@@ -60,6 +60,7 @@ ignore = [
   "PLR2004", # magic values are fine in tests
   "PLC0415", # imports inside test functions are intentional
   "TCH",     # type-checking blocks impractical in tests
+  "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
 ]
 
 [tool.ruff.format]

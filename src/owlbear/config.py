@@ -29,5 +29,8 @@ class OwlBearSettings(BaseSettings):
     copilot_base_url: str = "https://api.individual.githubcopilot.com"
     chat_model: str = "gpt-4o"
 
+    # --- Directories ---
+    config_dir: Path = Path.home() / ".owlbear"
+
     # --- Runtime ---
     debug: bool = False
