@@ -1,0 +1,46 @@
+{
+  "chat.agent.maxRequests": 99999,
+  "chat.checkpoints.showFileChanges": true, // false
+  "chat.customAgentInSubagent.enabled": true,
+  "chat.editing.autoAcceptDelay": 15,
+  "chat.exitAfterDelegation": false,
+  "chat.tools.edits.autoApprove": {
+    "**/*": true,
+    "**/.vscode/*.json": false,
+    "**/.git/**": false,
+    "**/{package.json,package-lock.json,server.xml,build.rs,web.config,.gitattributes,.env}": false,
+    "**/*.{code-workspace,csproj,fsproj,vbproj,vcxproj,proj,targets,props}": false
+  },
+  "chat.tools.terminal.preventShellHistory": false,
+  "chat.tools.urls.autoApprove": {
+    "https://*.visualstudio.com": true,
+    "https://*.github.com": true,
+    "https://*.claude.com": true,
+    "https://*.wikipedia.org": true,
+    "https://pypi.org": true,
+    "https://*.europa.eu": true,
+    "https://*.gesetze-im-internet.de": true,
+    "https://*.legislation.gov.uk": true,
+    "https://uscode.house.gov": true,
+    "*": true
+  },
+  "github.copilot.chat.agent.autoFix": true, // false
+  "github.copilot.chat.agent.currentEditorContext.enabled": false,
+  "github.copilot.chat.anthropic.thinking.budgetTokens": 8000, // 6000
+  "github.copilot.chat.backgroundAgent.enabled": false,
+  "github.copilot.chat.cloudAgent.enabled": false,
+  "github.copilot.chat.searchSubagent.toolCallLimit": 500,
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.defaultInterpreterPath": ".venv/Scripts/python.exe",
+  "[json]": {
+    "editor.formatOnSave": false
+  },
+  "chat.mcp.serverSampling": {
+    "owlbear/.vscode/mcp.json: octocode": {
+      "allowedModels": [
+        "copilot/gpt-5-mini"
+      ]
+    }
+  }
+}
