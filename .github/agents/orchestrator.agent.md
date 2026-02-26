@@ -52,7 +52,7 @@ gate checks — a task must be planned, atomic, test-first, and unblocked before
 </persona>
 
 <context>
-You operate within a project that uses `kanban-md` (v0.32.1) for file-based task
+You operate within a project that uses `kanban-md` (v0.33.0) for file-based task
 management. The binary lives at `kanban/kanban-md.exe`.
 
 For the full CLI reference, see the `kanban-md` skill (decision tree, core commands,
@@ -85,8 +85,34 @@ Only dispatch tasks in `todo` status that are `--not-blocked`. Tasks in `backlog
 - Tasks have `depends_on` fields listing blocking task IDs
 - `.github/copilot-instructions.md` has full workflow and coding standards
 
-**Subagent dispatch:** Use `runSubagent` to execute tasks. Each subagent receives a
-focused instruction with the task ID, AC, relevant files, and the specific work to do.
+**Subagent dispatch:** Use `runSubagent` with the `agentName` parameter to route
+tasks to the correct named agent. Each named agent carries its own persona, workflow,
+boundaries, and self-critique checklist — do NOT duplicate those in your inline
+instructions. Your inline prompt should contain only the task-specific context:
+task ID, AC, relevant files, and any wave-specific notes.
+
+<dispatch_routing>
+
+| Task type                            | Route to       | `agentName`        |
+| ------------------------------------ | -------------- | ------------------ |
+| Research investigation               | Researcher     | `"researcher"`     |
+| Task decomposition                   | Kanban-Planner | `"kanban-planner"` |
+| Architecture review (backlog → todo) | Architect      | `"architect"`      |
+| TDD implementation                   | Builder        | `"builder"`        |
+| Quality verification (review → docs) | Reviewer       | `"reviewer"`       |
+| Documentation gate (docs → done)     | Writer         | `"writer"`         |
+
+When dispatching, always include `agentName`. Example:
+
+```
+runSubagent(
+  agentName: "builder",
+  prompt: "Build: task #47\n\nAC:\n- EmbeddingStore class...\n\nRelevant files:\n- src/owlbear/memory/embeddings.py\n- tests/test_embeddings.py",
+  description: "Implement task #47"
+)
+```
+
+</dispatch_routing>
 
 **Progress tracking:** Use `manage_todo_list` to maintain a running checklist of the
 current execution plan, updated after each wave completes.
@@ -176,15 +202,17 @@ Use `manage_todo_list` to create a checklist of all waves and tasks:
 For each task in the current wave:
 
 1. Move task to `in-progress`: `kanban\kanban-md.exe move {id} in-progress`
-2. Dispatch subagent via `runSubagent` with a focused instruction containing:
-   - Task ID and title
-   - Full acceptance criteria (from task body)
-   - Relevant source and test file paths
-   - Project conventions to follow (from `.github/copilot-instructions.md`)
-   - Specific completion criteria: tests pass, ruff clean
+2. Dispatch via `runSubagent` with the correct `agentName` (see dispatch routing table):
+   - `agentName`: the named agent for this task type (e.g., `"builder"` for implementation)
+   - `prompt`: task-specific context only — task ID, title, AC, relevant file paths,
+     any wave-specific notes. Do NOT restate the agent's persona or workflow.
+   - `description`: short label (e.g., "Implement task #47")
 
-3. For serial chains (test + impl pairs on same module): dispatch ONE subagent
+3. For serial chains (test + impl pairs on same module): dispatch ONE `builder` subagent
    that executes both tasks sequentially
+
+4. For review after implementation: dispatch a `reviewer` subagent
+5. For docs gate after review: dispatch a `writer` subagent
 
 </step>
 
