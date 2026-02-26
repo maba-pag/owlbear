@@ -8,8 +8,11 @@ launch options, viewport size, timeout, and URL allow/block lists
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
+
+_MAX_PORT = 65535
 
 
 class BrowserConfig(BaseModel, frozen=True):
@@ -22,6 +25,10 @@ class BrowserConfig(BaseModel, frozen=True):
         headless: Whether to launch the browser without a visible window.
         viewport: ``(width, height)`` in pixels.  Both must be positive.
         timeout_ms: Navigation timeout in milliseconds.  Must be >= 0.
+        cdp_endpoint: CDP HTTP endpoint URL (localhost/127.0.0.1 only).
+        cdp_port: Default CDP debugging port (1-65535).
+        browser_executable: Override path for the browser binary.
+        auto_launch: Whether to auto-launch browser if CDP unavailable.
     """
 
     allowed_urls: list[str] = []
@@ -29,6 +36,10 @@ class BrowserConfig(BaseModel, frozen=True):
     headless: bool = False
     viewport: tuple[int, int] = (1280, 720)
     timeout_ms: int = 30_000
+    cdp_endpoint: str | None = None
+    cdp_port: int = 9222
+    browser_executable: str | None = None
+    auto_launch: bool = True
 
     # --- validators ---
 
@@ -51,6 +62,34 @@ class BrowserConfig(BaseModel, frozen=True):
         """Timeout must be zero or positive."""
         if value < 0:
             msg = "timeout_ms must be >= 0"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("cdp_endpoint", mode="after")
+    @classmethod
+    def _cdp_endpoint_localhost_only(cls, value: str | None) -> str | None:
+        """CDP endpoint must be http://localhost or http://127.0.0.1."""
+        if value is None:
+            return value
+        try:
+            parsed = urlparse(value)
+        except Exception as exc:
+            msg = "cdp_endpoint is not a valid URL"
+            raise ValueError(msg) from exc
+        if parsed.scheme != "http":
+            msg = "cdp_endpoint must use http:// scheme"
+            raise ValueError(msg)
+        if parsed.hostname not in ("localhost", "127.0.0.1"):
+            msg = "cdp_endpoint must target localhost or 127.0.0.1"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("cdp_port", mode="after")
+    @classmethod
+    def _cdp_port_valid_range(cls, value: int) -> int:
+        """CDP port must be between 1 and 65535 inclusive."""
+        if not (1 <= value <= _MAX_PORT):
+            msg = f"cdp_port must be between 1 and {_MAX_PORT}"
             raise ValueError(msg)
         return value
 

@@ -128,3 +128,118 @@ class TestBrowserConfigEdgeCases:
         cfg = BrowserConfig()
         with pytest.raises(ValidationError):
             cfg.headless = True  # type: ignore[misc]
+
+
+# --- CDP field defaults ---
+
+
+class TestBrowserConfigCDPDefaults:
+    """New CDP-related fields should have sensible defaults."""
+
+    def test_cdp_endpoint_defaults_to_none(self) -> None:
+        cfg = BrowserConfig()
+        assert cfg.cdp_endpoint is None
+
+    def test_cdp_port_defaults_to_9222(self) -> None:
+        cfg = BrowserConfig()
+        assert cfg.cdp_port == 9222
+
+    def test_browser_executable_defaults_to_none(self) -> None:
+        cfg = BrowserConfig()
+        assert cfg.browser_executable is None
+
+    def test_auto_launch_defaults_to_true(self) -> None:
+        cfg = BrowserConfig()
+        assert cfg.auto_launch is True
+
+    def test_default_config_unchanged_behavior(self) -> None:
+        """Default BrowserConfig() has no CDP behavior change."""
+        cfg = BrowserConfig()
+        assert cfg.cdp_endpoint is None
+        assert cfg.auto_launch is True
+        assert cfg.browser_executable is None
+
+
+# --- CDP field custom values ---
+
+
+class TestBrowserConfigCDPCustomValues:
+    """CDP fields accept valid custom values."""
+
+    def test_cdp_endpoint_localhost(self) -> None:
+        cfg = BrowserConfig(cdp_endpoint="http://localhost:9222")
+        assert cfg.cdp_endpoint == "http://localhost:9222"
+
+    def test_cdp_endpoint_127_0_0_1(self) -> None:
+        cfg = BrowserConfig(cdp_endpoint="http://127.0.0.1:9222")
+        assert cfg.cdp_endpoint == "http://127.0.0.1:9222"
+
+    def test_cdp_port_custom(self) -> None:
+        cfg = BrowserConfig(cdp_port=9333)
+        assert cfg.cdp_port == 9333
+
+    def test_browser_executable_custom_path(self) -> None:
+        cfg = BrowserConfig(browser_executable="C:/path/to/msedge.exe")
+        assert cfg.browser_executable == "C:/path/to/msedge.exe"
+
+    def test_auto_launch_false(self) -> None:
+        cfg = BrowserConfig(auto_launch=False)
+        assert cfg.auto_launch is False
+
+
+# --- CDP field validation ---
+
+
+class TestBrowserConfigCDPValidation:
+    """CDP fields must reject invalid values."""
+
+    def test_cdp_endpoint_non_localhost_host_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_endpoint"):
+            BrowserConfig(cdp_endpoint="http://evil.com:9222")
+
+    def test_cdp_endpoint_non_http_scheme_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_endpoint"):
+            BrowserConfig(cdp_endpoint="https://localhost:9222")
+
+    def test_cdp_endpoint_malformed_url_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_endpoint"):
+            BrowserConfig(cdp_endpoint="not-a-url")
+
+    def test_cdp_port_zero_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_port"):
+            BrowserConfig(cdp_port=0)
+
+    def test_cdp_port_above_65535_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_port"):
+            BrowserConfig(cdp_port=70000)
+
+    def test_cdp_port_negative_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cdp_port"):
+            BrowserConfig(cdp_port=-1)
+
+
+# --- CDP frozen-model checks ---
+
+
+class TestBrowserConfigCDPFrozen:
+    """Frozen model rejects mutation of new CDP fields."""
+
+    def test_frozen_cdp_endpoint(self) -> None:
+        cfg = BrowserConfig()
+        with pytest.raises(ValidationError):
+            cfg.cdp_endpoint = "http://localhost:9222"  # type: ignore[misc]
+
+    def test_frozen_cdp_port(self) -> None:
+        cfg = BrowserConfig()
+        with pytest.raises(ValidationError):
+            cfg.cdp_port = 1234  # type: ignore[misc]
+
+    def test_frozen_browser_executable(self) -> None:
+        cfg = BrowserConfig()
+        with pytest.raises(ValidationError):
+            cfg.browser_executable = "/usr/bin/chrome"  # type: ignore[misc]
+
+    def test_frozen_auto_launch(self) -> None:
+        cfg = BrowserConfig()
+        with pytest.raises(ValidationError):
+            cfg.auto_launch = False  # type: ignore[misc]
