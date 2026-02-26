@@ -1,0 +1,44 @@
+version: 10
+board:
+  name: OwlBear
+tasks_dir: tasks
+statuses:
+  - name: ideation
+  - name: backlog
+  - name: todo
+  - name: in-progress
+  - name: review
+  - name: docs
+  - name: done
+priorities:
+  - low
+  - medium
+  - high
+  - critical
+defaults:
+  status: ideation
+  priority: medium
+  class: standard
+claim_timeout: 1h
+classes:
+  - name: expedite
+    wip_limit: 1
+    bypass_column_wip: true
+  - name: fixed-date
+  - name: standard
+  - name: intangible
+tui:
+  title_lines: 2
+  age_thresholds:
+    - after: 0s
+      color: "242"
+    - after: 1h
+      color: "34"
+    - after: 24h
+      color: "226"
+    - after: 72h
+      color: "208"
+    - after: 168h
+      color: "196"
+  hide_empty_columns: true
+next_id: 51
