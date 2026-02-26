@@ -14,7 +14,7 @@ and operates as a standalone daemon process.
 ```bash
 uv sync                        # install dependencies
 uv run bearclaw --help         # show CLI help
-uv run bearclaw auth login     # start Copilot OAuth device flow (coming soon)
+uv run bearclaw auth login     # start Copilot OAuth device flow
 ```
 
 ## CLI — BearClaw

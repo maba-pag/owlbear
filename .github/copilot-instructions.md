@@ -54,7 +54,7 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 
 ## kanban-md usage
 
-The project uses [kanban-md](https://github.com/antopolskiy/kanban-md) (v0.32.1) for file-based task management. The binary lives at `kanban/kanban-md.exe` (gitignored); run `kanban/setup.ps1` to download it.
+The project uses [kanban-md](https://github.com/antopolskiy/kanban-md) (v0.33.0) for file-based task management. The binary lives at `kanban/kanban-md.exe` (gitignored); run `kanban/setup.ps1` to download it.
 
 For CLI commands, workflows, and cheatsheets, see the `kanban-md` and `kanban-based-development` skills. The sections below cover only **OwlBear-specific** conventions that override or extend the defaults.
 
@@ -198,8 +198,10 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 | kanban-planner | Use when a plan or feature needs decomposition into kanban tasks | User-invokable, TDD-first decomposition        |
 | orchestrator   | Use when tasks need to be executed from the kanban board         | User-invokable, wave-based parallel execution  |
 | researcher     | Investigate topics, produce structured findings + kanban tasks   | Read-only, comparison tables, source-backed    |
+| architect      | Review researched tasks, refine AC, approve for development      | Gate: backlog → todo, never writes code        |
 | builder        | Implement kanban tasks with TDD                                  | Full edit access, TDD mandatory, surgical diff |
 | reviewer       | Read-only quality verification of completed work                 | Never edits, evidence-based PASS/FAIL verdict  |
+| writer         | Verify and update documentation before marking done              | Gate: docs → done, edits docs only             |
 
 ### Skill inventory
 
@@ -225,8 +227,10 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 | `.github/prompts/orchestrate.prompt.md` | orchestrator   | Start orchestration with a scope filter                     |
 | `.github/prompts/plan.prompt.md`        | kanban-planner | Decompose a plan into atomic, dependency-aware kanban tasks |
 | `.github/prompts/research.prompt.md`    | researcher     | Start a research investigation on a topic                   |
+| `.github/prompts/architect.prompt.md`   | architect      | Review backlog tasks, refine AC, approve for development    |
 | `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                |
 | `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                 |
+| `.github/prompts/writer.prompt.md`      | writer         | Verify and update docs for completed tasks                  |
 
 ## Attribution
 
