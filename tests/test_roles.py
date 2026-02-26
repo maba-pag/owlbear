@@ -15,6 +15,7 @@ from owlbear.core.roles import (
 
 # ── Helpers ────────────────────────────────────────────────────────
 
+
 def _make_toolset() -> FunctionToolset:
     """Build a toolset with mixed read/write/execute tools."""
     ts = FunctionToolset()
@@ -60,6 +61,7 @@ def _make_toolset() -> FunctionToolset:
 
 # ── AgentRole enum ────────────────────────────────────────────────
 
+
 class TestAgentRole:
     def test_builder_value(self) -> None:
         assert AgentRole.BUILDER == "builder"
@@ -72,6 +74,7 @@ class TestAgentRole:
 
 
 # ── RolePolicy dataclass ─────────────────────────────────────────
+
 
 class TestRolePolicy:
     def test_builder_policy_allows_all(self) -> None:
@@ -97,6 +100,7 @@ class TestRolePolicy:
 
 
 # ── apply_role_policy ─────────────────────────────────────────────
+
 
 class TestApplyRolePolicy:
     def test_builder_keeps_all_tools(self) -> None:
@@ -129,9 +133,7 @@ class TestApplyRolePolicy:
 
         for name in ("file_write", "file_edit", "file_delete"):
             td = SimpleNamespace(name=name)
-            assert result.filter_func(None, td) is False, (
-                f"{name} should be denied"
-            )
+            assert result.filter_func(None, td) is False, f"{name} should be denied"
 
     def test_validator_filter_rejects_execute(self) -> None:
         ts = _make_toolset()
@@ -150,10 +152,7 @@ class TestApplyRolePolicy:
         from types import SimpleNamespace
 
         write_tools = ["file_write", "file_edit", "file_delete"]
-        results = [
-            result.filter_func(None, SimpleNamespace(name=n))
-            for n in write_tools
-        ]
+        results = [result.filter_func(None, SimpleNamespace(name=n)) for n in write_tools]
         assert all(r is False for r in results)
 
     def test_filtered_is_a_toolset(self) -> None:

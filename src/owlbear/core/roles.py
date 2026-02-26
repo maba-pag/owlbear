@@ -62,17 +62,20 @@ BUILDER_POLICY = RolePolicy(
 
 VALIDATOR_POLICY = RolePolicy(
     role=AgentRole.VALIDATOR,
-    denied_tools=frozenset({
-        "file_write",
-        "file_edit",
-        "file_delete",
-        "execute_command",
-    }),
+    denied_tools=frozenset(
+        {
+            "file_write",
+            "file_edit",
+            "file_delete",
+            "execute_command",
+        }
+    ),
 )
 """Validator: read-only — cannot write, edit, delete, or execute."""
 
 
 # ── Policy application ───────────────────────────────────────────
+
 
 def apply_role_policy(
     toolset: FunctionToolset,

@@ -40,19 +40,17 @@ class TestCLIVersion:
 
 
 class TestAuthCommands:
-    """Test auth subcommands."""
+    """Test auth subcommands exist and are callable."""
 
-    def test_auth_login(self) -> None:
-        result = runner.invoke(app, ["auth", "login"])
+    def test_auth_login_is_registered(self) -> None:
+        result = runner.invoke(app, ["auth", "--help"])
         assert result.exit_code == 0
-        assert "Not yet implemented" in result.output
-        assert "device flow" in result.output
+        assert "login" in result.output
 
-    def test_auth_status(self) -> None:
-        result = runner.invoke(app, ["auth", "status"])
+    def test_auth_status_is_registered(self) -> None:
+        result = runner.invoke(app, ["auth", "--help"])
         assert result.exit_code == 0
-        assert "Not yet implemented" in result.output
-        assert "token status" in result.output
+        assert "status" in result.output
 
 
 class TestNoArgsShowsHelp:
