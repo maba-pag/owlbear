@@ -98,9 +98,7 @@ class SkillRegistry(FunctionToolset):
             return "No skills available."
         lines = [
             f"- **{m.name}**: {m.description}"
-            for m in sorted(
-                self._skill_map.values(), key=lambda m: m.name
-            )
+            for m in sorted(self._skill_map.values(), key=lambda m: m.name)
         ]
         return "\n".join(lines)
 
@@ -108,10 +106,7 @@ class SkillRegistry(FunctionToolset):
         meta = self._skill_map.get(name)
         if meta is None:
             available = ", ".join(sorted(self._skill_map))
-            msg = (
-                f"Skill '{name}' not found. "
-                f"Available: {available}"
-            )
+            msg = f"Skill '{name}' not found. Available: {available}"
             raise KeyError(msg)
         return meta.file_path.read_text(encoding="utf-8")
 

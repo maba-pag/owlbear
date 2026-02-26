@@ -199,18 +199,14 @@ class TestSkillRegistryEdgeCases:
         registry = SkillRegistry(tmp_path)
         assert "bad" not in registry.skills
 
-    def test_no_closing_frontmatter_delimiter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_no_closing_frontmatter_delimiter(self, tmp_path: Path) -> None:
         """A file with opening --- but no closing --- is skipped."""
         f = tmp_path / "broken.md"
         f.write_text("---\nname: broken\n# Content\n", encoding="utf-8")
         registry = SkillRegistry(tmp_path)
         assert "broken" not in registry.skills
 
-    def test_frontmatter_missing_name_is_skipped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_missing_name_is_skipped(self, tmp_path: Path) -> None:
         """A file with valid YAML but no 'name' key is skipped."""
         f = tmp_path / "noname.md"
         f.write_text(
@@ -230,4 +226,3 @@ class TestSkillRegistryEdgeCases:
         registry = SkillRegistry(tmp_path)
         assert "badfm" not in registry.skills
         assert len(registry.skills) == 0
-
