@@ -462,3 +462,93 @@
 {"timestamp":"2026-02-26T22:29:22.7536135+01:00","action":"move","task_id":36,"detail":"in-progress -\u003e review"}
 {"timestamp":"2026-02-26T22:29:23.1737011+01:00","action":"move","task_id":36,"detail":"review -\u003e docs"}
 {"timestamp":"2026-02-26T22:29:23.6059448+01:00","action":"move","task_id":36,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-26T23:30:11.5636367+01:00","action":"create","task_id":65,"detail":"P6-01: Research CDP tab groups via DevTools Protocol"}
+{"timestamp":"2026-02-26T23:30:20.1890195+01:00","action":"create","task_id":66,"detail":"P6-02: Test BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:30:27.3117415+01:00","action":"create","task_id":67,"detail":"P6-03: Implement BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:30:35.1373773+01:00","action":"create","task_id":68,"detail":"P6-04: Test Edge executable detection (Windows)"}
+{"timestamp":"2026-02-26T23:30:44.115482+01:00","action":"create","task_id":69,"detail":"P6-05: Implement Edge launcher module"}
+{"timestamp":"2026-02-26T23:30:51.9456851+01:00","action":"create","task_id":70,"detail":"P6-06: Test BrowserManager CDP connect mode"}
+{"timestamp":"2026-02-26T23:31:00.3028706+01:00","action":"create","task_id":71,"detail":"P6-07: Implement BrowserManager CDP connect + cleanup"}
+{"timestamp":"2026-02-26T23:31:07.3681042+01:00","action":"create","task_id":72,"detail":"P6-08: Test BearClaw browser CLI subcommands"}
+{"timestamp":"2026-02-26T23:31:14.5843121+01:00","action":"create","task_id":73,"detail":"P6-09: Implement BearClaw browser CLI"}
+{"timestamp":"2026-02-26T23:31:21.8408764+01:00","action":"create","task_id":74,"detail":"P6-10: Test BrowserToolset CDP integration"}
+{"timestamp":"2026-02-26T23:31:29.7139798+01:00","action":"create","task_id":75,"detail":"P6-11: Implement BrowserToolset CDP mode + tab naming"}
+{"timestamp":"2026-02-26T23:31:37.3888492+01:00","action":"create","task_id":76,"detail":"P6-12: CDP safety + documentation"}
+{"timestamp":"2026-02-26T23:42:59.9069945+01:00","action":"move","task_id":66,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:00.4280489+01:00","action":"move","task_id":67,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:00.8251365+01:00","action":"move","task_id":68,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:01.1889072+01:00","action":"move","task_id":69,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:01.5574213+01:00","action":"move","task_id":70,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:02.0992034+01:00","action":"move","task_id":71,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:02.4713185+01:00","action":"move","task_id":72,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:02.8483937+01:00","action":"move","task_id":73,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:03.2196205+01:00","action":"move","task_id":74,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:03.7170089+01:00","action":"move","task_id":75,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:43:04.0995786+01:00","action":"move","task_id":76,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-26T23:47:46.2670683+01:00","action":"edit","task_id":66,"detail":"P6-02: Test BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:47:50.6632735+01:00","action":"edit","task_id":66,"detail":"P6-02: Test BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:47:59.0610291+01:00","action":"edit","task_id":67,"detail":"P6-03: Implement BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:48:03.5458203+01:00","action":"edit","task_id":67,"detail":"P6-03: Implement BrowserConfig CDP fields"}
+{"timestamp":"2026-02-26T23:48:14.4645035+01:00","action":"edit","task_id":68,"detail":"P6-04: Test Edge launcher module"}
+{"timestamp":"2026-02-26T23:48:18.9631519+01:00","action":"edit","task_id":68,"detail":"P6-04: Test Edge launcher module"}
+{"timestamp":"2026-02-26T23:48:29.7894987+01:00","action":"edit","task_id":69,"detail":"P6-05: Implement Edge launcher module"}
+{"timestamp":"2026-02-26T23:48:57.7641941+01:00","action":"edit","task_id":70,"detail":"P6-06: Test BrowserManager CDP connect mode"}
+{"timestamp":"2026-02-26T23:49:08.201337+01:00","action":"edit","task_id":71,"detail":"P6-07: Implement BrowserManager CDP connect + cleanup"}
+{"timestamp":"2026-02-26T23:49:13.6279959+01:00","action":"edit","task_id":71,"detail":"P6-07: Implement BrowserManager CDP connect + cleanup"}
+{"timestamp":"2026-02-26T23:49:42.326718+01:00","action":"edit","task_id":74,"detail":"P6-10: Test BrowserToolset CDP integration"}
+{"timestamp":"2026-02-26T23:50:27.5101185+01:00","action":"edit","task_id":76,"detail":"P6-12: CDP safety + documentation"}
+{"timestamp":"2026-02-26T23:50:32.1125566+01:00","action":"edit","task_id":76,"detail":"P6-12: CDP safety + documentation"}
+{"timestamp":"2026-02-26T23:50:50.2687644+01:00","action":"move","task_id":66,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.2764806+01:00","action":"move","task_id":67,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.2848514+01:00","action":"move","task_id":68,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.291428+01:00","action":"move","task_id":69,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.2995177+01:00","action":"move","task_id":70,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3058025+01:00","action":"move","task_id":71,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3126839+01:00","action":"move","task_id":72,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3220706+01:00","action":"move","task_id":73,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3306652+01:00","action":"move","task_id":74,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3370922+01:00","action":"move","task_id":75,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:50:50.3437193+01:00","action":"move","task_id":76,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-26T23:53:15.4459451+01:00","action":"move","task_id":66,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-26T23:53:15.8839891+01:00","action":"move","task_id":67,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-26T23:53:16.3111345+01:00","action":"move","task_id":68,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-26T23:56:39.2256282+01:00","action":"move","task_id":68,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-26T23:57:17.9029955+01:00","action":"move","task_id":66,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-26T23:57:18.3120215+01:00","action":"move","task_id":67,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-26T23:59:10.1675927+01:00","action":"move","task_id":66,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-26T23:59:10.6044022+01:00","action":"move","task_id":66,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-26T23:59:11.5678475+01:00","action":"move","task_id":67,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-26T23:59:11.9866525+01:00","action":"move","task_id":67,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-26T23:59:13.0105577+01:00","action":"move","task_id":68,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-26T23:59:13.4493894+01:00","action":"move","task_id":68,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-26T23:59:39.8526718+01:00","action":"move","task_id":69,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-26T23:59:40.3371358+01:00","action":"move","task_id":70,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-26T23:59:40.8134591+01:00","action":"move","task_id":71,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:01:39.1830162+01:00","action":"move","task_id":69,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:06:03.4771919+01:00","action":"move","task_id":70,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:06:03.9384506+01:00","action":"move","task_id":71,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:07:21.160299+01:00","action":"move","task_id":69,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:07:21.5867314+01:00","action":"move","task_id":69,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:07:22.4403411+01:00","action":"move","task_id":70,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:07:23.0154819+01:00","action":"move","task_id":70,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:07:23.9499635+01:00","action":"move","task_id":71,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:07:24.4063803+01:00","action":"move","task_id":71,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:07:56.7195417+01:00","action":"move","task_id":72,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:07:57.1381604+01:00","action":"move","task_id":73,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:07:57.5725161+01:00","action":"move","task_id":74,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:07:57.9994273+01:00","action":"move","task_id":75,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:11:34.2984226+01:00","action":"move","task_id":74,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:11:34.8417883+01:00","action":"move","task_id":75,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:15:24.0431595+01:00","action":"move","task_id":72,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:15:24.4975669+01:00","action":"move","task_id":73,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:16:48.9477287+01:00","action":"move","task_id":72,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:16:49.3838718+01:00","action":"move","task_id":72,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:16:50.3011713+01:00","action":"move","task_id":73,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:16:50.9681668+01:00","action":"move","task_id":73,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:16:51.951102+01:00","action":"move","task_id":74,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:16:52.447519+01:00","action":"move","task_id":74,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:16:53.5551412+01:00","action":"move","task_id":75,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:16:53.9758694+01:00","action":"move","task_id":75,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:17:11.5263488+01:00","action":"move","task_id":76,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:18:39.8331596+01:00","action":"move","task_id":76,"detail":"in-progress -\u003e docs"}
+{"timestamp":"2026-02-27T00:19:11.6869638+01:00","action":"move","task_id":76,"detail":"docs -\u003e done"}
