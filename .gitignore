@@ -1,0 +1,69 @@
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.egg-info
+
+# Virtual environments
+.venv/
+.Python
+lib/
+lib64/
+var/
+
+# Build artifacts
+build/
+_cache
+dist/
+sdist/
+wheels/
+parts/
+downloads/
+.installed.cfg
+MANIFEST
+artifacts/
+
+# Testing and coverage
+.*cache
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+.hypothesis/
+.benchmarks/
+megalinter-reports/
+
+# IDE and editor
+.vscode/*
+!.vscode/mcp.json
+!.vscode/settings.json
+.claude/
+.serena/
+
+# Secrets - NEVER commit
+.env
+.env.*
+!.env.example
+*.secret
+*.local.toml
+
+# Logs
+*.log
+
+# Scratch / ad-hoc workspace (under docs/)
+docs/scratch/
+!docs/scratch/.gitkeep
+
+# Research repos — cloned for analysis (under docs/)
+docs/research/
+
+# Temp test/debug output
+*_output.txt
+*_result.txt
+*_test.txt
+*_run.txt
+*_run2.txt
+
+# Portable tools (downloaded binaries)
+kanban/*.exe

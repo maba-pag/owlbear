@@ -1,0 +1,81 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "owlbear"
+version = "0.1.0"
+description = "Always-on, laptop-resident AI development system"
+requires-python = ">=3.12"
+license = "MIT"
+readme = "README.md"
+
+dependencies = [
+  "httpx>=0.28.0",
+  "openai>=1.60.0",
+  "pydantic>=2.10.0",
+  "pydantic-ai>=0.1.0",
+  "pydantic-settings>=2.7.0",
+  "tenacity>=9.0.0",
+  "truststore>=0.10.0",
+  "typer>=0.15.0",
+]
+
+[project.scripts]
+bearclaw = "bearclaw.cli:app"
+
+[project.optional-dependencies]
+dev = [
+  "bandit>=1.9.0",
+  "pre-commit>=4.0",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.25.0",
+  "pytest-cov>=6.0",
+  "ruff>=0.9.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/owlbear", "src/bearclaw"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",      # pydocstyle — we use Google-style docstrings, not enforced by ruff
+  "COM812", # trailing comma — conflicts with formatter
+  "ISC001", # implicit string concatenation — conflicts with formatter
+  "S101",   # assert used — needed in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "ANN",     # type annotations not required in tests
+  "S101",    # assert is fine in tests
+  "PLR2004", # magic values are fine in tests
+  "PLC0415", # imports inside test functions are intentional
+  "TCH",     # type-checking blocks impractical in tests
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "api: marks tests requiring live API access (deselect with '-m \"not api\"')",
+  "slow: marks slow tests (deselect with '-m \"not slow\"')",
+]
+
+[tool.bandit]
+targets = ["src/"]
+
+[tool.coverage.run]
+source = ["src/owlbear", "src/bearclaw"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
