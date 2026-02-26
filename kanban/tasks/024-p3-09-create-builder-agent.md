@@ -1,10 +1,12 @@
 ---
 id: 24
 title: 'P3-09: Create builder agent'
-status: ideation
+status: done
 priority: high
 created: 2026-02-24T15:13:43.2456667+01:00
-updated: 2026-02-26T18:53:02.1396165+01:00
+updated: 2026-02-26T20:35:55.6834471+01:00
+started: 2026-02-26T20:31:52.4235434+01:00
+completed: 2026-02-26T20:35:55.6834471+01:00
 tags:
     - phase-3
     - agent

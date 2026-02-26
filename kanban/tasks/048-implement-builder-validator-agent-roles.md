@@ -1,10 +1,12 @@
 ---
 id: 48
 title: Implement builder/validator agent roles
-status: ideation
+status: done
 priority: medium
 created: 2026-02-26T15:57:37.7600531+01:00
-updated: 2026-02-26T18:58:51.033965+01:00
+updated: 2026-02-26T20:54:58.141003+01:00
+started: 2026-02-26T20:32:13.4334905+01:00
+completed: 2026-02-26T20:54:58.141003+01:00
 tags:
     - phase-3
     - agent

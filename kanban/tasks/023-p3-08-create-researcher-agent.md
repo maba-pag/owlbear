@@ -1,10 +1,12 @@
 ---
 id: 23
 title: 'P3-08: Create researcher agent'
-status: ideation
+status: done
 priority: high
 created: 2026-02-24T15:13:31.2653526+01:00
-updated: 2026-02-26T18:53:01.6498372+01:00
+updated: 2026-02-26T20:34:15.6226839+01:00
+started: 2026-02-26T20:31:51.9693309+01:00
+completed: 2026-02-26T20:34:15.6226839+01:00
 tags:
     - phase-3
     - agent
