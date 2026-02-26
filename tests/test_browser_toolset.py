@@ -332,3 +332,232 @@ class TestBrowserToolsetComposition:
         # Both have their expected tools
         assert "browser_navigate" in browser_ts.tools
         assert "list_skills" in skill_ts.tools
+
+
+# ---------------------------------------------------------------------------
+# CDP-mode setup/teardown
+# ---------------------------------------------------------------------------
+
+CDP_CONFIG = BrowserConfig(cdp_endpoint="http://localhost:9222")
+
+
+def _make_mock_page_with_evaluate() -> AsyncMock:
+    """Build a mock Playwright Page with explicit evaluate method."""
+    page = _make_mock_page()
+    page.evaluate = AsyncMock(return_value=None)
+    return page
+
+
+class TestBrowserToolsetCDPSetupTeardown:
+    """BrowserToolset in CDP mode sets up and tears down correctly."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_setup_cdp_creates_manager_with_cdp_config(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """BrowserManager is constructed with the CDP config."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup()
+
+        mock_mgr_cls.assert_called_once_with(CDP_CONFIG)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_setup_cdp_enters_manager(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """__aenter__ is called (triggers connect_over_cdp internally)."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup()
+
+        mock_mgr.__aenter__.assert_awaited_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_teardown_cdp_exits_manager(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """teardown() calls __aexit__ (disconnects, does not close)."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup()
+        await toolset.teardown()
+
+        mock_mgr.__aexit__.assert_awaited_once_with(None, None, None)
+
+
+# ---------------------------------------------------------------------------
+# CDP-mode tool wrapper integration
+# ---------------------------------------------------------------------------
+
+
+class TestBrowserToolsetCDPToolWrappers:
+    """Tool wrappers receive a page from CDP-connected browser."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.browser_navigate", new_callable=AsyncMock)
+    async def test_navigate_works_in_cdp_mode(self, mock_nav: AsyncMock) -> None:
+        mock_nav.return_value = "Navigated to Example (https://example.com)"
+        page = _make_mock_page_with_evaluate()
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        mgr = _make_mock_manager(page)
+        toolset._manager = mgr  # noqa: SLF001
+
+        result = await toolset._navigate("https://example.com")  # noqa: SLF001
+
+        mock_nav.assert_awaited_once_with(
+            "https://example.com",
+            page=page,
+            config=CDP_CONFIG,
+        )
+        assert "Navigated" in result
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.browser_read_text", new_callable=AsyncMock)
+    async def test_read_text_works_in_cdp_mode(self, mock_read: AsyncMock) -> None:
+        mock_read.return_value = "CDP page text"
+        page = _make_mock_page_with_evaluate()
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        mgr = _make_mock_manager(page)
+        toolset._manager = mgr  # noqa: SLF001
+
+        result = await toolset._read_text()  # noqa: SLF001
+
+        mock_read.assert_awaited_once_with(page=page, selector=None, max_length=5000)
+        assert result == "CDP page text"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.browser_navigate", new_callable=AsyncMock)
+    async def test_navigate_safety_guard_in_cdp_mode(
+        self, mock_nav: AsyncMock
+    ) -> None:
+        """Navigate tool applies URL safety guard identically in CDP mode."""
+        cdp_cfg = BrowserConfig(
+            cdp_endpoint="http://localhost:9222",
+            blocked_urls=[r".*evil\.com.*"],
+        )
+        mock_nav.return_value = "Navigated"
+        page = _make_mock_page_with_evaluate()
+        toolset = BrowserToolset(config=cdp_cfg)
+        mgr = _make_mock_manager(page)
+        toolset._manager = mgr  # noqa: SLF001
+
+        await toolset._navigate("https://safe.com")  # noqa: SLF001
+
+        # Config with blocked_urls is passed through to navigate
+        mock_nav.assert_awaited_once_with(
+            "https://safe.com",
+            page=page,
+            config=cdp_cfg,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tab naming in CDP mode
+# ---------------------------------------------------------------------------
+
+
+class TestBrowserToolsetTabNaming:
+    """Tab naming behavior differs between CDP and launch mode."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_cdp_setup_sets_owlbear_title(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """In CDP mode, setup() sets window title with [OwlBear] prefix."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup()
+
+        page.evaluate.assert_awaited_once_with(
+            "document.title = '[OwlBear] ' + document.title"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_launch_setup_no_title_setting(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """In launch mode, no title setting occurs."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset()  # default launch mode
+        await toolset.setup()
+
+        page.evaluate.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# CDP warning log
+# ---------------------------------------------------------------------------
+
+
+class TestBrowserToolsetCDPWarningLog:
+    """CDP mode logs a warning about full session access."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_cdp_setup_logs_warning(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+
+        with patch("owlbear.tools.browser.toolset.logger") as mock_logger:
+            await toolset.setup()
+            mock_logger.warning.assert_called_once_with(
+                "CDP mode: attached to user browser — full session access"
+            )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_launch_setup_no_cdp_warning(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset()  # launch mode
+
+        with patch("owlbear.tools.browser.toolset.logger") as mock_logger:
+            await toolset.setup()
+            mock_logger.warning.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility
+# ---------------------------------------------------------------------------
+
+
+class TestBrowserToolsetBackwardCompat:
+    """Default BrowserToolset still uses launch mode — no CDP behavior."""
+
+    def test_default_toolset_has_no_cdp_endpoint(self) -> None:
+        toolset = BrowserToolset()
+        assert toolset.config.cdp_endpoint is None
+
+    def test_default_toolset_registers_six_tools(self) -> None:
+        toolset = BrowserToolset()
+        assert set(toolset.tools) == EXPECTED_TOOL_NAMES

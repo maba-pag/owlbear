@@ -74,9 +74,21 @@ class BrowserToolset(FunctionToolset):
     # ------------------------------------------------------------------
 
     async def setup(self) -> None:
-        """Launch browser — creates BrowserManager and enters context."""
+        """Launch browser — creates BrowserManager and enters context.
+
+        In CDP mode, also prefixes the initial page title with
+        ``[OwlBear]`` and emits a warning log.
+        """
         self._manager = BrowserManager(self._config)
         await self._manager.__aenter__()
+
+        if self._config.cdp_endpoint:
+            await self.page.evaluate(
+                "document.title = '[OwlBear] ' + document.title"
+            )
+            logger.warning(
+                "CDP mode: attached to user browser — full session access"
+            )
 
     async def teardown(self) -> None:
         """Close browser — exits BrowserManager context."""
