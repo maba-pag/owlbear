@@ -1,6 +1,6 @@
 # kanban/
 
-File-based task management for OwlBear, powered by [kanban-md](https://github.com/antopolskiy/kanban-md) v0.32.1.
+File-based task management for OwlBear, powered by [kanban-md](https://github.com/antopolskiy/kanban-md) v0.33.0.
 
 ## Setup
 

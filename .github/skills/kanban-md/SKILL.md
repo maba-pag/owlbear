@@ -3,7 +3,7 @@ name: kanban-md
 description: Manage project tasks using kanban-md, a file-based kanban board CLI.  Use when the user mentions tasks, kanban, board, backlog, sprint, project management, work items, priorities, blockers, or wants to track, create, list, move, edit, or delete tasks. Also use for standup, status update, sprint planning, triage, or project metrics.
 user-invokable: false
 ---
-<!-- kanban-md-skill-version: 0.32.1 -->
+<!-- kanban-md-skill-version: 0.33.0 -->
 
 # kanban-md
 
@@ -147,12 +147,16 @@ resuming a parked task).
 ### pick
 
 ```bash
-kanban-md pick --claim AGENT [--status S] [--move STATUS] [--tags T1,T2]
+kanban-md pick --claim AGENT [--status S] [--move STATUS] [--tags T1,T2] [--no-body]
 ```
 
 Atomically finds the highest-priority unclaimed, unblocked task and claims it. Use `--status` to
 restrict which column to pick from. Use `--move` to simultaneously move the task to a new status.
 Replaces the slower list → claim → move sequence.
+
+**v0.33.0:** `pick` now prints the full task details (including body) after the confirmation line,
+so a separate `show` call is no longer needed. Use `--no-body` to suppress the body and get
+the old one-line behavior.
 
 ### handoff
 
@@ -270,13 +274,14 @@ kanban-md board --compact                        # orient: what's active, blocke
 
 ```bash
 # Pick highest-priority unclaimed task from todo and move it to in-progress in one step
+# (v0.33.0: pick now prints full task details — no separate show needed)
 kanban-md pick --claim <agent> --status todo --move in-progress
 
 # If todo is empty, pick from backlog
 kanban-md pick --claim <agent> --status backlog --move in-progress
 
-# Read the full task after picking
-kanban-md show <ID>
+# Suppress body output when you only need the ID
+kanban-md pick --claim <agent> --status todo --move in-progress --no-body
 ```
 
 ### Create and claim in one shot
@@ -354,3 +359,5 @@ kanban-md list --compact --status in-progress,review   # all active/parked work
 - **DO NOT** use `--next` or `--prev` without checking current status. They fail at boundary statuses.
 - **DO NOT** pass both `--status` and `--next`/`--prev` to move. Use one or the other.
 - **DO** quote task titles with special characters: `kanban-md create "Fix: the 'login' bug"`.
+- **DO** trust automatic ID consistency repair (v0.33.0) — duplicate IDs, filename/frontmatter mismatches, and `next_id` drift are auto-fixed when any command runs. No manual intervention needed.
+- **DO** check for `# Warning: skipping malformed file ...` messages (v0.33.0) — task files missing `id`, `title`, or `status` frontmatter are now flagged and skipped.

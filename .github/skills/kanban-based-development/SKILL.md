@@ -3,7 +3,7 @@ name: kanban-based-development
 description: Autonomous, parallel-safe development workflow using kanban-md. Use when the user asks to work through tasks, do kanban-based development, or when multiple agents need to coordinate work on the same codebase. Optimized for explicit handoffs and a "defer to user" protocol when human intervention is required.
 user-invokable: false
 ---
-<!-- kanban-md-skill-version: 0.32.1 -->
+<!-- kanban-md-skill-version: 0.33.0 -->
 
 # Kanban-Based Development
 
@@ -103,11 +103,8 @@ kanban-md pick --claim <agent> --status backlog --move in-progress
 
 This is atomic — if another agent claims the task between your list and claim, `pick` handles it safely. No need to list/choose/claim manually.
 
-After picking, read the full task:
-
-```bash
-kanban-md show <ID>
-```
+**v0.33.0:** `pick` now prints full task details (including body) in its output, so a
+separate `show` call is no longer needed.
 
 ### 2) Create a worktree (default)
 

@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $kanbanDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # --- kanban-md ---
-$kanbanVersion = '0.32.2'
+$kanbanVersion = '0.33.0'
 $kanbanExe = Join-Path $kanbanDir 'kanban-md.exe'
 
 if (Test-Path $kanbanExe) {
