@@ -193,10 +193,13 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 
 ### Agent inventory
 
-| Agent          | Role                                                             | Pattern                                       |
-| -------------- | ---------------------------------------------------------------- | --------------------------------------------- |
-| kanban-planner | Use when a plan or feature needs decomposition into kanban tasks | User-invokable, TDD-first decomposition       |
-| orchestrator   | Use when tasks need to be executed from the kanban board         | User-invokable, wave-based parallel execution |
+| Agent          | Role                                                             | Pattern                                        |
+| -------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| kanban-planner | Use when a plan or feature needs decomposition into kanban tasks | User-invokable, TDD-first decomposition        |
+| orchestrator   | Use when tasks need to be executed from the kanban board         | User-invokable, wave-based parallel execution  |
+| researcher     | Investigate topics, produce structured findings + kanban tasks   | Read-only, comparison tables, source-backed    |
+| builder        | Implement kanban tasks with TDD                                  | Full edit access, TDD mandatory, surgical diff |
+| reviewer       | Read-only quality verification of completed work                 | Never edits, evidence-based PASS/FAIL verdict  |
 
 ### Skill inventory
 
@@ -221,6 +224,9 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 | --------------------------------------- | -------------- | ----------------------------------------------------------- |
 | `.github/prompts/orchestrate.prompt.md` | orchestrator   | Start orchestration with a scope filter                     |
 | `.github/prompts/plan.prompt.md`        | kanban-planner | Decompose a plan into atomic, dependency-aware kanban tasks |
+| `.github/prompts/research.prompt.md`    | researcher     | Start a research investigation on a topic                   |
+| `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                |
+| `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                 |
 
 ## Attribution
 
