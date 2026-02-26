@@ -26,6 +26,9 @@ here: authentication, task management, and daemon control.
 bearclaw --version       # print version
 bearclaw auth login      # authenticate with GitHub Copilot
 bearclaw auth status     # check token status
+bearclaw browser start [--port 9222]   # launch Edge with CDP debug port
+bearclaw browser stop                  # stop tracked browser
+bearclaw browser status [--port 9222]  # check CDP connection
 ```
 
 ## Architecture
