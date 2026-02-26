@@ -48,7 +48,7 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 | HTTP                | httpx + truststore          | Async HTTP client with system certificate trust      |
 | Config              | pydantic-settings           | Env vars + TOML config file, validated at startup    |
 | Knowledge (planned) | Knowledge graph + vector DB | Structured memory with embeddings; DB tech TBD       |
-| Browser (planned)   | Playwright                  | Non-headless for credential-gated intranet sites     |
+| Browser             | Playwright                  | Launch or attach via CDP (`localhost` only); see `bearclaw browser` CLI |
 | Voice (planned)     | Whisper STT + pyttsx3 TTS   | Local-first voice I/O                                |
 | Task board          | kanban-md                   | Go CLI binary in `kanban/`, file-based kanban        |
 
@@ -222,15 +222,16 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 
 ### Prompt file inventory
 
-| File                                    | Agent          | Description                                                 |
-| --------------------------------------- | -------------- | ----------------------------------------------------------- |
-| `.github/prompts/orchestrate.prompt.md` | orchestrator   | Start orchestration with a scope filter                     |
-| `.github/prompts/plan.prompt.md`        | kanban-planner | Decompose a plan into atomic, dependency-aware kanban tasks |
-| `.github/prompts/research.prompt.md`    | researcher     | Start a research investigation on a topic                   |
-| `.github/prompts/architect.prompt.md`   | architect      | Review backlog tasks, refine AC, approve for development    |
-| `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                |
-| `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                 |
-| `.github/prompts/writer.prompt.md`      | writer         | Verify and update docs for completed tasks                  |
+| File                                    | Agent          | Description                                                   |
+| --------------------------------------- | -------------- | ------------------------------------------------------------- |
+| `.github/prompts/orchestrate.prompt.md` | orchestrator   | Start orchestration with a scope filter                       |
+| `.github/prompts/plan.prompt.md`        | kanban-planner | Decompose a plan into atomic, dependency-aware kanban tasks   |
+| `.github/prompts/research.prompt.md`    | researcher     | Start a research investigation on a topic                     |
+| `.github/prompts/architect.prompt.md`   | architect      | Review backlog tasks, refine AC, approve for development      |
+| `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                  |
+| `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                   |
+| `.github/prompts/writer.prompt.md`      | writer         | Verify and update docs for completed tasks                    |
+| `.github/prompts/commit.prompt.md`      | _(any)_        | Group changes into logical commits with conventional messages |
 
 ## Attribution
 
