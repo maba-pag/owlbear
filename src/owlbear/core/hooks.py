@@ -27,6 +27,7 @@ class HookEvent(StrEnum):
     POST_TOOL_USE = "post_tool_use"
     ON_MESSAGE = "on_message"
     ON_ERROR = "on_error"
+    SUBAGENT_COMPLETE = "subagent_complete"
 
 
 class HookRegistry:

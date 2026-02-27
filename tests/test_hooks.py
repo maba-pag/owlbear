@@ -30,6 +30,9 @@ class TestHookEvent:
     def test_has_on_error(self) -> None:
         assert HookEvent.ON_ERROR == "on_error"
 
+    def test_has_subagent_complete(self) -> None:
+        assert HookEvent.SUBAGENT_COMPLETE == "subagent_complete"
+
 
 class TestHookRegistrySync:
     """Synchronous handler registration and emission."""
