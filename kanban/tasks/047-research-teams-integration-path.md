@@ -1,10 +1,12 @@
 ---
 id: 47
 title: Research Teams integration path
-status: ideation
+status: done
 priority: low
 created: 2026-02-26T15:57:31.9264163+01:00
-updated: 2026-02-26T18:53:13.2953801+01:00
+updated: 2026-02-27T00:54:19.1456237+01:00
+started: 2026-02-27T00:39:20.7125549+01:00
+completed: 2026-02-27T00:54:19.1456237+01:00
 tags:
     - phase-4
     - research
