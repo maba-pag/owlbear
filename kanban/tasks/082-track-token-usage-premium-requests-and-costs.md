@@ -1,10 +1,12 @@
 ---
 id: 82
 title: Track token usage, premium requests, and costs
-status: ideation
+status: done
 priority: medium
 created: 2026-02-27T01:33:42.7518913+01:00
-updated: 2026-02-27T01:33:42.7518913+01:00
+updated: 2026-02-27T03:25:19.9304824+01:00
+started: 2026-02-27T03:04:05.7317829+01:00
+completed: 2026-02-27T03:25:19.9304824+01:00
 tags:
     - ideation
     - observability

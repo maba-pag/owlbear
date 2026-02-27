@@ -41,4 +41,4 @@ tui:
         - after: 168h
           color: "196"
     hide_empty_columns: true
-next_id: 91
+next_id: 120

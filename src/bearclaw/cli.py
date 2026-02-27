@@ -153,9 +153,7 @@ def slack_test() -> None:
         raise typer.Exit(code=1) from exc
 
     if not data.get("ok"):
-        typer.echo(
-            f"Error: chat.postMessage failed — {data.get('error', 'unknown error')}"
-        )
+        typer.echo(f"Error: chat.postMessage failed — {data.get('error', 'unknown error')}")
         raise typer.Exit(code=1)
 
     typer.echo(f"Test message sent to channel {channel_id}")

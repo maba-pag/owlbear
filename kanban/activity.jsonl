@@ -677,3 +677,126 @@
 {"timestamp":"2026-02-27T02:40:01.4180416+01:00","action":"move","task_id":90,"detail":"in-progress -\u003e docs"}
 {"timestamp":"2026-02-27T02:40:07.5366546+01:00","action":"move","task_id":84,"detail":"docs -\u003e done"}
 {"timestamp":"2026-02-27T02:40:08.1669141+01:00","action":"move","task_id":90,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T03:04:04.8568311+01:00","action":"move","task_id":49,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-27T03:04:05.2966894+01:00","action":"move","task_id":65,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-27T03:04:05.7339506+01:00","action":"move","task_id":82,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-27T03:07:31.0957231+01:00","action":"create","task_id":91,"detail":"Add [voice] optional dependency group to pyproject.toml"}
+{"timestamp":"2026-02-27T03:07:40.4684641+01:00","action":"create","task_id":92,"detail":"Create src/owlbear/voice/stt.py — STTEngine wrapping faster-whisper"}
+{"timestamp":"2026-02-27T03:07:47.5785168+01:00","action":"create","task_id":93,"detail":"Create src/owlbear/voice/tts.py — TTSEngine wrapping pyttsx3"}
+{"timestamp":"2026-02-27T03:07:54.6927185+01:00","action":"create","task_id":94,"detail":"Create src/owlbear/voice/recorder.py — AudioRecorder wrapping PyAudio"}
+{"timestamp":"2026-02-27T03:08:02.1358762+01:00","action":"create","task_id":95,"detail":"Create src/owlbear/voice/channel.py — VoiceChannel implementing ChannelPlugin"}
+{"timestamp":"2026-02-27T03:08:09.5590494+01:00","action":"create","task_id":96,"detail":"Add bearclaw voice CLI subcommand for testing voice I/O"}
+{"timestamp":"2026-02-27T03:08:15.0131911+01:00","action":"move","task_id":49,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T03:15:01.2568636+01:00","action":"create","task_id":97,"detail":"Enhance tab title prefix with task label and MutationObserver"}
+{"timestamp":"2026-02-27T03:15:10.3551538+01:00","action":"create","task_id":98,"detail":"Test Edge Stable --load-extension sideloading flag"}
+{"timestamp":"2026-02-27T03:15:19.3221034+01:00","action":"create","task_id":99,"detail":"Spike: favicon badge injection for OwlBear tabs"}
+{"timestamp":"2026-02-27T03:15:24.7843727+01:00","action":"move","task_id":65,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T03:20:33.6548209+01:00","action":"create","task_id":100,"detail":"Create UsageRecord model and UsageTracker service"}
+{"timestamp":"2026-02-27T03:20:41.1353557+01:00","action":"create","task_id":101,"detail":"Integrate usage capture into OwlBearAgent.turn()"}
+{"timestamp":"2026-02-27T03:20:48.9699313+01:00","action":"create","task_id":102,"detail":"Add genai-prices dependency and cost calculation wrapper"}
+{"timestamp":"2026-02-27T03:20:56.63733+01:00","action":"create","task_id":103,"detail":"Add Copilot premium request multiplier lookup"}
+{"timestamp":"2026-02-27T03:21:05.3165486+01:00","action":"create","task_id":104,"detail":"Create bearclaw usage CLI command"}
+{"timestamp":"2026-02-27T03:21:12.8097939+01:00","action":"create","task_id":105,"detail":"Tests for usage tracking system"}
+{"timestamp":"2026-02-27T03:21:18.2272037+01:00","action":"move","task_id":82,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T03:25:12.8296839+01:00","action":"move","task_id":49,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T03:25:13.2285079+01:00","action":"move","task_id":65,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T03:25:13.6512352+01:00","action":"move","task_id":82,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T03:25:19.0111154+01:00","action":"move","task_id":49,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T03:25:19.4119572+01:00","action":"move","task_id":65,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T03:25:19.9323874+01:00","action":"move","task_id":82,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T03:31:10.9811259+01:00","action":"create","task_id":106,"detail":"Add sqlite-vec and fastembed to pyproject.toml"}
+{"timestamp":"2026-02-27T03:31:16.024638+01:00","action":"create","task_id":107,"detail":"Create owlbear.memory.knowledge.schema module"}
+{"timestamp":"2026-02-27T03:31:21.0101557+01:00","action":"create","task_id":108,"detail":"Create owlbear.memory.knowledge.models module"}
+{"timestamp":"2026-02-27T03:31:26.1680402+01:00","action":"create","task_id":109,"detail":"Create owlbear.memory.knowledge.graph module"}
+{"timestamp":"2026-02-27T03:31:31.4205917+01:00","action":"create","task_id":110,"detail":"Create owlbear.memory.knowledge.vectors module"}
+{"timestamp":"2026-02-27T03:31:36.4313128+01:00","action":"create","task_id":111,"detail":"Create owlbear.memory.knowledge.embeddings module"}
+{"timestamp":"2026-02-27T03:31:42.1285705+01:00","action":"create","task_id":112,"detail":"Add knowledge_db_path to OwlBearSettings"}
+{"timestamp":"2026-02-27T03:31:47.4381204+01:00","action":"create","task_id":113,"detail":"Write tests for knowledge subpackage"}
+{"timestamp":"2026-02-27T03:32:26.3173084+01:00","action":"move","task_id":50,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-02-27T03:32:26.8323716+01:00","action":"move","task_id":50,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T03:32:27.2797206+01:00","action":"move","task_id":50,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T03:32:41.6184626+01:00","action":"move","task_id":91,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:42.0051581+01:00","action":"move","task_id":92,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:42.4177454+01:00","action":"move","task_id":93,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:42.8231987+01:00","action":"move","task_id":94,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:43.2297137+01:00","action":"move","task_id":95,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:43.6490878+01:00","action":"move","task_id":96,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:44.0545129+01:00","action":"move","task_id":97,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:44.4677696+01:00","action":"move","task_id":98,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:44.8838605+01:00","action":"move","task_id":99,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:45.2671947+01:00","action":"move","task_id":100,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:45.6653376+01:00","action":"move","task_id":101,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:46.0806107+01:00","action":"move","task_id":102,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:46.5208816+01:00","action":"move","task_id":103,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:46.9486465+01:00","action":"move","task_id":104,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:47.3998155+01:00","action":"move","task_id":105,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:47.7796546+01:00","action":"move","task_id":106,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:48.1800571+01:00","action":"move","task_id":107,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:48.6519558+01:00","action":"move","task_id":108,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:49.0411136+01:00","action":"move","task_id":109,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:49.431151+01:00","action":"move","task_id":110,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:49.8564727+01:00","action":"move","task_id":111,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:50.284659+01:00","action":"move","task_id":112,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:32:50.8395458+01:00","action":"move","task_id":113,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T03:38:15.0693673+01:00","action":"edit","task_id":91,"detail":"Add [voice] optional dependency group to pyproject.toml"}
+{"timestamp":"2026-02-27T03:38:15.9630235+01:00","action":"create","task_id":114,"detail":"Tests for enhanced tab title prefix (task_label + MutationObserver)"}
+{"timestamp":"2026-02-27T03:38:29.4851918+01:00","action":"edit","task_id":92,"detail":"Create src/owlbear/voice/stt.py — STTEngine wrapping faster-whisper"}
+{"timestamp":"2026-02-27T03:38:36.4553012+01:00","action":"edit","task_id":93,"detail":"Create src/owlbear/voice/tts.py — TTSEngine wrapping pyttsx3"}
+{"timestamp":"2026-02-27T03:38:42.6843505+01:00","action":"edit","task_id":97,"detail":"Enhance tab title prefix with task label and MutationObserver"}
+{"timestamp":"2026-02-27T03:38:43.848736+01:00","action":"edit","task_id":94,"detail":"Create src/owlbear/voice/recorder.py — AudioRecorder wrapping PyAudio"}
+{"timestamp":"2026-02-27T03:38:48.2634119+01:00","action":"edit","task_id":97,"detail":"Enhance tab title prefix with task label and MutationObserver"}
+{"timestamp":"2026-02-27T03:38:52.0908746+01:00","action":"edit","task_id":95,"detail":"Create src/owlbear/voice/channel.py — VoiceChannel implementing ChannelPlugin"}
+{"timestamp":"2026-02-27T03:39:00.0696303+01:00","action":"edit","task_id":96,"detail":"Add bearclaw voice CLI subcommand for testing voice I/O"}
+{"timestamp":"2026-02-27T03:39:02.5682207+01:00","action":"edit","task_id":98,"detail":"Test Edge Stable --load-extension sideloading flag"}
+{"timestamp":"2026-02-27T03:39:07.9917349+01:00","action":"edit","task_id":106,"detail":"Add sqlite-vec and fastembed to pyproject.toml"}
+{"timestamp":"2026-02-27T03:39:15.8199526+01:00","action":"edit","task_id":99,"detail":"Spike: favicon badge injection for OwlBear tabs"}
+{"timestamp":"2026-02-27T03:39:18.7532761+01:00","action":"edit","task_id":112,"detail":"Add knowledge_db_path to OwlBearSettings"}
+{"timestamp":"2026-02-27T03:39:21.3311637+01:00","action":"move","task_id":114,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:26.1716642+01:00","action":"move","task_id":97,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:26.6462761+01:00","action":"move","task_id":98,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:36.0281798+01:00","action":"move","task_id":99,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:42.6295779+01:00","action":"move","task_id":91,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:48.4952339+01:00","action":"move","task_id":92,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:53.6870228+01:00","action":"move","task_id":93,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:53.6945517+01:00","action":"move","task_id":94,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:53.7014456+01:00","action":"move","task_id":95,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:53.7079788+01:00","action":"move","task_id":96,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:39:56.2982594+01:00","action":"edit","task_id":105,"detail":"Tests for usage tracking system"}
+{"timestamp":"2026-02-27T03:40:06.7161191+01:00","action":"move","task_id":105,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:40:23.4365219+01:00","action":"edit","task_id":100,"detail":"Create UsageRecord model and UsageTracker service"}
+{"timestamp":"2026-02-27T03:40:27.8069494+01:00","action":"move","task_id":98,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-02-27T03:40:32.7505718+01:00","action":"move","task_id":99,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-02-27T03:40:44.1998643+01:00","action":"move","task_id":100,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:40:56.4299753+01:00","action":"edit","task_id":102,"detail":"Add genai-prices dependency and cost calculation wrapper"}
+{"timestamp":"2026-02-27T03:41:09.736782+01:00","action":"move","task_id":102,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:41:21.7967703+01:00","action":"edit","task_id":103,"detail":"Add Copilot premium request multiplier lookup"}
+{"timestamp":"2026-02-27T03:41:26.4114497+01:00","action":"move","task_id":103,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:41:41.2227884+01:00","action":"edit","task_id":101,"detail":"Integrate usage capture into OwlBearAgent.turn()"}
+{"timestamp":"2026-02-27T03:41:55.6830825+01:00","action":"move","task_id":101,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:42:09.843439+01:00","action":"edit","task_id":104,"detail":"Create bearclaw usage CLI command"}
+{"timestamp":"2026-02-27T03:42:14.5530108+01:00","action":"move","task_id":104,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:42:22.042163+01:00","action":"delete","task_id":113,"detail":"Write tests for knowledge subpackage"}
+{"timestamp":"2026-02-27T03:42:28.9293258+01:00","action":"create","task_id":115,"detail":"Test knowledge models (Entity, Edge, Document)"}
+{"timestamp":"2026-02-27T03:42:34.8719209+01:00","action":"create","task_id":116,"detail":"Test knowledge schema DDL and init_db"}
+{"timestamp":"2026-02-27T03:42:40.8054327+01:00","action":"create","task_id":117,"detail":"Test knowledge graph CRUD operations"}
+{"timestamp":"2026-02-27T03:42:46.5947505+01:00","action":"create","task_id":118,"detail":"Test knowledge vector search operations"}
+{"timestamp":"2026-02-27T03:42:51.849937+01:00","action":"create","task_id":119,"detail":"Test knowledge embeddings provider"}
+{"timestamp":"2026-02-27T03:43:47.3609981+01:00","action":"edit","task_id":108,"detail":"Create owlbear.memory.knowledge.models module"}
+{"timestamp":"2026-02-27T03:43:52.1131965+01:00","action":"edit","task_id":107,"detail":"Create owlbear.memory.knowledge.schema module"}
+{"timestamp":"2026-02-27T03:43:57.1379467+01:00","action":"edit","task_id":109,"detail":"Create owlbear.memory.knowledge.graph module"}
+{"timestamp":"2026-02-27T03:44:02.2543814+01:00","action":"edit","task_id":110,"detail":"Create owlbear.memory.knowledge.vectors module"}
+{"timestamp":"2026-02-27T03:44:07.0981509+01:00","action":"edit","task_id":111,"detail":"Create owlbear.memory.knowledge.embeddings module"}
+{"timestamp":"2026-02-27T03:44:36.6429721+01:00","action":"move","task_id":106,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:44:41.3332329+01:00","action":"move","task_id":112,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:44:46.3756618+01:00","action":"move","task_id":115,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:44:53.0309411+01:00","action":"move","task_id":108,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:44:57.9829292+01:00","action":"move","task_id":116,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:03.4203945+01:00","action":"move","task_id":107,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:08.2199148+01:00","action":"move","task_id":117,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:12.9828213+01:00","action":"move","task_id":109,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:17.7296865+01:00","action":"move","task_id":118,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:24.0925053+01:00","action":"move","task_id":110,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:28.9944796+01:00","action":"move","task_id":119,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:45:34.2631908+01:00","action":"move","task_id":111,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:47:13.5252803+01:00","action":"move","task_id":98,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T03:47:13.966142+01:00","action":"move","task_id":99,"detail":"backlog -\u003e todo"}

@@ -1,11 +1,12 @@
 ---
 id: 50
 title: Research knowledge graph + vector DB technology
-status: backlog
+status: done
 priority: high
 created: 2026-02-26T18:52:39.2041727+01:00
-updated: 2026-02-26T19:43:05.0899992+01:00
+updated: 2026-02-27T03:32:27.2772391+01:00
 started: 2026-02-26T19:43:05.0899992+01:00
+completed: 2026-02-27T03:32:27.2772391+01:00
 tags:
     - research
     - memory

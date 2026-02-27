@@ -1,10 +1,12 @@
 ---
 id: 49
 title: Design voice I/O module
-status: ideation
+status: done
 priority: low
 created: 2026-02-26T15:57:43.8950802+01:00
-updated: 2026-02-26T18:53:18.1031326+01:00
+updated: 2026-02-27T03:25:19.0094689+01:00
+started: 2026-02-27T03:04:04.8548953+01:00
+completed: 2026-02-27T03:25:19.0094689+01:00
 tags:
     - phase-5
     - research
