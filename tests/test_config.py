@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr, ValidationError
 
 from owlbear.config import OwlBearSettings
 
@@ -64,3 +65,68 @@ class TestOwlBearSettingsEnvOverrides:
         monkeypatch.setenv("OWLBEAR_COPILOT_BASE_URL", "https://custom.api.example.com")
         settings = OwlBearSettings()
         assert settings.copilot_base_url == "https://custom.api.example.com"
+
+
+class TestSlackSettingsDefaults:
+    """Verify Slack fields default to None."""
+
+    def test_slack_app_token_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.slack_app_token is None
+
+    def test_slack_bot_token_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.slack_bot_token is None
+
+    def test_slack_channel_id_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.slack_channel_id is None
+
+
+class TestSlackSettingsAllSet:
+    """All three Slack fields set should work fine."""
+
+    def test_all_slack_fields_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
+        monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
+        monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
+        settings = OwlBearSettings()
+        assert isinstance(settings.slack_app_token, SecretStr)
+        assert settings.slack_app_token.get_secret_value() == "xapp-1-A111-222-abc"
+        assert isinstance(settings.slack_bot_token, SecretStr)
+        assert settings.slack_bot_token.get_secret_value() == "xoxb-111-222-abc"
+        assert settings.slack_channel_id == "C12345678"
+
+
+class TestSlackSettingsPartialRaises:
+    """If any Slack field is set, all three must be set — otherwise ValidationError."""
+
+    def test_only_app_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
+
+    def test_only_bot_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
+
+    def test_only_channel_id_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
+
+    def test_app_and_bot_without_channel_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
+        monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
+
+    def test_app_and_channel_without_bot_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
+        monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
+
+    def test_bot_and_channel_without_app_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
+        monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
+        with pytest.raises(ValidationError, match="Slack"):
+            OwlBearSettings()
