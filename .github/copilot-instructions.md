@@ -37,20 +37,20 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 
 ## Tech stack
 
-| Component           | Technology                  | Notes                                                |
-| ------------------- | --------------------------- | ---------------------------------------------------- |
-| Language            | Python 3.12+                | `uv` package manager, never bare `pip`               |
-| Runtime             | Standalone daemon           | Background process started via BearClaw CLI          |
-| Agents              | PydanticAI                  | Structured output, dependency injection              |
-| LLM provider        | GitHub Copilot OAuth        | Device-flow auth, `api.individual.githubcopilot.com` |
-| Retry               | tenacity                    | Exponential backoff, jitter, max 5 attempts          |
-| CLI                 | Typer (BearClaw)            | Entry point for daemon, auth, and user commands      |
-| HTTP                | httpx + truststore          | Async HTTP client with system certificate trust      |
-| Config              | pydantic-settings           | Env vars + TOML config file, validated at startup    |
-| Knowledge (planned) | Knowledge graph + vector DB | Structured memory with embeddings; DB tech TBD       |
+| Component           | Technology                  | Notes                                                                   |
+| ------------------- | --------------------------- | ----------------------------------------------------------------------- |
+| Language            | Python 3.12+                | `uv` package manager, never bare `pip`                                  |
+| Runtime             | Standalone daemon           | Background process started via BearClaw CLI                             |
+| Agents              | PydanticAI                  | Structured output, dependency injection                                 |
+| LLM provider        | GitHub Copilot OAuth        | Device-flow auth, `api.individual.githubcopilot.com`                    |
+| Retry               | tenacity                    | Exponential backoff, jitter, max 5 attempts                             |
+| CLI                 | Typer (BearClaw)            | Entry point for daemon, auth, and user commands                         |
+| HTTP                | httpx + truststore          | Async HTTP client with system certificate trust                         |
+| Config              | pydantic-settings           | Env vars + TOML config file, validated at startup                       |
+| Knowledge (planned) | Knowledge graph + vector DB | Structured memory with embeddings; DB tech TBD                          |
 | Browser             | Playwright                  | Launch or attach via CDP (`localhost` only); see `bearclaw browser` CLI |
-| Voice (planned)     | Whisper STT + pyttsx3 TTS   | Local-first voice I/O                                |
-| Task board          | kanban-md                   | Go CLI binary in `kanban/`, file-based kanban        |
+| Voice (planned)     | Whisper STT + pyttsx3 TTS   | Local-first voice I/O                                                   |
+| Task board          | kanban-md                   | Go CLI binary in `kanban/`, file-based kanban                           |
 
 ## kanban-md usage
 

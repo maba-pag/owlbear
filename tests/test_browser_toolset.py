@@ -353,9 +353,7 @@ class TestBrowserToolsetCDPSetupTeardown:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_setup_cdp_creates_manager_with_cdp_config(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_setup_cdp_creates_manager_with_cdp_config(self, mock_mgr_cls: MagicMock) -> None:
         """BrowserManager is constructed with the CDP config."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
@@ -368,9 +366,7 @@ class TestBrowserToolsetCDPSetupTeardown:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_setup_cdp_enters_manager(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_setup_cdp_enters_manager(self, mock_mgr_cls: MagicMock) -> None:
         """__aenter__ is called (triggers connect_over_cdp internally)."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
@@ -383,9 +379,7 @@ class TestBrowserToolsetCDPSetupTeardown:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_teardown_cdp_exits_manager(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_teardown_cdp_exits_manager(self, mock_mgr_cls: MagicMock) -> None:
         """teardown() calls __aexit__ (disconnects, does not close)."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
@@ -440,9 +434,7 @@ class TestBrowserToolsetCDPToolWrappers:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.browser_navigate", new_callable=AsyncMock)
-    async def test_navigate_safety_guard_in_cdp_mode(
-        self, mock_nav: AsyncMock
-    ) -> None:
+    async def test_navigate_safety_guard_in_cdp_mode(self, mock_nav: AsyncMock) -> None:
         """Navigate tool applies URL safety guard identically in CDP mode."""
         cdp_cfg = BrowserConfig(
             cdp_endpoint="http://localhost:9222",
@@ -474,9 +466,7 @@ class TestBrowserToolsetTabNaming:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_cdp_setup_sets_owlbear_title(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_cdp_setup_sets_owlbear_title(self, mock_mgr_cls: MagicMock) -> None:
         """In CDP mode, setup() sets window title with [OwlBear] prefix."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
@@ -485,15 +475,11 @@ class TestBrowserToolsetTabNaming:
         toolset = BrowserToolset(config=CDP_CONFIG)
         await toolset.setup()
 
-        page.evaluate.assert_awaited_once_with(
-            "document.title = '[OwlBear] ' + document.title"
-        )
+        page.evaluate.assert_awaited_once_with("document.title = '[OwlBear] ' + document.title")
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_launch_setup_no_title_setting(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_launch_setup_no_title_setting(self, mock_mgr_cls: MagicMock) -> None:
         """In launch mode, no title setting occurs."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
@@ -515,9 +501,7 @@ class TestBrowserToolsetCDPWarningLog:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_cdp_setup_logs_warning(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_cdp_setup_logs_warning(self, mock_mgr_cls: MagicMock) -> None:
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -532,9 +516,7 @@ class TestBrowserToolsetCDPWarningLog:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_launch_setup_no_cdp_warning(
-        self, mock_mgr_cls: MagicMock
-    ) -> None:
+    async def test_launch_setup_no_cdp_warning(self, mock_mgr_cls: MagicMock) -> None:
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr

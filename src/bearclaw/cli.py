@@ -61,9 +61,7 @@ app.add_typer(browser_app)
 
 @browser_app.command()
 def start(
-    port: Annotated[
-        int, typer.Option(help="CDP debugging port.")
-    ] = 9222,
+    port: Annotated[int, typer.Option(help="CDP debugging port.")] = 9222,
 ) -> None:
     """Launch Edge with Chrome DevTools Protocol enabled."""
     settings = OwlBearSettings()
@@ -97,9 +95,7 @@ def stop() -> None:
 
 @browser_app.command("status")
 def browser_status(
-    port: Annotated[
-        int, typer.Option(help="CDP debugging port.")
-    ] = 9222,
+    port: Annotated[int, typer.Option(help="CDP debugging port.")] = 9222,
 ) -> None:
     """Check whether the CDP endpoint is responding."""
     connected = asyncio.run(is_cdp_available(port=port))

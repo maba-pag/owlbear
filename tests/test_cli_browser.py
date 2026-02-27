@@ -113,9 +113,7 @@ class TestBrowserStop:
         assert not pid_file.exists()
 
     @patch("bearclaw.cli.OwlBearSettings")
-    def test_stop_exit_1_when_not_running(
-        self, mock_settings: object, tmp_path: Path
-    ) -> None:
+    def test_stop_exit_1_when_not_running(self, mock_settings: object, tmp_path: Path) -> None:
         """Exit code 1 and error message when no PID file exists."""
         mock_settings.return_value.config_dir = tmp_path  # type: ignore[union-attr]
         result = runner.invoke(app, ["browser", "stop"])

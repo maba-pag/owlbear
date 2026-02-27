@@ -83,12 +83,8 @@ class BrowserToolset(FunctionToolset):
         await self._manager.__aenter__()
 
         if self._config.cdp_endpoint:
-            await self.page.evaluate(
-                "document.title = '[OwlBear] ' + document.title"
-            )
-            logger.warning(
-                "CDP mode: attached to user browser — full session access"
-            )
+            await self.page.evaluate("document.title = '[OwlBear] ' + document.title")
+            logger.warning("CDP mode: attached to user browser — full session access")
 
     async def teardown(self) -> None:
         """Close browser — exits BrowserManager context."""
