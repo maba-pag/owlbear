@@ -552,3 +552,53 @@
 {"timestamp":"2026-02-27T00:17:11.5263488+01:00","action":"move","task_id":76,"detail":"todo -\u003e in-progress"}
 {"timestamp":"2026-02-27T00:18:39.8331596+01:00","action":"move","task_id":76,"detail":"in-progress -\u003e docs"}
 {"timestamp":"2026-02-27T00:19:11.6869638+01:00","action":"move","task_id":76,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:37:49.9326299+01:00","action":"move","task_id":16,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T00:37:56.8620686+01:00","action":"edit","task_id":16,"detail":"P3-01: Research VS Code hooks format and best patterns"}
+{"timestamp":"2026-02-27T00:38:03.4270115+01:00","action":"move","task_id":46,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T00:38:03.9066237+01:00","action":"edit","task_id":46,"detail":"Implement pre_tool_use safety hook"}
+{"timestamp":"2026-02-27T00:38:17.5393636+01:00","action":"edit","task_id":17,"detail":"P3-02: PostToolUse auto-lint hook"}
+{"timestamp":"2026-02-27T00:38:25.8258508+01:00","action":"edit","task_id":18,"detail":"P3-03: SessionStart context injection hook"}
+{"timestamp":"2026-02-27T00:38:37.5952549+01:00","action":"edit","task_id":19,"detail":"P3-04: PreToolUse command safety guard"}
+{"timestamp":"2026-02-27T00:38:46.1930746+01:00","action":"edit","task_id":20,"detail":"P3-05: SessionEnd test verification hook"}
+{"timestamp":"2026-02-27T00:38:54.9319641+01:00","action":"edit","task_id":21,"detail":"P3-06: SubagentComplete verification hook"}
+{"timestamp":"2026-02-27T00:39:19.8341474+01:00","action":"move","task_id":17,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:19.8432006+01:00","action":"move","task_id":18,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:19.8512698+01:00","action":"move","task_id":19,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:19.8596436+01:00","action":"move","task_id":20,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:19.8686656+01:00","action":"move","task_id":21,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:20.2514541+01:00","action":"move","task_id":17,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:39:20.2639615+01:00","action":"move","task_id":18,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:39:20.272976+01:00","action":"move","task_id":19,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:39:20.2824818+01:00","action":"move","task_id":20,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:39:20.2917609+01:00","action":"move","task_id":21,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:39:20.7149754+01:00","action":"move","task_id":47,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T00:39:21.2197155+01:00","action":"move","task_id":47,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T00:40:48.3897653+01:00","action":"move","task_id":17,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:40:48.3979397+01:00","action":"move","task_id":18,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:40:48.404649+01:00","action":"move","task_id":19,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:40:48.8006995+01:00","action":"move","task_id":47,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:47:06.8393585+01:00","action":"move","task_id":47,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:48:20.2779332+01:00","action":"move","task_id":18,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:50:34.7793449+01:00","action":"move","task_id":17,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:51:18.3461352+01:00","action":"move","task_id":19,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T00:52:45.0055613+01:00","action":"create","task_id":77,"detail":"Register Azure AD app for Graph API Teams access"}
+{"timestamp":"2026-02-27T00:53:01.5097955+01:00","action":"create","task_id":78,"detail":"Implement TeamsChannel adapter (Graph API + polling)"}
+{"timestamp":"2026-02-27T00:53:08.1902709+01:00","action":"create","task_id":79,"detail":"Add bearclaw teams CLI commands"}
+{"timestamp":"2026-02-27T00:53:14.5567231+01:00","action":"create","task_id":80,"detail":"Write tests for TeamsChannel adapter"}
+{"timestamp":"2026-02-27T00:53:21.107224+01:00","action":"create","task_id":81,"detail":"Document Teams setup in README"}
+{"timestamp":"2026-02-27T00:54:12.3909671+01:00","action":"move","task_id":17,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:54:12.3973623+01:00","action":"move","task_id":18,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:54:12.4079891+01:00","action":"move","task_id":19,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:54:12.8571795+01:00","action":"move","task_id":17,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:54:12.8656341+01:00","action":"move","task_id":18,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:54:12.8749675+01:00","action":"move","task_id":19,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:54:18.6912673+01:00","action":"move","task_id":47,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T00:54:19.1468041+01:00","action":"move","task_id":47,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T00:54:41.0333269+01:00","action":"move","task_id":20,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T00:54:41.042588+01:00","action":"move","task_id":21,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T01:03:41.7249889+01:00","action":"move","task_id":21,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T01:28:45.5406824+01:00","action":"move","task_id":20,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T01:30:09.1213009+01:00","action":"move","task_id":20,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T01:30:09.1342767+01:00","action":"move","task_id":21,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T01:30:09.785545+01:00","action":"move","task_id":20,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T01:30:09.7962575+01:00","action":"move","task_id":21,"detail":"docs -\u003e done"}
