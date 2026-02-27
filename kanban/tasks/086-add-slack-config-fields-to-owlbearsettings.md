@@ -1,10 +1,12 @@
 ---
 id: 86
 title: Add Slack config fields to OwlBearSettings
-status: ideation
+status: done
 priority: high
 created: 2026-02-27T01:45:01.565478+01:00
-updated: 2026-02-27T01:45:01.565478+01:00
+updated: 2026-02-27T02:21:58.1309277+01:00
+started: 2026-02-27T02:14:19.5091427+01:00
+completed: 2026-02-27T02:21:58.1309277+01:00
 tags:
     - phase-4
     - comms

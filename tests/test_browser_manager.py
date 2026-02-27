@@ -281,7 +281,7 @@ class TestBrowserManagerCDPConnect:
             from owlbear.tools.browser.manager import BrowserManager
 
             async with BrowserManager(config=cfg) as mgr:
-                assert mgr._context is pw_mocks["cdp_context"]  # noqa: SLF001
+                assert mgr._context is pw_mocks["cdp_context"]
                 pw_mocks["cdp_browser"].new_context.assert_not_awaited()
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -311,7 +311,7 @@ class TestBrowserManagerCDPConnect:
             from owlbear.tools.browser.manager import BrowserManager
 
             async with BrowserManager(config=cfg) as mgr:
-                assert mgr._is_cdp is True  # noqa: SLF001
+                assert mgr._is_cdp is True
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_launch_sets_is_cdp_false(self, pw_mocks):
@@ -319,7 +319,7 @@ class TestBrowserManagerCDPConnect:
             from owlbear.tools.browser.manager import BrowserManager
 
             async with BrowserManager() as mgr:
-                assert mgr._is_cdp is False  # noqa: SLF001
+                assert mgr._is_cdp is False
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_cdp_tracks_owned_pages(self, pw_mocks):
@@ -328,7 +328,7 @@ class TestBrowserManagerCDPConnect:
             from owlbear.tools.browser.manager import BrowserManager
 
             async with BrowserManager(config=cfg) as mgr:
-                assert pw_mocks["cdp_page"] in mgr._owned_pages  # noqa: SLF001
+                assert pw_mocks["cdp_page"] in mgr._owned_pages
 
 
 # ---------------------------------------------------------------------------

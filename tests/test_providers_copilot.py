@@ -53,7 +53,7 @@ class TestCreateCopilotClient:
             client = await create_copilot_client()
 
         # AsyncOpenAI stores custom headers; check via _custom_headers
-        assert client._custom_headers["Copilot-Integration-Id"] == "vscode-chat"  # noqa: SLF001
+        assert client._custom_headers["Copilot-Integration-Id"] == "vscode-chat"
 
     @pytest.mark.asyncio
     async def test_raises_runtime_error_when_no_token(self) -> None:

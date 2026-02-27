@@ -1,10 +1,12 @@
 ---
 id: 89
 title: Add bearclaw slack CLI commands
-status: ideation
+status: done
 priority: medium
 created: 2026-02-27T01:45:19.6636728+01:00
-updated: 2026-02-27T01:45:19.6636728+01:00
+updated: 2026-02-27T02:37:32.2957934+01:00
+started: 2026-02-27T02:14:22.5383157+01:00
+completed: 2026-02-27T02:37:32.2957934+01:00
 tags:
     - phase-4
     - comms

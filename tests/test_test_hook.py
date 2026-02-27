@@ -280,7 +280,7 @@ class TestTestVerificationHookConfigurable:
 
     def test_default_timeout_is_120(self) -> None:
         hook = TestVerificationHook()
-        assert hook._timeout == 120  # noqa: SLF001
+        assert hook._timeout == 120
 
 
 # ---------------------------------------------------------------------------

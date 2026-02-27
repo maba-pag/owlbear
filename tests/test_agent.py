@@ -188,4 +188,4 @@ class TestOwlBearAgentContext:
             session=SessionStore(tmp_path / "s.jsonl"),
             context=context,
         )
-        assert agent.inner._instructions == ["You are OwlBear."]  # noqa: SLF001
+        assert agent.inner._instructions == ["You are OwlBear."]

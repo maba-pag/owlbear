@@ -1,10 +1,12 @@
 ---
 id: 87
 title: Implement SlackChannel adapter (ChannelPlugin)
-status: ideation
+status: done
 priority: high
 created: 2026-02-27T01:45:07.8739871+01:00
-updated: 2026-02-27T01:45:07.8739871+01:00
+updated: 2026-02-27T02:32:07.1317948+01:00
+started: 2026-02-27T02:14:20.4261309+01:00
+completed: 2026-02-27T02:32:07.1317948+01:00
 tags:
     - phase-4
     - comms

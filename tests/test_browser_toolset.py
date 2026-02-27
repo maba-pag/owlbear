@@ -59,7 +59,7 @@ def _setup_toolset_with_mock_manager(page: AsyncMock) -> BrowserToolset:
     """Create a BrowserToolset with a mock manager injected (simulates setup)."""
     toolset = BrowserToolset()
     mgr = _make_mock_manager(page)
-    toolset._manager = mgr  # noqa: SLF001
+    toolset._manager = mgr
     return toolset
 
 
@@ -101,7 +101,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._navigate("https://example.com")  # noqa: SLF001
+        result = await toolset._navigate("https://example.com")
 
         mock_nav.assert_awaited_once_with(
             "https://example.com",
@@ -117,7 +117,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._click("#btn")  # noqa: SLF001
+        result = await toolset._click("#btn")
 
         mock_click.assert_awaited_once_with("#btn", page=page)
         assert result == "Clicked #btn"
@@ -129,7 +129,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._type("#input", "hello")  # noqa: SLF001
+        result = await toolset._type("#input", "hello")
 
         mock_type.assert_awaited_once_with("#input", "hello", page=page)
         assert result == "Typed 'hello' into #input"
@@ -141,7 +141,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._select("#dropdown", "opt1")  # noqa: SLF001
+        result = await toolset._select("#dropdown", "opt1")
 
         mock_select.assert_awaited_once_with("#dropdown", "opt1", page=page)
         assert result == "Selected 'opt1' in #dropdown"
@@ -153,7 +153,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._read_text()  # noqa: SLF001
+        result = await toolset._read_text()
 
         mock_read.assert_awaited_once_with(page=page, selector=None, max_length=5000)
         assert result == "page text"
@@ -165,7 +165,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._read_text(selector="#content", max_length=100)  # noqa: SLF001
+        result = await toolset._read_text(selector="#content", max_length=100)
 
         mock_read.assert_awaited_once_with(page=page, selector="#content", max_length=100)
         assert result == "element text"
@@ -177,7 +177,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._screenshot()  # noqa: SLF001
+        result = await toolset._screenshot()
 
         mock_ss.assert_awaited_once_with(page=page, selector=None, full_page=True)
         assert result == "base64png"
@@ -189,7 +189,7 @@ class TestBrowserToolsetDelegation:
         page = _make_mock_page()
         toolset = _setup_toolset_with_mock_manager(page)
 
-        result = await toolset._screenshot(selector="#hero", full_page=False)  # noqa: SLF001
+        result = await toolset._screenshot(selector="#hero", full_page=False)
 
         mock_ss.assert_awaited_once_with(page=page, selector="#hero", full_page=False)
         assert result == "element_png"
@@ -407,9 +407,9 @@ class TestBrowserToolsetCDPToolWrappers:
         page = _make_mock_page_with_evaluate()
         toolset = BrowserToolset(config=CDP_CONFIG)
         mgr = _make_mock_manager(page)
-        toolset._manager = mgr  # noqa: SLF001
+        toolset._manager = mgr
 
-        result = await toolset._navigate("https://example.com")  # noqa: SLF001
+        result = await toolset._navigate("https://example.com")
 
         mock_nav.assert_awaited_once_with(
             "https://example.com",
@@ -425,9 +425,9 @@ class TestBrowserToolsetCDPToolWrappers:
         page = _make_mock_page_with_evaluate()
         toolset = BrowserToolset(config=CDP_CONFIG)
         mgr = _make_mock_manager(page)
-        toolset._manager = mgr  # noqa: SLF001
+        toolset._manager = mgr
 
-        result = await toolset._read_text()  # noqa: SLF001
+        result = await toolset._read_text()
 
         mock_read.assert_awaited_once_with(page=page, selector=None, max_length=5000)
         assert result == "CDP page text"
@@ -444,9 +444,9 @@ class TestBrowserToolsetCDPToolWrappers:
         page = _make_mock_page_with_evaluate()
         toolset = BrowserToolset(config=cdp_cfg)
         mgr = _make_mock_manager(page)
-        toolset._manager = mgr  # noqa: SLF001
+        toolset._manager = mgr
 
-        await toolset._navigate("https://safe.com")  # noqa: SLF001
+        await toolset._navigate("https://safe.com")
 
         # Config with blocked_urls is passed through to navigate
         mock_nav.assert_awaited_once_with(
