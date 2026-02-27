@@ -4,7 +4,7 @@ Always-on, laptop-resident AI development system.
 
 ## Overview
 
-OwlBear receives user intent (via CLI, Teams, or voice), plans work, executes it
+OwlBear receives user intent (via CLI, Slack, or voice), plans work, executes it
 autonomously, and delivers results — with human approval gates for destructive or
 publishing actions. It owns the full build pipeline from ideation through delivery
 and operates as a standalone daemon process.
@@ -29,7 +29,70 @@ bearclaw auth status     # check token status
 bearclaw browser start [--port 9222]   # launch Edge with CDP debug port
 bearclaw browser stop                  # stop tracked browser
 bearclaw browser status [--port 9222]  # check CDP connection
+bearclaw slack auth                    # validate Slack tokens
+bearclaw slack test                    # send test message to configured channel
+bearclaw slack status                  # show Slack config and connection state
 ```
+
+## Slack Integration
+
+OwlBear uses Slack as its messaging channel. Socket Mode provides real-time
+messaging over an outbound WebSocket — no public endpoint or tunnel required.
+
+### Quick Setup
+
+1. **Create a free Slack workspace** at [slack.com/create](https://slack.com/create)
+2. **Create a Slack app** at [api.slack.com/apps](https://api.slack.com/apps) — use the manifest below for quick setup
+3. **Enable Socket Mode** — App Settings → Socket Mode → toggle on
+4. **Generate an app-level token** — Basic Information → App-Level Tokens → create with `connections:write` scope (prefix: `xapp-`)
+5. **Add bot scopes** — OAuth & Permissions → add `chat:write` and `im:history`
+6. **Install to workspace** — OAuth & Permissions → Install to Workspace → copy Bot User OAuth Token (prefix: `xoxb-`)
+7. **Subscribe to events** — Event Subscriptions → Subscribe to bot events → add `message.im`
+
+### App Manifest
+
+Use this manifest when creating your app for quick setup:
+
+```yaml
+display_information:
+  name: OwlBear
+  description: AI development assistant
+features:
+  bot_user:
+    display_name: OwlBear
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - im:history
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.im
+  socket_mode_enabled: true
+```
+
+### Configuration
+
+Set these environment variables (or add to `.env`):
+
+```bash
+OWLBEAR_SLACK_APP_TOKEN=xapp-...   # app-level token for Socket Mode
+OWLBEAR_SLACK_BOT_TOKEN=xoxb-...   # bot token for Web API
+OWLBEAR_SLACK_CHANNEL_ID=C...      # channel ID for outgoing messages
+```
+
+### CLI Commands
+
+```bash
+bearclaw slack auth      # validate tokens via auth.test API
+bearclaw slack test      # send a test message to the configured channel
+bearclaw slack status    # show token configuration and connection state
+```
+
+For architecture details and implementation rationale, see
+[docs/slack-integration-research.md](docs/slack-integration-research.md).
 
 ## Architecture
 

@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-OwlBear is an always-on, laptop-resident AI development system. It receives user intent (via CLI, Teams, or voice), extracts intent, plans work, executes it autonomously, and delivers results — with human approval gates for destructive or publishing actions. It owns the full build pipeline (ideation → spec → code → test → review → deliver) and operates as a standalone daemon process. VS Code remains the user's IDE for interactive work; OwlBear and VS Code share the filesystem (code, kanban board, sessions) as the integration point.
+OwlBear is an always-on, laptop-resident AI development system. It receives user intent (via CLI, Slack, or voice), extracts intent, plans work, executes it autonomously, and delivers results — with human approval gates for destructive or publishing actions. It owns the full build pipeline (ideation → spec → code → test → review → deliver) and operates as a standalone daemon process. VS Code remains the user's IDE for interactive work; OwlBear and VS Code share the filesystem (code, kanban board, sessions) as the integration point.
 
 ## Principles
 
@@ -49,6 +49,7 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 | Config              | pydantic-settings           | Env vars + TOML config file, validated at startup                       |
 | Knowledge (planned) | Knowledge graph + vector DB | Structured memory with embeddings; DB tech TBD                          |
 | Browser             | Playwright                  | Launch or attach via CDP (`localhost` only); see `bearclaw browser` CLI |
+| Messaging           | Slack (slack_sdk)           | Socket Mode WebSocket + AsyncWebClient; see `bearclaw slack` CLI        |
 | Voice (planned)     | Whisper STT + pyttsx3 TTS   | Local-first voice I/O                                                   |
 | Task board          | kanban-md                   | Go CLI binary in `kanban/`, file-based kanban                           |
 
