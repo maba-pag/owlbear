@@ -96,7 +96,11 @@ Polling interval: 5–15 seconds. Rate limit: Graph API allows ~10K requests per
 
 ## 5. Blocker: Azure AD App Registration — CLOSED
 
-> **2026-02-27 update:** The Graph API path is **permanently blocked**. IT admins restrict Entra ID app registrations — no local or Entra admin rights are available. Even the pre-registered "Microsoft Graph Command Line Tools" app (`14d82eec-204b-4c2f-b7e8-296a70dab67e`) is blocked by admin policy (AADSTS50105 — user not assigned).
+> **2026-02-27 update:** The Graph API path is **permanently blocked** at two independent levels:
+>
+> 1. **IT blocks app registrations** — no local or Entra admin rights. Even the pre-registered "Microsoft Graph Command Line Tools" app (`14d82eec-204b-4c2f-b7e8-296a70dab67e`) is blocked by admin policy (AADSTS50105 — user not assigned).
+>
+> 2. **Azure CLI piggyback fails** — Tested using Azure CLI's well-known client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) which is globally pre-consented for login. Login succeeds, but requesting `Chat.ReadWrite` / `ChatMessage.Send` scopes fails with **AADSTS65002**: "Consent between first party application and first party resource must be configured via preauthorization." Microsoft has not pre-authorized Chat scopes for the Azure CLI app. This is an Microsoft-side restriction that no IT admin can override.
 >
 > All three Microsoft approaches (M365 Agents SDK, Graph API, Composio with custom OAuth) require Azure AD app access. Power Automate is not a realistic workaround.
 >
