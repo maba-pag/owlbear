@@ -94,10 +94,23 @@ Polling interval: 5–15 seconds. Rate limit: Graph API allows ~10K requests per
 
 **Future upgrade path:** If real-time push becomes critical, migrate to M365 Agents SDK with a persistent dev tunnel or Azure relay. The ChannelPlugin abstraction makes this a swap-in replacement.
 
-## 5. Follow-up Tasks
+## 5. Blocker: Azure AD App Registration
 
-1. **Register Azure AD app for Graph API** — Create app registration with `Chat.ReadWrite` + `ChatMessage.Send` delegated permissions; configure device-flow redirect. Priority: high.
-2. **Implement `TeamsChannel` adapter** — `src/owlbear/channels/teams.py` conforming to `ChannelPlugin`. Uses `msgraph-sdk` + `msal` for auth, polling loop for `receive()`, Graph API for `send()`. Priority: high. Depends: task 1.
-3. **Add `bearclaw teams` CLI commands** — `bearclaw teams auth` (device-flow login), `bearclaw teams status` (connection check), `bearclaw teams chat` (set target chat ID). Priority: medium. Depends: task 2.
-4. **Write tests for TeamsChannel** — Unit tests with mocked Graph client. Integration test pattern for manual verification against real Teams tenant. Priority: high. Depends: task 2.
-5. **Document Teams setup in README** — User-facing setup guide: Azure AD app creation, permissions, `bearclaw teams auth` flow. Priority: low. Depends: task 3.
+> **2026-02-27 update:** The Graph API path is **blocked**. IT admins restrict Entra ID app registrations — no local or Entra admin rights are available. All three approaches (M365 Agents SDK, Graph API, and even Composio with custom OAuth) require an Azure AD app registration for `Chat.ReadWrite` / `ChatMessage.Send` permissions.
+>
+> **Options to unblock:**
+>
+> 1. Request IT to register the app on our behalf (provide the required permissions spec)
+> 2. Find an existing approved app/service principal with Graph Teams permissions we can reuse
+> 3. Use Power Automate / Logic Apps as a webhook relay (if available in the tenant) — these run under user credentials without a custom app registration
+> 4. Pivot to a different communication channel that doesn't require Azure AD (e.g., Slack, Discord, or a local web UI)
+>
+> All follow-up tasks (#77–#81) are **blocked** pending resolution.
+
+## 6. Follow-up Tasks
+
+1. **Register Azure AD app for Graph API** (#77) — **BLOCKED: IT admin restriction.** Create app registration with `Chat.ReadWrite` + `ChatMessage.Send` delegated permissions; configure device-flow redirect. Priority: high.
+2. **Implement `TeamsChannel` adapter** (#78) — `src/owlbear/channels/teams.py` conforming to `ChannelPlugin`. Uses `msgraph-sdk` + `msal` for auth, polling loop for `receive()`, Graph API for `send()`. Priority: high. Depends: #77.
+3. **Add `bearclaw teams` CLI commands** (#79) — `bearclaw teams auth` (device-flow login), `bearclaw teams status` (connection check), `bearclaw teams chat` (set target chat ID). Priority: medium. Depends: #78.
+4. **Write tests for TeamsChannel** (#80) — Unit tests with mocked Graph client. Integration test pattern for manual verification against real Teams tenant. Priority: high. Depends: #78.
+5. **Document Teams setup in README** (#81) — User-facing setup guide: Azure AD app creation, permissions, `bearclaw teams auth` flow. Priority: low. Depends: #79.

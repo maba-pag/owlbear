@@ -4,7 +4,7 @@ title: Document Teams setup in README
 status: ideation
 priority: low
 created: 2026-02-27T00:53:21.0983844+01:00
-updated: 2026-02-27T00:53:21.0983844+01:00
+updated: 2026-02-27T01:33:56.474139+01:00
 tags:
     - phase-4
     - comms
@@ -12,6 +12,8 @@ tags:
     - docs
 depends_on:
     - 79
+blocked: true
+block_reason: 'Blocked on #77 — Azure AD app registration not possible (IT admin restriction)'
 class: standard
 ---
 

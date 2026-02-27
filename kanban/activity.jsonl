@@ -602,3 +602,14 @@
 {"timestamp":"2026-02-27T01:30:09.1342767+01:00","action":"move","task_id":21,"detail":"review -\u003e docs"}
 {"timestamp":"2026-02-27T01:30:09.785545+01:00","action":"move","task_id":20,"detail":"docs -\u003e done"}
 {"timestamp":"2026-02-27T01:30:09.7962575+01:00","action":"move","task_id":21,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T01:33:42.7609385+01:00","action":"create","task_id":82,"detail":"Track token usage, premium requests, and costs"}
+{"timestamp":"2026-02-27T01:33:50.4007498+01:00","action":"edit","task_id":77,"detail":"Register Azure AD app for Graph API Teams access"}
+{"timestamp":"2026-02-27T01:33:50.4038038+01:00","action":"block","task_id":77,"detail":"Cannot register Azure AD app — IT admins block Entra ID app registrations. No local or Entra admin rights. Entire Graph API path is blocked without IT cooperation."}
+{"timestamp":"2026-02-27T01:33:56.4326662+01:00","action":"edit","task_id":78,"detail":"Implement TeamsChannel adapter (Graph API + polling)"}
+{"timestamp":"2026-02-27T01:33:56.4342328+01:00","action":"block","task_id":78,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
+{"timestamp":"2026-02-27T01:33:56.4485913+01:00","action":"edit","task_id":79,"detail":"Add bearclaw teams CLI commands"}
+{"timestamp":"2026-02-27T01:33:56.4533249+01:00","action":"block","task_id":79,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
+{"timestamp":"2026-02-27T01:33:56.4596894+01:00","action":"edit","task_id":80,"detail":"Write tests for TeamsChannel adapter"}
+{"timestamp":"2026-02-27T01:33:56.4670773+01:00","action":"block","task_id":80,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
+{"timestamp":"2026-02-27T01:33:56.4751978+01:00","action":"edit","task_id":81,"detail":"Document Teams setup in README"}
+{"timestamp":"2026-02-27T01:33:56.4830881+01:00","action":"block","task_id":81,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
