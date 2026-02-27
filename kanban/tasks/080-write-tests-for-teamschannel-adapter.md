@@ -1,10 +1,12 @@
 ---
 id: 80
 title: Write tests for TeamsChannel adapter
-status: ideation
+status: done
 priority: high
 created: 2026-02-27T00:53:14.5523451+01:00
-updated: 2026-02-27T01:33:56.45918+01:00
+updated: 2026-02-27T01:38:45.5300262+01:00
+started: 2026-02-27T01:38:44.5835916+01:00
+completed: 2026-02-27T01:38:44.5835916+01:00
 tags:
     - phase-4
     - comms
@@ -18,3 +20,6 @@ class: standard
 ---
 
 Unit tests with mocked Graph client (send, receive, connect, disconnect). Test polling logic, message deduplication, auth token refresh. See docs/teams-integration-research.md.
+
+[[2026-02-27]] Fri 01:38
+CLOSED: Teams path abandoned. Replaced by Slack tasks.

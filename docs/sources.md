@@ -49,3 +49,13 @@ External repos and resources studied during OwlBear development.
 | M365 Agents SDK Migration Guide | <https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/bf-migration-python> | N/A | Package mapping, initialization patterns, Teams bot examples | `docs/teams-integration-research.md` (comparison) | 2026-02-27 |
 | Microsoft Graph API — Teams notifications | <https://learn.microsoft.com/en-us/graph/teams-change-notification-in-microsoft-teams-overview> | N/A | Subscription model, webhook requirements, 60-min expiry | `docs/teams-integration-research.md` (real-time options analysis) | 2026-02-27 |
 | Composio Microsoft Teams toolkit | <https://composio.dev/toolkits/microsoft_teams> | N/A | 180 Teams tools inventory, MCP gateway model, OAuth2 managed auth | `docs/teams-integration-research.md` (comparison) | 2026-02-27 |
+
+## Slack Integration Research (Task #83)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Slack Socket Mode docs | <https://docs.slack.dev/apis/events-api/using-socket-mode> | N/A | Socket Mode protocol: WebSocket connection, envelope acknowledgment, no public endpoint | `docs/slack-integration-research.md` (architecture analysis) | 2026-02-27 |
+| Bolt for Python (slack_bolt) | <https://github.com/slackapi/bolt-python> | MIT | AsyncApp, SocketModeHandler, decorator patterns, AI Assistant class | `docs/slack-integration-research.md` (comparison) | 2026-02-27 |
+| Python Slack SDK (slack_sdk) | <https://github.com/slackapi/python-slack-sdk> | MIT | SocketModeClient (aiohttp), AsyncWebClient, listener pattern | `docs/slack-integration-research.md` (recommendation), future `src/owlbear/channels/slack.py` | 2026-02-27 |
+| slack_sdk Socket Mode docs | <https://docs.slack.dev/tools/python-slack-sdk/socket-mode> | N/A | Async SocketModeClient usage, aiohttp/websockets backends, event processing | `docs/slack-integration-research.md` (implementation approach) | 2026-02-27 |
+| Bolt Python AI Agent Template | <https://github.com/slack-samples/bolt-python-assistant-template> | MIT | Official AI assistant bot using Socket Mode, thread management, OpenAI integration | `docs/slack-integration-research.md` (prior art) | 2026-02-27 |

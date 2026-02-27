@@ -613,3 +613,27 @@
 {"timestamp":"2026-02-27T01:33:56.4670773+01:00","action":"block","task_id":80,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
 {"timestamp":"2026-02-27T01:33:56.4751978+01:00","action":"edit","task_id":81,"detail":"Document Teams setup in README"}
 {"timestamp":"2026-02-27T01:33:56.4830881+01:00","action":"block","task_id":81,"detail":"Blocked on #77 — Azure AD app registration not possible (IT admin restriction)"}
+{"timestamp":"2026-02-27T01:38:44.5607685+01:00","action":"move","task_id":77,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T01:38:44.5698812+01:00","action":"move","task_id":78,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T01:38:44.5778066+01:00","action":"move","task_id":79,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T01:38:44.5857602+01:00","action":"move","task_id":80,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T01:38:44.5940965+01:00","action":"move","task_id":81,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T01:38:45.0622444+01:00","action":"edit","task_id":77,"detail":"Register Azure AD app for Graph API Teams access"}
+{"timestamp":"2026-02-27T01:38:45.5139539+01:00","action":"edit","task_id":78,"detail":"Implement TeamsChannel adapter (Graph API + polling)"}
+{"timestamp":"2026-02-27T01:38:45.5225629+01:00","action":"edit","task_id":79,"detail":"Add bearclaw teams CLI commands"}
+{"timestamp":"2026-02-27T01:38:45.5311002+01:00","action":"edit","task_id":80,"detail":"Write tests for TeamsChannel adapter"}
+{"timestamp":"2026-02-27T01:38:45.5411353+01:00","action":"edit","task_id":81,"detail":"Document Teams setup in README"}
+{"timestamp":"2026-02-27T01:39:01.6086844+01:00","action":"create","task_id":83,"detail":"Research Slack integration path (replaces Teams #47)"}
+{"timestamp":"2026-02-27T01:39:07.3450024+01:00","action":"move","task_id":83,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T01:39:07.7644113+01:00","action":"move","task_id":83,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T01:39:08.1613249+01:00","action":"move","task_id":83,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T01:43:40.3862657+01:00","action":"move","task_id":83,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T01:44:49.3728594+01:00","action":"create","task_id":84,"detail":"Create Slack workspace + OwlBear app setup guide"}
+{"timestamp":"2026-02-27T01:44:55.5637039+01:00","action":"create","task_id":85,"detail":"Add slack_sdk[socket_mode] + aiohttp to pyproject.toml"}
+{"timestamp":"2026-02-27T01:45:01.5702417+01:00","action":"create","task_id":86,"detail":"Add Slack config fields to OwlBearSettings"}
+{"timestamp":"2026-02-27T01:45:07.8800346+01:00","action":"create","task_id":87,"detail":"Implement SlackChannel adapter (ChannelPlugin)"}
+{"timestamp":"2026-02-27T01:45:13.9059331+01:00","action":"create","task_id":88,"detail":"Write tests for SlackChannel adapter"}
+{"timestamp":"2026-02-27T01:45:19.6636728+01:00","action":"create","task_id":89,"detail":"Add bearclaw slack CLI commands"}
+{"timestamp":"2026-02-27T01:45:25.6208602+01:00","action":"create","task_id":90,"detail":"Document Slack setup in README"}
+{"timestamp":"2026-02-27T01:45:52.8203591+01:00","action":"move","task_id":83,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T01:45:53.2102544+01:00","action":"move","task_id":83,"detail":"docs -\u003e done"}

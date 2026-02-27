@@ -1,10 +1,12 @@
 ---
 id: 79
 title: Add bearclaw teams CLI commands
-status: ideation
+status: done
 priority: medium
 created: 2026-02-27T00:53:08.1856716+01:00
-updated: 2026-02-27T01:33:56.4453094+01:00
+updated: 2026-02-27T01:38:45.5214613+01:00
+started: 2026-02-27T01:38:44.576206+01:00
+completed: 2026-02-27T01:38:44.576206+01:00
 tags:
     - phase-4
     - comms
@@ -18,3 +20,6 @@ class: standard
 ---
 
 Add bearclaw teams auth (device-flow login), bearclaw teams status (connection check), bearclaw teams chat (set target chat ID). See docs/teams-integration-research.md.
+
+[[2026-02-27]] Fri 01:38
+CLOSED: Teams path abandoned. Replaced by Slack tasks.
