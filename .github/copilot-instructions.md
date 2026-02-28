@@ -62,7 +62,18 @@ For CLI commands, workflows, and cheatsheets, see the `kanban-md` and `kanban-ba
 ### Board structure
 
 - **Config:** `kanban/config.yml` — statuses: ideation → backlog → todo → in-progress → review → docs → done
+- **Priorities:** `someday` < `nice-to-have` < `important` (default) < `needed` < `critical`
 - **Tasks:** `kanban/tasks/*.md` — YAML frontmatter (id, title, status, priority, tags, depends_on) + body with acceptance criteria
+
+### Priority scheme
+
+| Priority       | Meaning                                          | When to use                             |
+| -------------- | ------------------------------------------------ | --------------------------------------- |
+| `someday`      | Future vision, no commitment                     | Ideas we might never build              |
+| `nice-to-have` | Useful improvement, no urgency                   | Build when everything important is done |
+| `important`    | Clear value, scheduled for a phase **(default)** | Most feature work lands here            |
+| `needed`       | Core capability, do soon                         | Required for the next milestone         |
+| `critical`     | Can't function without it                        | Current blocker — do immediately        |
 
 ### No worktrees
 
@@ -129,7 +140,7 @@ Tags are free-form (no config file — just `--tags` on create/edit). Use these 
 
 | Category     | Tags                                                        | Purpose                         |
 | ------------ | ----------------------------------------------------------- | ------------------------------- |
-| Phase        | `phase-1`, `phase-2`, `phase-3`, `phase-4`                  | Group tasks by project phase    |
+| Phase        | `phase-1` … `phase-12`                                      | Group tasks by project phase    |
 | Category     | `config`, `tooling`, `docs`, `test`, `cli`, `auth`, `agent` | What area the task touches      |
 | Specialty    | `hooks`, `model`, `rename`, `research`                      | Specific concern                |
 | Type prefix  | `type:build`, `type:test`, `type:docs`, `type:deploy`       | Task nature (what kind of work) |
@@ -232,6 +243,7 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 | `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                  |
 | `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                   |
 | `.github/prompts/writer.prompt.md`      | writer         | Verify and update docs for completed tasks                    |
+| `.github/prompts/audit.prompt.md`       | _(any)_        | Audit done tasks, archive confirmed, then commit in packages  |
 | `.github/prompts/commit.prompt.md`      | _(any)_        | Group changes into logical commits with conventional messages |
 
 ## Attribution
