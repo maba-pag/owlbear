@@ -23,6 +23,7 @@ class ContextManager:
     """
 
     def __init__(self, root: Path, *, filename: str = _DEFAULT_FILENAME) -> None:
+        self._root = root
         self._path = root / filename
 
     @property
@@ -48,7 +49,17 @@ class ContextManager:
     def instructions(self) -> str:
         """Context content formatted for ``Agent(instructions=...)``.
 
-        Returns an empty string when no context file is available, so it is
+        Combines the static context file with MEMORY.md (if present).
+        Returns an empty string when neither file is available, so it is
         always safe to pass directly to PydanticAI.
         """
-        return self.load() or ""
+        parts: list[str] = []
+        context = self.load()
+        if context:
+            parts.append(context)
+        memory_path = self._root / "MEMORY.md"
+        if memory_path.exists():
+            memory = memory_path.read_text(encoding="utf-8").strip()
+            if memory:
+                parts.append(memory)
+        return "\n\n".join(parts)

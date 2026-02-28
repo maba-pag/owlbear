@@ -8,6 +8,8 @@ Copilot-Integration-Id header.
 from __future__ import annotations
 
 from openai import AsyncOpenAI
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from owlbear.auth.copilot import derive_base_url, load_token
 from owlbear.config import OwlBearSettings
@@ -46,6 +48,29 @@ async def create_copilot_client(settings: OwlBearSettings | None = None) -> Asyn
         base_url=f"{base_url}/v1",
         default_headers=_COPILOT_INTEGRATION_HEADER,
     )
+
+
+async def create_copilot_model(settings: OwlBearSettings | None = None) -> OpenAIChatModel:
+    """Create a PydanticAI-compatible model backed by the Copilot API.
+
+    Calls :func:`create_copilot_client` to obtain an ``AsyncOpenAI`` client,
+    wraps it in an :class:`OpenAIProvider`, and returns an
+    :class:`OpenAIChatModel` ready to pass to ``Agent()`` or
+    ``OwlBearAgent()``.
+
+    Args:
+        settings: Optional settings override. Uses defaults when ``None``.
+
+    Returns:
+        Configured OpenAIChatModel instance.
+
+    Raises:
+        RuntimeError: If no valid Copilot token is cached.
+    """
+    settings = settings or OwlBearSettings()
+    client = await create_copilot_client(settings)
+    provider = OpenAIProvider(openai_client=client)
+    return OpenAIChatModel(settings.chat_model, provider=provider)
 
 
 # Future extensibility — add create_lmstudio_client() for local LM Studio provider

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -113,3 +113,68 @@ class TestCreateCopilotClient:
             client = await create_copilot_client()
 
         assert str(client.base_url) == "https://api.individual.githubcopilot.com/v1/"
+
+
+class TestCreateCopilotModel:
+    """Test create_copilot_model() bridge function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_openai_chat_model(self) -> None:
+        """create_copilot_model returns an OpenAIChatModel instance."""
+        from pydantic_ai.models.openai import OpenAIChatModel
+
+        from owlbear.providers.copilot import create_copilot_model
+
+        mock_client = MagicMock()
+        with patch(
+            "owlbear.providers.copilot.create_copilot_client",
+            return_value=mock_client,
+        ):
+            model = await create_copilot_model()
+
+        assert isinstance(model, OpenAIChatModel)
+
+    @pytest.mark.asyncio
+    async def test_forwards_chat_model_from_settings(self) -> None:
+        """settings.chat_model is used as the model name."""
+        from owlbear.providers.copilot import create_copilot_model
+
+        settings = OwlBearSettings(chat_model="gpt-4.1")
+        mock_client = MagicMock()
+        with patch(
+            "owlbear.providers.copilot.create_copilot_client",
+            return_value=mock_client,
+        ):
+            model = await create_copilot_model(settings)
+
+        assert model.model_name == "gpt-4.1"
+
+    @pytest.mark.asyncio
+    async def test_propagates_runtime_error_when_no_token(self) -> None:
+        """RuntimeError from create_copilot_client propagates unchanged."""
+        from owlbear.providers.copilot import create_copilot_model
+
+        with (
+            patch(
+                "owlbear.providers.copilot.create_copilot_client",
+                side_effect=RuntimeError("No valid Copilot token"),
+            ),
+            pytest.raises(RuntimeError, match="No valid Copilot token"),
+        ):
+            await create_copilot_model()
+
+    @pytest.mark.asyncio
+    async def test_wraps_client_in_openai_provider(self) -> None:
+        """The returned model uses an OpenAIProvider wrapping the client."""
+        from pydantic_ai.providers.openai import OpenAIProvider
+
+        from owlbear.providers.copilot import create_copilot_model
+
+        mock_client = MagicMock()
+        with patch(
+            "owlbear.providers.copilot.create_copilot_client",
+            return_value=mock_client,
+        ):
+            model = await create_copilot_model()
+
+        assert isinstance(model._provider, OpenAIProvider)

@@ -7,10 +7,13 @@ Run ``bearclaw --help`` to see available commands.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import ssl
+import subprocess
 import webbrowser
-from typing import Annotated
+from datetime import timedelta
+from typing import TYPE_CHECKING, Annotated
 
 import httpx
 import truststore
@@ -26,11 +29,20 @@ from owlbear.auth.copilot import (
     save_token,
 )
 from owlbear.config import OwlBearSettings
+from owlbear.memory.session import SessionStore
+from owlbear.memory.usage import UsageRecord, UsageTracker
 from owlbear.tools.browser.launcher import (
     is_cdp_available,
     kill_edge,
     launch_edge_cdp,
 )
+from owlbear.tools.github_api import parse_git_remote
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from owlbear.channels.cli import CLIChannel
+    from owlbear.core.agent import OwlBearAgent
 
 app = typer.Typer(
     name="bearclaw",
@@ -73,6 +85,249 @@ slack_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(slack_app)
+
+
+# ---------------------------------------------------------------------------
+# Usage subcommand group
+# ---------------------------------------------------------------------------
+
+usage_app = typer.Typer(
+    name="usage",
+    help="View token usage and cost statistics.",
+    invoke_without_command=True,
+)
+app.add_typer(usage_app)
+
+
+# ---------------------------------------------------------------------------
+# Voice subcommand group
+# ---------------------------------------------------------------------------
+
+voice_app = typer.Typer(
+    name="voice",
+    help="Voice I/O commands (requires: uv sync --extra voice).",
+    no_args_is_help=True,
+)
+app.add_typer(voice_app)
+
+
+def _make_voice_channel(duration: float = 5.0) -> object:
+    """Create a VoiceChannel with the given recording duration.
+
+    Raises:
+        ImportError: If the ``[voice]`` extras are not installed.
+    """
+    from owlbear.voice.channel import VoiceChannel  # noqa: PLC0415
+
+    return VoiceChannel(record_duration=duration)
+
+
+@voice_app.command("listen")
+def voice_listen(
+    duration: Annotated[
+        float,
+        typer.Option("--duration", "-d", help="Recording duration in seconds."),
+    ] = 5.0,
+) -> None:
+    """Record audio and print transcription."""
+    try:
+        ch = _make_voice_channel(duration)
+    except ImportError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    text = asyncio.run(ch.receive())  # type: ignore[union-attr]
+
+    if text is None:
+        typer.echo("No speech detected.")
+    else:
+        typer.echo(text)
+
+
+@voice_app.command("speak")
+def voice_speak(
+    text: Annotated[str, typer.Argument(help="Text to speak aloud.")],
+) -> None:
+    """Speak the given text via TTS."""
+    try:
+        ch = _make_voice_channel()
+    except ImportError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    asyncio.run(ch.send(text))  # type: ignore[union-attr]
+
+
+@voice_app.command("brainstorm")
+def voice_brainstorm(
+    duration: Annotated[
+        float,
+        typer.Option("--duration", "-d", help="Max session duration in seconds."),
+    ] = 120.0,
+    idle_timeout: Annotated[
+        float,
+        typer.Option(
+            "--idle-timeout",
+            "-i",
+            help="End session after this many seconds of silence.",
+        ),
+    ] = 10.0,
+) -> None:
+    """Open-ended brainstorm session with live transcription."""
+    try:
+        ch = _make_voice_channel()
+    except ImportError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+
+    def _on_update(text: str) -> None:
+        typer.echo(f"\r{text}", nl=False)
+
+    transcript = asyncio.run(
+        ch.brainstorm(  # type: ignore[union-attr]
+            duration=duration,
+            idle_timeout=idle_timeout,
+            on_update=_on_update,
+        ),
+    )
+    typer.echo()  # newline after live updates
+    typer.echo(transcript)
+
+
+def _get_usage_path() -> Path:
+    """Return the usage JSONL path from settings."""
+    return OwlBearSettings().usage_path
+
+
+def _resolve_usage_window(
+    *,
+    last_hour: bool,
+    last_7d: bool,
+    show_all: bool,
+) -> timedelta | None:
+    """Map CLI flags to a time-window ``timedelta`` (``None`` = all)."""
+    if last_hour:
+        return timedelta(hours=1)
+    if last_7d:
+        return timedelta(days=7)
+    if show_all:
+        return None
+    # Default: last 24 hours (covers --last-24h and no-flag case)
+    return timedelta(hours=24)
+
+
+def _aggregate_by_model(
+    records: list[UsageRecord],
+) -> tuple[dict[str, dict[str, float]], bool]:
+    """Group *records* by model, returning ``(model_data, has_premium)``."""
+    model_data: dict[str, dict[str, float]] = {}
+    has_premium = False
+    for r in records:
+        if r.model not in model_data:
+            model_data[r.model] = {
+                "requests": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost": 0.0,
+                "premium": 0.0,
+            }
+        m = model_data[r.model]
+        m["requests"] += r.requests
+        m["input_tokens"] += r.input_tokens
+        m["output_tokens"] += r.output_tokens
+        m["total_tokens"] += r.total_tokens
+        if r.estimated_cost_usd is not None:
+            m["cost"] += r.estimated_cost_usd
+        if r.provider == "copilot" and r.premium_requests is not None:
+            m["premium"] += r.premium_requests
+            has_premium = True
+    return model_data, has_premium
+
+
+def _print_usage_table(
+    model_data: dict[str, dict[str, float]],
+    *,
+    has_premium: bool,
+) -> None:
+    """Format *model_data* as a table and print with a totals row."""
+    headers = [
+        "Model",
+        "Requests",
+        "Input Tokens",
+        "Output Tokens",
+        "Total Tokens",
+        "Est. Cost (USD)",
+    ]
+    if has_premium:
+        headers.append("Premium Requests")
+
+    def _row(label: str, s: dict[str, float]) -> list[str]:
+        row = [
+            label,
+            str(int(s["requests"])),
+            str(int(s["input_tokens"])),
+            str(int(s["output_tokens"])),
+            str(int(s["total_tokens"])),
+            f"${s['cost']:.4f}",
+        ]
+        if has_premium:
+            row.append(str(int(s["premium"])))
+        return row
+
+    rows = [_row(model, s) for model, s in sorted(model_data.items())]
+
+    # Summary totals
+    keys = next(iter(model_data.values()))
+    agg: dict[str, float] = {k: sum(s[k] for s in model_data.values()) for k in keys}
+    totals = _row("TOTAL", agg)
+
+    col_widths = [len(h) for h in headers]
+    for row in [*rows, totals]:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
+    separator = "  ".join("-" * w for w in col_widths)
+    typer.echo(fmt.format(*headers))
+    typer.echo(separator)
+    for row in rows:
+        typer.echo(fmt.format(*row))
+    typer.echo(separator)
+    typer.echo(fmt.format(*totals))
+
+
+@usage_app.callback(invoke_without_command=True)
+def usage_show(
+    last_hour: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--last-hour", help="Filter to last 1 hour."),
+    ] = False,
+    last_24h: Annotated[  # noqa: ARG001, FBT002
+        bool,
+        typer.Option("--last-24h", help="Filter to last 24 hours."),
+    ] = False,
+    last_7d: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--last-7d", help="Filter to last 7 days."),
+    ] = False,
+    show_all: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--all", help="Show all records."),
+    ] = False,
+) -> None:
+    """Show token usage and cost statistics."""
+    path = _get_usage_path()
+    tracker = UsageTracker(path)
+    window = _resolve_usage_window(last_hour=last_hour, last_7d=last_7d, show_all=show_all)
+    records = tracker.load() if window is None else tracker.query(window)
+
+    if not records:
+        typer.echo("No usage data found for the selected time window.")
+        return
+
+    model_data, has_premium = _aggregate_by_model(records)
+    _print_usage_table(model_data, has_premium=has_premium)
 
 
 def _slack_ssl_context() -> ssl.SSLContext:
@@ -285,6 +540,288 @@ def status() -> None:
     typer.echo("Status: Authenticated")
     typer.echo(f"Model:  {settings.chat_model}")
     typer.echo(f"API:    {base_url}")
+
+
+# ---------------------------------------------------------------------------
+# Chat command
+# ---------------------------------------------------------------------------
+
+_EXIT_KEYWORDS = frozenset({"exit", "quit"})
+
+
+@app.command()
+def chat(
+    model: Annotated[str | None, typer.Option("--model", help="LLM model name.")] = None,
+    session: Annotated[
+        str | None,
+        typer.Option("--session", help="Session name (default: auto-generated)."),
+    ] = None,
+    workspace: Annotated[
+        str,
+        typer.Option("--workspace", help="Workspace root directory."),
+    ] = ".",
+) -> None:
+    """Start an interactive chat REPL with OwlBear."""
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    ws = _Path(workspace).resolve()
+    asyncio.run(_chat_async(model=model, session=session, workspace_root=ws))
+
+
+async def _read_multiline(channel: CLIChannel) -> str | None:
+    """Accumulate lines until ``!end`` or EOF, return joined text."""
+    lines: list[str] = []
+    await channel.send("(multi-line mode — type !end to submit)")
+    while True:
+        ml = await channel.receive(prompt="... ")
+        if ml is None or ml.strip() == "!end":
+            break
+        lines.append(ml)
+    return "\n".join(lines) if lines else None
+
+
+def _detect_github_remote(workspace_root: Path) -> tuple[str, str] | None:
+    """Auto-detect GitHub owner/repo from ``git remote get-url origin``.
+
+    Returns:
+        Tuple of ``(owner, repo)`` on success, or ``None`` if detection fails.
+    """
+    result = subprocess.run(
+        ["git", "remote", "get-url", "origin"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        cwd=workspace_root,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return parse_git_remote(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _build_chat_session(
+    settings: OwlBearSettings,
+    session: str | None,
+) -> tuple[str, SessionStore]:
+    """Resolve session name and create a :class:`SessionStore`."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    name = session or f"chat-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+    path = Path(settings.config_dir) / "sessions" / f"{name}.jsonl"
+    return name, SessionStore(path)
+
+
+async def _chat_async(
+    *,
+    model: str | None,
+    session: str | None,
+    workspace_root: Path,
+) -> None:
+    """Run the interactive chat REPL loop."""
+    from owlbear.bootstrap import bootstrap  # noqa: PLC0415
+
+    settings = OwlBearSettings()
+    model_name = model or settings.chat_model
+    session_name, store = _build_chat_session(settings, session)
+
+    # Load existing history (resume previous session).
+    store.load()
+
+    # Delegate all hook/toolset/channel assembly to bootstrap().
+    result = await bootstrap(settings, channel_name="cli", workspace_root=workspace_root)
+
+    # Override session with user-specified store (chat-specific naming).
+    result.agent.session = store
+
+    # Override model if --model provided.
+    if model:
+        result.agent.update_model(model)
+
+    # Banner.
+    await result.channel.send(
+        f"OwlBear Chat — model: {model_name}, session: {session_name}",
+    )
+    await result.channel.send(
+        "Type !multi for multi-line input (!end to submit). Type exit or quit to leave.",
+    )
+
+    await _chat_loop(result.agent, result.channel)
+
+
+async def _chat_loop(agent: OwlBearAgent, channel: CLIChannel) -> None:
+    """Core receive → turn → send loop."""
+    try:
+        while True:
+            line = await channel.receive(prompt="> ")
+            if line is None:
+                break
+
+            text = line.strip()
+            if text.lower() in _EXIT_KEYWORDS:
+                break
+            if not text:
+                continue
+
+            if text == "!multi":
+                text = await _read_multiline(channel)  # type: ignore[assignment]
+                if text is None:
+                    continue
+
+            try:
+                response = await agent.turn(text)
+                await channel.send(response)
+            except Exception as exc:  # noqa: BLE001
+                await channel.send(f"Error: {exc}")
+    except KeyboardInterrupt:
+        pass
+
+    await channel.send("Goodbye!")
+
+
+# ---------------------------------------------------------------------------
+# Daemon commands — run / stop / status
+# ---------------------------------------------------------------------------
+
+
+def _get_config_dir() -> Path:
+    """Return the config_dir from settings."""
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    return _Path(OwlBearSettings().config_dir)
+
+
+def _is_process_alive(pid: int) -> bool:
+    """Check whether *pid* refers to a running process."""
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    else:
+        return True
+
+
+def _poll_pid_removal(pid_path: Path, *, timeout: float = 5.0) -> bool:
+    """Poll for PID file removal, returning True if removed within timeout."""
+    import time  # noqa: PLC0415
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not pid_path.exists():
+            return True
+        time.sleep(0.2)
+    return False
+
+
+@app.command(name="run")
+def run_cmd(
+    channel: Annotated[
+        str,
+        typer.Option("--channel", help="Channel to use: cli or slack."),
+    ] = "cli",
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="LLM model name."),
+    ] = None,
+) -> None:
+    """Start the OwlBear daemon."""
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    from owlbear.bootstrap import bootstrap  # noqa: PLC0415
+    from owlbear.daemon import PidFile, run_daemon, setup_logging  # noqa: PLC0415
+
+    settings = OwlBearSettings()
+    config_dir = _Path(settings.config_dir)
+
+    # Set up logging
+    setup_logging(config_dir / "owlbear.log")
+
+    async def _run() -> None:
+        result = await bootstrap(settings, channel_name=channel, workspace_root=_Path.cwd())
+        if model:
+            result.agent.update_model(model)
+        try:
+            if result.mcp_registry:
+                await result.mcp_registry.__aenter__()
+            await run_daemon(
+                channel=result.channel,
+                agent=result.agent,
+                config_dir=config_dir,
+                settings=settings,
+            )
+        finally:
+            if result.mcp_registry:
+                await result.mcp_registry.__aexit__(None, None, None)
+            for cb in result.cleanup:
+                with contextlib.suppress(Exception):
+                    cb()
+
+    pid_path = config_dir / "owlbear.pid"
+    with PidFile(pid_path):
+        asyncio.run(_run())
+
+
+def _daemon_stop() -> None:
+    """Stop the running OwlBear daemon."""
+    config_dir = _get_config_dir()
+    pid_path = config_dir / "owlbear.pid"
+
+    if not pid_path.exists():
+        typer.echo("Daemon is not running (no PID file found).")
+        return
+
+    pid = int(pid_path.read_text().strip())
+    sentinel = config_dir / "owlbear.stop"
+
+    # Create sentinel to request graceful shutdown
+    sentinel.touch()
+    typer.echo(f"Sent stop signal to daemon (PID {pid}).")
+
+    # Poll for PID file removal (daemon removes it on exit)
+    if _poll_pid_removal(pid_path):
+        typer.echo("Daemon stopped gracefully.")
+        sentinel.unlink(missing_ok=True)
+        return
+
+    # Fallback: force kill
+    import contextlib  # noqa: PLC0415
+
+    typer.echo("Daemon did not stop in time — force killing.")
+    with contextlib.suppress(OSError):
+        os.kill(pid, 9)  # SIGKILL / TerminateProcess
+
+    pid_path.unlink(missing_ok=True)
+    sentinel.unlink(missing_ok=True)
+
+
+@app.command(name="stop")
+def stop_cmd() -> None:
+    """Stop the running OwlBear daemon."""
+    _daemon_stop()
+
+
+def _daemon_status() -> None:
+    """Report daemon status."""
+    config_dir = _get_config_dir()
+    pid_path = config_dir / "owlbear.pid"
+
+    if not pid_path.exists():
+        typer.echo("Status: not running")
+        return
+
+    pid = int(pid_path.read_text().strip())
+    if _is_process_alive(pid):
+        typer.echo(f"Status: running (PID {pid})")
+    else:
+        typer.echo(f"Status: stale PID file (PID {pid} is not alive)")
+
+
+@app.command(name="status")
+def status_cmd() -> None:
+    """Show OwlBear daemon status."""
+    _daemon_status()
 
 
 # ---------------------------------------------------------------------------

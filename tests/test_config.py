@@ -130,3 +130,142 @@ class TestSlackSettingsPartialRaises:
         monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
+
+
+class TestKnowledgeSettingsDefaults:
+    """Verify Knowledge-related fields have correct defaults."""
+
+    def test_knowledge_db_path_default(self, default_settings: OwlBearSettings) -> None:
+        """Default knowledge_db_path should be ~/.owlbear/knowledge.db."""
+        expected = Path.home() / ".owlbear" / "knowledge.db"
+        assert default_settings.knowledge_db_path == expected
+        assert isinstance(default_settings.knowledge_db_path, Path)
+
+    def test_embedding_model_default(self, default_settings: OwlBearSettings) -> None:
+        """Default embedding model should be BAAI/bge-small-en-v1.5."""
+        assert default_settings.embedding_model == "BAAI/bge-small-en-v1.5"
+
+
+class TestKnowledgeSettingsEnvOverrides:
+    """Verify Knowledge env var overrides work."""
+
+    def test_knowledge_db_path_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_KNOWLEDGE_DB_PATH should override knowledge_db_path."""
+        monkeypatch.setenv("OWLBEAR_KNOWLEDGE_DB_PATH", "/opt/data/custom.db")
+        settings = OwlBearSettings()
+        assert settings.knowledge_db_path == Path("/opt/data/custom.db")
+
+    def test_embedding_model_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_EMBEDDING_MODEL should override embedding_model."""
+        monkeypatch.setenv("OWLBEAR_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        settings = OwlBearSettings()
+        assert settings.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class TestNotificationSettingsDefaults:
+    """Verify notification fields have correct defaults."""
+
+    def test_notification_events_default(self, default_settings: OwlBearSettings) -> None:
+        """Default notification_events should be task_complete, question_pending, on_error."""
+        assert default_settings.notification_events == [
+            "task_complete",
+            "question_pending",
+            "on_error",
+        ]
+
+    def test_notification_backends_default(self, default_settings: OwlBearSettings) -> None:
+        """Default notification_backends should be bell, sound (priority order)."""
+        assert default_settings.notification_backends == ["bell", "sound"]
+
+
+class TestNotificationSettingsEnvOverrides:
+    """Verify notification env var overrides work."""
+
+    def test_notification_events_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_NOTIFICATION_EVENTS should override notification_events."""
+        monkeypatch.setenv("OWLBEAR_NOTIFICATION_EVENTS", '["on_error"]')
+        settings = OwlBearSettings()
+        assert settings.notification_events == ["on_error"]
+
+    def test_notification_backends_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_NOTIFICATION_BACKENDS should override notification_backends."""
+        monkeypatch.setenv("OWLBEAR_NOTIFICATION_BACKENDS", '["toast","slack"]')
+        settings = OwlBearSettings()
+        assert settings.notification_backends == ["toast", "slack"]
+
+    def test_notification_events_custom_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Custom notification_events list should be accepted."""
+        monkeypatch.setenv(
+            "OWLBEAR_NOTIFICATION_EVENTS",
+            '["task_complete","session_start"]',
+        )
+        settings = OwlBearSettings()
+        assert settings.notification_events == ["task_complete", "session_start"]
+
+
+# ---------------------------------------------------------------------------
+# GitHub settings
+# ---------------------------------------------------------------------------
+
+
+class TestGitHubSettingsDefaults:
+    """Verify GitHub fields default to None."""
+
+    def test_github_token_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.github_token is None
+
+    def test_github_owner_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.github_owner is None
+
+    def test_github_repo_default_none(self, default_settings: OwlBearSettings) -> None:
+        assert default_settings.github_repo is None
+
+
+class TestGitHubSettingsEnvOverrides:
+    """Verify GitHub env var overrides work."""
+
+    def test_github_token_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_GITHUB_TOKEN should set github_token as SecretStr."""
+        monkeypatch.setenv("OWLBEAR_GITHUB_TOKEN", "ghp_test123")
+        settings = OwlBearSettings()
+        assert isinstance(settings.github_token, SecretStr)
+        assert settings.github_token.get_secret_value() == "ghp_test123"
+
+    def test_github_owner_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_GITHUB_OWNER should override github_owner."""
+        monkeypatch.setenv("OWLBEAR_GITHUB_OWNER", "my-org")
+        settings = OwlBearSettings()
+        assert settings.github_owner == "my-org"
+
+    def test_github_repo_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_GITHUB_REPO should override github_repo."""
+        monkeypatch.setenv("OWLBEAR_GITHUB_REPO", "my-repo")
+        settings = OwlBearSettings()
+        assert settings.github_repo == "my-repo"
+
+
+# ---------------------------------------------------------------------------
+# Temporal memory settings — task #224 / #212
+# ---------------------------------------------------------------------------
+
+
+class TestTemporalSettingsDefaults:
+    """Verify temporal memory fields have correct defaults."""
+
+    def test_temporal_decay_rate_default(self, default_settings: OwlBearSettings) -> None:
+        """Default temporal_decay_rate should be 0.001 (29-day half-life)."""
+        assert default_settings.temporal_decay_rate == 0.001
+
+    def test_temporal_recency_weight_default(self, default_settings: OwlBearSettings) -> None:
+        """Default temporal_recency_weight should be 0.1."""
+        assert default_settings.temporal_recency_weight == 0.1
+
+
+class TestTemporalSettingsEnvOverrides:
+    """Verify temporal env var overrides work."""
+
+    def test_temporal_decay_rate_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_TEMPORAL_DECAY_RATE=0.01 should change setting."""
+        monkeypatch.setenv("OWLBEAR_TEMPORAL_DECAY_RATE", "0.01")
+        settings = OwlBearSettings()
+        assert settings.temporal_decay_rate == 0.01

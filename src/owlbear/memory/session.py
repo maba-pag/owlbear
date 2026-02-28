@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from typing import TYPE_CHECKING
 
@@ -31,11 +32,21 @@ class SessionStore:
 
     def __init__(self, path: Path) -> None:
         self._path = path
+        self._last_consolidated: int | None = None
 
     @property
     def path(self) -> Path:
         """Location of the JSONL file."""
         return self._path
+
+    @property
+    def last_consolidated(self) -> int | None:
+        """Index into the message list up to which consolidation has run."""
+        return self._last_consolidated
+
+    @last_consolidated.setter
+    def last_consolidated(self, value: int | None) -> None:
+        self._last_consolidated = value
 
     # -- read ----------------------------------------------------------------
 
@@ -47,6 +58,7 @@ class SessionStore:
         if not self._path.exists():
             return []
         lines = self._path.read_text(encoding="utf-8").strip().splitlines()
+        self._load_meta()
         return [_message_adapter.validate_json(line) for line in lines if line]
 
     # -- write ---------------------------------------------------------------
@@ -64,6 +76,7 @@ class SessionStore:
         with self._path.open("w", encoding="utf-8") as fh:
             for msg in messages:
                 fh.write(_message_adapter.dump_json(msg).decode("utf-8") + "\n")
+        self._save_meta()
 
     # -- maintenance ---------------------------------------------------------
 
@@ -77,3 +90,23 @@ class SessionStore:
         bak = self._path.with_suffix(".bak")
         shutil.copy2(self._path, bak)
         return bak
+
+    # -- metadata ------------------------------------------------------------
+
+    @property
+    def _meta_path(self) -> Path:
+        """Path to the companion ``.meta`` JSON file."""
+        return self._path.with_suffix(".meta")
+
+    def _load_meta(self) -> None:
+        """Restore ``last_consolidated`` from the ``.meta`` file."""
+        if not self._meta_path.exists():
+            return
+        data = json.loads(self._meta_path.read_text(encoding="utf-8"))
+        self._last_consolidated = data.get("last_consolidated")
+
+    def _save_meta(self) -> None:
+        """Persist ``last_consolidated`` to the ``.meta`` file."""
+        self._meta_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {"last_consolidated": self._last_consolidated}
+        self._meta_path.write_text(json.dumps(data), encoding="utf-8")

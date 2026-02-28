@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -221,3 +222,206 @@ class TestSlackStatus:
 
         assert result.exit_code == 0
         assert "Connection: Failed" in result.output
+
+
+# ---------------------------------------------------------------------------
+# bearclaw run — run_cmd integration tests
+# ---------------------------------------------------------------------------
+
+
+def _make_bootstrap_result() -> MagicMock:
+    """Create a mock BootstrapResult with all required attributes."""
+    result = MagicMock()
+    result.agent = MagicMock()
+    result.channel = MagicMock()
+    result.mcp_registry = None
+    result.cleanup = []
+    return result
+
+
+def _pid_context_manager() -> MagicMock:
+    """Create a MagicMock that acts as a sync context manager."""
+    cm = MagicMock()
+    cm.__enter__ = MagicMock(return_value=cm)
+    cm.__exit__ = MagicMock(return_value=False)
+    return cm
+
+
+class TestRunCmd:
+    """Test bearclaw run command wired through bootstrap()."""
+
+    def test_calls_bootstrap_with_channel_name(self, tmp_path: Path) -> None:
+        """run_cmd passes --channel value to bootstrap(channel_name=...)."""
+        mock_result = _make_bootstrap_result()
+        captured_channel: list[str] = []
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            captured_channel.append(channel_name)
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            result = runner.invoke(app, ["run", "--channel", "cli"])
+
+        assert result.exit_code == 0
+        assert captured_channel == ["cli"]
+
+    def test_model_override_calls_update_model(self, tmp_path: Path) -> None:
+        """When --model is provided, result.agent.update_model() is called."""
+        mock_result = _make_bootstrap_result()
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run", "--model", "gpt-4o"])
+
+        mock_result.agent.update_model.assert_called_once_with("gpt-4o")
+
+    def test_mcp_lifecycle_managed(self, tmp_path: Path) -> None:
+        """MCP registry __aenter__/__aexit__ called around run_daemon."""
+        mock_result = _make_bootstrap_result()
+        mock_mcp = MagicMock()
+        mock_mcp.__aenter__ = AsyncMock(return_value=mock_mcp)
+        mock_mcp.__aexit__ = AsyncMock(return_value=None)
+        mock_result.mcp_registry = mock_mcp
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        mock_mcp.__aenter__.assert_called_once()
+        mock_mcp.__aexit__.assert_called_once()
+
+    def test_cleanup_callbacks_invoked(self, tmp_path: Path) -> None:
+        """result.cleanup callbacks are invoked in finally block."""
+        mock_result = _make_bootstrap_result()
+        cb1 = MagicMock()
+        cb2 = MagicMock()
+        mock_result.cleanup = [cb1, cb2]
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        cb1.assert_called_once()
+        cb2.assert_called_once()
+
+    def test_cleanup_runs_even_on_error(self, tmp_path: Path) -> None:
+        """Cleanup callbacks run even when run_daemon raises."""
+        mock_result = _make_bootstrap_result()
+        cb = MagicMock()
+        mock_result.cleanup = [cb]
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**_kwargs):
+            msg = "daemon crashed"
+            raise RuntimeError(msg)
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        # Cleanup should still be called despite the error
+        cb.assert_called_once()
+
+    def test_pidfile_still_managed(self, tmp_path: Path) -> None:
+        """run_cmd still owns PidFile (not bootstrap)."""
+        mock_result = _make_bootstrap_result()
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        pid_cm = _pid_context_manager()
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=pid_cm) as mock_pid_cls,
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        # PidFile was constructed and used as context manager
+        mock_pid_cls.assert_called_once()
+        pid_cm.__enter__.assert_called_once()
+        pid_cm.__exit__.assert_called_once()
+
+    def test_run_daemon_receives_settings(self, tmp_path: Path) -> None:
+        """run_daemon is called with settings parameter."""
+        mock_result = _make_bootstrap_result()
+        captured_kwargs: dict = {}
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            captured_kwargs.update(kwargs)
+
+        with (
+            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        assert "settings" in captured_kwargs

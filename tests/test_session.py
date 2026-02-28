@@ -140,3 +140,60 @@ class TestSessionStoreBackup:
     def test_backup_nonexistent_returns_none(self, tmp_path: Path) -> None:
         store = SessionStore(tmp_path / "nope.jsonl")
         assert store.backup() is None
+
+
+# ---------------------------------------------------------------------------
+# last_consolidated metadata (.meta file)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionStoreLastConsolidated:
+    """last_consolidated tracks the consolidation pointer via a .meta file."""
+
+    def test_default_is_none(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        assert store.last_consolidated is None
+
+    def test_setter_and_getter(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        store.last_consolidated = 42
+        assert store.last_consolidated == 42
+
+    def test_save_persists_meta(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        store.last_consolidated = 10
+        store.save(_sample_messages())
+        meta_path = tmp_path / "sess.meta"
+        assert meta_path.exists()
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        assert data["last_consolidated"] == 10
+
+    def test_load_restores_meta(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        store.last_consolidated = 15
+        store.save(_sample_messages())
+
+        store2 = SessionStore(tmp_path / "sess.jsonl")
+        store2.load()
+        assert store2.last_consolidated == 15
+
+    def test_load_without_meta_file_keeps_none(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        store.save(_sample_messages())
+        # Delete the meta file
+        meta_path = tmp_path / "sess.meta"
+        if meta_path.exists():
+            meta_path.unlink()
+
+        store2 = SessionStore(tmp_path / "sess.jsonl")
+        store2.load()
+        assert store2.last_consolidated is None
+
+    def test_save_none_meta(self, tmp_path: Path) -> None:
+        store = SessionStore(tmp_path / "sess.jsonl")
+        store.last_consolidated = None
+        store.save(_sample_messages())
+        meta_path = tmp_path / "sess.meta"
+        assert meta_path.exists()
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        assert data["last_consolidated"] is None

@@ -8,7 +8,7 @@ Uses pydantic-settings to load configuration from environment variables
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings
@@ -32,11 +32,38 @@ class OwlBearSettings(BaseSettings):
 
     # --- Directories ---
     config_dir: Path = Path.home() / ".owlbear"
+    agents_dir: Path = Path(__file__).parent / "agents"
 
     # --- Slack ---
     slack_app_token: SecretStr | None = None
     slack_bot_token: SecretStr | None = None
     slack_channel_id: str | None = None
+
+    # --- Knowledge ---
+    knowledge_db_path: Path = Path.home() / ".owlbear" / "knowledge.db"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+
+    # --- Usage tracking ---
+    usage_path: Path = Path.home() / ".owlbear" / "usage.jsonl"
+
+    # --- Notifications ---
+    notification_events: list[str] = ["task_complete", "question_pending", "on_error"]
+    notification_backends: list[str] = ["bell", "sound"]
+
+    # --- GitHub ---
+    github_token: SecretStr | None = None
+    github_owner: str | None = None
+    github_repo: str | None = None
+
+    # --- Observability ---
+    otel_endpoint: str | None = None
+
+    # --- Temporal memory ---
+    temporal_decay_rate: float = 0.001
+    temporal_recency_weight: float = 0.1
+
+    # --- MCP servers ---
+    mcp_servers: dict[str, dict[str, Any]] | None = None
 
     # --- Runtime ---
     debug: bool = False
