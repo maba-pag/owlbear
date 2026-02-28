@@ -131,4 +131,3 @@ owlbear/memory/
 6. **Create owlbear.memory.knowledge.embeddings** — FastEmbed adapter with EmbeddingProvider protocol.
 7. **Add knowledge_db_path to OwlBearSettings** — Config for DB file location.
 8. **Write tests for knowledge subpackage** — Unit tests for schema, models, graph, vectors, embeddings.
-
