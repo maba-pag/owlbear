@@ -28,6 +28,8 @@ class HookEvent(StrEnum):
     ON_MESSAGE = "on_message"
     ON_ERROR = "on_error"
     SUBAGENT_COMPLETE = "subagent_complete"
+    TASK_COMPLETE = "task_complete"
+    QUESTION_PENDING = "question_pending"
 
 
 class HookRegistry:

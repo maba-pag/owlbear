@@ -33,6 +33,12 @@ class TestHookEvent:
     def test_has_subagent_complete(self) -> None:
         assert HookEvent.SUBAGENT_COMPLETE == "subagent_complete"
 
+    def test_has_task_complete(self) -> None:
+        assert HookEvent.TASK_COMPLETE == "task_complete"
+
+    def test_has_question_pending(self) -> None:
+        assert HookEvent.QUESTION_PENDING == "question_pending"
+
 
 class TestHookRegistrySync:
     """Synchronous handler registration and emission."""
@@ -156,3 +162,21 @@ class TestHookRegistryClear:
         registry.register(HookEvent.ON_ERROR, MagicMock())
         registry.clear()
         assert registry.handlers == {}
+
+
+class TestNewHookEventsEmitRegister:
+    """Emit/register round-trip for TASK_COMPLETE and QUESTION_PENDING."""
+
+    def test_task_complete_emit(self) -> None:
+        registry = HookRegistry()
+        handler = MagicMock()
+        registry.register(HookEvent.TASK_COMPLETE, handler)
+        asyncio.run(registry.emit(HookEvent.TASK_COMPLETE, {"task_id": 42}))
+        handler.assert_called_once_with({"task_id": 42})
+
+    def test_question_pending_emit(self) -> None:
+        registry = HookRegistry()
+        handler = MagicMock()
+        registry.register(HookEvent.QUESTION_PENDING, handler)
+        asyncio.run(registry.emit(HookEvent.QUESTION_PENDING, {"q": "confirm?"}))
+        handler.assert_called_once_with({"q": "confirm?"})

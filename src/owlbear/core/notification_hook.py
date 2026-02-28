@@ -1,0 +1,137 @@
+"""Notification hook — alert user via sound/bell when lifecycle events occur.
+
+Provides :class:`NotificationHook` — a hook that dispatches user-facing
+notifications through a priority-ordered chain of backends.  Backends are
+tried in order; the first successful one stops the chain.  All errors are
+logged and swallowed.
+"""
+
+from __future__ import annotations
+
+import logging
+import sys
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from owlbear.core.hooks import HookEvent, HookRegistry
+
+logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class NotificationBackend(Protocol):
+    """A notification channel that can alert the user.
+
+    Implementations must provide a :pyattr:`name` property and an async
+    :meth:`notify` method that returns ``True`` on success.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    async def notify(self, message: str, event: HookEvent) -> bool: ...
+
+
+class ConsoleBellBackend:
+    """Writes the terminal bell character (``\\a``) to stdout."""
+
+    @property
+    def name(self) -> str:
+        """Backend identifier."""
+        return "bell"
+
+    async def notify(self, message: str, event: HookEvent) -> bool:  # noqa: ARG002
+        """Write ``\\a`` to stdout and flush."""
+        sys.stdout.write("\a")
+        sys.stdout.flush()
+        return True
+
+
+class WinSoundBackend:
+    """Plays a Windows system sound via :func:`winsound.MessageBeep`."""
+
+    @property
+    def name(self) -> str:
+        """Backend identifier."""
+        return "sound"
+
+    async def notify(self, message: str, event: HookEvent) -> bool:  # noqa: ARG002
+        """Call :func:`winsound.MessageBeep`.  Returns ``False`` on non-Windows."""
+        try:
+            import winsound  # noqa: PLC0415
+        except ImportError:
+            return False
+        try:
+            winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+        except Exception:  # noqa: BLE001
+            logger.warning("winsound.MessageBeep failed", exc_info=True)
+            return False
+        return True
+
+
+class NotificationHook:
+    """Hook that dispatches notifications to backends on configured events.
+
+    Backends are tried in priority order.  The first backend returning
+    ``True`` stops the chain.  Failures are logged and skipped — hook
+    errors never propagate.
+
+    Args:
+        backends: Ordered list of notification backends to try.
+        notification_events: Event value strings (e.g. ``"task_complete"``)
+            that trigger notifications.
+    """
+
+    def __init__(
+        self,
+        backends: list[NotificationBackend],
+        notification_events: list[str],
+    ) -> None:
+        self._backends = backends
+        self._notification_events = notification_events
+
+    async def __call__(self, event: HookEvent, data: object) -> None:
+        """Dispatch a notification for *event* through the backend chain."""
+        if event.value not in self._notification_events:
+            return
+
+        message = (
+            data.get("message", f"OwlBear: {event.value}")
+            if isinstance(data, dict)
+            else f"OwlBear: {event.value}"
+        )
+
+        for backend in self._backends:
+            try:
+                if await backend.notify(message, event):
+                    return
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Notification backend %r failed for %s",
+                    backend.name,
+                    event.value,
+                )
+
+        logger.warning("All notification backends failed for event %s", event.value)
+
+    def register(self, hooks: HookRegistry) -> None:
+        """Register this hook on all events in *notification_events*."""
+        from owlbear.core.hooks import HookEvent  # noqa: PLC0415
+
+        for event_name in self._notification_events:
+            try:
+                event = HookEvent(event_name)
+            except ValueError:
+                logger.warning("Unknown notification event %r, skipping", event_name)
+                continue
+            hooks.register(event, self._make_handler(event))
+
+    def _make_handler(self, event: HookEvent) -> Callable:
+        """Create a single-arg handler closure for the hook registry."""
+
+        async def _handler(data: object) -> None:
+            await self(event, data if isinstance(data, dict) else {})
+
+        return _handler
