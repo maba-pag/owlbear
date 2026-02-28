@@ -41,6 +41,23 @@ __all__ = ["BrowserToolset"]
 
 logger = logging.getLogger(__name__)
 
+# JS snippet that watches <title> for mutations and re-applies the OwlBear
+# prefix.  ``{prefix}`` is interpolated at call-time with the concrete
+# prefix string (e.g. ``[OwlBear Task 65]``).
+_TITLE_OBSERVER_JS = """
+(() => {{
+    const PREFIX = '{prefix}';
+    const titleEl = document.querySelector('title');
+    if (!titleEl) return;
+    const obs = new MutationObserver(() => {{
+        if (!document.title.startsWith(PREFIX)) {{
+            document.title = PREFIX + ' ' + document.title;
+        }}
+    }});
+    obs.observe(titleEl, {{ childList: true }});
+}})();
+""".strip()
+
 
 class BrowserToolset(FunctionToolset):
     """FunctionToolset subclass that registers all 6 browser action tools.
@@ -73,17 +90,25 @@ class BrowserToolset(FunctionToolset):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def setup(self) -> None:
+    async def setup(self, *, task_label: str | None = None) -> None:
         """Launch browser — creates BrowserManager and enters context.
 
-        In CDP mode, also prefixes the initial page title with
-        ``[OwlBear]`` and emits a warning log.
+        In CDP mode, prefixes the page title with ``[OwlBear]`` (or
+        ``[OwlBear {task_label}]`` when *task_label* is given) and installs
+        a ``MutationObserver`` that re-applies the prefix whenever the
+        title changes.
+
+        Args:
+            task_label: Optional label embedded in the title prefix
+                (e.g. ``"Task 65"`` → ``[OwlBear Task 65]``).
         """
         self._manager = BrowserManager(self._config)
         await self._manager.__aenter__()
 
         if self._config.cdp_endpoint:
-            await self.page.evaluate("document.title = '[OwlBear] ' + document.title")
+            prefix = f"[OwlBear {task_label}]" if task_label else "[OwlBear]"
+            await self.page.evaluate(f"document.title = '{prefix} ' + document.title")
+            await self.page.evaluate(_TITLE_OBSERVER_JS.format(prefix=prefix))
             logger.warning("CDP mode: attached to user browser — full session access")
 
     async def teardown(self) -> None:

@@ -466,8 +466,24 @@ class TestBrowserToolsetTabNaming:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
-    async def test_cdp_setup_sets_owlbear_title(self, mock_mgr_cls: MagicMock) -> None:
-        """In CDP mode, setup() sets window title with [OwlBear] prefix."""
+    async def test_cdp_setup_with_task_label_sets_title(self, mock_mgr_cls: MagicMock) -> None:
+        """setup(task_label='Task 65') sets title containing [OwlBear Task 65]."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup(task_label="Task 65")
+
+        title_call_js = page.evaluate.call_args_list[0].args[0]
+        assert "[OwlBear Task 65]" in title_call_js
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_cdp_setup_without_task_label_uses_default_prefix(
+        self, mock_mgr_cls: MagicMock
+    ) -> None:
+        """setup() with no task_label uses [OwlBear] prefix (backward compat)."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -475,12 +491,13 @@ class TestBrowserToolsetTabNaming:
         toolset = BrowserToolset(config=CDP_CONFIG)
         await toolset.setup()
 
-        page.evaluate.assert_awaited_once_with("document.title = '[OwlBear] ' + document.title")
+        title_call_js = page.evaluate.call_args_list[0].args[0]
+        assert "[OwlBear]" in title_call_js
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
     async def test_launch_setup_no_title_setting(self, mock_mgr_cls: MagicMock) -> None:
-        """In launch mode, no title setting occurs."""
+        """In launch mode, no title setting or observer injection occurs."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -489,6 +506,35 @@ class TestBrowserToolsetTabNaming:
         await toolset.setup()
 
         page.evaluate.assert_not_awaited()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_cdp_setup_installs_mutation_observer(self, mock_mgr_cls: MagicMock) -> None:
+        """In CDP mode, a second page.evaluate() installs a MutationObserver."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup()
+
+        assert page.evaluate.await_count == 2
+        observer_js = page.evaluate.call_args_list[1].args[0]
+        assert "MutationObserver" in observer_js
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_mutation_observer_contains_correct_prefix(self, mock_mgr_cls: MagicMock) -> None:
+        """MutationObserver JS embeds the correct prefix for the given task_label."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup(task_label="Task 65")
+
+        observer_js = page.evaluate.call_args_list[1].args[0]
+        assert "[OwlBear Task 65]" in observer_js
 
 
 # ---------------------------------------------------------------------------
