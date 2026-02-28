@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pydantic_ai.toolsets import FunctionToolset
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
 __all__ = [
@@ -64,21 +63,19 @@ VALIDATOR_POLICY = RolePolicy(
     role=AgentRole.VALIDATOR,
     denied_tools=frozenset(
         {
-            "file_write",
-            "file_edit",
-            "file_delete",
-            "execute_command",
+            "write_file",
+            "create_file",
         }
     ),
 )
-"""Validator: read-only — cannot write, edit, delete, or execute."""
+"""Validator: read-only — cannot write or create files."""
 
 
 # ── Policy application ───────────────────────────────────────────
 
 
 def apply_role_policy(
-    toolset: FunctionToolset,
+    toolset: AbstractToolset,
     policy: RolePolicy,
 ) -> AbstractToolset:
     """Return a filtered view of *toolset* respecting *policy*.

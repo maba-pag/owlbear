@@ -1,0 +1,121 @@
+"""DelegationToolset — orchestrator dispatches subtasks to inner agents.
+
+Provides a ``delegate_to_agent`` tool that looks up a named agent via
+:class:`~owlbear.core.agent_registry.AgentRegistry`, creates child
+dependencies with incremented delegation depth, and runs the inner
+agent on the given task.
+
+Usage::
+
+    from owlbear.core.delegation import DelegationToolset
+
+    toolset = DelegationToolset()
+    # Register on an Agent — PydanticAI injects RunContext automatically.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import logging
+
+from pydantic_ai import RunContext  # noqa: TC002
+from pydantic_ai.toolsets import FunctionToolset
+
+from owlbear.core.deps import OwlBearDeps  # noqa: TC001
+
+__all__ = ["MAX_DELEGATION_DEPTH", "DelegationToolset"]
+
+logger = logging.getLogger(__name__)
+
+MAX_DELEGATION_DEPTH: int = 5
+"""Maximum nesting depth for agent-to-agent delegation."""
+
+
+class DelegationToolset(FunctionToolset):
+    """FunctionToolset subclass that registers a ``delegate_to_agent`` tool.
+
+    The tool uses :class:`~pydantic_ai.RunContext` to access the shared
+    :class:`~owlbear.core.deps.OwlBearDeps`, looks up the target agent
+    by name, and runs it with incremented delegation depth.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._register_tools()
+
+    # ------------------------------------------------------------------
+    # Tool registration
+    # ------------------------------------------------------------------
+
+    def _register_tools(self) -> None:
+        """Register the ``delegate_to_agent`` tool on this toolset."""
+        self.add_function(
+            self._delegate,
+            name="delegate_to_agent",
+            description=(
+                "Delegate a subtask to another agent by name. "
+                "Returns the agent's text output on success, "
+                "or a descriptive error string on failure."
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # Core tool
+    # ------------------------------------------------------------------
+
+    async def _delegate(
+        self,
+        ctx: RunContext[OwlBearDeps],
+        agent_name: str,
+        task: str,
+    ) -> str:
+        """Dispatch *task* to the agent named *agent_name*.
+
+        Args:
+            ctx: PydanticAI run context (injected automatically).
+            agent_name: Name of the target agent in the registry.
+            task: Prompt / instruction to send to the inner agent.
+
+        Returns:
+            The inner agent's text output, or a descriptive error string
+            if delegation fails for any reason.
+        """
+        # -- Guard: registry must exist -----------------------------------
+        registry = ctx.deps.agent_registry
+        if registry is None:
+            return "Error: agent_registry is not configured on deps."
+
+        # -- Guard: depth limit -------------------------------------------
+        depth = ctx.deps._delegation_depth  # noqa: SLF001
+        if depth >= MAX_DELEGATION_DEPTH:
+            return (
+                f"Error: max delegation depth ({MAX_DELEGATION_DEPTH}) "
+                f"exceeded (current depth: {depth})."
+            )
+
+        # -- Look up agent ------------------------------------------------
+        try:
+            agent = registry.get(agent_name)
+        except KeyError:
+            available = ", ".join(sorted(registry.definitions))
+            return f"Error: agent '{agent_name}' not found. Available: {available}"
+
+        # -- Build child deps with incremented depth ----------------------
+        inner_deps = dataclasses.replace(
+            ctx.deps,
+            _delegation_depth=depth + 1,
+        )
+
+        # -- Run inner agent ----------------------------------------------
+        try:
+            result = await agent.run(task, deps=inner_deps, usage=ctx.usage)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Delegation to '%s' failed: %s",
+                agent_name,
+                exc,
+                exc_info=True,
+            )
+            return f"Error: delegation to '{agent_name}' failed: {exc}"
+
+        return result.output
