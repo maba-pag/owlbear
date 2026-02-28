@@ -1,12 +1,12 @@
 ---
 id: 19
 title: 'P3-04: PreToolUse command safety guard'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:11:32.1221629+01:00
-updated: 2026-02-27T00:54:12.873861+01:00
+updated: 2026-02-27T10:00:01.536765+01:00
 started: 2026-02-27T00:39:19.8496979+01:00
-completed: 2026-02-27T00:54:12.873861+01:00
+completed: 2026-02-27T10:00:01.536765+01:00
 tags:
     - phase-3
     - hooks

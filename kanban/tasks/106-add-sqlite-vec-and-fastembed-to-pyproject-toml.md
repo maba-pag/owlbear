@@ -1,11 +1,12 @@
 ---
 id: 106
 title: Add sqlite-vec and fastembed to pyproject.toml
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:10.9778052+01:00
-updated: 2026-02-27T03:44:36.6421993+01:00
+updated: 2026-02-27T13:21:37.7089483+01:00
 started: 2026-02-27T03:32:47.77834+01:00
+completed: 2026-02-27T13:21:37.7089483+01:00
 tags:
     - memory
     - knowledge-graph

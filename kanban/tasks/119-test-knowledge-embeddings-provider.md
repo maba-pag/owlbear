@@ -1,10 +1,12 @@
 ---
 id: 119
 title: Test knowledge embeddings provider
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:42:51.8453017+01:00
-updated: 2026-02-27T03:45:28.9921884+01:00
+updated: 2026-02-27T13:21:48.6280494+01:00
+started: 2026-02-27T11:23:22.143788+01:00
+completed: 2026-02-27T13:21:48.6280494+01:00
 tags:
     - memory
     - knowledge-graph

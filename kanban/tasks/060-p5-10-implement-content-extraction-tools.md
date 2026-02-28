@@ -1,12 +1,12 @@
 ---
 id: 60
 title: 'P5-10: Implement content extraction tools'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T21:18:07.9205102+01:00
-updated: 2026-02-26T22:17:39.3258941+01:00
+updated: 2026-02-27T10:00:29.1636593+01:00
 started: 2026-02-26T21:21:45.7394452+01:00
-completed: 2026-02-26T22:17:39.3258941+01:00
+completed: 2026-02-27T10:00:29.1636593+01:00
 tags:
     - phase-5
     - browser

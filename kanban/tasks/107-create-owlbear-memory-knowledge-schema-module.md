@@ -1,11 +1,12 @@
 ---
 id: 107
 title: Create owlbear.memory.knowledge.schema module
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:16.02141+01:00
-updated: 2026-02-27T03:45:03.4193123+01:00
+updated: 2026-02-27T13:21:38.2099456+01:00
 started: 2026-02-27T03:32:48.1775178+01:00
+completed: 2026-02-27T13:21:38.2099456+01:00
 tags:
     - memory
     - knowledge-graph

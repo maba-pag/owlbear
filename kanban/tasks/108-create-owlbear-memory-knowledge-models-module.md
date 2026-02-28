@@ -1,11 +1,12 @@
 ---
 id: 108
 title: Create owlbear.memory.knowledge.models module
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:21.0047032+01:00
-updated: 2026-02-27T03:44:53.0296216+01:00
+updated: 2026-02-27T13:21:38.8135412+01:00
 started: 2026-02-27T03:32:48.647058+01:00
+completed: 2026-02-27T13:21:38.8135412+01:00
 tags:
     - memory
     - knowledge-graph

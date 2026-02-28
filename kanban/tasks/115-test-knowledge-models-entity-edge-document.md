@@ -1,10 +1,12 @@
 ---
 id: 115
 title: Test knowledge models (Entity, Edge, Document)
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:42:28.9270327+01:00
-updated: 2026-02-27T03:44:46.3745144+01:00
+updated: 2026-02-27T13:21:46.5922203+01:00
+started: 2026-02-27T10:53:58.9171443+01:00
+completed: 2026-02-27T13:21:46.5922203+01:00
 tags:
     - memory
     - knowledge-graph

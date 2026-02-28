@@ -1,12 +1,12 @@
 ---
 id: 64
 title: 'P5-14: Implement URL safety guard'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T21:18:35.3821565+01:00
-updated: 2026-02-26T21:40:19.1948339+01:00
+updated: 2026-02-27T10:00:31.2970525+01:00
 started: 2026-02-26T21:21:49.4203824+01:00
-completed: 2026-02-26T21:40:19.1948339+01:00
+completed: 2026-02-27T10:00:31.2970525+01:00
 tags:
     - phase-5
     - browser

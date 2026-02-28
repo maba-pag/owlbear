@@ -1,12 +1,12 @@
 ---
 id: 7
 title: 'P1-07: Create .python-version and src/owlbear/ package skeleton'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:04:25.2220612+01:00
-updated: 2026-02-26T18:14:54.6287927+01:00
+updated: 2026-02-27T09:59:55.54836+01:00
 started: 2026-02-24T15:16:56.5323282+01:00
-completed: 2026-02-26T18:14:54.6287927+01:00
+completed: 2026-02-27T09:59:55.54836+01:00
 tags:
     - phase-1
     - tooling

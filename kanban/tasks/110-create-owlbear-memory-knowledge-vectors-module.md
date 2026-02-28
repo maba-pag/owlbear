@@ -1,11 +1,12 @@
 ---
 id: 110
 title: Create owlbear.memory.knowledge.vectors module
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:31.4159779+01:00
-updated: 2026-02-27T03:45:24.0908145+01:00
+updated: 2026-02-27T13:21:44.4886891+01:00
 started: 2026-02-27T03:32:49.431151+01:00
+completed: 2026-02-27T13:21:44.4886891+01:00
 tags:
     - memory
     - knowledge-graph

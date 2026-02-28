@@ -1,12 +1,12 @@
 ---
 id: 30
 title: 'P4-02: Research Copilot OAuth from Graphicator project'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:15:19.0279037+01:00
-updated: 2026-02-26T21:40:20.4424486+01:00
+updated: 2026-02-27T10:00:07.9889007+01:00
 started: 2026-02-24T15:17:05.0151219+01:00
-completed: 2026-02-26T21:40:20.4424486+01:00
+completed: 2026-02-27T10:00:07.9889007+01:00
 tags:
     - phase-4
     - research

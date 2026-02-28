@@ -11,13 +11,14 @@ statuses:
     - name: docs
     - name: done
 priorities:
-    - low
-    - medium
-    - high
+    - someday
+    - nice-to-have
+    - important
+    - needed
     - critical
 defaults:
     status: ideation
-    priority: medium
+    priority: important
     class: standard
 claim_timeout: 1h
 classes:
@@ -41,4 +42,4 @@ tui:
         - after: 168h
           color: "196"
     hide_empty_columns: true
-next_id: 120
+next_id: 288

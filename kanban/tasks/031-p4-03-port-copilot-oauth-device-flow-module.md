@@ -1,12 +1,12 @@
 ---
 id: 31
 title: 'P4-03: Port Copilot OAuth device-flow module'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:15:36.029406+01:00
-updated: 2026-02-26T21:54:08.5291096+01:00
+updated: 2026-02-27T10:00:08.5532252+01:00
 started: 2026-02-26T21:21:58.0975781+01:00
-completed: 2026-02-26T21:54:08.5291096+01:00
+completed: 2026-02-27T10:00:08.5532252+01:00
 tags:
     - phase-4
     - auth

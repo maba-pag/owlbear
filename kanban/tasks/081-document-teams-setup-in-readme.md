@@ -1,12 +1,12 @@
 ---
 id: 81
 title: Document Teams setup in README
-status: done
+status: archived
 priority: low
 created: 2026-02-27T00:53:21.0983844+01:00
-updated: 2026-02-27T01:38:45.5398817+01:00
+updated: 2026-02-27T10:11:24.560335+01:00
 started: 2026-02-27T01:38:44.5929973+01:00
-completed: 2026-02-27T01:38:44.5929973+01:00
+completed: 2026-02-27T10:11:24.560335+01:00
 tags:
     - phase-4
     - comms

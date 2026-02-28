@@ -1,10 +1,12 @@
 ---
 id: 116
 title: Test knowledge schema DDL and init_db
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:42:34.8673295+01:00
-updated: 2026-02-27T03:44:57.9818451+01:00
+updated: 2026-02-27T13:21:47.1087709+01:00
+started: 2026-02-27T10:53:57.6136213+01:00
+completed: 2026-02-27T13:21:47.1087709+01:00
 tags:
     - memory
     - knowledge-graph

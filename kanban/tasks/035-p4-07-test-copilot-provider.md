@@ -1,12 +1,12 @@
 ---
 id: 35
 title: 'P4-07: Test Copilot provider'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:16:21.1836537+01:00
-updated: 2026-02-26T22:18:44.5366938+01:00
+updated: 2026-02-27T10:00:10.5504685+01:00
 started: 2026-02-26T20:48:32.1143172+01:00
-completed: 2026-02-26T22:18:44.5366938+01:00
+completed: 2026-02-27T10:00:10.5504685+01:00
 tags:
     - phase-4
     - test

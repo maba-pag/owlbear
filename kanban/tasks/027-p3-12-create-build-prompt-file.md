@@ -1,12 +1,12 @@
 ---
 id: 27
 title: 'P3-12: Create build prompt file'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:14:14.2817211+01:00
-updated: 2026-02-26T20:38:52.0625745+01:00
+updated: 2026-02-27T10:00:06.4373372+01:00
 started: 2026-02-26T20:31:53.7352069+01:00
-completed: 2026-02-26T20:38:52.0625745+01:00
+completed: 2026-02-27T10:00:06.4373372+01:00
 tags:
     - phase-3
     - agent

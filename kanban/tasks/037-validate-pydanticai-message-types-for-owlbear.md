@@ -1,12 +1,12 @@
 ---
 id: 37
 title: Validate PydanticAI message types for OwlBear
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:56:34.890276+01:00
-updated: 2026-02-26T19:58:54.8467234+01:00
+updated: 2026-02-27T10:00:11.5679091+01:00
 started: 2026-02-26T19:41:06.5120847+01:00
-completed: 2026-02-26T19:58:54.8467234+01:00
+completed: 2026-02-27T10:00:11.5679091+01:00
 tags:
     - phase-2
     - agent

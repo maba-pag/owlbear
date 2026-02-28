@@ -1,12 +1,12 @@
 ---
 id: 77
 title: Register Azure AD app for Graph API Teams access
-status: done
+status: archived
 priority: high
 created: 2026-02-27T00:52:45.0022224+01:00
-updated: 2026-02-27T01:38:45.0608196+01:00
+updated: 2026-02-27T10:11:23.023653+01:00
 started: 2026-02-27T01:38:44.5546456+01:00
-completed: 2026-02-27T01:38:44.5546456+01:00
+completed: 2026-02-27T10:11:23.023653+01:00
 tags:
     - phase-4
     - comms

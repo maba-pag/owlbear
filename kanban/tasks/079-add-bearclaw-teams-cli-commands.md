@@ -1,12 +1,12 @@
 ---
 id: 79
 title: Add bearclaw teams CLI commands
-status: done
+status: archived
 priority: medium
 created: 2026-02-27T00:53:08.1856716+01:00
-updated: 2026-02-27T01:38:45.5214613+01:00
+updated: 2026-02-27T10:11:23.8325012+01:00
 started: 2026-02-27T01:38:44.576206+01:00
-completed: 2026-02-27T01:38:44.576206+01:00
+completed: 2026-02-27T10:11:23.8325012+01:00
 tags:
     - phase-4
     - comms

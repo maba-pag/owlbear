@@ -1,12 +1,12 @@
 ---
 id: 4
 title: 'P1-04: Fill project purpose in copilot-instructions.md'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:03:32.5810524+01:00
-updated: 2026-02-26T16:35:00.390664+01:00
+updated: 2026-02-27T09:59:54.1274468+01:00
 started: 2026-02-24T15:16:56.4216799+01:00
-completed: 2026-02-26T16:35:00.390664+01:00
+completed: 2026-02-27T09:59:54.1274468+01:00
 tags:
     - phase-1
     - docs

@@ -1,12 +1,12 @@
 ---
 id: 57
 title: 'P5-07: Test interaction tools (click, type, select)'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T21:17:50.8758096+01:00
-updated: 2026-02-26T22:17:37.9458856+01:00
+updated: 2026-02-27T10:00:27.6967199+01:00
 started: 2026-02-26T21:21:36.6327544+01:00
-completed: 2026-02-26T22:17:37.9458856+01:00
+completed: 2026-02-27T10:00:27.6967199+01:00
 tags:
     - phase-5
     - browser

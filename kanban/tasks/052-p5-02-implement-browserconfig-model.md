@@ -1,12 +1,12 @@
 ---
 id: 52
 title: 'P5-02: Implement BrowserConfig model'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T21:17:21.6260108+01:00
-updated: 2026-02-26T21:40:16.3407333+01:00
+updated: 2026-02-27T10:00:25.2700137+01:00
 started: 2026-02-26T21:21:25.5662337+01:00
-completed: 2026-02-26T21:40:16.3407333+01:00
+completed: 2026-02-27T10:00:25.2700137+01:00
 tags:
     - phase-5
     - browser

@@ -1,12 +1,12 @@
 ---
 id: 40
 title: Implement SkillRegistry with progressive loading
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:56:51.5667047+01:00
-updated: 2026-02-26T20:48:36.4337208+01:00
+updated: 2026-02-27T10:00:13.0012166+01:00
 started: 2026-02-26T19:41:55.6455363+01:00
-completed: 2026-02-26T20:48:36.4337208+01:00
+completed: 2026-02-27T10:00:13.0012166+01:00
 tags:
     - phase-2
     - agent

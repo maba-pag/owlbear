@@ -1,11 +1,12 @@
 ---
 id: 96
 title: Add bearclaw voice CLI subcommand for testing voice I/O
-status: todo
-priority: low
+status: archived
+priority: nice-to-have
 created: 2026-02-27T03:08:09.5547373+01:00
-updated: 2026-02-27T03:39:53.7062577+01:00
+updated: 2026-02-28T23:52:46.5476696+01:00
 started: 2026-02-27T03:32:43.6434085+01:00
+completed: 2026-02-28T23:52:46.5476696+01:00
 tags:
     - phase-5
     - voice

@@ -1,12 +1,12 @@
 ---
 id: 8
 title: 'P1-08: Create src/owlbear/config.py settings module'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:04:38.4330922+01:00
-updated: 2026-02-26T18:14:56.9028516+01:00
+updated: 2026-02-27T09:59:56.2193804+01:00
 started: 2026-02-24T15:16:56.5690286+01:00
-completed: 2026-02-26T18:14:56.9028516+01:00
+completed: 2026-02-27T09:59:56.2193804+01:00
 tags:
     - phase-1
     - config

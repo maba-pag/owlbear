@@ -1,12 +1,12 @@
 ---
 id: 70
 title: 'P6-06: Test BrowserManager CDP connect mode'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T23:30:51.9397243+01:00
-updated: 2026-02-27T00:07:23.0154819+01:00
+updated: 2026-02-27T10:00:34.273267+01:00
 started: 2026-02-26T23:43:01.5542988+01:00
-completed: 2026-02-27T00:07:23.0154819+01:00
+completed: 2026-02-27T10:00:34.273267+01:00
 tags:
     - phase-6
     - test

@@ -1,12 +1,12 @@
 ---
 id: 85
 title: Add slack_sdk[socket_mode] + aiohttp to pyproject.toml
-status: done
+status: archived
 priority: high
 created: 2026-02-27T01:44:55.5607936+01:00
-updated: 2026-02-27T02:18:09.4630386+01:00
+updated: 2026-02-27T10:00:39.1371401+01:00
 started: 2026-02-27T02:14:18.5734065+01:00
-completed: 2026-02-27T02:18:09.4630386+01:00
+completed: 2026-02-27T10:00:39.1371401+01:00
 tags:
     - phase-4
     - comms

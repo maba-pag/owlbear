@@ -1,12 +1,12 @@
 ---
 id: 2
 title: 'P1-02: Rename Graphicator to OwlBear in python.instructions.md'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:03:03.1833992+01:00
-updated: 2026-02-26T16:34:51.7025497+01:00
+updated: 2026-02-27T09:59:53.1540356+01:00
 started: 2026-02-24T15:16:56.373085+01:00
-completed: 2026-02-26T16:34:51.7025497+01:00
+completed: 2026-02-27T09:59:53.1540356+01:00
 tags:
     - phase-1
     - config

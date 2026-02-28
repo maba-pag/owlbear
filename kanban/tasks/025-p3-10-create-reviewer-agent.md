@@ -1,12 +1,12 @@
 ---
 id: 25
 title: 'P3-10: Create reviewer agent'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:13:53.7692576+01:00
-updated: 2026-02-26T20:37:41.1708939+01:00
+updated: 2026-02-27T10:00:05.0149897+01:00
 started: 2026-02-26T20:31:52.8557297+01:00
-completed: 2026-02-26T20:37:41.1708939+01:00
+completed: 2026-02-27T10:00:05.0149897+01:00
 tags:
     - phase-3
     - agent

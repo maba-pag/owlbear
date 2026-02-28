@@ -1,11 +1,12 @@
 ---
 id: 101
 title: Integrate usage capture into OwlBearAgent.turn()
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:20:41.1319025+01:00
-updated: 2026-02-27T03:41:55.6823609+01:00
+updated: 2026-02-27T13:21:35.2024863+01:00
 started: 2026-02-27T03:32:45.6636219+01:00
+completed: 2026-02-27T13:21:35.2024863+01:00
 tags:
     - observability
     - agent

@@ -1,12 +1,12 @@
 ---
 id: 33
 title: 'P4-05: Create auth CLI subcommand in BearClaw'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:15:59.8991499+01:00
-updated: 2026-02-26T22:17:40.217502+01:00
+updated: 2026-02-27T10:00:09.6191716+01:00
 started: 2026-02-26T21:21:59.9459172+01:00
-completed: 2026-02-26T22:17:40.217502+01:00
+completed: 2026-02-27T10:00:09.6191716+01:00
 tags:
     - phase-4
     - cli

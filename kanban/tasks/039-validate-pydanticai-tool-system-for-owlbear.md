@@ -1,12 +1,12 @@
 ---
 id: 39
 title: Validate PydanticAI tool system for OwlBear
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:56:45.8638593+01:00
-updated: 2026-02-26T19:59:52.5177031+01:00
+updated: 2026-02-27T10:00:12.506693+01:00
 started: 2026-02-26T19:41:17.4910157+01:00
-completed: 2026-02-26T19:59:52.5177031+01:00
+completed: 2026-02-27T10:00:12.506693+01:00
 tags:
     - phase-2
     - agent

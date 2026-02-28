@@ -1,12 +1,12 @@
 ---
 id: 55
 title: 'P5-05: Test navigate tool'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T21:17:37.3355018+01:00
-updated: 2026-02-26T22:17:37.003175+01:00
+updated: 2026-02-27T10:00:26.7088211+01:00
 started: 2026-02-26T21:21:34.7903335+01:00
-completed: 2026-02-26T22:17:37.003175+01:00
+completed: 2026-02-27T10:00:26.7088211+01:00
 tags:
     - phase-5
     - browser

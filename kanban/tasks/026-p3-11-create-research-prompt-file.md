@@ -1,12 +1,12 @@
 ---
 id: 26
 title: 'P3-11: Create research prompt file'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:14:03.6746537+01:00
-updated: 2026-02-26T20:38:50.7900671+01:00
+updated: 2026-02-27T10:00:05.7167087+01:00
 started: 2026-02-26T20:31:53.2851697+01:00
-completed: 2026-02-26T20:38:50.7900671+01:00
+completed: 2026-02-27T10:00:05.7167087+01:00
 tags:
     - phase-3
     - agent

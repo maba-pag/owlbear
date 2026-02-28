@@ -1,12 +1,12 @@
 ---
 id: 28
 title: 'P3-13: Create review prompt file'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:14:22.5909624+01:00
-updated: 2026-02-26T20:38:53.1963677+01:00
+updated: 2026-02-27T10:00:06.9848934+01:00
 started: 2026-02-26T20:31:54.2538327+01:00
-completed: 2026-02-26T20:38:53.1963677+01:00
+completed: 2026-02-27T10:00:06.9848934+01:00
 tags:
     - phase-3
     - agent

@@ -1,11 +1,12 @@
 ---
 id: 111
 title: Create owlbear.memory.knowledge.embeddings module
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:36.4284447+01:00
-updated: 2026-02-27T03:45:34.2621493+01:00
+updated: 2026-02-27T13:21:44.9940039+01:00
 started: 2026-02-27T03:32:49.8548519+01:00
+completed: 2026-02-27T13:21:44.9940039+01:00
 tags:
     - memory
     - knowledge-graph

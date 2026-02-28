@@ -1,12 +1,12 @@
 ---
 id: 74
 title: 'P6-10: Test BrowserToolset CDP integration'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T23:31:21.8368884+01:00
-updated: 2026-02-27T00:16:52.4394778+01:00
+updated: 2026-02-27T10:00:36.2050071+01:00
 started: 2026-02-26T23:43:03.218346+01:00
-completed: 2026-02-27T00:16:52.4394778+01:00
+completed: 2026-02-27T10:00:36.2050071+01:00
 tags:
     - phase-6
     - test

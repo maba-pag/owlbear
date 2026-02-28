@@ -1,12 +1,12 @@
 ---
 id: 80
 title: Write tests for TeamsChannel adapter
-status: done
+status: archived
 priority: high
 created: 2026-02-27T00:53:14.5523451+01:00
-updated: 2026-02-27T01:38:45.5300262+01:00
+updated: 2026-02-27T10:11:18.8739271+01:00
 started: 2026-02-27T01:38:44.5835916+01:00
-completed: 2026-02-27T01:38:44.5835916+01:00
+completed: 2026-02-27T10:11:18.8739271+01:00
 tags:
     - phase-4
     - comms

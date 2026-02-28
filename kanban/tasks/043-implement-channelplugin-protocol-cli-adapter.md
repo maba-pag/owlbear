@@ -1,12 +1,12 @@
 ---
 id: 43
 title: Implement ChannelPlugin Protocol + CLI adapter
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:57:07.9642917+01:00
-updated: 2026-02-26T19:52:55.9304353+01:00
+updated: 2026-02-27T10:00:14.619446+01:00
 started: 2026-02-26T19:42:32.6099182+01:00
-completed: 2026-02-26T19:52:55.9304353+01:00
+completed: 2026-02-27T10:00:14.619446+01:00
 tags:
     - phase-2
     - agent

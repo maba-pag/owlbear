@@ -1,12 +1,12 @@
 ---
 id: 42
 title: Implement two-layer memory (context + session)
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T15:57:02.648065+01:00
-updated: 2026-02-26T19:57:27.369324+01:00
+updated: 2026-02-27T10:00:14.0984314+01:00
 started: 2026-02-26T19:42:20.0121496+01:00
-completed: 2026-02-26T19:57:27.369324+01:00
+completed: 2026-02-27T10:00:14.0984314+01:00
 tags:
     - phase-2
     - agent

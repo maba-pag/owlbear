@@ -1,12 +1,12 @@
 ---
 id: 9
 title: 'P1-09: Create src/bearclaw/ package with CLI stub'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:04:52.3899502+01:00
-updated: 2026-02-26T18:14:59.7857957+01:00
+updated: 2026-02-27T09:59:56.7074974+01:00
 started: 2026-02-24T15:16:56.5940145+01:00
-completed: 2026-02-26T18:14:59.7857957+01:00
+completed: 2026-02-27T09:59:56.7074974+01:00
 tags:
     - phase-1
     - cli

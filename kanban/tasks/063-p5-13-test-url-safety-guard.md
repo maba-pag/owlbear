@@ -1,12 +1,12 @@
 ---
 id: 63
 title: 'P5-13: Test URL safety guard'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T21:18:28.8854567+01:00
-updated: 2026-02-26T21:40:17.5827971+01:00
+updated: 2026-02-27T10:00:30.818859+01:00
 started: 2026-02-26T21:21:48.4527871+01:00
-completed: 2026-02-26T21:40:17.5827971+01:00
+completed: 2026-02-27T10:00:30.818859+01:00
 tags:
     - phase-5
     - browser

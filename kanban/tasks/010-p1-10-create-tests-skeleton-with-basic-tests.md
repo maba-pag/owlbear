@@ -1,12 +1,12 @@
 ---
 id: 10
 title: 'P1-10: Create tests/ skeleton with basic tests'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:05:08.5357734+01:00
-updated: 2026-02-26T18:15:02.1872802+01:00
+updated: 2026-02-27T09:59:57.2790659+01:00
 started: 2026-02-24T15:16:56.6196723+01:00
-completed: 2026-02-26T18:15:02.1872802+01:00
+completed: 2026-02-27T09:59:57.2790659+01:00
 tags:
     - phase-1
     - test

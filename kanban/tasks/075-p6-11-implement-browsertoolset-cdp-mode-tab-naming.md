@@ -1,12 +1,12 @@
 ---
 id: 75
 title: 'P6-11: Implement BrowserToolset CDP mode + tab naming'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T23:31:29.7092589+01:00
-updated: 2026-02-27T00:16:53.9747473+01:00
+updated: 2026-02-27T10:00:36.6734158+01:00
 started: 2026-02-26T23:43:03.7158592+01:00
-completed: 2026-02-27T00:16:53.9747473+01:00
+completed: 2026-02-27T10:00:36.6734158+01:00
 tags:
     - phase-6
     - browser

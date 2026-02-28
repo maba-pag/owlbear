@@ -1,11 +1,12 @@
 ---
 id: 105
 title: Tests for usage tracking system
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:21:12.8067194+01:00
-updated: 2026-02-27T03:40:06.7150429+01:00
+updated: 2026-02-27T13:21:37.1970133+01:00
 started: 2026-02-27T03:32:47.3980287+01:00
+completed: 2026-02-27T13:21:37.1970133+01:00
 tags:
     - observability
     - test

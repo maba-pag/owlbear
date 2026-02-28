@@ -1,12 +1,12 @@
 ---
 id: 56
 title: 'P5-06: Implement navigate tool'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T21:17:42.6380509+01:00
-updated: 2026-02-26T22:17:37.5387921+01:00
+updated: 2026-02-27T10:00:27.1999981+01:00
 started: 2026-02-26T21:21:35.6486176+01:00
-completed: 2026-02-26T22:17:37.5387921+01:00
+completed: 2026-02-27T10:00:27.1999981+01:00
 tags:
     - phase-5
     - browser

@@ -1,12 +1,12 @@
 ---
 id: 32
 title: 'P4-04: Port Copilot provider integration'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:15:48.1667425+01:00
-updated: 2026-02-26T22:17:39.7791924+01:00
+updated: 2026-02-27T10:00:09.1246915+01:00
 started: 2026-02-26T21:21:58.9589216+01:00
-completed: 2026-02-26T22:17:39.7791924+01:00
+completed: 2026-02-27T10:00:09.1246915+01:00
 tags:
     - phase-4
     - auth

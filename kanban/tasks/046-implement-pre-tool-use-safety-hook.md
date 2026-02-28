@@ -1,12 +1,12 @@
 ---
 id: 46
 title: Implement pre_tool_use safety hook
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T15:57:26.4378399+01:00
-updated: 2026-02-27T00:38:03.904192+01:00
+updated: 2026-02-27T10:00:16.33527+01:00
 started: 2026-02-27T00:38:03.4260153+01:00
-completed: 2026-02-27T00:38:03.4260153+01:00
+completed: 2026-02-27T10:00:16.33527+01:00
 tags:
     - phase-3
     - agent

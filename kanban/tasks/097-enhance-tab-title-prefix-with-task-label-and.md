@@ -1,11 +1,12 @@
 ---
 id: 97
 title: Enhance tab title prefix with task label and MutationObserver
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:15:01.2541819+01:00
-updated: 2026-02-27T03:39:26.1627866+01:00
+updated: 2026-02-27T13:21:34.1800871+01:00
 started: 2026-02-27T03:32:44.0527301+01:00
+completed: 2026-02-27T13:21:34.1800871+01:00
 tags:
     - phase-6
     - browser

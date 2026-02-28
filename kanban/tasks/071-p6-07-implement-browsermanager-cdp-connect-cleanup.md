@@ -1,12 +1,12 @@
 ---
 id: 71
 title: 'P6-07: Implement BrowserManager CDP connect + cleanup'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T23:31:00.2985806+01:00
-updated: 2026-02-27T00:07:24.4053103+01:00
+updated: 2026-02-27T10:00:34.7448399+01:00
 started: 2026-02-26T23:43:02.0975448+01:00
-completed: 2026-02-27T00:07:24.4053103+01:00
+completed: 2026-02-27T10:00:34.7448399+01:00
 tags:
     - phase-6
     - browser

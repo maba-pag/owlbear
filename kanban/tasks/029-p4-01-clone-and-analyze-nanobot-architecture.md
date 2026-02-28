@@ -1,12 +1,12 @@
 ---
 id: 29
 title: 'P4-01: Clone and analyze nanobot architecture'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:15:04.1251469+01:00
-updated: 2026-02-26T18:55:09.9845289+01:00
+updated: 2026-02-27T10:00:07.5115072+01:00
 started: 2026-02-24T15:17:04.9850543+01:00
-completed: 2026-02-26T18:55:09.0870754+01:00
+completed: 2026-02-27T10:00:07.5115072+01:00
 tags:
     - phase-4
     - research

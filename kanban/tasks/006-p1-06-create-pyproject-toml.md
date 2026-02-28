@@ -1,12 +1,12 @@
 ---
 id: 6
 title: 'P1-06: Create pyproject.toml'
-status: done
+status: archived
 priority: critical
 created: 2026-02-24T15:04:11.7404125+01:00
-updated: 2026-02-26T18:15:09.5040766+01:00
+updated: 2026-02-27T09:59:55.0791109+01:00
 started: 2026-02-24T15:16:56.4856862+01:00
-completed: 2026-02-26T18:15:09.5040766+01:00
+completed: 2026-02-27T09:59:55.0791109+01:00
 tags:
     - phase-1
     - tooling

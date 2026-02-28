@@ -1,12 +1,12 @@
 ---
 id: 51
 title: 'P5-01: Test BrowserConfig model'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T21:17:15.716263+01:00
-updated: 2026-02-26T21:40:14.5703975+01:00
+updated: 2026-02-27T10:00:24.7160292+01:00
 started: 2026-02-26T21:21:24.6809826+01:00
-completed: 2026-02-26T21:40:14.5703975+01:00
+completed: 2026-02-27T10:00:24.7160292+01:00
 tags:
     - phase-5
     - browser

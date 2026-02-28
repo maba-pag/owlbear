@@ -1,12 +1,12 @@
 ---
 id: 20
 title: 'P3-05: SessionEnd test verification hook'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:12:24.8904478+01:00
-updated: 2026-02-27T01:30:09.784445+01:00
+updated: 2026-02-27T10:00:02.0261773+01:00
 started: 2026-02-27T00:39:19.8580825+01:00
-completed: 2026-02-27T01:30:09.784445+01:00
+completed: 2026-02-27T10:00:02.0261773+01:00
 tags:
     - phase-3
     - hooks

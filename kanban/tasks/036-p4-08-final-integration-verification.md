@@ -1,12 +1,12 @@
 ---
 id: 36
 title: 'P4-08: Final integration verification'
-status: done
+status: archived
 priority: critical
 created: 2026-02-24T15:16:35.3534616+01:00
-updated: 2026-02-26T22:29:23.6042401+01:00
+updated: 2026-02-27T10:00:11.0608083+01:00
 started: 2026-02-26T20:48:24.2159838+01:00
-completed: 2026-02-26T22:29:23.6042401+01:00
+completed: 2026-02-27T10:00:11.0608083+01:00
 tags:
     - phase-4
     - test

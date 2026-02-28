@@ -1,12 +1,12 @@
 ---
 id: 18
 title: 'P3-03: SessionStart context injection hook'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:11:11.4147194+01:00
-updated: 2026-02-27T00:54:12.8640199+01:00
+updated: 2026-02-27T10:00:01.0620761+01:00
 started: 2026-02-27T00:39:19.8415883+01:00
-completed: 2026-02-27T00:54:12.8640199+01:00
+completed: 2026-02-27T10:00:01.0620761+01:00
 tags:
     - phase-3
     - hooks

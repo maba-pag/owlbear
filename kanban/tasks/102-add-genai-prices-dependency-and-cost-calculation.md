@@ -1,11 +1,12 @@
 ---
 id: 102
 title: Add genai-prices dependency and cost calculation wrapper
-status: todo
+status: archived
 priority: medium
 created: 2026-02-27T03:20:48.9650458+01:00
-updated: 2026-02-27T03:41:09.735544+01:00
+updated: 2026-02-27T13:21:35.6929381+01:00
 started: 2026-02-27T03:32:46.077463+01:00
+completed: 2026-02-27T13:21:35.6929381+01:00
 tags:
     - observability
     - config

@@ -1,11 +1,12 @@
 ---
 id: 93
 title: Create src/owlbear/voice/tts.py — TTSEngine wrapping pyttsx3
-status: todo
-priority: low
+status: archived
+priority: nice-to-have
 created: 2026-02-27T03:07:47.5747552+01:00
-updated: 2026-02-27T03:39:53.6860214+01:00
+updated: 2026-02-28T23:52:45.1833014+01:00
 started: 2026-02-27T03:32:42.4165989+01:00
+completed: 2026-02-28T23:52:45.1833014+01:00
 tags:
     - phase-5
     - voice

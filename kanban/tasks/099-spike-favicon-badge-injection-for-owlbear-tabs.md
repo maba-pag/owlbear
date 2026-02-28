@@ -1,10 +1,10 @@
 ---
 id: 99
 title: 'Spike: favicon badge injection for OwlBear tabs'
-status: todo
-priority: low
+status: ideation
+priority: someday
 created: 2026-02-27T03:15:19.317906+01:00
-updated: 2026-02-27T03:47:13.964812+01:00
+updated: 2026-02-27T17:58:16.4326967+01:00
 started: 2026-02-27T03:32:44.8825842+01:00
 tags:
     - phase-6
@@ -13,26 +13,21 @@ tags:
 class: standard
 ---
 
-Research spike: prototype canvas-based favicon overlay that shows an 'OB' badge on OwlBear-controlled tabs. Provides additional visual differentiation beyond title prefix.
+## Intent
+Provide a visible badge or icon on OwlBear-controlled browser tabs so the user can instantly tell which tabs are agent-managed.
 
-See docs/cdp-tab-groups-research.md section 4 for context.
+## Constraint (2026-02-27)
+Edge and all other browsers are locked down by IT admins. Extension sideloading is blocked — only whitelisted addons can be installed. Favicon injection via extension is impossible.
 
-## Scope
-- JS prototype only — no production code changes
-- Prototype lives in docs/scratch/99-favicon-badge.js (deleted after spike)
-- Deliverable is a go/no-go decision + documented approach
+## Original approach (invalidated)
+Inject a custom favicon badge via a browser extension. Cannot install extensions.
 
-## Approach
-1. Write JS snippet: create 16x16 canvas, draw original favicon, overlay 'OB' badge
-2. Set as new favicon via link[rel=icon] href = canvas.toDataURL()
-3. Test manually via page.evaluate() on sites with: no favicon, PNG favicon, SVG favicon, multi-size favicon
+## Research needed
+Alternative favicon/badge approaches without extensions:
+- CDP Page.setDocumentContent or Runtime.evaluate to modify favicon link elements
+- Inline SVG favicon with overlay badge via CDP
+- CSS-based tab indicators (limited but possible via CDP injection)
+- Tab grouping with color labels via CDP (Chrome/Edge support)
+- Combination with existing title prefix ([OwlBear] prefix already works)
 
-AC:
-- [ ] JS prototype in docs/scratch/99-favicon-badge.js
-- [ ] Tested on 3+ sites: one with no favicon, one with simple PNG, one with SVG favicon
-- [ ] Cross-origin favicon handling documented (canvas tainted by CORS? fallback needed?)
-- [ ] Visual quality assessed — screenshot evidence or description of result
-- [ ] Go/no-go recommendation: worth integrating into BrowserToolset? Under what conditions?
-- [ ] If go: follow-up implementation task created on kanban board
-- [ ] If no-go: rationale documented, no follow-up task needed
-- [ ] docs/scratch/99-* files deleted after spike completion
+Key question: is the title prefix sufficient, or do users need stronger visual cues?

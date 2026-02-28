@@ -1,12 +1,12 @@
 ---
 id: 76
 title: 'P6-12: CDP safety + documentation'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T23:31:37.3851097+01:00
-updated: 2026-02-27T00:19:11.6853102+01:00
+updated: 2026-02-27T10:00:37.1657317+01:00
 started: 2026-02-26T23:43:04.0984721+01:00
-completed: 2026-02-27T00:19:11.6853102+01:00
+completed: 2026-02-27T10:00:37.1657317+01:00
 tags:
     - phase-6
     - browser

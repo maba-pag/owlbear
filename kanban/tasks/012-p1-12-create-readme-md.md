@@ -1,12 +1,12 @@
 ---
 id: 12
 title: 'P1-12: Create README.md'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:05:40.8404347+01:00
-updated: 2026-02-26T18:15:07.0246125+01:00
+updated: 2026-02-27T09:59:58.2370587+01:00
 started: 2026-02-24T15:16:56.6885366+01:00
-completed: 2026-02-26T18:15:07.0246125+01:00
+completed: 2026-02-27T09:59:58.2370587+01:00
 tags:
     - phase-1
     - docs

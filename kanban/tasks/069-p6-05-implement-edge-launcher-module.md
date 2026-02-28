@@ -1,12 +1,12 @@
 ---
 id: 69
 title: 'P6-05: Implement Edge launcher module'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T23:30:44.111309+01:00
-updated: 2026-02-27T00:07:21.5827305+01:00
+updated: 2026-02-27T10:00:33.7896345+01:00
 started: 2026-02-26T23:43:01.1876934+01:00
-completed: 2026-02-27T00:07:21.5827305+01:00
+completed: 2026-02-27T10:00:33.7896345+01:00
 tags:
     - phase-6
     - browser

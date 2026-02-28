@@ -1,11 +1,12 @@
 ---
 id: 104
 title: Create bearclaw usage CLI command
-status: todo
+status: archived
 priority: medium
 created: 2026-02-27T03:21:05.3113567+01:00
-updated: 2026-02-27T03:42:14.5513542+01:00
+updated: 2026-02-27T13:21:36.6951306+01:00
 started: 2026-02-27T03:32:46.946924+01:00
+completed: 2026-02-27T13:21:36.6951306+01:00
 tags:
     - observability
     - cli

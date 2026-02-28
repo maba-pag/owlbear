@@ -1,10 +1,12 @@
 ---
 id: 114
 title: Tests for enhanced tab title prefix (task_label + MutationObserver)
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:38:15.9587595+01:00
-updated: 2026-02-27T03:39:21.3300598+01:00
+updated: 2026-02-27T13:21:46.095033+01:00
+started: 2026-02-27T12:56:44.5123112+01:00
+completed: 2026-02-27T13:21:46.095033+01:00
 tags:
     - phase-6
     - browser

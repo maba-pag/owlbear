@@ -1,12 +1,12 @@
 ---
 id: 5
 title: 'P1-05: Update tech stack table in copilot-instructions.md'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:03:51.8977003+01:00
-updated: 2026-02-26T16:35:02.1789928+01:00
+updated: 2026-02-27T09:59:54.6064492+01:00
 started: 2026-02-24T15:16:56.4543599+01:00
-completed: 2026-02-26T16:35:02.1789928+01:00
+completed: 2026-02-27T09:59:54.6064492+01:00
 tags:
     - phase-1
     - config

@@ -1,12 +1,12 @@
 ---
 id: 13
 title: 'P2-01: Create docs/sources.md attribution table'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:06:14.3499844+01:00
-updated: 2026-02-26T18:55:09.5639663+01:00
+updated: 2026-02-27T09:59:58.7066109+01:00
 started: 2026-02-24T15:17:04.8235974+01:00
-completed: 2026-02-26T18:55:06.4391219+01:00
+completed: 2026-02-27T09:59:58.7066109+01:00
 tags:
     - phase-2
     - docs

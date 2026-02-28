@@ -1,11 +1,12 @@
 ---
 id: 100
 title: Create UsageRecord model and UsageTracker service
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:20:33.6510502+01:00
-updated: 2026-02-27T03:40:44.1971192+01:00
+updated: 2026-02-27T13:21:34.7180432+01:00
 started: 2026-02-27T03:32:45.2663588+01:00
+completed: 2026-02-27T13:21:34.7180432+01:00
 tags:
     - observability
     - agent

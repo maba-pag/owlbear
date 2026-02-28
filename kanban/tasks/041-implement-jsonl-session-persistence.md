@@ -1,12 +1,12 @@
 ---
 id: 41
 title: Implement JSONL session persistence
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:56:56.6024432+01:00
-updated: 2026-02-26T19:55:54.6119063+01:00
+updated: 2026-02-27T10:00:13.5801664+01:00
 started: 2026-02-26T19:42:07.499875+01:00
-completed: 2026-02-26T19:55:54.6119063+01:00
+completed: 2026-02-27T10:00:13.5801664+01:00
 tags:
     - phase-2
     - agent

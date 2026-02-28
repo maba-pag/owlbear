@@ -1,11 +1,12 @@
 ---
 id: 95
 title: Create src/owlbear/voice/channel.py — VoiceChannel implementing ChannelPlugin
-status: todo
-priority: low
+status: archived
+priority: nice-to-have
 created: 2026-02-27T03:08:02.1221995+01:00
-updated: 2026-02-27T03:39:53.7003073+01:00
+updated: 2026-02-28T23:52:45.7641312+01:00
 started: 2026-02-27T03:32:43.2290101+01:00
+completed: 2026-02-28T23:52:45.7641312+01:00
 tags:
     - phase-5
     - voice

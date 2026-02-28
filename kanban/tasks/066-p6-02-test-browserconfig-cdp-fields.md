@@ -1,12 +1,12 @@
 ---
 id: 66
 title: 'P6-02: Test BrowserConfig CDP fields'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T23:30:20.185944+01:00
-updated: 2026-02-26T23:59:10.6025096+01:00
+updated: 2026-02-27T10:00:32.3388827+01:00
 started: 2026-02-26T23:42:59.905846+01:00
-completed: 2026-02-26T23:59:10.6025096+01:00
+completed: 2026-02-27T10:00:32.3388827+01:00
 tags:
     - phase-6
     - test

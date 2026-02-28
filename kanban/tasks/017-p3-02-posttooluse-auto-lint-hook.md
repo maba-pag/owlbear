@@ -1,12 +1,12 @@
 ---
 id: 17
 title: 'P3-02: PostToolUse auto-lint hook'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:10:07.746675+01:00
-updated: 2026-02-27T00:54:12.8555569+01:00
+updated: 2026-02-27T10:00:00.602771+01:00
 started: 2026-02-27T00:39:19.831958+01:00
-completed: 2026-02-27T00:54:12.8555569+01:00
+completed: 2026-02-27T10:00:00.602771+01:00
 tags:
     - phase-3
     - hooks

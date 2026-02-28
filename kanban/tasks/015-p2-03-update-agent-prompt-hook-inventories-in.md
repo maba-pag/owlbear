@@ -1,11 +1,12 @@
 ---
 id: 15
 title: 'P2-03: Update agent/prompt/hook inventories in copilot-instructions.md'
-status: done
+status: archived
 priority: medium
 created: 2026-02-24T15:06:44.8934615+01:00
-updated: 2026-02-26T18:56:58.2510894+01:00
+updated: 2026-02-27T09:59:59.6212301+01:00
 started: 2026-02-24T15:17:04.8916672+01:00
+completed: 2026-02-27T09:59:59.6212301+01:00
 tags:
     - phase-2
     - docs

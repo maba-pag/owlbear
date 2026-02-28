@@ -1,10 +1,12 @@
 ---
 id: 117
 title: Test knowledge graph CRUD operations
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:42:40.80036+01:00
-updated: 2026-02-27T03:45:08.2189163+01:00
+updated: 2026-02-27T13:21:47.6279228+01:00
+started: 2026-02-27T12:47:47.4409198+01:00
+completed: 2026-02-27T13:21:47.6279228+01:00
 tags:
     - memory
     - knowledge-graph

@@ -1,12 +1,12 @@
 ---
 id: 61
 title: 'P5-11: Test BrowserToolset registration'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T21:18:15.86809+01:00
-updated: 2026-02-26T22:26:14.1095212+01:00
+updated: 2026-02-27T10:00:29.6412715+01:00
 started: 2026-02-26T21:21:46.7349809+01:00
-completed: 2026-02-26T22:26:14.1095212+01:00
+completed: 2026-02-27T10:00:29.6412715+01:00
 tags:
     - phase-5
     - browser

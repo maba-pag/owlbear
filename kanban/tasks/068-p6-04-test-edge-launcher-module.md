@@ -1,12 +1,12 @@
 ---
 id: 68
 title: 'P6-04: Test Edge launcher module'
-status: done
+status: archived
 priority: high
 created: 2026-02-26T23:30:35.1325412+01:00
-updated: 2026-02-26T23:59:13.4471964+01:00
+updated: 2026-02-27T10:00:33.3025505+01:00
 started: 2026-02-26T23:43:00.8241248+01:00
-completed: 2026-02-26T23:59:13.4471964+01:00
+completed: 2026-02-27T10:00:33.3025505+01:00
 tags:
     - phase-6
     - test

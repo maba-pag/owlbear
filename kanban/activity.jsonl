@@ -800,3 +800,1443 @@
 {"timestamp":"2026-02-27T03:45:34.2631908+01:00","action":"move","task_id":111,"detail":"backlog -\u003e todo"}
 {"timestamp":"2026-02-27T03:47:13.5252803+01:00","action":"move","task_id":98,"detail":"backlog -\u003e todo"}
 {"timestamp":"2026-02-27T03:47:13.966142+01:00","action":"move","task_id":99,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T09:59:47.9949795+01:00","action":"move","task_id":1,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:53.1564548+01:00","action":"move","task_id":2,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:53.6332249+01:00","action":"move","task_id":3,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:54.1290971+01:00","action":"move","task_id":4,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:54.6075533+01:00","action":"move","task_id":5,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:55.0808153+01:00","action":"move","task_id":6,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:55.5502966+01:00","action":"move","task_id":7,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:56.2205288+01:00","action":"move","task_id":8,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:56.7095556+01:00","action":"move","task_id":9,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:57.2802121+01:00","action":"move","task_id":10,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:57.7561379+01:00","action":"move","task_id":11,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:58.2382096+01:00","action":"move","task_id":12,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:58.7082222+01:00","action":"move","task_id":13,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:59.1507529+01:00","action":"move","task_id":14,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T09:59:59.6227939+01:00","action":"move","task_id":15,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:00.1345472+01:00","action":"move","task_id":16,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:00.6037702+01:00","action":"move","task_id":17,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:01.0632123+01:00","action":"move","task_id":18,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:01.5384177+01:00","action":"move","task_id":19,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:02.0274604+01:00","action":"move","task_id":20,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:02.5435148+01:00","action":"move","task_id":21,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:03.0908678+01:00","action":"move","task_id":22,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:03.737162+01:00","action":"move","task_id":23,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:04.3047084+01:00","action":"move","task_id":24,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:05.0163664+01:00","action":"move","task_id":25,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:05.7194718+01:00","action":"move","task_id":26,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:06.4399991+01:00","action":"move","task_id":27,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:06.9880396+01:00","action":"move","task_id":28,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:07.5130166+01:00","action":"move","task_id":29,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:07.990556+01:00","action":"move","task_id":30,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:08.556401+01:00","action":"move","task_id":31,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:09.1264033+01:00","action":"move","task_id":32,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:09.6202468+01:00","action":"move","task_id":33,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:10.0773819+01:00","action":"move","task_id":34,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:10.5524709+01:00","action":"move","task_id":35,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:11.0618136+01:00","action":"move","task_id":36,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:11.5696487+01:00","action":"move","task_id":37,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:12.0538536+01:00","action":"move","task_id":38,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:12.5096982+01:00","action":"move","task_id":39,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:13.0035535+01:00","action":"move","task_id":40,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:13.5818152+01:00","action":"move","task_id":41,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:14.1004283+01:00","action":"move","task_id":42,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:14.6211022+01:00","action":"move","task_id":43,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:15.1399438+01:00","action":"move","task_id":44,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:15.864528+01:00","action":"move","task_id":45,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:16.3371657+01:00","action":"move","task_id":46,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:16.8187716+01:00","action":"move","task_id":47,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:17.3156301+01:00","action":"move","task_id":48,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:17.8069304+01:00","action":"move","task_id":49,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:18.2993798+01:00","action":"move","task_id":50,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:24.7176183+01:00","action":"move","task_id":51,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:25.2723565+01:00","action":"move","task_id":52,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:25.7460313+01:00","action":"move","task_id":53,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:26.2498572+01:00","action":"move","task_id":54,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:26.7100575+01:00","action":"move","task_id":55,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:27.2013001+01:00","action":"move","task_id":56,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:27.6980445+01:00","action":"move","task_id":57,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:28.1835781+01:00","action":"move","task_id":58,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:28.6624137+01:00","action":"move","task_id":59,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:29.1655836+01:00","action":"move","task_id":60,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:29.6427784+01:00","action":"move","task_id":61,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:30.1362763+01:00","action":"move","task_id":62,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:30.8218559+01:00","action":"move","task_id":63,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:31.2980526+01:00","action":"move","task_id":64,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:31.7806014+01:00","action":"move","task_id":65,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:32.3413957+01:00","action":"move","task_id":66,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:32.8322266+01:00","action":"move","task_id":67,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:33.3037515+01:00","action":"move","task_id":68,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:33.7946036+01:00","action":"move","task_id":69,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:34.2756306+01:00","action":"move","task_id":70,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:34.7463063+01:00","action":"move","task_id":71,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:35.232358+01:00","action":"move","task_id":72,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:35.725596+01:00","action":"move","task_id":73,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:36.2061573+01:00","action":"move","task_id":74,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:36.6747627+01:00","action":"move","task_id":75,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:37.1672528+01:00","action":"move","task_id":76,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:37.6658122+01:00","action":"move","task_id":82,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:38.1547203+01:00","action":"move","task_id":83,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:38.6332741+01:00","action":"move","task_id":84,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:39.1383687+01:00","action":"move","task_id":85,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:39.6128775+01:00","action":"move","task_id":86,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:40.0923976+01:00","action":"move","task_id":87,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:40.6020765+01:00","action":"move","task_id":88,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:41.1206073+01:00","action":"move","task_id":89,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:00:41.5919519+01:00","action":"move","task_id":90,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T10:10:06.1840615+01:00","action":"move","task_id":80,"detail":"done -\u003e docs"}
+{"timestamp":"2026-02-27T10:10:10.4237436+01:00","action":"move","task_id":80,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:11:18.8751512+01:00","action":"delete","task_id":80,"detail":"Write tests for TeamsChannel adapter"}
+{"timestamp":"2026-02-27T10:11:21.1535523+01:00","action":"delete","task_id":78,"detail":"Implement TeamsChannel adapter (Graph API + polling)"}
+{"timestamp":"2026-02-27T10:11:23.0258498+01:00","action":"delete","task_id":77,"detail":"Register Azure AD app for Graph API Teams access"}
+{"timestamp":"2026-02-27T10:11:23.8345544+01:00","action":"delete","task_id":79,"detail":"Add bearclaw teams CLI commands"}
+{"timestamp":"2026-02-27T10:11:24.562108+01:00","action":"delete","task_id":81,"detail":"Document Teams setup in README"}
+{"timestamp":"2026-02-27T10:16:08.8319106+01:00","action":"move","task_id":106,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:16:09.3543802+01:00","action":"move","task_id":105,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:16:09.8387813+01:00","action":"move","task_id":116,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:16:10.354148+01:00","action":"move","task_id":115,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:16:10.9988454+01:00","action":"move","task_id":108,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:28:08.0426945+01:00","action":"move","task_id":106,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T10:29:08.1253481+01:00","action":"move","task_id":105,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T10:34:32.1254305+01:00","action":"move","task_id":115,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T10:34:32.5517613+01:00","action":"move","task_id":108,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T10:51:37.1848651+01:00","action":"move","task_id":116,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T10:53:54.5213758+01:00","action":"move","task_id":106,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T10:53:54.9802993+01:00","action":"move","task_id":106,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:53:55.8576586+01:00","action":"move","task_id":105,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T10:53:56.2883306+01:00","action":"move","task_id":105,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:53:57.1718254+01:00","action":"move","task_id":116,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T10:53:57.6147152+01:00","action":"move","task_id":116,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:53:58.4852916+01:00","action":"move","task_id":115,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T10:53:58.9182348+01:00","action":"move","task_id":115,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:53:59.8215896+01:00","action":"move","task_id":108,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T10:54:00.3106952+01:00","action":"move","task_id":108,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T10:54:21.8683719+01:00","action":"move","task_id":107,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:54:22.3774266+01:00","action":"move","task_id":102,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:54:22.8199832+01:00","action":"move","task_id":103,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:54:23.259992+01:00","action":"move","task_id":119,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:54:23.7305975+01:00","action":"move","task_id":111,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T10:58:59.2045804+01:00","action":"move","task_id":103,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:06:01.6310355+01:00","action":"move","task_id":102,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:23:20.1642541+01:00","action":"move","task_id":119,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:23:20.6729004+01:00","action":"move","task_id":111,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:23:21.1792053+01:00","action":"move","task_id":119,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T11:23:21.6550972+01:00","action":"move","task_id":111,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T11:23:22.1447946+01:00","action":"move","task_id":119,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T11:23:22.60291+01:00","action":"move","task_id":111,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T11:23:42.4728962+01:00","action":"move","task_id":107,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:23:42.9796293+01:00","action":"move","task_id":107,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T11:23:43.4536559+01:00","action":"move","task_id":107,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T11:24:50.7679078+01:00","action":"move","task_id":102,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T11:24:51.3387805+01:00","action":"move","task_id":102,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T11:24:51.8712289+01:00","action":"move","task_id":103,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T11:24:52.4739062+01:00","action":"move","task_id":103,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T11:26:10.2960628+01:00","action":"move","task_id":117,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:26:10.7653261+01:00","action":"move","task_id":109,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:26:11.2570108+01:00","action":"move","task_id":118,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:26:11.7449419+01:00","action":"move","task_id":110,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:26:12.2507193+01:00","action":"move","task_id":100,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:26:12.8514157+01:00","action":"move","task_id":112,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T11:32:46.1136686+01:00","action":"move","task_id":112,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T11:35:02.645313+01:00","action":"move","task_id":100,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:38:24.6381974+01:00","action":"move","task_id":117,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:38:25.2761918+01:00","action":"move","task_id":109,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:45:52.7828633+01:00","action":"move","task_id":118,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:45:53.9527692+01:00","action":"move","task_id":110,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:47:46.9115871+01:00","action":"move","task_id":117,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:47.442576+01:00","action":"move","task_id":117,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:47:48.5285662+01:00","action":"move","task_id":109,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:49.0707189+01:00","action":"move","task_id":109,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:47:50.1836259+01:00","action":"move","task_id":118,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:50.7093633+01:00","action":"move","task_id":118,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:47:51.7234035+01:00","action":"move","task_id":110,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:52.2117466+01:00","action":"move","task_id":110,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:47:53.2994796+01:00","action":"move","task_id":100,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:53.8606006+01:00","action":"move","task_id":100,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:47:54.7988134+01:00","action":"move","task_id":112,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:47:55.5601483+01:00","action":"move","task_id":112,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:48:55.2255271+01:00","action":"move","task_id":101,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T12:48:55.6874015+01:00","action":"move","task_id":104,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T12:48:56.183963+01:00","action":"move","task_id":114,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T12:48:56.7101869+01:00","action":"move","task_id":97,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T12:52:46.6560516+01:00","action":"move","task_id":114,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:52:47.2980122+01:00","action":"move","task_id":97,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:54:34.391261+01:00","action":"move","task_id":101,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:55:24.2509474+01:00","action":"move","task_id":104,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T12:56:41.0384484+01:00","action":"move","task_id":101,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:56:41.5303236+01:00","action":"move","task_id":101,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:56:42.4953729+01:00","action":"move","task_id":104,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:56:43.0172214+01:00","action":"move","task_id":104,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:56:44.0281013+01:00","action":"move","task_id":114,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:56:44.5138157+01:00","action":"move","task_id":114,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T12:56:45.5282039+01:00","action":"move","task_id":97,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T12:56:45.9907076+01:00","action":"move","task_id":97,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T13:21:34.1832777+01:00","action":"move","task_id":97,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:34.7208118+01:00","action":"move","task_id":100,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:35.2043301+01:00","action":"move","task_id":101,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:35.6945857+01:00","action":"move","task_id":102,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:36.2170918+01:00","action":"move","task_id":103,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:36.6987278+01:00","action":"move","task_id":104,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:37.1985519+01:00","action":"move","task_id":105,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:37.7100921+01:00","action":"move","task_id":106,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:38.2115565+01:00","action":"move","task_id":107,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:38.815229+01:00","action":"move","task_id":108,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:43.9701155+01:00","action":"move","task_id":109,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:44.4903728+01:00","action":"move","task_id":110,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:44.9968805+01:00","action":"move","task_id":111,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:45.5949947+01:00","action":"move","task_id":112,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:46.0985328+01:00","action":"move","task_id":114,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:46.5936576+01:00","action":"move","task_id":115,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:47.1099313+01:00","action":"move","task_id":116,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:47.6306824+01:00","action":"move","task_id":117,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:48.1122133+01:00","action":"move","task_id":118,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T13:21:48.629212+01:00","action":"move","task_id":119,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-27T14:53:29.0608114+01:00","action":"edit","task_id":91,"detail":"Add [voice] optional dependency group to pyproject.toml"}
+{"timestamp":"2026-02-27T14:53:30.5658589+01:00","action":"edit","task_id":92,"detail":"Create src/owlbear/voice/stt.py — STTEngine wrapping faster-whisper"}
+{"timestamp":"2026-02-27T14:53:31.8683529+01:00","action":"edit","task_id":93,"detail":"Create src/owlbear/voice/tts.py — TTSEngine wrapping pyttsx3"}
+{"timestamp":"2026-02-27T14:53:33.1096545+01:00","action":"edit","task_id":94,"detail":"Create src/owlbear/voice/recorder.py — AudioRecorder wrapping PyAudio"}
+{"timestamp":"2026-02-27T14:53:34.7902421+01:00","action":"edit","task_id":95,"detail":"Create src/owlbear/voice/channel.py — VoiceChannel implementing ChannelPlugin"}
+{"timestamp":"2026-02-27T14:53:35.9928743+01:00","action":"edit","task_id":96,"detail":"Add bearclaw voice CLI subcommand for testing voice I/O"}
+{"timestamp":"2026-02-27T14:53:37.5358753+01:00","action":"edit","task_id":98,"detail":"Test Edge Stable --load-extension sideloading flag"}
+{"timestamp":"2026-02-27T14:53:39.0217685+01:00","action":"edit","task_id":99,"detail":"Spike: favicon badge injection for OwlBear tabs"}
+{"timestamp":"2026-02-27T14:54:08.07627+01:00","action":"create","task_id":120,"detail":"Core filesystem tools — read, write, search, list_dir"}
+{"timestamp":"2026-02-27T14:54:23.8549862+01:00","action":"create","task_id":121,"detail":"Core tool: run_command (terminal execution)"}
+{"timestamp":"2026-02-27T14:54:37.0694226+01:00","action":"create","task_id":122,"detail":"bearclaw chat — interactive CLI REPL"}
+{"timestamp":"2026-02-27T14:54:50.1159258+01:00","action":"create","task_id":123,"detail":"Channel-based ask_user tool — agent asks, user answers"}
+{"timestamp":"2026-02-27T14:55:03.2245496+01:00","action":"create","task_id":124,"detail":"bearclaw run — background daemon entry point"}
+{"timestamp":"2026-02-27T14:55:15.9352196+01:00","action":"create","task_id":125,"detail":"Notification hook — alert user on task completion or question"}
+{"timestamp":"2026-02-27T14:55:31.2782392+01:00","action":"create","task_id":126,"detail":"E2E integration tests for chat and daemon lifecycle"}
+{"timestamp":"2026-02-27T14:55:50.0934755+01:00","action":"create","task_id":127,"detail":"Research: PydanticAI multi-agent patterns and tool architecture"}
+{"timestamp":"2026-02-27T14:56:01.2473683+01:00","action":"create","task_id":128,"detail":"Agent definition format — system prompt, tools, skills per agent"}
+{"timestamp":"2026-02-27T14:56:13.5703731+01:00","action":"create","task_id":129,"detail":"Agent registry — load, instantiate, and manage agents"}
+{"timestamp":"2026-02-27T14:56:24.4084404+01:00","action":"create","task_id":130,"detail":"Agent delegation — orchestrator dispatches subtasks to inner agents"}
+{"timestamp":"2026-02-27T14:56:36.8524615+01:00","action":"create","task_id":131,"detail":"GitHub API integration — git operations as agent tools"}
+{"timestamp":"2026-02-27T14:56:49.386147+01:00","action":"create","task_id":132,"detail":"Core agent definitions — orchestrator, coder, reviewer, researcher"}
+{"timestamp":"2026-02-27T14:57:05.2211302+01:00","action":"create","task_id":133,"detail":"Knowledge ingestion pipeline — document to graph+embeddings"}
+{"timestamp":"2026-02-27T14:57:16.251599+01:00","action":"create","task_id":134,"detail":"Web crawling into knowledge graph via Playwright"}
+{"timestamp":"2026-02-27T14:57:27.4710022+01:00","action":"create","task_id":135,"detail":"Knowledge scoping — per-agent, per-project, and global namespaces"}
+{"timestamp":"2026-02-27T14:57:37.6740449+01:00","action":"create","task_id":136,"detail":"Temporal memory — time-aware retrieval with relevance decay"}
+{"timestamp":"2026-02-27T14:57:50.4597657+01:00","action":"create","task_id":137,"detail":"Research: MCP servers — inventory, evaluation, integration path"}
+{"timestamp":"2026-02-27T14:58:00.5849527+01:00","action":"create","task_id":138,"detail":"MCP client integration — consume MCP servers as PydanticAI toolsets"}
+{"timestamp":"2026-02-27T14:58:12.5071524+01:00","action":"create","task_id":139,"detail":"GitHub bot account for OwlBear-published projects"}
+{"timestamp":"2026-02-27T14:58:23.6612502+01:00","action":"create","task_id":140,"detail":"Upstream update scanner — monitor inspiration repos for relevant changes"}
+{"timestamp":"2026-02-27T14:58:35.9969361+01:00","action":"create","task_id":141,"detail":"Research: PydanticAI web UI and Logfire for agent observability"}
+{"timestamp":"2026-02-27T14:58:47.9142106+01:00","action":"create","task_id":142,"detail":"Agent analytics — structured activity logging and performance metrics"}
+{"timestamp":"2026-02-27T14:59:00.7410068+01:00","action":"create","task_id":143,"detail":"Research: Admin dashboard — manage agents, memory, tools, activity"}
+{"timestamp":"2026-02-27T14:59:15.1422949+01:00","action":"create","task_id":144,"detail":"Research: Kanban replacement — richer task management"}
+{"timestamp":"2026-02-27T14:59:30.0880466+01:00","action":"create","task_id":145,"detail":"Council system — multi-agent structured debate with consensus"}
+{"timestamp":"2026-02-27T14:59:42.8206383+01:00","action":"create","task_id":146,"detail":"Self-improvement pipeline — analytics to evaluation to human-gated proposals"}
+{"timestamp":"2026-02-27T14:59:53.7783429+01:00","action":"create","task_id":147,"detail":"Cron job scheduler — periodic autonomous tasks"}
+{"timestamp":"2026-02-27T15:00:05.2349299+01:00","action":"create","task_id":148,"detail":"Research: OpenClaw ecosystem — addon patterns, compatibility assessment"}
+{"timestamp":"2026-02-27T15:36:33.5505993+01:00","action":"move","task_id":121,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T15:36:50.7284166+01:00","action":"edit","task_id":121,"detail":"Core tool: run_command (terminal execution)"}
+{"timestamp":"2026-02-27T15:37:56.7029641+01:00","action":"move","task_id":122,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T15:38:06.1868353+01:00","action":"edit","task_id":120,"detail":"Core filesystem tools — read, write, search, list_dir"}
+{"timestamp":"2026-02-27T15:38:15.3443103+01:00","action":"edit","task_id":122,"detail":"bearclaw chat — interactive CLI REPL"}
+{"timestamp":"2026-02-27T15:38:18.1328645+01:00","action":"move","task_id":120,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T15:38:52.5194387+01:00","action":"edit","task_id":122,"detail":"bearclaw chat — interactive CLI REPL"}
+{"timestamp":"2026-02-27T15:45:57.210508+01:00","action":"create","task_id":149,"detail":"Add toolsets parameter to OwlBearAgent"}
+{"timestamp":"2026-02-27T15:46:38.1426327+01:00","action":"edit","task_id":120,"detail":"Core filesystem tools — read, write, search, list_dir"}
+{"timestamp":"2026-02-27T15:47:09.4775741+01:00","action":"edit","task_id":121,"detail":"Core tool: run_command (terminal execution)"}
+{"timestamp":"2026-02-27T15:48:56.927022+01:00","action":"move","task_id":149,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T15:48:58.0806005+01:00","action":"move","task_id":120,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T15:48:59.834325+01:00","action":"move","task_id":121,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T15:49:01.8770771+01:00","action":"move","task_id":122,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T15:51:07.972806+01:00","action":"move","task_id":149,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T15:51:09.2133322+01:00","action":"move","task_id":120,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T15:51:11.0620361+01:00","action":"move","task_id":121,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T16:11:07.0303547+01:00","action":"move","task_id":149,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T16:15:22.1231701+01:00","action":"move","task_id":121,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T16:15:41.7505085+01:00","action":"move","task_id":120,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T16:19:31.1814648+01:00","action":"move","task_id":149,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T16:19:32.1448189+01:00","action":"move","task_id":149,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T16:19:35.7875146+01:00","action":"move","task_id":120,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T16:19:38.0052851+01:00","action":"move","task_id":120,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T16:19:41.004356+01:00","action":"move","task_id":121,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T16:19:41.9281091+01:00","action":"move","task_id":121,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T16:20:06.1663504+01:00","action":"move","task_id":122,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T16:29:53.5706745+01:00","action":"move","task_id":122,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T16:30:39.7545015+01:00","action":"move","task_id":122,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T16:30:40.2475644+01:00","action":"move","task_id":122,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T16:39:05.6029556+01:00","action":"move","task_id":127,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:39:13.5531549+01:00","action":"move","task_id":123,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:40:10.7783246+01:00","action":"move","task_id":124,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:40:11.2931496+01:00","action":"move","task_id":126,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:45:33.9461253+01:00","action":"create","task_id":150,"detail":"Test AskUserToolset — free-text, options, timeout, retries"}
+{"timestamp":"2026-02-27T16:45:40.4360986+01:00","action":"move","task_id":150,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:45:51.9874222+01:00","action":"create","task_id":151,"detail":"Test daemon lifecycle — PidFile, sentinel, signals, logging"}
+{"timestamp":"2026-02-27T16:45:56.8344859+01:00","action":"move","task_id":151,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:46:29.1471419+01:00","action":"edit","task_id":123,"detail":"Channel-based ask_user tool — agent asks, user answers"}
+{"timestamp":"2026-02-27T16:46:47.9091462+01:00","action":"edit","task_id":124,"detail":"bearclaw run — background daemon entry point"}
+{"timestamp":"2026-02-27T16:47:07.2298649+01:00","action":"edit","task_id":126,"detail":"E2E integration tests for chat and daemon lifecycle"}
+{"timestamp":"2026-02-27T16:47:14.9535954+01:00","action":"move","task_id":150,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:15.4936031+01:00","action":"move","task_id":151,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:15.961962+01:00","action":"move","task_id":123,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:16.4057455+01:00","action":"move","task_id":124,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:16.8537487+01:00","action":"move","task_id":126,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:17.321567+01:00","action":"move","task_id":127,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T16:47:31.1733367+01:00","action":"create","task_id":152,"detail":"Refactor apply_role_policy to accept AbstractToolset via FilteredToolset"}
+{"timestamp":"2026-02-27T16:47:45.9876831+01:00","action":"create","task_id":153,"detail":"Implement OwlBearDeps dataclass for shared dependency injection"}
+{"timestamp":"2026-02-27T16:47:56.971107+01:00","action":"create","task_id":154,"detail":"Add history_processors support to OwlBearAgent"}
+{"timestamp":"2026-02-27T16:48:11.1673715+01:00","action":"create","task_id":155,"detail":"Implement HookedToolset — WrapperToolset for hook integration"}
+{"timestamp":"2026-02-27T16:48:17.2400473+01:00","action":"move","task_id":152,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:48:17.6977848+01:00","action":"move","task_id":153,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:48:18.1633682+01:00","action":"move","task_id":154,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:48:18.632545+01:00","action":"move","task_id":155,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T16:49:45.7139423+01:00","action":"edit","task_id":98,"detail":"Test Edge Stable --load-extension sideloading flag"}
+{"timestamp":"2026-02-27T16:49:46.4176086+01:00","action":"move","task_id":98,"detail":"todo -\u003e done"}
+{"timestamp":"2026-02-27T16:49:46.9037718+01:00","action":"edit","task_id":99,"detail":"Spike: favicon badge injection for OwlBear tabs"}
+{"timestamp":"2026-02-27T16:49:47.3831449+01:00","action":"move","task_id":99,"detail":"todo -\u003e done"}
+{"timestamp":"2026-02-27T17:57:53.710795+01:00","action":"move","task_id":98,"detail":"done -\u003e ideation"}
+{"timestamp":"2026-02-27T17:57:54.184154+01:00","action":"move","task_id":99,"detail":"done -\u003e ideation"}
+{"timestamp":"2026-02-27T17:58:05.5468638+01:00","action":"edit","task_id":98,"detail":"Test Edge Stable --load-extension sideloading flag"}
+{"timestamp":"2026-02-27T17:58:16.4338386+01:00","action":"edit","task_id":99,"detail":"Spike: favicon badge injection for OwlBear tabs"}
+{"timestamp":"2026-02-27T18:01:21.2836248+01:00","action":"move","task_id":127,"detail":"todo -\u003e review"}
+{"timestamp":"2026-02-27T18:01:21.7969663+01:00","action":"move","task_id":127,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:01:22.3085936+01:00","action":"move","task_id":127,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:02:31.8253413+01:00","action":"move","task_id":150,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:02:32.5699448+01:00","action":"move","task_id":123,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:02:33.3201101+01:00","action":"move","task_id":151,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:02:34.3336341+01:00","action":"move","task_id":124,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:11:05.2898837+01:00","action":"move","task_id":150,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T18:11:06.0900298+01:00","action":"move","task_id":123,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T18:22:26.9966765+01:00","action":"move","task_id":151,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T18:22:27.4525614+01:00","action":"move","task_id":124,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T18:23:20.9177577+01:00","action":"move","task_id":150,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:23:21.4000255+01:00","action":"move","task_id":150,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:23:22.3293874+01:00","action":"move","task_id":123,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:23:22.824613+01:00","action":"move","task_id":123,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:23:23.730839+01:00","action":"move","task_id":151,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:23:24.2318737+01:00","action":"move","task_id":151,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:23:25.1974363+01:00","action":"move","task_id":124,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:23:25.6598454+01:00","action":"move","task_id":124,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:23:36.5437072+01:00","action":"move","task_id":126,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:29:06.6655578+01:00","action":"move","task_id":126,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T18:29:42.4985773+01:00","action":"move","task_id":126,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T18:29:42.9594588+01:00","action":"move","task_id":126,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T18:35:33.1623822+01:00","action":"move","task_id":152,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T18:35:46.1344484+01:00","action":"edit","task_id":153,"detail":"Implement OwlBearDeps dataclass for shared dependency injection"}
+{"timestamp":"2026-02-27T18:35:50.9176564+01:00","action":"move","task_id":153,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T18:36:13.2464248+01:00","action":"edit","task_id":154,"detail":"Add history_processors support to OwlBearAgent"}
+{"timestamp":"2026-02-27T18:36:17.9767754+01:00","action":"move","task_id":154,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T18:36:29.9829261+01:00","action":"edit","task_id":155,"detail":"Implement HookedToolset — WrapperToolset for hook integration"}
+{"timestamp":"2026-02-27T18:36:34.6182686+01:00","action":"move","task_id":155,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T18:53:26.2803106+01:00","action":"move","task_id":125,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T18:53:26.7332171+01:00","action":"move","task_id":128,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T18:53:27.2286256+01:00","action":"move","task_id":129,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T18:53:27.7064296+01:00","action":"move","task_id":130,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T18:53:34.0448132+01:00","action":"move","task_id":152,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:53:34.4989666+01:00","action":"move","task_id":153,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:53:34.9367662+01:00","action":"move","task_id":155,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T18:55:54.4677262+01:00","action":"move","task_id":152,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:01:36.8011304+01:00","action":"move","task_id":153,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:10:07.2036455+01:00","action":"move","task_id":155,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:10:52.1221676+01:00","action":"move","task_id":152,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:10:52.599367+01:00","action":"move","task_id":152,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:10:53.8849975+01:00","action":"move","task_id":153,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:10:54.4667795+01:00","action":"move","task_id":153,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:10:55.4908984+01:00","action":"move","task_id":155,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:10:55.9908512+01:00","action":"move","task_id":155,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:11:02.6288861+01:00","action":"move","task_id":154,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:14:16.4505064+01:00","action":"move","task_id":154,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:14:52.7213507+01:00","action":"move","task_id":154,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:14:53.189284+01:00","action":"move","task_id":154,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:18:33.2463514+01:00","action":"create","task_id":156,"detail":"Extend HookEvent enum with TASK_COMPLETE and QUESTION_PENDING"}
+{"timestamp":"2026-02-27T19:18:41.1761899+01:00","action":"move","task_id":156,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T19:18:42.838341+01:00","action":"move","task_id":156,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:18:52.9887561+01:00","action":"create","task_id":157,"detail":"Add notification settings to OwlBearSettings"}
+{"timestamp":"2026-02-27T19:18:57.7839903+01:00","action":"move","task_id":157,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T19:18:58.2725751+01:00","action":"move","task_id":157,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:19:18.7641547+01:00","action":"create","task_id":159,"detail":"Test NotificationHook and NotificationBackend protocol"}
+{"timestamp":"2026-02-27T19:19:25.2401982+01:00","action":"move","task_id":159,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T19:19:25.7463728+01:00","action":"move","task_id":159,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:19:37.6423352+01:00","action":"create","task_id":160,"detail":"Implement NotificationHook with bell and sound backends"}
+{"timestamp":"2026-02-27T19:19:42.0988492+01:00","action":"move","task_id":160,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T19:19:42.5393028+01:00","action":"move","task_id":160,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:19:51.6983803+01:00","action":"edit","task_id":125,"detail":"Notification hook — alert user on task completion or question"}
+{"timestamp":"2026-02-27T19:19:57.0543541+01:00","action":"move","task_id":125,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:19:57.5253354+01:00","action":"move","task_id":125,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:19:58.00652+01:00","action":"move","task_id":125,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:19:58.4562692+01:00","action":"move","task_id":125,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:19:58.9310228+01:00","action":"move","task_id":125,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:20:15.5312183+01:00","action":"edit","task_id":128,"detail":"Agent definition format — system prompt, tools, skills per agent"}
+{"timestamp":"2026-02-27T19:20:20.5773454+01:00","action":"move","task_id":128,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:20:39.4569036+01:00","action":"edit","task_id":129,"detail":"Agent registry — load, instantiate, and manage agents"}
+{"timestamp":"2026-02-27T19:20:43.9606356+01:00","action":"move","task_id":129,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:20:55.4544994+01:00","action":"create","task_id":161,"detail":"Extend OwlBearDeps with agent_registry and delegation_depth"}
+{"timestamp":"2026-02-27T19:21:00.8828536+01:00","action":"move","task_id":161,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T19:21:01.34893+01:00","action":"move","task_id":161,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:21:31.9282138+01:00","action":"edit","task_id":130,"detail":"Agent delegation — orchestrator dispatches subtasks to inner agents"}
+{"timestamp":"2026-02-27T19:22:08.0066595+01:00","action":"move","task_id":130,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T19:23:14.1296318+01:00","action":"move","task_id":156,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:23:14.6024063+01:00","action":"move","task_id":157,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:23:15.1026194+01:00","action":"move","task_id":128,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:23:15.6024671+01:00","action":"move","task_id":129,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:26:35.7363411+01:00","action":"move","task_id":156,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:26:36.2388799+01:00","action":"move","task_id":157,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:35:09.1747662+01:00","action":"move","task_id":128,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:35:09.604532+01:00","action":"move","task_id":129,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:35:50.5305525+01:00","action":"move","task_id":156,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:35:50.9920103+01:00","action":"move","task_id":156,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:35:52.0152975+01:00","action":"move","task_id":157,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:35:52.4775563+01:00","action":"move","task_id":157,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:35:53.3942642+01:00","action":"move","task_id":128,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:35:53.8595033+01:00","action":"move","task_id":128,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:35:54.7644629+01:00","action":"move","task_id":129,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:35:55.2132366+01:00","action":"move","task_id":129,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:36:09.0108849+01:00","action":"move","task_id":159,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:36:09.4760066+01:00","action":"move","task_id":161,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:37:04.4169078+01:00","action":"move","task_id":160,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:48:31.6748332+01:00","action":"move","task_id":159,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:48:32.1221498+01:00","action":"move","task_id":160,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:51:59.8760134+01:00","action":"move","task_id":161,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T19:52:34.6881566+01:00","action":"move","task_id":159,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:52:35.1881335+01:00","action":"move","task_id":159,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:52:36.1072742+01:00","action":"move","task_id":160,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:52:36.5928069+01:00","action":"move","task_id":160,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:52:37.5086983+01:00","action":"move","task_id":161,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T19:52:37.9357647+01:00","action":"move","task_id":161,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T19:52:55.7959035+01:00","action":"move","task_id":130,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T19:59:24.4932444+01:00","action":"move","task_id":130,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T20:00:01.0339511+01:00","action":"move","task_id":130,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T20:00:01.4571788+01:00","action":"move","task_id":130,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T20:00:58.7087617+01:00","action":"edit","task_id":158,"detail":"Test NotificationHook and NotificationBackend protocol"}
+{"timestamp":"2026-02-27T20:00:59.1740834+01:00","action":"move","task_id":158,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-27T20:01:05.3947898+01:00","action":"move","task_id":158,"detail":"done -\u003e backlog"}
+{"timestamp":"2026-02-27T20:01:05.8465088+01:00","action":"move","task_id":158,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T20:01:06.3298993+01:00","action":"move","task_id":158,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:01:06.7912908+01:00","action":"move","task_id":158,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T20:01:07.23173+01:00","action":"move","task_id":158,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T20:01:07.6918289+01:00","action":"move","task_id":158,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T20:01:21.42981+01:00","action":"move","task_id":91,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:01:21.944129+01:00","action":"move","task_id":92,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:01:22.4462066+01:00","action":"move","task_id":93,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:20:10.4473651+01:00","action":"move","task_id":137,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T20:29:25.1603067+01:00","action":"move","task_id":91,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T20:29:25.6345315+01:00","action":"move","task_id":92,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T20:29:26.0936984+01:00","action":"move","task_id":93,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T20:30:10.1926662+01:00","action":"move","task_id":91,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T20:30:10.6836672+01:00","action":"move","task_id":91,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T20:30:11.7551085+01:00","action":"move","task_id":92,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T20:30:12.2309301+01:00","action":"move","task_id":92,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T20:30:13.2455589+01:00","action":"move","task_id":93,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T20:30:13.7346042+01:00","action":"move","task_id":93,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T20:30:20.1655055+01:00","action":"move","task_id":131,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T20:30:20.6227+01:00","action":"move","task_id":132,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T20:30:32.8037365+01:00","action":"move","task_id":94,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:30:33.2910795+01:00","action":"move","task_id":95,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:30:33.7723489+01:00","action":"move","task_id":96,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:46:21.1153903+01:00","action":"create","task_id":162,"detail":"Fix VALIDATOR_POLICY denied tool names to match actual toolset registrations"}
+{"timestamp":"2026-02-27T20:46:31.8788318+01:00","action":"create","task_id":163,"detail":"Test GitLocalToolset — subprocess git operations"}
+{"timestamp":"2026-02-27T20:46:46.2557956+01:00","action":"create","task_id":164,"detail":"Implement GitLocalToolset — subprocess git operations"}
+{"timestamp":"2026-02-27T20:46:56.0837366+01:00","action":"create","task_id":165,"detail":"Test GitHubToolset — httpx GitHub API tools"}
+{"timestamp":"2026-02-27T20:47:09.5234092+01:00","action":"create","task_id":166,"detail":"Implement GitHubToolset — httpx GitHub API tools + config"}
+{"timestamp":"2026-02-27T20:47:20.4499105+01:00","action":"create","task_id":167,"detail":"Wire git toolsets into CLI chat"}
+{"timestamp":"2026-02-27T20:47:47.1864391+01:00","action":"delete","task_id":131,"detail":"GitHub API integration — git operations as agent tools"}
+{"timestamp":"2026-02-27T20:48:24.0157439+01:00","action":"edit","task_id":132,"detail":"Core agent definitions — orchestrator, coder, reviewer, researcher"}
+{"timestamp":"2026-02-27T20:48:33.2123382+01:00","action":"edit","task_id":132,"detail":"Core agent definitions — orchestrator, coder, reviewer, researcher"}
+{"timestamp":"2026-02-27T20:49:25.0361365+01:00","action":"move","task_id":132,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T20:50:06.9620434+01:00","action":"move","task_id":137,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T20:50:13.8698588+01:00","action":"move","task_id":163,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T20:50:14.3225074+01:00","action":"move","task_id":165,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T20:55:36.6944433+01:00","action":"move","task_id":162,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:55:37.1606567+01:00","action":"move","task_id":163,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T20:55:37.6253898+01:00","action":"move","task_id":165,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:00:30.2716309+01:00","action":"move","task_id":94,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:01:57.1493295+01:00","action":"move","task_id":95,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:08:22.4172012+01:00","action":"move","task_id":96,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:12:42.1778371+01:00","action":"move","task_id":162,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:18:52.9862002+01:00","action":"move","task_id":163,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:26:41.7768752+01:00","action":"move","task_id":165,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:26:51.2171707+01:00","action":"edit","task_id":164,"detail":"Implement GitLocalToolset — subprocess git operationsts talk about the knowldge database. i see a problem with basic embedding. i work with very detail oriented texts (e.g. ISO norms, internal policies, laws, etc (ca. 35%)) but also general information (like powerpoint slides and intranet articles, ca 15%) but also the inbetween: technical documentation ()this might actually be the biggest part, lets say 50%. picking the right embedding model is hard. please add one or three or maybe even more research tasks for possible solutions. i am thinking of:"}
+{"timestamp":"2026-02-27T21:26:51.4133124+01:00","action":"priority","task_id":164,"detail":"important -\u003e needed"}
+{"timestamp":"2026-02-27T21:26:51.7118447+01:00","action":"edit","task_id":164,"detail":"Implement GitLocalToolset — subprocess git operationsts talk about the knowldge database. i see a problem with basic embedding. i work with very detail oriented texts (e.g. ISO norms, internal policies, laws, etc (ca. 35%)) but also general information (like powerpoint slides and intranet articles, ca 15%) but also the inbetween: technical documentation ()this might actually be the biggest part, lets say 50%. picking the right embedding model is hard. please add one or three or maybe even more research tasks for possible solutions. i am thinking of:ciprocal rank fusion, e.g. with pplx-embed-context-v1-0.6B and bge-m3, putting data into two tables: vec_semantic and vec_lexical, then using rrf (reciprocal rank fusion) to augment the results."}
+{"timestamp":"2026-02-27T21:26:51.9976217+01:00","action":"edit","task_id":164,"detail":"Implement GitLocalToolset — subprocess git operationsts talk about the knowldge database. i see a problem with basic embedding. i work with very detail oriented texts (e.g. ISO norms, internal policies, laws, etc (ca. 35%)) but also general information (like powerpoint slides and intranet articles, ca 15%) but also the inbetween: technical documentation ()this might actually be the biggest part, lets say 50%. picking the right embedding model is hard. please add one or three or maybe even more research tasks for possible solutions. i am thinking of:ciprocal rank fusion, e.g. with pplx-embed-context-v1-0.6B and bge-m3, putting data into two tables: vec_semantic and vec_lexical, then using rrf (reciprocal rank fusion) to augment the results.trieve and rerank. pplx-embed-context-v1-0.6B to embed, and bge-reranker-v2-m3 to rerank search results."}
+{"timestamp":"2026-02-27T21:26:52.2699683+01:00","action":"move","task_id":164,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-02-27T21:26:52.3711054+01:00","action":"priority","task_id":164,"detail":"needed -\u003e important"}
+{"timestamp":"2026-02-27T21:26:52.5695691+01:00","action":"move","task_id":164,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T21:28:11.196776+01:00","action":"move","task_id":94,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:11.6770423+01:00","action":"move","task_id":94,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:12.1751604+01:00","action":"move","task_id":95,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:12.6347443+01:00","action":"move","task_id":95,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:13.1170947+01:00","action":"move","task_id":96,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:13.6364655+01:00","action":"move","task_id":96,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:14.0973625+01:00","action":"move","task_id":162,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:14.5617108+01:00","action":"move","task_id":162,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:15.0716295+01:00","action":"move","task_id":163,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:15.533499+01:00","action":"move","task_id":163,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:16.0036266+01:00","action":"move","task_id":165,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:28:16.5673496+01:00","action":"move","task_id":165,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:28:47.8600079+01:00","action":"move","task_id":164,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T21:28:48.3486924+01:00","action":"move","task_id":166,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T21:28:48.8146048+01:00","action":"move","task_id":132,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:28:49.3153102+01:00","action":"move","task_id":137,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:35:38.2390118+01:00","action":"move","task_id":132,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:35:58.701232+01:00","action":"create","task_id":168,"detail":"MCP client infrastructure — MCPServerRegistry + tool_resolver mcp: prefix"}
+{"timestamp":"2026-02-27T21:36:06.8126105+01:00","action":"create","task_id":169,"detail":"GitHub MCP server integration — @modelcontextprotocol/server-github"}
+{"timestamp":"2026-02-27T21:36:22.2652177+01:00","action":"create","task_id":170,"detail":"Git MCP server integration — @modelcontextprotocol/server-git"}
+{"timestamp":"2026-02-27T21:36:28.9309671+01:00","action":"create","task_id":171,"detail":"Fetch MCP server integration — @modelcontextprotocol/server-fetch"}
+{"timestamp":"2026-02-27T21:36:35.9999284+01:00","action":"create","task_id":172,"detail":"MCP server lifecycle management — async context manager, health checks"}
+{"timestamp":"2026-02-27T21:37:02.3052+01:00","action":"move","task_id":132,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:37:02.7992797+01:00","action":"move","task_id":132,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:37:03.2599366+01:00","action":"move","task_id":137,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:37:03.7749254+01:00","action":"move","task_id":137,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:37:04.2518357+01:00","action":"move","task_id":137,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:38:17.4584985+01:00","action":"move","task_id":164,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:38:26.5414134+01:00","action":"move","task_id":164,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:38:27.0218306+01:00","action":"move","task_id":164,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:38:27.4965918+01:00","action":"move","task_id":164,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:38:33.4684609+01:00","action":"move","task_id":166,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:45:52.4320951+01:00","action":"move","task_id":166,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:46:29.1168938+01:00","action":"move","task_id":166,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:46:29.605143+01:00","action":"move","task_id":166,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T21:46:49.8246611+01:00","action":"move","task_id":167,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T21:46:50.6846066+01:00","action":"move","task_id":167,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T21:54:33.1132748+01:00","action":"move","task_id":167,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T21:55:09.983704+01:00","action":"move","task_id":167,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T21:55:10.4339199+01:00","action":"move","task_id":167,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T22:09:46.5503145+01:00","action":"create","task_id":173,"detail":"Knowledge chunker — recursive separator-based text splitting"}
+{"timestamp":"2026-02-27T22:09:53.6126328+01:00","action":"create","task_id":174,"detail":"Knowledge entity extractor — LLM-based extraction with PydanticAI"}
+{"timestamp":"2026-02-27T22:10:00.9042694+01:00","action":"create","task_id":175,"detail":"Knowledge intake — file, URL, and text content readers"}
+{"timestamp":"2026-02-27T22:10:08.0592385+01:00","action":"create","task_id":176,"detail":"Knowledge ingest pipeline — async orchestrator"}
+{"timestamp":"2026-02-27T22:10:15.6458537+01:00","action":"create","task_id":177,"detail":"Knowledge schema v2 — document status and chunk tracking"}
+{"timestamp":"2026-02-27T22:10:23.1145844+01:00","action":"create","task_id":178,"detail":"Knowledge entity deduplication — fuzzy merge of near-duplicates"}
+{"timestamp":"2026-02-27T22:10:30.8030752+01:00","action":"create","task_id":179,"detail":"Knowledge reranker — RerankerProvider protocol + bge-reranker adapter"}
+{"timestamp":"2026-02-27T22:10:36.8143596+01:00","action":"create","task_id":180,"detail":"CrawlConfig Pydantic model — scope, depth, rate limiting"}
+{"timestamp":"2026-02-27T22:10:42.7052237+01:00","action":"create","task_id":181,"detail":"URL utilities — normalize, discover links, robots.txt"}
+{"timestamp":"2026-02-27T22:10:49.0520289+01:00","action":"create","task_id":182,"detail":"Content extractor — trafilatura wrapper for Playwright HTML"}
+{"timestamp":"2026-02-27T22:10:55.9740176+01:00","action":"create","task_id":183,"detail":"WebCrawler class — async crawl orchestrator using BrowserManager"}
+{"timestamp":"2026-02-27T22:11:02.6636957+01:00","action":"create","task_id":184,"detail":"Pipeline integration — connect WebCrawler to ingestion intake"}
+{"timestamp":"2026-02-27T22:11:08.8768782+01:00","action":"move","task_id":133,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:11:09.3645216+01:00","action":"move","task_id":134,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:11:19.30473+01:00","action":"move","task_id":133,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:11:19.7851874+01:00","action":"move","task_id":133,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:11:20.2406644+01:00","action":"move","task_id":133,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T22:11:20.7154287+01:00","action":"move","task_id":133,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T22:11:21.1376219+01:00","action":"move","task_id":133,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T22:11:28.0067847+01:00","action":"move","task_id":134,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:11:28.5105349+01:00","action":"move","task_id":134,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:11:28.9929182+01:00","action":"move","task_id":134,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T22:11:29.531899+01:00","action":"move","task_id":134,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T22:11:30.0181698+01:00","action":"move","task_id":134,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T22:11:59.1735143+01:00","action":"move","task_id":173,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:11:59.6571239+01:00","action":"move","task_id":174,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:00.2675193+01:00","action":"move","task_id":175,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:00.7530746+01:00","action":"move","task_id":176,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:01.2410765+01:00","action":"move","task_id":177,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:08.0772349+01:00","action":"move","task_id":178,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:08.5731476+01:00","action":"move","task_id":179,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:09.0793793+01:00","action":"move","task_id":180,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:09.5367971+01:00","action":"move","task_id":181,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:10.024042+01:00","action":"move","task_id":182,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:10.537093+01:00","action":"move","task_id":183,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:12:11.0841574+01:00","action":"move","task_id":184,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-27T22:14:46.9178643+01:00","action":"edit","task_id":177,"detail":"Knowledge schema v2 — document status and chunk tracking"}
+{"timestamp":"2026-02-27T22:14:50.2874+01:00","action":"edit","task_id":176,"detail":"Knowledge ingest pipeline — async orchestrator"}
+{"timestamp":"2026-02-27T22:15:03.370182+01:00","action":"edit","task_id":176,"detail":"Knowledge ingest pipeline — async orchestrator"}
+{"timestamp":"2026-02-27T22:15:14.1134078+01:00","action":"edit","task_id":175,"detail":"Knowledge intake — file, URL, and text content readers"}
+{"timestamp":"2026-02-27T22:15:17.8699911+01:00","action":"edit","task_id":175,"detail":"Knowledge intake — file, URL, and text content readers"}
+{"timestamp":"2026-02-27T22:15:27.914865+01:00","action":"edit","task_id":174,"detail":"Knowledge entity extractor — LLM-based extraction with PydanticAI"}
+{"timestamp":"2026-02-27T22:15:34.2790113+01:00","action":"edit","task_id":173,"detail":"Knowledge chunker — recursive separator-based text splitting"}
+{"timestamp":"2026-02-27T22:15:43.9400908+01:00","action":"edit","task_id":184,"detail":"Pipeline integration — connect WebCrawler to ingestion intake"}
+{"timestamp":"2026-02-27T22:16:05.66193+01:00","action":"edit","task_id":179,"detail":"Knowledge reranker — RerankerProvider protocol + bge-reranker adapter"}
+{"timestamp":"2026-02-27T22:16:13.495487+01:00","action":"edit","task_id":178,"detail":"Knowledge entity deduplication — fuzzy merge of near-duplicates"}
+{"timestamp":"2026-02-27T22:17:15.4246091+01:00","action":"create","task_id":185,"detail":"Test knowledge chunker — recursive text splitting"}
+{"timestamp":"2026-02-27T22:17:23.4794064+01:00","action":"create","task_id":186,"detail":"Test knowledge entity extractor — LLM extraction with mocked agent"}
+{"timestamp":"2026-02-27T22:17:31.9480451+01:00","action":"create","task_id":187,"detail":"Test knowledge intake — file, URL, and text readers"}
+{"timestamp":"2026-02-27T22:17:40.7080166+01:00","action":"create","task_id":188,"detail":"Test knowledge schema v2 — document status and chunk tables"}
+{"timestamp":"2026-02-27T22:17:49.8469309+01:00","action":"create","task_id":189,"detail":"Test knowledge ingest pipeline — async orchestration"}
+{"timestamp":"2026-02-27T22:17:58.4556763+01:00","action":"create","task_id":190,"detail":"Test knowledge entity dedup — fuzzy merge"}
+{"timestamp":"2026-02-27T22:18:07.3110116+01:00","action":"create","task_id":191,"detail":"Test knowledge reranker — protocol and BGE adapter"}
+{"timestamp":"2026-02-27T22:18:17.5505685+01:00","action":"create","task_id":192,"detail":"Test CrawlConfig model — validation and defaults"}
+{"timestamp":"2026-02-27T22:18:27.5683101+01:00","action":"create","task_id":193,"detail":"Test URL utilities — normalize, discover, robots"}
+{"timestamp":"2026-02-27T22:18:35.4610077+01:00","action":"create","task_id":194,"detail":"Test content extractor — trafilatura wrapper"}
+{"timestamp":"2026-02-27T22:18:44.7546378+01:00","action":"create","task_id":195,"detail":"Test WebCrawler — async crawl with mocked browser"}
+{"timestamp":"2026-02-27T22:18:53.0954994+01:00","action":"create","task_id":196,"detail":"Test pipeline integration — crawl to ingest flow"}
+{"timestamp":"2026-02-27T22:19:22.2926008+01:00","action":"edit","task_id":173,"detail":"Knowledge chunker — recursive separator-based text splitting"}
+{"timestamp":"2026-02-27T22:19:31.6332261+01:00","action":"edit","task_id":174,"detail":"Knowledge entity extractor — LLM-based extraction with PydanticAI"}
+{"timestamp":"2026-02-27T22:19:40.7945071+01:00","action":"edit","task_id":175,"detail":"Knowledge intake — file, URL, and text content readers"}
+{"timestamp":"2026-02-27T22:19:52.0603846+01:00","action":"edit","task_id":177,"detail":"Knowledge schema v2 — document status and chunk tracking"}
+{"timestamp":"2026-02-27T22:20:03.5998223+01:00","action":"edit","task_id":176,"detail":"Knowledge ingest pipeline — async orchestrator"}
+{"timestamp":"2026-02-27T22:20:14.3304855+01:00","action":"edit","task_id":178,"detail":"Knowledge entity deduplication — fuzzy merge of near-duplicates"}
+{"timestamp":"2026-02-27T22:20:25.5754291+01:00","action":"edit","task_id":179,"detail":"Knowledge reranker — RerankerProvider protocol + bge-reranker adapter"}
+{"timestamp":"2026-02-27T22:20:35.7619922+01:00","action":"edit","task_id":180,"detail":"CrawlConfig Pydantic model — scope, depth, rate limiting"}
+{"timestamp":"2026-02-27T22:20:46.831279+01:00","action":"edit","task_id":181,"detail":"URL utilities — normalize, discover links, robots.txt"}
+{"timestamp":"2026-02-27T22:20:55.6251862+01:00","action":"edit","task_id":182,"detail":"Content extractor — trafilatura wrapper for Playwright HTML"}
+{"timestamp":"2026-02-27T22:21:07.7007725+01:00","action":"edit","task_id":183,"detail":"WebCrawler class — async crawl orchestrator using BrowserManager"}
+{"timestamp":"2026-02-27T22:21:17.2242638+01:00","action":"edit","task_id":184,"detail":"Pipeline integration — connect WebCrawler to ingestion intake"}
+{"timestamp":"2026-02-27T22:21:25.2643107+01:00","action":"move","task_id":173,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.2714784+01:00","action":"move","task_id":174,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.2788971+01:00","action":"move","task_id":175,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.2861578+01:00","action":"move","task_id":177,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.2944528+01:00","action":"move","task_id":178,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.3021985+01:00","action":"move","task_id":179,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.3091135+01:00","action":"move","task_id":180,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.3168981+01:00","action":"move","task_id":181,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:25.3231067+01:00","action":"move","task_id":182,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:30.3879367+01:00","action":"move","task_id":176,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:30.3979687+01:00","action":"move","task_id":183,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:21:30.4060389+01:00","action":"move","task_id":184,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-27T22:22:06.4752581+01:00","action":"edit","task_id":173,"detail":"Knowledge chunker — recursive separator-based text splitting"}
+{"timestamp":"2026-02-27T22:22:06.4869469+01:00","action":"edit","task_id":174,"detail":"Knowledge entity extractor — LLM-based extraction with PydanticAI"}
+{"timestamp":"2026-02-27T22:22:06.4948041+01:00","action":"edit","task_id":175,"detail":"Knowledge intake — file, URL, and text content readers"}
+{"timestamp":"2026-02-27T22:22:06.5076197+01:00","action":"edit","task_id":176,"detail":"Knowledge ingest pipeline — async orchestrator"}
+{"timestamp":"2026-02-27T22:22:06.5170157+01:00","action":"edit","task_id":177,"detail":"Knowledge schema v2 — document status and chunk tracking"}
+{"timestamp":"2026-02-27T22:22:06.5248449+01:00","action":"edit","task_id":178,"detail":"Knowledge entity deduplication — fuzzy merge of near-duplicates"}
+{"timestamp":"2026-02-27T22:22:06.5341334+01:00","action":"edit","task_id":179,"detail":"Knowledge reranker — RerankerProvider protocol + bge-reranker adapter"}
+{"timestamp":"2026-02-27T22:22:06.545989+01:00","action":"edit","task_id":184,"detail":"Pipeline integration — connect WebCrawler to ingestion intake"}
+{"timestamp":"2026-02-27T22:24:09.99309+01:00","action":"move","task_id":185,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:10.5037377+01:00","action":"move","task_id":173,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:11.0280531+01:00","action":"move","task_id":186,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:11.5707536+01:00","action":"move","task_id":174,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:12.0671124+01:00","action":"move","task_id":187,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:12.5907714+01:00","action":"move","task_id":175,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:13.0979756+01:00","action":"move","task_id":188,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:24:13.5949488+01:00","action":"move","task_id":177,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T22:32:53.1315325+01:00","action":"move","task_id":185,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T22:32:53.5902586+01:00","action":"move","task_id":173,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T22:57:04.4010434+01:00","action":"move","task_id":186,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T22:57:04.9774134+01:00","action":"move","task_id":174,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:02:26.1310254+01:00","action":"move","task_id":187,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:02:26.6009086+01:00","action":"move","task_id":175,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:10:43.0658662+01:00","action":"move","task_id":188,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:10:43.6486755+01:00","action":"move","task_id":177,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:11:55.780571+01:00","action":"move","task_id":185,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:11:56.3165251+01:00","action":"move","task_id":185,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:11:56.8274329+01:00","action":"move","task_id":173,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:11:57.3371009+01:00","action":"move","task_id":173,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:11:57.8659193+01:00","action":"move","task_id":186,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:11:58.356044+01:00","action":"move","task_id":186,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:11:58.864065+01:00","action":"move","task_id":174,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:11:59.3550071+01:00","action":"move","task_id":174,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:11:59.8900965+01:00","action":"move","task_id":187,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:12:00.3836914+01:00","action":"move","task_id":187,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:12:00.8903419+01:00","action":"move","task_id":175,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:12:01.43013+01:00","action":"move","task_id":175,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:12:01.9322312+01:00","action":"move","task_id":188,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:12:02.4814678+01:00","action":"move","task_id":188,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:12:03.0453831+01:00","action":"move","task_id":177,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:12:03.543136+01:00","action":"move","task_id":177,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:14:12.375252+01:00","action":"move","task_id":190,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:12.9127003+01:00","action":"move","task_id":178,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:13.3938212+01:00","action":"move","task_id":191,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:13.8981045+01:00","action":"move","task_id":179,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:14.3806578+01:00","action":"move","task_id":192,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:14.877861+01:00","action":"move","task_id":180,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:15.3448398+01:00","action":"move","task_id":193,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:14:15.8287766+01:00","action":"move","task_id":181,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:20:31.2403938+01:00","action":"move","task_id":190,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:20:31.7188033+01:00","action":"move","task_id":178,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:32:58.9072729+01:00","action":"move","task_id":191,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:32:59.3531368+01:00","action":"move","task_id":179,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:38:27.1414925+01:00","action":"move","task_id":192,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:38:27.6024971+01:00","action":"move","task_id":180,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:46:26.9164573+01:00","action":"move","task_id":193,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:46:27.3751698+01:00","action":"move","task_id":181,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:47:18.2804432+01:00","action":"move","task_id":190,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:18.8074867+01:00","action":"move","task_id":190,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:19.7113878+01:00","action":"move","task_id":178,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:20.1712614+01:00","action":"move","task_id":178,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:21.0350619+01:00","action":"move","task_id":191,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:21.4816109+01:00","action":"move","task_id":191,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:22.3511711+01:00","action":"move","task_id":179,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:22.8179545+01:00","action":"move","task_id":179,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:23.7014467+01:00","action":"move","task_id":192,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:24.1653414+01:00","action":"move","task_id":192,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:25.0537328+01:00","action":"move","task_id":180,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:25.5171283+01:00","action":"move","task_id":180,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:26.6897402+01:00","action":"move","task_id":193,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:27.1139902+01:00","action":"move","task_id":193,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:28.0002644+01:00","action":"move","task_id":181,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-27T23:47:28.4606355+01:00","action":"move","task_id":181,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-27T23:47:58.2740326+01:00","action":"move","task_id":194,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:47:58.7529567+01:00","action":"move","task_id":182,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:47:59.2131386+01:00","action":"move","task_id":189,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:47:59.6960765+01:00","action":"move","task_id":176,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:48:00.1492411+01:00","action":"move","task_id":195,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-27T23:56:06.1777047+01:00","action":"move","task_id":194,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-27T23:56:06.6312059+01:00","action":"move","task_id":182,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:10:06.0255886+01:00","action":"move","task_id":189,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:10:06.5306841+01:00","action":"move","task_id":176,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:25:41.332802+01:00","action":"move","task_id":195,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:26:32.8663017+01:00","action":"move","task_id":194,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:26:33.4230092+01:00","action":"move","task_id":194,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:26:34.5354075+01:00","action":"move","task_id":182,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:26:35.1085854+01:00","action":"move","task_id":182,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:26:36.1312883+01:00","action":"move","task_id":189,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:26:36.8433029+01:00","action":"move","task_id":189,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:26:38.2520975+01:00","action":"move","task_id":176,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:26:38.9523814+01:00","action":"move","task_id":176,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:26:40.504881+01:00","action":"move","task_id":195,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:26:41.234109+01:00","action":"move","task_id":195,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:27:11.2887768+01:00","action":"move","task_id":183,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T00:27:11.8728297+01:00","action":"move","task_id":196,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T00:35:52.1203812+01:00","action":"move","task_id":196,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:36:30.3825865+01:00","action":"move","task_id":183,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:36:30.9387231+01:00","action":"move","task_id":183,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:36:31.4554613+01:00","action":"move","task_id":183,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:36:32.4488723+01:00","action":"move","task_id":196,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:36:32.9295709+01:00","action":"move","task_id":196,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:37:09.543699+01:00","action":"move","task_id":184,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T00:37:10.0408423+01:00","action":"move","task_id":184,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T00:37:10.519839+01:00","action":"move","task_id":184,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T00:37:11.0335875+01:00","action":"move","task_id":184,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T00:40:58.3177329+01:00","action":"move","task_id":168,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:40:58.8056253+01:00","action":"move","task_id":169,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:40:59.2949924+01:00","action":"move","task_id":170,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:40:59.768145+01:00","action":"move","task_id":171,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:41:00.2420829+01:00","action":"move","task_id":172,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:46:45.5169145+01:00","action":"move","task_id":135,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:52:48.4781606+01:00","action":"move","task_id":136,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T00:56:58.2966023+01:00","action":"move","task_id":141,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:09:38.0603501+01:00","action":"move","task_id":138,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T01:09:38.5754592+01:00","action":"move","task_id":139,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T01:09:39.0528708+01:00","action":"move","task_id":140,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T01:09:39.5136461+01:00","action":"move","task_id":142,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T01:10:07.2144227+01:00","action":"create","task_id":197,"detail":"Schema v3 migration — add scope column to knowledge tables"}
+{"timestamp":"2026-02-28T01:10:17.1580724+01:00","action":"create","task_id":198,"detail":"Model scope field — add scope to Entity, Edge, Document"}
+{"timestamp":"2026-02-28T01:10:17.707598+01:00","action":"create","task_id":199,"detail":"GraphStore scoped queries — filter CRUD by scope"}
+{"timestamp":"2026-02-28T01:10:18.2530694+01:00","action":"create","task_id":200,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T01:10:18.8686457+01:00","action":"create","task_id":201,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T01:10:23.623938+01:00","action":"create","task_id":202,"detail":"GraphStore scoped queries — filter CRUD by scope"}
+{"timestamp":"2026-02-28T01:10:24.2011401+01:00","action":"create","task_id":203,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T01:10:24.7798112+01:00","action":"create","task_id":204,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T01:10:29.4000849+01:00","action":"create","task_id":205,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T01:10:36.0334934+01:00","action":"create","task_id":206,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T01:10:46.280661+01:00","action":"create","task_id":207,"detail":"Temporal freshness boost in VectorStore.search_similar"}
+{"timestamp":"2026-02-28T01:10:47.0141393+01:00","action":"create","task_id":208,"detail":"Importance-based decay resistance for temporal retrieval"}
+{"timestamp":"2026-02-28T01:10:47.564409+01:00","action":"create","task_id":209,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T01:10:52.3183861+01:00","action":"create","task_id":210,"detail":"Importance-based decay resistance for temporal retrieval"}
+{"timestamp":"2026-02-28T01:10:52.9293571+01:00","action":"create","task_id":211,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T01:10:58.3926502+01:00","action":"create","task_id":212,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T01:11:08.6995138+01:00","action":"create","task_id":213,"detail":"ObservabilityHook: structured JSONL event logging"}
+{"timestamp":"2026-02-28T01:11:09.3355771+01:00","action":"create","task_id":214,"detail":"Enable Agent.instrument_all() at daemon startup"}
+{"timestamp":"2026-02-28T01:11:09.9776237+01:00","action":"create","task_id":215,"detail":"Optional OTel endpoint config (OWLBEAR_OTEL_ENDPOINT)"}
+{"timestamp":"2026-02-28T01:11:15.1612397+01:00","action":"create","task_id":216,"detail":"Enable Agent.instrument_all() at daemon startup"}
+{"timestamp":"2026-02-28T01:11:15.758428+01:00","action":"create","task_id":217,"detail":"Optional OTel endpoint config"}
+{"timestamp":"2026-02-28T01:11:20.6928487+01:00","action":"create","task_id":218,"detail":"Optional OTel endpoint config"}
+{"timestamp":"2026-02-28T01:11:27.7439598+01:00","action":"create","task_id":219,"detail":"Add OwlBear Co-authored-by trailer to git_commit"}
+{"timestamp":"2026-02-28T01:11:35.5294916+01:00","action":"move","task_id":135,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-02-28T01:11:36.1460835+01:00","action":"move","task_id":136,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-02-28T01:11:36.6161936+01:00","action":"move","task_id":141,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-02-28T01:11:42.7877563+01:00","action":"move","task_id":197,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:43.3005322+01:00","action":"move","task_id":198,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:43.7832338+01:00","action":"move","task_id":202,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:44.2651955+01:00","action":"move","task_id":205,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:44.7582215+01:00","action":"move","task_id":206,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:45.2333781+01:00","action":"move","task_id":207,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:45.7232406+01:00","action":"move","task_id":210,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:46.2135712+01:00","action":"move","task_id":212,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:46.7338405+01:00","action":"move","task_id":213,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:47.2448769+01:00","action":"move","task_id":216,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:47.7723334+01:00","action":"move","task_id":218,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:11:48.2996586+01:00","action":"move","task_id":219,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T01:17:21.6406551+01:00","action":"create","task_id":220,"detail":"Test schema v3 migration and model scope fields"}
+{"timestamp":"2026-02-28T01:17:31.6526814+01:00","action":"create","task_id":221,"detail":"Test GraphStore scoped queries"}
+{"timestamp":"2026-02-28T01:17:41.1839685+01:00","action":"create","task_id":222,"detail":"Test VectorStore scoped search"}
+{"timestamp":"2026-02-28T01:17:48.8083514+01:00","action":"create","task_id":223,"detail":"Test IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T01:17:58.9615921+01:00","action":"create","task_id":224,"detail":"Test temporal freshness boost and decay settings"}
+{"timestamp":"2026-02-28T01:18:07.2926246+01:00","action":"create","task_id":225,"detail":"Test importance-based decay resistance"}
+{"timestamp":"2026-02-28T01:18:16.9964755+01:00","action":"create","task_id":226,"detail":"Test MCPServerRegistry and mcp: tool resolver"}
+{"timestamp":"2026-02-28T01:18:25.807282+01:00","action":"create","task_id":227,"detail":"Test MCP server integrations (GitHub, Git, Fetch)"}
+{"timestamp":"2026-02-28T01:18:34.0892293+01:00","action":"create","task_id":228,"detail":"Test MCP server lifecycle management"}
+{"timestamp":"2026-02-28T01:18:46.0005179+01:00","action":"create","task_id":229,"detail":"Test ObservabilityHook JSONL event logging"}
+{"timestamp":"2026-02-28T01:18:54.9610632+01:00","action":"create","task_id":230,"detail":"Test instrument_all and OTel endpoint config"}
+{"timestamp":"2026-02-28T01:19:03.3405186+01:00","action":"create","task_id":231,"detail":"Test Co-authored-by trailer in git_commit"}
+{"timestamp":"2026-02-28T01:19:10.9591289+01:00","action":"move","task_id":220,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:11.4828867+01:00","action":"move","task_id":221,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:11.9938237+01:00","action":"move","task_id":222,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:12.5850272+01:00","action":"move","task_id":223,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:13.1768941+01:00","action":"move","task_id":224,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:13.6724443+01:00","action":"move","task_id":225,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:14.1329772+01:00","action":"move","task_id":226,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:14.6152403+01:00","action":"move","task_id":227,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:15.1095116+01:00","action":"move","task_id":228,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:15.5920087+01:00","action":"move","task_id":229,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:16.1074026+01:00","action":"move","task_id":230,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:16.5976566+01:00","action":"move","task_id":231,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T01:19:30.261783+01:00","action":"edit","task_id":197,"detail":"Schema v3 migration — add scope column to knowledge tables"}
+{"timestamp":"2026-02-28T01:19:39.9558772+01:00","action":"edit","task_id":198,"detail":"Model scope field — add scope to Entity, Edge, Document"}
+{"timestamp":"2026-02-28T01:19:50.6494076+01:00","action":"edit","task_id":202,"detail":"GraphStore scoped queries — filter CRUD by scope"}
+{"timestamp":"2026-02-28T01:20:01.156027+01:00","action":"edit","task_id":205,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T01:20:11.6758323+01:00","action":"edit","task_id":206,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T01:20:23.3651824+01:00","action":"edit","task_id":207,"detail":"Temporal freshness boost in VectorStore.search_similar"}
+{"timestamp":"2026-02-28T01:20:33.3754819+01:00","action":"edit","task_id":210,"detail":"Importance-based decay resistance for temporal retrieval"}
+{"timestamp":"2026-02-28T01:20:41.4863049+01:00","action":"edit","task_id":212,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T01:20:52.6160623+01:00","action":"edit","task_id":168,"detail":"MCP client infrastructure — MCPServerRegistry + tool_resolver mcp: prefix"}
+{"timestamp":"2026-02-28T01:21:02.2320547+01:00","action":"edit","task_id":169,"detail":"GitHub MCP server integration — @modelcontextprotocol/server-github"}
+{"timestamp":"2026-02-28T01:21:10.1387423+01:00","action":"edit","task_id":170,"detail":"Git MCP server integration — @modelcontextprotocol/server-git"}
+{"timestamp":"2026-02-28T01:21:17.3499547+01:00","action":"edit","task_id":171,"detail":"Fetch MCP server integration — @modelcontextprotocol/server-fetch"}
+{"timestamp":"2026-02-28T01:21:27.2339261+01:00","action":"edit","task_id":172,"detail":"MCP server lifecycle management — async context manager, health checks"}
+{"timestamp":"2026-02-28T01:21:42.5697398+01:00","action":"edit","task_id":213,"detail":"ObservabilityHook: structured JSONL event logging"}
+{"timestamp":"2026-02-28T01:21:52.3620818+01:00","action":"edit","task_id":216,"detail":"Enable Agent.instrument_all() at daemon startup"}
+{"timestamp":"2026-02-28T01:22:00.8795407+01:00","action":"edit","task_id":218,"detail":"Optional OTel endpoint config"}
+{"timestamp":"2026-02-28T01:22:09.6025031+01:00","action":"edit","task_id":219,"detail":"Add OwlBear Co-authored-by trailer to git_commit"}
+{"timestamp":"2026-02-28T01:22:17.4959835+01:00","action":"move","task_id":197,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:18.0968197+01:00","action":"move","task_id":198,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:18.6625166+01:00","action":"move","task_id":202,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:19.1506243+01:00","action":"move","task_id":205,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:19.6414149+01:00","action":"move","task_id":206,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:20.1460541+01:00","action":"move","task_id":207,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:20.6358172+01:00","action":"move","task_id":210,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:21.1793564+01:00","action":"move","task_id":212,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:21.6485957+01:00","action":"move","task_id":168,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:22.1248286+01:00","action":"move","task_id":169,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:22.655769+01:00","action":"move","task_id":170,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:23.143619+01:00","action":"move","task_id":171,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:23.6357652+01:00","action":"move","task_id":172,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:24.147519+01:00","action":"move","task_id":213,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:24.6266845+01:00","action":"move","task_id":216,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:25.139975+01:00","action":"move","task_id":218,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:22:25.6252789+01:00","action":"move","task_id":219,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T01:24:13.7712425+01:00","action":"move","task_id":220,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:14.3008789+01:00","action":"move","task_id":197,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:14.830974+01:00","action":"move","task_id":198,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:15.3133924+01:00","action":"move","task_id":229,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:15.7832116+01:00","action":"move","task_id":213,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:16.2959295+01:00","action":"move","task_id":230,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:17.1808083+01:00","action":"move","task_id":216,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:17.6749095+01:00","action":"move","task_id":218,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:18.2596282+01:00","action":"move","task_id":231,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:24:18.7372485+01:00","action":"move","task_id":219,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T01:35:04.4936509+01:00","action":"move","task_id":220,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:35:05.0681561+01:00","action":"move","task_id":197,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:35:05.8111623+01:00","action":"move","task_id":198,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:43:56.0420568+01:00","action":"move","task_id":229,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:43:56.5477112+01:00","action":"move","task_id":213,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:51:06.2534012+01:00","action":"move","task_id":230,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:51:06.7537493+01:00","action":"move","task_id":216,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:51:07.2910457+01:00","action":"move","task_id":218,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:55:20.395861+01:00","action":"move","task_id":231,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:55:20.8561212+01:00","action":"move","task_id":219,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T01:55:59.2463288+01:00","action":"move","task_id":220,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:55:59.7309882+01:00","action":"move","task_id":220,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:00.6883733+01:00","action":"move","task_id":197,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:01.1533497+01:00","action":"move","task_id":197,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:02.0617566+01:00","action":"move","task_id":198,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:02.5082433+01:00","action":"move","task_id":198,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:03.4626741+01:00","action":"move","task_id":229,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:03.9322914+01:00","action":"move","task_id":229,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:04.9170179+01:00","action":"move","task_id":213,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:05.3881471+01:00","action":"move","task_id":213,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:06.3368768+01:00","action":"move","task_id":230,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:06.8777902+01:00","action":"move","task_id":230,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:07.8871183+01:00","action":"move","task_id":216,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:08.3653343+01:00","action":"move","task_id":216,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:09.3313103+01:00","action":"move","task_id":218,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:09.8116621+01:00","action":"move","task_id":218,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:10.8083956+01:00","action":"move","task_id":231,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:11.3211774+01:00","action":"move","task_id":231,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T01:56:12.3380048+01:00","action":"move","task_id":219,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T01:56:12.8383292+01:00","action":"move","task_id":219,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:01:13.9364959+01:00","action":"move","task_id":221,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:14.4281867+01:00","action":"move","task_id":202,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:14.9131469+01:00","action":"move","task_id":222,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:15.391803+01:00","action":"move","task_id":205,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:15.8670637+01:00","action":"move","task_id":224,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:16.3233222+01:00","action":"move","task_id":207,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:16.799971+01:00","action":"move","task_id":212,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:17.2538173+01:00","action":"move","task_id":226,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:01:17.7587542+01:00","action":"move","task_id":168,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:05:49.3252729+01:00","action":"move","task_id":221,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:05:49.8977483+01:00","action":"move","task_id":202,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:12:11.2303732+01:00","action":"move","task_id":222,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:12:11.7711615+01:00","action":"move","task_id":205,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:22:44.5640394+01:00","action":"move","task_id":224,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:22:45.1067334+01:00","action":"move","task_id":207,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:22:45.6375094+01:00","action":"move","task_id":212,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:31:57.0749993+01:00","action":"move","task_id":226,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:31:57.6458641+01:00","action":"move","task_id":168,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:32:53.2082324+01:00","action":"move","task_id":221,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:32:53.7158332+01:00","action":"move","task_id":221,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:32:54.6930745+01:00","action":"move","task_id":202,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:32:55.2286569+01:00","action":"move","task_id":202,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:32:56.2166615+01:00","action":"move","task_id":222,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:32:56.6959479+01:00","action":"move","task_id":222,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:32:57.6549894+01:00","action":"move","task_id":205,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:32:58.1821721+01:00","action":"move","task_id":205,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:32:59.1988138+01:00","action":"move","task_id":224,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:32:59.6605674+01:00","action":"move","task_id":224,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:33:00.6651509+01:00","action":"move","task_id":207,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:33:01.171429+01:00","action":"move","task_id":207,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:33:02.1636068+01:00","action":"move","task_id":212,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:33:02.6753743+01:00","action":"move","task_id":212,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:33:03.7387583+01:00","action":"move","task_id":226,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:33:04.3709022+01:00","action":"move","task_id":226,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:33:05.8066751+01:00","action":"move","task_id":168,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T02:33:06.3313784+01:00","action":"move","task_id":168,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T02:33:34.4714005+01:00","action":"move","task_id":223,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:33:35.282407+01:00","action":"move","task_id":206,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:33:36.3874346+01:00","action":"move","task_id":225,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:33:38.7135701+01:00","action":"move","task_id":210,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:33:43.5048779+01:00","action":"move","task_id":227,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:33:56.7677616+01:00","action":"move","task_id":169,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:34:08.5746443+01:00","action":"move","task_id":170,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:34:15.948011+01:00","action":"move","task_id":171,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:34:17.1151493+01:00","action":"move","task_id":228,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:34:17.7615435+01:00","action":"move","task_id":172,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T02:41:36.1891329+01:00","action":"move","task_id":223,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:41:36.7052454+01:00","action":"move","task_id":206,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:47:43.9967736+01:00","action":"move","task_id":225,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T02:47:44.4855166+01:00","action":"move","task_id":210,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T09:57:19.7734348+01:00","action":"move","task_id":227,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T09:57:20.2623801+01:00","action":"move","task_id":169,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T09:57:20.8560525+01:00","action":"move","task_id":170,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T09:57:21.3597592+01:00","action":"move","task_id":171,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:03:36.4899545+01:00","action":"move","task_id":228,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:03:36.9701621+01:00","action":"move","task_id":172,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:04:44.5985126+01:00","action":"move","task_id":223,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:45.0495724+01:00","action":"move","task_id":223,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:46.0368325+01:00","action":"move","task_id":206,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:46.5376548+01:00","action":"move","task_id":206,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:47.6904264+01:00","action":"move","task_id":225,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:48.1974789+01:00","action":"move","task_id":225,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:49.1254177+01:00","action":"move","task_id":210,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:49.6018855+01:00","action":"move","task_id":210,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:50.5593468+01:00","action":"move","task_id":227,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:51.0180631+01:00","action":"move","task_id":227,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:51.9790455+01:00","action":"move","task_id":169,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:52.4271301+01:00","action":"move","task_id":169,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:53.3516561+01:00","action":"move","task_id":170,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:53.794429+01:00","action":"move","task_id":170,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:54.765998+01:00","action":"move","task_id":171,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:55.2388222+01:00","action":"move","task_id":171,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:56.2776423+01:00","action":"move","task_id":228,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:56.7350021+01:00","action":"move","task_id":228,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:04:57.6980119+01:00","action":"move","task_id":172,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T10:04:58.128682+01:00","action":"move","task_id":172,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T10:07:20.0887621+01:00","action":"edit","task_id":199,"detail":"GraphStore scoped queries — filter CRUD by scope"}
+{"timestamp":"2026-02-28T10:07:20.6294716+01:00","action":"edit","task_id":200,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T10:07:21.1421563+01:00","action":"edit","task_id":201,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T10:07:21.7054598+01:00","action":"edit","task_id":203,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-02-28T10:07:22.2056583+01:00","action":"edit","task_id":204,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-02-28T10:07:22.7575893+01:00","action":"edit","task_id":208,"detail":"Importance-based decay resistance for temporal retrieval"}
+{"timestamp":"2026-02-28T10:07:23.2977116+01:00","action":"edit","task_id":209,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T10:07:23.7922384+01:00","action":"edit","task_id":211,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-02-28T10:07:24.3449419+01:00","action":"edit","task_id":214,"detail":"Enable Agent.instrument_all() at daemon startup"}
+{"timestamp":"2026-02-28T10:07:24.9052152+01:00","action":"edit","task_id":215,"detail":"Optional OTel endpoint config (OWLBEAR_OTEL_ENDPOINT)"}
+{"timestamp":"2026-02-28T10:08:37.3867832+01:00","action":"create","task_id":232,"detail":"Research: Dual embedding + RRF retrieval strategy"}
+{"timestamp":"2026-02-28T10:08:45.7875606+01:00","action":"create","task_id":233,"detail":"Research: Retrieve-and-rerank strategy (pplx-embed + bge-reranker)"}
+{"timestamp":"2026-02-28T10:08:56.6988796+01:00","action":"create","task_id":234,"detail":"Research: Graph-augmented retrieval (bge-m3 + neighbor expansion)"}
+{"timestamp":"2026-02-28T10:09:07.4086842+01:00","action":"create","task_id":235,"detail":"Research: Embedding model shootout — local feasibility and honest benchmarks"}
+{"timestamp":"2026-02-28T10:09:17.656779+01:00","action":"create","task_id":236,"detail":"Research: Qdrant local mode for bge-m3 hybrid search (dense+sparse+ColBERT)"}
+{"timestamp":"2026-02-28T10:22:58.689471+01:00","action":"move","task_id":233,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:29:18.5652762+01:00","action":"move","task_id":234,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:47:14.6335931+01:00","action":"move","task_id":232,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:47:16.0776334+01:00","action":"move","task_id":235,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T10:47:16.5894095+01:00","action":"move","task_id":236,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T11:10:36.4653484+01:00","action":"create","task_id":237,"detail":"Research: bge-m3 ONNX availability and FlagEmbedding integration patterns"}
+{"timestamp":"2026-02-28T11:10:43.1969901+01:00","action":"create","task_id":238,"detail":"Research: Qdrant local mode feature parity — multivector, sparse, prefetch"}
+{"timestamp":"2026-02-28T11:10:50.1424462+01:00","action":"create","task_id":239,"detail":"Research: ColBERT late-interaction vs cross-encoder reranking tradeoff"}
+{"timestamp":"2026-02-28T11:10:57.4815173+01:00","action":"create","task_id":240,"detail":"Research: Moonshine voice (moonshine-ai/moonshine) vs Whisper viability"}
+{"timestamp":"2026-02-28T11:19:51.4201785+01:00","action":"move","task_id":238,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T11:23:37.9787235+01:00","action":"move","task_id":237,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T11:25:43.7462361+01:00","action":"move","task_id":240,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T11:30:59.6777667+01:00","action":"move","task_id":239,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T12:18:45.7250531+01:00","action":"create","task_id":241,"detail":"Swap faster-whisper for moonshine-voice in deps"}
+{"timestamp":"2026-02-28T12:18:58.2503983+01:00","action":"create","task_id":242,"detail":"Rewrite STTEngine for Moonshine batch mode"}
+{"timestamp":"2026-02-28T12:19:10.4996157+01:00","action":"create","task_id":243,"detail":"Implement streaming STT for brainstorming sessions"}
+{"timestamp":"2026-02-28T12:19:21.2368799+01:00","action":"create","task_id":244,"detail":"Refactor VoiceChannel for brainstorming mode"}
+{"timestamp":"2026-02-28T12:19:30.9237737+01:00","action":"create","task_id":245,"detail":"Remove all faster-whisper references and clean up"}
+{"timestamp":"2026-02-28T12:19:43.439385+01:00","action":"create","task_id":246,"detail":"Research Moonshine streaming API patterns"}
+{"timestamp":"2026-02-28T12:19:49.4033886+01:00","action":"edit","task_id":243,"detail":"Implement streaming STT for brainstorming sessions"}
+{"timestamp":"2026-02-28T12:38:43.4185038+01:00","action":"create","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T12:38:59.1883196+01:00","action":"create","task_id":248,"detail":"Implement BgeM3EmbeddingProvider"}
+{"timestamp":"2026-02-28T12:39:16.5563913+01:00","action":"create","task_id":249,"detail":"Implement QdrantVectorStore"}
+{"timestamp":"2026-02-28T12:39:28.3228288+01:00","action":"create","task_id":250,"detail":"Wire QdrantVectorStore + BgeM3 into IngestPipeline"}
+{"timestamp":"2026-02-28T12:39:40.8237902+01:00","action":"create","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T12:39:52.6657634+01:00","action":"create","task_id":252,"detail":"Benchmark hybrid search quality"}
+{"timestamp":"2026-02-28T12:40:06.3585475+01:00","action":"create","task_id":253,"detail":"Research: Content hashing and delta re-ingest strategy"}
+{"timestamp":"2026-02-28T12:40:19.719729+01:00","action":"create","task_id":254,"detail":"Research: Source registry and crawl scheduling"}
+{"timestamp":"2026-02-28T12:40:38.685886+01:00","action":"create","task_id":255,"detail":"Research: Intra-document graph builder"}
+{"timestamp":"2026-02-28T12:41:01.1200945+01:00","action":"create","task_id":256,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T12:41:05.4979865+01:00","action":"create","task_id":257,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T12:41:37.0463402+01:00","action":"create","task_id":258,"detail":"Research: Graph-augmented retrieval implementation"}
+{"timestamp":"2026-02-28T12:41:54.4466151+01:00","action":"create","task_id":259,"detail":"Research: Knowledge pipeline as reusable module"}
+{"timestamp":"2026-02-28T12:42:07.1963538+01:00","action":"create","task_id":260,"detail":"Data migration: re-embed with bge-m3 into Qdrant"}
+{"timestamp":"2026-02-28T12:42:18.8906692+01:00","action":"create","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T12:42:37.2448133+01:00","action":"delete","task_id":257,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T12:42:43.3231582+01:00","action":"edit","task_id":256,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T12:55:48.5367959+01:00","action":"edit","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T12:55:54.2800562+01:00","action":"move","task_id":260,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T12:55:54.8067207+01:00","action":"edit","task_id":260,"detail":"Data migration: re-embed with bge-m3 into Qdrant"}
+{"timestamp":"2026-02-28T12:56:29.6257154+01:00","action":"create","task_id":262,"detail":"Research: Adopt existing knowledge pipeline vs build custom"}
+{"timestamp":"2026-02-28T12:56:44.7341338+01:00","action":"edit","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T12:56:44.7393424+01:00","action":"block","task_id":247,"detail":"Blocked on #262 — if we adopt an existing framework, VectorStoreProtocol may not be needed"}
+{"timestamp":"2026-02-28T12:56:45.2708276+01:00","action":"edit","task_id":248,"detail":"Implement BgeM3EmbeddingProvider"}
+{"timestamp":"2026-02-28T12:56:45.2757896+01:00","action":"block","task_id":248,"detail":"Blocked on #262 — framework may provide embedding integration"}
+{"timestamp":"2026-02-28T12:56:45.8007456+01:00","action":"edit","task_id":249,"detail":"Implement QdrantVectorStore"}
+{"timestamp":"2026-02-28T12:56:45.8098459+01:00","action":"block","task_id":249,"detail":"Blocked on #262 — framework may provide Qdrant integration"}
+{"timestamp":"2026-02-28T12:56:46.3614643+01:00","action":"edit","task_id":250,"detail":"Wire QdrantVectorStore + BgeM3 into IngestPipeline"}
+{"timestamp":"2026-02-28T12:56:46.36802+01:00","action":"block","task_id":250,"detail":"Blocked on #262 — pipeline wiring depends on framework decision"}
+{"timestamp":"2026-02-28T12:56:46.9132179+01:00","action":"edit","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T12:56:46.9203965+01:00","action":"block","task_id":251,"detail":"Blocked on #262 — scope of removal depends on what we adopt"}
+{"timestamp":"2026-02-28T12:56:47.4117273+01:00","action":"edit","task_id":252,"detail":"Benchmark hybrid search quality"}
+{"timestamp":"2026-02-28T12:56:47.4198634+01:00","action":"block","task_id":252,"detail":"Blocked on #262 — benchmark target depends on framework decision"}
+{"timestamp":"2026-02-28T12:56:48.8432789+01:00","action":"edit","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T12:56:53.5478329+01:00","action":"edit","task_id":248,"detail":"Implement BgeM3EmbeddingProvider"}
+{"timestamp":"2026-02-28T12:56:58.0603241+01:00","action":"edit","task_id":249,"detail":"Implement QdrantVectorStore"}
+{"timestamp":"2026-02-28T12:57:02.6684323+01:00","action":"edit","task_id":250,"detail":"Wire QdrantVectorStore + BgeM3 into IngestPipeline"}
+{"timestamp":"2026-02-28T12:57:08.1423173+01:00","action":"edit","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T12:57:14.2331457+01:00","action":"edit","task_id":252,"detail":"Benchmark hybrid search quality"}
+{"timestamp":"2026-02-28T12:57:14.7549532+01:00","action":"edit","task_id":253,"detail":"Research: Content hashing and delta re-ingest strategy"}
+{"timestamp":"2026-02-28T12:57:14.7638969+01:00","action":"block","task_id":253,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:15.4638833+01:00","action":"edit","task_id":254,"detail":"Research: Source registry and crawl scheduling"}
+{"timestamp":"2026-02-28T12:57:15.4728086+01:00","action":"block","task_id":254,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:16.6149035+01:00","action":"edit","task_id":255,"detail":"Research: Intra-document graph builder"}
+{"timestamp":"2026-02-28T12:57:16.635209+01:00","action":"block","task_id":255,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:17.5760928+01:00","action":"edit","task_id":256,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T12:57:17.6303795+01:00","action":"block","task_id":256,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:18.3327709+01:00","action":"edit","task_id":258,"detail":"Research: Graph-augmented retrieval implementation"}
+{"timestamp":"2026-02-28T12:57:18.3380535+01:00","action":"block","task_id":258,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:18.9165946+01:00","action":"edit","task_id":259,"detail":"Research: Knowledge pipeline as reusable module"}
+{"timestamp":"2026-02-28T12:57:18.9254956+01:00","action":"block","task_id":259,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T12:57:19.5667275+01:00","action":"edit","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T12:57:19.5759983+01:00","action":"block","task_id":261,"detail":"Blocked on #262"}
+{"timestamp":"2026-02-28T13:31:55.7210008+01:00","action":"create","task_id":263,"detail":"Research: Bootstrap/assembly layer — nanobot wiring patterns for PydanticAI"}
+{"timestamp":"2026-02-28T13:32:20.3443424+01:00","action":"create","task_id":264,"detail":"Research: Browser automation alternatives — keep custom vs adopt OSS"}
+{"timestamp":"2026-02-28T13:51:44.0741972+01:00","action":"move","task_id":238,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:51:48.4695776+01:00","action":"move","task_id":235,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:51:52.1175084+01:00","action":"move","task_id":239,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:51:56.3326899+01:00","action":"move","task_id":240,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:01.3233595+01:00","action":"move","task_id":236,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:01.8287285+01:00","action":"move","task_id":237,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:07.9873056+01:00","action":"move","task_id":238,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:52:08.5185036+01:00","action":"move","task_id":239,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:52:08.9961463+01:00","action":"move","task_id":240,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:52:21.5972317+01:00","action":"move","task_id":232,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:22.0981609+01:00","action":"move","task_id":233,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:22.6014403+01:00","action":"move","task_id":234,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T13:52:38.0967373+01:00","action":"move","task_id":232,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:52:38.6442872+01:00","action":"move","task_id":233,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:52:39.502737+01:00","action":"move","task_id":234,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:57:00.5172319+01:00","action":"move","task_id":235,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:57:01.0338263+01:00","action":"move","task_id":236,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:57:01.5225742+01:00","action":"move","task_id":237,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T13:57:46.3212359+01:00","action":"move","task_id":263,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-28T13:57:46.8192905+01:00","action":"move","task_id":262,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-28T13:57:47.3080466+01:00","action":"move","task_id":264,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-28T13:57:47.8048385+01:00","action":"move","task_id":246,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-02-28T14:16:33.4247999+01:00","action":"move","task_id":262,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T14:20:13.7670668+01:00","action":"create","task_id":265,"detail":"Create create_copilot_model() bridge function"}
+{"timestamp":"2026-02-28T14:20:23.0268584+01:00","action":"create","task_id":266,"detail":"OwlBearAgent: accept model instances and add update_model()"}
+{"timestamp":"2026-02-28T14:20:33.9716811+01:00","action":"create","task_id":267,"detail":"Implement bootstrap() module - wire all OwlBear components"}
+{"timestamp":"2026-02-28T14:20:42.5017962+01:00","action":"create","task_id":268,"detail":"Implement ChannelManager - config-driven channel creation"}
+{"timestamp":"2026-02-28T14:20:51.4471055+01:00","action":"create","task_id":269,"detail":"Update bearclaw run to use bootstrap() - full wiring"}
+{"timestamp":"2026-02-28T14:20:59.4382614+01:00","action":"create","task_id":270,"detail":"Update bearclaw chat to use bootstrap() - shared wiring"}
+{"timestamp":"2026-02-28T14:21:07.7418487+01:00","action":"create","task_id":271,"detail":"Add Copilot token refresh to daemon loop"}
+{"timestamp":"2026-02-28T14:21:18.206686+01:00","action":"create","task_id":272,"detail":"Implement memory consolidation - nanobot MEMORY.md pattern"}
+{"timestamp":"2026-02-28T14:21:26.7436855+01:00","action":"create","task_id":273,"detail":"Integration test: full bootstrap() smoke test"}
+{"timestamp":"2026-02-28T14:21:36.1963711+01:00","action":"create","task_id":274,"detail":"Add graph community detection (Leiden algorithm)"}
+{"timestamp":"2026-02-28T14:21:44.8717135+01:00","action":"create","task_id":275,"detail":"Add provenance tracking to IngestResult"}
+{"timestamp":"2026-02-28T14:21:56.3783021+01:00","action":"create","task_id":276,"detail":"Update architecture.md browser section with constraint rationale"}
+{"timestamp":"2026-02-28T14:22:06.7811995+01:00","action":"create","task_id":277,"detail":"Evaluate crawl4ai for WebCrawler replacement if crawling demand grows"}
+{"timestamp":"2026-02-28T14:22:18.2374155+01:00","action":"edit","task_id":241,"detail":"Swap faster-whisper for moonshine-voice in deps"}
+{"timestamp":"2026-02-28T14:22:29.3430002+01:00","action":"edit","task_id":242,"detail":"Rewrite STTEngine for Moonshine batch mode"}
+{"timestamp":"2026-02-28T14:22:41.6686222+01:00","action":"edit","task_id":243,"detail":"Implement streaming STT for brainstorming sessions"}
+{"timestamp":"2026-02-28T14:22:51.5547855+01:00","action":"edit","task_id":245,"detail":"Remove all faster-whisper references and clean up"}
+{"timestamp":"2026-02-28T14:23:38.6603801+01:00","action":"edit","task_id":266,"detail":"OwlBearAgent: accept model instances and add update_model()"}
+{"timestamp":"2026-02-28T14:23:39.214652+01:00","action":"edit","task_id":267,"detail":"Implement bootstrap() module - wire all OwlBear components"}
+{"timestamp":"2026-02-28T14:23:40.2069102+01:00","action":"edit","task_id":267,"detail":"Implement bootstrap() module - wire all OwlBear components"}
+{"timestamp":"2026-02-28T14:23:41.1338887+01:00","action":"edit","task_id":269,"detail":"Update bearclaw run to use bootstrap() - full wiring"}
+{"timestamp":"2026-02-28T14:23:41.7467177+01:00","action":"edit","task_id":270,"detail":"Update bearclaw chat to use bootstrap() - shared wiring"}
+{"timestamp":"2026-02-28T14:23:42.3401094+01:00","action":"edit","task_id":271,"detail":"Add Copilot token refresh to daemon loop"}
+{"timestamp":"2026-02-28T14:23:42.9021964+01:00","action":"edit","task_id":271,"detail":"Add Copilot token refresh to daemon loop"}
+{"timestamp":"2026-02-28T14:23:43.4452112+01:00","action":"edit","task_id":273,"detail":"Integration test: full bootstrap() smoke test"}
+{"timestamp":"2026-02-28T14:23:50.964065+01:00","action":"move","task_id":263,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T14:23:52.0999806+01:00","action":"move","task_id":264,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T14:23:52.707357+01:00","action":"move","task_id":246,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T14:24:29.921323+01:00","action":"move","task_id":263,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T14:24:30.4530968+01:00","action":"move","task_id":263,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T14:24:30.9882624+01:00","action":"move","task_id":262,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T14:24:31.5629699+01:00","action":"move","task_id":262,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T14:24:32.1304065+01:00","action":"move","task_id":264,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T14:24:32.6634096+01:00","action":"move","task_id":264,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T14:24:33.2356619+01:00","action":"move","task_id":246,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T14:24:33.7728525+01:00","action":"move","task_id":246,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T14:54:35.404869+01:00","action":"edit","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T14:54:35.4281394+01:00","action":"unblock","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T14:54:35.9974031+01:00","action":"edit","task_id":248,"detail":"Implement BgeM3EmbeddingProvider"}
+{"timestamp":"2026-02-28T14:54:36.0052563+01:00","action":"unblock","task_id":248,"detail":"Implement BgeM3EmbeddingProvider"}
+{"timestamp":"2026-02-28T14:54:36.4991707+01:00","action":"edit","task_id":249,"detail":"Implement QdrantVectorStore"}
+{"timestamp":"2026-02-28T14:54:36.5064339+01:00","action":"unblock","task_id":249,"detail":"Implement QdrantVectorStore"}
+{"timestamp":"2026-02-28T14:54:36.9975212+01:00","action":"edit","task_id":250,"detail":"Wire QdrantVectorStore + BgeM3 into IngestPipeline"}
+{"timestamp":"2026-02-28T14:54:37.0025129+01:00","action":"unblock","task_id":250,"detail":"Wire QdrantVectorStore + BgeM3 into IngestPipeline"}
+{"timestamp":"2026-02-28T14:54:37.5598376+01:00","action":"edit","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T14:54:37.5679907+01:00","action":"unblock","task_id":251,"detail":"Remove sqlite-vec and FastEmbed"}
+{"timestamp":"2026-02-28T14:54:38.0732733+01:00","action":"edit","task_id":252,"detail":"Benchmark hybrid search quality"}
+{"timestamp":"2026-02-28T14:54:38.0807955+01:00","action":"unblock","task_id":252,"detail":"Benchmark hybrid search quality"}
+{"timestamp":"2026-02-28T14:54:38.6230165+01:00","action":"edit","task_id":253,"detail":"Research: Content hashing and delta re-ingest strategy"}
+{"timestamp":"2026-02-28T14:54:38.6300539+01:00","action":"unblock","task_id":253,"detail":"Research: Content hashing and delta re-ingest strategy"}
+{"timestamp":"2026-02-28T14:54:39.1652249+01:00","action":"edit","task_id":254,"detail":"Research: Source registry and crawl scheduling"}
+{"timestamp":"2026-02-28T14:54:39.1707909+01:00","action":"unblock","task_id":254,"detail":"Research: Source registry and crawl scheduling"}
+{"timestamp":"2026-02-28T14:54:39.679113+01:00","action":"edit","task_id":255,"detail":"Research: Intra-document graph builder"}
+{"timestamp":"2026-02-28T14:54:39.6870711+01:00","action":"unblock","task_id":255,"detail":"Research: Intra-document graph builder"}
+{"timestamp":"2026-02-28T14:54:40.2345654+01:00","action":"edit","task_id":256,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T14:54:40.2420821+01:00","action":"unblock","task_id":256,"detail":"Research: Inter-document graph builder"}
+{"timestamp":"2026-02-28T14:54:41.0742603+01:00","action":"edit","task_id":258,"detail":"Research: Graph-augmented retrieval implementation"}
+{"timestamp":"2026-02-28T14:54:41.0908461+01:00","action":"unblock","task_id":258,"detail":"Research: Graph-augmented retrieval implementation"}
+{"timestamp":"2026-02-28T14:54:41.6968375+01:00","action":"edit","task_id":259,"detail":"Research: Knowledge pipeline as reusable module"}
+{"timestamp":"2026-02-28T14:54:41.7021498+01:00","action":"unblock","task_id":259,"detail":"Research: Knowledge pipeline as reusable module"}
+{"timestamp":"2026-02-28T14:54:42.2374979+01:00","action":"edit","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T14:54:42.2463879+01:00","action":"unblock","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T15:04:17.1657811+01:00","action":"edit","task_id":265,"detail":"Create create_copilot_model() bridge function"}
+{"timestamp":"2026-02-28T15:04:22.7772975+01:00","action":"move","task_id":265,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:04:23.2749243+01:00","action":"move","task_id":265,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:04:38.4006534+01:00","action":"edit","task_id":266,"detail":"OwlBearAgent: accept model instances and add update_model()"}
+{"timestamp":"2026-02-28T15:04:44.2645087+01:00","action":"move","task_id":266,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:04:44.773082+01:00","action":"move","task_id":266,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:05:16.9906481+01:00","action":"edit","task_id":267,"detail":"Implement bootstrap() module - wire all OwlBear components"}
+{"timestamp":"2026-02-28T15:05:22.2861537+01:00","action":"move","task_id":267,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:05:22.7990673+01:00","action":"move","task_id":267,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:05:45.0763008+01:00","action":"edit","task_id":268,"detail":"Implement ChannelManager - config-driven channel creation"}
+{"timestamp":"2026-02-28T15:05:52.7601341+01:00","action":"move","task_id":268,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-02-28T15:06:15.8332381+01:00","action":"edit","task_id":272,"detail":"Implement memory consolidation - nanobot MEMORY.md pattern"}
+{"timestamp":"2026-02-28T15:06:20.946002+01:00","action":"move","task_id":272,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:06:21.4320121+01:00","action":"move","task_id":272,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:06:37.8473152+01:00","action":"edit","task_id":273,"detail":"Integration test: full bootstrap() smoke test"}
+{"timestamp":"2026-02-28T15:06:43.1560603+01:00","action":"move","task_id":273,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:06:43.6685096+01:00","action":"move","task_id":273,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:07:16.2998829+01:00","action":"edit","task_id":247,"detail":"Create VectorStoreProtocol"}
+{"timestamp":"2026-02-28T15:07:22.362221+01:00","action":"move","task_id":247,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:07:22.8644831+01:00","action":"move","task_id":247,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T15:09:37.8482227+01:00","action":"move","task_id":265,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:09:38.3868483+01:00","action":"move","task_id":266,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:09:38.9238273+01:00","action":"move","task_id":272,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:09:39.4494957+01:00","action":"move","task_id":247,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:19:47.1041657+01:00","action":"move","task_id":247,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:26:02.2895072+01:00","action":"move","task_id":265,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:26:02.8478221+01:00","action":"move","task_id":266,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:26:15.2755282+01:00","action":"move","task_id":272,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:30:19.8634289+01:00","action":"move","task_id":265,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:30:20.3745445+01:00","action":"move","task_id":265,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:30:20.8655839+01:00","action":"move","task_id":266,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:30:21.3494732+01:00","action":"move","task_id":266,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:30:21.8171761+01:00","action":"move","task_id":272,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:30:22.3249941+01:00","action":"move","task_id":272,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:30:22.8110598+01:00","action":"move","task_id":247,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:30:23.3288121+01:00","action":"move","task_id":247,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:32:56.7842618+01:00","action":"move","task_id":267,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:46:44.2325381+01:00","action":"move","task_id":267,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:47:31.9987385+01:00","action":"move","task_id":267,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:47:32.5462518+01:00","action":"move","task_id":267,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:47:39.879126+01:00","action":"move","task_id":273,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T15:53:52.8018505+01:00","action":"move","task_id":273,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T15:54:34.9930884+01:00","action":"move","task_id":273,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T15:54:35.5300368+01:00","action":"move","task_id":273,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T15:55:12.9311701+01:00","action":"move","task_id":269,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:55:13.4349828+01:00","action":"move","task_id":270,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T15:55:13.9215704+01:00","action":"move","task_id":271,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:01:20.8988425+01:00","action":"edit","task_id":269,"detail":"Update bearclaw run to use bootstrap() - full wiring"}
+{"timestamp":"2026-02-28T16:01:35.8577694+01:00","action":"edit","task_id":270,"detail":"Update bearclaw chat to use bootstrap() - shared wiring"}
+{"timestamp":"2026-02-28T16:01:53.5481868+01:00","action":"edit","task_id":271,"detail":"Add Copilot token refresh to daemon loop"}
+{"timestamp":"2026-02-28T16:01:59.0861815+01:00","action":"move","task_id":269,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:01:59.6088986+01:00","action":"move","task_id":270,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:02:00.1248099+01:00","action":"move","task_id":271,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:03:19.9714695+01:00","action":"move","task_id":269,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T16:03:20.5317773+01:00","action":"move","task_id":270,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T16:16:46.2523783+01:00","action":"move","task_id":270,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T16:21:44.0640831+01:00","action":"move","task_id":269,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T16:21:44.6459588+01:00","action":"move","task_id":269,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T16:21:45.2843406+01:00","action":"move","task_id":269,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T16:21:45.8541684+01:00","action":"move","task_id":270,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T16:21:46.5146016+01:00","action":"move","task_id":270,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T16:24:06.6698235+01:00","action":"move","task_id":271,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T16:30:13.5891459+01:00","action":"move","task_id":271,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T16:31:45.3714228+01:00","action":"move","task_id":271,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T16:31:45.9378786+01:00","action":"move","task_id":271,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T16:34:30.4459504+01:00","action":"move","task_id":248,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:31.0178367+01:00","action":"move","task_id":249,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:31.6057946+01:00","action":"move","task_id":250,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:32.1730505+01:00","action":"move","task_id":251,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:32.7838739+01:00","action":"move","task_id":241,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:33.3746437+01:00","action":"move","task_id":242,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:33.9022678+01:00","action":"move","task_id":243,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:34.5129876+01:00","action":"move","task_id":244,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:34:35.0958666+01:00","action":"move","task_id":245,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T16:40:59.7541285+01:00","action":"move","task_id":248,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:41:00.2779548+01:00","action":"move","task_id":249,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:41:00.8487435+01:00","action":"move","task_id":250,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:41:01.4350232+01:00","action":"move","task_id":251,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:42:24.4984186+01:00","action":"move","task_id":248,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T16:42:25.083312+01:00","action":"move","task_id":249,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T16:48:41.3794057+01:00","action":"edit","task_id":242,"detail":"Rewrite STTEngine for Moonshine batch mode"}
+{"timestamp":"2026-02-28T16:48:57.0498154+01:00","action":"edit","task_id":244,"detail":"Refactor VoiceChannel for brainstorming mode"}
+{"timestamp":"2026-02-28T16:49:21.8509585+01:00","action":"edit","task_id":245,"detail":"Remove all faster-whisper references and clean up"}
+{"timestamp":"2026-02-28T16:49:29.3031822+01:00","action":"edit","task_id":245,"detail":"Remove all faster-whisper references and clean up"}
+{"timestamp":"2026-02-28T16:49:35.1746632+01:00","action":"move","task_id":241,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:49:35.7110912+01:00","action":"move","task_id":242,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:49:36.2569389+01:00","action":"move","task_id":243,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:49:36.7626784+01:00","action":"move","task_id":244,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:49:37.3058355+01:00","action":"move","task_id":245,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T16:57:50.290758+01:00","action":"move","task_id":248,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:13:57.7813188+01:00","action":"move","task_id":249,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:15:19.5602084+01:00","action":"move","task_id":248,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:15:20.1199908+01:00","action":"move","task_id":248,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:15:21.2556549+01:00","action":"move","task_id":249,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:15:21.9798104+01:00","action":"move","task_id":249,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:15:40.0830661+01:00","action":"move","task_id":250,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T17:31:27.5106227+01:00","action":"move","task_id":250,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:32:09.1605231+01:00","action":"move","task_id":250,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:32:09.7703654+01:00","action":"move","task_id":250,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:32:24.330683+01:00","action":"move","task_id":251,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T17:45:03.3439351+01:00","action":"move","task_id":251,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:47:03.1875162+01:00","action":"move","task_id":251,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:47:03.7607879+01:00","action":"move","task_id":251,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:47:21.8418389+01:00","action":"move","task_id":241,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T17:57:59.1453924+01:00","action":"move","task_id":241,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:58:00.1997318+01:00","action":"move","task_id":242,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T17:58:01.3277105+01:00","action":"move","task_id":242,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:58:46.4940863+01:00","action":"move","task_id":241,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:58:47.0545469+01:00","action":"move","task_id":241,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:58:47.6362777+01:00","action":"move","task_id":242,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-02-28T17:58:48.1738199+01:00","action":"move","task_id":242,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T17:58:49.2259619+01:00","action":"move","task_id":242,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T17:58:49.8817822+01:00","action":"move","task_id":242,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T17:59:03.45292+01:00","action":"move","task_id":243,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T18:04:59.4266816+01:00","action":"move","task_id":243,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T18:05:37.0371389+01:00","action":"move","task_id":243,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T18:05:37.5522982+01:00","action":"move","task_id":243,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T18:05:57.6213283+01:00","action":"move","task_id":244,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T18:22:59.5882288+01:00","action":"move","task_id":244,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T18:23:00.1378122+01:00","action":"move","task_id":245,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T18:26:42.5559753+01:00","action":"move","task_id":245,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T18:28:09.4430597+01:00","action":"move","task_id":244,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T18:28:09.9837926+01:00","action":"move","task_id":244,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T18:28:10.5486039+01:00","action":"move","task_id":245,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-02-28T18:28:11.1136463+01:00","action":"move","task_id":245,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T18:28:11.7010375+01:00","action":"move","task_id":245,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T18:28:12.2854503+01:00","action":"move","task_id":245,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T22:54:20.7739005+01:00","action":"move","task_id":253,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T22:56:15.8264717+01:00","action":"move","task_id":255,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T22:56:17.0564581+01:00","action":"move","task_id":261,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T22:56:18.9838056+01:00","action":"move","task_id":276,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-02-28T22:56:30.2111132+01:00","action":"create","task_id":278,"detail":"Schema v4: add content_hash to document_status + source index"}
+{"timestamp":"2026-02-28T22:56:37.312155+01:00","action":"create","task_id":279,"detail":"Implement find_status_by_source() query"}
+{"timestamp":"2026-02-28T22:56:44.3100521+01:00","action":"create","task_id":280,"detail":"Implement content hash computation and has_changed() check"}
+{"timestamp":"2026-02-28T22:56:52.1149701+01:00","action":"create","task_id":281,"detail":"Implement delete_document_data() cascade (SQLite + Qdrant)"}
+{"timestamp":"2026-02-28T22:57:07.749406+01:00","action":"create","task_id":282,"detail":"Wire delta re-ingest check into IngestPipeline"}
+{"timestamp":"2026-02-28T22:57:23.1636497+01:00","action":"edit","task_id":282,"detail":"Wire delta re-ingest check into IngestPipeline"}
+{"timestamp":"2026-02-28T22:57:32.322565+01:00","action":"create","task_id":283,"detail":"Add document_id provenance to entities table (schema v4)"}
+{"timestamp":"2026-02-28T22:57:43.4935958+01:00","action":"create","task_id":284,"detail":"Implement IntraDocGraphBuilder -- cross-chunk relationship inference"}
+{"timestamp":"2026-02-28T22:57:49.2329237+01:00","action":"edit","task_id":284,"detail":"Implement IntraDocGraphBuilder -- cross-chunk relationship inference"}
+{"timestamp":"2026-02-28T22:57:57.3218178+01:00","action":"create","task_id":285,"detail":"Test IntraDocGraphBuilder -- cross-chunk inference with mocked agent"}
+{"timestamp":"2026-02-28T22:58:05.9625913+01:00","action":"create","task_id":286,"detail":"Wire IntraDocGraphBuilder into IngestPipeline as post-ingestion hook"}
+{"timestamp":"2026-02-28T22:58:11.5284646+01:00","action":"edit","task_id":286,"detail":"Wire IntraDocGraphBuilder into IngestPipeline as post-ingestion hook"}
+{"timestamp":"2026-02-28T23:09:54.2336183+01:00","action":"move","task_id":253,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T23:09:54.7224456+01:00","action":"move","task_id":255,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T23:10:19.4108596+01:00","action":"edit","task_id":278,"detail":"Schema v4: content_hash on document_status, document_id on entities, source index"}
+{"timestamp":"2026-02-28T23:10:28.8420721+01:00","action":"edit","task_id":283,"detail":"Wire document_id provenance into IngestPipeline and GraphStore"}
+{"timestamp":"2026-02-28T23:10:34.216902+01:00","action":"edit","task_id":279,"detail":"Implement find_status_by_source() query"}
+{"timestamp":"2026-02-28T23:10:39.5408405+01:00","action":"edit","task_id":280,"detail":"Implement content hash computation and has_changed() check"}
+{"timestamp":"2026-02-28T23:10:44.5276839+01:00","action":"edit","task_id":284,"detail":"Implement IntraDocGraphBuilder -- cross-chunk relationship inference"}
+{"timestamp":"2026-02-28T23:10:53.2012291+01:00","action":"edit","task_id":279,"detail":"Implement find_status_by_source() query"}
+{"timestamp":"2026-02-28T23:11:02.3664438+01:00","action":"edit","task_id":280,"detail":"Implement content hash computation and has_changed() check"}
+{"timestamp":"2026-02-28T23:11:12.5115512+01:00","action":"edit","task_id":281,"detail":"Implement delete_document_data() cascade (SQLite + Qdrant)"}
+{"timestamp":"2026-02-28T23:11:23.6941901+01:00","action":"edit","task_id":282,"detail":"Wire delta re-ingest check into IngestPipeline"}
+{"timestamp":"2026-02-28T23:11:35.3495525+01:00","action":"edit","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T23:11:45.0000391+01:00","action":"create","task_id":287,"detail":"Test BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T23:11:50.5853136+01:00","action":"edit","task_id":261,"detail":"BgeM3 idle-timeout model unloading"}
+{"timestamp":"2026-02-28T23:11:57.7889967+01:00","action":"move","task_id":276,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:08.4629113+01:00","action":"move","task_id":261,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:14.4710538+01:00","action":"move","task_id":278,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:15.0066087+01:00","action":"move","task_id":279,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:15.5654738+01:00","action":"move","task_id":280,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:16.3690972+01:00","action":"move","task_id":281,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:17.0449745+01:00","action":"move","task_id":282,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:22.7448095+01:00","action":"move","task_id":283,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:23.3514749+01:00","action":"move","task_id":284,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:24.0148767+01:00","action":"move","task_id":285,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:24.5037987+01:00","action":"move","task_id":286,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:12:25.4420047+01:00","action":"move","task_id":287,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-02-28T23:15:04.2571144+01:00","action":"move","task_id":253,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:15:04.8051542+01:00","action":"move","task_id":255,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:15:22.5410632+01:00","action":"move","task_id":253,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:15:23.1966685+01:00","action":"move","task_id":253,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:15:23.7795936+01:00","action":"move","task_id":253,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:15:24.2598603+01:00","action":"move","task_id":255,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:15:24.7535884+01:00","action":"move","task_id":255,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:15:25.2678436+01:00","action":"move","task_id":255,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:15:31.8975629+01:00","action":"move","task_id":278,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:15:32.4727511+01:00","action":"move","task_id":285,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:15:32.9564042+01:00","action":"move","task_id":287,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:19:26.1109611+01:00","action":"move","task_id":278,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:22:34.0049297+01:00","action":"move","task_id":285,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:25:06.506896+01:00","action":"move","task_id":287,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:26:00.9019081+01:00","action":"move","task_id":278,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:26:01.632802+01:00","action":"move","task_id":278,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:26:03.0805088+01:00","action":"move","task_id":285,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:26:03.763176+01:00","action":"move","task_id":285,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:26:05.0351784+01:00","action":"move","task_id":287,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:26:05.7250429+01:00","action":"move","task_id":287,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:26:15.0458889+01:00","action":"move","task_id":281,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:26:15.9428422+01:00","action":"move","task_id":276,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:26:16.9997978+01:00","action":"move","task_id":279,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:26:17.8411971+01:00","action":"move","task_id":283,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-02-28T23:27:47.3049994+01:00","action":"move","task_id":276,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:27:47.8635473+01:00","action":"move","task_id":276,"detail":"review -\u003e docs"}
+{"timestamp":"2026-02-28T23:27:48.5938247+01:00","action":"move","task_id":276,"detail":"docs -\u003e done"}
+{"timestamp":"2026-02-28T23:34:33.1442254+01:00","action":"move","task_id":279,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:37:58.2861975+01:00","action":"move","task_id":283,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-02-28T23:52:43.6676058+01:00","action":"move","task_id":91,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:44.3686394+01:00","action":"move","task_id":92,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:45.1845061+01:00","action":"move","task_id":93,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:45.7658793+01:00","action":"move","task_id":95,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:46.549184+01:00","action":"move","task_id":96,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:47.1030929+01:00","action":"move","task_id":120,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:47.6306196+01:00","action":"move","task_id":121,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:48.2013779+01:00","action":"move","task_id":122,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:48.7384686+01:00","action":"move","task_id":123,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:49.2988242+01:00","action":"move","task_id":124,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:49.8728254+01:00","action":"move","task_id":125,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:50.4503002+01:00","action":"move","task_id":126,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:50.9918141+01:00","action":"move","task_id":127,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:51.668536+01:00","action":"move","task_id":128,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:52.4777385+01:00","action":"move","task_id":129,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:53.4382408+01:00","action":"move","task_id":130,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:54.7003858+01:00","action":"move","task_id":132,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:56.3928528+01:00","action":"move","task_id":133,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:57.6291244+01:00","action":"move","task_id":134,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:52:58.5809318+01:00","action":"move","task_id":135,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:00.3445321+01:00","action":"move","task_id":136,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:02.0655287+01:00","action":"move","task_id":137,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:03.9961625+01:00","action":"move","task_id":138,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:04.9426095+01:00","action":"move","task_id":139,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:06.0632422+01:00","action":"move","task_id":140,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:07.0134491+01:00","action":"move","task_id":141,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:07.8133862+01:00","action":"move","task_id":142,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:08.4551804+01:00","action":"move","task_id":149,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:09.1006284+01:00","action":"move","task_id":150,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:09.7274907+01:00","action":"move","task_id":151,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:10.3161198+01:00","action":"move","task_id":152,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:10.9688762+01:00","action":"move","task_id":153,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:11.6225374+01:00","action":"move","task_id":154,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:12.187019+01:00","action":"move","task_id":155,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:12.7635366+01:00","action":"move","task_id":156,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:13.3827592+01:00","action":"move","task_id":157,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:13.9326982+01:00","action":"move","task_id":158,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:14.5530647+01:00","action":"move","task_id":159,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:15.1897445+01:00","action":"move","task_id":160,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:15.8144072+01:00","action":"move","task_id":161,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:16.4591696+01:00","action":"move","task_id":162,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:17.0713182+01:00","action":"move","task_id":163,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:17.7131014+01:00","action":"move","task_id":164,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:18.3423261+01:00","action":"move","task_id":165,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:19.1546796+01:00","action":"move","task_id":166,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:19.7573694+01:00","action":"move","task_id":167,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:20.4134632+01:00","action":"move","task_id":168,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:21.0201674+01:00","action":"move","task_id":169,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:21.649907+01:00","action":"move","task_id":170,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:22.2610932+01:00","action":"move","task_id":171,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:22.8913651+01:00","action":"move","task_id":172,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:23.6381214+01:00","action":"move","task_id":173,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:24.329276+01:00","action":"move","task_id":174,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:24.9590886+01:00","action":"move","task_id":175,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:25.5883019+01:00","action":"move","task_id":176,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:26.2711384+01:00","action":"move","task_id":177,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:26.9462831+01:00","action":"move","task_id":178,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:27.6288538+01:00","action":"move","task_id":179,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:28.6865558+01:00","action":"move","task_id":180,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:29.588072+01:00","action":"move","task_id":181,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:30.2824177+01:00","action":"move","task_id":182,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:31.0474783+01:00","action":"move","task_id":183,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:31.8447669+01:00","action":"move","task_id":184,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:33.3360813+01:00","action":"move","task_id":185,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:35.0303529+01:00","action":"move","task_id":186,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:36.9677928+01:00","action":"move","task_id":187,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:37.8378533+01:00","action":"move","task_id":188,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:38.5932569+01:00","action":"move","task_id":189,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:39.3571083+01:00","action":"move","task_id":190,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:40.7361494+01:00","action":"move","task_id":191,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:41.8415594+01:00","action":"move","task_id":192,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:42.9855137+01:00","action":"move","task_id":193,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:43.7768667+01:00","action":"move","task_id":194,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:44.5873217+01:00","action":"move","task_id":195,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:45.3876707+01:00","action":"move","task_id":196,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:46.1688758+01:00","action":"move","task_id":197,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:46.8681567+01:00","action":"move","task_id":198,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:47.6084888+01:00","action":"move","task_id":199,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:48.2866123+01:00","action":"move","task_id":200,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:49.0163899+01:00","action":"move","task_id":201,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:49.7171015+01:00","action":"move","task_id":202,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:50.4162348+01:00","action":"move","task_id":203,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:51.1373667+01:00","action":"move","task_id":204,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:51.9901421+01:00","action":"move","task_id":205,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:52.7766987+01:00","action":"move","task_id":206,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:53.6599367+01:00","action":"move","task_id":207,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:54.5690641+01:00","action":"move","task_id":208,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:55.4729349+01:00","action":"move","task_id":209,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:56.4121469+01:00","action":"move","task_id":210,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:57.4559416+01:00","action":"move","task_id":211,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:58.372807+01:00","action":"move","task_id":212,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:53:59.2457146+01:00","action":"move","task_id":213,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:00.0900729+01:00","action":"move","task_id":214,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:00.8725436+01:00","action":"move","task_id":215,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:01.762215+01:00","action":"move","task_id":216,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:02.6571995+01:00","action":"move","task_id":218,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:03.3827532+01:00","action":"move","task_id":219,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:04.1263481+01:00","action":"move","task_id":220,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:04.9526302+01:00","action":"move","task_id":221,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:05.7828616+01:00","action":"move","task_id":222,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:06.4600793+01:00","action":"move","task_id":223,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:07.1282041+01:00","action":"move","task_id":224,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:07.7805772+01:00","action":"move","task_id":225,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:08.4932684+01:00","action":"move","task_id":226,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:09.2124157+01:00","action":"move","task_id":227,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:10.0285369+01:00","action":"move","task_id":228,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:10.9116493+01:00","action":"move","task_id":229,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:11.6414236+01:00","action":"move","task_id":230,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:12.3089555+01:00","action":"move","task_id":231,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:13.0482655+01:00","action":"move","task_id":232,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:14.8265334+01:00","action":"move","task_id":233,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:15.4549498+01:00","action":"move","task_id":234,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:16.0987037+01:00","action":"move","task_id":235,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:16.8783872+01:00","action":"move","task_id":236,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:17.5754978+01:00","action":"move","task_id":237,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:18.2384312+01:00","action":"move","task_id":238,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:18.9406945+01:00","action":"move","task_id":239,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:19.6000763+01:00","action":"move","task_id":240,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:20.2591802+01:00","action":"move","task_id":241,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:20.9814617+01:00","action":"move","task_id":242,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:21.7129796+01:00","action":"move","task_id":243,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:22.5107206+01:00","action":"move","task_id":244,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:23.4556294+01:00","action":"move","task_id":245,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:24.181036+01:00","action":"move","task_id":246,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:24.8604805+01:00","action":"move","task_id":247,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:25.458086+01:00","action":"move","task_id":248,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:26.1489729+01:00","action":"move","task_id":249,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:26.7814572+01:00","action":"move","task_id":250,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:27.5388322+01:00","action":"move","task_id":251,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:28.2002954+01:00","action":"move","task_id":260,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:28.882453+01:00","action":"move","task_id":262,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:29.5299046+01:00","action":"move","task_id":263,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:30.1913964+01:00","action":"move","task_id":264,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:30.8514338+01:00","action":"move","task_id":265,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:31.5419541+01:00","action":"move","task_id":266,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:32.1996378+01:00","action":"move","task_id":267,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:32.853894+01:00","action":"move","task_id":268,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:33.5269382+01:00","action":"move","task_id":269,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:34.1837675+01:00","action":"move","task_id":270,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:34.8990361+01:00","action":"move","task_id":271,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:35.6248115+01:00","action":"move","task_id":272,"detail":"done -\u003e archived"}
+{"timestamp":"2026-02-28T23:54:36.3304747+01:00","action":"move","task_id":273,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T00:02:50.0228591+01:00","action":"move","task_id":253,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T00:02:50.5431218+01:00","action":"move","task_id":255,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T00:02:51.0227363+01:00","action":"move","task_id":276,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T00:02:51.5310903+01:00","action":"move","task_id":278,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T00:08:33.2264514+01:00","action":"edit","task_id":199,"detail":"GraphStore scoped queries — filter CRUD by scope"}
+{"timestamp":"2026-03-01T00:08:39.1216179+01:00","action":"edit","task_id":200,"detail":"VectorStore scoped search — filter similarity by scope"}
+{"timestamp":"2026-03-01T00:08:44.2263074+01:00","action":"edit","task_id":201,"detail":"IngestPipeline scope passthrough"}
+{"timestamp":"2026-03-01T00:08:50.1053514+01:00","action":"edit","task_id":208,"detail":"Importance-based decay resistance for temporal retrieval"}
+{"timestamp":"2026-03-01T00:09:10.8400573+01:00","action":"edit","task_id":209,"detail":"Add temporal decay settings to OwlBearSettings"}
+{"timestamp":"2026-03-01T00:09:16.3116362+01:00","action":"edit","task_id":214,"detail":"Enable Agent.instrument_all() at daemon startup"}
+{"timestamp":"2026-03-01T00:09:21.498331+01:00","action":"edit","task_id":215,"detail":"Optional OTel endpoint config (OWLBEAR_OTEL_ENDPOINT)"}
+{"timestamp":"2026-03-01T00:09:30.3564625+01:00","action":"edit","task_id":94,"detail":"Create src/owlbear/voice/recorder.py — AudioRecorder wrapping PyAudio"}
+{"timestamp":"2026-03-01T00:09:45.1684809+01:00","action":"move","task_id":281,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-01T00:09:45.8431365+01:00","action":"move","task_id":279,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-01T00:09:46.5321583+01:00","action":"move","task_id":281,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-01T00:09:47.5309891+01:00","action":"move","task_id":283,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-01T00:09:56.6162177+01:00","action":"move","task_id":279,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-01T00:09:57.4766045+01:00","action":"move","task_id":281,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-01T00:09:58.3031485+01:00","action":"move","task_id":283,"detail":"docs -\u003e done"}

@@ -1,12 +1,12 @@
 ---
 id: 38
 title: Implement HookRegistry
-status: done
+status: archived
 priority: high
 created: 2026-02-26T15:56:40.5978275+01:00
-updated: 2026-02-26T19:50:16.1192307+01:00
+updated: 2026-02-27T10:00:12.0526645+01:00
 started: 2026-02-26T19:41:44.2338163+01:00
-completed: 2026-02-26T19:50:16.1192307+01:00
+completed: 2026-02-27T10:00:12.0526645+01:00
 tags:
     - phase-2
     - agent

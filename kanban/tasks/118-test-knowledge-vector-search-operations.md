@@ -1,10 +1,12 @@
 ---
 id: 118
 title: Test knowledge vector search operations
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:42:46.59104+01:00
-updated: 2026-02-27T03:45:17.727812+01:00
+updated: 2026-02-27T13:21:48.1109497+01:00
+started: 2026-02-27T12:47:50.7083652+01:00
+completed: 2026-02-27T13:21:48.1109497+01:00
 tags:
     - memory
     - knowledge-graph

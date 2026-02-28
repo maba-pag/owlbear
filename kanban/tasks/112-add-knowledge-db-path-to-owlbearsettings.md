@@ -1,11 +1,12 @@
 ---
 id: 112
 title: Add knowledge_db_path to OwlBearSettings
-status: todo
+status: archived
 priority: high
 created: 2026-02-27T03:31:42.1253923+01:00
-updated: 2026-02-27T03:44:41.3317935+01:00
+updated: 2026-02-27T13:21:45.5918893+01:00
 started: 2026-02-27T03:32:50.278732+01:00
+completed: 2026-02-27T13:21:45.5918893+01:00
 tags:
     - memory
     - knowledge-graph

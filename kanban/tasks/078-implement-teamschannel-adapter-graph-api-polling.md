@@ -1,12 +1,12 @@
 ---
 id: 78
 title: Implement TeamsChannel adapter (Graph API + polling)
-status: done
+status: archived
 priority: high
 created: 2026-02-27T00:53:01.5038514+01:00
-updated: 2026-02-27T01:38:45.5119542+01:00
+updated: 2026-02-27T10:11:21.152072+01:00
 started: 2026-02-27T01:38:44.5682737+01:00
-completed: 2026-02-27T01:38:44.5682737+01:00
+completed: 2026-02-27T10:11:21.152072+01:00
 tags:
     - phase-4
     - comms

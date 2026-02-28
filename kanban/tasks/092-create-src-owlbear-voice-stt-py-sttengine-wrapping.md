@@ -1,11 +1,12 @@
 ---
 id: 92
 title: Create src/owlbear/voice/stt.py — STTEngine wrapping faster-whisper
-status: todo
-priority: low
+status: archived
+priority: nice-to-have
 created: 2026-02-27T03:07:40.4602907+01:00
-updated: 2026-02-27T03:39:48.4941993+01:00
+updated: 2026-02-28T23:52:44.3673363+01:00
 started: 2026-02-27T03:32:42.0040256+01:00
+completed: 2026-02-28T23:52:44.3673363+01:00
 tags:
     - phase-5
     - voice

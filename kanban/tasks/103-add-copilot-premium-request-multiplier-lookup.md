@@ -1,11 +1,12 @@
 ---
 id: 103
 title: Add Copilot premium request multiplier lookup
-status: todo
+status: archived
 priority: medium
 created: 2026-02-27T03:20:56.6307896+01:00
-updated: 2026-02-27T03:41:26.4101067+01:00
+updated: 2026-02-27T13:21:36.2134994+01:00
 started: 2026-02-27T03:32:46.5189824+01:00
+completed: 2026-02-27T13:21:36.2134994+01:00
 tags:
     - observability
     - auth

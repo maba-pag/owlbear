@@ -1,12 +1,12 @@
 ---
 id: 3
 title: 'P1-03: Rename Graphicator to OwlBear in kanban-planner.agent.md'
-status: done
+status: archived
 priority: high
 created: 2026-02-24T15:03:14.8567693+01:00
-updated: 2026-02-26T16:34:53.4019621+01:00
+updated: 2026-02-27T09:59:53.6320806+01:00
 started: 2026-02-24T15:16:56.397089+01:00
-completed: 2026-02-26T16:34:53.4019621+01:00
+completed: 2026-02-27T09:59:53.6320806+01:00
 tags:
     - phase-1
     - config

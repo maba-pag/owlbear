@@ -1,12 +1,12 @@
 ---
 id: 58
 title: 'P5-08: Implement interaction tools'
-status: done
+status: archived
 priority: medium
 created: 2026-02-26T21:17:56.3032114+01:00
-updated: 2026-02-26T22:17:38.3581961+01:00
+updated: 2026-02-27T10:00:28.1822811+01:00
 started: 2026-02-26T21:21:37.4970598+01:00
-completed: 2026-02-26T22:17:38.3581961+01:00
+completed: 2026-02-27T10:00:28.1822811+01:00
 tags:
     - phase-5
     - browser
