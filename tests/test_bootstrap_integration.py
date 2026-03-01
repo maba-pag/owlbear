@@ -15,7 +15,6 @@ from owlbear.config import OwlBearSettings
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.agent_registry import AgentRegistry
 from owlbear.core.hooks import HookEvent
-from owlbear.tools.hooked import HookedToolset
 
 
 def _make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
@@ -33,10 +32,10 @@ def _toolset_names(result: BootstrapResult) -> set[str]:
     """Extract inner toolset class names from a bootstrap result."""
     names: set[str] = set()
     for ts in result.agent.inner._user_toolsets:
-        if isinstance(ts, HookedToolset):
-            names.add(type(ts.wrapped).__name__)
-        else:
-            names.add(type(ts).__name__)
+        inner = ts
+        while hasattr(inner, "wrapped"):
+            inner = inner.wrapped
+        names.add(type(inner).__name__)
     return names
 
 

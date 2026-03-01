@@ -13,6 +13,7 @@ import ssl
 import subprocess
 import webbrowser
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import httpx
@@ -39,10 +40,9 @@ from owlbear.tools.browser.launcher import (
 from owlbear.tools.github_api import parse_git_remote
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear.channels.cli import CLIChannel
     from owlbear.core.agent import OwlBearAgent
+    from owlbear.projects.store import ProjectStore
 
 app = typer.Typer(
     name="bearclaw",
@@ -85,6 +85,122 @@ slack_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(slack_app)
+
+
+# ---------------------------------------------------------------------------
+# Project subcommand group
+# ---------------------------------------------------------------------------
+
+project_app = typer.Typer(
+    name="project",
+    help="Manage OwlBear projects.",
+    no_args_is_help=True,
+)
+app.add_typer(project_app)
+
+
+def _get_project_store() -> ProjectStore:
+    """Return a ProjectStore rooted at ``config_dir/projects``."""
+    from owlbear.projects.store import ProjectStore  # noqa: PLC0415
+
+    settings = OwlBearSettings()
+    return ProjectStore(Path(str(settings.config_dir)) / "projects")
+
+
+@project_app.command("create")
+def project_create(
+    name: Annotated[str, typer.Option("--name", "-n", help="Project name.")],
+    workspace: Annotated[
+        str,
+        typer.Option(
+            "--workspace",
+            "-w",
+            help="Workspace directory path (default: current directory).",
+        ),
+    ] = "",
+) -> None:
+    """Create a new project."""
+    ws = Path(workspace) if workspace else Path.cwd()
+    store = _get_project_store()
+    try:
+        project = store.create(name, ws)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Created project '{project.name}' (id: {project.id})")
+
+
+@project_app.command("list")
+def project_list(
+    show_all: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--all", "-a", help="Include archived projects."),
+    ] = False,
+) -> None:
+    """List projects in a table."""
+    store = _get_project_store()
+    projects = store.list_all() if show_all else store.list_active()
+    if not projects:
+        typer.echo("No projects found.")
+        return
+
+    # Table header
+    headers = ["Name", "Workspace", "Last Active", "Status"]
+    rows = [
+        [
+            p.name,
+            str(p.workspace_path),
+            p.last_active.strftime("%Y-%m-%d %H:%M"),
+            p.status,
+        ]
+        for p in projects
+    ]
+
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
+    typer.echo(fmt.format(*headers))
+    typer.echo("  ".join("-" * w for w in col_widths))
+    for row in rows:
+        typer.echo(fmt.format(*row))
+
+
+@project_app.command("switch")
+def project_switch(
+    name: Annotated[str, typer.Argument(help="Name of the project to switch to.")],
+) -> None:
+    """Switch the active project."""
+    store = _get_project_store()
+    try:
+        project = store.get_by_name(name)
+    except KeyError:
+        typer.echo(f"Error: No project named '{name}'")
+        raise typer.Exit(code=1) from None
+
+    settings = OwlBearSettings()
+    active_path = Path(str(settings.config_dir)) / "active_project"
+    active_path.parent.mkdir(parents=True, exist_ok=True)
+    active_path.write_text(project.id, encoding="utf-8")
+    typer.echo(f"Switched to project '{project.name}'")
+
+
+@project_app.command("archive")
+def project_archive(
+    name: Annotated[str, typer.Argument(help="Name of the project to archive.")],
+) -> None:
+    """Archive a project (set status to archived)."""
+    store = _get_project_store()
+    try:
+        project = store.get_by_name(name)
+    except KeyError:
+        typer.echo(f"Error: No project named '{name}'")
+        raise typer.Exit(code=1) from None
+
+    store.archive(project.id)
+    typer.echo(f"Archived project '{project.name}'")
 
 
 # ---------------------------------------------------------------------------
@@ -560,12 +676,18 @@ def chat(
         str,
         typer.Option("--workspace", help="Workspace root directory."),
     ] = ".",
+    project: Annotated[
+        str | None,
+        typer.Option("--project", help="Project name for scoped sessions."),
+    ] = None,
 ) -> None:
     """Start an interactive chat REPL with OwlBear."""
     from pathlib import Path as _Path  # noqa: PLC0415
 
     ws = _Path(workspace).resolve()
-    asyncio.run(_chat_async(model=model, session=session, workspace_root=ws))
+    asyncio.run(
+        _chat_async(model=model, session=session, workspace_root=ws, project=project),
+    )
 
 
 async def _read_multiline(channel: CLIChannel) -> str | None:
@@ -604,13 +726,23 @@ def _detect_github_remote(workspace_root: Path) -> tuple[str, str] | None:
 def _build_chat_session(
     settings: OwlBearSettings,
     session: str | None,
+    *,
+    project_id: str | None = None,
 ) -> tuple[str, SessionStore]:
-    """Resolve session name and create a :class:`SessionStore`."""
+    """Resolve session name and create a :class:`SessionStore`.
+
+    When *project_id* is provided the session file is placed under
+    ``config_dir/projects/{project_id}/sessions/``.  Otherwise the
+    legacy ``config_dir/sessions/`` directory is used (backward compat).
+    """
     from datetime import UTC, datetime  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     name = session or f"chat-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
-    path = Path(settings.config_dir) / "sessions" / f"{name}.jsonl"
+    base = Path(settings.config_dir)
+    if project_id:
+        base = base / "projects" / project_id
+    path = base / "sessions" / f"{name}.jsonl"
     return name, SessionStore(path)
 
 
@@ -619,13 +751,24 @@ async def _chat_async(
     model: str | None,
     session: str | None,
     workspace_root: Path,
+    project: str | None = None,
 ) -> None:
     """Run the interactive chat REPL loop."""
     from owlbear.bootstrap import bootstrap  # noqa: PLC0415
 
     settings = OwlBearSettings()
     model_name = model or settings.chat_model
-    session_name, store = _build_chat_session(settings, session)
+
+    # Resolve project name → id for session scoping.
+    project_id: str | None = None
+    if project:
+        from owlbear.projects.store import ProjectStore  # noqa: PLC0415
+
+        store_dir = Path(settings.config_dir) / "projects"
+        proj = ProjectStore(store_dir).get_by_name(project)
+        project_id = proj.id
+
+    session_name, store = _build_chat_session(settings, session, project_id=project_id)
 
     # Load existing history (resume previous session).
     store.load()

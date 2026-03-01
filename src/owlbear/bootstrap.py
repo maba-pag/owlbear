@@ -32,6 +32,7 @@ from owlbear.core.test_hook import TestVerificationHook
 from owlbear.memory.context import ContextManager
 from owlbear.memory.session import SessionStore
 from owlbear.memory.usage import UsageTracker
+from owlbear.projects.store import ProjectStore
 from owlbear.providers.copilot import create_copilot_model
 from owlbear.tools.ask_user import AskUserToolset
 from owlbear.tools.browser.config import BrowserConfig
@@ -40,6 +41,7 @@ from owlbear.tools.filesystem import FileToolset
 from owlbear.tools.git_local import GitLocalToolset
 from owlbear.tools.github_api import GitHubToolset
 from owlbear.tools.hooked import HookedToolset
+from owlbear.tools.kanban import KanbanToolset
 from owlbear.tools.mcp_registry import MCPServerRegistry
 from owlbear.tools.mcp_servers import register_default_servers
 from owlbear.tools.terminal import TerminalToolset
@@ -52,10 +54,13 @@ if TYPE_CHECKING:
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
+    from owlbear.core.progress import ProgressReporter
+    from owlbear.projects.models import Project
     from owlbear.skills.registry import SkillRegistry
 
 __all__ = [
     "BootstrapResult",
+    "_resolve_active_project",
     "bootstrap",
     "build_agent_registry",
     "build_hooks",
@@ -68,18 +73,67 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Active project resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_active_project(
+    config_dir: Path,
+) -> tuple[Project, ProjectStore] | None:
+    """Read *config_dir/active_project* and load the corresponding :class:`Project`.
+
+    Returns
+    -------
+    tuple[Project, ProjectStore] | None
+        ``(project, store)`` when an active project is found, ``None`` otherwise.
+        Returns ``None`` when the file is missing, empty, or the project ID
+        does not correspond to a persisted project.
+    """
+    active_path = config_dir / "active_project"
+    if not active_path.is_file():
+        return None
+
+    project_id = active_path.read_text(encoding="utf-8").strip()
+    if not project_id:
+        return None
+
+    projects_dir = config_dir / "projects"
+    store = ProjectStore(projects_dir)
+    try:
+        project = store.get(project_id)
+    except FileNotFoundError:
+        logger.warning("Active project '%s' not found on disk", project_id)
+        return None
+
+    return project, store
+
+
+# ---------------------------------------------------------------------------
 # Result container
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class BootstrapResult:
-    """Everything produced by :func:`bootstrap`."""
+    """Everything produced by :func:`bootstrap`.
+
+    Attributes
+    ----------
+    progress_reporter:
+        Optional :class:`~owlbear.core.progress.ProgressReporter`.  Callers
+        must invoke ``await progress_reporter.start()`` at the beginning of
+        each turn and ``await progress_reporter.stop()`` at the end.  A
+        cleanup callable that calls ``stop()`` is also appended to
+        :attr:`cleanup` so teardown always cancels the timer.
+    cleanup:
+        Async callables to invoke during shutdown (e.g. progress stop).
+    """
 
     agent: OwlBearAgent
     channel: ChannelPlugin
     mcp_registry: MCPServerRegistry | None
     hooks: HookRegistry
+    progress_reporter: ProgressReporter | None = None
     cleanup: list[Callable] = field(default_factory=list)
 
 
@@ -88,15 +142,21 @@ class BootstrapResult:
 # ---------------------------------------------------------------------------
 
 
-def build_hooks(settings: OwlBearSettings, *, workspace_root: Path | None = None) -> HookRegistry:
+def build_hooks(
+    settings: OwlBearSettings,
+    *,
+    workspace_root: Path | None = None,
+    channel: ChannelPlugin | None = None,
+) -> tuple[HookRegistry, ProgressReporter | None]:
     """Create a :class:`HookRegistry` with all standard hooks registered.
 
     Args:
         settings: Application settings (notification events, etc.).
         workspace_root: Workspace path for observability event storage.
+        channel: Optional channel for :class:`ProgressReporter` creation.
 
     Returns:
-        Fully-wired :class:`HookRegistry`.
+        Tuple of (fully-wired :class:`HookRegistry`, optional :class:`ProgressReporter`).
     """
     hooks = HookRegistry()
 
@@ -115,7 +175,19 @@ def build_hooks(settings: OwlBearSettings, *, workspace_root: Path | None = None
         event_path = workspace_root / ".owlbear" / "events.jsonl"
         ObservabilityHook(store=EventStore(event_path)).register(hooks)
 
-    return hooks
+    # Progress reporting — requires a channel and settings.progress_enabled
+    progress_reporter: ProgressReporter | None = None
+    if settings.progress_enabled and channel is not None:
+        from owlbear.core.progress import ProgressReporter  # noqa: PLC0415
+
+        progress_reporter = ProgressReporter(
+            channel=channel,
+            interval=settings.progress_interval,
+            detail=settings.progress_detail,
+        )
+        progress_reporter.register(hooks)
+
+    return hooks, progress_reporter
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +240,82 @@ def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugi
 # ---------------------------------------------------------------------------
 
 
+def _build_knowledge_toolset(workspace: Path) -> AbstractToolset | None:
+    """Create a :class:`KnowledgeToolset` if knowledge components are available.
+
+    Returns ``None`` when the knowledge subsystem cannot be initialised
+    (e.g. missing DB, unavailable model).  All failures are logged at
+    ``WARNING`` and silently swallowed.
+    """
+    try:
+        import sqlite3  # noqa: PLC0415
+
+        from owlbear.memory.knowledge import (  # noqa: PLC0415
+            GraphStore,
+            IngestPipeline,
+            TextChunker,
+            init_db,
+        )
+        from owlbear.memory.knowledge.embeddings import (  # noqa: PLC0415
+            BgeM3EmbeddingProvider,
+        )
+        from owlbear.memory.knowledge.extractor import EntityExtractor  # noqa: PLC0415
+        from owlbear.memory.knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
+        from owlbear.tools.knowledge import KnowledgeToolset  # noqa: PLC0415
+
+        owlbear_dir = workspace / ".owlbear"
+        owlbear_dir.mkdir(parents=True, exist_ok=True)
+        db_path = owlbear_dir / "knowledge.db"
+
+        conn = sqlite3.connect(str(db_path))
+        init_db(conn)
+
+        graph_store = GraphStore(conn)
+        embedding_provider = BgeM3EmbeddingProvider()
+        vector_store = QdrantVectorStore(storage_path=str(owlbear_dir / "qdrant"))
+        entity_extractor = EntityExtractor()
+        text_chunker = TextChunker()
+        ingest_pipeline = IngestPipeline(
+            conn=conn,
+            graph_store=graph_store,
+            vector_store=vector_store,
+            embedding_provider=embedding_provider,
+            entity_extractor=entity_extractor,
+            text_chunker=text_chunker,
+        )
+
+        return KnowledgeToolset(
+            workspace_root=workspace,
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=embedding_provider,
+            ingest_pipeline=ingest_pipeline,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create KnowledgeToolset", exc_info=True)
+        return None
+
+
+def _build_web_search_toolset() -> AbstractToolset | None:
+    """Create a :class:`WebSearchToolset` if duckduckgo_search is available.
+
+    Returns ``None`` when ``duckduckgo_search`` or ``trafilatura`` cannot
+    be imported.  All failures are logged at ``WARNING`` and silently
+    swallowed.
+    """
+    try:
+        from owlbear.tools.web_search import WebSearchToolset  # noqa: PLC0415
+
+        config = BrowserConfig()
+        return WebSearchToolset(
+            blocked_urls=config.blocked_urls,
+            allowed_urls=config.allowed_urls,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create WebSearchToolset", exc_info=True)
+        return None
+
+
 def build_toolsets(
     settings: OwlBearSettings,
     workspace: Path,
@@ -192,6 +340,7 @@ def build_toolsets(
     raw.append(AskUserToolset(channel))
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
     raw.append(BrowserToolset(config=BrowserConfig()))
+    raw.append(KanbanToolset(kanban_dir=workspace / "kanban", hooks=hooks))
 
     # Conditional toolsets
     skills_dir = workspace / ".github" / "skills"
@@ -216,8 +365,52 @@ def build_toolsets(
         except Exception:  # noqa: BLE001
             logger.warning("Failed to create GitHubToolset", exc_info=True)
 
+    # Knowledge toolset — conditional on knowledge components being available
+    knowledge_ts = _build_knowledge_toolset(workspace)
+    if knowledge_ts is not None:
+        raw.append(knowledge_ts)
+
+    # Web search toolset — conditional on duckduckgo_search availability
+    web_ts = _build_web_search_toolset()
+    if web_ts is not None:
+        raw.append(web_ts)
+
     # Wrap non-delegation toolsets in HookedToolset
     wrapped: list[AbstractToolset] = [HookedToolset(wrapped=ts, hooks=hooks) for ts in raw]
+
+    # Approval gate wrapping — destructive toolsets get gated
+    _destructive = {"GitLocalToolset", "TerminalToolset", "GitHubToolset"}
+
+    if settings.approval_policy:
+        from owlbear.safety.gate import ApprovalGateToolset  # noqa: PLC0415
+        from owlbear.safety.policy import (  # noqa: PLC0415
+            ApprovalPolicy,
+            ApprovalRule,
+            ApprovalSession,
+        )
+
+        policy = ApprovalPolicy(
+            rules=[ApprovalRule(**r) for r in settings.approval_policy],
+            default_timeout=settings.approval_timeout,
+        )
+        approval_session = ApprovalSession()
+
+        gated: list[AbstractToolset] = []
+        for ts in wrapped:
+            inner = ts.wrapped if isinstance(ts, HookedToolset) else ts
+            if type(inner).__name__ in _destructive:
+                gated.append(
+                    ApprovalGateToolset(
+                        wrapped=ts,
+                        policy=policy,
+                        session=approval_session,
+                        channel=channel,
+                        hooks=hooks,
+                    )
+                )
+            else:
+                gated.append(ts)
+        wrapped = gated
 
     # DelegationToolset is NOT wrapped — it's internal dispatch
     wrapped.append(DelegationToolset())
@@ -272,16 +465,37 @@ def build_agent_registry(
     Returns:
         Scanned :class:`AgentRegistry`.
     """
-    # Build a name → toolset resolver from the toolsets list
+    # Build a name → toolset resolver from the toolsets list.
+    # Agent definitions use short names (e.g. "filesystem", "kanban");
+    # the alias map translates these to class names for lookup.
+    _aliases: dict[str, str] = {
+        "filesystem": "FileToolset",
+        "terminal": "TerminalToolset",
+        "ask_user": "AskUserToolset",
+        "browser": "BrowserToolset",
+        "delegation": "DelegationToolset",
+        "git_local": "GitLocalToolset",
+        "github": "GitHubToolset",
+        "kanban": "KanbanToolset",
+        "knowledge": "KnowledgeToolset",
+        "web_search": "WebSearchToolset",
+        "skills": "SkillRegistry",
+    }
+
     tool_map: dict[str, AbstractToolset] = {}
     for ts in toolsets:
-        inner = ts.wrapped if isinstance(ts, HookedToolset) else ts
+        inner = ts
+        while hasattr(inner, "wrapped"):
+            inner = inner.wrapped
         name = type(inner).__name__
         tool_map[name] = ts
 
     def _resolve(name: str) -> AbstractToolset:
         if name in tool_map:
             return tool_map[name]
+        class_name = _aliases.get(name)
+        if class_name and class_name in tool_map:
+            return tool_map[class_name]
         msg = f"Unknown tool: {name!r}"
         raise KeyError(msg)
 
@@ -293,6 +507,50 @@ def build_agent_registry(
     )
     registry.scan()
     return registry
+
+
+# ---------------------------------------------------------------------------
+# Main bootstrap
+# ---------------------------------------------------------------------------
+
+
+def _add_project_toolset(
+    toolsets: list[AbstractToolset],
+    project_store: ProjectStore,
+    config_dir: Path,
+    hooks: HookRegistry,
+) -> None:
+    """Append a :class:`ProjectToolset` to *toolsets* if import succeeds.
+
+    The toolset is created with a placeholder agent reference that
+    :func:`bootstrap` patches after agent construction.
+    """
+    try:
+        from owlbear.projects.toolset import ProjectToolset  # noqa: PLC0415
+
+        placeholder = type("_Placeholder", (), {"session": None})()
+        project_toolset = ProjectToolset(
+            store=project_store,
+            agent=placeholder,
+            config_dir=config_dir,
+        )
+        toolsets.append(HookedToolset(wrapped=project_toolset, hooks=hooks))
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create ProjectToolset", exc_info=True)
+
+
+def _patch_project_toolset_agent(
+    toolsets: list[AbstractToolset],
+    agent: OwlBearAgent,
+) -> None:
+    """Replace the placeholder agent reference inside :class:`ProjectToolset`."""
+    for ts in toolsets:
+        inner = ts
+        while hasattr(inner, "wrapped"):
+            inner = inner.wrapped
+        if type(inner).__name__ == "ProjectToolset":
+            inner._agent = agent  # noqa: SLF001
+            break
 
 
 # ---------------------------------------------------------------------------
@@ -318,17 +576,42 @@ async def bootstrap(
     """
     from pathlib import Path as _Path  # noqa: PLC0415
 
+    # 0. Project resolution — derive workspace from active project
+    active_project: Project | None = None
+    project_store: ProjectStore | None = None
+
+    if workspace_root is None:
+        resolved = _resolve_active_project(settings.config_dir)
+        if resolved is not None:
+            active_project, project_store = resolved
+            workspace_root = active_project.workspace_path
+            logger.info(
+                "Active project '%s' → workspace %s",
+                active_project.name,
+                workspace_root,
+            )
+
     workspace = workspace_root or _Path.cwd()
     cleanup: list[Callable] = []
 
-    # 1. Hooks
-    hooks = build_hooks(settings, workspace_root=workspace_root)
-
-    # 2. Channel
+    # 1. Channel (created first so build_hooks can wire ProgressReporter)
     channel = create_channel(settings, channel_name)
+
+    # 2. Hooks (with channel for progress reporting)
+    hooks, progress_reporter = build_hooks(
+        settings, workspace_root=workspace_root, channel=channel,
+    )
+
+    # Register progress stop() in cleanup so teardown always cancels the timer
+    if progress_reporter is not None:
+        cleanup.append(progress_reporter.stop)
 
     # 3. Toolsets
     toolsets = build_toolsets(settings, workspace, hooks, channel)
+
+    # 3b. ProjectToolset — when an active project provides a store
+    if active_project is not None and project_store is not None:
+        _add_project_toolset(toolsets, project_store, settings.config_dir, hooks)
 
     # 4. MCP
     mcp_registry = build_mcp_registry(settings)
@@ -337,7 +620,9 @@ async def bootstrap(
     # Find SkillRegistry if present
     skill_reg = None
     for ts in toolsets:
-        inner = ts.wrapped if isinstance(ts, HookedToolset) else ts
+        inner = ts
+        while hasattr(inner, "wrapped"):
+            inner = inner.wrapped
         if type(inner).__name__ == "SkillRegistry":
             skill_reg = inner
             break
@@ -348,8 +633,18 @@ async def bootstrap(
     model = await create_copilot_model(settings)
 
     # 7. Session, context, tracker
-    owlbear_dir = workspace / ".owlbear"
-    session = SessionStore(owlbear_dir / "session.jsonl")
+    if active_project is not None:
+        session_path = (
+            settings.config_dir
+            / "projects"
+            / active_project.id
+            / "sessions"
+            / "session.jsonl"
+        )
+    else:
+        session_path = workspace / ".owlbear" / "session.jsonl"
+
+    session = SessionStore(session_path)
     context = ContextManager(workspace)
     tracker = UsageTracker(settings.usage_path)
 
@@ -366,10 +661,15 @@ async def bootstrap(
     )
     agent._deps.agent_registry = agent_registry  # noqa: SLF001
 
+    # Patch agent reference into ProjectToolset now that agent is created
+    if active_project is not None:
+        _patch_project_toolset_agent(toolsets, agent)
+
     return BootstrapResult(
         agent=agent,
         channel=channel,
         mcp_registry=mcp_registry,
         hooks=hooks,
+        progress_reporter=progress_reporter,
         cleanup=cleanup,
     )

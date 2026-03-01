@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 from typer.testing import CliRunner
 
 from bearclaw.cli import app
@@ -222,6 +223,47 @@ class TestSlackStatus:
 
         assert result.exit_code == 0
         assert "Connection: Failed" in result.output
+
+    def test_slack_status_http_error(self, monkeypatch: MagicMock) -> None:
+        """All tokens set but httpx raises → shows Connection: Failed (request error)."""
+        for key, val in _SLACK_ENV.items():
+            monkeypatch.setenv(key, val)
+
+        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("timeout")):
+            result = runner.invoke(app, ["slack", "status"])
+
+        assert result.exit_code == 0
+        assert "request error" in result.output.lower()
+
+
+class TestSlackAuthHttpError:
+    """Test bearclaw slack auth when httpx raises."""
+
+    def test_slack_auth_http_error(self, monkeypatch: MagicMock) -> None:
+        """HTTP error during auth.test → error message and exit 1."""
+        for key, val in _SLACK_ENV.items():
+            monkeypatch.setenv(key, val)
+
+        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("connection failed")):
+            result = runner.invoke(app, ["slack", "auth"])
+
+        assert result.exit_code == 1
+        assert "failed" in result.output.lower()
+
+
+class TestSlackTestHttpError:
+    """Test bearclaw slack test when httpx raises."""
+
+    def test_slack_test_http_error(self, monkeypatch: MagicMock) -> None:
+        """HTTP error during chat.postMessage → error message and exit 1."""
+        for key, val in _SLACK_ENV.items():
+            monkeypatch.setenv(key, val)
+
+        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("connection failed")):
+            result = runner.invoke(app, ["slack", "test"])
+
+        assert result.exit_code == 1
+        assert "failed" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------

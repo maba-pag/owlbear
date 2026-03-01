@@ -113,7 +113,7 @@ class TestContextInjectionHookCall:
     @patch("owlbear.core.context_hook.subprocess.run")
     def test_kanban_cmd_called_with_correct_args(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(stdout="summary", returncode=0)
-        cmd = ["tools/kanban-md.exe", "context"]
+        cmd = ["kanban/kanban-md.exe", "context"]
         hook = ContextInjectionHook(
             instructions_path=Path("fake.md"),
             kanban_cmd=cmd,

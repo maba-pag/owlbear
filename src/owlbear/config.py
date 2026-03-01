@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -58,6 +58,9 @@ class OwlBearSettings(BaseSettings):
     # --- Observability ---
     otel_endpoint: str | None = None
 
+    # --- Embedding ---
+    embedding_idle_timeout: int = 600
+
     # --- Temporal memory ---
     temporal_decay_rate: float = 0.001
     temporal_recency_weight: float = 0.1
@@ -65,8 +68,30 @@ class OwlBearSettings(BaseSettings):
     # --- MCP servers ---
     mcp_servers: dict[str, dict[str, Any]] | None = None
 
+    # --- Approval gates ---
+    approval_policy: list[dict[str, Any]] = [
+        {"tool_name": "git_push"},
+        {"tool_name": "create_pr"},
+        {"tool_name": "deploy"},
+    ]
+    approval_timeout: float = 120.0
+
+    # --- Progress reporting ---
+    progress_enabled: bool = True
+    progress_interval: float = 30.0
+    progress_detail: Literal["brief", "detailed"] = "brief"
+
     # --- Runtime ---
     debug: bool = False
+
+    @field_validator("progress_interval")
+    @classmethod
+    def _validate_progress_interval(cls, v: float) -> float:
+        """progress_interval must be strictly positive."""
+        if v <= 0:
+            msg = "progress_interval must be greater than 0"
+            raise ValueError(msg)
+        return v
 
     @model_validator(mode="after")
     def _validate_slack_all_or_nothing(self) -> OwlBearSettings:

@@ -98,34 +98,47 @@ class TestSlackSettingsAllSet:
 class TestSlackSettingsPartialRaises:
     """If any Slack field is set, all three must be set — otherwise ValidationError."""
 
+    @staticmethod
+    def _clear_slack(mp: pytest.MonkeyPatch) -> None:
+        """Remove all Slack env vars so each test controls exactly which are set."""
+        mp.delenv("OWLBEAR_SLACK_APP_TOKEN", raising=False)
+        mp.delenv("OWLBEAR_SLACK_BOT_TOKEN", raising=False)
+        mp.delenv("OWLBEAR_SLACK_CHANNEL_ID", raising=False)
+
     def test_only_app_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
 
     def test_only_bot_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
 
     def test_only_channel_id_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
 
     def test_app_and_bot_without_channel_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
         monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
 
     def test_app_and_channel_without_bot_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_APP_TOKEN", "xapp-1-A111-222-abc")
         monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
         with pytest.raises(ValidationError, match="Slack"):
             OwlBearSettings()
 
     def test_bot_and_channel_without_app_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._clear_slack(monkeypatch)
         monkeypatch.setenv("OWLBEAR_SLACK_BOT_TOKEN", "xoxb-111-222-abc")
         monkeypatch.setenv("OWLBEAR_SLACK_CHANNEL_ID", "C12345678")
         with pytest.raises(ValidationError, match="Slack"):
@@ -269,3 +282,68 @@ class TestTemporalSettingsEnvOverrides:
         monkeypatch.setenv("OWLBEAR_TEMPORAL_DECAY_RATE", "0.01")
         settings = OwlBearSettings()
         assert settings.temporal_decay_rate == 0.01
+
+
+# ---------------------------------------------------------------------------
+# Progress reporting settings — task #334
+# ---------------------------------------------------------------------------
+
+
+class TestProgressSettingsDefaults:
+    """Verify progress reporting fields have correct defaults."""
+
+    def test_progress_enabled_default_true(self, default_settings: OwlBearSettings) -> None:
+        """progress_enabled should default to True."""
+        assert default_settings.progress_enabled is True
+
+    def test_progress_interval_default(self, default_settings: OwlBearSettings) -> None:
+        """progress_interval should default to 30.0 seconds."""
+        assert default_settings.progress_interval == 30.0
+
+    def test_progress_detail_default_brief(self, default_settings: OwlBearSettings) -> None:
+        """progress_detail should default to 'brief'."""
+        assert default_settings.progress_detail == "brief"
+
+
+class TestProgressSettingsEnvOverrides:
+    """Verify progress env var overrides work."""
+
+    def test_progress_enabled_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_PROGRESS_ENABLED=false should disable progress."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_ENABLED", "false")
+        settings = OwlBearSettings()
+        assert settings.progress_enabled is False
+
+    def test_progress_interval_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_PROGRESS_INTERVAL=60 should override interval."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_INTERVAL", "60")
+        settings = OwlBearSettings()
+        assert settings.progress_interval == 60.0
+
+    def test_progress_detail_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_PROGRESS_DETAIL=detailed should override detail level."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_DETAIL", "detailed")
+        settings = OwlBearSettings()
+        assert settings.progress_detail == "detailed"
+
+
+class TestProgressSettingsValidation:
+    """Verify progress field validation rules."""
+
+    def test_progress_interval_must_be_positive(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """progress_interval <= 0 should raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_INTERVAL", "0")
+        with pytest.raises(ValidationError, match="progress_interval"):
+            OwlBearSettings()
+
+    def test_progress_interval_negative_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Negative progress_interval should raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_INTERVAL", "-5")
+        with pytest.raises(ValidationError, match="progress_interval"):
+            OwlBearSettings()
+
+    def test_progress_detail_invalid_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """progress_detail must be 'brief' or 'detailed'."""
+        monkeypatch.setenv("OWLBEAR_PROGRESS_DETAIL", "verbose")
+        with pytest.raises(ValidationError):
+            OwlBearSettings()

@@ -14,19 +14,22 @@ from bearclaw.cli import app
 runner = CliRunner()
 
 
-def _usage_jsonl_line(
+def _usage_jsonl_line(  # noqa: PLR0913
     *,
     minutes_ago: int = 5,
     model: str = "gpt-4o",
     input_tokens: int = 500,
     output_tokens: int = 150,
+    estimated_cost_usd: float | None = None,
+    premium_requests: float | None = None,
+    provider: str = "copilot",
 ) -> str:
     """Build a single JSONL line for a UsageRecord."""
     ts = datetime.now(UTC) - timedelta(minutes=minutes_ago)
     record = {
         "timestamp": ts.isoformat(),
         "model": model,
-        "provider": "copilot",
+        "provider": provider,
         "session_id": "sess-001",
         "requests": 1,
         "input_tokens": input_tokens,
@@ -34,8 +37,8 @@ def _usage_jsonl_line(
         "cache_write_tokens": 0,
         "cache_read_tokens": 0,
         "tool_calls": 0,
-        "estimated_cost_usd": None,
-        "premium_requests": None,
+        "estimated_cost_usd": estimated_cost_usd,
+        "premium_requests": premium_requests,
     }
     return json.dumps(record)
 
@@ -199,3 +202,73 @@ class TestUsageEmptyLog:
 
         assert "Traceback" not in result.output
         assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Premium and cost columns
+# ---------------------------------------------------------------------------
+
+
+class TestUsagePremiumCost:
+    """Coverage for cost/premium branches in usage CLI."""
+
+    def test_estimated_cost_aggregated(self, tmp_path: Path) -> None:
+        """Records with estimated_cost_usd → costs summed in output."""
+        usage_file = tmp_path / "usage.jsonl"
+        lines = [
+            _usage_jsonl_line(
+                minutes_ago=5,
+                model="gpt-4o",
+                estimated_cost_usd=0.0025,
+            ),
+            _usage_jsonl_line(
+                minutes_ago=10,
+                model="gpt-4o",
+                estimated_cost_usd=0.0050,
+            ),
+        ]
+        _write_mock_jsonl(usage_file, lines)
+
+        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+            result = runner.invoke(app, ["usage"])
+
+        assert result.exit_code == 0
+        assert "$" in result.output  # Cost column present
+
+    def test_premium_column_shown_for_copilot(self, tmp_path: Path) -> None:
+        """Copilot records with premium_requests → Premium column in output."""
+        usage_file = tmp_path / "usage.jsonl"
+        lines = [
+            _usage_jsonl_line(
+                minutes_ago=5,
+                model="gpt-4o",
+                provider="copilot",
+                premium_requests=1.0,
+            ),
+        ]
+        _write_mock_jsonl(usage_file, lines)
+
+        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+            result = runner.invoke(app, ["usage"])
+
+        assert result.exit_code == 0
+        assert "Premium" in result.output
+
+    def test_non_copilot_no_premium_column(self, tmp_path: Path) -> None:
+        """Non-copilot records without premium → no Premium column."""
+        usage_file = tmp_path / "usage.jsonl"
+        lines = [
+            _usage_jsonl_line(
+                minutes_ago=5,
+                model="gpt-4o",
+                provider="openai",
+                premium_requests=None,
+            ),
+        ]
+        _write_mock_jsonl(usage_file, lines)
+
+        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+            result = runner.invoke(app, ["usage"])
+
+        assert result.exit_code == 0
+        assert "Premium" not in result.output

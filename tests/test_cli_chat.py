@@ -6,7 +6,8 @@ agent/channel) instead of mocking individual toolset constructors.
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+import subprocess
+from pathlib import Path, PurePosixPath
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
@@ -290,3 +291,64 @@ class TestBootstrapIntegration:
         assert result.exit_code == 0
         # The session store created by _build_chat_session should be assigned
         assert agent.session == ss_cls.return_value
+
+
+# ---------------------------------------------------------------------------
+# _detect_github_remote
+# ---------------------------------------------------------------------------
+
+
+class TestDetectGitHubRemote:
+    """Unit tests for _detect_github_remote."""
+
+    def test_ssh_remote_parsed(self, tmp_path: Path) -> None:
+        """SSH-style remote → (owner, repo) tuple."""
+        from bearclaw.cli import _detect_github_remote
+
+        mock_result = MagicMock(spec=subprocess.CompletedProcess)
+        mock_result.returncode = 0
+        mock_result.stdout = "git@github.com:owner/repo.git\n"
+
+        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+            result = _detect_github_remote(tmp_path)
+
+        assert result == ("owner", "repo")
+
+    def test_https_remote_parsed(self, tmp_path: Path) -> None:
+        """HTTPS-style remote → (owner, repo) tuple."""
+        from bearclaw.cli import _detect_github_remote
+
+        mock_result = MagicMock(spec=subprocess.CompletedProcess)
+        mock_result.returncode = 0
+        mock_result.stdout = "https://github.com/owner/repo.git\n"
+
+        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+            result = _detect_github_remote(tmp_path)
+
+        assert result == ("owner", "repo")
+
+    def test_git_failure_returns_none(self, tmp_path: Path) -> None:
+        """Non-zero git exit code → None."""
+        from bearclaw.cli import _detect_github_remote
+
+        mock_result = MagicMock(spec=subprocess.CompletedProcess)
+        mock_result.returncode = 128
+        mock_result.stdout = ""
+
+        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+            result = _detect_github_remote(tmp_path)
+
+        assert result is None
+
+    def test_invalid_remote_returns_none(self, tmp_path: Path) -> None:
+        """Unparseable remote URL → None (ValueError caught)."""
+        from bearclaw.cli import _detect_github_remote
+
+        mock_result = MagicMock(spec=subprocess.CompletedProcess)
+        mock_result.returncode = 0
+        mock_result.stdout = "not-a-valid-url\n"
+
+        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+            result = _detect_github_remote(tmp_path)
+
+        assert result is None
