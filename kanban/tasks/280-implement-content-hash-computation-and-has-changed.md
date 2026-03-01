@@ -1,11 +1,12 @@
 ---
 id: 280
 title: Implement content hash computation and has_changed() check
-status: in-progress
+status: archived
 priority: needed
 created: 2026-02-28T22:56:44.3022124+01:00
-updated: 2026-03-01T00:10:54.3193749+01:00
+updated: 2026-03-01T17:07:31.5692046+01:00
 started: 2026-02-28T23:12:15.564346+01:00
+completed: 2026-03-01T17:07:31.5692046+01:00
 tags:
     - phase-9
     - knowledge-graph

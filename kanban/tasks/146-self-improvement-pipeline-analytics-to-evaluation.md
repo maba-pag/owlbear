@@ -4,11 +4,11 @@ title: Self-improvement pipeline — analytics to evaluation to human-gated prop
 status: ideation
 priority: someday
 created: 2026-02-27T14:59:42.7922645+01:00
-updated: 2026-02-27T14:59:42.7922645+01:00
+updated: 2026-03-01T02:55:06.7859326+01:00
 tags:
-    - phase-12
     - agent
     - analytics
+    - phase-14
 depends_on:
     - 142
 class: standard

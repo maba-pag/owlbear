@@ -1,12 +1,12 @@
 ---
 id: 283
 title: Wire document_id provenance into IngestPipeline and GraphStore
-status: done
+status: archived
 priority: needed
 created: 2026-02-28T22:57:32.3172477+01:00
-updated: 2026-03-01T00:09:58.2989448+01:00
+updated: 2026-03-01T17:07:38.5100322+01:00
 started: 2026-02-28T23:12:22.7437356+01:00
-completed: 2026-03-01T00:09:58.2989448+01:00
+completed: 2026-03-01T17:07:38.5100322+01:00
 tags:
     - phase-9
     - knowledge-graph

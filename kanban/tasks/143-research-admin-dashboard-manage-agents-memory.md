@@ -4,11 +4,11 @@ title: 'Research: Admin dashboard — manage agents, memory, tools, activity'
 status: ideation
 priority: someday
 created: 2026-02-27T14:59:00.7312135+01:00
-updated: 2026-02-27T14:59:00.7312135+01:00
+updated: 2026-03-01T02:55:04.6730063+01:00
 tags:
-    - phase-11
     - research
     - ui
+    - phase-14
 class: standard
 ---
 

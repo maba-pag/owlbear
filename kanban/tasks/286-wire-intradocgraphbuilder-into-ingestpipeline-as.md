@@ -1,11 +1,12 @@
 ---
 id: 286
 title: Wire IntraDocGraphBuilder into IngestPipeline as post-ingestion hook
-status: todo
+status: archived
 priority: important
 created: 2026-02-28T22:58:05.958293+01:00
-updated: 2026-02-28T23:12:24.5037987+01:00
+updated: 2026-03-01T17:08:04.5002403+01:00
 started: 2026-02-28T23:12:24.5037987+01:00
+completed: 2026-03-01T17:08:04.5002403+01:00
 tags:
     - phase-9
     - knowledge-graph

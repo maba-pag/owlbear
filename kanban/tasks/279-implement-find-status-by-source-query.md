@@ -1,12 +1,12 @@
 ---
 id: 279
 title: Implement find_status_by_source() query
-status: done
+status: archived
 priority: needed
 created: 2026-02-28T22:56:37.3065174+01:00
-updated: 2026-03-01T00:09:56.6130113+01:00
+updated: 2026-03-01T17:07:29.3424076+01:00
 started: 2026-02-28T23:12:15.0052802+01:00
-completed: 2026-03-01T00:09:56.6130113+01:00
+completed: 2026-03-01T17:07:29.3424076+01:00
 tags:
     - phase-9
     - knowledge-graph

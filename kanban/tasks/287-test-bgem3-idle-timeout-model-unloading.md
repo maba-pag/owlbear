@@ -1,12 +1,12 @@
 ---
 id: 287
 title: Test BgeM3 idle-timeout model unloading
-status: done
+status: archived
 priority: important
 created: 2026-02-28T23:11:44.9967136+01:00
-updated: 2026-02-28T23:26:05.7230437+01:00
+updated: 2026-03-01T17:08:07.4757312+01:00
 started: 2026-02-28T23:12:25.4408241+01:00
-completed: 2026-02-28T23:26:05.7230437+01:00
+completed: 2026-03-01T17:08:07.4757312+01:00
 tags:
     - phase-9
     - embedding

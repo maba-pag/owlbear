@@ -4,11 +4,11 @@ title: 'Research: Kanban replacement — richer task management'
 status: ideation
 priority: someday
 created: 2026-02-27T14:59:15.1180834+01:00
-updated: 2026-02-27T14:59:15.1180834+01:00
+updated: 2026-03-01T02:55:05.166538+01:00
 tags:
-    - phase-11
     - research
     - tooling
+    - phase-14
 class: standard
 ---
 

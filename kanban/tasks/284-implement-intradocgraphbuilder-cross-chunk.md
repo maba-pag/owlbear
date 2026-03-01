@@ -1,11 +1,12 @@
 ---
 id: 284
 title: Implement IntraDocGraphBuilder -- cross-chunk relationship inference
-status: in-progress
+status: archived
 priority: needed
 created: 2026-02-28T22:57:43.4880746+01:00
-updated: 2026-03-01T00:10:55.3919259+01:00
+updated: 2026-03-01T17:09:12.7317603+01:00
 started: 2026-02-28T23:12:23.3498328+01:00
+completed: 2026-03-01T17:09:12.7317603+01:00
 tags:
     - phase-9
     - knowledge-graph

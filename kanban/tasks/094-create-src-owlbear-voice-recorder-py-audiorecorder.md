@@ -1,12 +1,12 @@
 ---
 id: 94
 title: Create src/owlbear/voice/recorder.py — AudioRecorder wrapping PyAudio
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-02-27T03:07:54.6891889+01:00
-updated: 2026-03-01T00:09:30.3525633+01:00
+updated: 2026-03-01T17:07:22.0725326+01:00
 started: 2026-02-27T03:32:42.8220289+01:00
-completed: 2026-02-27T21:28:11.6757874+01:00
+completed: 2026-03-01T17:07:22.0725326+01:00
 tags:
     - phase-5
     - voice

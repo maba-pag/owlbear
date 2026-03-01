@@ -1,12 +1,12 @@
 ---
 id: 281
 title: Implement delete_document_data() cascade (SQLite + Qdrant)
-status: done
+status: archived
 priority: needed
 created: 2026-02-28T22:56:52.1084221+01:00
-updated: 2026-03-01T00:09:57.4750608+01:00
+updated: 2026-03-01T17:07:33.7283586+01:00
 started: 2026-02-28T23:12:16.3650553+01:00
-completed: 2026-03-01T00:09:57.4750608+01:00
+completed: 2026-03-01T17:07:33.7283586+01:00
 tags:
     - phase-9
     - knowledge-graph

@@ -4,10 +4,10 @@ title: 'Research: OpenClaw ecosystem — addon patterns, compatibility assessmen
 status: ideation
 priority: someday
 created: 2026-02-27T15:00:05.2199197+01:00
-updated: 2026-02-27T15:00:05.2199197+01:00
+updated: 2026-03-01T02:55:07.8915856+01:00
 tags:
-    - phase-12
     - research
+    - phase-14
 class: standard
 ---
 
