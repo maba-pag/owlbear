@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 from pathlib import Path
@@ -12,7 +13,28 @@ from pydantic import ValidationError
 
 from owlbear.memory.knowledge.chunker import Chunk
 from owlbear.memory.knowledge.extractor import ExtractionResult
-from owlbear.memory.knowledge.ingest import DocumentStatus, IngestPipeline, IngestResult
+
+try:
+    from owlbear.memory.knowledge.graph_builder import GraphBuildResult
+except ImportError:
+    # graph_builder module not yet implemented (task #284).
+    # Create a minimal stand-in so the rest of the tests can run.
+    from pydantic import BaseModel as _BaseModel
+
+    from owlbear.memory.knowledge.models import Edge as _Edge
+
+    class GraphBuildResult(_BaseModel):  # type: ignore[no-redef]
+        """Minimal stub for tests until graph_builder is built."""
+
+        edges_added: int = 0
+        edges: list[_Edge] = []
+
+from owlbear.memory.knowledge.ingest import (
+    DocumentStatus,
+    IngestPipeline,
+    IngestResult,
+    compute_content_hash,
+)
 from owlbear.memory.knowledge.intake import IntakeResult
 from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear.memory.knowledge.protocol import HybridEmbedding, SparseVector
@@ -788,3 +810,650 @@ class TestFindStatusBySource:
 
         # Non-existent scope returns None.
         assert pipeline.find_status_by_source("shared.txt", scope="nope") is None
+
+
+# ---------------------------------------------------------------------------
+# compute_content_hash
+# ---------------------------------------------------------------------------
+
+
+class TestComputeContentHash:
+    """Tests for the compute_content_hash() free function."""
+
+    def test_sha256_hex_digest(self) -> None:
+        """Returns SHA-256 hex digest of content.strip()."""
+        import hashlib
+
+        content = "hello world"
+        expected = hashlib.sha256(content.encode()).hexdigest()
+        assert compute_content_hash(content) == expected
+
+    def test_strips_whitespace_before_hashing(self) -> None:
+        """Leading/trailing whitespace is stripped before hashing."""
+        assert compute_content_hash("  hello  ") == compute_content_hash("hello")
+
+    def test_identical_content_same_hash(self) -> None:
+        """Identical content produces identical hashes."""
+        assert compute_content_hash("abc") == compute_content_hash("abc")
+
+    def test_different_content_different_hash(self) -> None:
+        """Different content produces different hashes."""
+        assert compute_content_hash("abc") != compute_content_hash("xyz")
+
+    def test_empty_string(self) -> None:
+        """Empty string (after strip) is hashable."""
+        import hashlib
+
+        expected = hashlib.sha256(b"").hexdigest()
+        assert compute_content_hash("") == expected
+        assert compute_content_hash("   ") == expected
+
+
+# ---------------------------------------------------------------------------
+# check_content_changed
+# ---------------------------------------------------------------------------
+
+
+class TestCheckContentChanged:
+    """Tests for IngestPipeline.check_content_changed()."""
+
+    def test_new_content_returns_true_none(
+        self, pipeline: IngestPipeline
+    ) -> None:
+        """Source not previously ingested -> (True, None)."""
+        changed, doc_id = pipeline.check_content_changed(
+            "new-file.txt", "some content", "global"
+        )
+        assert changed is True
+        assert doc_id is None
+
+    def test_identical_content_returns_false_and_id(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """Content hash matches stored -> (False, existing_document_id)."""
+        content = "hello world"
+        content_hash = compute_content_hash(content)
+        conn.execute(
+            "INSERT INTO document_status "
+            "(document_id, status, source, scope, content_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "doc-existing", "indexed", "test.txt", "global",
+                content_hash, "2026-01-01", "2026-01-01",
+            ),
+        )
+        conn.commit()
+
+        changed, doc_id = pipeline.check_content_changed(
+            "test.txt", content, "global"
+        )
+        assert changed is False
+        assert doc_id == "doc-existing"
+
+    def test_changed_content_returns_true_and_id(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """Content hash differs from stored -> (True, existing_document_id)."""
+        conn.execute(
+            "INSERT INTO document_status "
+            "(document_id, status, source, scope, content_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "doc-old", "indexed", "test.txt", "global",
+                "old-hash-value", "2026-01-01", "2026-01-01",
+            ),
+        )
+        conn.commit()
+
+        changed, doc_id = pipeline.check_content_changed(
+            "test.txt", "updated content", "global"
+        )
+        assert changed is True
+        assert doc_id == "doc-old"
+
+    def test_respects_scope(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """check_content_changed respects scope parameter."""
+        content = "scoped content"
+        content_hash = compute_content_hash(content)
+        conn.execute(
+            "INSERT INTO document_status "
+            "(document_id, status, source, scope, content_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "doc-scoped", "indexed", "test.txt", "project-x",
+                content_hash, "2026-01-01", "2026-01-01",
+            ),
+        )
+        conn.commit()
+
+        # Global scope has no record -> new content.
+        changed, doc_id = pipeline.check_content_changed(
+            "test.txt", content, "global"
+        )
+        assert changed is True
+        assert doc_id is None
+
+        # project-x scope has matching hash -> unchanged.
+        changed, doc_id = pipeline.check_content_changed(
+            "test.txt", content, "project-x"
+        )
+        assert changed is False
+        assert doc_id == "doc-scoped"
+
+    def test_whitespace_only_change_no_diff(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """Trailing whitespace difference is not detected as a change."""
+        content = "hello world"
+        content_hash = compute_content_hash(content)
+        conn.execute(
+            "INSERT INTO document_status "
+            "(document_id, status, source, scope, content_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("doc-ws", "indexed", "test.txt", "global", content_hash, "2026-01-01", "2026-01-01"),
+        )
+        conn.commit()
+
+        # Extra whitespace should NOT be detected as a change.
+        changed, doc_id = pipeline.check_content_changed(
+            "test.txt", "  hello world  \n", "global"
+        )
+        assert changed is False
+        assert doc_id == "doc-ws"
+
+
+# ---------------------------------------------------------------------------
+# IngestResult.skipped field
+# ---------------------------------------------------------------------------
+
+
+class TestIngestResultSkipped:
+    """IngestResult gains skipped: bool = False field."""
+
+    def test_skipped_defaults_false(self) -> None:
+        r = IngestResult(
+            document_id="abc",
+            chunk_count=1,
+            entity_count=0,
+            edge_count=0,
+            status="indexed",
+        )
+        assert r.skipped is False
+
+    def test_skipped_explicit_true(self) -> None:
+        r = IngestResult(
+            document_id="abc",
+            chunk_count=0,
+            entity_count=0,
+            edge_count=0,
+            status="skipped",
+            skipped=True,
+        )
+        assert r.skipped is True
+
+
+# ---------------------------------------------------------------------------
+# Delta re-ingest integration tests (#282)
+# ---------------------------------------------------------------------------
+
+
+class TestDeltaReIngest:
+    """Wire delta re-ingest check into ingest() and ingest_text()."""
+
+    @pytest.mark.anyio
+    async def test_first_ingest_normal_path(self, pipeline: IngestPipeline) -> None:
+        """First ingest of a source runs the full pipeline (no skip)."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipeline.ingest(Path("test.txt"))
+
+        assert result.status == "indexed"
+        assert result.skipped is False
+        assert result.chunk_count == 2
+
+    @pytest.mark.anyio
+    async def test_first_ingest_stores_content_hash(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """After first ingest, document_status.content_hash is populated."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipeline.ingest(Path("test.txt"))
+
+        row = conn.execute(
+            "SELECT content_hash FROM document_status WHERE document_id = ?",
+            (result.document_id,),
+        ).fetchone()
+        expected_hash = compute_content_hash(SAMPLE_INTAKE.content)
+        assert row[0] == expected_hash
+
+    @pytest.mark.anyio
+    async def test_reingest_unchanged_content_skips(
+        self, pipeline: IngestPipeline
+    ) -> None:
+        """Re-ingesting identical content returns skipped=True, no new doc."""
+        # First ingest.
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            first = await pipeline.ingest("test.txt")
+
+        assert first.status == "indexed"
+
+        # Second ingest — same content.
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            second = await pipeline.ingest("test.txt")
+
+        assert second.skipped is True
+        assert second.status == "skipped"
+        assert second.document_id == first.document_id
+
+    @pytest.mark.anyio
+    async def test_reingest_unchanged_logs_skip(
+        self,
+        pipeline: IngestPipeline,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Skipping unchanged source logs INFO message."""
+        # First ingest.
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline.ingest("test.txt")
+
+        # Second ingest — same content, should log skip.
+        with (
+            caplog.at_level(logging.INFO),
+            patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf,
+        ):
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline.ingest("test.txt")
+
+        assert any("skipping unchanged source" in r.message.lower() for r in caplog.records)
+
+    @pytest.mark.anyio
+    async def test_reingest_changed_content_deletes_old_and_reingests(
+        self,
+        pipeline: IngestPipeline,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Re-ingesting changed content deletes old data and creates new doc."""
+        # First ingest.
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            first = await pipeline.ingest("test.txt")
+
+        assert first.status == "indexed"
+        old_doc_id = first.document_id
+
+        # Second ingest — changed content.
+        changed_intake = IntakeResult(
+            content="updated content here",
+            source="test.txt",
+            metadata={"source_type": "file"},
+        )
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = changed_intake
+            second = await pipeline.ingest("test.txt")
+
+        assert second.skipped is False
+        assert second.status == "indexed"
+        assert second.document_id != old_doc_id
+
+        # Old document should be deleted.
+        old_row = conn.execute(
+            "SELECT count(*) FROM documents WHERE id = ?", (old_doc_id,)
+        ).fetchone()
+        assert old_row[0] == 0
+
+        # New document should exist.
+        new_row = conn.execute(
+            "SELECT count(*) FROM documents WHERE id = ?", (second.document_id,)
+        ).fetchone()
+        assert new_row[0] == 1
+
+        # Content hash updated to new content.
+        hash_row = conn.execute(
+            "SELECT content_hash FROM document_status WHERE document_id = ?",
+            (second.document_id,),
+        ).fetchone()
+        assert hash_row[0] == compute_content_hash("updated content here")
+
+    @pytest.mark.anyio
+    async def test_reingest_changed_logs_reingest(
+        self,
+        pipeline: IngestPipeline,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Re-ingesting changed source logs INFO message with old doc id."""
+        # First ingest.
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            first = await pipeline.ingest("test.txt")
+
+        # Second ingest — different content.
+        changed_intake = IntakeResult(
+            content="different content",
+            source="test.txt",
+            metadata={"source_type": "file"},
+        )
+        with (
+            caplog.at_level(logging.INFO),
+            patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf,
+        ):
+            mock_rf.return_value = changed_intake
+            await pipeline.ingest("test.txt")
+
+        assert any(
+            "re-ingesting changed source" in r.message.lower()
+            and first.document_id in r.message
+            for r in caplog.records
+        )
+
+    @pytest.mark.anyio
+    async def test_ingest_text_unchanged_skips(
+        self, pipeline: IngestPipeline
+    ) -> None:
+        """ingest_text() with unchanged content skips re-ingest."""
+        first = await pipeline.ingest_text(
+            "hello world", metadata={"url": "https://example.com/page"}
+        )
+        assert first.status == "indexed"
+        assert first.skipped is False
+
+        second = await pipeline.ingest_text(
+            "hello world", metadata={"url": "https://example.com/page"}
+        )
+        assert second.skipped is True
+        assert second.status == "skipped"
+        assert second.document_id == first.document_id
+
+    @pytest.mark.anyio
+    async def test_ingest_text_changed_reingests(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """ingest_text() with changed content deletes old and creates new doc."""
+        first = await pipeline.ingest_text(
+            "original text", metadata={"url": "https://example.com/page"}
+        )
+        assert first.status == "indexed"
+
+        second = await pipeline.ingest_text(
+            "updated text", metadata={"url": "https://example.com/page"}
+        )
+        assert second.skipped is False
+        assert second.status == "indexed"
+        assert second.document_id != first.document_id
+
+        # Old doc gone.
+        old = conn.execute(
+            "SELECT count(*) FROM documents WHERE id = ?", (first.document_id,)
+        ).fetchone()
+        assert old[0] == 0
+
+    @pytest.mark.anyio
+    async def test_ingest_text_stores_content_hash(
+        self, pipeline: IngestPipeline, conn: sqlite3.Connection
+    ) -> None:
+        """After ingest_text(), document_status.content_hash is populated."""
+        result = await pipeline.ingest_text("hash me", metadata={"url": "test-url"})
+
+        row = conn.execute(
+            "SELECT content_hash FROM document_status WHERE document_id = ?",
+            (result.document_id,),
+        ).fetchone()
+        assert row[0] == compute_content_hash("hash me")
+
+
+# ---------------------------------------------------------------------------
+# Graph builder integration (#286)
+# ---------------------------------------------------------------------------
+
+
+class TestGraphBuilderIntegration:
+    """IngestPipeline triggers IntraDocGraphBuilder after successful ingestion."""
+
+    @pytest.fixture
+    def mock_intra_doc_builder(self) -> MagicMock:
+        """Mock IntraDocGraphBuilder — async build returns empty result."""
+        builder = MagicMock()
+        builder.build = AsyncMock(return_value=GraphBuildResult())
+        return builder
+
+    @pytest.fixture
+    def pipeline_with_builder(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+        mock_intra_doc_builder: MagicMock,
+    ) -> IngestPipeline:
+        """IngestPipeline with a mocked IntraDocGraphBuilder wired in."""
+        return IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            graph_builder=mock_intra_doc_builder,
+        )
+
+    @pytest.mark.anyio
+    async def test_constructor_accepts_graph_builder(
+        self, pipeline_with_builder: IngestPipeline
+    ) -> None:
+        """IngestPipeline accepts optional graph_builder parameter."""
+        assert pipeline_with_builder._graph_builder is not None
+
+    def test_constructor_defaults_graph_builder_none(
+        self, pipeline: IngestPipeline
+    ) -> None:
+        """graph_builder defaults to None when not provided."""
+        assert pipeline._graph_builder is None
+
+    @pytest.mark.anyio
+    async def test_build_called_after_successful_ingest(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        mock_intra_doc_builder: MagicMock,
+    ) -> None:
+        """After successful ingest, graph builder build() is called."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline_with_builder.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        mock_intra_doc_builder.build.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_enrichment_runs_non_blocking(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """ingest() returns 'indexed' immediately; enrichment updates DB later."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipeline_with_builder.ingest(Path("test.txt"))
+
+        # Ingest returns "indexed" — enrichment hasn't run yet.
+        assert result.status == "indexed"
+
+        await asyncio.sleep(0.01)
+
+        # After yielding, background task updated status.
+        row = conn.execute(
+            "SELECT status FROM document_status WHERE document_id = ?",
+            (result.document_id,),
+        ).fetchone()
+        assert row[0] == "graph_enriched"
+
+    @pytest.mark.anyio
+    async def test_skips_already_enriched_document(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        conn: sqlite3.Connection,
+        mock_intra_doc_builder: MagicMock,
+    ) -> None:
+        """If document status is already graph_enriched, build() is not called."""
+        doc_id = "pre-enriched"
+        conn.execute(
+            "INSERT INTO document_status "
+            "(document_id, status, source, scope, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (doc_id, "graph_enriched", "test.txt", "global", "2026-01-01", "2026-01-01"),
+        )
+        conn.commit()
+
+        await pipeline_with_builder._enrich_graph(doc_id, list(SAMPLE_ENTITIES), "global")
+
+        mock_intra_doc_builder.build.assert_not_awaited()
+
+    @pytest.mark.anyio
+    async def test_inferred_edges_stored_in_graph(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        mock_graph_store: MagicMock,
+        mock_intra_doc_builder: MagicMock,
+    ) -> None:
+        """Inferred edges from graph builder are stored in graph store."""
+        inferred_edge = Edge(
+            source_id="e1", target_id="e2", relation=RelationType.DEFINES, weight=0.5,
+        )
+        mock_intra_doc_builder.build = AsyncMock(
+            return_value=GraphBuildResult(edges_added=1, edges=[inferred_edge])
+        )
+
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline_with_builder.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        edge_calls = mock_graph_store.insert_edge.call_args_list
+        inserted = [c[0][0] for c in edge_calls]
+        assert any(e.source_id == "e1" and e.target_id == "e2" for e in inserted)
+
+    @pytest.mark.anyio
+    async def test_no_enrichment_without_graph_builder(
+        self,
+        pipeline: IngestPipeline,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """When graph_builder is None, status stays 'indexed'."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipeline.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        row = conn.execute(
+            "SELECT status FROM document_status WHERE document_id = ?",
+            (result.document_id,),
+        ).fetchone()
+        assert row[0] == "indexed"
+
+    @pytest.mark.anyio
+    async def test_logs_scheduling_message(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """INFO log 'Scheduling graph enrichment for document ...' is emitted."""
+        with (
+            caplog.at_level(logging.INFO),
+            patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf,
+        ):
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline_with_builder.ingest(Path("test.txt"))
+
+        assert any(
+            "scheduling graph enrichment" in r.message.lower()
+            for r in caplog.records
+        )
+
+    @pytest.mark.anyio
+    async def test_builder_failure_does_not_crash_ingest(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """If graph builder raises, ingest result is still returned successfully."""
+        failing_builder = MagicMock()
+        failing_builder.build = AsyncMock(side_effect=RuntimeError("LLM down"))
+
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            graph_builder=failing_builder,
+        )
+
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipe.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        assert result.status == "indexed"
+        assert result.chunk_count == 2
+
+    @pytest.mark.anyio
+    async def test_ingest_text_triggers_enrichment(
+        self,
+        pipeline_with_builder: IngestPipeline,
+        mock_intra_doc_builder: MagicMock,
+    ) -> None:
+        """ingest_text() also triggers graph enrichment."""
+        await pipeline_with_builder.ingest_text("hello world")
+
+        await asyncio.sleep(0.01)
+
+        mock_intra_doc_builder.build.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_no_enrichment_when_extract_fails(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """When extraction fails, graph enrichment is not scheduled."""
+        failing_extractor = MagicMock()
+        failing_extractor.extract = AsyncMock(side_effect=RuntimeError("LLM down"))
+
+        builder = MagicMock()
+        builder.build = AsyncMock(return_value=GraphBuildResult())
+
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=failing_extractor,
+            text_chunker=mock_chunker,
+            graph_builder=builder,
+        )
+
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipe.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        builder.build.assert_not_awaited()

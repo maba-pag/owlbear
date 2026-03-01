@@ -8,6 +8,7 @@ document status in the ``document_status`` table.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import UTC, datetime
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.embeddings import EmbeddingProvider
     from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
     from owlbear.memory.knowledge.graph import GraphStore
+    from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+    from owlbear.memory.knowledge.models import Entity
     from owlbear.memory.knowledge.protocol import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
@@ -57,6 +60,30 @@ class IngestResult(BaseModel):
     entity_count: int
     edge_count: int
     status: str
+    skipped: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Content hashing
+# ---------------------------------------------------------------------------
+
+
+def compute_content_hash(content: str) -> str:
+    """Return the SHA-256 hex digest of *content* after stripping whitespace.
+
+    Parameters
+    ----------
+    content:
+        Raw document text.  Leading/trailing whitespace is stripped
+        before hashing so that cosmetic differences (e.g. trailing
+        newlines in HTTP responses) do not produce false positives.
+
+    Returns
+    -------
+    str
+        64-character lowercase hex digest.
+    """
+    return hashlib.sha256(content.strip().encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +123,7 @@ class IngestPipeline:
         embedding_provider: EmbeddingProvider,
         entity_extractor: EntityExtractor,
         text_chunker: TextChunker,
+        graph_builder: IntraDocGraphBuilder | None = None,
     ) -> None:
         self._conn = conn
         self._graph = graph_store
@@ -103,6 +131,8 @@ class IngestPipeline:
         self._embedder = embedding_provider
         self._extractor = entity_extractor
         self._chunker = text_chunker
+        self._graph_builder = graph_builder
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     # -- Public API ----------------------------------------------------------
 
@@ -131,6 +161,40 @@ class IngestPipeline:
         if row is None:
             return None
         return DocumentStatus(document_id=row[0], content_hash=row[1], status=row[2])
+
+    def check_content_changed(
+        self, source: str, content: str, scope: str = "global"
+    ) -> tuple[bool, str | None]:
+        """Check whether *content* differs from the previously-ingested version.
+
+        Computes the SHA-256 hash of *content* (stripped), looks up the
+        existing record via :meth:`find_status_by_source`, and compares.
+
+        Parameters
+        ----------
+        source:
+            The source string (file path or URL) used during ingestion.
+        content:
+            The new/current document text.
+        scope:
+            Visibility scope (default ``'global'``).
+
+        Returns
+        -------
+        tuple[bool, str | None]
+            ``(changed, existing_document_id)`` where:
+
+            - ``(True, None)`` — source not previously ingested (new doc).
+            - ``(False, id)`` — hash matches stored record (skip).
+            - ``(True, id)`` — hash differs (re-ingest needed).
+        """
+        new_hash = compute_content_hash(content)
+        existing = self.find_status_by_source(source, scope=scope)
+        if existing is None:
+            return True, None
+        if existing.content_hash == new_hash:
+            return False, existing.document_id
+        return True, existing.document_id
 
     def delete_document_data(self, document_id: str) -> None:
         """Cascade-delete all data for *document_id* across SQLite and Qdrant.
@@ -196,37 +260,70 @@ class IngestPipeline:
         IngestResult
             Summary with document_id, counts, and final status.
         """
-        document_id = uuid4().hex
         source_str = str(source)
-        self._set_status(document_id, "pending", source=source_str, scope=scope)
+        document_id: str | None = None
 
         try:
             # 1. Intake — read content from source.
             intake_result = await self._read_source(source)
 
-            # 2. Mark processing.
+            # 2. Delta check — skip if content unchanged.
+            changed, existing_doc_id = self.check_content_changed(
+                source_str, intake_result.content, scope
+            )
+            if not changed:
+                logger.info("Skipping unchanged source %s", source_str)
+                return IngestResult(
+                    document_id=existing_doc_id or "",
+                    chunk_count=0,
+                    entity_count=0,
+                    edge_count=0,
+                    status="skipped",
+                    skipped=True,
+                )
+
+            if existing_doc_id is not None:
+                logger.info(
+                    "Re-ingesting changed source %s (old doc %s)",
+                    source_str,
+                    existing_doc_id,
+                )
+                self.delete_document_data(existing_doc_id)
+
+            # 3. Create new document tracking.
+            document_id = uuid4().hex
+            self._set_status(document_id, "pending", source=source_str, scope=scope)
             self._set_status(document_id, "processing", scope=scope)
 
-            # 3. Chunk the content.
+            # 4. Chunk the content.
             chunks = self._chunker.chunk(intake_result.content, metadata=intake_result.metadata)
 
-            # 4. Insert document record, then persist chunks.
+            # 5. Insert document record, then persist chunks.
             self._insert_document(document_id, intake_result, scope=scope)
             self._store_chunks(document_id, chunks, scope=scope)
 
-            # 5. Parallel: embed (CPU-bound) + extract (LLM I/O-bound).
+            # 6. Parallel: embed (CPU-bound) + extract (LLM I/O-bound).
             embed_result, extract_result = await asyncio.gather(
                 self._run_embed(chunks),
                 self._run_extract(chunks),
                 return_exceptions=True,
             )
 
-            # 6. Store successful results, determine final status.
+            # 7. Store successful results, determine final status.
             entity_count, edge_count, status = self._process_results(
                 document_id, chunks, embed_result, extract_result, scope=scope
             )
 
             self._set_status(document_id, status, scope=scope)
+
+            # 8. Record content hash for future delta checks.
+            self._update_content_hash(document_id, intake_result.content)
+
+            # 9. Schedule graph enrichment (non-blocking).
+            if not isinstance(extract_result, BaseException):
+                self._schedule_graph_enrichment(
+                    document_id, extract_result, scope
+                )
 
             return IngestResult(
                 document_id=document_id,
@@ -238,6 +335,11 @@ class IngestPipeline:
 
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ingest failed for %s", source_str, exc_info=True)
+            if document_id is None:
+                document_id = uuid4().hex
+                self._set_status(
+                    document_id, "pending", source=source_str, scope=scope
+                )
             self._set_status(document_id, "failed", error=str(exc), scope=scope)
             return IngestResult(
                 document_id=document_id,
@@ -273,8 +375,32 @@ class IngestPipeline:
         IngestResult
             Summary with document_id, counts, and final status.
         """
-        source_label = (metadata or {}).get("url", "inline")
-        intake_result = read_text(text, source=str(source_label))
+        source_label = str((metadata or {}).get("url", "inline"))
+
+        # Delta check — skip if content unchanged.
+        changed, existing_doc_id = self.check_content_changed(
+            source_label, text, scope
+        )
+        if not changed:
+            logger.info("Skipping unchanged source %s", source_label)
+            return IngestResult(
+                document_id=existing_doc_id or "",
+                chunk_count=0,
+                entity_count=0,
+                edge_count=0,
+                status="skipped",
+                skipped=True,
+            )
+
+        if existing_doc_id is not None:
+            logger.info(
+                "Re-ingesting changed source %s (old doc %s)",
+                source_label,
+                existing_doc_id,
+            )
+            self.delete_document_data(existing_doc_id)
+
+        intake_result = read_text(text, source=source_label)
         if metadata:
             intake_result = IntakeResult(
                 content=intake_result.content,
@@ -313,6 +439,15 @@ class IngestPipeline:
             )
             self._set_status(document_id, status, scope=scope)
 
+            # Record content hash for future delta checks.
+            self._update_content_hash(document_id, intake_result.content)
+
+            # Schedule graph enrichment (non-blocking).
+            if not isinstance(extract_result, BaseException):
+                self._schedule_graph_enrichment(
+                    document_id, extract_result, scope
+                )
+
             return IngestResult(
                 document_id=document_id,
                 chunk_count=len(chunks),
@@ -329,6 +464,66 @@ class IngestPipeline:
                 entity_count=0,
                 edge_count=0,
                 status="failed",
+            )
+
+    def _update_content_hash(self, document_id: str, content: str) -> None:
+        """Store the content hash in ``document_status`` for future delta checks."""
+        content_hash = compute_content_hash(content)
+        self._conn.execute(
+            "UPDATE document_status SET content_hash = ? WHERE document_id = ?",
+            (content_hash, document_id),
+        )
+        self._conn.commit()
+
+    def _schedule_graph_enrichment(
+        self,
+        document_id: str,
+        extract_results: list[ExtractionResult],
+        scope: str,
+    ) -> None:
+        """Schedule non-blocking graph enrichment if graph_builder is available."""
+        if self._graph_builder is None:
+            return
+        entities = [e for r in extract_results for e in r.entities]
+        if not entities:
+            return
+        logger.info("Scheduling graph enrichment for document %s", document_id)
+        task = asyncio.create_task(self._enrich_graph(document_id, entities, scope))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _enrich_graph(
+        self,
+        document_id: str,
+        entities: list[Entity],
+        scope: str,
+    ) -> None:
+        """Background task: run graph builder and update status on completion."""
+        try:
+            # Idempotency check — skip if already enriched.
+            row = self._conn.execute(
+                "SELECT status FROM document_status WHERE document_id = ?",
+                (document_id,),
+            ).fetchone()
+            if row and row[0] == "graph_enriched":
+                logger.info(
+                    "Document %s already graph-enriched, skipping", document_id
+                )
+                return
+
+            result = await self._graph_builder.build(  # type: ignore[union-attr]
+                entities, scope=scope, document_id=document_id
+            )
+
+            for edge in result.edges:
+                self._graph.insert_edge(edge)
+
+            self._set_status(document_id, "graph_enriched", scope=scope)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Graph enrichment failed for document %s",
+                document_id,
+                exc_info=True,
             )
 
     @staticmethod

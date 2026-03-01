@@ -7,6 +7,8 @@ Standalone module with no dependency on other knowledge submodules
 from __future__ import annotations
 
 import gc
+import threading
+import time
 from typing import Protocol, runtime_checkable
 
 from owlbear.memory.knowledge.protocol import HybridEmbedding, SparseVector
@@ -37,36 +39,58 @@ class BgeM3EmbeddingProvider:
         self,
         model_name: str = "BAAI/bge-m3",
         batch_size: int = 16,
+        idle_timeout: float = 600.0,
     ) -> None:
         self.model_name = model_name
         self.batch_size = batch_size
+        self.idle_timeout = float(idle_timeout)
         self._model: object | None = None
+        self._last_used: float = 0.0
+        self._timer: threading.Timer | None = None
+        self._lock = threading.Lock()
 
     # -- internal helpers ---------------------------------------------------
 
     def _ensure_model(self) -> object:
         """Lazily create the ``BGEM3FlagModel`` instance.
 
+        Thread-safe: acquires ``_lock`` before checking/creating the model.
+
         Raises :class:`ImportError` with an actionable message when the
         ``FlagEmbedding`` package is not installed.
         """
-        if self._model is None:
-            try:
-                from FlagEmbedding import BGEM3FlagModel  # noqa: PLC0415
-            except ImportError:
-                msg = (
-                    "FlagEmbedding is required for BgeM3EmbeddingProvider. "
-                    "Install it with: uv pip install FlagEmbedding"
-                )
-                raise ImportError(msg) from None
+        with self._lock:
+            if self._model is None:
+                try:
+                    from FlagEmbedding import BGEM3FlagModel  # noqa: PLC0415
+                except ImportError:
+                    msg = (
+                        "FlagEmbedding is required for BgeM3EmbeddingProvider. "
+                        "Install it with: uv pip install FlagEmbedding"
+                    )
+                    raise ImportError(msg) from None
 
-            self._model = BGEM3FlagModel(
-                self.model_name,
-                use_fp16=True,
-                devices=["cpu"],
-                batch_size=self.batch_size,
-            )
+                self._model = BGEM3FlagModel(
+                    self.model_name,
+                    use_fp16=True,
+                    devices=["cpu"],
+                    batch_size=self.batch_size,
+                )
         return self._model
+
+    def _reset_timer(self) -> None:
+        """Cancel any existing timer and start a new one (if enabled).
+
+        Thread-safe: acquires ``_lock`` to swap the timer reference.
+        """
+        if self.idle_timeout <= 0:
+            return
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            self._timer = threading.Timer(self.idle_timeout, self.unload)
+            self._timer.daemon = True
+            self._timer.start()
 
     # -- public API ---------------------------------------------------------
 
@@ -79,6 +103,8 @@ class BgeM3EmbeddingProvider:
             return []
 
         model = self._ensure_model()
+        self._last_used = time.monotonic()
+        self._reset_timer()
         output = model.encode(texts)  # type: ignore[union-attr]
         return [row.tolist() for row in output["dense_vecs"]]
 
@@ -94,6 +120,8 @@ class BgeM3EmbeddingProvider:
             return []
 
         model = self._ensure_model()
+        self._last_used = time.monotonic()
+        self._reset_timer()
         output = model.encode(texts)  # type: ignore[union-attr]
 
         results: list[HybridEmbedding] = []
@@ -112,6 +140,14 @@ class BgeM3EmbeddingProvider:
         return results
 
     def unload(self) -> None:
-        """Release the model and reclaim memory (~3 GB)."""
-        self._model = None
+        """Release the model and reclaim memory (~3 GB).
+
+        Thread-safe: acquires ``_lock`` to clear the model reference
+        and cancel any pending timer.
+        """
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            self._model = None
         gc.collect()

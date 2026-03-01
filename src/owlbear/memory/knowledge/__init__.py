@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+from owlbear.memory.knowledge.chunker import Chunk, TextChunker
+from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
 from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
+from owlbear.memory.knowledge.graph_builder import GraphBuildResult, IntraDocGraphBuilder
+from owlbear.memory.knowledge.ingest import (
+    DocumentStatus,
+    IngestPipeline,
+    IngestResult,
+    compute_content_hash,
+)
 from owlbear.memory.knowledge.models import (
     Document,
     Edge,
@@ -18,19 +27,31 @@ from owlbear.memory.knowledge.protocol import (
     VectorStoreProtocol,
 )
 from owlbear.memory.knowledge.qdrant import QdrantVectorStore
+from owlbear.memory.knowledge.schema import init_db
 
 __all__ = [
+    "BgeM3EmbeddingProvider",
+    "Chunk",
     "Document",
+    "DocumentStatus",
     "Edge",
     "Embedding",
+    "EmbeddingProvider",
     "Entity",
     "EntityExtractor",
     "EntityType",
     "ExtractionResult",
+    "GraphBuildResult",
     "GraphStore",
     "HybridEmbedding",
+    "IngestPipeline",
+    "IngestResult",
+    "IntraDocGraphBuilder",
     "QdrantVectorStore",
     "RelationType",
     "SparseVector",
+    "TextChunker",
     "VectorStoreProtocol",
+    "compute_content_hash",
+    "init_db",
 ]
