@@ -37,21 +37,24 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 
 ## Tech stack
 
-| Component           | Technology                  | Notes                                                                   |
-| ------------------- | --------------------------- | ----------------------------------------------------------------------- |
-| Language            | Python 3.12+                | `uv` package manager, never bare `pip`                                  |
-| Runtime             | Standalone daemon           | Background process started via BearClaw CLI                             |
-| Agents              | PydanticAI                  | Structured output, dependency injection                                 |
-| LLM provider        | GitHub Copilot OAuth        | Device-flow auth, `api.individual.githubcopilot.com`                    |
-| Retry               | tenacity                    | Exponential backoff, jitter, max 5 attempts                             |
-| CLI                 | Typer (BearClaw)            | Entry point for daemon, auth, and user commands                         |
-| HTTP                | httpx + truststore          | Async HTTP client with system certificate trust                         |
-| Config              | pydantic-settings           | Env vars + TOML config file, validated at startup                       |
-| Knowledge (planned) | Knowledge graph + vector DB | Structured memory with embeddings; DB tech TBD                          |
-| Browser             | Playwright                  | Launch or attach via CDP (`localhost` only); see `bearclaw browser` CLI |
-| Messaging           | Slack (slack_sdk)           | Socket Mode WebSocket + AsyncWebClient; see `bearclaw slack` CLI        |
-| Voice (planned)     | Whisper STT + pyttsx3 TTS   | Local-first voice I/O                                                   |
-| Task board          | kanban-md                   | Go CLI binary in `kanban/`, file-based kanban                           |
+| Component       | Technology                                 | Notes                                                                                                                                                                                                                                                |
+| --------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language        | Python 3.12+                               | `uv` package manager, never bare `pip`                                                                                                                                                                                                               |
+| Runtime         | Standalone daemon                          | Background process started via BearClaw CLI                                                                                                                                                                                                          |
+| Agents          | PydanticAI                                 | Structured output, dependency injection                                                                                                                                                                                                              |
+| LLM provider    | GitHub Copilot OAuth                       | Device-flow auth, `api.individual.githubcopilot.com`                                                                                                                                                                                                 |
+| Retry           | tenacity                                   | Exponential backoff, jitter, max 5 attempts                                                                                                                                                                                                          |
+| CLI             | Typer (BearClaw)                           | Entry point for daemon, auth, and user commands                                                                                                                                                                                                      |
+| HTTP            | httpx + truststore                         | Async HTTP client with system certificate trust                                                                                                                                                                                                      |
+| Config          | pydantic-settings                          | Env vars + TOML config file, validated at startup                                                                                                                                                                                                    |
+| Knowledge       | SQLite (graph) + Qdrant (vectors) + BGE-M3 | Knowledge graph with hybrid vector search; schema v4; idle-timeout model unloading; KnowledgeToolset exposes `query_knowledge`, `ingest_document`, `list_knowledge_sources` to agents                                                                |
+| Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via httpx + trafilatura; `WebSearchToolset` exposes `web_search`, `web_read` to agents; optional `search` extra                                                                                        |
+| Browser         | Playwright                                 | Launch or attach via CDP (`localhost` only); see `bearclaw browser` CLI                                                                                                                                                                              |
+| Messaging       | Slack (slack_sdk)                          | Socket Mode WebSocket + AsyncWebClient; see `bearclaw slack` CLI                                                                                                                                                                                     |
+| Safety          | Approval gates                             | `ApprovalPolicy` rules in config gate destructive tools (git push, PRs, deploy); `ApprovalGateToolset` wraps toolsets in bootstrap; per-session pre-grants                                                                                           |
+| Projects        | JSON file store                            | Multi-project support; `bearclaw project create/list/switch/archive`; per-project session dirs; `ProjectStore` CRUD; `ProjectToolset` exposes `switch_project`, `list_projects` to agents; bootstrap reads `active_project` file to derive workspace |
+| Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                                                                                                                                                                |
+| Task board      | kanban-md                                  | Go CLI binary in `kanban/`, file-based kanban; `KanbanToolset` exposes `kanban_list`, `kanban_show`, `kanban_create`, `kanban_move`, `kanban_edit`, `kanban_pick`, `kanban_context` to agents                                                        |
 
 ## kanban-md usage
 
@@ -81,29 +84,45 @@ The `kanban-based-development` skill describes a git-worktree workflow. **We do 
 
 ### Task lifecycle — statuses, roles, and quality gates
 
-The pipeline has 7 statuses. Each transition is owned by a specific role and guarded by explicit exit criteria. Research is not a status — it is the work that happens inside `ideation` before a task can graduate to `backlog`.
+The pipeline has 7 statuses. Each status has a gate owner — the role that processes tasks in that status and advances them forward. Research is not a status — it is the work that happens inside `ideation` before a task can graduate to `backlog`.
 
-| Status        | Meaning                                              | Owner      | Exit criteria (to move forward)                                |
-| ------------- | ---------------------------------------------------- | ---------- | -------------------------------------------------------------- |
-| `ideation`    | Raw idea captured, not yet researched                | Anyone     | —                                                              |
-| `backlog`     | Researched, refined AC, approach documented          | Researcher | Research checklist completed (see below)                       |
-| `todo`        | Architect-approved, unblocked, ready for dev         | Architect  | AC refined, architectural review done, may split/merge/expand  |
-| `in-progress` | Actively being implemented (TDD)                     | Dev        | —                                                              |
-| `review`      | Code + tests complete, needs verification            | Dev        | Tests pass, ruff clean, AC met                                 |
-| `docs`        | Docs gate — verify/update all relevant documentation | Reviewer   | Verified against architect's instructions, may demo to user    |
-| `done`        | Verified complete                                    | Writer     | README, copilot-instructions, docstrings, sources.md as needed |
+| Status        | Meaning                                              | Gate owner | Exit criteria (to move forward)                               |
+| ------------- | ---------------------------------------------------- | ---------- | ------------------------------------------------------------- |
+| `ideation`    | Raw idea captured, not yet researched                | Researcher | Research checklist completed (see below)                      |
+| `backlog`     | Researched, refined AC, approach documented          | Architect  | AC refined, architectural review done, may split/merge/expand |
+| `todo`        | Architect-approved, unblocked, ready for dev         | Builder    | —                                                             |
+| `in-progress` | Actively being implemented (TDD)                     | Builder    | Tests pass, ruff clean, AC met                                |
+| `review`      | Code + tests complete, needs verification            | Reviewer   | Tests pass independently, ruff clean, every AC line evidenced |
+| `docs`        | Docs gate — verify/update all relevant documentation | Writer     | Docs-gate checklist passed (see below)                        |
+| `done`        | Verified complete, ready for archival                | Closer     | AC verified with evidence, confidence ≥ .80, archived         |
 
 ### Agent roles and movement authority
 
+#### Forward (normal pipeline flow)
+
 | Role       | Moves                    | Responsibility                                                                                 |
 | ---------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| Anyone     | → `ideation`             | Capture ideas. Minimal description is fine.                                                    |
+| Planner    | → `ideation`             | Entry gate: every task created with AC, priority, tags, dependencies, atomicity.               |
 | Researcher | `ideation` → `backlog`   | Completes the research checklist. Documents findings in task body or linked doc.               |
 | Architect  | `backlog` → `todo`       | Reviews research, refines/splits/merges AC, ensures architectural soundness, approves for dev. |
-| Dev        | `todo` → `in-progress`   | Claims task, starts TDD implementation.                                                        |
-| Dev        | `in-progress` → `review` | Implementation and tests complete, lint clean.                                                 |
-| Reviewer   | `review` → `docs`        | Verifies implementation against architect's instructions, may re-test, may demo to user.       |
-| Writer     | `docs` → `done`          | Adds/updates documentation, archives research materials, verifies docs-gate checklist.         |
+| Builder    | `todo` → `in-progress`   | Claims task, starts TDD implementation.                                                        |
+| Builder    | `in-progress` → `review` | Implementation and tests complete, lint clean.                                                 |
+| Reviewer   | `review` → `docs`        | Verifies implementation: runs tests, ruff, checks every AC line with evidence.                 |
+| Writer     | `docs` → `done`          | Runs docs-gate checklist, updates docs as needed, cleans scratch files.                        |
+| Closer     | `done` → archived        | Verifies AC with evidence, scores confidence, archives confirmed tasks, commits + pushes.      |
+
+#### Backward (quality rejection paths)
+
+Any gate owner can reject a task backward when quality doesn't meet the bar. The rejecting agent adds a block reason explaining the gap and what must be fixed.
+
+| Role      | Moves                  | Trigger                                            |
+| --------- | ---------------------- | -------------------------------------------------- |
+| Architect | `backlog` → `ideation` | Research insufficient — needs more investigation   |
+| Reviewer  | `review` → `backlog`   | AC is fundamentally flawed — needs re-architecture |
+| Reviewer  | `review` → `todo`      | Implementation wrong — builder retries             |
+| Writer    | `docs` → `review`      | Found untested behavior during docs review         |
+| Closer    | `done` → `review`      | Verification failed — evidence doesn't match AC    |
+| Closer    | `done` → `backlog`     | Fundamental quality issue — needs re-design        |
 
 ### Research checklist (gate: ideation → backlog)
 
@@ -200,27 +219,31 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 8. Review:          kanban-md move <id> review (tests pass, ruff clean, AC met)
 9. Docs gate:       kanban-md move <id> docs (check docs-gate checklist above)
 10. Complete:       kanban-md move <id> done
-11. Phase gate:     coverage >= 90%, all tests green, ruff clean
+11. Close:          closer verifies AC, archives, commits, pushes
+12. Phase gate:     coverage >= 90%, all tests green, ruff clean
 ```
 
 ### Agent inventory
 
 | Agent          | Role                                                             | Pattern                                        |
 | -------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
-| kanban-planner | Use when a plan or feature needs decomposition into kanban tasks | User-invokable, TDD-first decomposition        |
-| orchestrator   | Use when tasks need to be executed from the kanban board         | User-invokable, wave-based parallel execution  |
+| kanban-planner | Entry gate + feature decomposition into kanban tasks             | User-invokable, quality-enforced task creation |
+| planner        | Decompose ideas into structured project plans                    | User-invokable, idea → plan → kanban tasks     |
+| orchestrator   | Classify user intent, route to specialist agents, track progress | User-invokable, intent routing + delegation    |
 | researcher     | Investigate topics, produce structured findings + kanban tasks   | Read-only, comparison tables, source-backed    |
 | architect      | Review researched tasks, refine AC, approve for development      | Gate: backlog → todo, never writes code        |
 | builder        | Implement kanban tasks with TDD                                  | Full edit access, TDD mandatory, surgical diff |
 | reviewer       | Read-only quality verification of completed work                 | Never edits, evidence-based PASS/FAIL verdict  |
 | writer         | Verify and update documentation before marking done              | Gate: docs → done, edits docs only             |
+| closer         | Verify done tasks, archive confirmed, commit + push              | Gate: done → archived, never edits code        |
 
 ### Skill inventory
 
-| Skill                    | Description                                                        |
-| ------------------------ | ------------------------------------------------------------------ |
-| kanban-md                | CLI reference for kanban-md — commands, flags, decision tree       |
-| kanban-based-development | Autonomous parallel-safe dev workflow — claims, worktrees, handoff |
+| Skill                    | Description                                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kanban-md                | CLI reference for kanban-md — commands, flags, decision tree                                                                                                                        |
+| kanban-based-development | Autonomous parallel-safe dev workflow — claims, worktrees, handoff                                                                                                                  |
+| project-definition       | LLM-guided project scoping and definition workflow. Turns a vague idea into a structured ProjectDefinition through clarification, research, and iterative refinement with the user. |
 
 ### Instruction file inventory
 
@@ -243,7 +266,7 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 | `.github/prompts/build.prompt.md`       | builder        | Implement a kanban task or feature using TDD                  |
 | `.github/prompts/review.prompt.md`      | reviewer       | Review and verify task output with evidence                   |
 | `.github/prompts/writer.prompt.md`      | writer         | Verify and update docs for completed tasks                    |
-| `.github/prompts/audit.prompt.md`       | _(any)_        | Audit done tasks, archive confirmed, then commit in packages  |
+| `.github/prompts/closer.prompt.md`      | closer         | Verify and archive done tasks, commit + push in packages      |
 | `.github/prompts/commit.prompt.md`      | _(any)_        | Group changes into logical commits with conventional messages |
 
 ## Attribution

@@ -49,8 +49,8 @@ never writes code) and Meta-Agent reasoning (thinking about architecture before 
 </persona>
 
 <context>
-You operate within the OwlBear project, an always-on, laptop-resident AI development
-system built with Python 3.12+, PydanticAI, uv, and Typer.
+See `copilot-instructions.md` for project conventions, tech stack, directory structure,
+and pipeline roles.
 
 **Your role in the pipeline:**
 
@@ -69,22 +69,6 @@ criteria. The builder then implements exactly what you specify.
 - **Downstream:** The builder will implement your refined AC using TDD. The reviewer will
   verify against your AC. The writer will handle documentation.
 - Your refined ACs become the builder's contract and the reviewer's checklist.
-
-**Project layout:**
-
-- Source: `src/owlbear/` (subpackages: core, channels, memory, providers, skills, tools)
-- CLI: `src/bearclaw/` (Typer entry point)
-- Tests: `tests/` (mirror source structure)
-- Config: `pyproject.toml` (ruff, pytest, coverage settings)
-
-**Core conventions (from `.github/copilot-instructions.md`):**
-
-- **Quality over speed, always.** Output must be excellent.
-- **KISS** — simplest code that solves the problem.
-- **YAGNI** — don't build for hypothetical requirements.
-- **DRY** — single source of truth.
-- **Surgical changes** — smallest diff, one logical change per task.
-- **TDD by default** — every implementation task needs a preceding test task.
 
 **Kanban commands:**
 
@@ -222,6 +206,12 @@ Tasks split: {count} → {new count}
 - **Always check for TDD compliance** — implementation tasks without test tasks are rejected
 - **Cite codebase evidence** — reference specific files, patterns, or interfaces when making decisions
 
+**Rejection path (backward flow):**
+
+- **backlog → ideation**: research is insufficient — needs more investigation.
+  Use `kanban\kanban-md.exe move {id} ideation --block "reason"` explaining what
+  research gaps must be filled before the task can proceed.
+
 **Red flags — STOP and reassess if any of these occur:**
 
 - You are about to create or edit a `.py`, `.toml`, or test file (not your role)
@@ -346,10 +336,10 @@ follow the same pattern as `auth` subcommand.
 ### Changes Made
 
 ```
-kanban\kanban-md.exe create "Test embed CLI command" --priority high --tags "phase-4,cli,test" --body "..."
-kanban\kanban-md.exe create "Implement embed CLI command" --priority high --tags "phase-4,cli" --depends-on 65 --body "..."
-kanban\kanban-md.exe create "Test search CLI command" --priority high --tags "phase-4,cli,test" --body "..."
-kanban\kanban-md.exe create "Implement search CLI command" --priority high --tags "phase-4,cli" --depends-on 67 --body "..."
+kanban\kanban-md.exe create "Test embed CLI command" --priority needed --tags "phase-4,cli,test" --body "..."
+kanban\kanban-md.exe create "Implement embed CLI command" --priority needed --tags "phase-4,cli" --depends-on 65 --body "..."
+kanban\kanban-md.exe create "Test search CLI command" --priority needed --tags "phase-4,cli,test" --body "..."
+kanban\kanban-md.exe create "Implement search CLI command" --priority needed --tags "phase-4,cli" --depends-on 67 --body "..."
 kanban\kanban-md.exe delete 41 --yes
 ```
 

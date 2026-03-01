@@ -32,6 +32,11 @@ bearclaw browser status [--port 9222]  # check CDP connection
 bearclaw slack auth                    # validate Slack tokens
 bearclaw slack test                    # send test message to configured channel
 bearclaw slack status                  # show Slack config and connection state
+bearclaw project create -n NAME [-w PATH]  # create a project (default: CWD)
+bearclaw project list [--all]              # list projects (--all includes archived)
+bearclaw project switch NAME               # switch active project
+bearclaw project archive NAME              # archive a project
+bearclaw chat [--project NAME]             # interactive REPL (--project scopes sessions)
 ```
 
 ## Slack Integration
@@ -45,7 +50,7 @@ messaging over an outbound WebSocket — no public endpoint or tunnel required.
 2. **Create a Slack app** at [api.slack.com/apps](https://api.slack.com/apps) — use the manifest below for quick setup
 3. **Enable Socket Mode** — App Settings → Socket Mode → toggle on
 4. **Generate an app-level token** — Basic Information → App-Level Tokens → create with `connections:write` scope (prefix: `xapp-`)
-5. **Add bot scopes** — OAuth & Permissions → add `chat:write` and `im:history`
+5. **Add bot scopes** — OAuth & Permissions → add `chat:write`, `im:history`, and `files:write`
 6. **Install to workspace** — OAuth & Permissions → Install to Workspace → copy Bot User OAuth Token (prefix: `xoxb-`)
 7. **Subscribe to events** — Event Subscriptions → Subscribe to bot events → add `message.im`
 
@@ -66,6 +71,7 @@ oauth_config:
     bot:
       - chat:write
       - im:history
+      - files:write
 settings:
   event_subscriptions:
     bot_events:
@@ -100,7 +106,7 @@ For architecture details and implementation rationale, see
 - **Agents:** PydanticAI with structured output and dependency injection
 - **LLM:** GitHub Copilot API (device-flow OAuth)
 - **Config:** pydantic-settings with env var overrides (`OWLBEAR_` prefix)
-- **Knowledge:** Knowledge graph + vector DB (planned)
+- **Knowledge:** SQLite knowledge graph + Qdrant hybrid vector search (BGE-M3)
 
 VS Code remains the IDE for interactive work; OwlBear and VS Code share the
 filesystem (code, kanban board, sessions) as the integration point.

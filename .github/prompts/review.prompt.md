@@ -16,6 +16,7 @@ Review: ${input:task_or_files:Task ID or file paths — e.g. 'task #40', 'src/ow
 - Verify every AC line with specific evidence (test names, line numbers, output)
 - Produce an AC compliance table: AC Line | Evidence | PASS/FAIL
 - Binary verdict only: PASS or FAIL (no "conditional pass")
-- PASS → `kanban\kanban-md.exe move {id} docs` then check docs gate → `done`
+- PASS → `kanban\kanban-md.exe move {id} docs` — then STOP (writer handles docs→done)
 - FAIL → `kanban\kanban-md.exe move {id} todo` with specific failure reasons
 - **NEVER edit any files** — you are strictly read-only
+- **NEVER move a task to done** — the writer agent owns the docs gate

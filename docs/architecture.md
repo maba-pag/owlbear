@@ -116,13 +116,15 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │   ├── session.py                    # SessionStore (JSONL persistence)
 │   ├── usage.py                      # UsageRecord, UsageTracker (JSONL)
 │   ├── usage_cost.py                 # calc_estimated_cost (genai_prices)
-│   └── knowledge/                    # Knowledge pipeline (11 files, ~2500 LOC)
+│   └── knowledge/                    # Knowledge pipeline (14 files, ~2500 LOC)
 │       ├── __init__.py
-│       ├── schema.py                 # SQLite + sqlite-vec DDL, migrations
-│       ├── vectors.py                # VectorStore (temporal decay, bridge table)
-│       ├── embeddings.py             # EmbeddingProvider + FastEmbedProvider
+│       ├── schema.py                 # SQLite DDL, migrations (v1-v4)
+│       ├── qdrant.py                 # QdrantVectorStore (hybrid search, temporal decay)
+│       ├── embeddings.py             # EmbeddingProvider protocol + BgeM3EmbeddingProvider (idle-timeout)
 │       ├── graph.py                  # GraphStore (entity/edge CRUD)
+│       ├── graph_builder.py          # GraphBuilder (batch entity/edge construction)
 │       ├── models.py                 # Entity, Edge, Document Pydantic models
+│       ├── protocol.py               # KnowledgeStore protocol (query interface)
 │       ├── extractor.py              # LLM-based entity extraction
 │       ├── reranker.py               # BGE reranker (cross-encoder)
 │       ├── chunker.py                # TextChunker (token-level splits)
@@ -266,7 +268,7 @@ PydanticAI-based multi-agent system:
 
 **Usage tracking**: `UsageTracker` records per-turn usage (tokens, cost, premium requests) as JSONL.
 
-**Knowledge pipeline** (built, not wired to agent): 11 modules covering chunking → entity extraction → graph store → vector embeddings → reranking → ingest pipeline. Currently uses sqlite-vec + FastEmbed; planned migration to Qdrant + bge-m3 (#247-#261).
+**Knowledge pipeline** (built, not wired to agent): 13 modules covering chunking → entity extraction → graph store → vector embeddings → reranking → ingest pipeline. Uses SQLite (graph schema) + Qdrant (hybrid vector search) + BGE-M3 (embeddings with idle-timeout model unloading).
 
 ### 4.7 Auth
 
@@ -384,7 +386,7 @@ As of v0.2, all individual modules are built and tested (1608 tests, 2 SSL-env f
 | P6 | CDP Browser | #69-90 | ✅ Done | Edge launcher, CDP connect, tab naming |
 | P7 | Daemon & Core Tools | #120-126 | ✅ Done | FileToolset, TerminalToolset, chat REPL, ask_user, daemon |
 | P8 | Agent Framework | #127-132, #149-162 | ✅ Done | PydanticAI multi-agent, agent def/registry/delegation, observability |
-| P9 | Knowledge Pipeline | #133-136, #247-262 | 🔄 Active | Ingestion pipeline built; Qdrant+bge-m3 migration in research |
+| P9 | Knowledge Pipeline | #133-136, #247-262 | ✅ Done | Ingestion pipeline, Qdrant hybrid search, BGE-M3 embeddings |
 | P10 | External Connectors | #137-140 | ✅ Done | MCP client built |
 | P10.5 | Voice | #240-246 | 📋 Planned | Moonshine migration (research done) |
 | **PX** | **Bootstrap/Assembly** | **#263** | **🚨 Critical** | **Wire all modules into working system** |
@@ -402,7 +404,7 @@ As of v0.2, all individual modules are built and tested (1608 tests, 2 SSL-env f
 | Async | Async throughout | httpx, Playwright, channel adapters all async |
 | Hook implementation | Python callables | HookRegistry with async emit, error-isolated |
 | Tool system | PydanticAI FunctionToolset | Not custom Tool ABC — PydanticAI handles schema export, validation, dispatch |
-| Memory persistence | JSONL files | Session stores PydanticAI ModelMessage. Knowledge pipeline uses sqlite-vec (migrating to Qdrant) |
+| Memory persistence | JSONL files | Session stores PydanticAI ModelMessage. Knowledge pipeline uses SQLite (schema) + Qdrant (vectors) + BGE-M3 (embeddings) |
 | Skill loading | Progressive (lazy) | Frontmatter at scan time, full content on demand |
 | Channel abstraction | Protocol (structural typing) | ChannelPlugin with name, send(), receive() |
 | CLI | Typer (BearClaw) | Entry point for all user commands |

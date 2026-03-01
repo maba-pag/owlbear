@@ -190,6 +190,22 @@ External repos and resources studied during OwlBear development.
 | R2R (SciPhi) | <https://github.com/SciPhi-AI/R2R> | MIT | Server-based RAG system; REST API architecture; knowledge graph features; eliminated due to server-only architecture | `docs/knowledge-pipeline-research.md` (elimination analysis) | 2026-02-28 |
 | Unstructured.io | <https://github.com/Unstructured-IO/unstructured> | Apache 2.0 | Document processing library; 130+ format support; eliminated — intake layer only | `docs/knowledge-pipeline-research.md` (elimination analysis) | 2026-02-28 |
 
+## Web Search Tool Research (Task #292)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ddgs (deedy5) | <https://github.com/deedy5/ddgs> | MIT | DuckDuckGo metasearch library: `DDGS().text()` API returning `{title, href, body}` dicts, multi-engine fallback, `RatelimitException`, sync-only API wrapped with `asyncio.to_thread()` | `src/owlbear/tools/web_search.py` (`_web_search` tool) | 2026-03-01 |
+| LangChain DuckDuckGoSearchRun | <https://python.langchain.com/docs/integrations/tools/ddg> | MIT | Thin wrapper over `duckduckgo-search`; snippet-concatenation formatting pattern (adapted to numbered markdown list) | `src/owlbear/tools/web_search.py` (result formatting inspiration) | 2026-03-01 |
+| trafilatura | <https://github.com/adbar/trafilatura> | Apache-2.0 | Web content extraction: `extract()` with `output_format="markdown"`, `include_links=True`; fallback-to-raw-HTML pattern | `src/owlbear/tools/web_search.py` (`_web_read` tool) | 2026-03-01 |
+
+## Conversation Router Research (Task #296)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| AutoGen SelectorGroupChat | <https://github.com/microsoft/autogen> | MIT | LLM-based speaker selection with prompt template (`{roles}`, `{participants}`, `{history}`), `selector_func` override, `candidate_func` filtering, retry with feedback | `docs/conversation-router-research.md` (prior art comparison), `src/owlbear/agents/orchestrator.md` (prompt-based routing pattern) | 2026-03-01 |
+| Semantic Router (aurelio-labs) | <https://github.com/aurelio-labs/semantic-router> | MIT | Embedding-based intent routing: `Route` objects with utterances, cosine similarity classification, sub-10ms decisions; evaluated but not adopted (YAGNI — embedding infra overkill for 6-agent system) | `docs/conversation-router-research.md` (prior art comparison) | 2026-03-01 |
+| PydanticAI multi-agent docs | <https://ai.pydantic.dev/multi-agent-applications/> | MIT | Agent delegation pattern, output functions for hand-off, `RunContext.usage` propagation; confirmed prompt-based routing as simplest approach | `docs/conversation-router-research.md` (recommendation basis), `src/owlbear/agents/orchestrator.md` (routing rules) | 2026-03-01 |
+
 ## Bootstrap/Assembly Research (Task #263)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -227,3 +243,35 @@ External repos and resources studied during OwlBear development.
 | MS GraphRAG Dataflow | <https://microsoft.github.io/graphrag/index/default_dataflow> | MIT | 6-phase indexing pipeline architecture | `docs/intra-document-graph-research.md` | 2026-02-28 |
 | LlamaIndex PropertyGraphIndex | <https://developers.llamaindex.ai/docs/llamaindex/module_guides/indexing/lpg_index_guide> | MIT | SchemaLLMPathExtractor, constrained extraction | `docs/intra-document-graph-research.md` | 2026-02-28 |
 | nano-graphrag (intra-doc patterns) | <https://github.com/gusye1234/nano-graphrag> | MIT | Minimal extract-merge-summarize pattern (~1100 LOC) | `docs/intra-document-graph-research.md` | 2026-02-28 |
+
+## Project Definition Workflow Research (Task #294)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| gpt-engineer preprompts | <https://github.com/gpt-engineer-org/gpt-engineer/tree/main/gpt_engineer/preprompts> | MIT | `clarify` → `generate` two-phase pipeline; clarify asks one question at a time; philosophy sets coding constraints | `docs/project-definition-workflow-research.md`, `.github/skills/project-definition/SKILL.md` (workflow step design) | 2026-03-01 |
+| Devika ARCHITECTURE.md | <https://github.com/stitionai/devika/blob/main/ARCHITECTURE.md> | MIT | Agent Core → Planner → Researcher → Coder pipeline; Planner generates step-by-step plan with focus area; agents are stateless, core manages state | `docs/project-definition-workflow-research.md`, `.github/skills/project-definition/SKILL.md` (6-step workflow pattern) | 2026-03-01 |
+| PydanticAI output docs | <https://ai.pydantic.dev/output/> | MIT | `output_type=SomeModel` for structured output; validated structured extraction pattern (`Agent[None, ProjectDefinition]`) | `docs/project-definition-workflow-research.md` (recommendation B: internal structured extraction) | 2026-03-01 |
+| aider chat modes | <https://aider.chat/docs/usage/modes.html> | N/A | ask/code workflow — discuss first, execute second; architect mode pairs reasoning model with editor model | `docs/project-definition-workflow-research.md` (prior art comparison) | 2026-03-01 |
+
+## Slack Rich Messaging Research (Task #297)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Slack Block Kit — Blocks reference | <https://docs.slack.dev/reference/block-kit/blocks> | N/A | Block types (header, section, actions, divider, image, context), max 50 blocks/message, mrkdwn text type | `src/owlbear/channels/slack.py` (`send_blocks`), `docs/slack-rich-messaging-research.md` | 2026-03-01 |
+| slack_sdk `AsyncWebClient` (v3.40.1) | <https://github.com/slackapi/python-slack-sdk> | MIT | `chat_postMessage(blocks=...)`, `files_upload_v2` 3-step upload, `thread_ts` threading | `src/owlbear/channels/slack.py` (`send_blocks`, `send_image`), `docs/slack-rich-messaging-research.md` | 2026-03-01 |
+| Slack mrkdwn formatting | <https://api.slack.com/reference/surfaces/formatting> | N/A | Markdown → mrkdwn conversion rules: bold, italic, strike, links, code passthrough | `src/owlbear/channels/slack_mrkdwn.py` (`markdown_to_mrkdwn`), `docs/slack-rich-messaging-research.md` | 2026-03-01 |
+
+## Multi-Project Session Research (Task #300)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Devika ProjectManager | <https://github.com/stitionai/devika> | MIT | SQLite-backed `Projects` model, per-project conversation stacks, name → slug pattern, CRUD store pattern | `src/owlbear/projects/models.py` (`_slugify`, `Project` model), `src/owlbear/projects/store.py` (`ProjectStore` CRUD), `docs/multi-project-session-research.md` | 2026-03-01 |
+| Nanobot SessionManager | <https://github.com/HKUDS/nanobot> | MIT | JSONL sessions keyed by workspace, workspace-scoped context loading, consolidation pattern | `docs/multi-project-session-research.md` (architecture reference) | 2026-03-01 |
+| Mem0 memory scoping | <https://github.com/mem0ai/mem0> | Apache-2.0 | Multi-level memory via user_id/agent_id/run_id metadata, scope-as-filter-parameter pattern | `docs/multi-project-session-research.md` (scoping pattern analysis) | 2026-03-01 |
+
+## Knowledge Toolset Research (Task #291)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI RAG example | <https://ai.pydantic.dev/examples/rag/> | MIT | Official RAG pattern: `@agent.tool` → embed query → vector search → format results; adapted for KnowledgeToolset query_knowledge flow | `src/owlbear/tools/knowledge.py` (`_query_knowledge` tool), `docs/knowledge-toolset-research.md` | 2026-03-01 |
+| PydanticAI FunctionToolset docs | <https://ai.pydantic.dev/toolsets/> | MIT | `FunctionToolset` subclass API, `add_function()` registration, toolset composition pattern | `src/owlbear/tools/knowledge.py` (`KnowledgeToolset` class), `docs/knowledge-toolset-research.md` | 2026-03-01 |
