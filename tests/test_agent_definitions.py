@@ -14,14 +14,19 @@ from owlbear.core.roles import AgentRole
 AGENTS_DIR = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "agents"
 
 # Known toolset names that map to real Toolset classes.
-KNOWN_TOOLSETS = frozenset({"filesystem", "terminal", "ask_user", "browser", "delegation"})
+KNOWN_TOOLSETS = frozenset(
+    {
+        "filesystem", "terminal", "ask_user", "browser",
+        "delegation", "kanban", "knowledge", "web_search",
+    }
+)
 
 # Expected metadata for each agent definition.
 EXPECTED_AGENTS: dict[str, dict] = {
     "orchestrator": {
         "description": "Routes tasks to specialist agents and plans work",
         "role": "builder",
-        "tools": ["delegation", "filesystem", "ask_user"],
+        "tools": ["delegation", "filesystem", "ask_user", "kanban"],
         "skills": ["kanban-md", "kanban-based-development"],
         "max_delegation_depth": 5,
     },
@@ -52,6 +57,13 @@ EXPECTED_AGENTS: dict[str, dict] = {
         "tools": ["filesystem"],
         "skills": ["kanban-md"],
         "max_delegation_depth": 0,
+    },
+    "planner": {
+        "description": "Decomposes ideas into structured project plans",
+        "role": "builder",
+        "tools": ["filesystem", "ask_user", "delegation", "knowledge", "web_search"],
+        "skills": ["kanban-md", "kanban-based-development", "project-definition"],
+        "max_delegation_depth": 3,
     },
 }
 
@@ -90,15 +102,17 @@ class TestAgentDefinitionFiles:
     def test_system_prompt_nonempty(self, agent_name: str) -> None:
         defn = parse_agent_definition(AGENTS_DIR / f"{agent_name}.md")
         lines = [ln for ln in defn.system_prompt.strip().splitlines() if ln.strip()]
-        assert 10 <= len(lines) <= 25, (
-            f"{agent_name} system prompt has {len(lines)} non-blank lines, expected 10-25"
+        # orchestrator has routing tables + agent catalog + kanban pipeline (tasks #311, #312, #316)
+        upper = 70 if agent_name == "orchestrator" else 25
+        assert 10 <= len(lines) <= upper, (
+            f"{agent_name} system prompt has {len(lines)} non-blank lines, expected 10-{upper}"
         )
 
 
 class TestRegistryScanAgentsDir:
-    """AgentRegistry.scan() on agents dir loads all 5 definitions."""
+    """AgentRegistry.scan() on agents dir loads all 6 definitions."""
 
-    def test_scan_loads_all_five(self) -> None:
+    def test_scan_loads_all_six(self) -> None:
         from pydantic_ai.toolsets import FunctionToolset
 
         registry = AgentRegistry(
@@ -107,8 +121,31 @@ class TestRegistryScanAgentsDir:
             default_model="test",
         )
         registry.scan()
-        assert len(registry.definitions) == 5
+        assert len(registry.definitions) == 6
         assert set(registry.definitions) == set(EXPECTED_AGENTS)
+
+    def test_get_planner_returns_agent_with_resolved_tools(self) -> None:
+        from pydantic_ai import Agent
+        from pydantic_ai.toolsets import FunctionToolset
+
+        resolved_tools: list[str] = []
+
+        def tracking_resolver(name: str) -> FunctionToolset:
+            resolved_tools.append(name)
+            return FunctionToolset()
+
+        registry = AgentRegistry(
+            AGENTS_DIR,
+            tracking_resolver,
+            default_model="test",
+        )
+        registry.scan()
+        agent = registry.get("planner")
+
+        assert isinstance(agent, Agent)
+        assert sorted(resolved_tools) == [
+            "ask_user", "delegation", "filesystem", "knowledge", "web_search",
+        ]
 
 
 class TestRoleValues:
@@ -128,7 +165,7 @@ class TestRoleValues:
         defn = parse_agent_definition(AGENTS_DIR / "researcher.md")
         assert AgentRole(defn.role) is AgentRole.VALIDATOR
 
-    @pytest.mark.parametrize("agent_name", ["orchestrator", "coder", "writer"])
+    @pytest.mark.parametrize("agent_name", ["orchestrator", "coder", "writer", "planner"])
     def test_builders(self, agent_name: str) -> None:
         defn = parse_agent_definition(AGENTS_DIR / f"{agent_name}.md")
         assert AgentRole(defn.role) is AgentRole.BUILDER
