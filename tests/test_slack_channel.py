@@ -337,3 +337,257 @@ class TestSlackChannelEventHandler:
 
         # Handler should acknowledge the request
         mock_socket_instance.send_socket_mode_response.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# send_blocks()  (task #326)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelSendBlocks:
+    """SlackChannel.send_blocks sends Block Kit messages via chat_postMessage."""
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_calls_chat_post_message_with_blocks(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        blocks = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": "Hello"}},
+        ]
+        await channel.send_blocks(blocks, text_fallback="Hello")
+
+        channel._web_client.chat_postMessage.assert_awaited_once_with(
+            channel="C12345",
+            blocks=blocks,
+            text="Hello",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_passes_block_kit_structure(self) -> None:
+        """Blocks must be passed as a list[dict] matching Block Kit format."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        blocks: list[dict] = [
+            {"type": "header", "text": {"type": "plain_text", "text": "Title"}},
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Option 1*"},
+            },
+        ]
+        await channel.send_blocks(blocks, text_fallback="Title")
+
+        call_kwargs = channel._web_client.chat_postMessage.call_args.kwargs
+        sent_blocks = call_kwargs["blocks"]
+        assert isinstance(sent_blocks, list)
+        assert all(isinstance(b, dict) for b in sent_blocks)
+        assert sent_blocks[0]["type"] == "header"
+        assert sent_blocks[1]["type"] == "divider"
+        assert sent_blocks[2]["type"] == "section"
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_forwards_thread_ts(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        blocks = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": "reply"}},
+        ]
+        await channel.send_blocks(
+            blocks,
+            text_fallback="reply",
+            thread_ts="1234567890.123456",
+        )
+
+        channel._web_client.chat_postMessage.assert_awaited_once_with(
+            channel="C12345",
+            blocks=blocks,
+            text="reply",
+            thread_ts="1234567890.123456",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_without_thread_ts_omits_it(self) -> None:
+        """When thread_ts is None, it should NOT appear in the API call."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        blocks = [{"type": "divider"}]
+        await channel.send_blocks(blocks, text_fallback="divider")
+
+        call_kwargs = channel._web_client.chat_postMessage.call_args.kwargs
+        assert "thread_ts" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_empty_blocks_raises_value_error(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        with pytest.raises(ValueError, match=r"[Bb]locks"):
+            await channel.send_blocks([], text_fallback="empty")
+
+        # chat_postMessage should NOT have been called
+        channel._web_client.chat_postMessage.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# send_image()  (task #328)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelSendImage:
+    """SlackChannel.send_image uploads files via files_upload_v2."""
+
+    @pytest.mark.asyncio
+    async def test_send_image_path_calls_files_upload_v2(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send_image("/images/chart.png", caption="Chart")
+
+        channel._web_client.files_upload_v2.assert_awaited_once_with(
+            file="/images/chart.png",
+            channel="C12345",
+            title="Chart",
+            initial_comment="Chart",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_image_bytes_calls_files_upload_v2(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        image_data = b"\x89PNG\r\n\x1a\nfake-image-bytes"
+        await channel.send_image(image_data, caption="Screenshot")
+
+        channel._web_client.files_upload_v2.assert_awaited_once_with(
+            file=image_data,
+            channel="C12345",
+            title="Screenshot",
+            initial_comment="Screenshot",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_image_forwards_thread_ts(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send_image(
+            "/images/img.png",
+            caption="Threaded",
+            thread_ts="9876543210.654321",
+        )
+
+        channel._web_client.files_upload_v2.assert_awaited_once_with(
+            file="/images/img.png",
+            channel="C12345",
+            title="Threaded",
+            initial_comment="Threaded",
+            thread_ts="9876543210.654321",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_image_caption_becomes_initial_comment_and_title(self) -> None:
+        """The caption param must map to both initial_comment and title."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send_image(b"data", caption="My caption text")
+
+        call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
+        assert call_kwargs["initial_comment"] == "My caption text"
+        assert call_kwargs["title"] == "My caption text"
+
+    @pytest.mark.asyncio
+    async def test_send_image_without_caption_uses_defaults(self) -> None:
+        """When caption is None, title defaults to 'image' and no initial_comment."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send_image(b"data")
+
+        call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
+        assert call_kwargs["title"] == "image"
+        assert "initial_comment" not in call_kwargs or call_kwargs["initial_comment"] is None
+
+    @pytest.mark.asyncio
+    async def test_send_image_error_fallback_sends_caption_as_text(self) -> None:
+        """When files_upload_v2 raises, fall back to send(caption)."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.side_effect = Exception("upload failed")
+
+        await channel.send_image("/images/pic.png", caption="Fallback text")
+
+        # files_upload_v2 was attempted
+        channel._web_client.files_upload_v2.assert_awaited_once()
+        # Fell back to chat_postMessage with the caption
+        channel._web_client.chat_postMessage.assert_awaited_once_with(
+            channel="C12345",
+            text="Fallback text",
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_image_error_without_caption_sends_generic(self) -> None:
+        """Fallback with no caption sends a generic failure notice."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.side_effect = Exception("upload failed")
+
+        await channel.send_image("/images/pic.png")
+
+        channel._web_client.chat_postMessage.assert_awaited_once()
+        call_kwargs = channel._web_client.chat_postMessage.call_args.kwargs
+        assert "text" in call_kwargs
+        # Should contain some indication of failure, not be empty
+        assert call_kwargs["text"]

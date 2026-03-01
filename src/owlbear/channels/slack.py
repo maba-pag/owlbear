@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from slack_sdk.socket_mode.aiohttp import SocketModeClient
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web.async_client import AsyncWebClient
 
+from owlbear.channels.slack_mrkdwn import markdown_to_mrkdwn
+
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from slack_sdk.socket_mode.async_client import AsyncBaseSocketModeClient
     from slack_sdk.socket_mode.request import SocketModeRequest
 
@@ -68,8 +72,91 @@ class SlackChannel:
         """Send *message* to the configured Slack channel."""
         await self._web_client.chat_postMessage(
             channel=self._channel_id,
-            text=message,
+            text=markdown_to_mrkdwn(message),
         )
+
+    async def send_blocks(
+        self,
+        blocks: list[dict[str, Any]],
+        text_fallback: str,
+        *,
+        thread_ts: str | None = None,
+    ) -> None:
+        """Send a Block Kit structured message to the configured Slack channel.
+
+        Parameters
+        ----------
+        blocks:
+            Non-empty list of Block Kit block dicts.
+        text_fallback:
+            Plain-text fallback — Slack uses it for notifications and
+            accessibility readers.
+        thread_ts:
+            Optional thread timestamp to reply in a thread.
+
+        Raises
+        ------
+        ValueError
+            If *blocks* is empty.
+        """
+        if not blocks:
+            msg = "blocks must be non-empty"
+            raise ValueError(msg)
+
+        kwargs: dict[str, Any] = {
+            "channel": self._channel_id,
+            "blocks": blocks,
+            "text": text_fallback,
+        }
+        if thread_ts is not None:
+            kwargs["thread_ts"] = thread_ts
+
+        await self._web_client.chat_postMessage(**kwargs)
+
+    async def send_image(
+        self,
+        file_or_bytes: str | Path | bytes,
+        caption: str = "",
+        *,
+        thread_ts: str | None = None,
+    ) -> None:
+        """Upload an image file to the configured Slack channel.
+
+        Accepts a file path (``str`` or :class:`~pathlib.Path`) or raw
+        ``bytes``.  On upload failure the method logs a warning and falls
+        back to :meth:`send` with the *caption* as plain text.
+
+        Requires the ``files:write`` bot scope.
+
+        Parameters
+        ----------
+        file_or_bytes:
+            Path to the image file or raw image bytes.
+        caption:
+            Optional caption used as both ``title`` and ``initial_comment``.
+        thread_ts:
+            Optional thread timestamp to reply in a thread.
+        """
+        kwargs: dict[str, Any] = {
+            "file": file_or_bytes,
+            "channel": self._channel_id,
+        }
+        if caption:
+            kwargs["title"] = caption
+            kwargs["initial_comment"] = caption
+        else:
+            kwargs["title"] = "image"
+        if thread_ts is not None:
+            kwargs["thread_ts"] = thread_ts
+
+        try:
+            await self._web_client.files_upload_v2(**kwargs)
+        except Exception:  # noqa: BLE001 — deliberate catch-all; fallback to plain text
+            logger.warning(
+                "files_upload_v2 failed, falling back to plain text",
+                exc_info=True,
+            )
+            await self.send(caption or "[image upload failed]")
 
     async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
         """Wait for the next incoming message from Slack.
