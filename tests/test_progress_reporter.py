@@ -12,6 +12,7 @@ import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from owlbear.core.progress import ProgressReporter
 
 # ---------------------------------------------------------------------------
