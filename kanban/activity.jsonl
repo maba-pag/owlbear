@@ -2842,3 +2842,16 @@
 {"timestamp":"2026-03-01T17:10:18.9350056+01:00","action":"move","task_id":350,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-01T17:10:20.0068988+01:00","action":"move","task_id":351,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-01T17:10:20.8923763+01:00","action":"move","task_id":352,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T17:31:28.6847703+01:00","action":"create","task_id":353,"detail":"P12-01: Fix I001 lint error in test_progress_reporter.py"}
+{"timestamp":"2026-03-01T17:31:35.2572283+01:00","action":"create","task_id":354,"detail":"P12-02: Fix flaky timing assertion in test_successive_calls_advance_last_used"}
+{"timestamp":"2026-03-01T17:31:42.2133125+01:00","action":"create","task_id":355,"detail":"P12-03: Wire project scope into KnowledgeToolset during bootstrap"}
+{"timestamp":"2026-03-01T17:32:17.5842376+01:00","action":"move","task_id":353,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-01T17:32:18.3093741+01:00","action":"move","task_id":354,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-01T17:33:50.1881083+01:00","action":"move","task_id":353,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-01T17:36:54.007567+01:00","action":"move","task_id":354,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-01T17:39:01.2312981+01:00","action":"move","task_id":353,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-01T17:39:02.0285577+01:00","action":"move","task_id":354,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-01T17:39:48.8675767+01:00","action":"move","task_id":353,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-01T17:39:49.6070524+01:00","action":"move","task_id":354,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-01T17:41:20.6734582+01:00","action":"move","task_id":353,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-01T17:41:21.5030523+01:00","action":"move","task_id":354,"detail":"done -\u003e archived"}
