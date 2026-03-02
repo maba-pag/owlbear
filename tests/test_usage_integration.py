@@ -6,11 +6,11 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from owlbear.memory.usage import UsageRecord, UsageTracker
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 from owlbear.core.agent import OwlBearAgent
 from owlbear.memory.session import SessionStore
+from owlbear.memory.usage import UsageRecord, UsageTracker
 
 
 def _mock_result(output: str, messages: list[object]) -> MagicMock:

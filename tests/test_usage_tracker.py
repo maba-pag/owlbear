@@ -6,8 +6,9 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from owlbear.memory.usage import UsageRecord, UsageSummary, UsageTracker
 from pydantic import TypeAdapter
+
+from owlbear.memory.usage import UsageRecord, UsageSummary, UsageTracker
 
 _adapter: TypeAdapter[UsageRecord] = TypeAdapter(UsageRecord)
 

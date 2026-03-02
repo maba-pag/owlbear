@@ -12,8 +12,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from owlbear.projects.models import Project
 from pydantic import ValidationError
+
+from owlbear.projects.models import Project
 
 # ---------------------------------------------------------------------------
 # Fields

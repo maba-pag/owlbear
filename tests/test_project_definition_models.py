@@ -7,8 +7,9 @@ task (#318) creates src/owlbear/planning/models.py.
 from __future__ import annotations
 
 import pytest
-from owlbear.planning.models import ProjectDefinition, Requirement
 from pydantic import ValidationError
+
+from owlbear.planning.models import ProjectDefinition, Requirement
 
 # ---------------------------------------------------------------------------
 # Helpers

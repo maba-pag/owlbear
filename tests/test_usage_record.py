@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from owlbear.memory.usage import UsageRecord
 from pydantic import TypeAdapter
+
+from owlbear.memory.usage import UsageRecord
 
 
 def _sample_record(**overrides: object) -> UsageRecord:

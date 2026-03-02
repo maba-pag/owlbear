@@ -32,6 +32,7 @@ coverage.xml
 htmlcov/
 .hypothesis/
 .benchmarks/
+tests/benchmarks/.cache/
 megalinter-reports/
 
 # IDE and editor
