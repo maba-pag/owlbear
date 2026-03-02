@@ -18,7 +18,8 @@ import httpx
 import openai
 import pytest
 
-from owlbear.daemon import PidFile, _is_auth_error, run_daemon, setup_logging
+from owlbear.core.errors import ErrorCategory
+from owlbear.daemon import PidFile, run_daemon, setup_logging
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -587,7 +588,7 @@ class TestBearclawStatus:
 
 
 # ---------------------------------------------------------------------------
-# _is_auth_error helper
+# Error factory helpers
 # ---------------------------------------------------------------------------
 
 
@@ -610,31 +611,6 @@ def _make_openai_permission_error() -> openai.PermissionDeniedError:
     request = httpx.Request("GET", "http://example.com")
     response = httpx.Response(403, request=request)
     return openai.PermissionDeniedError(message="denied", response=response, body=None)
-
-
-class TestIsAuthError:
-    """_is_auth_error detects 401/403 HTTP and openai auth exceptions."""
-
-    def test_httpx_401_is_auth(self) -> None:
-        assert _is_auth_error(_make_httpx_status_error(401)) is True
-
-    def test_httpx_403_is_auth(self) -> None:
-        assert _is_auth_error(_make_httpx_status_error(403)) is True
-
-    def test_httpx_500_is_not_auth(self) -> None:
-        assert _is_auth_error(_make_httpx_status_error(500)) is False
-
-    def test_openai_authentication_error_is_auth(self) -> None:
-        assert _is_auth_error(_make_openai_auth_error()) is True
-
-    def test_openai_permission_denied_is_auth(self) -> None:
-        assert _is_auth_error(_make_openai_permission_error()) is True
-
-    def test_runtime_error_is_not_auth(self) -> None:
-        assert _is_auth_error(RuntimeError("something else")) is False
-
-    def test_value_error_is_not_auth(self) -> None:
-        assert _is_auth_error(ValueError("bad value")) is False
 
 
 # ---------------------------------------------------------------------------
@@ -786,3 +762,198 @@ class TestCopilotTokenRefresh:
         mock_create.assert_not_called()
         # Error still sent to channel
         assert any("Error:" in msg for msg in channel.sent)
+
+
+# ---------------------------------------------------------------------------
+# Classified error recovery (classify_error integration)
+# ---------------------------------------------------------------------------
+
+
+class TestClassifiedErrorRecovery:
+    """run_daemon uses classify_error() for structured error recovery."""
+
+    def test_transient_error_retries_three_times(self, tmp_path: Path) -> None:
+        """Transient errors retry up to 3 times; all fail → sends error."""
+        channel = MockChannel(["hello", None])
+
+        exc = httpx.ConnectError("connection refused")
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=exc)
+
+        with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        # 1 initial + 3 retries = 4 calls
+        assert mock_agent.turn.call_count == 4
+        # 3 sleeps (one per retry)
+        assert mock_sleep.call_count == 3
+        # Error sent to channel after retries exhausted
+        assert any("connection refused" in msg for msg in channel.sent)
+
+    def test_transient_error_succeeds_on_second_retry(self, tmp_path: Path) -> None:
+        """Transient error on first two attempts, success on third."""
+        channel = MockChannel(["hello", None])
+
+        exc = httpx.ConnectError("connection refused")
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=[exc, exc, "recovered"])
+
+        with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        # Initial call + 2 retry = 3 calls
+        assert mock_agent.turn.call_count == 3
+        assert "recovered" in channel.sent
+
+    def test_transient_backoff_uses_jitter(self, tmp_path: Path) -> None:
+        """Backoff delays include jitter — sleep values are not pure powers of 2."""
+        channel = MockChannel(["hello", None])
+
+        exc = httpx.ConnectError("connection refused")
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=exc)
+
+        with (
+            patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("owlbear.daemon.random.uniform", return_value=0.42) as mock_jitter,
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        # random.uniform called for each retry
+        assert mock_jitter.call_count == 3
+        # Each sleep = base_delay + jitter (0.42)
+        sleep_args = [call.args[0] for call in mock_sleep.call_args_list]
+        # With jitter=0.42: delays should be 1+0.42, 2+0.42, 4+0.42
+        assert sleep_args[0] == pytest.approx(1.42)
+        assert sleep_args[1] == pytest.approx(2.42)
+        assert sleep_args[2] == pytest.approx(4.42)
+
+    def test_permanent_error_no_retry(self, tmp_path: Path) -> None:
+        """Permanent errors are sent to channel immediately — no retry."""
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        # Only 1 call — no retry for permanent errors
+        mock_agent.turn.assert_called_once()
+        assert any("missing.txt" in msg for msg in channel.sent)
+
+    def test_tool_semantic_error_treated_as_permanent(self, tmp_path: Path) -> None:
+        """Tool-semantic errors treated same as permanent at daemon level."""
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=KeyError("bad_key"))
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        mock_agent.turn.assert_called_once()
+        assert any("Error:" in msg for msg in channel.sent)
+
+    def test_daemon_continues_after_transient_exhaustion(self, tmp_path: Path) -> None:
+        """After transient retries exhausted, daemon processes next message."""
+        channel = MockChannel(["msg1", "msg2", None])
+
+        exc = httpx.ConnectError("timeout")
+        mock_agent = AsyncMock()
+        # msg1: all 4 calls (1 initial + 3 retry) fail; msg2: succeeds
+        mock_agent.turn = AsyncMock(side_effect=[exc, exc, exc, exc, "reply2"])
+
+        with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        # 4 calls for msg1 + 1 call for msg2
+        assert mock_agent.turn.call_count == 5
+        # Error from msg1 and reply from msg2 both sent
+        assert any("timeout" in msg for msg in channel.sent)
+        assert "reply2" in channel.sent
+
+    def test_classify_error_is_used_not_is_auth_error(self, tmp_path: Path) -> None:
+        """Verify classify_error is called (not _is_auth_error)."""
+        channel = MockChannel(["hello", None])
+
+        exc = _make_openai_auth_error()
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(
+            side_effect=[exc, "refreshed"],
+        )
+        mock_agent.update_model = MagicMock()
+
+        with (
+            patch(
+                "owlbear.daemon.create_copilot_model",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ),
+            patch("owlbear.daemon.classify_error", return_value=ErrorCategory.AUTH) as mock_clf,
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    settings=MagicMock(),
+                )
+            )
+
+        mock_clf.assert_called_once_with(exc)
+
+    def test_daemon_never_crashes_from_message_failure(self, tmp_path: Path) -> None:
+        """Daemon loop continues even after unexpected exception types."""
+        channel = MockChannel(["bad", "good", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(
+            side_effect=[MemoryError("oom"), "ok"],
+        )
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        assert mock_agent.turn.call_count == 2
+        assert any("oom" in msg for msg in channel.sent)
+        assert "ok" in channel.sent

@@ -2,14 +2,19 @@
 
 Covers: PRE_TOOL_USE emission with tool_name and args, POST_TOOL_USE emission
 with tool_name and result, hook exception isolation, preservation of
-wrapped toolset behavior, and guard-based command blocking.
+wrapped toolset behavior, guard-based command blocking, and retry logic
+for transient errors.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
+import httpx
+import pytest
 
 from owlbear.core.command_guard import CommandSafetyGuard
 from owlbear.core.hooks import HookEvent, HookRegistry
@@ -375,3 +380,259 @@ class TestGuardWithAsyncCallable:
         assert isinstance(result, str)
         assert "BLOCKED" in result or "blocked" in result.lower()
         mock_ts.call_tool.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Retry logic for transient errors (#359)
+# ---------------------------------------------------------------------------
+
+
+def _make_transient_error() -> httpx.ConnectError:
+    """Create a transient error (network connect failure)."""
+    return httpx.ConnectError("Connection refused")
+
+
+def _make_timeout_error() -> httpx.ReadTimeout:
+    """Create a transient timeout error."""
+    return httpx.ReadTimeout("Read timed out")
+
+
+def _make_http_429_error() -> httpx.HTTPStatusError:
+    """Create a transient HTTP 429 rate-limit error."""
+    request = httpx.Request("POST", "https://api.example.com/chat")
+    response = httpx.Response(429, request=request)
+    return httpx.HTTPStatusError("Rate limited", request=request, response=response)
+
+
+def _make_permanent_error() -> FileNotFoundError:
+    """Create a permanent error (file not found)."""
+    return FileNotFoundError("No such file")
+
+
+def _make_auth_error() -> httpx.HTTPStatusError:
+    """Create an auth error (HTTP 401)."""
+    request = httpx.Request("POST", "https://api.example.com/chat")
+    response = httpx.Response(401, request=request)
+    return httpx.HTTPStatusError("Unauthorized", request=request, response=response)
+
+
+def _make_tool_semantic_error() -> ValueError:
+    """Create a tool-semantic error (model can self-correct)."""
+    return ValueError("invalid argument: expected positive int")
+
+
+class TestRetryTransientErrors:
+    """call_tool() retries when classify_error returns TRANSIENT."""
+
+    def test_retries_on_transient_then_succeeds(self) -> None:
+        """Tool fails once with transient error, then succeeds on retry."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(
+            side_effect=[_make_transient_error(), "success"]
+        )
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        result = _run(hooked.call_tool("fetch", {"url": "http://example.com"}, ctx, tool))
+
+        assert result == "success"
+        assert mock_ts.call_tool.call_count == 2
+
+    def test_retries_on_timeout_then_succeeds(self) -> None:
+        """Tool fails with timeout, then succeeds on retry."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(
+            side_effect=[_make_timeout_error(), "ok"]
+        )
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        result = _run(hooked.call_tool("read_page", {}, ctx, tool))
+
+        assert result == "ok"
+        assert mock_ts.call_tool.call_count == 2
+
+    def test_retries_on_http_429_then_succeeds(self) -> None:
+        """Tool fails with 429 rate limit, then succeeds on retry."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(
+            side_effect=[_make_http_429_error(), "done"]
+        )
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        result = _run(hooked.call_tool("query", {}, ctx, tool))
+
+        assert result == "done"
+        assert mock_ts.call_tool.call_count == 2
+
+    def test_max_3_attempts_then_propagates(self) -> None:
+        """After 3 transient failures, the original exception propagates."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        err = _make_transient_error()
+        mock_ts.call_tool = AsyncMock(side_effect=err)
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(httpx.ConnectError):
+            _run(hooked.call_tool("fetch", {}, ctx, tool))
+
+        assert mock_ts.call_tool.call_count == 3
+
+    def test_exhausted_retries_original_exception_type(self) -> None:
+        """After retries exhausted, the raised exception is the original type, not RetryError."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(side_effect=_make_timeout_error())
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(httpx.ReadTimeout):
+            _run(hooked.call_tool("read_page", {}, ctx, tool))
+
+
+class TestNoRetryForNonTransient:
+    """PERMANENT, AUTH, and TOOL_SEMANTIC errors propagate immediately."""
+
+    def test_permanent_error_no_retry(self) -> None:
+        """FileNotFoundError (PERMANENT) propagates immediately — 1 attempt."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(side_effect=_make_permanent_error())
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(FileNotFoundError):
+            _run(hooked.call_tool("read_file", {"path": "/nope"}, ctx, tool))
+
+        assert mock_ts.call_tool.call_count == 1
+
+    def test_auth_error_no_retry(self) -> None:
+        """HTTP 401 (AUTH) propagates immediately — 1 attempt."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(side_effect=_make_auth_error())
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(httpx.HTTPStatusError):
+            _run(hooked.call_tool("query", {}, ctx, tool))
+
+        assert mock_ts.call_tool.call_count == 1
+
+    def test_tool_semantic_error_no_retry(self) -> None:
+        """ValueError (TOOL_SEMANTIC) propagates immediately — 1 attempt."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(side_effect=_make_tool_semantic_error())
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(ValueError, match="invalid argument"):
+            _run(hooked.call_tool("compute", {"x": -1}, ctx, tool))
+
+        assert mock_ts.call_tool.call_count == 1
+
+
+class TestBlockedCommandNotRetried:
+    """BlockedCommandError still returns BLOCKED string, never retried."""
+
+    def test_blocked_returns_string_not_retried(self) -> None:
+        """BlockedCommandError from guard returns 'BLOCKED: ...' — no retry."""
+        hooks = HookRegistry()
+        guard = CommandSafetyGuard()
+        hooked, mock_ts = _make_hooked(hooks=hooks)
+        hooked.guards = [guard]
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        result = _run(
+            hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool)
+        )
+
+        assert isinstance(result, str)
+        assert "BLOCKED" in result
+        mock_ts.call_tool.assert_not_called()
+
+
+class TestGuardsRunOnceNotPerRetry:
+    """Guards run once before the retry loop, not on every retry attempt."""
+
+    def test_guard_called_once_even_with_retries(self) -> None:
+        """Guard is called once, even if the tool retries multiple times."""
+        hooks = HookRegistry()
+        guard_calls: list[dict[str, object]] = []
+
+        def tracking_guard(payload: dict[str, object]) -> None:
+            guard_calls.append(payload)
+
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(
+            side_effect=[_make_transient_error(), "success"]
+        )
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks, guards=[tracking_guard])
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        result = _run(hooked.call_tool("fetch", {"url": "http://x"}, ctx, tool))
+
+        assert result == "success"
+        assert len(guard_calls) == 1  # Guard ran exactly once
+        assert mock_ts.call_tool.call_count == 2  # Tool retried once
+
+
+class TestRetryLogging:
+    """Each retry is logged at WARNING with tool name, attempt, and error."""
+
+    def test_retry_logs_warning_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
+        """WARNING log emitted for each retry attempt."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(
+            side_effect=[_make_transient_error(), "ok"]
+        )
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with caplog.at_level(logging.WARNING, logger="owlbear.tools.hooked"):
+            _run(hooked.call_tool("web_fetch", {}, ctx, tool))
+
+        retry_warnings = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+            and ("retry" in r.message.lower() or "attempt" in r.message.lower())
+        ]
+        assert len(retry_warnings) >= 1
+        msg = retry_warnings[0].message
+        assert "web_fetch" in msg
+
+    def test_no_retry_log_on_success(self, caplog: pytest.LogCaptureFixture) -> None:
+        """No retry WARNING when tool succeeds on first attempt."""
+        hooks = HookRegistry()
+        hooked, _ = _make_hooked(return_value="ok", hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with caplog.at_level(logging.WARNING, logger="owlbear.tools.hooked"):
+            _run(hooked.call_tool("greet", {}, ctx, tool))
+
+        retry_warnings = [
+            r
+            for r in caplog.records
+            if "retry" in r.message.lower() or "attempt" in r.message.lower()
+        ]
+        assert len(retry_warnings) == 0

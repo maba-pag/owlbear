@@ -16,12 +16,14 @@ Usage::
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 
 from pydantic_ai import RunContext  # noqa: TC002
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.deps import OwlBearDeps  # noqa: TC001
+from owlbear.core.errors import ErrorCategory, ToolError, classify_error
 
 __all__ = ["MAX_DELEGATION_DEPTH", "DelegationToolset"]
 
@@ -83,14 +85,26 @@ class DelegationToolset(FunctionToolset):
         # -- Guard: registry must exist -----------------------------------
         registry = ctx.deps.agent_registry
         if registry is None:
-            return "Error: agent_registry is not configured on deps."
+            return json.dumps(
+                ToolError(
+                    error_type=ErrorCategory.PERMANENT,
+                    tool_name="delegate_to_agent",
+                    message="agent_registry is not configured on deps.",
+                ).to_dict()
+            )
 
         # -- Guard: depth limit -------------------------------------------
         depth = ctx.deps._delegation_depth  # noqa: SLF001
         if depth >= MAX_DELEGATION_DEPTH:
-            return (
-                f"Error: max delegation depth ({MAX_DELEGATION_DEPTH}) "
-                f"exceeded (current depth: {depth})."
+            return json.dumps(
+                ToolError(
+                    error_type=ErrorCategory.PERMANENT,
+                    tool_name="delegate_to_agent",
+                    message=(
+                        f"max delegation depth ({MAX_DELEGATION_DEPTH}) "
+                        f"exceeded (current depth: {depth})."
+                    ),
+                ).to_dict()
             )
 
         # -- Look up agent ------------------------------------------------
@@ -98,7 +112,13 @@ class DelegationToolset(FunctionToolset):
             agent = registry.get(agent_name)
         except KeyError:
             available = ", ".join(sorted(registry.definitions))
-            return f"Error: agent '{agent_name}' not found. Available: {available}"
+            return json.dumps(
+                ToolError(
+                    error_type=ErrorCategory.TOOL_SEMANTIC,
+                    tool_name="delegate_to_agent",
+                    message=f"agent '{agent_name}' not found. Available: {available}",
+                ).to_dict()
+            )
 
         # -- Build child deps with incremented depth ----------------------
         inner_deps = dataclasses.replace(
@@ -116,6 +136,12 @@ class DelegationToolset(FunctionToolset):
                 exc,
                 exc_info=True,
             )
-            return f"Error: delegation to '{agent_name}' failed: {exc}"
+            return json.dumps(
+                ToolError(
+                    error_type=classify_error(exc),
+                    tool_name="delegate_to_agent",
+                    message=f"delegation to '{agent_name}' failed: {exc}",
+                ).to_dict()
+            )
 
         return result.output

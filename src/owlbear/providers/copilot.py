@@ -2,19 +2,71 @@
 
 Creates an :class:`openai.AsyncOpenAI` client configured for the GitHub
 Copilot API, using device-flow OAuth tokens and the required
-Copilot-Integration-Id header.
+Copilot-Integration-Id header.  HTTP requests are automatically retried
+on transient errors (429, 502, 503, 504) via
+:class:`pydantic_ai.retries.AsyncTenacityTransport`.
 """
 
 from __future__ import annotations
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.retries import AsyncTenacityTransport, RetryConfig, wait_retry_after
+from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from owlbear.auth.copilot import derive_base_url, load_token
 from owlbear.config import OwlBearSettings
 
 _COPILOT_INTEGRATION_HEADER = {"Copilot-Integration-Id": "vscode-chat"}
+
+_TRANSIENT_STATUS_CODES: frozenset[int] = frozenset({429, 502, 503, 504})
+
+
+def _validate_transient_response(response: httpx.Response) -> None:
+    """Raise :class:`httpx.HTTPStatusError` only for transient status codes.
+
+    Transient codes (429, 502, 503, 504) are raised so the
+    :class:`AsyncTenacityTransport` can retry them.  All other status
+    codes — including permanent errors (400, 404, 422) and auth errors
+    (401, 403) — pass through untouched so callers can handle them.
+    """
+    if response.status_code in _TRANSIENT_STATUS_CODES:
+        response.raise_for_status()
+
+
+def _build_retry_transport(
+    *,
+    inner_transport: httpx.AsyncBaseTransport | None = None,
+) -> AsyncTenacityTransport:
+    """Build an :class:`AsyncTenacityTransport` with OwlBear retry policy.
+
+    - Max 3 attempts
+    - Exponential backoff: base 1 s, multiplier 2, max 30 s
+    - Respects ``Retry-After`` header on 429 responses
+    - Only retries :class:`httpx.HTTPStatusError` (transient codes)
+    - Re-raises the original exception after exhausting retries
+
+    Args:
+        inner_transport: Optional custom inner transport (useful for testing).
+
+    Returns:
+        Configured :class:`AsyncTenacityTransport`.
+    """
+    config = RetryConfig(
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        stop=stop_after_attempt(3),
+        wait=wait_retry_after(
+            fallback_strategy=wait_exponential(multiplier=2, min=1, max=30),
+            max_wait=30,
+        ),
+        reraise=True,
+    )
+    kwargs: dict = {"config": config, "validate_response": _validate_transient_response}
+    if inner_transport is not None:
+        kwargs["wrapped"] = inner_transport
+    return AsyncTenacityTransport(**kwargs)
 
 
 async def create_copilot_client(settings: OwlBearSettings | None = None) -> AsyncOpenAI:
@@ -43,10 +95,14 @@ async def create_copilot_client(settings: OwlBearSettings | None = None) -> Asyn
     token = token_data["token"]
     base_url = derive_base_url(token)
 
+    transport = _build_retry_transport()
+    http_client = httpx.AsyncClient(transport=transport)
+
     return AsyncOpenAI(
         api_key=token,
         base_url=f"{base_url}/v1",
         default_headers=_COPILOT_INTEGRATION_HEADER,
+        http_client=http_client,
     )
 
 

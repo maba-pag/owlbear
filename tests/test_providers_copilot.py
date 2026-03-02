@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from owlbear.config import OwlBearSettings
@@ -178,3 +179,286 @@ class TestCreateCopilotModel:
             model = await create_copilot_model()
 
         assert isinstance(model._provider, OpenAIProvider)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for retry transport tests
+# ---------------------------------------------------------------------------
+
+_TOKEN_DATA = {
+    "token": "tid=abc;exp=9999999999;proxy-ep=proxy.individual.githubcopilot.com",
+    "expires_at": 9999999999,
+}
+
+
+def _make_response(status_code: int, headers: dict[str, str] | None = None) -> httpx.Response:
+    """Build a minimal httpx.Response for testing."""
+    return httpx.Response(
+        status_code=status_code,
+        headers=headers or {},
+        request=httpx.Request("GET", "https://example.com"),
+    )
+
+
+class TestRetryTransportConfig:
+    """Verify that create_copilot_client wires an AsyncTenacityTransport."""
+
+    @pytest.mark.asyncio
+    async def test_client_uses_retry_transport(self) -> None:
+        """AsyncOpenAI's http_client should use AsyncTenacityTransport."""
+        from pydantic_ai.retries import AsyncTenacityTransport
+
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        transport = client._client._transport
+        assert isinstance(transport, AsyncTenacityTransport)
+
+    @pytest.mark.asyncio
+    async def test_validate_response_is_set(self) -> None:
+        """The transport's validate_response callback should be set."""
+        from pydantic_ai.retries import AsyncTenacityTransport
+
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        transport = client._client._transport
+        assert isinstance(transport, AsyncTenacityTransport)
+        assert transport.validate_response is not None
+
+
+class TestRetryTransientCodes:
+    """Transient status codes (429, 502, 503, 504) trigger retry."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_code", [429, 502, 503, 504])
+    async def test_transient_codes_are_retried(self, status_code: int) -> None:
+        """Transient HTTP codes trigger retries up to max attempts."""
+        from owlbear.providers.copilot import _validate_transient_response
+
+        response = _make_response(status_code)
+        with pytest.raises(httpx.HTTPStatusError):
+            _validate_transient_response(response)
+
+
+class TestPermanentCodesPropagateImmediately:
+    """Permanent errors (400, 404, 422) and auth errors (401, 403) pass through."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_code", [400, 404, 422])
+    async def test_permanent_codes_not_raised_by_validator(self, status_code: int) -> None:
+        """Permanent HTTP codes are NOT raised by the validator (pass through)."""
+        from owlbear.providers.copilot import _validate_transient_response
+
+        response = _make_response(status_code)
+        # Should NOT raise — permanent errors pass through the transport
+        _validate_transient_response(response)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_code", [401, 403])
+    async def test_auth_codes_not_raised_by_validator(self, status_code: int) -> None:
+        """Auth HTTP codes are NOT raised by the validator (handled at daemon layer)."""
+        from owlbear.providers.copilot import _validate_transient_response
+
+        response = _make_response(status_code)
+        # Should NOT raise — auth errors handled by daemon layer
+        _validate_transient_response(response)
+
+    @pytest.mark.asyncio
+    async def test_success_codes_pass_through(self) -> None:
+        """2xx responses pass through without raising."""
+        from owlbear.providers.copilot import _validate_transient_response
+
+        response = _make_response(200)
+        _validate_transient_response(response)
+
+
+class TestRetryAfterHeader:
+    """429 responses with Retry-After header should be respected."""
+
+    @pytest.mark.asyncio
+    async def test_retry_after_seconds_header_present_in_exception(self) -> None:
+        """When 429 has Retry-After header, it's available in the raised exception."""
+        from owlbear.providers.copilot import _validate_transient_response
+
+        response = _make_response(429, headers={"Retry-After": "5"})
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            _validate_transient_response(response)
+
+        assert exc_info.value.response.headers.get("Retry-After") == "5"
+
+
+class TestRetryConfig:
+    """Verify the retry configuration parameters."""
+
+    @pytest.mark.asyncio
+    async def test_max_3_retry_attempts(self) -> None:
+        """The transport should be configured for max 3 attempts."""
+        from tenacity import stop_after_attempt
+
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        transport = client._client._transport
+        # The stop config should be stop_after_attempt(3)
+        assert isinstance(transport.config["stop"], stop_after_attempt)
+        assert transport.config["stop"].max_attempt_number == 3
+
+    @pytest.mark.asyncio
+    async def test_reraise_is_true(self) -> None:
+        """After exhausting retries, the original exception should be re-raised."""
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        transport = client._client._transport
+        assert transport.config.get("reraise") is True
+
+    @pytest.mark.asyncio
+    async def test_retry_only_on_http_status_error(self) -> None:
+        """Retry should only trigger on HTTPStatusError."""
+        from tenacity.retry import retry_if_exception_type
+
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        transport = client._client._transport
+        retry_config = transport.config["retry"]
+        assert isinstance(retry_config, retry_if_exception_type)
+
+
+class TestExistingClientBehaviorPreserved:
+    """Ensure retry transport doesn't break existing client properties."""
+
+    @pytest.mark.asyncio
+    async def test_api_key_still_correct(self) -> None:
+        """Client still has the correct API key after adding retry transport."""
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        assert client.api_key == _TOKEN_DATA["token"]
+
+    @pytest.mark.asyncio
+    async def test_base_url_still_correct(self) -> None:
+        """Client still has the correct base URL after adding retry transport."""
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        assert str(client.base_url) == "https://api.individual.githubcopilot.com/v1/"
+
+    @pytest.mark.asyncio
+    async def test_copilot_header_still_present(self) -> None:
+        """Client still has the Copilot-Integration-Id header."""
+        from owlbear.providers.copilot import create_copilot_client
+
+        with patch("owlbear.providers.copilot.load_token", return_value=_TOKEN_DATA):
+            client = await create_copilot_client()
+
+        assert client._custom_headers["Copilot-Integration-Id"] == "vscode-chat"
+
+
+class TestRetryTransportIntegration:
+    """Integration-level tests: verify retry actually happens end-to-end."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_502_then_succeeds(self) -> None:
+        """Transport retries on 502 and succeeds on next attempt."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) < 2:
+                return httpx.Response(502, request=request)
+            return httpx.Response(200, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 200
+        assert len(calls) == 2  # first 502 + second 200
+
+    @pytest.mark.asyncio
+    async def test_exhausts_retries_on_persistent_503(self) -> None:
+        """Transport raises after max retries on persistent 503."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            return httpx.Response(503, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        with pytest.raises(httpx.HTTPStatusError):
+            await transport.handle_async_request(request)
+
+        assert len(calls) == 3  # max 3 attempts
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_on_404(self) -> None:
+        """Transport does NOT retry on 404 — passes through immediately."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            return httpx.Response(404, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 404
+        assert len(calls) == 1  # no retry
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_on_401(self) -> None:
+        """Transport does NOT retry on 401 — auth errors pass through."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            return httpx.Response(401, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 401
+        assert len(calls) == 1  # no retry

@@ -9,18 +9,19 @@ Provides the building blocks for ``bearclaw run``:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import logging.handlers
 import os
+import random
 import signal
 import sys
 from typing import TYPE_CHECKING, Self
 
-import httpx
 import logfire
-import openai
 from pydantic_ai import Agent
 
+from owlbear.core.errors import ErrorCategory, classify_error
 from owlbear.providers.copilot import create_copilot_model
 
 if TYPE_CHECKING:
@@ -38,16 +39,11 @@ _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 _BACKUP_COUNT = 3
 
-
-def _is_auth_error(exc: Exception) -> bool:
-    """Return True if *exc* is an authentication/authorization error.
-
-    Detects ``httpx.HTTPStatusError`` with status 401 or 403,
-    ``openai.AuthenticationError``, and ``openai.PermissionDeniedError``.
-    """
-    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
-        return True
-    return isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError))
+# Transient retry constants
+_TRANSIENT_MAX_RETRIES = 3
+_TRANSIENT_BACKOFF_BASE = 1.0  # seconds
+_TRANSIENT_BACKOFF_MAX = 30.0  # seconds
+_JITTER_FACTOR = 0.5
 
 
 def _is_process_alive(pid: int) -> bool:
@@ -184,6 +180,62 @@ def configure_otel(otel_endpoint: str) -> None:
     logger.info("OTel configured — exporting to %s", otel_endpoint)
 
 
+async def _recover_from_error(
+    exc: Exception,
+    message: str,
+    *,
+    agent: OwlBearAgent,
+    channel: ChannelPlugin,
+    settings: OwlBearSettings | None,
+) -> None:
+    """Apply classified recovery strategy for a failed ``agent.turn()`` call.
+
+    - **TRANSIENT**: exponential backoff with jitter, up to 3 retries.
+    - **AUTH**: token refresh via :func:`create_copilot_model`, retry once.
+    - **PERMANENT / TOOL_SEMANTIC / AUTH without settings**: log and send error.
+    """
+    category = classify_error(exc)
+
+    if category is ErrorCategory.TRANSIENT:
+        last_exc: Exception = exc
+        for attempt in range(1, _TRANSIENT_MAX_RETRIES + 1):
+            delay = min(
+                _TRANSIENT_BACKOFF_BASE * (2 ** (attempt - 1)),
+                _TRANSIENT_BACKOFF_MAX,
+            )
+            jitter = random.uniform(0, delay * _JITTER_FACTOR)  # noqa: S311
+            await asyncio.sleep(delay + jitter)
+            try:
+                response = await agent.turn(message)
+                await channel.send(response)
+            except Exception as retry_exc:  # noqa: BLE001
+                last_exc = retry_exc
+                logger.warning(
+                    "Transient retry %d/%d failed: %s",
+                    attempt,
+                    _TRANSIENT_MAX_RETRIES,
+                    retry_exc,
+                )
+            else:
+                return
+        logger.exception("Transient retries exhausted", exc_info=last_exc)
+        await channel.send(f"Error: {last_exc}")
+
+    elif category is ErrorCategory.AUTH and settings is not None:
+        try:
+            new_model = await create_copilot_model(settings)
+            agent.update_model(new_model)
+            response = await agent.turn(message)
+            await channel.send(response)
+        except Exception as retry_exc:
+            logger.exception("Token refresh/retry failed")
+            await channel.send(f"Error: {retry_exc}")
+
+    else:  # PERMANENT, TOOL_SEMANTIC, or AUTH without settings
+        logger.exception("Error processing message")
+        await channel.send(f"Error: {exc}")
+
+
 async def run_daemon(
     *,
     channel: ChannelPlugin,
@@ -253,19 +305,10 @@ async def run_daemon(
             try:
                 response = await agent.turn(message)
                 await channel.send(response)
-            except Exception as exc:
-                if _is_auth_error(exc) and settings is not None:
-                    try:
-                        new_model = await create_copilot_model(settings)
-                        agent.update_model(new_model)
-                        response = await agent.turn(message)
-                        await channel.send(response)
-                    except Exception as retry_exc:
-                        logger.exception("Token refresh/retry failed")
-                        await channel.send(f"Error: {retry_exc}")
-                else:
-                    logger.exception("Error processing message")
-                    await channel.send(f"Error: {exc}")
+            except Exception as exc:  # noqa: BLE001
+                await _recover_from_error(
+                    exc, message, agent=agent, channel=channel, settings=settings,
+                )
 
     finally:
         # Restore previous signal handlers
