@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.memory.context import ContextManager
+    from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
     from owlbear.memory.usage import UsageTracker
 
@@ -60,6 +61,7 @@ class OwlBearAgent:
         provider: str = "copilot",
         toolsets: Sequence[AbstractToolset] | None = None,
         history_processors: Sequence[HistoryProcessor[OwlBearDeps]] | None = None,
+        knowledge_service: KnowledgeQueryService | None = None,
     ) -> None:
         self.session = session
         self.hooks = hooks or HookRegistry()
@@ -68,6 +70,7 @@ class OwlBearAgent:
         self.provider = provider
         self._model_name = self._extract_model_name(model)
         self._deps = OwlBearDeps(hooks=self.hooks, tracker=self.tracker)
+        self._knowledge_service = knowledge_service
 
         instructions = context.instructions if context else ""
         self.inner: Agent[OwlBearDeps, str] = Agent(
@@ -111,11 +114,26 @@ class OwlBearAgent:
 
         history = self.session.load()
 
+        # Knowledge context injection (per-turn)
+        run_kwargs: dict[str, object] = {}
+        if self._knowledge_service is not None:
+            try:
+                run_kwargs["instructions"] = self._knowledge_service.query_for_context(
+                    prompt
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Knowledge context injection failed for prompt: %s",
+                    prompt[:100],
+                    exc_info=True,
+                )
+
         try:
             result = await self.inner.run(
                 prompt,
                 message_history=history or None,
                 deps=self._deps,
+                **run_kwargs,
             )
         except Exception as exc:
             await self.hooks.emit(HookEvent.ON_ERROR, {"error": exc, "prompt": prompt})

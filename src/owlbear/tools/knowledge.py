@@ -50,15 +50,18 @@ class KnowledgeToolset(FunctionToolset):
         graph_store: :class:`GraphStore` for document/entity queries.
         embedding_provider: :class:`EmbeddingProvider` for query embedding.
         ingest_pipeline: :class:`IngestPipeline` for document ingestion.
+        project_scope: Optional project ID. When set, queries are filtered
+            to ``["global", "project:{id}"]`` scopes.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         workspace_root: Path,
         vector_store: VectorStoreProtocol,
         graph_store: GraphStore,
         embedding_provider: EmbeddingProvider,
         ingest_pipeline: IngestPipeline,
+        project_scope: str | None = None,
     ) -> None:
         super().__init__()
         self._root = workspace_root.resolve()
@@ -66,6 +69,9 @@ class KnowledgeToolset(FunctionToolset):
         self._graph = graph_store
         self._embedder = embedding_provider
         self._pipeline = ingest_pipeline
+        self._scopes: list[str] | None = (
+            ["global", f"project:{project_scope}"] if project_scope else None
+        )
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -137,8 +143,11 @@ class KnowledgeToolset(FunctionToolset):
         """
         embeddings = self._embedder.embed([query])
         query_embedding = embeddings[0]
+        kwargs: dict[str, object] = {}
+        if self._scopes is not None:
+            kwargs["scopes"] = self._scopes
         results = self._vectors.search_similar(
-            query_embedding, top_k=top_k, embedding_type="document"
+            query_embedding, top_k=top_k, embedding_type="document", **kwargs
         )
 
         if not results:

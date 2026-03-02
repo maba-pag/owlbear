@@ -347,3 +347,42 @@ class TestProgressSettingsValidation:
         monkeypatch.setenv("OWLBEAR_PROGRESS_DETAIL", "verbose")
         with pytest.raises(ValidationError):
             OwlBearSettings()
+
+
+# ---------------------------------------------------------------------------
+# Knowledge context tokens — task #424 / #407
+# ---------------------------------------------------------------------------
+
+
+class TestKnowledgeContextTokensDefault:
+    """Verify knowledge_context_tokens defaults to 2000."""
+
+    def test_default_value(self, default_settings: OwlBearSettings) -> None:
+        """knowledge_context_tokens should default to 2000."""
+        assert default_settings.knowledge_context_tokens == 2000
+
+
+class TestKnowledgeContextTokensEnvOverride:
+    """Verify OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS env var overrides the default."""
+
+    def test_env_override_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS=500 should be accepted."""
+        monkeypatch.setenv("OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS", "500")
+        settings = OwlBearSettings()
+        assert settings.knowledge_context_tokens == 500
+
+
+class TestKnowledgeContextTokensValidation:
+    """Verify knowledge_context_tokens must be > 0."""
+
+    def test_zero_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """knowledge_context_tokens = 0 should raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS", "0")
+        with pytest.raises(ValidationError, match="knowledge_context_tokens"):
+            OwlBearSettings()
+
+    def test_negative_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """knowledge_context_tokens = -1 should raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS", "-1")
+        with pytest.raises(ValidationError, match="knowledge_context_tokens"):
+            OwlBearSettings()

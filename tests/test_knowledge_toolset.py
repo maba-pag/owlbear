@@ -387,3 +387,83 @@ class TestSafePath:
         """_safe_path rejects paths containing null bytes."""
         with pytest.raises(PermissionError, match="Path outside workspace"):
             toolset._safe_path("file\x00.txt")
+
+
+# ---------------------------------------------------------------------------
+# Project scope filtering
+# ---------------------------------------------------------------------------
+
+
+class TestProjectScope:
+    """Test that project_scope parameter controls query scoping."""
+
+    def test_no_project_scope_passes_no_scopes(
+        self,
+        toolset: KnowledgeToolset,
+        mock_vector_store: MagicMock,
+        mock_embedding_provider: MagicMock,
+    ) -> None:
+        """Without project_scope, search_similar receives no scopes kwarg."""
+        mock_embedding_provider.embed.return_value = [[0.1, 0.2, 0.3]]
+        mock_vector_store.search_similar.return_value = []
+
+        toolset._query_knowledge("test query")
+
+        mock_vector_store.search_similar.assert_called_once_with(
+            [0.1, 0.2, 0.3], top_k=5, embedding_type="document",
+        )
+
+    def test_project_scope_passes_scopes_to_search(
+        self,
+        workspace_root: Path,
+        mock_vector_store: MagicMock,
+        mock_graph_store: MagicMock,
+        mock_embedding_provider: MagicMock,
+        mock_ingest_pipeline: MagicMock,
+    ) -> None:
+        """With project_scope set, search_similar receives scopes=['global', 'project:{id}']."""
+        ts = KnowledgeToolset(
+            workspace_root=workspace_root,
+            vector_store=mock_vector_store,
+            graph_store=mock_graph_store,
+            embedding_provider=mock_embedding_provider,
+            ingest_pipeline=mock_ingest_pipeline,
+            project_scope="proj-abc",
+        )
+        mock_embedding_provider.embed.return_value = [[0.1, 0.2, 0.3]]
+        mock_vector_store.search_similar.return_value = []
+
+        ts._query_knowledge("scoped query")
+
+        mock_vector_store.search_similar.assert_called_once_with(
+            [0.1, 0.2, 0.3],
+            top_k=5,
+            embedding_type="document",
+            scopes=["global", "project:proj-abc"],
+        )
+
+    def test_project_scope_none_by_default(
+        self,
+        toolset: KnowledgeToolset,
+    ) -> None:
+        """Default project_scope is None."""
+        assert toolset._scopes is None
+
+    def test_project_scope_stored_as_scopes_list(
+        self,
+        workspace_root: Path,
+        mock_vector_store: MagicMock,
+        mock_graph_store: MagicMock,
+        mock_embedding_provider: MagicMock,
+        mock_ingest_pipeline: MagicMock,
+    ) -> None:
+        """project_scope is converted to a scopes list on the instance."""
+        ts = KnowledgeToolset(
+            workspace_root=workspace_root,
+            vector_store=mock_vector_store,
+            graph_store=mock_graph_store,
+            embedding_provider=mock_embedding_provider,
+            ingest_pipeline=mock_ingest_pipeline,
+            project_scope="proj-xyz",
+        )
+        assert ts._scopes == ["global", "project:proj-xyz"]

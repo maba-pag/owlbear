@@ -639,3 +639,170 @@ class TestOwlBearAgentModelInstance:
         agent.update_model("gpt-4.1")
         assert agent._model_name == "gpt-4.1"
         assert agent.inner.model == "gpt-4.1"
+
+
+# ---------------------------------------------------------------------------
+# Knowledge context injection (#425 / #408)
+# ---------------------------------------------------------------------------
+
+
+class TestOwlBearAgentKnowledgeInjection:
+    """turn() auto-injects knowledge context via instructions= parameter."""
+
+    def test_init_accepts_knowledge_service_none_default(self, tmp_path: Path) -> None:
+        """knowledge_service defaults to None when not provided."""
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+        )
+        assert agent._knowledge_service is None
+
+    def test_init_accepts_knowledge_service(self, tmp_path: Path) -> None:
+        """knowledge_service can be set via __init__."""
+        svc = MagicMock()
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        assert agent._knowledge_service is svc
+
+    def test_turn_calls_query_for_context(self, tmp_path: Path) -> None:
+        """When knowledge_service is set, turn() calls query_for_context(prompt)."""
+        svc = MagicMock()
+        svc.query_for_context.return_value = "Relevant knowledge:\n\n- doc: snippet"
+
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        asyncio.run(agent.turn("What is X?"))
+
+        svc.query_for_context.assert_called_once_with("What is X?")
+
+    def test_turn_passes_instructions_to_inner_run(self, tmp_path: Path) -> None:
+        """query_for_context result is passed as instructions= to inner.run()."""
+        svc = MagicMock()
+        svc.query_for_context.return_value = "Relevant knowledge:\n\n- doc: snippet"
+
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        asyncio.run(agent.turn("What is X?"))
+
+        call_kwargs = agent.inner.run.call_args
+        assert call_kwargs.kwargs["instructions"] == "Relevant knowledge:\n\n- doc: snippet"
+
+    def test_turn_no_instructions_when_service_is_none(self, tmp_path: Path) -> None:
+        """When knowledge_service is None, instructions= is NOT passed."""
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        asyncio.run(agent.turn("hi"))
+
+        call_kwargs = agent.inner.run.call_args
+        assert "instructions" not in call_kwargs.kwargs
+
+    def test_turn_passes_none_instructions_when_service_returns_none(
+        self, tmp_path: Path
+    ) -> None:
+        """When service returns None, instructions=None passed (PydanticAI ignores it)."""
+        svc = MagicMock()
+        svc.query_for_context.return_value = None
+
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        asyncio.run(agent.turn("hi"))
+
+        call_kwargs = agent.inner.run.call_args
+        assert call_kwargs.kwargs["instructions"] is None
+
+    def test_turn_continues_on_service_exception(self, tmp_path: Path) -> None:
+        """When knowledge_service raises, turn() logs WARNING and continues."""
+        svc = MagicMock()
+        svc.query_for_context.side_effect = RuntimeError("embedding failed")
+
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        # Should NOT raise
+        result = asyncio.run(agent.turn("hi"))
+        assert result == "ok"
+
+        # inner.run() should have been called WITHOUT instructions
+        call_kwargs = agent.inner.run.call_args
+        assert "instructions" not in call_kwargs.kwargs
+
+    def test_turn_logs_warning_on_service_exception(
+        self, tmp_path: Path
+    ) -> None:
+        """Exception from knowledge_service is logged at WARNING level."""
+        svc = MagicMock()
+        svc.query_for_context.side_effect = RuntimeError("DB corrupt")
+
+        agent = OwlBearAgent(
+            model="test",
+            session=SessionStore(tmp_path / "s.jsonl"),
+            knowledge_service=svc,
+        )
+        mock = _mock_result("ok", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        with patch("owlbear.core.agent.logger") as mock_logger:
+            asyncio.run(agent.turn("hi"))
+            mock_logger.warning.assert_called_once()
+            assert "Knowledge context injection failed" in mock_logger.warning.call_args[0][0]
+
+    def test_existing_turn_behavior_preserved(self, tmp_path: Path) -> None:
+        """With no knowledge_service, turn() works exactly as before."""
+        hooks = HookRegistry()
+        events: list[str] = []
+        hooks.register(HookEvent.ON_MESSAGE, lambda _: events.append("msg"))
+
+        session = SessionStore(tmp_path / "s.jsonl")
+        agent = OwlBearAgent(
+            model="test",
+            session=session,
+            hooks=hooks,
+        )
+        mock = _mock_result("reply", _simple_messages())
+        agent.inner = MagicMock()
+        agent.inner.run = AsyncMock(return_value=mock)
+
+        result = asyncio.run(agent.turn("hello"))
+
+        assert result == "reply"
+        assert "msg" in events
+        # Verify no instructions kwarg
+        call_kwargs = agent.inner.run.call_args
+        assert "instructions" not in call_kwargs.kwargs

@@ -42,6 +42,7 @@ class OwlBearSettings(BaseSettings):
     # --- Knowledge ---
     knowledge_db_path: Path = Path.home() / ".owlbear" / "knowledge.db"
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+    knowledge_context_tokens: int = 2000
 
     # --- Usage tracking ---
     usage_path: Path = Path.home() / ".owlbear" / "usage.jsonl"
@@ -60,6 +61,10 @@ class OwlBearSettings(BaseSettings):
 
     # --- Embedding ---
     embedding_idle_timeout: int = 600
+
+    # --- Knowledge graph ---
+    knowledge_graph_expansion: bool = True
+    inter_doc_graph_building: bool = False
 
     # --- Temporal memory ---
     temporal_decay_rate: float = 0.001
@@ -90,6 +95,15 @@ class OwlBearSettings(BaseSettings):
         """progress_interval must be strictly positive."""
         if v <= 0:
             msg = "progress_interval must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("knowledge_context_tokens")
+    @classmethod
+    def _validate_knowledge_context_tokens(cls, v: int) -> int:
+        """knowledge_context_tokens must be strictly positive."""
+        if v <= 0:
+            msg = "knowledge_context_tokens must be greater than 0"
             raise ValueError(msg)
         return v
 
