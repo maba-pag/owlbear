@@ -112,7 +112,13 @@ class QdrantVectorStore:
             )
             raise ImportError(msg)
 
-        self._client: QdrantClient = QdrantClient(location=location)  # type: ignore[misc]
+        # ``location=`` interprets drive letters (``C:``) as URL schemes on
+        # Windows.  Use ``path=`` for on-disk storage so Qdrant opens the
+        # local directory correctly.
+        if location == ":memory:" or location.startswith(("http://", "https://")):
+            self._client: QdrantClient = QdrantClient(location=location)  # type: ignore[misc]
+        else:
+            self._client: QdrantClient = QdrantClient(path=location)  # type: ignore[misc]
         self._collection = collection_name
         self._initialized = False
 

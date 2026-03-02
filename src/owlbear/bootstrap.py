@@ -50,11 +50,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from pydantic_ai.models import Model
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.progress import ProgressReporter
+    from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.projects.models import Project
     from owlbear.skills.registry import SkillRegistry
 
@@ -240,8 +242,31 @@ def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugi
 # ---------------------------------------------------------------------------
 
 
-def _build_knowledge_toolset(workspace: Path) -> AbstractToolset | None:
-    """Create a :class:`KnowledgeToolset` if knowledge components are available.
+def _build_knowledge_toolset(  # noqa: PLR0913
+    workspace: Path,
+    project_id: str | None = None,
+    *,
+    chat_model: str | Model = "gpt-4o",
+    max_tokens: int = 2000,
+    knowledge_graph_expansion: bool = True,
+    inter_doc_graph_building: bool = False,
+) -> tuple[AbstractToolset, KnowledgeQueryService] | None:
+    """Create a :class:`KnowledgeToolset` and :class:`KnowledgeQueryService`.
+
+    Args:
+        workspace: Root directory for knowledge DB and vector store.
+        project_id: Optional active project ID.  When set, both the toolset
+            and service scope queries to ``["global", "project:{id}"]``.
+        chat_model: Model identifier or PydanticAI ``Model`` instance for
+            agents used by :class:`EntityExtractor` and
+            :class:`InterDocGraphBuilder`.
+        max_tokens: Default token budget stored on the service as
+            ``default_max_tokens`` for per-turn context injection.
+        knowledge_graph_expansion: When ``True``, creates a
+            :class:`GraphAugmentedRetriever` and passes it to the service.
+        inter_doc_graph_building: When ``True``, creates an
+            :class:`InterDocGraphBuilder` and passes it to the
+            :class:`IngestPipeline` for cross-document relationship inference.
 
     Returns ``None`` when the knowledge subsystem cannot be initialised
     (e.g. missing DB, unavailable model).  All failures are logged at
@@ -261,6 +286,9 @@ def _build_knowledge_toolset(workspace: Path) -> AbstractToolset | None:
         )
         from owlbear.memory.knowledge.extractor import EntityExtractor  # noqa: PLC0415
         from owlbear.memory.knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
+        from owlbear.memory.knowledge.query_service import (  # noqa: PLC0415
+            KnowledgeQueryService,
+        )
         from owlbear.tools.knowledge import KnowledgeToolset  # noqa: PLC0415
 
         owlbear_dir = workspace / ".owlbear"
@@ -272,9 +300,23 @@ def _build_knowledge_toolset(workspace: Path) -> AbstractToolset | None:
 
         graph_store = GraphStore(conn)
         embedding_provider = BgeM3EmbeddingProvider()
-        vector_store = QdrantVectorStore(storage_path=str(owlbear_dir / "qdrant"))
-        entity_extractor = EntityExtractor()
+        vector_store = QdrantVectorStore(location=str(owlbear_dir / "qdrant"))
+        entity_extractor = EntityExtractor(model=chat_model)
         text_chunker = TextChunker()
+
+        # Build optional inter-document graph builder.
+        inter_doc_builder = None
+        if inter_doc_graph_building:
+            from owlbear.memory.knowledge.inter_doc_graph_builder import (  # noqa: PLC0415
+                InterDocGraphBuilder,
+            )
+
+            inter_doc_builder = InterDocGraphBuilder(
+                model=chat_model,
+                vector_store=vector_store,
+                graph_store=graph_store,
+            )
+
         ingest_pipeline = IngestPipeline(
             conn=conn,
             graph_store=graph_store,
@@ -282,15 +324,44 @@ def _build_knowledge_toolset(workspace: Path) -> AbstractToolset | None:
             embedding_provider=embedding_provider,
             entity_extractor=entity_extractor,
             text_chunker=text_chunker,
+            inter_doc_builder=inter_doc_builder,
         )
 
-        return KnowledgeToolset(
+        scopes: list[str] | None = None
+        if project_id:
+            scopes = ["global", f"project:{project_id}"]
+
+        # Build optional graph-augmented retriever.
+        retriever = None
+        if knowledge_graph_expansion:
+            from owlbear.memory.knowledge.retrieval import (  # noqa: PLC0415
+                GraphAugmentedRetriever,
+            )
+
+            retriever = GraphAugmentedRetriever(
+                vector_store=vector_store,
+                graph_store=graph_store,
+                embedding_provider=embedding_provider,
+            )
+
+        service = KnowledgeQueryService(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=embedding_provider,
+            scopes=scopes,
+            retriever=retriever,
+        )
+        service.default_max_tokens = max_tokens
+
+        toolset = KnowledgeToolset(
             workspace_root=workspace,
             vector_store=vector_store,
             graph_store=graph_store,
             embedding_provider=embedding_provider,
             ingest_pipeline=ingest_pipeline,
+            project_scope=project_id,
         )
+        return toolset, service  # noqa: TRY300
     except Exception:  # noqa: BLE001
         logger.warning("Failed to create KnowledgeToolset", exc_info=True)
         return None
@@ -316,12 +387,14 @@ def _build_web_search_toolset() -> AbstractToolset | None:
         return None
 
 
-def build_toolsets(
+def build_toolsets(  # noqa: PLR0913
     settings: OwlBearSettings,
     workspace: Path,
     hooks: HookRegistry,
     channel: ChannelPlugin,
-) -> list[AbstractToolset]:
+    active_project_id: str | None = None,
+    chat_model: str | Model | None = None,
+) -> tuple[list[AbstractToolset], KnowledgeQueryService | None]:
     """Build all toolsets, wrapping non-delegation ones in :class:`HookedToolset`.
 
     Args:
@@ -329,9 +402,12 @@ def build_toolsets(
         workspace: Workspace root directory.
         hooks: Hook registry for HookedToolset wrapping.
         channel: Channel adapter for AskUserToolset.
+        active_project_id: Optional active project ID for knowledge scoping.
+        chat_model: Optional PydanticAI Model or model name for knowledge
+            agents.  When ``None``, falls back to ``settings.chat_model``.
 
     Returns:
-        List of toolsets ready for the agent.
+        Tuple of (toolset list, optional :class:`KnowledgeQueryService`).
     """
     raw: list[AbstractToolset] = []
 
@@ -366,8 +442,16 @@ def build_toolsets(
             logger.warning("Failed to create GitHubToolset", exc_info=True)
 
     # Knowledge toolset — conditional on knowledge components being available
-    knowledge_ts = _build_knowledge_toolset(workspace)
-    if knowledge_ts is not None:
+    knowledge_service: KnowledgeQueryService | None = None
+    knowledge_result = _build_knowledge_toolset(
+        workspace, project_id=active_project_id,
+        chat_model=chat_model or settings.chat_model,
+        max_tokens=settings.knowledge_context_tokens,
+        knowledge_graph_expansion=settings.knowledge_graph_expansion,
+        inter_doc_graph_building=settings.inter_doc_graph_building,
+    )
+    if knowledge_result is not None:
+        knowledge_ts, knowledge_service = knowledge_result
         raw.append(knowledge_ts)
 
     # Web search toolset — conditional on duckduckgo_search availability
@@ -415,7 +499,7 @@ def build_toolsets(
     # DelegationToolset is NOT wrapped — it's internal dispatch
     wrapped.append(DelegationToolset())
 
-    return wrapped
+    return wrapped, knowledge_service
 
 
 # ---------------------------------------------------------------------------
@@ -606,17 +690,24 @@ async def bootstrap(
     if progress_reporter is not None:
         cleanup.append(progress_reporter.stop)
 
-    # 3. Toolsets
-    toolsets = build_toolsets(settings, workspace, hooks, channel)
+    # 3. Model (created early so knowledge agents can reuse it)
+    model = await create_copilot_model(settings)
 
-    # 3b. ProjectToolset — when an active project provides a store
+    # 4. Toolsets
+    toolsets, knowledge_service = build_toolsets(
+        settings, workspace, hooks, channel,
+        active_project_id=active_project.id if active_project else None,
+        chat_model=model,
+    )
+
+    # 4b. ProjectToolset — when an active project provides a store
     if active_project is not None and project_store is not None:
         _add_project_toolset(toolsets, project_store, settings.config_dir, hooks)
 
-    # 4. MCP
+    # 5. MCP
     mcp_registry = build_mcp_registry(settings)
 
-    # 5. Agent registry
+    # 6. Agent registry
     # Find SkillRegistry if present
     skill_reg = None
     for ts in toolsets:
@@ -628,9 +719,6 @@ async def bootstrap(
             break
 
     agent_registry = build_agent_registry(settings, toolsets, mcp_registry, skill_reg)
-
-    # 6. Model
-    model = await create_copilot_model(settings)
 
     # 7. Session, context, tracker
     if active_project is not None:
@@ -658,6 +746,7 @@ async def bootstrap(
         tracker=tracker,
         provider=settings.provider,
         toolsets=toolsets,
+        knowledge_service=knowledge_service,
     )
     agent._deps.agent_registry = agent_registry  # noqa: SLF001
 
