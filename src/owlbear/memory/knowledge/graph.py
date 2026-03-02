@@ -9,6 +9,7 @@ serialized to JSON strings on write and deserialized on read.
 from __future__ import annotations
 
 import json
+from collections import deque
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -60,9 +61,10 @@ class GraphStore:
         Raises :class:`sqlite3.IntegrityError` if the id already exists.
         """
         self._conn.execute(
-            "INSERT INTO entities "
-            "(id, name, entity_type, description, metadata, created_at, scope, document_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO entities"
+            " (id, name, entity_type, description, metadata,"
+            "  created_at, scope, document_id, chunk_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entity.id,
                 entity.name,
@@ -72,6 +74,7 @@ class GraphStore:
                 self._now(),
                 entity.scope,
                 entity.document_id,
+                entity.chunk_id,
             ),
         )
         self._conn.commit()
@@ -79,7 +82,7 @@ class GraphStore:
     def get_entity(self, entity_id: str) -> Entity | None:
         """Return the :class:`Entity` with *entity_id*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, name, entity_type, description, metadata, scope, document_id "
+            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
             "FROM entities WHERE id = ?",
             (entity_id,),
         ).fetchone()
@@ -93,6 +96,7 @@ class GraphStore:
             metadata=self._load_meta(row[4]),
             scope=row[5],
             document_id=row[6],
+            chunk_id=row[7],
         )
 
     def list_entities(
@@ -116,7 +120,7 @@ class GraphStore:
             params.extend(scopes)
 
         sql = (
-            "SELECT id, name, entity_type, description, metadata, scope, document_id "
+            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
             "FROM entities"
         )
         if clauses:
@@ -132,6 +136,7 @@ class GraphStore:
                 metadata=self._load_meta(r[4]),
                 scope=r[5],
                 document_id=r[6],
+                chunk_id=r[7],
             )
             for r in rows
         ]
@@ -154,7 +159,7 @@ class GraphStore:
             params.extend(scopes)
 
         sql = (
-            "SELECT id, name, entity_type, description, metadata, scope, document_id "
+            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
             "FROM entities WHERE " + " AND ".join(clauses)
         )
 
@@ -168,6 +173,7 @@ class GraphStore:
                 metadata=self._load_meta(r[4]),
                 scope=r[5],
                 document_id=r[6],
+                chunk_id=r[7],
             )
             for r in rows
         ]
@@ -286,6 +292,70 @@ class GraphStore:
         )
         self._conn.commit()
         return cursor.rowcount > 0
+
+    # ── Traversal operations ───────────────────────────────────────────────
+
+    def get_neighbors(
+        self,
+        entity_id: str,
+        max_depth: int = 1,
+        max_nodes: int = 20,
+        scopes: list[str] | None = None,
+    ) -> list[tuple[Entity, Edge]]:
+        """BFS traversal returning neighbor entities with their connecting edges.
+
+        Parameters
+        ----------
+        entity_id:
+            Starting entity for the traversal.
+        max_depth:
+            Maximum number of hops (1 = direct neighbors only).
+        max_nodes:
+            Stop collecting once this many neighbors have been found.
+        scopes:
+            Optional scope filter passed through to :meth:`list_edges`.
+
+        Returns
+        -------
+        list[tuple[Entity, Edge]]:
+            Each tuple is ``(neighbor_entity, connecting_edge)``.
+            Returns an empty list if *entity_id* does not exist.
+        """
+        if self.get_entity(entity_id) is None:
+            return []
+
+        visited: set[str] = {entity_id}
+        result: list[tuple[Entity, Edge]] = []
+        queue: deque[tuple[str, int]] = deque([(entity_id, 0)])
+
+        while queue and len(result) < max_nodes:
+            current_id, depth = queue.popleft()
+            if depth >= max_depth:
+                continue
+
+            # Collect outgoing and incoming edges for bidirectional traversal.
+            edges = self.list_edges(source_id=current_id, scopes=scopes)
+            edges += self.list_edges(target_id=current_id, scopes=scopes)
+
+            for edge in edges:
+                neighbor_id = (
+                    edge.target_id if edge.source_id == current_id else edge.source_id
+                )
+                if neighbor_id in visited:
+                    continue
+                visited.add(neighbor_id)
+
+                neighbor = self.get_entity(neighbor_id)
+                if neighbor is None:
+                    continue  # pragma: no cover — FK constraints prevent this
+
+                result.append((neighbor, edge))
+                if len(result) >= max_nodes:
+                    break
+
+                queue.append((neighbor_id, depth + 1))
+
+        return result
 
     # ── Document operations ────────────────────────────────────────────────
 

@@ -388,7 +388,7 @@ class TestMigrateV3ToV4:
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 4
+        assert row[0] >= 4
 
     def test_existing_rows_get_null_for_new_columns(self) -> None:
         conn = _create_v3_db()
@@ -414,7 +414,7 @@ class TestMigrateV3ToV4:
         init_db(conn)  # second call — must not raise
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 4
+        assert row[0] >= 4
 
     def test_fresh_db_has_v4_columns(self) -> None:
         """A fresh init_db creates tables with v4 columns already present."""

@@ -34,17 +34,20 @@ class TestEntityType:
 
 
 class TestRelationType:
-    """RelationType StrEnum has all 6 expected values."""
+    """RelationType StrEnum has all 7 expected values."""
 
     @pytest.mark.parametrize(
         "value",
-        ["defines", "imports", "depends_on", "related_to", "implements", "documents"],
+        [
+            "defines", "imports", "depends_on", "related_to",
+            "implements", "documents", "governed_by",
+        ],
     )
     def test_valid_values(self, value: str) -> None:
         assert RelationType(value) == value
 
     def test_member_count(self) -> None:
-        assert len(RelationType) == 6
+        assert len(RelationType) == 7
 
 
 # -- Entity model ------------------------------------------------------------

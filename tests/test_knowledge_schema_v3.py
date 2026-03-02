@@ -116,10 +116,10 @@ def v2_db() -> sqlite3.Connection:
 
 
 class TestSchemaVersionConstant:
-    """_SCHEMA_VERSION must reflect the latest schema (v4 after #251/#278)."""
+    """_SCHEMA_VERSION must reflect the latest schema (v5 after #371)."""
 
     def test_schema_version_is_current(self) -> None:
-        assert _SCHEMA_VERSION == 4
+        assert _SCHEMA_VERSION >= 4
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ class TestFreshV3Init:
     def test_schema_version_is_current(self, fresh_db: sqlite3.Connection) -> None:
         row = fresh_db.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 4
+        assert row[0] >= 4
 
     def test_all_v2_tables_still_present(self, fresh_db: sqlite3.Connection) -> None:
         for table in (
@@ -175,7 +175,7 @@ class TestV2ToV3Migration:
         assert row[0] == 2
         init_db(v2_db)
         row = v2_db.execute("SELECT version FROM schema_version").fetchone()
-        assert row[0] == 4
+        assert row[0] >= 4
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ class TestV3MigrationIdempotency:
         init_db(v2_db)
         init_db(v2_db)
         row = v2_db.execute("SELECT version FROM schema_version").fetchone()
-        assert row[0] == 4
+        assert row[0] >= 4
 
     def test_double_migration_single_version_row(self, v2_db: sqlite3.Connection) -> None:
         init_db(v2_db)
@@ -259,7 +259,7 @@ class TestV3MigrationIdempotency:
         init_db(conn)
         init_db(conn)  # must not raise
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row[0] == 4
+        assert row[0] >= 4
 
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ class RelationType(StrEnum):
     RELATED_TO = "related_to"
     IMPLEMENTS = "implements"
     DOCUMENTS = "documents"
+    GOVERNED_BY = "governed_by"
 
 
 # -- Helpers -----------------------------------------------------------------
@@ -42,6 +43,35 @@ def _uuid_hex() -> str:
 
 
 # -- Models ------------------------------------------------------------------
+
+
+class SourceType(StrEnum):
+    """Classification of knowledge sources."""
+
+    URL_LIST = "url_list"
+    CRAWL = "crawl"
+    FILE_GLOB = "file_glob"
+
+
+# -- Models ------------------------------------------------------------------
+
+
+class KnowledgeSource(BaseModel):
+    """A registered knowledge source — where content comes from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=_uuid_hex)
+    name: str
+    source_type: SourceType
+    config: dict[str, Any] = Field(default_factory=dict)
+    scope: str = "global"
+    enabled: bool = True
+    priority: int = 0
+    last_refreshed_at: str | None = None
+    last_error: str | None = None
+    created_at: str
+    updated_at: str
 
 
 class Entity(BaseModel):
@@ -56,6 +86,7 @@ class Entity(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     scope: str = "global"
     document_id: str | None = None
+    chunk_id: str | None = None
 
 
 class Edge(BaseModel):

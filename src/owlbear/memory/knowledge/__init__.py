@@ -13,6 +13,7 @@ from owlbear.memory.knowledge.ingest import (
     IngestResult,
     compute_content_hash,
 )
+from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear.memory.knowledge.models import (
     Document,
     Edge,
@@ -27,6 +28,8 @@ from owlbear.memory.knowledge.protocol import (
     VectorStoreProtocol,
 )
 from owlbear.memory.knowledge.qdrant import QdrantVectorStore
+from owlbear.memory.knowledge.query_service import KnowledgeQueryService
+from owlbear.memory.knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
 from owlbear.memory.knowledge.schema import init_db
 
 __all__ = [
@@ -41,14 +44,18 @@ __all__ = [
     "EntityExtractor",
     "EntityType",
     "ExtractionResult",
+    "GraphAugmentedRetriever",
     "GraphBuildResult",
     "GraphStore",
     "HybridEmbedding",
     "IngestPipeline",
     "IngestResult",
+    "InterDocGraphBuilder",
     "IntraDocGraphBuilder",
+    "KnowledgeQueryService",
     "QdrantVectorStore",
     "RelationType",
+    "RetrievalResult",
     "SparseVector",
     "TextChunker",
     "VectorStoreProtocol",
