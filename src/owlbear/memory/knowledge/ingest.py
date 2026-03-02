@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
     from owlbear.memory.knowledge.graph import GraphStore
     from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+    from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
     from owlbear.memory.knowledge.models import Entity
     from owlbear.memory.knowledge.protocol import VectorStoreProtocol
 
@@ -113,6 +114,14 @@ class IngestPipeline:
         LLM-based entity/relationship extractor (async, I/O-bound).
     text_chunker:
         Splits text into chunks.
+    graph_builder:
+        Optional intra-document graph builder.  When provided, entities
+        extracted from each document are connected via structural
+        relationships within the same document.
+    inter_doc_builder:
+        Optional inter-document graph builder.  When provided (and at
+        least two documents exist in the scope), cross-document edges
+        are inferred in a background task after ingest completes.
     """
 
     def __init__(  # noqa: PLR0913
@@ -124,6 +133,7 @@ class IngestPipeline:
         entity_extractor: EntityExtractor,
         text_chunker: TextChunker,
         graph_builder: IntraDocGraphBuilder | None = None,
+        inter_doc_builder: InterDocGraphBuilder | None = None,
     ) -> None:
         self._conn = conn
         self._graph = graph_store
@@ -132,6 +142,7 @@ class IngestPipeline:
         self._extractor = entity_extractor
         self._chunker = text_chunker
         self._graph_builder = graph_builder
+        self._inter_doc_builder = inter_doc_builder
         self._background_tasks: set[asyncio.Task[None]] = set()
 
     # -- Public API ----------------------------------------------------------
@@ -300,7 +311,7 @@ class IngestPipeline:
 
             # 5. Insert document record, then persist chunks.
             self._insert_document(document_id, intake_result, scope=scope)
-            self._store_chunks(document_id, chunks, scope=scope)
+            chunk_ids = self._store_chunks(document_id, chunks, scope=scope)
 
             # 6. Parallel: embed (CPU-bound) + extract (LLM I/O-bound).
             embed_result, extract_result = await asyncio.gather(
@@ -311,7 +322,8 @@ class IngestPipeline:
 
             # 7. Store successful results, determine final status.
             entity_count, edge_count, status = self._process_results(
-                document_id, chunks, embed_result, extract_result, scope=scope
+                document_id, chunks, embed_result, extract_result,
+                scope=scope, chunk_ids=chunk_ids,
             )
 
             self._set_status(document_id, status, scope=scope)
@@ -322,6 +334,11 @@ class IngestPipeline:
             # 9. Schedule graph enrichment (non-blocking).
             if not isinstance(extract_result, BaseException):
                 self._schedule_graph_enrichment(
+                    document_id, extract_result, scope
+                )
+
+                # 9b. Schedule inter-document graph enrichment (non-blocking).
+                self._schedule_inter_doc_enrichment(
                     document_id, extract_result, scope
                 )
 
@@ -426,7 +443,7 @@ class IngestPipeline:
 
             chunks = self._chunker.chunk(intake_result.content, metadata=intake_result.metadata)
             self._insert_document(document_id, intake_result, scope=scope)
-            self._store_chunks(document_id, chunks, scope=scope)
+            chunk_ids = self._store_chunks(document_id, chunks, scope=scope)
 
             embed_result, extract_result = await asyncio.gather(
                 self._run_embed(chunks),
@@ -435,7 +452,8 @@ class IngestPipeline:
             )
 
             entity_count, edge_count, status = self._process_results(
-                document_id, chunks, embed_result, extract_result, scope=scope
+                document_id, chunks, embed_result, extract_result,
+                scope=scope, chunk_ids=chunk_ids,
             )
             self._set_status(document_id, status, scope=scope)
 
@@ -445,6 +463,11 @@ class IngestPipeline:
             # Schedule graph enrichment (non-blocking).
             if not isinstance(extract_result, BaseException):
                 self._schedule_graph_enrichment(
+                    document_id, extract_result, scope
+                )
+
+                # Schedule inter-document graph enrichment (non-blocking).
+                self._schedule_inter_doc_enrichment(
                     document_id, extract_result, scope
                 )
 
@@ -526,6 +549,59 @@ class IngestPipeline:
                 exc_info=True,
             )
 
+    def _schedule_inter_doc_enrichment(
+        self,
+        document_id: str,
+        extract_results: list[ExtractionResult],
+        scope: str,
+    ) -> None:
+        """Schedule non-blocking inter-document graph enrichment if builder is available."""
+        if self._inter_doc_builder is None:
+            return
+        entities = [e for r in extract_results for e in r.entities]
+        if not entities:
+            return
+
+        # Skip if fewer than 2 documents exist in scope.
+        doc_count = self._conn.execute(
+            "SELECT COUNT(*) FROM document_status WHERE scope = ?",
+            (scope,),
+        ).fetchone()[0]
+        _min_docs = 2
+        if doc_count < _min_docs:
+            return
+
+        logger.info(
+            "Scheduling inter-document graph enrichment for document %s",
+            document_id,
+        )
+        task = asyncio.create_task(
+            self._enrich_inter_doc_graph(document_id, entities, scope)
+        )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _enrich_inter_doc_graph(
+        self,
+        document_id: str,
+        entities: list[Entity],
+        scope: str,
+    ) -> None:
+        """Background task: run inter-doc graph builder and store inferred edges."""
+        try:
+            result = await self._inter_doc_builder.build(  # type: ignore[union-attr]
+                entities, scope=scope, document_id=document_id
+            )
+
+            for edge in result.edges:
+                self._graph.insert_edge(edge)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Inter-document graph enrichment failed for document %s",
+                document_id,
+                exc_info=True,
+            )
+
     @staticmethod
     async def _read_source(source: str | Path) -> IntakeResult:
         """Dispatch to the appropriate intake reader."""
@@ -558,7 +634,7 @@ class IngestPipeline:
             results.append(r)
         return results
 
-    def _process_results(
+    def _process_results(  # noqa: PLR0913
         self,
         document_id: str,
         chunks: list[Chunk],
@@ -566,6 +642,7 @@ class IngestPipeline:
         extract_result: list[ExtractionResult] | BaseException,
         *,
         scope: str = "global",
+        chunk_ids: list[str] | None = None,
     ) -> tuple[int, int, str]:
         """Store successful results and determine final status."""
         embed_ok = not isinstance(embed_result, BaseException)
@@ -582,6 +659,7 @@ class IngestPipeline:
         if extract_ok:
             entity_count, edge_count = self._store_extractions(
                 extract_result, scope=scope, document_id=document_id,  # type: ignore[arg-type]
+                chunk_ids=chunk_ids,
             )
             try:
                 self._store_entity_embeddings(extract_result, scope=scope)  # type: ignore[arg-type]
@@ -653,11 +731,19 @@ class IngestPipeline:
 
     def _store_chunks(
         self, document_id: str, chunks: list[Chunk], *, scope: str = "global"
-    ) -> None:
-        """Insert chunks into the ``chunks`` table."""
+    ) -> list[str]:
+        """Insert chunks into the ``chunks`` table.
+
+        Returns
+        -------
+        list[str]
+            The generated chunk IDs, in the same order as *chunks*.
+        """
         now = datetime.now(tz=UTC).isoformat()
+        chunk_ids: list[str] = []
         for chunk in chunks:
             chunk_id = uuid4().hex
+            chunk_ids.append(chunk_id)
             self._conn.execute(
                 "INSERT INTO chunks "
                 "(id, document_id, chunk_index, content, metadata, scope, created_at) "
@@ -673,6 +759,7 @@ class IngestPipeline:
                 ),
             )
         self._conn.commit()
+        return chunk_ids
 
     def _store_embeddings(
         self,
@@ -693,15 +780,27 @@ class IngestPipeline:
         *,
         scope: str = "global",
         document_id: str | None = None,
+        chunk_ids: list[str] | None = None,
     ) -> tuple[int, int]:
-        """Store entities and edges in the graph store."""
+        """Store entities and edges in the graph store.
+
+        Parameters
+        ----------
+        chunk_ids:
+            When provided, must be the same length as *results*.  Each
+            extraction result's entities are stamped with the
+            corresponding chunk_id.
+        """
         entity_count = 0
         edge_count = 0
-        for result in results:
+        for idx, result in enumerate(results):
+            cid = chunk_ids[idx] if chunk_ids is not None else None
             for entity in result.entities:
                 updates: dict[str, object] = {"scope": scope}
                 if document_id is not None:
                     updates["document_id"] = document_id
+                if cid is not None:
+                    updates["chunk_id"] = cid
                 scoped = entity.model_copy(update=updates)
                 self._graph.insert_entity(scoped)
                 entity_count += 1
