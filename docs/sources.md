@@ -158,7 +158,7 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | bge-m3-qdrant-sample | <https://github.com/yuniko-software/bge-m3-qdrant-sample> | N/A | Full bge-m3 + Qdrant integration: collection creation, embedding, named vectors, hybrid search | `docs/qdrant-local-research.md`, `docs/bge-m3-integration-research.md` | 2026-02-28 |
-| workshop-ultimate-hybrid-search | <https://github.com/qdrant/workshop-ultimate-hybrid-search> | N/A | Official Qdrant hybrid search evaluation workshop | `docs/qdrant-local-research.md` | 2026-02-28 |
+| workshop-ultimate-hybrid-search | <https://github.com/qdrant/workshop-ultimate-hybrid-search> | N/A | Official Qdrant hybrid search evaluation workshop; `query_points` API patterns for sparse/RRF search | `docs/qdrant-local-research.md`, `tests/benchmarks/search.py` (`_sparse_search`, `_hybrid_rrf_search`) | 2026-02-28 |
 | FlagEmbedding (v1.3.5) | <https://github.com/FlagOpen/FlagEmbedding> | MIT | M3Embedder/BGEM3FlagModel code analysis: constructor behavior (NOT lazy), encode() internals, sparse/ColBERT processing, FP16 CPU auto-disable, dependency chain | `docs/bge-m3-integration-research.md` | 2026-02-28 |
 | FastEmbed issue #107 (bge-m3 support) | <https://github.com/qdrant/fastembed/issues/107> | N/A | 2+ year open issue; maintainer confirmed sparse/ColBERT heads need ONNX export | `docs/bge-m3-integration-research.md` | 2026-02-28 |
 | FastEmbed PR #602 (bge-m3 dense only) | <https://github.com/qdrant/fastembed/pull/602> | N/A | Feb 2026 PR adding dense-only ONNX bge-m3 embedding, no sparse/ColBERT, no reviewer | `docs/bge-m3-integration-research.md` | 2026-02-28 |
@@ -244,6 +244,21 @@ External repos and resources studied during OwlBear development.
 | LlamaIndex PropertyGraphIndex | <https://developers.llamaindex.ai/docs/llamaindex/module_guides/indexing/lpg_index_guide> | MIT | SchemaLLMPathExtractor, constrained extraction | `docs/intra-document-graph-research.md` | 2026-02-28 |
 | nano-graphrag (intra-doc patterns) | <https://github.com/gusye1234/nano-graphrag> | MIT | Minimal extract-merge-summarize pattern (~1100 LOC) | `docs/intra-document-graph-research.md` | 2026-02-28 |
 
+## Source Registry Research (Task #254)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| LlamaIndex Data Connectors | <https://developers.llamaindex.ai/python/framework/module_guides/loading/connector/> | MIT | Reader → Document pattern, LlamaHub connector registry, type-specific loaders — informed SourceType enum design | `docs/source-registry-research.md` (comparison) | 2026-03-01 |
+| APScheduler v4 (pre-release) | <https://github.com/agronholm/apscheduler> | MIT | Cron/interval/calendar triggers, SQLite data store, async-native v4 — evaluated but not adopted (YAGNI; manual refresh recommended, scheduling deferred to phase-14) | `docs/source-registry-research.md` (scheduling comparison) | 2026-03-01 |
+
+## Inter-Document Graph Builder Research (Task #256)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG (Edge et al.) | <https://arxiv.org/abs/2404.16130> | N/A | Scaling data (~8K–15K entities per 1M tokens), entity merging by name match, Leiden community detection pipeline — used as comparison baseline; implementation chose embedding pre-filter approach instead | `docs/inter-document-graph-builder-research.md` (comparison analysis, scaling reference) | 2026-02-28 |
+| GraphRAG Indexing Dataflow | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | 6-phase pipeline (chunk → extract → graph → community → summarize → embed) — evaluated as approach D; not adopted (YAGNI — community detection not needed yet) | `docs/inter-document-graph-builder-research.md` (pipeline comparison) | 2026-02-28 |
+| Neo4j entity resolution (Senzing) | <https://neo4j.com/developer-blog/entity-resolved-knowledge-graphs/> | N/A | Entity deduplication across datasets via record linkage; different use case from relationship inference — not adopted | `docs/inter-document-graph-builder-research.md` (comparison) | 2026-02-28 |
+
 ## Project Definition Workflow Research (Task #294)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -269,9 +284,33 @@ External repos and resources studied during OwlBear development.
 | Nanobot SessionManager | <https://github.com/HKUDS/nanobot> | MIT | JSONL sessions keyed by workspace, workspace-scoped context loading, consolidation pattern | `docs/multi-project-session-research.md` (architecture reference) | 2026-03-01 |
 | Mem0 memory scoping | <https://github.com/mem0ai/mem0> | Apache-2.0 | Multi-level memory via user_id/agent_id/run_id metadata, scope-as-filter-parameter pattern | `docs/multi-project-session-research.md` (scoping pattern analysis) | 2026-03-01 |
 
+## Error Recovery Research (Tasks #357–#358)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI Retries docs | <https://ai.pydantic.dev/retries/> | MIT | `AsyncTenacityTransport`, `RetryConfig`, `wait_retry_after` for HTTP-level retry with Retry-After header support | `src/owlbear/providers/copilot.py` (`_build_retry_transport`, `create_copilot_client`) | 2026-03-01 |
+| tenacity docs | <https://tenacity.readthedocs.io/> | Apache-2.0 | `retry_if_exception_type`, `stop_after_attempt`, `wait_exponential` composable retry primitives | `src/owlbear/providers/copilot.py` (`_build_retry_transport`), `src/owlbear/core/errors.py` (classification categories aligned to retry policies) | 2026-03-01 |
+| PydanticAI ModelRetry docs | <https://ai.pydantic.dev/agents/#reflection-and-self-correction> | MIT | `ModelRetry` exception pattern — tool tells LLM "try again" with hint; informed TOOL_SEMANTIC error category design | `src/owlbear/core/errors.py` (`ErrorCategory.TOOL_SEMANTIC`) | 2026-03-01 |
+
 ## Knowledge Toolset Research (Task #291)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | PydanticAI RAG example | <https://ai.pydantic.dev/examples/rag/> | MIT | Official RAG pattern: `@agent.tool` → embed query → vector search → format results; adapted for KnowledgeToolset query_knowledge flow | `src/owlbear/tools/knowledge.py` (`_query_knowledge` tool), `docs/knowledge-toolset-research.md` | 2026-03-01 |
 | PydanticAI FunctionToolset docs | <https://ai.pydantic.dev/toolsets/> | MIT | `FunctionToolset` subclass API, `add_function()` registration, toolset composition pattern | `src/owlbear/tools/knowledge.py` (`KnowledgeToolset` class), `docs/knowledge-toolset-research.md` | 2026-03-01 |
+
+## Hybrid Search Benchmark Harness (Tasks #377, #379)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| BEIR (beir-cellar) | <https://github.com/beir-cellar/beir> | Apache-2.0 | Standard IR benchmark library: `GenericDataLoader` for dataset download + loading, NFCorpus qrels (multi-level relevance 0/1/2), corpus/queries/qrels 3-tuple format | `tests/benchmarks/corpus.py` (`load_nfcorpus`), `tests/benchmarks/conftest.py` (session fixtures) | 2026-03-02 |
+| ranx (Bassani) | <https://github.com/AmenRa/ranx> | MIT | IR evaluation library: `Qrels.from_dict()` for ground-truth construction, `Run.from_dict()` for result sets, `evaluate()` for nDCG@10 scoring, `compare()` for multi-run comparison with paired t-test statistical significance | `tests/benchmarks/harness.py` (`build_qrels`, `build_run`), `tests/benchmarks/search.py` (run construction), `tests/benchmarks/evaluate.py` (`evaluate_runs`, `format_results`, `write_results_doc`) | 2026-03-02 |
+| workshop-ultimate-hybrid-search | <https://github.com/qdrant/workshop-ultimate-hybrid-search> | N/A | Qdrant `query_points` API patterns: sparse-only `SparseVector` query, dense+sparse `Prefetch` with `FusionQuery(Fusion.RRF)` fusion | `tests/benchmarks/search.py` (`_sparse_search`, `_hybrid_rrf_search`) | 2026-03-02 |
+
+## Context-Aware Knowledge Injection Research (Tasks #305, #408)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI runtime `instructions=` param | <https://ai.pydantic.dev/agents/#instructions> | MIT | Dynamic instructions via `.run(instructions="...")` — reevaluated per-run, caller-provided; chosen over `@agent.instructions` decorator (which lacks prompt access) | `src/owlbear/core/agent.py` (`turn()` knowledge injection via `run_kwargs["instructions"]`), `docs/context-aware-knowledge-injection-research.md` | 2026-03-02 |
+| MemGPT (Packer et al., 2023) | <https://arxiv.org/abs/2310.08560> | N/A | OS-inspired hierarchical memory: auto-retrieve from archival → inject into working context per turn; inspired per-turn auto-inject approach over tool-based RAG | `docs/context-aware-knowledge-injection-research.md` (architecture comparison), `src/owlbear/memory/knowledge/query_service.py` (per-turn injection pattern) | 2026-03-02 |
+| LlamaIndex ContextChatEngine | <https://docs.llamaindex.ai> | MIT | Auto-retrieves relevant nodes pre-query; prepends to system prompt with top-k + token budget; informed token-budgeted injection design | `docs/context-aware-knowledge-injection-research.md` (architecture comparison), `src/owlbear/memory/knowledge/query_service.py` (token-budget pattern) | 2026-03-02 |
