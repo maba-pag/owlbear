@@ -42,6 +42,8 @@ from owlbear.tools.github_api import parse_git_remote
 if TYPE_CHECKING:
     from owlbear.channels.cli import CLIChannel
     from owlbear.core.agent import OwlBearAgent
+    from owlbear.memory.knowledge.refresh import RefreshOrchestrator
+    from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
     from owlbear.projects.store import ProjectStore
 
 app = typer.Typer(
@@ -308,6 +310,257 @@ def voice_brainstorm(
     )
     typer.echo()  # newline after live updates
     typer.echo(transcript)
+
+
+# ---------------------------------------------------------------------------
+# Knowledge-source subcommand group
+# ---------------------------------------------------------------------------
+
+knowledge_source_app = typer.Typer(
+    name="knowledge-source",
+    help="Manage knowledge sources.",
+    no_args_is_help=True,
+)
+app.add_typer(knowledge_source_app)
+
+
+def _get_source_store() -> KnowledgeSourceStore:
+    """Return a :class:`KnowledgeSourceStore` backed by the knowledge DB."""
+    import sqlite3  # noqa: PLC0415
+
+    from owlbear.memory.knowledge.schema import init_db  # noqa: PLC0415
+    from owlbear.memory.knowledge.source_store import (  # noqa: PLC0415
+        KnowledgeSourceStore,
+    )
+
+    settings = OwlBearSettings()
+    settings.knowledge_db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(settings.knowledge_db_path))
+    init_db(conn)
+    return KnowledgeSourceStore(conn)
+
+
+def _make_refresh_orchestrator(
+    store: KnowledgeSourceStore,
+) -> RefreshOrchestrator:
+    """Build a :class:`RefreshOrchestrator` for the CLI.
+
+    Requires a fully initialized knowledge DB with all supporting stores.
+    In tests, this function is mocked entirely.
+    """
+    # Full pipeline wiring requires graph_store, vector_store, embedding,
+    # entity extractor, and chunker.  For now, the CLI refresh path is
+    # expected to be invoked through the daemon where these are already
+    # constructed.  This factory is primarily a seam for test mocking.
+    msg = (
+        "Direct CLI refresh requires the daemon's knowledge infrastructure. "
+        "Use 'bearclaw run' and invoke refresh through the agent, or mock "
+        "this function in tests."
+    )
+    raise NotImplementedError(msg)
+
+
+_VALID_SOURCE_TYPES = ("url_list", "crawl", "file_glob")
+
+
+@knowledge_source_app.command("add")
+def ks_add(  # noqa: PLR0913
+    name: Annotated[str, typer.Option("--name", "-n", help="Source name.")],
+    source_type: Annotated[
+        str, typer.Option("--type", "-t", help="Source type: url_list, crawl, or file_glob.")
+    ],
+    urls: Annotated[
+        str, typer.Option("--urls", help="Comma-separated URLs (for url_list).")
+    ] = "",
+    seeds: Annotated[
+        str, typer.Option("--seeds", help="Comma-separated seed URLs (for crawl).")
+    ] = "",
+    pattern: Annotated[
+        str, typer.Option("--pattern", help="Glob pattern (for file_glob).")
+    ] = "",
+    scope: Annotated[
+        str, typer.Option("--scope", "-s", help="Scope (default: global).")
+    ] = "global",
+    max_depth: Annotated[
+        int, typer.Option("--max-depth", help="Max crawl depth (for crawl).")
+    ] = 1,
+    max_pages: Annotated[
+        int, typer.Option("--max-pages", help="Max pages to crawl (for crawl).")
+    ] = 50,
+) -> None:
+    """Add a new knowledge source."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from owlbear.memory.knowledge.models import (  # noqa: PLC0415
+        KnowledgeSource,
+        SourceType,
+    )
+
+    if source_type not in _VALID_SOURCE_TYPES:
+        valid = ", ".join(_VALID_SOURCE_TYPES)
+        typer.echo(f"Error: Invalid type '{source_type}'. Must be one of: {valid}")
+        raise typer.Exit(code=1)
+
+    # Build config dict based on type
+    config: dict[str, object] = {}
+    if source_type == "url_list":
+        if not urls:
+            typer.echo("Error: --urls is required for type 'url_list'.")
+            raise typer.Exit(code=1)
+        config["urls"] = [u.strip() for u in urls.split(",")]
+    elif source_type == "crawl":
+        if not seeds:
+            typer.echo("Error: --seeds is required for type 'crawl'.")
+            raise typer.Exit(code=1)
+        config["seeds"] = [s.strip() for s in seeds.split(",")]
+        config["max_depth"] = max_depth
+        config["max_pages"] = max_pages
+    elif source_type == "file_glob":
+        if not pattern:
+            typer.echo("Error: --pattern is required for type 'file_glob'.")
+            raise typer.Exit(code=1)
+        config["pattern"] = pattern
+
+    now = datetime.now(tz=UTC).isoformat()
+    source = KnowledgeSource(
+        name=name,
+        source_type=SourceType(source_type),
+        config=config,
+        scope=scope,
+        created_at=now,
+        updated_at=now,
+    )
+
+    store = _get_source_store()
+    store.create(source)
+    typer.echo(f"Added knowledge source '{name}' (type: {source_type}, scope: {scope})")
+
+
+@knowledge_source_app.command("list")
+def ks_list(
+    scope: Annotated[
+        str, typer.Option("--scope", "-s", help="Filter by scope.")
+    ] = "",
+) -> None:
+    """List knowledge sources."""
+    store = _get_source_store()
+    scope_filter = scope or None
+    sources = store.list_all(scope=scope_filter)
+
+    if not sources:
+        typer.echo("No knowledge sources found.")
+        return
+
+    headers = ["Name", "Type", "Scope", "Enabled", "Last Refreshed"]
+    rows = [
+        [
+            s.name,
+            str(s.source_type),
+            s.scope,
+            "yes" if s.enabled else "no",
+            s.last_refreshed_at or "never",
+        ]
+        for s in sources
+    ]
+
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
+    typer.echo(fmt.format(*headers))
+    typer.echo("  ".join("-" * w for w in col_widths))
+    for row in rows:
+        typer.echo(fmt.format(*row))
+
+
+@knowledge_source_app.command("show")
+def ks_show(
+    name: Annotated[str, typer.Argument(help="Name of the source to show.")],
+    scope: Annotated[
+        str, typer.Option("--scope", "-s", help="Source scope.")
+    ] = "global",
+) -> None:
+    """Show details of a knowledge source."""
+    import json  # noqa: PLC0415
+
+    store = _get_source_store()
+    source = store.get_by_name(name, scope=scope)
+    if source is None:
+        typer.echo(f"Error: No knowledge source named '{name}' (scope: {scope})")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Name:           {source.name}")
+    typer.echo(f"Type:           {source.source_type}")
+    typer.echo(f"Scope:          {source.scope}")
+    typer.echo(f"Enabled:        {source.enabled}")
+    typer.echo(f"Priority:       {source.priority}")
+    typer.echo(f"Config:         {json.dumps(source.config, indent=2)}")
+    typer.echo(f"Last Refreshed: {source.last_refreshed_at or 'never'}")
+    typer.echo(f"Last Error:     {source.last_error or 'none'}")
+    typer.echo(f"Created:        {source.created_at}")
+
+
+@knowledge_source_app.command("refresh")
+def ks_refresh(
+    name: Annotated[
+        str, typer.Option("--name", "-n", help="Name of source to refresh.")
+    ] = "",
+    refresh_all: Annotated[  # noqa: FBT002
+        bool, typer.Option("--all", "-a", help="Refresh all enabled sources.")
+    ] = False,
+    scope: Annotated[
+        str, typer.Option("--scope", "-s", help="Source scope.")
+    ] = "global",
+) -> None:
+    """Refresh knowledge sources."""
+    if not name and not refresh_all:
+        typer.echo("Error: Provide --name or --all.")
+        raise typer.Exit(code=1)
+
+    store = _get_source_store()
+
+    if name:
+        source = store.get_by_name(name, scope=scope)
+        if source is None:
+            typer.echo(f"Error: No knowledge source named '{name}'")
+            raise typer.Exit(code=1)
+        orch = _make_refresh_orchestrator(store)
+        result = asyncio.run(orch.refresh(source))
+        typer.echo(
+            f"Refreshed '{name}': {result.refreshed} refreshed, "
+            f"{result.skipped} skipped, {result.failed} failed"
+        )
+    else:
+        orch = _make_refresh_orchestrator(store)
+        results = asyncio.run(orch.refresh_all())
+        total_refreshed = sum(r.refreshed for r in results)
+        total_skipped = sum(r.skipped for r in results)
+        total_failed = sum(r.failed for r in results)
+        typer.echo(
+            f"Refreshed all: {total_refreshed} refreshed, "
+            f"{total_skipped} skipped, {total_failed} failed "
+            f"({len(results)} sources)"
+        )
+
+
+@knowledge_source_app.command("remove")
+def ks_remove(
+    name: Annotated[str, typer.Argument(help="Name of the source to remove.")],
+    scope: Annotated[
+        str, typer.Option("--scope", "-s", help="Source scope.")
+    ] = "global",
+) -> None:
+    """Remove a knowledge source."""
+    store = _get_source_store()
+    source = store.get_by_name(name, scope=scope)
+    if source is None:
+        typer.echo(f"Error: No knowledge source named '{name}'")
+        raise typer.Exit(code=1)
+
+    store.delete(source.id)
+    typer.echo(f"Removed knowledge source '{name}'")
 
 
 def _get_usage_path() -> Path:

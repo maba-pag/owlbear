@@ -1,7 +1,8 @@
 """DDL and database initialization for the knowledge graph.
 
 Creates all relational tables required by the knowledge graph: documents,
-entities, edges, chunks, document_status, and a schema version tracker.
+entities, edges, chunks, document_status, knowledge_sources, and a schema
+version tracker.
 Calling ``init_db`` multiple times is safe (idempotent).
 
 Vector storage is handled externally by Qdrant (see ``qdrant.py``).
@@ -17,7 +18,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 4
+_SCHEMA_VERSION: int = 6
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS entities (
     metadata    TEXT,
     created_at  TEXT,
     scope       TEXT DEFAULT 'global',
-    document_id TEXT
+    document_id TEXT,
+    chunk_id    TEXT
 )
 """
 
@@ -92,6 +94,22 @@ CREATE TABLE IF NOT EXISTS document_status (
     updated_at     TEXT,
     scope          TEXT DEFAULT 'global',
     content_hash   TEXT
+)
+"""
+
+_CREATE_KNOWLEDGE_SOURCES = """\
+CREATE TABLE IF NOT EXISTS knowledge_sources (
+    id                TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    source_type       TEXT NOT NULL,
+    config            TEXT NOT NULL,
+    scope             TEXT DEFAULT 'global',
+    enabled           INTEGER DEFAULT 1,
+    priority          INTEGER DEFAULT 0,
+    last_refreshed_at TEXT,
+    last_error        TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
 )
 """
 
@@ -167,6 +185,45 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
+    """Migrate a v4 knowledge-graph database to v5.
+
+    Adds ``chunk_id`` TEXT column to ``entities``, linking each entity
+    back to its source chunk.  Safe to call multiple times (idempotent).
+    """
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute("ALTER TABLE entities ADD COLUMN chunk_id TEXT")
+
+    # Bump the stored version.
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (5, datetime.now(tz=UTC).isoformat()),
+    )
+
+
+def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
+    """Migrate a v5 knowledge-graph database to v6.
+
+    Adds the ``knowledge_sources`` table and indexes.  Safe to call
+    multiple times (idempotent).
+    """
+    conn.execute(_CREATE_KNOWLEDGE_SOURCES)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
+        "ON knowledge_sources(name, scope)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope "
+        "ON knowledge_sources(scope)"
+    )
+
+    # Bump the stored version.
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (6, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     """Create all knowledge-graph relational tables if they do not exist.
 
@@ -180,10 +237,12 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2, v3, and v4.  The v2 migration adds ``chunks`` and
+    through v2, v3, v4, v5, and v6.  The v2 migration adds ``chunks`` and
     ``document_status``; the v3 migration adds ``scope`` columns to five
     tables; the v4 migration adds ``content_hash`` to ``document_status``,
-    ``document_id`` to ``entities``, and indexes ``document_status(source)``.
+    ``document_id`` to ``entities``, and indexes ``document_status(source)``;
+    the v5 migration adds ``chunk_id`` to ``entities``; the v6 migration
+    adds the ``knowledge_sources`` table with indexes.
 
     Vector storage is handled externally by Qdrant — no sqlite-vec
     extension or vec0 virtual tables are used.
@@ -197,6 +256,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_EDGES)
     conn.execute(_CREATE_CHUNKS)
     conn.execute(_CREATE_DOCUMENT_STATUS)
+    conn.execute(_CREATE_KNOWLEDGE_SOURCES)
     conn.execute(_CREATE_SCHEMA_VERSION)
 
     # Schema version — insert or migrate ------------------------------------
@@ -217,9 +277,23 @@ def init_db(conn: sqlite3.Connection) -> None:
             _migrate_v2_to_v3(conn)
         if current < 4:  # noqa: PLR2004
             _migrate_v3_to_v4(conn)
+        if current < 5:  # noqa: PLR2004
+            _migrate_v4_to_v5(conn)
+        if current < 6:  # noqa: PLR2004
+            _migrate_v5_to_v6(conn)
 
     # Scope indexes (idempotent) --------------------------------------------
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
+
+    # Knowledge-sources indexes (idempotent) --------------------------------
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
+        "ON knowledge_sources(name, scope)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope "
+        "ON knowledge_sources(scope)"
+    )
 
     conn.commit()
