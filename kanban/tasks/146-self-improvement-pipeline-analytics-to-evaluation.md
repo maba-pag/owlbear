@@ -1,10 +1,11 @@
 ---
 id: 146
 title: Self-improvement pipeline — analytics to evaluation to human-gated proposals
-status: ideation
+status: backlog
 priority: someday
 created: 2026-02-27T14:59:42.7922645+01:00
-updated: 2026-03-01T02:55:06.7859326+01:00
+updated: 2026-03-01T20:08:57.7214986+01:00
+started: 2026-03-01T20:08:57.7214986+01:00
 tags:
     - agent
     - analytics

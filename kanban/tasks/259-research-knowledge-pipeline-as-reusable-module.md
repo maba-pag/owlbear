@@ -1,10 +1,12 @@
 ---
 id: 259
 title: 'Research: Knowledge pipeline as reusable module'
-status: ideation
+status: archived
 priority: important
 created: 2026-02-28T12:41:54.4410414+01:00
-updated: 2026-02-28T14:54:41.6951402+01:00
+updated: 2026-03-02T09:14:19.1923017+01:00
+started: 2026-03-01T19:13:58.2203258+01:00
+completed: 2026-03-02T09:14:19.1923017+01:00
 tags:
     - phase-9
     - knowledge-graph

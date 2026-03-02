@@ -1,10 +1,11 @@
 ---
 id: 302
 title: Screenshot and visual feedback — capture and share project state
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-01T02:53:47.9350608+01:00
-updated: 2026-03-01T02:53:47.9350608+01:00
+updated: 2026-03-01T19:37:23.1461205+01:00
+started: 2026-03-01T19:37:23.1461205+01:00
 tags:
     - phase-12
     - browser

@@ -1,10 +1,11 @@
 ---
 id: 148
 title: 'Research: OpenClaw ecosystem — addon patterns, compatibility assessment'
-status: ideation
+status: backlog
 priority: someday
 created: 2026-02-27T15:00:05.2199197+01:00
-updated: 2026-03-01T02:55:07.8915856+01:00
+updated: 2026-03-01T20:09:04.9967263+01:00
+started: 2026-03-01T20:09:04.9967263+01:00
 tags:
     - research
     - phase-14

@@ -1,10 +1,12 @@
 ---
 id: 252
 title: Benchmark hybrid search quality
-status: ideation
+status: archived
 priority: important
 created: 2026-02-28T12:39:52.6609423+01:00
-updated: 2026-02-28T14:54:38.0721609+01:00
+updated: 2026-03-02T05:41:58.9910943+01:00
+started: 2026-03-01T18:56:06.0454716+01:00
+completed: 2026-03-02T05:41:58.9910943+01:00
 tags:
     - phase-9
     - knowledge-graph

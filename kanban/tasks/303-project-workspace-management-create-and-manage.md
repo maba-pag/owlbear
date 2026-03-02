@@ -1,10 +1,11 @@
 ---
 id: 303
 title: Project workspace management — create and manage project repos
-status: ideation
+status: backlog
 priority: needed
 created: 2026-03-01T02:53:58.0773901+01:00
-updated: 2026-03-01T02:53:58.0773901+01:00
+updated: 2026-03-01T18:42:33.1027862+01:00
+started: 2026-03-01T18:42:33.1027862+01:00
 tags:
     - phase-13
     - tools

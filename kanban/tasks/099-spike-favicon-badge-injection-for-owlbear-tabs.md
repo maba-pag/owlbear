@@ -1,11 +1,12 @@
 ---
 id: 99
 title: 'Spike: favicon badge injection for OwlBear tabs'
-status: ideation
+status: archived
 priority: someday
 created: 2026-02-27T03:15:19.317906+01:00
-updated: 2026-02-27T17:58:16.4326967+01:00
+updated: 2026-03-02T09:14:07.5045447+01:00
 started: 2026-02-27T03:32:44.8825842+01:00
+completed: 2026-03-02T09:14:07.5045447+01:00
 tags:
     - phase-6
     - browser

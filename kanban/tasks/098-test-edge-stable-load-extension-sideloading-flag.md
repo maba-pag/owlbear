@@ -1,11 +1,12 @@
 ---
 id: 98
 title: Test Edge Stable --load-extension sideloading flag
-status: ideation
+status: archived
 priority: someday
 created: 2026-02-27T03:15:10.3521445+01:00
-updated: 2026-02-27T17:58:05.5437944+01:00
+updated: 2026-03-02T09:14:05.4605922+01:00
 started: 2026-02-27T03:32:44.4664477+01:00
+completed: 2026-03-02T09:14:05.4605922+01:00
 tags:
     - phase-6
     - browser

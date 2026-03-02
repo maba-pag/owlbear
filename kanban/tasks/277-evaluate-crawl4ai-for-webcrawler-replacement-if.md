@@ -1,10 +1,12 @@
 ---
 id: 277
 title: Evaluate crawl4ai for WebCrawler replacement if crawling demand grows
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-02-28T14:22:06.7778096+01:00
-updated: 2026-02-28T14:22:06.7778096+01:00
+updated: 2026-03-02T09:14:23.5632046+01:00
+started: 2026-03-01T19:58:26.0120766+01:00
+completed: 2026-03-02T09:14:23.5632046+01:00
 tags:
     - browser
     - research

@@ -1,10 +1,11 @@
 ---
 id: 305
 title: Context-aware research — use knowledge base to improve agent work
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-01T02:54:19.689127+01:00
-updated: 2026-03-01T02:54:54.9129285+01:00
+updated: 2026-03-01T19:55:13.6887087+01:00
+started: 2026-03-01T19:55:13.6887087+01:00
 tags:
     - phase-13
     - knowledge-graph

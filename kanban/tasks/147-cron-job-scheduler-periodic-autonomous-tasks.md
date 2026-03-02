@@ -1,10 +1,11 @@
 ---
 id: 147
 title: Cron job scheduler — periodic autonomous tasks
-status: ideation
+status: backlog
 priority: someday
 created: 2026-02-27T14:59:53.7566789+01:00
-updated: 2026-03-01T02:55:07.334828+01:00
+updated: 2026-03-01T20:09:00.7665231+01:00
+started: 2026-03-01T20:09:00.7665231+01:00
 tags:
     - daemon
     - phase-14

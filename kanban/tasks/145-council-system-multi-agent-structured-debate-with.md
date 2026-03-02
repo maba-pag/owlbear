@@ -1,10 +1,11 @@
 ---
 id: 145
 title: Council system — multi-agent structured debate with consensus
-status: ideation
+status: backlog
 priority: someday
 created: 2026-02-27T14:59:30.0743201+01:00
-updated: 2026-03-01T02:55:06.2299848+01:00
+updated: 2026-03-01T20:08:55.0411741+01:00
+started: 2026-03-01T20:08:55.0411741+01:00
 tags:
     - agent
     - phase-14

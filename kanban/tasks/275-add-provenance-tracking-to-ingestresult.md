@@ -1,10 +1,11 @@
 ---
 id: 275
 title: Add provenance tracking to IngestResult
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-02-28T14:21:44.8669303+01:00
-updated: 2026-02-28T14:21:44.8669303+01:00
+updated: 2026-03-01T18:51:11.0977368+01:00
+started: 2026-03-01T18:51:11.0977368+01:00
 tags:
     - phase-9
     - knowledge-graph

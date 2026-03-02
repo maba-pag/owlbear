@@ -1,10 +1,12 @@
 ---
 id: 274
 title: Add graph community detection (Leiden algorithm)
-status: ideation
+status: archived
 priority: important
 created: 2026-02-28T14:21:36.1781468+01:00
-updated: 2026-02-28T14:21:36.1781468+01:00
+updated: 2026-03-02T09:14:21.3555665+01:00
+started: 2026-03-01T19:55:12.0944096+01:00
+completed: 2026-03-02T09:14:21.3555665+01:00
 tags:
     - phase-9
     - knowledge-graph

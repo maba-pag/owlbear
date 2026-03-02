@@ -1,10 +1,11 @@
 ---
 id: 304
 title: Source discovery and bookmarking — crawl, evaluate, ingest pipeline
-status: ideation
+status: backlog
 priority: needed
 created: 2026-03-01T02:54:08.8905141+01:00
-updated: 2026-03-01T02:54:54.3532222+01:00
+updated: 2026-03-01T19:45:01.4839522+01:00
+started: 2026-03-01T19:45:01.4839522+01:00
 tags:
     - phase-13
     - knowledge-graph

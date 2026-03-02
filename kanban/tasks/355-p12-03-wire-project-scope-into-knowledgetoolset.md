@@ -1,10 +1,12 @@
 ---
 id: 355
 title: 'P12-03: Wire project scope into KnowledgeToolset during bootstrap'
-status: ideation
+status: archived
 priority: important
 created: 2026-03-01T17:31:42.2101+01:00
-updated: 2026-03-01T17:31:42.2101+01:00
+updated: 2026-03-02T09:14:25.2804257+01:00
+started: 2026-03-01T18:13:08.9630324+01:00
+completed: 2026-03-02T09:14:25.2804257+01:00
 tags:
     - phase-12
     - knowledge-graph
