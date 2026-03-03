@@ -1,11 +1,12 @@
 ---
 id: 397
 title: Unit tests for screenshot service, toolset, and hook
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:17:12.4991548+01:00
-updated: 2026-03-01T20:23:22.490465+01:00
+updated: 2026-03-03T15:33:23.4883486+01:00
 started: 2026-03-01T20:23:22.490465+01:00
+completed: 2026-03-03T15:33:23.4883486+01:00
 tags:
     - phase-12
     - test

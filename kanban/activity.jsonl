@@ -3528,3 +3528,17 @@
 {"timestamp":"2026-03-03T15:03:04.0856655+01:00","action":"move","task_id":304,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T15:03:06.4771475+01:00","action":"move","task_id":306,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T15:03:08.2591416+01:00","action":"move","task_id":307,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T15:05:24.833731+01:00","action":"move","task_id":397,"detail":"backlog -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:06:03.2876945+01:00","action":"move","task_id":397,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T15:10:29.5709033+01:00","action":"move","task_id":397,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T15:11:56.774326+01:00","action":"move","task_id":397,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T15:12:06.1150593+01:00","action":"move","task_id":302,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-03T15:16:36.5694619+01:00","action":"edit","task_id":305,"detail":"Context-aware research — use knowledge base to improve agent work"}
+{"timestamp":"2026-03-03T15:16:42.6001593+01:00","action":"move","task_id":305,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:17:04.7566055+01:00","action":"move","task_id":305,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:17:13.1321176+01:00","action":"move","task_id":305,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T15:25:48.5631127+01:00","action":"move","task_id":305,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T15:28:04.6603124+01:00","action":"move","task_id":305,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T15:33:19.9012071+01:00","action":"move","task_id":302,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T15:33:21.4092159+01:00","action":"move","task_id":305,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T15:33:23.4921735+01:00","action":"move","task_id":397,"detail":"done -\u003e archived"}
