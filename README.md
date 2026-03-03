@@ -33,6 +33,7 @@ bearclaw slack auth                    # validate Slack tokens
 bearclaw slack test                    # send test message to configured channel
 bearclaw slack status                  # show Slack config and connection state
 bearclaw project create -n NAME [-w PATH]  # create a project (default: CWD)
+bearclaw project new NAME [--template T]   # scaffold a new project from template
 bearclaw project list [--all]              # list projects (--all includes archived)
 bearclaw project switch NAME               # switch active project
 bearclaw project archive NAME              # archive a project

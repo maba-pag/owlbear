@@ -314,3 +314,34 @@ External repos and resources studied during OwlBear development.
 | PydanticAI runtime `instructions=` param | <https://ai.pydantic.dev/agents/#instructions> | MIT | Dynamic instructions via `.run(instructions="...")` — reevaluated per-run, caller-provided; chosen over `@agent.instructions` decorator (which lacks prompt access) | `src/owlbear/core/agent.py` (`turn()` knowledge injection via `run_kwargs["instructions"]`), `docs/context-aware-knowledge-injection-research.md` | 2026-03-02 |
 | MemGPT (Packer et al., 2023) | <https://arxiv.org/abs/2310.08560> | N/A | OS-inspired hierarchical memory: auto-retrieve from archival → inject into working context per turn; inspired per-turn auto-inject approach over tool-based RAG | `docs/context-aware-knowledge-injection-research.md` (architecture comparison), `src/owlbear/memory/knowledge/query_service.py` (per-turn injection pattern) | 2026-03-02 |
 | LlamaIndex ContextChatEngine | <https://docs.llamaindex.ai> | MIT | Auto-retrieves relevant nodes pre-query; prepends to system prompt with top-k + token budget; informed token-budgeted injection design | `docs/context-aware-knowledge-injection-research.md` (architecture comparison), `src/owlbear/memory/knowledge/query_service.py` (token-budget pattern) | 2026-03-02 |
+
+## Screenshot Visual Feedback Research (Task #302)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Claude Computer Use docs | <https://docs.anthropic.com/en/docs/build-with-claude/computer-use> | N/A | Screenshot-after-every-action pattern; base64 in tool_result; coordinate scaling; informed ScreenshotService capture/deliver architecture | `docs/screenshot-visual-feedback-research.md` (architecture analysis), `src/owlbear/tools/screenshot.py` (service pattern) | 2026-03-03 |
+| Anthropic quickstart (computer-use-demo) | <https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo> | MIT | Agent loop: action → screenshot → send to LLM; screenshot quality/resize tradeoffs; informed auto-capture-on-error hook design | `docs/screenshot-visual-feedback-research.md` (prior art), `src/owlbear/tools/screenshot_hook.py` (hook pattern) | 2026-03-03 |
+
+## Project Workspace Research (Task #303)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| cookiecutter | <https://github.com/cookiecutter/cookiecutter> | BSD-3 | Jinja2 project templates from repos, `cookiecutter.json` config; informed hardcoded-template approach (simpler, YAGNI) | `docs/project-workspace-research.md` (comparison), `src/owlbear/projects/workspace.py` (template dispatch pattern) | 2026-03-03 |
+| copier | <https://github.com/copier-org/copier> | MIT | Template lifecycle (scaffold + update), `copier.yml` questions; evaluated but not adopted (YAGNI — update lifecycle not needed) | `docs/project-workspace-research.md` (comparison) | 2026-03-03 |
+
+## Source Discovery & Bookmarking Research (Task #304)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Karakeep (fka Hoarder) | <https://github.com/karakeep-app/karakeep> | AGPL-3.0 | AI-based auto-tagging via LLM prompt; bookmark → extract → tag pipeline; inspired `SourceEvaluator` LLM scoring pattern | `docs/source-discovery-bookmarking-research.md` (prior art), `src/owlbear/memory/knowledge/evaluator.py` (LLM eval pattern) | 2026-03-03 |
+| Pinboard API v1 | <https://pinboard.in/api/> | N/A | Minimal bookmark model: url, title, description, tags, datetime, toread flag; `posts/suggest` for tag recommendations; informed `BookmarkStore` field design | `docs/source-discovery-bookmarking-research.md` (data model comparison) | 2026-03-03 |
+| Omnivore digest-score | <https://github.com/omnivore-app/omnivore/tree/main/ml/digest-score> | N/A | ML-based relevance scoring (random forest); evaluated but not adopted (too complex for LLM-scored approach) | `docs/source-discovery-bookmarking-research.md` (comparison) | 2026-03-03 |
+
+## Slack Structured Proposals Research (Task #307)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Slack Socket Mode — interactive features | <https://docs.slack.dev/apis/events-api/using-socket-mode/#interactivity> | N/A | `type: "interactive"` envelope, `block_actions` payload, `envelope_id` acknowledgment | `src/owlbear/channels/slack.py` (`_handle_socket_event` interactive branch), `docs/slack-structured-proposals-research.md` | 2026-03-03 |
+| Slack Button element reference | <https://docs.slack.dev/reference/block-kit/block-elements/button-element> | N/A | `action_id`, `value`, `style` (primary/danger), `confirm` dialog; informed approval/interactive proposal button design | `src/owlbear/channels/slack_templates.py` (`format_approval_blocks`, `format_interactive_proposal_blocks`) | 2026-03-03 |
+| Bolt for Python — action listener | <https://docs.slack.dev/tools/bolt-python/concepts/actions> | N/A | `@app.action("action_id")` pattern, `ack()` + `say()` response; informed handler acknowledgment pattern | `docs/slack-structured-proposals-research.md` (architecture comparison) | 2026-03-03 |
+| Bolt Python AI Agent Template | <https://github.com/slack-samples/bolt-python-assistant-template> | MIT | Thread-based AI assistant pattern, message-per-thread model; informed thread registry design | `src/owlbear/channels/slack.py` (`_thread_registry`, `get_or_create_thread`), `docs/slack-structured-proposals-research.md` | 2026-03-03 |
