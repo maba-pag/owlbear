@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 6
+_SCHEMA_VERSION: int = 7
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -113,6 +113,23 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
 )
 """
 
+_CREATE_BOOKMARKS = """\
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id              TEXT PRIMARY KEY,
+    url             TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT,
+    tags            TEXT NOT NULL DEFAULT '[]',
+    relevance_score REAL NOT NULL DEFAULT 0.0,
+    reason          TEXT,
+    scope           TEXT NOT NULL DEFAULT 'global',
+    document_id     TEXT,
+    content_hash    TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+)
+"""
+
 _CREATE_SCHEMA_VERSION = """\
 CREATE TABLE IF NOT EXISTS schema_version (
     version    INTEGER,
@@ -173,10 +190,7 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE document_status ADD COLUMN content_hash TEXT")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE entities ADD COLUMN document_id TEXT")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_document_status_source "
-        "ON document_status(source)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_document_status_source ON document_status(source)")
 
     # Bump the stored version.
     conn.execute(
@@ -213,14 +227,32 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
         "ON knowledge_sources(name, scope)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope "
-        "ON knowledge_sources(scope)"
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
     )
 
     # Bump the stored version.
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (6, datetime.now(tz=UTC).isoformat()),
+    )
+
+
+def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
+    """Migrate a v6 knowledge-graph database to v7.
+
+    Adds the ``bookmarks`` table and indexes.  Safe to call
+    multiple times (idempotent).
+    """
+    conn.execute(_CREATE_BOOKMARKS)
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
+
+    # Bump the stored version.
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (7, datetime.now(tz=UTC).isoformat()),
     )
 
 
@@ -237,12 +269,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2, v3, v4, v5, and v6.  The v2 migration adds ``chunks`` and
+    through v2, v3, v4, v5, v6, and v7.  The v2 migration adds ``chunks`` and
     ``document_status``; the v3 migration adds ``scope`` columns to five
     tables; the v4 migration adds ``content_hash`` to ``document_status``,
     ``document_id`` to ``entities``, and indexes ``document_status(source)``;
     the v5 migration adds ``chunk_id`` to ``entities``; the v6 migration
-    adds the ``knowledge_sources`` table with indexes.
+    adds the ``knowledge_sources`` table with indexes; the v7 migration
+    adds the ``bookmarks`` table with indexes.
 
     Vector storage is handled externally by Qdrant — no sqlite-vec
     extension or vec0 virtual tables are used.
@@ -257,6 +290,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_CHUNKS)
     conn.execute(_CREATE_DOCUMENT_STATUS)
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
+    conn.execute(_CREATE_BOOKMARKS)
     conn.execute(_CREATE_SCHEMA_VERSION)
 
     # Schema version — insert or migrate ------------------------------------
@@ -281,6 +315,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             _migrate_v4_to_v5(conn)
         if current < 6:  # noqa: PLR2004
             _migrate_v5_to_v6(conn)
+        if current < 7:  # noqa: PLR2004
+            _migrate_v6_to_v7(conn)
 
     # Scope indexes (idempotent) --------------------------------------------
     for table in _SCOPE_TABLES:
@@ -292,8 +328,13 @@ def init_db(conn: sqlite3.Connection) -> None:
         "ON knowledge_sources(name, scope)"
     )
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope "
-        "ON knowledge_sources(scope)"
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
     )
+
+    # Bookmarks indexes (idempotent) ----------------------------------------
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
 
     conn.commit()

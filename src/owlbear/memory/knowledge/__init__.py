@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
 from owlbear.memory.knowledge.chunker import Chunk, TextChunker
 from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
+from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.graph_builder import GraphBuildResult, IntraDocGraphBuilder
@@ -34,6 +36,8 @@ from owlbear.memory.knowledge.schema import init_db
 
 __all__ = [
     "BgeM3EmbeddingProvider",
+    "Bookmark",
+    "BookmarkStore",
     "Chunk",
     "Document",
     "DocumentStatus",
@@ -43,6 +47,7 @@ __all__ = [
     "Entity",
     "EntityExtractor",
     "EntityType",
+    "EvaluationResult",
     "ExtractionResult",
     "GraphAugmentedRetriever",
     "GraphBuildResult",
@@ -56,6 +61,7 @@ __all__ = [
     "QdrantVectorStore",
     "RelationType",
     "RetrievalResult",
+    "SourceEvaluator",
     "SparseVector",
     "TextChunker",
     "VectorStoreProtocol",

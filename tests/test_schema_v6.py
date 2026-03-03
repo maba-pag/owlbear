@@ -74,9 +74,7 @@ def _create_v5_db() -> sqlite3.Connection:
         "source TEXT, error TEXT, created_at TEXT, updated_at TEXT, "
         "scope TEXT DEFAULT 'global', content_hash TEXT)"
     )
-    conn.execute(
-        "CREATE TABLE schema_version (version INTEGER, applied_at TEXT)"
-    )
+    conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
     conn.execute(
         "INSERT INTO schema_version (version, applied_at) VALUES (5, '2026-01-01T00:00:00')"
     )
@@ -92,13 +90,11 @@ def _create_v5_db() -> sqlite3.Connection:
         ("ent-1", "OldEntity", "concept", "doc-1", "chunk-1"),
     )
     conn.execute(
-        "INSERT INTO edges (id, source_id, target_id, relation, weight) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO edges (id, source_id, target_id, relation, weight) VALUES (?, ?, ?, ?, ?)",
         ("edge-1", "ent-1", "ent-1", "self-ref", 1.0),
     )
     conn.execute(
-        "INSERT INTO chunks (id, document_id, chunk_index, content) "
-        "VALUES (?, ?, ?, ?)",
+        "INSERT INTO chunks (id, document_id, chunk_index, content) VALUES (?, ?, ?, ?)",
         ("chunk-1", "doc-1", 0, "chunk content"),
     )
     conn.execute(
@@ -129,10 +125,10 @@ def db() -> sqlite3.Connection:
 
 
 class TestSchemaVersionConstant:
-    """_SCHEMA_VERSION must be 6."""
+    """_SCHEMA_VERSION must be 7 (bumped from 6 by bookmarks migration)."""
 
     def test_schema_version_is_6(self) -> None:
-        assert _SCHEMA_VERSION == 6
+        assert _SCHEMA_VERSION == 7
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +168,7 @@ class TestFreshDbHasKnowledgeSources:
     def test_schema_version_is_6(self, db: sqlite3.Connection) -> None:
         row = db.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
 
 # ---------------------------------------------------------------------------
@@ -222,23 +218,19 @@ class TestMigrateV5ToV6:
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
     def test_existing_documents_preserved(self) -> None:
         conn = _create_v5_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT title FROM documents WHERE id = 'doc-1'"
-        ).fetchone()
+        row = conn.execute("SELECT title FROM documents WHERE id = 'doc-1'").fetchone()
         assert row is not None
         assert row[0] == "Test Doc"
 
     def test_existing_entities_preserved(self) -> None:
         conn = _create_v5_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT name, chunk_id FROM entities WHERE id = 'ent-1'"
-        ).fetchone()
+        row = conn.execute("SELECT name, chunk_id FROM entities WHERE id = 'ent-1'").fetchone()
         assert row is not None
         assert row[0] == "OldEntity"
         assert row[1] == "chunk-1"
@@ -246,18 +238,14 @@ class TestMigrateV5ToV6:
     def test_existing_edges_preserved(self) -> None:
         conn = _create_v5_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT relation FROM edges WHERE id = 'edge-1'"
-        ).fetchone()
+        row = conn.execute("SELECT relation FROM edges WHERE id = 'edge-1'").fetchone()
         assert row is not None
         assert row[0] == "self-ref"
 
     def test_existing_chunks_preserved(self) -> None:
         conn = _create_v5_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT content FROM chunks WHERE id = 'chunk-1'"
-        ).fetchone()
+        row = conn.execute("SELECT content FROM chunks WHERE id = 'chunk-1'").fetchone()
         assert row is not None
         assert row[0] == "chunk content"
 
@@ -287,7 +275,7 @@ class TestIdempotency:
         init_db(conn)  # second call — must not raise
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
     def test_idempotent_on_fresh_db(self, db: sqlite3.Connection) -> None:
         """Running init_db twice on a fresh DB must not raise."""
@@ -295,4 +283,4 @@ class TestIdempotency:
         assert _table_exists(db, "knowledge_sources")
         row = db.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7

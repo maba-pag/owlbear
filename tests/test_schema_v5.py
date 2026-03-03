@@ -64,9 +64,7 @@ def _create_v4_db() -> sqlite3.Connection:
         "source TEXT, error TEXT, created_at TEXT, updated_at TEXT, "
         "scope TEXT DEFAULT 'global', content_hash TEXT)"
     )
-    conn.execute(
-        "CREATE TABLE schema_version (version INTEGER, applied_at TEXT)"
-    )
+    conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
     conn.execute(
         "INSERT INTO schema_version (version, applied_at) VALUES (4, '2026-01-01T00:00:00')"
     )
@@ -105,10 +103,10 @@ def graph_store(db: sqlite3.Connection) -> GraphStore:
 
 
 class TestSchemaVersionConstant:
-    """_SCHEMA_VERSION must be 6 (bumped from 5 by knowledge_sources migration)."""
+    """_SCHEMA_VERSION must be 7 (bumped from 6 by bookmarks migration)."""
 
     def test_schema_version_is_6(self) -> None:
-        assert _SCHEMA_VERSION == 6
+        assert _SCHEMA_VERSION == 7
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +124,7 @@ class TestFreshDbHasChunkId:
     def test_schema_version_is_6(self, db: sqlite3.Connection) -> None:
         row = db.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
 
 # ---------------------------------------------------------------------------
@@ -144,19 +142,17 @@ class TestMigrateV4ToV5:
         assert "chunk_id" in cols
 
     def test_schema_version_bumped_to_6(self) -> None:
-        """v4 DB migrated through v5 and v6 ends at version 6."""
+        """v4 DB migrated through v5, v6, and v7 ends at version 7."""
         conn = _create_v4_db()
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
     def test_existing_rows_get_null_chunk_id(self) -> None:
         conn = _create_v4_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT chunk_id FROM entities WHERE id = 'ent-old'"
-        ).fetchone()
+        row = conn.execute("SELECT chunk_id FROM entities WHERE id = 'ent-old'").fetchone()
         assert row is not None
         assert row[0] is None
 
@@ -167,7 +163,7 @@ class TestMigrateV4ToV5:
         init_db(conn)  # second call — must not raise
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 6
+        assert row[0] == 7
 
     def test_idempotent_fresh_db(self, db: sqlite3.Connection) -> None:
         """Running init_db twice on a fresh DB must not raise."""
@@ -231,12 +227,8 @@ class TestGraphStoreChunkId:
         assert result.chunk_id is None
 
     def test_list_entities_includes_chunk_id(self, graph_store: GraphStore) -> None:
-        e1 = Entity(
-            id="e1", name="a", entity_type=EntityType.FILE, chunk_id="c1"
-        )
-        e2 = Entity(
-            id="e2", name="b", entity_type=EntityType.FUNCTION, chunk_id="c2"
-        )
+        e1 = Entity(id="e1", name="a", entity_type=EntityType.FILE, chunk_id="c1")
+        e2 = Entity(id="e2", name="b", entity_type=EntityType.FUNCTION, chunk_id="c2")
         graph_store.insert_entity(e1)
         graph_store.insert_entity(e2)
 
@@ -244,9 +236,7 @@ class TestGraphStoreChunkId:
         chunk_ids = {e.id: e.chunk_id for e in result}
         assert chunk_ids == {"e1": "c1", "e2": "c2"}
 
-    def test_list_entities_for_document_includes_chunk_id(
-        self, graph_store: GraphStore
-    ) -> None:
+    def test_list_entities_for_document_includes_chunk_id(self, graph_store: GraphStore) -> None:
         e1 = Entity(
             id="e1",
             name="a",
@@ -357,9 +347,7 @@ class TestStoreExtractionsChunkId:
             text_chunker=MagicMock(),
         )
 
-    def test_entities_get_chunk_id_from_corresponding_chunk(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    def test_entities_get_chunk_id_from_corresponding_chunk(self, pipeline: IngestPipeline) -> None:
         """Each extraction result's entities get the chunk_id from the matching chunk."""
         chunk_ids = ["chunk-A", "chunk-B"]
         extractions = [
@@ -391,9 +379,7 @@ class TestStoreExtractionsChunkId:
         assert calls[1][0][0].chunk_id == "chunk-B"
         assert calls[2][0][0].chunk_id == "chunk-B"
 
-    def test_without_chunk_ids_entities_have_no_chunk_id(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    def test_without_chunk_ids_entities_have_no_chunk_id(self, pipeline: IngestPipeline) -> None:
         """When chunk_ids is not provided, entities keep chunk_id=None (backward compat)."""
         extractions = [
             ExtractionResult(
