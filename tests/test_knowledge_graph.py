@@ -631,3 +631,127 @@ class TestMetadataRoundTrip:
         assert result is not None
         assert result.metadata == meta
         assert isinstance(result.metadata, dict)
+
+
+# ---------------------------------------------------------------------------
+# source_pipeline filter (#411)
+# ---------------------------------------------------------------------------
+
+
+class TestListEntitiesSourcePipelineFilter:
+    """list_entities(source_pipeline=...) filters by metadata provenance."""
+
+    def test_filter_returns_matching_entities(self, graph_store: GraphStore) -> None:
+        """Only entities whose metadata.source_pipeline matches are returned."""
+        e1 = Entity(
+            id="prov-1",
+            name="a",
+            entity_type=EntityType.CONCEPT,
+            metadata={"source_pipeline": "ingest", "source_task": "entity_extraction"},
+        )
+        e2 = Entity(
+            id="prov-2",
+            name="b",
+            entity_type=EntityType.CONCEPT,
+            metadata={"custom": "value"},
+        )
+        graph_store.insert_entity(e1)
+        graph_store.insert_entity(e2)
+
+        result = graph_store.list_entities(source_pipeline="ingest")
+        assert len(result) == 1
+        assert result[0].id == "prov-1"
+
+    def test_none_returns_all(self, graph_store: GraphStore) -> None:
+        """source_pipeline=None returns all entities (backward compatible)."""
+        e1 = Entity(
+            id="all-1",
+            name="x",
+            entity_type=EntityType.FILE,
+            metadata={"source_pipeline": "ingest"},
+        )
+        e2 = Entity(
+            id="all-2",
+            name="y",
+            entity_type=EntityType.FILE,
+        )
+        graph_store.insert_entity(e1)
+        graph_store.insert_entity(e2)
+
+        result = graph_store.list_entities(source_pipeline=None)
+        assert len(result) == 2
+
+    def test_filter_with_other_params(self, graph_store: GraphStore) -> None:
+        """source_pipeline filter combines with entity_type filter."""
+        e1 = Entity(
+            id="combo-1",
+            name="a",
+            entity_type=EntityType.FILE,
+            metadata={"source_pipeline": "ingest"},
+        )
+        e2 = Entity(
+            id="combo-2",
+            name="b",
+            entity_type=EntityType.CONCEPT,
+            metadata={"source_pipeline": "ingest"},
+        )
+        graph_store.insert_entity(e1)
+        graph_store.insert_entity(e2)
+
+        result = graph_store.list_entities(entity_type=EntityType.FILE, source_pipeline="ingest")
+        assert len(result) == 1
+        assert result[0].id == "combo-1"
+
+
+class TestListEdgesSourcePipelineFilter:
+    """list_edges(source_pipeline=...) filters by metadata provenance."""
+
+    @pytest.fixture(autouse=True)
+    def _seed_entities(self, graph_store: GraphStore) -> None:
+        """Insert entities needed for edge FK constraints."""
+        for eid in ("ep1", "ep2", "ep3"):
+            graph_store.insert_entity(Entity(id=eid, name=eid, entity_type=EntityType.CONCEPT))
+
+    def test_filter_returns_matching_edges(self, graph_store: GraphStore) -> None:
+        """Only edges whose metadata.source_pipeline matches are returned."""
+        edge1 = Edge(
+            id="pe1",
+            source_id="ep1",
+            target_id="ep2",
+            relation=RelationType.RELATED_TO,
+            metadata={"source_pipeline": "ingest", "source_task": "entity_extraction"},
+        )
+        edge2 = Edge(
+            id="pe2",
+            source_id="ep2",
+            target_id="ep3",
+            relation=RelationType.DEFINES,
+            metadata={"custom": "thing"},
+        )
+        graph_store.insert_edge(edge1)
+        graph_store.insert_edge(edge2)
+
+        result = graph_store.list_edges(source_pipeline="ingest")
+        assert len(result) == 1
+        assert result[0].id == "pe1"
+
+    def test_none_returns_all(self, graph_store: GraphStore) -> None:
+        """source_pipeline=None returns all edges (backward compatible)."""
+        edge1 = Edge(
+            id="ae1",
+            source_id="ep1",
+            target_id="ep2",
+            relation=RelationType.RELATED_TO,
+            metadata={"source_pipeline": "ingest"},
+        )
+        edge2 = Edge(
+            id="ae2",
+            source_id="ep2",
+            target_id="ep3",
+            relation=RelationType.DEFINES,
+        )
+        graph_store.insert_edge(edge1)
+        graph_store.insert_edge(edge2)
+
+        result = graph_store.list_edges(source_pipeline=None)
+        assert len(result) == 2

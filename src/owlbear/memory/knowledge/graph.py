@@ -103,8 +103,9 @@ class GraphStore:
         self,
         entity_type: EntityType | None = None,
         scopes: list[str] | None = None,
+        source_pipeline: str | None = None,
     ) -> list[Entity]:
-        """Return all entities, optionally filtered by *entity_type* and/or *scopes*."""
+        """Return all entities, optionally filtered by type, scopes, and/or source_pipeline."""
         if scopes is not None and len(scopes) == 0:
             return []
 
@@ -118,6 +119,9 @@ class GraphStore:
             placeholders = ", ".join("?" for _ in scopes)
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
+        if source_pipeline is not None:
+            clauses.append("json_extract(metadata, '$.source_pipeline') = ?")
+            params.append(source_pipeline)
 
         sql = (
             "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
@@ -245,8 +249,9 @@ class GraphStore:
         source_id: str | None = None,
         target_id: str | None = None,
         scopes: list[str] | None = None,
+        source_pipeline: str | None = None,
     ) -> list[Edge]:
-        """Return edges, optionally filtered by *source_id*, *target_id*, and/or *scopes*."""
+        """Return edges, optionally filtered by source/target, scopes, and/or source_pipeline."""
         if scopes is not None and len(scopes) == 0:
             return []
 
@@ -262,6 +267,9 @@ class GraphStore:
             placeholders = ", ".join("?" for _ in scopes)
             clauses.append(f"scope IN ({placeholders})")
             params.extend(scopes)
+        if source_pipeline is not None:
+            clauses.append("json_extract(metadata, '$.source_pipeline') = ?")
+            params.append(source_pipeline)
 
         sql = "SELECT id, source_id, target_id, relation, weight, metadata, scope FROM edges"
         if clauses:
@@ -338,9 +346,7 @@ class GraphStore:
             edges += self.list_edges(target_id=current_id, scopes=scopes)
 
             for edge in edges:
-                neighbor_id = (
-                    edge.target_id if edge.source_id == current_id else edge.source_id
-                )
+                neighbor_id = edge.target_id if edge.source_id == current_id else edge.source_id
                 if neighbor_id in visited:
                     continue
                 visited.add(neighbor_id)

@@ -29,6 +29,8 @@ except ImportError:
         edges_added: int = 0
         edges: list[_Edge] = []
 
+
+from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.ingest import (
     DocumentStatus,
     IngestPipeline,
@@ -778,9 +780,7 @@ class TestFindStatusBySource:
         result = pipeline.find_status_by_source("nonexistent.txt")
         assert result is None
 
-    def test_scope_filtering(
-        self, pipeline: IngestPipeline, conn: sqlite3.Connection
-    ) -> None:
+    def test_scope_filtering(self, pipeline: IngestPipeline, conn: sqlite3.Connection) -> None:
         """Only returns rows matching the requested scope."""
         conn.execute(
             "INSERT INTO document_status "
@@ -857,13 +857,9 @@ class TestComputeContentHash:
 class TestCheckContentChanged:
     """Tests for IngestPipeline.check_content_changed()."""
 
-    def test_new_content_returns_true_none(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    def test_new_content_returns_true_none(self, pipeline: IngestPipeline) -> None:
         """Source not previously ingested -> (True, None)."""
-        changed, doc_id = pipeline.check_content_changed(
-            "new-file.txt", "some content", "global"
-        )
+        changed, doc_id = pipeline.check_content_changed("new-file.txt", "some content", "global")
         assert changed is True
         assert doc_id is None
 
@@ -878,15 +874,18 @@ class TestCheckContentChanged:
             "(document_id, status, source, scope, content_hash, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                "doc-existing", "indexed", "test.txt", "global",
-                content_hash, "2026-01-01", "2026-01-01",
+                "doc-existing",
+                "indexed",
+                "test.txt",
+                "global",
+                content_hash,
+                "2026-01-01",
+                "2026-01-01",
             ),
         )
         conn.commit()
 
-        changed, doc_id = pipeline.check_content_changed(
-            "test.txt", content, "global"
-        )
+        changed, doc_id = pipeline.check_content_changed("test.txt", content, "global")
         assert changed is False
         assert doc_id == "doc-existing"
 
@@ -899,21 +898,22 @@ class TestCheckContentChanged:
             "(document_id, status, source, scope, content_hash, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                "doc-old", "indexed", "test.txt", "global",
-                "old-hash-value", "2026-01-01", "2026-01-01",
+                "doc-old",
+                "indexed",
+                "test.txt",
+                "global",
+                "old-hash-value",
+                "2026-01-01",
+                "2026-01-01",
             ),
         )
         conn.commit()
 
-        changed, doc_id = pipeline.check_content_changed(
-            "test.txt", "updated content", "global"
-        )
+        changed, doc_id = pipeline.check_content_changed("test.txt", "updated content", "global")
         assert changed is True
         assert doc_id == "doc-old"
 
-    def test_respects_scope(
-        self, pipeline: IngestPipeline, conn: sqlite3.Connection
-    ) -> None:
+    def test_respects_scope(self, pipeline: IngestPipeline, conn: sqlite3.Connection) -> None:
         """check_content_changed respects scope parameter."""
         content = "scoped content"
         content_hash = compute_content_hash(content)
@@ -922,23 +922,24 @@ class TestCheckContentChanged:
             "(document_id, status, source, scope, content_hash, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                "doc-scoped", "indexed", "test.txt", "project-x",
-                content_hash, "2026-01-01", "2026-01-01",
+                "doc-scoped",
+                "indexed",
+                "test.txt",
+                "project-x",
+                content_hash,
+                "2026-01-01",
+                "2026-01-01",
             ),
         )
         conn.commit()
 
         # Global scope has no record -> new content.
-        changed, doc_id = pipeline.check_content_changed(
-            "test.txt", content, "global"
-        )
+        changed, doc_id = pipeline.check_content_changed("test.txt", content, "global")
         assert changed is True
         assert doc_id is None
 
         # project-x scope has matching hash -> unchanged.
-        changed, doc_id = pipeline.check_content_changed(
-            "test.txt", content, "project-x"
-        )
+        changed, doc_id = pipeline.check_content_changed("test.txt", content, "project-x")
         assert changed is False
         assert doc_id == "doc-scoped"
 
@@ -957,9 +958,7 @@ class TestCheckContentChanged:
         conn.commit()
 
         # Extra whitespace should NOT be detected as a change.
-        changed, doc_id = pipeline.check_content_changed(
-            "test.txt", "  hello world  \n", "global"
-        )
+        changed, doc_id = pipeline.check_content_changed("test.txt", "  hello world  \n", "global")
         assert changed is False
         assert doc_id == "doc-ws"
 
@@ -1030,9 +1029,7 @@ class TestDeltaReIngest:
         assert row[0] == expected_hash
 
     @pytest.mark.anyio
-    async def test_reingest_unchanged_content_skips(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    async def test_reingest_unchanged_content_skips(self, pipeline: IngestPipeline) -> None:
         """Re-ingesting identical content returns skipped=True, no new doc."""
         # First ingest.
         with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
@@ -1146,15 +1143,12 @@ class TestDeltaReIngest:
             await pipeline.ingest("test.txt")
 
         assert any(
-            "re-ingesting changed source" in r.message.lower()
-            and first.document_id in r.message
+            "re-ingesting changed source" in r.message.lower() and first.document_id in r.message
             for r in caplog.records
         )
 
     @pytest.mark.anyio
-    async def test_ingest_text_unchanged_skips(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    async def test_ingest_text_unchanged_skips(self, pipeline: IngestPipeline) -> None:
         """ingest_text() with unchanged content skips re-ingest."""
         first = await pipeline.ingest_text(
             "hello world", metadata={"url": "https://example.com/page"}
@@ -1250,9 +1244,7 @@ class TestGraphBuilderIntegration:
         """IngestPipeline accepts optional graph_builder parameter."""
         assert pipeline_with_builder._graph_builder is not None
 
-    def test_constructor_defaults_graph_builder_none(
-        self, pipeline: IngestPipeline
-    ) -> None:
+    def test_constructor_defaults_graph_builder_none(self, pipeline: IngestPipeline) -> None:
         """graph_builder defaults to None when not provided."""
         assert pipeline._graph_builder is None
 
@@ -1324,7 +1316,10 @@ class TestGraphBuilderIntegration:
     ) -> None:
         """Inferred edges from graph builder are stored in graph store."""
         inferred_edge = Edge(
-            source_id="e1", target_id="e2", relation=RelationType.DEFINES, weight=0.5,
+            source_id="e1",
+            target_id="e2",
+            relation=RelationType.DEFINES,
+            weight=0.5,
         )
         mock_intra_doc_builder.build = AsyncMock(
             return_value=GraphBuildResult(edges_added=1, edges=[inferred_edge])
@@ -1373,10 +1368,7 @@ class TestGraphBuilderIntegration:
             mock_rf.return_value = SAMPLE_INTAKE
             await pipeline_with_builder.ingest(Path("test.txt"))
 
-        assert any(
-            "scheduling graph enrichment" in r.message.lower()
-            for r in caplog.records
-        )
+        assert any("scheduling graph enrichment" in r.message.lower() for r in caplog.records)
 
     @pytest.mark.anyio
     async def test_builder_failure_does_not_crash_ingest(  # noqa: PLR0913
@@ -1457,3 +1449,270 @@ class TestGraphBuilderIntegration:
         await asyncio.sleep(0.01)
 
         builder.build.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Provenance metadata stamping (#410)
+# ---------------------------------------------------------------------------
+
+
+class TestProvenanceStamping:
+    """IngestPipeline stamps source_pipeline/source_task in entity/edge metadata."""
+
+    def test_constructor_accepts_pipeline_name(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """IngestPipeline accepts optional pipeline_name parameter."""
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            pipeline_name="custom",
+        )
+        assert pipe._pipeline_name == "custom"
+
+    def test_constructor_defaults_pipeline_name(self, pipeline: IngestPipeline) -> None:
+        """pipeline_name defaults to 'ingest'."""
+        assert pipeline._pipeline_name == "ingest"
+
+    @pytest.mark.anyio
+    async def test_store_extractions_stamps_entity_provenance(
+        self,
+        pipeline: IngestPipeline,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """Entities stored via _store_extractions have provenance in metadata."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline.ingest(Path("test.txt"))
+
+        # Check every insert_entity call's metadata.
+        for call in mock_graph_store.insert_entity.call_args_list:
+            entity = call[0][0]
+            assert entity.metadata.get("source_pipeline") == "ingest"
+            assert entity.metadata.get("source_task") == "entity_extraction"
+
+    @pytest.mark.anyio
+    async def test_store_extractions_stamps_edge_provenance(
+        self,
+        pipeline: IngestPipeline,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """Edges stored via _store_extractions have provenance in metadata."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipeline.ingest(Path("test.txt"))
+
+        # Edges from extraction (not graph enrichment) should have provenance.
+        for call in mock_graph_store.insert_edge.call_args_list:
+            edge = call[0][0]
+            assert edge.metadata.get("source_pipeline") == "ingest"
+            assert edge.metadata.get("source_task") == "entity_extraction"
+
+    @pytest.mark.anyio
+    async def test_custom_pipeline_name_propagates(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """Custom pipeline_name appears in entity/edge metadata."""
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            pipeline_name="custom_pipe",
+        )
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipe.ingest(Path("test.txt"))
+
+        for call in mock_graph_store.insert_entity.call_args_list:
+            entity = call[0][0]
+            assert entity.metadata["source_pipeline"] == "custom_pipe"
+
+    @pytest.mark.anyio
+    async def test_enrich_graph_stamps_edge_provenance(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """Edges from _enrich_graph have source_task='graph_enrichment' in metadata."""
+        inferred_edge = Edge(
+            source_id="e1",
+            target_id="e2",
+            relation=RelationType.DEFINES,
+            weight=0.5,
+        )
+        builder = MagicMock()
+        builder.build = AsyncMock(
+            return_value=GraphBuildResult(edges_added=1, edges=[inferred_edge])
+        )
+
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            graph_builder=builder,
+        )
+
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            await pipe.ingest(Path("test.txt"))
+
+        await asyncio.sleep(0.01)
+
+        # Find edge calls from enrichment (source_task='graph_enrichment').
+        enrichment_edges = [
+            call[0][0]
+            for call in mock_graph_store.insert_edge.call_args_list
+            if call[0][0].metadata.get("source_task") == "graph_enrichment"
+        ]
+        assert len(enrichment_edges) >= 1
+        assert enrichment_edges[0].metadata["source_pipeline"] == "ingest"
+
+    @pytest.mark.anyio
+    async def test_entities_without_provenance_unaffected(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Entities created directly (not through pipeline) have no provenance."""
+        store = GraphStore(conn)
+        entity = Entity(
+            id="plain-ent",
+            name="plain",
+            entity_type=EntityType.CONCEPT,
+            metadata={"custom": "value"},
+        )
+        store.insert_entity(entity)
+        result = store.get_entity("plain-ent")
+        assert result is not None
+        assert "source_pipeline" not in result.metadata
+        assert "source_task" not in result.metadata
+
+
+# ---------------------------------------------------------------------------
+# IngestResult provenance fields (#412)
+# ---------------------------------------------------------------------------
+
+
+class TestIngestResultProvenance:
+    """IngestResult includes source_pipeline and source_task fields."""
+
+    def test_default_provenance_fields(self) -> None:
+        """IngestResult defaults: source_pipeline='ingest', source_task='full_pipeline'."""
+        r = IngestResult(
+            document_id="abc",
+            chunk_count=1,
+            entity_count=1,
+            edge_count=0,
+            status="indexed",
+        )
+        assert r.source_pipeline == "ingest"
+        assert r.source_task == "full_pipeline"
+
+    @pytest.mark.anyio
+    async def test_ingest_populates_provenance(self, pipeline: IngestPipeline) -> None:
+        """ingest() result includes source_pipeline from pipeline_name."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipeline.ingest(Path("test.txt"))
+
+        assert result.source_pipeline == "ingest"
+        assert result.source_task == "full_pipeline"
+
+    @pytest.mark.anyio
+    async def test_ingest_text_populates_provenance(self, pipeline: IngestPipeline) -> None:
+        """ingest_text() result includes provenance."""
+        result = await pipeline.ingest_text("hello world")
+        assert result.source_pipeline == "ingest"
+        assert result.source_task == "full_pipeline"
+
+    @pytest.mark.anyio
+    async def test_custom_pipeline_name_in_result(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """Custom pipeline_name propagates to IngestResult.source_pipeline."""
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+            entity_extractor=mock_extractor,
+            text_chunker=mock_chunker,
+            pipeline_name="my_pipe",
+        )
+        result = await pipe.ingest_text("hello world")
+        assert result.source_pipeline == "my_pipe"
+
+    @pytest.mark.anyio
+    async def test_skipped_result_has_provenance(self, pipeline: IngestPipeline) -> None:
+        """Skipped results include provenance fields."""
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            # First ingest succeeds.
+            await pipeline.ingest(Path("test.txt"))
+            # Second ingest should be skipped (unchanged content).
+            result = await pipeline.ingest(Path("test.txt"))
+
+        assert result.skipped is True
+        assert result.source_pipeline == "ingest"
+        assert result.source_task == "full_pipeline"
+
+    @pytest.mark.anyio
+    async def test_failed_result_has_provenance(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """Failed results include provenance fields."""
+        failing_embedder = MagicMock(spec=["embed"])
+        failing_embedder.embed.side_effect = RuntimeError("Boom")
+        failing_extractor = MagicMock()
+        failing_extractor.extract = AsyncMock(side_effect=RuntimeError("Boom"))
+
+        pipe = IngestPipeline(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=failing_embedder,
+            entity_extractor=failing_extractor,
+            text_chunker=mock_chunker,
+        )
+        with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
+            mock_rf.return_value = SAMPLE_INTAKE
+            result = await pipe.ingest(Path("test.txt"))
+
+        assert result.status == "failed"
+        assert result.source_pipeline == "ingest"
+        assert result.source_task == "full_pipeline"

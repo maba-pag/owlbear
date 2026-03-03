@@ -62,6 +62,8 @@ class IngestResult(BaseModel):
     edge_count: int
     status: str
     skipped: bool = False
+    source_pipeline: str = "ingest"
+    source_task: str = "full_pipeline"
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +124,10 @@ class IngestPipeline:
         Optional inter-document graph builder.  When provided (and at
         least two documents exist in the scope), cross-document edges
         are inferred in a background task after ingest completes.
+    pipeline_name:
+        Label stamped into ``source_pipeline`` provenance metadata on
+        every entity and edge produced by this pipeline.  Defaults to
+        ``'ingest'``.
     """
 
     def __init__(  # noqa: PLR0913
@@ -134,6 +140,7 @@ class IngestPipeline:
         text_chunker: TextChunker,
         graph_builder: IntraDocGraphBuilder | None = None,
         inter_doc_builder: InterDocGraphBuilder | None = None,
+        pipeline_name: str = "ingest",
     ) -> None:
         self._conn = conn
         self._graph = graph_store
@@ -143,13 +150,12 @@ class IngestPipeline:
         self._chunker = text_chunker
         self._graph_builder = graph_builder
         self._inter_doc_builder = inter_doc_builder
+        self._pipeline_name = pipeline_name
         self._background_tasks: set[asyncio.Task[None]] = set()
 
     # -- Public API ----------------------------------------------------------
 
-    def find_status_by_source(
-        self, source: str, scope: str = "global"
-    ) -> DocumentStatus | None:
+    def find_status_by_source(self, source: str, scope: str = "global") -> DocumentStatus | None:
         """Look up a previously-ingested document by source URI.
 
         Parameters
@@ -216,9 +222,7 @@ class IngestPipeline:
         Safe to call with a non-existent *document_id* (no-op).
         """
         # 1. Delete chunks.
-        self._conn.execute(
-            "DELETE FROM chunks WHERE document_id = ?", (document_id,)
-        )
+        self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
 
         # 2. Delete edges referencing entities that belong to this document,
         #    then delete the entities themselves.
@@ -245,14 +249,10 @@ class IngestPipeline:
             self._vectors.delete_by_document_id(document_id)
 
         # 4. Delete document row.
-        self._conn.execute(
-            "DELETE FROM documents WHERE id = ?", (document_id,)
-        )
+        self._conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
         # 5. Delete document_status row.
-        self._conn.execute(
-            "DELETE FROM document_status WHERE document_id = ?", (document_id,)
-        )
+        self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (document_id,))
 
         self._conn.commit()
 
@@ -291,6 +291,7 @@ class IngestPipeline:
                     edge_count=0,
                     status="skipped",
                     skipped=True,
+                    source_pipeline=self._pipeline_name,
                 )
 
             if existing_doc_id is not None:
@@ -322,8 +323,12 @@ class IngestPipeline:
 
             # 7. Store successful results, determine final status.
             entity_count, edge_count, status = self._process_results(
-                document_id, chunks, embed_result, extract_result,
-                scope=scope, chunk_ids=chunk_ids,
+                document_id,
+                chunks,
+                embed_result,
+                extract_result,
+                scope=scope,
+                chunk_ids=chunk_ids,
             )
 
             self._set_status(document_id, status, scope=scope)
@@ -333,14 +338,10 @@ class IngestPipeline:
 
             # 9. Schedule graph enrichment (non-blocking).
             if not isinstance(extract_result, BaseException):
-                self._schedule_graph_enrichment(
-                    document_id, extract_result, scope
-                )
+                self._schedule_graph_enrichment(document_id, extract_result, scope)
 
                 # 9b. Schedule inter-document graph enrichment (non-blocking).
-                self._schedule_inter_doc_enrichment(
-                    document_id, extract_result, scope
-                )
+                self._schedule_inter_doc_enrichment(document_id, extract_result, scope)
 
             return IngestResult(
                 document_id=document_id,
@@ -348,15 +349,14 @@ class IngestPipeline:
                 entity_count=entity_count,
                 edge_count=edge_count,
                 status=status,
+                source_pipeline=self._pipeline_name,
             )
 
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ingest failed for %s", source_str, exc_info=True)
             if document_id is None:
                 document_id = uuid4().hex
-                self._set_status(
-                    document_id, "pending", source=source_str, scope=scope
-                )
+                self._set_status(document_id, "pending", source=source_str, scope=scope)
             self._set_status(document_id, "failed", error=str(exc), scope=scope)
             return IngestResult(
                 document_id=document_id,
@@ -364,6 +364,7 @@ class IngestPipeline:
                 entity_count=0,
                 edge_count=0,
                 status="failed",
+                source_pipeline=self._pipeline_name,
             )
 
     async def ingest_text(
@@ -395,9 +396,7 @@ class IngestPipeline:
         source_label = str((metadata or {}).get("url", "inline"))
 
         # Delta check — skip if content unchanged.
-        changed, existing_doc_id = self.check_content_changed(
-            source_label, text, scope
-        )
+        changed, existing_doc_id = self.check_content_changed(source_label, text, scope)
         if not changed:
             logger.info("Skipping unchanged source %s", source_label)
             return IngestResult(
@@ -407,6 +406,7 @@ class IngestPipeline:
                 edge_count=0,
                 status="skipped",
                 skipped=True,
+                source_pipeline=self._pipeline_name,
             )
 
         if existing_doc_id is not None:
@@ -452,8 +452,12 @@ class IngestPipeline:
             )
 
             entity_count, edge_count, status = self._process_results(
-                document_id, chunks, embed_result, extract_result,
-                scope=scope, chunk_ids=chunk_ids,
+                document_id,
+                chunks,
+                embed_result,
+                extract_result,
+                scope=scope,
+                chunk_ids=chunk_ids,
             )
             self._set_status(document_id, status, scope=scope)
 
@@ -462,14 +466,10 @@ class IngestPipeline:
 
             # Schedule graph enrichment (non-blocking).
             if not isinstance(extract_result, BaseException):
-                self._schedule_graph_enrichment(
-                    document_id, extract_result, scope
-                )
+                self._schedule_graph_enrichment(document_id, extract_result, scope)
 
                 # Schedule inter-document graph enrichment (non-blocking).
-                self._schedule_inter_doc_enrichment(
-                    document_id, extract_result, scope
-                )
+                self._schedule_inter_doc_enrichment(document_id, extract_result, scope)
 
             return IngestResult(
                 document_id=document_id,
@@ -477,6 +477,7 @@ class IngestPipeline:
                 entity_count=entity_count,
                 edge_count=edge_count,
                 status=status,
+                source_pipeline=self._pipeline_name,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ingest failed for %s", intake_result.source, exc_info=True)
@@ -487,6 +488,7 @@ class IngestPipeline:
                 entity_count=0,
                 edge_count=0,
                 status="failed",
+                source_pipeline=self._pipeline_name,
             )
 
     def _update_content_hash(self, document_id: str, content: str) -> None:
@@ -529,17 +531,24 @@ class IngestPipeline:
                 (document_id,),
             ).fetchone()
             if row and row[0] == "graph_enriched":
-                logger.info(
-                    "Document %s already graph-enriched, skipping", document_id
-                )
+                logger.info("Document %s already graph-enriched, skipping", document_id)
                 return
 
             result = await self._graph_builder.build(  # type: ignore[union-attr]
                 entities, scope=scope, document_id=document_id
             )
 
+            enrichment_provenance = {
+                "source_pipeline": self._pipeline_name,
+                "source_task": "graph_enrichment",
+            }
             for edge in result.edges:
-                self._graph.insert_edge(edge)
+                stamped = edge.model_copy(
+                    update={
+                        "metadata": {**edge.metadata, **enrichment_provenance},
+                    }
+                )
+                self._graph.insert_edge(stamped)
 
             self._set_status(document_id, "graph_enriched", scope=scope)
         except Exception:  # noqa: BLE001
@@ -575,9 +584,7 @@ class IngestPipeline:
             "Scheduling inter-document graph enrichment for document %s",
             document_id,
         )
-        task = asyncio.create_task(
-            self._enrich_inter_doc_graph(document_id, entities, scope)
-        )
+        task = asyncio.create_task(self._enrich_inter_doc_graph(document_id, entities, scope))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
@@ -658,7 +665,9 @@ class IngestPipeline:
 
         if extract_ok:
             entity_count, edge_count = self._store_extractions(
-                extract_result, scope=scope, document_id=document_id,  # type: ignore[arg-type]
+                extract_result,
+                scope=scope,
+                document_id=document_id,  # type: ignore[arg-type]
                 chunk_ids=chunk_ids,
             )
             try:
@@ -791,12 +800,19 @@ class IngestPipeline:
             extraction result's entities are stamped with the
             corresponding chunk_id.
         """
+        provenance = {
+            "source_pipeline": self._pipeline_name,
+            "source_task": "entity_extraction",
+        }
         entity_count = 0
         edge_count = 0
         for idx, result in enumerate(results):
             cid = chunk_ids[idx] if chunk_ids is not None else None
             for entity in result.entities:
-                updates: dict[str, object] = {"scope": scope}
+                updates: dict[str, object] = {
+                    "scope": scope,
+                    "metadata": {**entity.metadata, **provenance},
+                }
                 if document_id is not None:
                     updates["document_id"] = document_id
                 if cid is not None:
@@ -805,7 +821,12 @@ class IngestPipeline:
                 self._graph.insert_entity(scoped)
                 entity_count += 1
             for edge in result.edges:
-                scoped = edge.model_copy(update={"scope": scope})
+                scoped = edge.model_copy(
+                    update={
+                        "scope": scope,
+                        "metadata": {**edge.metadata, **provenance},
+                    }
+                )
                 self._graph.insert_edge(scoped)
                 edge_count += 1
         return entity_count, edge_count
