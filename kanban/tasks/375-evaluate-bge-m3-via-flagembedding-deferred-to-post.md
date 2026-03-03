@@ -1,11 +1,12 @@
 ---
 id: 375
 title: Evaluate bge-m3 via FlagEmbedding (deferred to post-Qdrant)
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-01T20:13:51.6264167+01:00
-updated: 2026-03-01T20:22:46.345354+01:00
+updated: 2026-03-03T16:40:10.7167974+01:00
 started: 2026-03-01T20:22:46.345354+01:00
+completed: 2026-03-03T16:40:10.7167974+01:00
 tags:
     - phase-10
     - embedding

@@ -3542,3 +3542,50 @@
 {"timestamp":"2026-03-03T15:33:19.9012071+01:00","action":"move","task_id":302,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T15:33:21.4092159+01:00","action":"move","task_id":305,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T15:33:23.4921735+01:00","action":"move","task_id":397,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T15:42:01.3616411+01:00","action":"edit","task_id":275,"detail":"Add provenance tracking to IngestResult"}
+{"timestamp":"2026-03-03T15:42:18.0898832+01:00","action":"edit","task_id":410,"detail":"Stamp provenance metadata in IngestPipeline"}
+{"timestamp":"2026-03-03T15:42:37.057051+01:00","action":"edit","task_id":411,"detail":"Add source_pipeline filter to GraphStore.list_entities/list_edges"}
+{"timestamp":"2026-03-03T15:42:47.3467745+01:00","action":"edit","task_id":412,"detail":"Add source_pipeline/source_task to IngestResult model"}
+{"timestamp":"2026-03-03T15:43:01.7656058+01:00","action":"edit","task_id":418,"detail":"Action callback routing for future structured Slack actions"}
+{"timestamp":"2026-03-03T15:43:08.6272315+01:00","action":"move","task_id":410,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:43:13.6244222+01:00","action":"move","task_id":411,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:43:18.8180886+01:00","action":"move","task_id":412,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:43:23.795289+01:00","action":"move","task_id":418,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:43:28.7750173+01:00","action":"move","task_id":375,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T15:44:45.8989612+01:00","action":"move","task_id":410,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:44:46.6556768+01:00","action":"move","task_id":411,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:44:47.2769938+01:00","action":"move","task_id":412,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:44:47.8634855+01:00","action":"move","task_id":418,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:44:48.571026+01:00","action":"move","task_id":375,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T15:55:06.3423278+01:00","action":"move","task_id":410,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T15:55:06.9487949+01:00","action":"move","task_id":411,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T15:55:07.5327216+01:00","action":"move","task_id":412,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T16:00:09.7300929+01:00","action":"move","task_id":418,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T16:05:03.5816777+01:00","action":"move","task_id":375,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T16:10:18.0564941+01:00","action":"move","task_id":410,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T16:10:18.6658904+01:00","action":"move","task_id":411,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T16:10:19.2577326+01:00","action":"move","task_id":412,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T16:12:44.4505828+01:00","action":"move","task_id":418,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T16:17:28.9223439+01:00","action":"move","task_id":375,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-03T16:17:29.5249798+01:00","action":"edit","task_id":375,"detail":"Evaluate bge-m3 via FlagEmbedding (deferred to post-Qdrant)"}
+{"timestamp":"2026-03-03T16:17:29.534527+01:00","action":"block","task_id":375,"detail":"Missing follow-up kanban tasks (3 listed in doc section 5 not created on board) and docs/sources.md not updated with new source (Yannael TDS article) or bge-m3-evaluation.md in Where Used column"}
+{"timestamp":"2026-03-03T16:18:30.9097209+01:00","action":"move","task_id":375,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T16:18:47.0875558+01:00","action":"edit","task_id":375,"detail":"Evaluate bge-m3 via FlagEmbedding (deferred to post-Qdrant)"}
+{"timestamp":"2026-03-03T16:18:47.0954899+01:00","action":"unblock","task_id":375,"detail":"Evaluate bge-m3 via FlagEmbedding (deferred to post-Qdrant)"}
+{"timestamp":"2026-03-03T16:18:57.000397+01:00","action":"create","task_id":433,"detail":"Benchmark bge-m3 encoding on Ryzen 8840U sample corpus"}
+{"timestamp":"2026-03-03T16:19:03.7849734+01:00","action":"create","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-03T16:19:11.5081056+01:00","action":"create","task_id":435,"detail":"Monitor FastEmbed bge-m3 PR 602 status"}
+{"timestamp":"2026-03-03T16:19:35.4350881+01:00","action":"move","task_id":375,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T16:23:20.8680734+01:00","action":"move","task_id":375,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T16:26:57.5150981+01:00","action":"move","task_id":410,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T16:26:58.1546122+01:00","action":"move","task_id":411,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T16:26:58.7962626+01:00","action":"move","task_id":412,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T16:26:59.3790495+01:00","action":"move","task_id":418,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T16:26:59.9972479+01:00","action":"move","task_id":375,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T16:39:55.2268084+01:00","action":"move","task_id":275,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-03T16:40:07.7795534+01:00","action":"move","task_id":275,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T16:40:08.3823096+01:00","action":"move","task_id":410,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T16:40:08.9379518+01:00","action":"move","task_id":411,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T16:40:09.5078312+01:00","action":"move","task_id":412,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T16:40:10.0654867+01:00","action":"move","task_id":418,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T16:40:10.7179554+01:00","action":"move","task_id":375,"detail":"done -\u003e archived"}
