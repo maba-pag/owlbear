@@ -55,6 +55,7 @@ class SlackChannel:
         self._web_client = AsyncWebClient(token=bot_token)
         self._socket_client: SocketModeClient | None = None
         self._message_queue: asyncio.Queue[str | None] = asyncio.Queue()
+        self._thread_registry: dict[str, str] = {}
 
     # -- ChannelPlugin interface ---------------------------------------------
 
@@ -68,12 +69,36 @@ class SlackChannel:
         """The Slack channel ID for outgoing messages."""
         return self._channel_id
 
-    async def send(self, message: str) -> None:
-        """Send *message* to the configured Slack channel."""
-        await self._web_client.chat_postMessage(
-            channel=self._channel_id,
-            text=markdown_to_mrkdwn(message),
-        )
+    async def send(
+        self,
+        message: str,
+        *,
+        context_key: str | None = None,
+    ) -> None:
+        """Send *message* to the configured Slack channel.
+
+        Parameters
+        ----------
+        message:
+            Text to send (Markdown is converted to mrkdwn).
+        context_key:
+            Optional context identifier (e.g. ``"project_id:task_id"``).
+            When provided, the first message creates a thread and subsequent
+            messages with the same key auto-thread.
+        """
+        kwargs: dict[str, Any] = {
+            "channel": self._channel_id,
+            "text": markdown_to_mrkdwn(message),
+        }
+        if context_key is not None:
+            thread_ts = self._thread_registry.get(context_key)
+            if thread_ts is not None:
+                kwargs["thread_ts"] = thread_ts
+
+        response = await self._web_client.chat_postMessage(**kwargs)
+
+        if context_key is not None and context_key not in self._thread_registry:
+            self._thread_registry[context_key] = response["ts"]
 
     async def send_blocks(
         self,
@@ -81,6 +106,7 @@ class SlackChannel:
         text_fallback: str,
         *,
         thread_ts: str | None = None,
+        context_key: str | None = None,
     ) -> None:
         """Send a Block Kit structured message to the configured Slack channel.
 
@@ -110,8 +136,15 @@ class SlackChannel:
         }
         if thread_ts is not None:
             kwargs["thread_ts"] = thread_ts
+        elif context_key is not None:
+            registry_ts = self._thread_registry.get(context_key)
+            if registry_ts is not None:
+                kwargs["thread_ts"] = registry_ts
 
-        await self._web_client.chat_postMessage(**kwargs)
+        response = await self._web_client.chat_postMessage(**kwargs)
+
+        if context_key is not None and context_key not in self._thread_registry:
+            self._thread_registry[context_key] = response["ts"]
 
     async def send_image(
         self,
@@ -173,6 +206,14 @@ class SlackChannel:
         except TimeoutError:
             return None
 
+    def get_or_create_thread(self, context_key: str) -> str | None:
+        """Return the thread timestamp for *context_key*, or ``None``.
+
+        The thread is "created" implicitly when the first message is sent
+        via :meth:`send` or :meth:`send_blocks` with the same *context_key*.
+        """
+        return self._thread_registry.get(context_key)
+
     # -- Lifecycle -----------------------------------------------------------
 
     async def connect(self) -> None:
@@ -217,3 +258,15 @@ class SlackChannel:
                 text = event.get("text", "")
                 await self._message_queue.put(text)
                 logger.debug("Enqueued Slack message: %s", text[:80])
+
+        elif request.type == "interactive":
+            # Always acknowledge interactive envelopes
+            response = SocketModeResponse(envelope_id=request.envelope_id)
+            await client.send_socket_mode_response(response)
+
+            payload = request.payload
+            if payload.get("type") == "block_actions":
+                for action in payload.get("actions", []):
+                    value = action.get("value") or action.get("action_id", "")
+                    await self._message_queue.put(value)
+                    logger.debug("Enqueued interactive action: %s", value[:80])

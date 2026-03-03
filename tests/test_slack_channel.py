@@ -591,3 +591,411 @@ class TestSlackChannelSendImage:
         assert "text" in call_kwargs
         # Should contain some indication of failure, not be empty
         assert call_kwargs["text"]
+
+
+# ---------------------------------------------------------------------------
+# Interactive event handler  (task #414)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelInteractiveHandler:
+    """Interactive block_actions are routed to the message queue."""
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_interactive_block_actions_enqueued(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """A block_actions interactive payload puts action values on the queue."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [{"action_id": "approve_btn", "value": "approve"}],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "approve"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_interactive_block_actions_acknowledged(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Interactive envelopes are always acknowledged."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [{"action_id": "deny_btn", "value": "deny"}],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        mock_socket_instance.send_socket_mode_response.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_interactive_multiple_actions_enqueued(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Multiple actions in one payload each get enqueued."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [
+                {"action_id": "opt1", "value": "option_a"},
+                {"action_id": "opt2", "value": "option_b"},
+            ],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        results = []
+        while not channel._message_queue.empty():
+            results.append(channel._message_queue.get_nowait())
+        assert results == ["option_a", "option_b"]
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_interactive_non_block_actions_ignored(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Interactive payloads that aren't block_actions don't enqueue."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "view_submission",
+            "view": {"id": "V123"},
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        # Still acknowledged
+        mock_socket_instance.send_socket_mode_response.assert_awaited_once()
+        # But nothing enqueued
+        assert channel._message_queue.empty()
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_interactive_action_without_value_uses_action_id(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """When action has no 'value', fall back to action_id."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [{"action_id": "approve_btn"}],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "approve_btn"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_events_api_still_works_after_interactive_support(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Existing events_api handling is unaffected by interactive changes."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        await channel.connect()
+
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "events_api"
+        fake_request.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "text": "still works",
+            },
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "still works"
+
+
+# ---------------------------------------------------------------------------
+# Thread registry  (task #415)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelThreadRegistry:
+    """SlackChannel tracks per-context thread timestamps."""
+
+    def test_thread_registry_initialized_empty(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        assert channel._thread_registry == {}
+
+    def test_get_or_create_thread_returns_none_for_unknown(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        assert channel.get_or_create_thread("proj1:task5") is None
+
+    def test_get_or_create_thread_returns_ts_after_registration(self) -> None:
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._thread_registry["proj1:task5"] = "1234567890.000001"
+        assert channel.get_or_create_thread("proj1:task5") == "1234567890.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_with_context_key_captures_ts(self) -> None:
+        """First send with context_key captures ts in the registry."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1111111111.000001",
+        }
+
+        await channel.send("hello", context_key="proj1:task5")
+
+        assert channel._thread_registry["proj1:task5"] == "1111111111.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_with_context_key_threads_subsequent(self) -> None:
+        """Second send with same context_key passes thread_ts."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1111111111.000001",
+        }
+
+        # First message — creates thread
+        await channel.send("first", context_key="proj1:task5")
+
+        # Second message — should thread
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1111111111.000002",
+        }
+        await channel.send("second", context_key="proj1:task5")
+
+        second_call = channel._web_client.chat_postMessage.call_args_list[1]
+        assert second_call.kwargs.get("thread_ts") == "1111111111.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_without_context_key_unchanged(self) -> None:
+        """send() without context_key doesn't interact with the registry."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send("no context")
+
+        call_kwargs = channel._web_client.chat_postMessage.call_args.kwargs
+        assert "thread_ts" not in call_kwargs
+        assert channel._thread_registry == {}
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_with_context_key_captures_ts(self) -> None:
+        """send_blocks with context_key captures ts in the registry."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "2222222222.000001",
+        }
+
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "hi"}}]
+        await channel.send_blocks(blocks, "hi", context_key="proj2:task10")
+
+        assert channel._thread_registry["proj2:task10"] == "2222222222.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_with_context_key_threads_subsequent(self) -> None:
+        """Second send_blocks with same context_key auto-threads."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "2222222222.000001",
+        }
+
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "msg"}}]
+
+        # First message
+        await channel.send_blocks(blocks, "first", context_key="proj2:task10")
+
+        # Second message
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "2222222222.000002",
+        }
+        await channel.send_blocks(blocks, "second", context_key="proj2:task10")
+
+        second_call = channel._web_client.chat_postMessage.call_args_list[1]
+        assert second_call.kwargs.get("thread_ts") == "2222222222.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_blocks_context_key_does_not_override_explicit_thread_ts(
+        self,
+    ) -> None:
+        """Explicit thread_ts takes precedence over registry lookup."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "3333333333.000001",
+        }
+        # Pre-populate registry
+        channel._thread_registry["proj3:task1"] = "9999999999.000001"
+
+        blocks = [{"type": "divider"}]
+        await channel.send_blocks(
+            blocks,
+            "explicit",
+            thread_ts="5555555555.000001",
+            context_key="proj3:task1",
+        )
+
+        call_kwargs = channel._web_client.chat_postMessage.call_args.kwargs
+        # Explicit thread_ts wins
+        assert call_kwargs["thread_ts"] == "5555555555.000001"
+
+    @pytest.mark.asyncio
+    async def test_thread_registry_does_not_overwrite_existing(self) -> None:
+        """Registry keeps the first ts — doesn't overwrite on subsequent sends."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1111111111.000001",
+        }
+
+        await channel.send("first", context_key="ctx1")
+
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "1111111111.000099",
+        }
+        await channel.send("second", context_key="ctx1")
+
+        # Still the first ts
+        assert channel._thread_registry["ctx1"] == "1111111111.000001"
