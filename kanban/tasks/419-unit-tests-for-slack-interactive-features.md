@@ -1,11 +1,12 @@
 ---
 id: 419
 title: Unit tests for Slack interactive features
-status: in-progress
+status: archived
 priority: important
 created: 2026-03-01T20:21:01.0436377+01:00
-updated: 2026-03-03T12:28:45.2099775+01:00
+updated: 2026-03-03T15:02:59.0415826+01:00
 started: 2026-03-01T20:24:10.8131551+01:00
+completed: 2026-03-03T15:02:59.0415826+01:00
 tags:
     - phase-13
     - test

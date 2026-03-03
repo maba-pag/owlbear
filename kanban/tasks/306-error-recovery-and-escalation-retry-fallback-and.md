@@ -1,11 +1,12 @@
 ---
 id: 306
 title: Error recovery and escalation — retry, fallback, and human escalation
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T02:54:29.6350075+01:00
-updated: 2026-03-01T18:37:24.9049342+01:00
+updated: 2026-03-03T15:03:06.4728949+01:00
 started: 2026-03-01T18:37:24.9049342+01:00
+completed: 2026-03-03T15:03:06.4728949+01:00
 tags:
     - phase-13
     - agent

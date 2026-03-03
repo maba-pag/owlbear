@@ -1,11 +1,12 @@
 ---
 id: 307
 title: Slack structured proposals — Block Kit for interactive decisions
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T02:54:39.5274342+01:00
-updated: 2026-03-01T19:58:23.1190876+01:00
+updated: 2026-03-03T15:03:08.255643+01:00
 started: 2026-03-01T19:58:23.1190876+01:00
+completed: 2026-03-03T15:03:08.255643+01:00
 tags:
     - phase-13
     - slack
