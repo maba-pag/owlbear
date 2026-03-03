@@ -367,6 +367,74 @@ def _build_knowledge_toolset(  # noqa: PLR0913
         return None
 
 
+def _build_bookmark_toolset(
+    workspace: Path,
+    chat_model: str | Model = "gpt-4o",
+    ingest_threshold: float = 0.7,
+) -> AbstractToolset | None:
+    """Create a :class:`BookmarkToolset` backed by the knowledge DB.
+
+    Returns ``None`` when the bookmark subsystem cannot be initialised.
+    All failures are logged at ``WARNING`` and silently swallowed.
+    """
+    try:
+        import sqlite3  # noqa: PLC0415
+
+        from owlbear.memory.knowledge import (  # noqa: PLC0415
+            BookmarkStore,
+            IngestPipeline,
+            TextChunker,
+            init_db,
+        )
+        from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline  # noqa: PLC0415
+        from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset  # noqa: PLC0415
+        from owlbear.memory.knowledge.embeddings import (  # noqa: PLC0415
+            BgeM3EmbeddingProvider,
+        )
+        from owlbear.memory.knowledge.evaluator import SourceEvaluator  # noqa: PLC0415
+        from owlbear.memory.knowledge.extractor import EntityExtractor  # noqa: PLC0415
+        from owlbear.memory.knowledge.graph import GraphStore  # noqa: PLC0415
+        from owlbear.memory.knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
+
+        owlbear_dir = workspace / ".owlbear"
+        owlbear_dir.mkdir(parents=True, exist_ok=True)
+        db_path = owlbear_dir / "knowledge.db"
+
+        conn = sqlite3.connect(str(db_path))
+        init_db(conn)
+
+        bookmark_store = BookmarkStore(conn)
+        evaluator = SourceEvaluator(model=chat_model)
+
+        # Build a lightweight ingest pipeline for bookmarks.
+        graph_store = GraphStore(conn)
+        embedding_provider = BgeM3EmbeddingProvider()
+        vector_store = QdrantVectorStore(location=str(owlbear_dir / "qdrant"))
+        entity_extractor = EntityExtractor(model=chat_model)
+        text_chunker = TextChunker()
+
+        ingest_pipeline = IngestPipeline(
+            conn=conn,
+            graph_store=graph_store,
+            vector_store=vector_store,
+            embedding_provider=embedding_provider,
+            entity_extractor=entity_extractor,
+            text_chunker=text_chunker,
+        )
+
+        pipeline = BookmarkPipeline(
+            bookmark_store=bookmark_store,
+            evaluator=evaluator,
+            ingest_pipeline=ingest_pipeline,
+            ingest_threshold=ingest_threshold,
+        )
+
+        return BookmarkToolset(pipeline=pipeline, store=bookmark_store)
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create BookmarkToolset", exc_info=True)
+        return None
+
+
 def _build_web_search_toolset() -> AbstractToolset | None:
     """Create a :class:`WebSearchToolset` if duckduckgo_search is available.
 
@@ -387,7 +455,45 @@ def _build_web_search_toolset() -> AbstractToolset | None:
         return None
 
 
-def build_toolsets(  # noqa: PLR0913
+def _build_screenshot_components(
+    settings: OwlBearSettings,
+    browser_toolset: BrowserToolset,
+    channel: ChannelPlugin,
+    workspace: Path,
+    hooks: HookRegistry,
+) -> AbstractToolset:
+    """Create screenshot service, visual-feedback toolset, and optional error hook.
+
+    Registers :class:`ScreenshotOnErrorHook` on *hooks* when
+    ``settings.screenshot_mode`` is not ``"manual"``.
+
+    Returns the :class:`VisualFeedbackToolset`.
+    """
+    from owlbear.tools.screenshot import ScreenshotService  # noqa: PLC0415
+    from owlbear.tools.visual_feedback import VisualFeedbackToolset  # noqa: PLC0415
+
+    screenshot_service = ScreenshotService()
+    toolset = VisualFeedbackToolset(
+        screenshot_service=screenshot_service,
+        channel=channel,
+        page_getter=lambda: browser_toolset.page,
+        workspace=workspace,
+    )
+
+    if settings.screenshot_mode != "manual":
+        from owlbear.tools.screenshot_hook import ScreenshotOnErrorHook  # noqa: PLC0415
+
+        ScreenshotOnErrorHook(
+            screenshot_service=screenshot_service,
+            browser_toolset=browser_toolset,
+            workspace=workspace,
+            screenshot_mode=settings.screenshot_mode,
+        ).register(hooks)
+
+    return toolset
+
+
+def build_toolsets(  # noqa: PLR0913, C901
     settings: OwlBearSettings,
     workspace: Path,
     hooks: HookRegistry,
@@ -415,8 +521,12 @@ def build_toolsets(  # noqa: PLR0913
     raw.append(TerminalToolset(workspace_root=workspace, hooks=hooks))
     raw.append(AskUserToolset(channel))
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
-    raw.append(BrowserToolset(config=BrowserConfig()))
+    browser_toolset = BrowserToolset(config=BrowserConfig())
+    raw.append(browser_toolset)
     raw.append(KanbanToolset(kanban_dir=workspace / "kanban", hooks=hooks))
+
+    # Screenshot / visual-feedback wiring
+    raw.append(_build_screenshot_components(settings, browser_toolset, channel, workspace, hooks))
 
     # Conditional toolsets
     skills_dir = workspace / ".github" / "skills"
@@ -453,6 +563,13 @@ def build_toolsets(  # noqa: PLR0913
     if knowledge_result is not None:
         knowledge_ts, knowledge_service = knowledge_result
         raw.append(knowledge_ts)
+
+    # Bookmark toolset — conditional on knowledge components being available
+    bookmark_ts = _build_bookmark_toolset(
+        workspace, chat_model=chat_model or settings.chat_model,
+    )
+    if bookmark_ts is not None:
+        raw.append(bookmark_ts)
 
     # Web search toolset — conditional on duckduckgo_search availability
     web_ts = _build_web_search_toolset()

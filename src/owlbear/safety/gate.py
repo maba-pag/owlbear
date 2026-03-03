@@ -23,12 +23,14 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
+from owlbear.channels.slack_templates import format_approval_blocks
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.safety.policy import ApprovalPolicy, ApprovalSession
 
@@ -94,11 +96,23 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
 
         # Build and send the approval prompt
         args_summary = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
-        prompt = (
-            f"Action requires approval: {name}({args_summary}). "
-            f"Approve? (yes/no/approve all {name})"
-        )
-        await self.channel.send(prompt)
+        action_description = f"{name}({args_summary})" if args_summary else name
+
+        if hasattr(self.channel, "send_blocks") and asyncio.iscoroutinefunction(
+            self.channel.send_blocks
+        ):
+            # Slack path: Block Kit approval buttons
+            action_id_prefix = f"approval_{name}"
+            blocks = format_approval_blocks(action_description, action_id_prefix)
+            text_fallback = f"Approval required: {action_description}"
+            await self.channel.send_blocks(blocks, text_fallback)
+        else:
+            # CLI / non-interactive path: plain text prompt
+            prompt = (
+                f"Action requires approval: {action_description}. "
+                f"Approve? (yes/no/approve all {name})"
+            )
+            await self.channel.send(prompt)
 
         # Wait for the user's response
         response = await self.channel.receive()
@@ -117,7 +131,7 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
 
         normalised = response.strip().lower()
 
-        if normalised in ("yes", "y"):
+        if normalised in ("yes", "y", "approved"):
             await self.hooks.emit(
                 HookEvent.POST_TOOL_USE,
                 {

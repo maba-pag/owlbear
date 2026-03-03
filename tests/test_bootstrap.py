@@ -1294,6 +1294,94 @@ class TestBuildKnowledgeToolsetReturnsService:
         assert result is None
 
 
+# ---------------------------------------------------------------------------
+# Screenshot wiring — AC for task #396
+# ---------------------------------------------------------------------------
+
+
+class TestScreenshotWiring:
+    """Verify build_toolsets wires screenshot components."""
+
+    def test_visual_feedback_toolset_in_toolsets(self, tmp_path: Path) -> None:
+        """AC: VisualFeedbackToolset appears in the toolset list."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        type_names = [_inner_name(ts) for ts in toolsets]
+        assert "VisualFeedbackToolset" in type_names
+
+    def test_screenshot_hook_registered_on_error_default(self, tmp_path: Path) -> None:
+        """AC: ON_ERROR hook active when screenshot_mode='on_error' (default)."""
+        settings = OwlBearSettings(approval_policy=[], screenshot_mode="on_error")
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        build_toolsets(settings, tmp_path, hooks, channel)
+        handlers = hooks.handlers.get(HookEvent.ON_ERROR, [])
+        handler_names = [h.__qualname__ for h in handlers]
+        assert any("ScreenshotOnErrorHook" in n for n in handler_names)
+
+    def test_screenshot_hook_registered_when_auto(self, tmp_path: Path) -> None:
+        """AC: ON_ERROR hook active when screenshot_mode='auto'."""
+        settings = OwlBearSettings(approval_policy=[], screenshot_mode="auto")
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        build_toolsets(settings, tmp_path, hooks, channel)
+        handlers = hooks.handlers.get(HookEvent.ON_ERROR, [])
+        handler_names = [h.__qualname__ for h in handlers]
+        assert any("ScreenshotOnErrorHook" in n for n in handler_names)
+
+    def test_screenshot_hook_not_registered_when_manual(self, tmp_path: Path) -> None:
+        """AC: No ON_ERROR screenshot hook when screenshot_mode='manual'."""
+        settings = OwlBearSettings(approval_policy=[], screenshot_mode="manual")
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        build_toolsets(settings, tmp_path, hooks, channel)
+        handlers = hooks.handlers.get(HookEvent.ON_ERROR, [])
+        handler_names = [h.__qualname__ for h in handlers]
+        assert not any("ScreenshotOnErrorHook" in n for n in handler_names)
+
+    def test_visual_feedback_toolset_wrapped_in_hooked(self, tmp_path: Path) -> None:
+        """AC: VisualFeedbackToolset is wrapped in HookedToolset."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        for ts in toolsets:
+            if _inner_name(ts) == "VisualFeedbackToolset":
+                assert isinstance(ts, HookedToolset)
+                break
+        else:
+            pytest.fail("VisualFeedbackToolset not found in toolsets")
+
+
+class TestBootstrapScreenshotIntegration:
+    """Integration: bootstrap() wires screenshot components end-to-end."""
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_includes_visual_feedback(self, tmp_path: Path) -> None:
+        """bootstrap result includes VisualFeedbackToolset in agent toolsets."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings(approval_policy=[])
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_model",
+                new_callable=AsyncMock,
+                return_value=mock_model,
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        # ON_ERROR hook should be registered (default screenshot_mode=on_error)
+        handlers = result.hooks.handlers.get(HookEvent.ON_ERROR, [])
+        handler_names = [h.__qualname__ for h in handlers]
+        assert any("ScreenshotOnErrorHook" in n for n in handler_names)
+
+
 class TestBuildToolsetsKnowledgeService:
     """AC: build_toolsets returns (toolsets, knowledge_service)."""
 

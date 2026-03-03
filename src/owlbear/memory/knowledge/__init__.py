@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
+from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
+from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset
 from owlbear.memory.knowledge.chunker import Chunk, TextChunker
 from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
 from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
@@ -37,7 +39,10 @@ from owlbear.memory.knowledge.schema import init_db
 __all__ = [
     "BgeM3EmbeddingProvider",
     "Bookmark",
+    "BookmarkPipeline",
+    "BookmarkResult",
     "BookmarkStore",
+    "BookmarkToolset",
     "Chunk",
     "Document",
     "DocumentStatus",
