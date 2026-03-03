@@ -13,6 +13,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 from owlbear.channels.slack_mrkdwn import markdown_to_mrkdwn
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from slack_sdk.socket_mode.async_client import AsyncBaseSocketModeClient
@@ -56,6 +57,20 @@ class SlackChannel:
         self._socket_client: SocketModeClient | None = None
         self._message_queue: asyncio.Queue[str | None] = asyncio.Queue()
         self._thread_registry: dict[str, str] = {}
+        self._action_callbacks: dict[str, Callable[[dict], Awaitable[None]]] = {}
+
+    def register_action(
+        self,
+        action_id: str,
+        callback: Callable[[dict], Awaitable[None]],
+    ) -> None:
+        """Register a callback for a specific interactive action.
+
+        When a ``block_actions`` payload contains an action whose
+        ``action_id`` matches, *callback* is awaited with the full
+        action dict instead of pushing the value to the message queue.
+        """
+        self._action_callbacks[action_id] = callback
 
     # -- ChannelPlugin interface ---------------------------------------------
 
@@ -267,6 +282,11 @@ class SlackChannel:
             payload = request.payload
             if payload.get("type") == "block_actions":
                 for action in payload.get("actions", []):
-                    value = action.get("value") or action.get("action_id", "")
-                    await self._message_queue.put(value)
-                    logger.debug("Enqueued interactive action: %s", value[:80])
+                    aid = action.get("action_id", "")
+                    if aid in self._action_callbacks:
+                        await self._action_callbacks[aid](action)
+                        logger.debug("Routed action to callback: %s", aid)
+                    else:
+                        value = action.get("value") or aid
+                        await self._message_queue.put(value)
+                        logger.debug("Enqueued interactive action: %s", value[:80])

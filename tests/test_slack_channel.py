@@ -804,6 +804,150 @@ class TestSlackChannelInteractiveHandler:
 
 
 # ---------------------------------------------------------------------------
+# Action callback routing  (task #418)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelActionCallbackRouting:
+    """Registered action callbacks are awaited; unregistered fall to queue."""
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_registered_callback_is_awaited(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """When action_id has a registered callback, it is awaited with action dict."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+
+        callback = AsyncMock()
+        channel.register_action("approve_btn", callback)
+
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        action_dict = {"action_id": "approve_btn", "value": "approve"}
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [action_dict],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        callback.assert_awaited_once_with(action_dict)
+        # Should NOT be enqueued
+        assert channel._message_queue.empty()
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_unregistered_action_falls_through_to_queue(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Unregistered actions are still pushed to the message queue."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        # Register a different action — "approve_btn" is NOT registered
+        channel.register_action("other_btn", AsyncMock())
+
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [{"action_id": "approve_btn", "value": "approve"}],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "approve"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_mixed_registered_and_unregistered_actions(
+        self,
+        mock_socket_cls: MagicMock,
+    ) -> None:
+        """Payload with both registered and unregistered actions routes correctly."""
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+
+        callback = AsyncMock()
+        channel.register_action("approve_btn", callback)
+
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        approve_action = {"action_id": "approve_btn", "value": "approve"}
+        deny_action = {"action_id": "deny_btn", "value": "deny"}
+
+        fake_request = MagicMock()
+        fake_request.type = "interactive"
+        fake_request.payload = {
+            "type": "block_actions",
+            "actions": [approve_action, deny_action],
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        # approve_btn → callback
+        callback.assert_awaited_once_with(approve_action)
+        # deny_btn → queue
+        result = channel._message_queue.get_nowait()
+        assert result == "deny"
+        assert channel._message_queue.empty()
+
+    @pytest.mark.asyncio
+    async def test_action_callbacks_initialized_empty(self) -> None:
+        """_action_callbacks starts as an empty dict."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        assert channel._action_callbacks == {}
+
+    @pytest.mark.asyncio
+    async def test_register_action_stores_callback(self) -> None:
+        """register_action adds the callback to the internal dict."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        cb = AsyncMock()
+        channel.register_action("my_action", cb)
+        assert channel._action_callbacks["my_action"] is cb
+
+
+# ---------------------------------------------------------------------------
 # Thread registry  (task #415)
 # ---------------------------------------------------------------------------
 

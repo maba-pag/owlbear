@@ -161,9 +161,7 @@ class TestApprovalGateSlackEnrichment:
         # Second positional arg or keyword arg is text_fallback
         call_args = channel.send_blocks.call_args
         text_fallback = (
-            call_args[0][1]
-            if len(call_args[0]) > 1
-            else call_args[1].get("text_fallback")
+            call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("text_fallback")
         )
         assert isinstance(text_fallback, str)
         assert "git_push" in text_fallback
