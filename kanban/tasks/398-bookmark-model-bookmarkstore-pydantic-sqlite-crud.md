@@ -1,11 +1,12 @@
 ---
 id: 398
 title: Bookmark model + BookmarkStore (Pydantic + SQLite CRUD)
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-01T20:17:23.7804382+01:00
-updated: 2026-03-01T20:23:24.0751337+01:00
+updated: 2026-03-03T13:42:39.5612417+01:00
 started: 2026-03-01T20:23:24.0751337+01:00
+completed: 2026-03-03T13:42:39.5612417+01:00
 tags:
     - phase-13
     - knowledge-graph

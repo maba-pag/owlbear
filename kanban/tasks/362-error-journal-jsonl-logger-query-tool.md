@@ -1,11 +1,12 @@
 ---
 id: 362
 title: Error journal — JSONL logger + query tool
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:11:59.9232321+01:00
-updated: 2026-03-01T20:22:24.7416349+01:00
+updated: 2026-03-03T13:42:27.2704936+01:00
 started: 2026-03-01T20:22:24.7416349+01:00
+completed: 2026-03-03T13:42:27.2704936+01:00
 tags:
     - phase-13
     - memory

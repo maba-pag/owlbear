@@ -1,11 +1,12 @@
 ---
 id: 400
 title: 'BookmarkPipeline — orchestrator: extract, evaluate, ingest, store'
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-01T20:17:42.43629+01:00
-updated: 2026-03-01T20:23:44.1431027+01:00
+updated: 2026-03-03T13:42:46.3827781+01:00
 started: 2026-03-01T20:23:44.1431027+01:00
+completed: 2026-03-03T13:42:46.3827781+01:00
 tags:
     - phase-13
     - knowledge-graph

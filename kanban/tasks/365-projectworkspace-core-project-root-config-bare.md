@@ -1,11 +1,12 @@
 ---
 id: 365
 title: ProjectWorkspace core + project_root config + bare template
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-01T20:12:28.4216838+01:00
-updated: 2026-03-01T20:22:29.9344732+01:00
+updated: 2026-03-03T13:42:27.9373227+01:00
 started: 2026-03-01T20:22:29.9344732+01:00
+completed: 2026-03-03T13:42:27.9373227+01:00
 tags:
     - phase-13
     - tools

@@ -1,10 +1,10 @@
 ---
 id: 401
 title: BookmarkToolset — bookmark_source + list_bookmarks agent tools
-status: backlog
+status: in-progress
 priority: important
 created: 2026-03-01T20:17:51.3799582+01:00
-updated: 2026-03-01T20:23:45.5568854+01:00
+updated: 2026-03-03T12:28:40.8894303+01:00
 started: 2026-03-01T20:23:45.5568854+01:00
 tags:
     - phase-13

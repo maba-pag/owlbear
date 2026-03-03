@@ -1,11 +1,12 @@
 ---
 id: 404
 title: 'Tests: BookmarkPipeline with mocked web_read, evaluator, ingest'
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:18:20.1669989+01:00
-updated: 2026-03-01T20:23:50.5295296+01:00
+updated: 2026-03-03T13:42:48.3833842+01:00
 started: 2026-03-01T20:23:50.5295296+01:00
+completed: 2026-03-03T13:42:48.3833842+01:00
 tags:
     - phase-13
     - test

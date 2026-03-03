@@ -1,11 +1,12 @@
 ---
 id: 391
 title: ScreenshotService — core save/deliver logic
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-01T20:16:20.2166909+01:00
-updated: 2026-03-01T20:23:13.2611053+01:00
+updated: 2026-03-03T13:42:36.3911176+01:00
 started: 2026-03-01T20:23:13.2611053+01:00
+completed: 2026-03-03T13:42:36.3911176+01:00
 tags:
     - phase-12
     - browser

@@ -1,11 +1,12 @@
 ---
 id: 414
 title: Socket Mode interactive handler — route block_actions to message queue
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-01T20:20:16.9654856+01:00
-updated: 2026-03-01T20:24:04.711965+01:00
+updated: 2026-03-03T13:42:49.6910393+01:00
 started: 2026-03-01T20:24:04.711965+01:00
+completed: 2026-03-03T13:42:49.6910393+01:00
 tags:
     - phase-13
     - slack

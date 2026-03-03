@@ -1,11 +1,12 @@
 ---
 id: 413
 title: Interactive Slack templates — proposal, approval, progress Block Kit
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:20:04.7235129+01:00
-updated: 2026-03-01T20:24:03.1356882+01:00
+updated: 2026-03-03T13:42:49.0368605+01:00
 started: 2026-03-01T20:24:03.1356882+01:00
+completed: 2026-03-03T13:42:49.0368605+01:00
 tags:
     - phase-13
     - slack

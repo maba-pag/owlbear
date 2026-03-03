@@ -1,11 +1,12 @@
 ---
 id: 369
 title: Workspace switching improvements — CWD + context reload
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:13:00.7251343+01:00
-updated: 2026-03-01T20:22:36.2101449+01:00
+updated: 2026-03-03T13:42:30.4579964+01:00
 started: 2026-03-01T20:22:36.2101449+01:00
+completed: 2026-03-03T13:42:30.4579964+01:00
 tags:
     - phase-13
     - agent

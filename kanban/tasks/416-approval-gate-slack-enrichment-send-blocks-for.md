@@ -1,10 +1,10 @@
 ---
 id: 416
 title: Approval gate Slack enrichment — send_blocks for interactive approvals
-status: backlog
+status: in-progress
 priority: important
 created: 2026-03-01T20:20:34.8118849+01:00
-updated: 2026-03-01T20:24:07.2504439+01:00
+updated: 2026-03-03T12:28:43.7642249+01:00
 started: 2026-03-01T20:24:07.2504439+01:00
 tags:
     - phase-13

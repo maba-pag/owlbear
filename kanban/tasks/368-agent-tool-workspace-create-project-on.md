@@ -1,11 +1,12 @@
 ---
 id: 368
 title: 'Agent tool: workspace_create_project on ProjectToolset'
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:12:51.8220161+01:00
-updated: 2026-03-01T20:22:34.7598239+01:00
+updated: 2026-03-03T13:42:29.8536768+01:00
 started: 2026-03-01T20:22:34.7598239+01:00
+completed: 2026-03-03T13:42:29.8536768+01:00
 tags:
     - phase-13
     - agent

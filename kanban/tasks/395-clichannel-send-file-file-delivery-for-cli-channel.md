@@ -1,11 +1,12 @@
 ---
 id: 395
 title: CLIChannel.send_file() — file delivery for CLI channel
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:16:55.6962088+01:00
-updated: 2026-03-01T20:23:18.627681+01:00
+updated: 2026-03-03T13:42:38.9267375+01:00
 started: 2026-03-01T20:23:18.627681+01:00
+completed: 2026-03-03T13:42:38.9267375+01:00
 tags:
     - phase-12
     - cli

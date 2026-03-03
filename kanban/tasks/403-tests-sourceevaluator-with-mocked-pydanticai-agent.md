@@ -1,11 +1,12 @@
 ---
 id: 403
 title: 'Tests: SourceEvaluator with mocked PydanticAI agent'
-status: backlog
+status: archived
 priority: important
 created: 2026-03-01T20:18:10.0476153+01:00
-updated: 2026-03-01T20:23:49.170812+01:00
+updated: 2026-03-03T13:42:47.7018533+01:00
 started: 2026-03-01T20:23:49.170812+01:00
+completed: 2026-03-03T13:42:47.7018533+01:00
 tags:
     - phase-13
     - test

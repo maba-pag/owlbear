@@ -1,10 +1,10 @@
 ---
 id: 396
 title: Bootstrap wiring for screenshot toolset, hook, and config
-status: backlog
+status: in-progress
 priority: important
 created: 2026-03-01T20:17:04.0977373+01:00
-updated: 2026-03-01T20:23:20.3122802+01:00
+updated: 2026-03-03T12:28:39.4151903+01:00
 started: 2026-03-01T20:23:20.3122802+01:00
 tags:
     - phase-12
