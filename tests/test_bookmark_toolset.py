@@ -19,6 +19,7 @@ from owlbear.memory.knowledge.evaluator import EvaluationResult
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_bookmark(  # noqa: PLR0913
     *,
     url: str = "https://example.com",
@@ -63,6 +64,7 @@ def _make_evaluation(
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_pipeline() -> MagicMock:
     """Mock satisfying BookmarkPipeline interface."""
@@ -91,6 +93,7 @@ def toolset(mock_pipeline: MagicMock, mock_store: MagicMock) -> object:
 # Subclass check
 # ---------------------------------------------------------------------------
 
+
 class TestSubclass:
     """BookmarkToolset must subclass FunctionToolset."""
 
@@ -103,6 +106,7 @@ class TestSubclass:
 # ---------------------------------------------------------------------------
 # Constructor
 # ---------------------------------------------------------------------------
+
 
 class TestConstructor:
     """Verify constructor wiring."""
@@ -122,6 +126,7 @@ class TestConstructor:
 # Tool registration
 # ---------------------------------------------------------------------------
 
+
 class TestToolRegistration:
     """Verify exactly 2 tools are registered."""
 
@@ -136,6 +141,7 @@ class TestToolRegistration:
 # ---------------------------------------------------------------------------
 # bookmark_source — happy path (high score, ingested)
 # ---------------------------------------------------------------------------
+
 
 class TestBookmarkSourceHappyPath:
     """bookmark_source delegates to pipeline.process and formats result."""
@@ -176,7 +182,8 @@ class TestBookmarkSourceHappyPath:
 
         # Verify delegation
         mock_pipeline.process.assert_awaited_once_with(
-            "https://docs.python.org", reason="Need Python reference",
+            "https://docs.python.org",
+            reason="Need Python reference",
         )
 
         # Verify output is a readable string (not raw object repr)
@@ -189,6 +196,7 @@ class TestBookmarkSourceHappyPath:
 # ---------------------------------------------------------------------------
 # bookmark_source — low score (not ingested but bookmarked)
 # ---------------------------------------------------------------------------
+
 
 class TestBookmarkSourceLowScore:
     """bookmark_source with low score: saved but not ingested."""
@@ -233,6 +241,7 @@ class TestBookmarkSourceLowScore:
 # bookmark_source — duplicate URL (skipped)
 # ---------------------------------------------------------------------------
 
+
 class TestBookmarkSourceDuplicate:
     """bookmark_source with duplicate URL: skipped with reason."""
 
@@ -262,6 +271,7 @@ class TestBookmarkSourceDuplicate:
 # ---------------------------------------------------------------------------
 # bookmark_source — error handling
 # ---------------------------------------------------------------------------
+
 
 class TestBookmarkSourceError:
     """bookmark_source handles pipeline errors gracefully."""
@@ -309,6 +319,7 @@ class TestBookmarkSourceError:
 # list_bookmarks — with results
 # ---------------------------------------------------------------------------
 
+
 class TestListBookmarksWithResults:
     """list_bookmarks returns formatted list of bookmarks."""
 
@@ -351,6 +362,7 @@ class TestListBookmarksWithResults:
 # list_bookmarks — empty
 # ---------------------------------------------------------------------------
 
+
 class TestListBookmarksEmpty:
     """list_bookmarks returns informative message when empty."""
 
@@ -374,6 +386,7 @@ class TestListBookmarksEmpty:
 # list_bookmarks — tag filter
 # ---------------------------------------------------------------------------
 
+
 class TestListBookmarksTagFilter:
     """list_bookmarks passes tag filter to store.list()."""
 
@@ -395,6 +408,7 @@ class TestListBookmarksTagFilter:
 # ---------------------------------------------------------------------------
 # list_bookmarks — min_score filter
 # ---------------------------------------------------------------------------
+
 
 class TestListBookmarksMinScoreFilter:
     """list_bookmarks passes min_score filter to store.list()."""
@@ -431,6 +445,7 @@ class TestListBookmarksMinScoreFilter:
 # ---------------------------------------------------------------------------
 # Output formatting — readable strings, not raw objects
 # ---------------------------------------------------------------------------
+
 
 class TestOutputFormatting:
     """Tool outputs must be readable strings, not raw object reprs."""

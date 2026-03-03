@@ -554,7 +554,8 @@ def build_toolsets(  # noqa: PLR0913, C901
     # Knowledge toolset — conditional on knowledge components being available
     knowledge_service: KnowledgeQueryService | None = None
     knowledge_result = _build_knowledge_toolset(
-        workspace, project_id=active_project_id,
+        workspace,
+        project_id=active_project_id,
         chat_model=chat_model or settings.chat_model,
         max_tokens=settings.knowledge_context_tokens,
         knowledge_graph_expansion=settings.knowledge_graph_expansion,
@@ -566,7 +567,8 @@ def build_toolsets(  # noqa: PLR0913, C901
 
     # Bookmark toolset — conditional on knowledge components being available
     bookmark_ts = _build_bookmark_toolset(
-        workspace, chat_model=chat_model or settings.chat_model,
+        workspace,
+        chat_model=chat_model or settings.chat_model,
     )
     if bookmark_ts is not None:
         raw.append(bookmark_ts)
@@ -803,7 +805,9 @@ async def bootstrap(
 
     # 2. Hooks (with channel for progress reporting)
     hooks, progress_reporter = build_hooks(
-        settings, workspace_root=workspace_root, channel=channel,
+        settings,
+        workspace_root=workspace_root,
+        channel=channel,
     )
 
     # Register progress stop() in cleanup so teardown always cancels the timer
@@ -815,7 +819,10 @@ async def bootstrap(
 
     # 4. Toolsets
     toolsets, knowledge_service = build_toolsets(
-        settings, workspace, hooks, channel,
+        settings,
+        workspace,
+        hooks,
+        channel,
         active_project_id=active_project.id if active_project else None,
         chat_model=model,
     )
@@ -823,7 +830,10 @@ async def bootstrap(
     # 4b. ProjectToolset — when an active project provides a store
     if active_project is not None and project_store is not None:
         _add_project_toolset(
-            toolsets, project_store, settings.config_dir, hooks,
+            toolsets,
+            project_store,
+            settings.config_dir,
+            hooks,
             project_root=settings.project_root,
         )
 
@@ -846,11 +856,7 @@ async def bootstrap(
     # 7. Session, context, tracker
     if active_project is not None:
         session_path = (
-            settings.config_dir
-            / "projects"
-            / active_project.id
-            / "sessions"
-            / "session.jsonl"
+            settings.config_dir / "projects" / active_project.id / "sessions" / "session.jsonl"
         )
     else:
         session_path = workspace / ".owlbear" / "session.jsonl"

@@ -66,8 +66,7 @@ class BookmarkToolset(FunctionToolset):
             self._list_bookmarks,
             name="list_bookmarks",
             description=(
-                "List saved bookmarks, optionally filtered by tag and/or "
-                "minimum relevance score."
+                "List saved bookmarks, optionally filtered by tag and/or minimum relevance score."
             ),
         )
 
@@ -97,10 +96,7 @@ class BookmarkToolset(FunctionToolset):
 
         # Skipped (duplicate or extraction failure)
         if result.skipped_reason:
-            return (
-                f"Skipped: {url}\n"
-                f"Reason: {result.skipped_reason}"
-            )
+            return f"Skipped: {url}\nReason: {result.skipped_reason}"
 
         # Normal result — format readable output
         bm = result.bookmark
@@ -142,7 +138,5 @@ class BookmarkToolset(FunctionToolset):
         lines: list[str] = []
         for bm in bookmarks:
             tags = ", ".join(bm.tags) if bm.tags else "none"
-            lines.append(
-                f"- [{bm.title}]({bm.url}) — score: {bm.relevance_score}, tags: {tags}"
-            )
+            lines.append(f"- [{bm.title}]({bm.url}) — score: {bm.relevance_score}, tags: {tags}")
         return "\n".join(lines)

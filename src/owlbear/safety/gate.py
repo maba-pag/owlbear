@@ -144,7 +144,7 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
             return await super().call_tool(name, tool_args, ctx, tool)
 
         if normalised.startswith("approve all "):
-            tool_to_grant = normalised[len("approve all "):]
+            tool_to_grant = normalised[len("approve all ") :]
             self.session.grant(tool_to_grant)
             await self.hooks.emit(
                 HookEvent.POST_TOOL_USE,

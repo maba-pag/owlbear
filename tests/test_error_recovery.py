@@ -388,9 +388,7 @@ class TestHookedToolsetRetryEdgeCases:
         hooks.register(HookEvent.PRE_TOOL_USE, pre_calls.append)
 
         mock_ts = MagicMock()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[httpx.ConnectError("fail"), "ok"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[httpx.ConnectError("fail"), "ok"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
         tool = MagicMock()
