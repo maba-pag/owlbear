@@ -345,3 +345,11 @@ External repos and resources studied during OwlBear development.
 | Slack Button element reference | <https://docs.slack.dev/reference/block-kit/block-elements/button-element> | N/A | `action_id`, `value`, `style` (primary/danger), `confirm` dialog; informed approval/interactive proposal button design | `src/owlbear/channels/slack_templates.py` (`format_approval_blocks`, `format_interactive_proposal_blocks`) | 2026-03-03 |
 | Bolt for Python — action listener | <https://docs.slack.dev/tools/bolt-python/concepts/actions> | N/A | `@app.action("action_id")` pattern, `ack()` + `say()` response; informed handler acknowledgment pattern | `docs/slack-structured-proposals-research.md` (architecture comparison) | 2026-03-03 |
 | Bolt Python AI Agent Template | <https://github.com/slack-samples/bolt-python-assistant-template> | MIT | Thread-based AI assistant pattern, message-per-thread model; informed thread registry design | `src/owlbear/channels/slack.py` (`_thread_registry`, `get_or_create_thread`), `docs/slack-structured-proposals-research.md` | 2026-03-03 |
+
+## BGE-M3 Evaluation Research (Task #375)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| BGE-M3 paper (Chen et al. 2024) | <https://arxiv.org/abs/2402.03216> | N/A | MIRACL/MLDR benchmarks for dense/sparse/ColBERT quality comparison; self-knowledge distillation training methodology | `docs/bge-m3-evaluation.md` | 2026-03-03 |
+| Yannael — OpenAI vs open-source embeddings (TDS) | <https://towardsdatascience.com/openai-vs-open-source-multilingual-embedding-models-e5ccb7c90f05> | N/A | Independent MRR evaluation of bge-m3 vs OpenAI embeddings on multilingual retrieval tasks | `docs/bge-m3-evaluation.md` | 2026-03-03 |
+| FastEmbed issue #107 (bge-m3 support) | <https://github.com/qdrant/fastembed/issues/107> | N/A | 2+ year open issue tracking bge-m3 3-output support status (dense+sparse+ColBERT via ONNX) | `docs/bge-m3-evaluation.md` | 2026-03-03 |
