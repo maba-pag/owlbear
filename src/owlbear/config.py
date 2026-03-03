@@ -33,6 +33,7 @@ class OwlBearSettings(BaseSettings):
     # --- Directories ---
     config_dir: Path = Path.home() / ".owlbear"
     agents_dir: Path = Path(__file__).parent / "agents"
+    project_root: Path = Path.home() / "projects"
 
     # --- Slack ---
     slack_app_token: SecretStr | None = None
@@ -85,6 +86,9 @@ class OwlBearSettings(BaseSettings):
     progress_enabled: bool = True
     progress_interval: float = 30.0
     progress_detail: Literal["brief", "detailed"] = "brief"
+
+    # --- Browser / screenshots ---
+    screenshot_mode: Literal["auto", "manual", "on_error"] = "on_error"
 
     # --- Runtime ---
     debug: bool = False

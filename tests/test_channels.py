@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from io import StringIO
+from pathlib import Path
+
+import pytest
 
 from owlbear.channels.base import ChannelPlugin
 from owlbear.channels.cli import CLIChannel
@@ -93,3 +96,60 @@ class TestCLIChannelPrompt:
         result = asyncio.run(channel.receive(prompt="> "))
         assert result == "answer"
         assert out_buf.getvalue() == "> "
+
+
+# ---------------------------------------------------------------------------
+# CLIChannel.send_file — task #395
+# ---------------------------------------------------------------------------
+
+
+class TestCLIChannelSendFile:
+    """CLIChannel.send_file delivers file paths to the user."""
+
+    def test_send_file_prints_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """send_file should print the file path to output."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        monkeypatch.setattr("os.startfile", lambda _p: None, raising=False)
+        path = Path("screenshots/screenshot.png")
+        asyncio.run(channel.send_file(path))
+        assert str(path) in buf.getvalue()
+
+    def test_send_file_prints_caption(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """send_file with caption should include caption in output."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        monkeypatch.setattr("os.startfile", lambda _p: None, raising=False)
+        path = Path("screenshots/shot.png")
+        asyncio.run(channel.send_file(path, caption="Error screenshot"))
+        output = buf.getvalue()
+        assert "Error screenshot" in output
+        assert str(path) in output
+
+    def test_send_file_no_caption(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """send_file without caption should still work."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        monkeypatch.setattr("os.startfile", lambda _p: None, raising=False)
+        path = Path("screenshots/shot.png")
+        asyncio.run(channel.send_file(path))
+        assert str(path) in buf.getvalue()
+
+    def test_send_file_calls_startfile_on_windows(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """On Windows, send_file should call os.startfile."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[Path] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_file(Path("C:/screenshots/shot.png")))
+        assert len(opened) == 1
+
+    def test_send_file_no_startfile_on_linux(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """On non-Windows, send_file should not call os.startfile."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        monkeypatch.setattr("sys.platform", "linux")
+        path = Path("screenshots/shot.png")
+        asyncio.run(channel.send_file(path))
+        assert str(path) in buf.getvalue()

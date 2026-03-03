@@ -386,3 +386,48 @@ class TestKnowledgeContextTokensValidation:
         monkeypatch.setenv("OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS", "-1")
         with pytest.raises(ValidationError, match="knowledge_context_tokens"):
             OwlBearSettings()
+
+
+# ---------------------------------------------------------------------------
+# Screenshot mode settings — task #394
+# ---------------------------------------------------------------------------
+
+
+class TestScreenshotModeDefault:
+    """Verify screenshot_mode defaults to 'on_error'."""
+
+    def test_screenshot_mode_default(self, default_settings: OwlBearSettings) -> None:
+        """screenshot_mode should default to 'on_error'."""
+        assert default_settings.screenshot_mode == "on_error"
+
+
+class TestScreenshotModeEnvOverride:
+    """Verify OWLBEAR_SCREENSHOT_MODE env var overrides the default."""
+
+    def test_screenshot_mode_auto(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_SCREENSHOT_MODE=auto should be accepted."""
+        monkeypatch.setenv("OWLBEAR_SCREENSHOT_MODE", "auto")
+        settings = OwlBearSettings()
+        assert settings.screenshot_mode == "auto"
+
+    def test_screenshot_mode_manual(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_SCREENSHOT_MODE=manual should be accepted."""
+        monkeypatch.setenv("OWLBEAR_SCREENSHOT_MODE", "manual")
+        settings = OwlBearSettings()
+        assert settings.screenshot_mode == "manual"
+
+    def test_screenshot_mode_on_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_SCREENSHOT_MODE=on_error should be accepted."""
+        monkeypatch.setenv("OWLBEAR_SCREENSHOT_MODE", "on_error")
+        settings = OwlBearSettings()
+        assert settings.screenshot_mode == "on_error"
+
+
+class TestScreenshotModeValidation:
+    """Verify screenshot_mode rejects invalid values."""
+
+    def test_invalid_screenshot_mode_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Invalid screenshot_mode value should raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_SCREENSHOT_MODE", "always")
+        with pytest.raises(ValidationError):
+            OwlBearSettings()

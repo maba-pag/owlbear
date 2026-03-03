@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING, TextIO
 
 if TYPE_CHECKING:
     from io import TextIOBase
+    from pathlib import Path
 
 
 class CLIChannel:
@@ -45,3 +47,20 @@ class CLIChannel:
         if not line:
             return None
         return line.rstrip("\n")
+
+    async def send_file(self, path: Path, *, caption: str | None = None) -> None:
+        """Deliver a file path to the user.
+
+        Prints *path* (and optional *caption*) to the output stream.
+        On Windows, also opens the file in the default viewer via
+        ``os.startfile``.  On other platforms this is a no-op beyond
+        the console output.
+        """
+        if caption:
+            self._output.write(f"[{caption}] {path}\n")
+        else:
+            self._output.write(f"{path}\n")
+        self._output.flush()
+
+        if sys.platform == "win32" and hasattr(os, "startfile"):
+            os.startfile(path)  # noqa: S606
