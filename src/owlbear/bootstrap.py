@@ -603,6 +603,8 @@ def _add_project_toolset(
     project_store: ProjectStore,
     config_dir: Path,
     hooks: HookRegistry,
+    *,
+    project_root: Path | None = None,
 ) -> None:
     """Append a :class:`ProjectToolset` to *toolsets* if import succeeds.
 
@@ -617,6 +619,7 @@ def _add_project_toolset(
             store=project_store,
             agent=placeholder,
             config_dir=config_dir,
+            project_root=project_root,
         )
         toolsets.append(HookedToolset(wrapped=project_toolset, hooks=hooks))
     except Exception:  # noqa: BLE001
@@ -702,7 +705,10 @@ async def bootstrap(
 
     # 4b. ProjectToolset — when an active project provides a store
     if active_project is not None and project_store is not None:
-        _add_project_toolset(toolsets, project_store, settings.config_dir, hooks)
+        _add_project_toolset(
+            toolsets, project_store, settings.config_dir, hooks,
+            project_root=settings.project_root,
+        )
 
     # 5. MCP
     mcp_registry = build_mcp_registry(settings)

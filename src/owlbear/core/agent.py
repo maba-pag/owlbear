@@ -64,10 +64,12 @@ class OwlBearAgent:
         knowledge_service: KnowledgeQueryService | None = None,
     ) -> None:
         self.session = session
+        self.context = context
         self.hooks = hooks or HookRegistry()
         self.channel = channel
         self.tracker = tracker
         self.provider = provider
+        self.toolsets: list[AbstractToolset] = list(toolsets or [])
         self._model_name = self._extract_model_name(model)
         self._deps = OwlBearDeps(hooks=self.hooks, tracker=self.tracker)
         self._knowledge_service = knowledge_service

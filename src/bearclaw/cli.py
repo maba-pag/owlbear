@@ -205,6 +205,32 @@ def project_archive(
     typer.echo(f"Archived project '{project.name}'")
 
 
+@project_app.command("new")
+def project_new(
+    name: Annotated[str, typer.Argument(help="Name of the new project.")],
+    template: Annotated[
+        str,
+        typer.Option(
+            "--template",
+            "-t",
+            help="Project template: bare, python-uv, python-pip, node.",
+        ),
+    ] = "bare",
+) -> None:
+    """Scaffold a new project under project_root with a template."""
+    from owlbear.projects.workspace import ProjectWorkspace  # noqa: PLC0415
+
+    settings = OwlBearSettings()
+    store = _get_project_store()
+    ws = ProjectWorkspace(project_root=settings.project_root, store=store)
+    try:
+        path = ws.create_project(name, template)
+    except (ValueError, FileExistsError) as exc:
+        typer.echo(f"Error: {exc}")
+        raise typer.Exit(code=1) from None
+    typer.echo(str(path))
+
+
 # ---------------------------------------------------------------------------
 # Usage subcommand group
 # ---------------------------------------------------------------------------

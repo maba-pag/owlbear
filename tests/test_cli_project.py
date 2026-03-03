@@ -21,9 +21,10 @@ runner = CliRunner()
 
 @pytest.fixture
 def _mock_settings(tmp_path: Path):
-    """Patch OwlBearSettings so config_dir points at tmp_path."""
+    """Patch OwlBearSettings so config_dir and project_root point at tmp_path."""
     mock_settings = MagicMock()
     mock_settings.config_dir = tmp_path
+    mock_settings.project_root = tmp_path / "project-root"
     with patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings):
         yield tmp_path
 
@@ -215,3 +216,93 @@ class TestProjectArchive:
         # Verify it's archived in list --all
         result = runner.invoke(app, ["project", "list", "--all"])
         assert "archived" in result.output
+
+
+# ---------------------------------------------------------------------------
+# new (workspace scaffolding)
+# ---------------------------------------------------------------------------
+
+
+class TestProjectNew:
+    """bearclaw project new NAME --template TEMPLATE — scaffold project."""
+
+    def test_new_in_help(self) -> None:
+        result = runner.invoke(app, ["project", "--help"])
+        assert "new" in result.output
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_default_bare_template(self, tmp_path: Path) -> None:
+        """Default template is 'bare' when --template is omitted."""
+        expected = tmp_path / "project-root" / "my-app"
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.return_value = expected
+            result = runner.invoke(app, ["project", "new", "My App"])
+        assert result.exit_code == 0
+        mock_ws_cls.return_value.create_project.assert_called_once_with(
+            "My App", "bare"
+        )
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_with_template_option(self, tmp_path: Path) -> None:
+        expected = tmp_path / "project-root" / "my-app"
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.return_value = expected
+            result = runner.invoke(
+                app, ["project", "new", "My App", "--template", "python-uv"]
+            )
+        assert result.exit_code == 0
+        mock_ws_cls.return_value.create_project.assert_called_once_with(
+            "My App", "python-uv"
+        )
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_prints_path(self, tmp_path: Path) -> None:
+        expected = tmp_path / "project-root" / "my-app"
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.return_value = expected
+            result = runner.invoke(app, ["project", "new", "My App"])
+        assert str(expected) in result.output
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_invalid_template_errors(self) -> None:
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.side_effect = ValueError(
+                "Unknown template 'bad'. Valid: ['bare', 'node', 'python-pip', 'python-uv']"
+            )
+            result = runner.invoke(
+                app, ["project", "new", "My App", "--template", "bad"]
+            )
+        assert result.exit_code == 1
+        assert "Error" in result.output
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_duplicate_name_errors(self) -> None:
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.side_effect = ValueError(
+                "Project 'My App' already exists"
+            )
+            result = runner.invoke(app, ["project", "new", "My App"])
+        assert result.exit_code == 1
+        assert "already exists" in result.output
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_new_dir_exists_errors(self) -> None:
+        with patch(
+            "owlbear.projects.workspace.ProjectWorkspace"
+        ) as mock_ws_cls:
+            mock_ws_cls.return_value.create_project.side_effect = FileExistsError(
+                "Directory already exists: /some/path"
+            )
+            result = runner.invoke(app, ["project", "new", "My App"])
+        assert result.exit_code == 1
+        assert "Error" in result.output

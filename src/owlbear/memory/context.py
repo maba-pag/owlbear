@@ -31,6 +31,20 @@ class ContextManager:
         """Absolute path to the context file."""
         return self._path
 
+    def update_root(self, new_root: Path) -> None:
+        """Update the workspace root directory.
+
+        Resets internal paths so subsequent calls to :meth:`load` and
+        :attr:`instructions` use the new workspace.  The context filename
+        is preserved.
+
+        Args:
+            new_root: New workspace root directory.
+        """
+        filename = self._path.name
+        self._root = new_root
+        self._path = new_root / filename
+
     def exists(self) -> bool:
         """Whether the context file is present on disk."""
         return self._path.exists()
