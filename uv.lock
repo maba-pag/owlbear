@@ -3103,6 +3103,7 @@ dependencies = [
 [package.optional-dependencies]
 benchmark = [
     { name = "beir" },
+    { name = "psutil" },
     { name = "ranx" },
 ]
 browser = [
@@ -3151,6 +3152,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.60.0" },
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "psutil", marker = "extra == 'benchmark'" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-ai", specifier = ">=0.1.0" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
