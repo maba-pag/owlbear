@@ -1,13 +1,17 @@
 ---
 id: 435
 title: Monitor FastEmbed bge-m3 PR 602 status
-status: ideation
+status: archived
 priority: someday
 created: 2026-03-03T16:19:11.5050848+01:00
-updated: 2026-03-03T16:19:11.5050848+01:00
+updated: 2026-03-04T07:58:15.8430659+01:00
+started: 2026-03-04T07:24:30.0835869+01:00
+completed: 2026-03-04T07:58:15.8430659+01:00
 tags:
     - embedding
     - research
+blocked: true
+block_reason: --unblock
 class: standard
 ---
 

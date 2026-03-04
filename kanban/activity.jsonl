@@ -3589,3 +3589,228 @@
 {"timestamp":"2026-03-03T16:40:09.5078312+01:00","action":"move","task_id":412,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T16:40:10.0654867+01:00","action":"move","task_id":418,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-03T16:40:10.7179554+01:00","action":"move","task_id":375,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-03T17:25:18.2164107+01:00","action":"create","task_id":436,"detail":"Create terminal.instructions.md"}
+{"timestamp":"2026-03-03T17:25:25.5052189+01:00","action":"create","task_id":437,"detail":"Create agent-common.instructions.md"}
+{"timestamp":"2026-03-03T17:25:33.4625002+01:00","action":"create","task_id":438,"detail":"Extract tdd-workflow skill from builder"}
+{"timestamp":"2026-03-03T17:25:40.6576237+01:00","action":"create","task_id":439,"detail":"Extract code-review skill from reviewer"}
+{"timestamp":"2026-03-03T17:25:48.0061012+01:00","action":"create","task_id":440,"detail":"Extract docs-gate skill from writer"}
+{"timestamp":"2026-03-03T17:25:54.4295552+01:00","action":"create","task_id":441,"detail":"Extract task-verification skill from closer"}
+{"timestamp":"2026-03-03T17:26:03.8252753+01:00","action":"create","task_id":442,"detail":"Rewrite orchestrator with triage and routing table"}
+{"timestamp":"2026-03-03T17:26:12.3862311+01:00","action":"create","task_id":443,"detail":"Slim builder agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:19.163204+01:00","action":"create","task_id":444,"detail":"Slim reviewer agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:25.5863396+01:00","action":"create","task_id":445,"detail":"Slim writer agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:32.3648311+01:00","action":"create","task_id":446,"detail":"Slim closer agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:39.423051+01:00","action":"create","task_id":447,"detail":"Slim architect agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:46.28371+01:00","action":"create","task_id":448,"detail":"Slim researcher agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:26:53.0400561+01:00","action":"create","task_id":449,"detail":"Slim kanban-planner agent to ~150 lines"}
+{"timestamp":"2026-03-03T17:30:07.5938182+01:00","action":"create","task_id":450,"detail":"Set user-invokable false on pipeline agents"}
+{"timestamp":"2026-03-03T17:30:15.5049734+01:00","action":"create","task_id":451,"detail":"Update copilot-instructions.md inventories"}
+{"timestamp":"2026-03-03T17:30:23.6423618+01:00","action":"create","task_id":452,"detail":"E2E test: orchestrate real task through refactored pipeline"}
+{"timestamp":"2026-03-03T18:03:31.5332048+01:00","action":"move","task_id":436,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:32.179235+01:00","action":"move","task_id":437,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:32.812694+01:00","action":"move","task_id":438,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:33.4566296+01:00","action":"move","task_id":439,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:34.0999131+01:00","action":"move","task_id":440,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:34.7445692+01:00","action":"move","task_id":441,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:35.3860091+01:00","action":"move","task_id":442,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:36.1387558+01:00","action":"move","task_id":443,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:36.7585322+01:00","action":"move","task_id":444,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:37.3791465+01:00","action":"move","task_id":445,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:37.9999792+01:00","action":"move","task_id":446,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:38.6214847+01:00","action":"move","task_id":447,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:39.2433898+01:00","action":"move","task_id":448,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:39.8784655+01:00","action":"move","task_id":449,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:40.5103165+01:00","action":"move","task_id":450,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:03:41.1363008+01:00","action":"move","task_id":451,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-03T18:59:07.6413022+01:00","action":"create","task_id":453,"detail":"Sync OwlBear agent definitions with refactored agent inventory"}
+{"timestamp":"2026-03-03T18:59:52.4147856+01:00","action":"create","task_id":454,"detail":"Mark NFCorpus download tests with @pytest.mark.api"}
+{"timestamp":"2026-03-03T19:08:38.3035053+01:00","action":"move","task_id":453,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T19:08:38.9621495+01:00","action":"move","task_id":454,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T19:08:39.6814928+01:00","action":"move","task_id":433,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T19:08:45.4569408+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-03T19:08:45.4660617+01:00","action":"block","task_id":434,"detail":"Needs 1 more source on multivector quantization quality impact + eval methodology. Defer until corpus exceeds 5K chunks."}
+{"timestamp":"2026-03-03T19:15:42.8174443+01:00","action":"edit","task_id":453,"detail":"Sync OwlBear agent definitions with refactored agent inventory"}
+{"timestamp":"2026-03-03T19:15:53.6348821+01:00","action":"move","task_id":453,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T19:17:10.2671564+01:00","action":"move","task_id":454,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T19:17:38.9767025+01:00","action":"move","task_id":453,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T19:17:39.6827036+01:00","action":"move","task_id":454,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T19:21:37.0241559+01:00","action":"move","task_id":454,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T19:36:50.9911953+01:00","action":"move","task_id":453,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T19:44:35.1518748+01:00","action":"move","task_id":454,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T19:51:47.5740836+01:00","action":"move","task_id":453,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T19:52:48.4757719+01:00","action":"move","task_id":454,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T19:54:07.0385373+01:00","action":"move","task_id":453,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T20:01:00.1753649+01:00","action":"move","task_id":452,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T20:06:19.7890605+01:00","action":"edit","task_id":452,"detail":"E2E test: orchestrate real task through refactored pipeline"}
+{"timestamp":"2026-03-03T20:06:34.3881775+01:00","action":"move","task_id":452,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T20:07:13.0523845+01:00","action":"move","task_id":452,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T20:22:41.3590182+01:00","action":"move","task_id":452,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T20:28:56.9832028+01:00","action":"move","task_id":452,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T20:30:40.8088533+01:00","action":"move","task_id":452,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T20:33:18.1196442+01:00","action":"create","task_id":455,"detail":"Share Qdrant client between KnowledgeToolset and BookmarkToolset"}
+{"timestamp":"2026-03-03T20:33:25.2552657+01:00","action":"move","task_id":455,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T20:36:41.4529373+01:00","action":"edit","task_id":455,"detail":"Share Qdrant client between KnowledgeToolset and BookmarkToolset"}
+{"timestamp":"2026-03-03T20:38:40.9110656+01:00","action":"move","task_id":455,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T20:39:12.4300662+01:00","action":"move","task_id":455,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T21:03:15.0236366+01:00","action":"move","task_id":455,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T21:09:21.2712311+01:00","action":"move","task_id":455,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T21:10:59.0130391+01:00","action":"move","task_id":455,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-03T21:12:29.6423444+01:00","action":"create","task_id":456,"detail":"Pass Copilot model to AgentRegistry from bootstrap"}
+{"timestamp":"2026-03-03T21:12:37.3492118+01:00","action":"move","task_id":456,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-03T21:12:37.970333+01:00","action":"move","task_id":456,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-03T21:12:38.5839732+01:00","action":"move","task_id":456,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-03T21:21:51.8244945+01:00","action":"move","task_id":456,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-03T21:30:04.0269116+01:00","action":"move","task_id":456,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-03T21:31:50.1059207+01:00","action":"move","task_id":456,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-04T07:24:24.1746814+01:00","action":"move","task_id":434,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-04T07:24:30.0850153+01:00","action":"move","task_id":435,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-03-04T07:24:30.7356122+01:00","action":"edit","task_id":435,"detail":"Monitor FastEmbed bge-m3 PR 602 status"}
+{"timestamp":"2026-03-04T07:24:30.741909+01:00","action":"block","task_id":435,"detail":"--unblock"}
+{"timestamp":"2026-03-04T07:26:50.3945017+01:00","action":"edit","task_id":433,"detail":"Benchmark bge-m3 encoding on Ryzen 8840U sample corpus"}
+{"timestamp":"2026-03-04T07:26:55.4026521+01:00","action":"move","task_id":433,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-04T07:27:24.6185012+01:00","action":"move","task_id":433,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-04T07:37:27.4616627+01:00","action":"move","task_id":433,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-04T07:37:37.7242251+01:00","action":"create","task_id":457,"detail":"Deduplicate knowledge infrastructure in bootstrap"}
+{"timestamp":"2026-03-04T07:37:38.401782+01:00","action":"create","task_id":458,"detail":"Fix broken voice channel import in bootstrap"}
+{"timestamp":"2026-03-04T07:37:39.2200843+01:00","action":"create","task_id":459,"detail":"Add SQLite connection lifecycle management to bootstrap"}
+{"timestamp":"2026-03-04T07:37:40.3449761+01:00","action":"create","task_id":460,"detail":"Add explicit timeouts to all httpx.AsyncClient calls"}
+{"timestamp":"2026-03-04T07:37:41.9320401+01:00","action":"create","task_id":461,"detail":"Add run_command to default approval policy"}
+{"timestamp":"2026-03-04T07:37:43.1717711+01:00","action":"create","task_id":462,"detail":"Rewrite architecture.md to match actual codebase"}
+{"timestamp":"2026-03-04T07:37:43.9405593+01:00","action":"create","task_id":463,"detail":"Add slack_sdk import guard to channels package"}
+{"timestamp":"2026-03-04T07:37:44.7031638+01:00","action":"create","task_id":464,"detail":"Refactor ingest() to delegate to _ingest_from_intake()"}
+{"timestamp":"2026-03-04T07:37:45.4440735+01:00","action":"create","task_id":465,"detail":"Extract generic JsonlStore base class"}
+{"timestamp":"2026-03-04T07:37:46.214841+01:00","action":"create","task_id":466,"detail":"Add public APIs to eliminate SLF001 suppressions"}
+{"timestamp":"2026-03-04T07:37:47.0181837+01:00","action":"create","task_id":467,"detail":"Add working directory confinement to terminal toolset"}
+{"timestamp":"2026-03-04T07:37:47.9549401+01:00","action":"create","task_id":468,"detail":"Restrict token file permissions"}
+{"timestamp":"2026-03-04T07:37:49.0223938+01:00","action":"create","task_id":469,"detail":"Add ConnectError and TimeoutException to Copilot transport retry"}
+{"timestamp":"2026-03-04T07:37:49.8760509+01:00","action":"create","task_id":470,"detail":"Add retry decorators to unretried external calls"}
+{"timestamp":"2026-03-04T07:37:50.7070889+01:00","action":"create","task_id":471,"detail":"Fix _recover_from_error swallowing PERMANENT errors"}
+{"timestamp":"2026-03-04T07:37:51.3624118+01:00","action":"create","task_id":472,"detail":"Sanitize error messages before sending to channels"}
+{"timestamp":"2026-03-04T07:37:52.0262639+01:00","action":"create","task_id":473,"detail":"Fix URL safety guard tool name mismatch"}
+{"timestamp":"2026-03-04T07:37:52.7558409+01:00","action":"create","task_id":474,"detail":"Fix JavaScript injection in browser title prefix"}
+{"timestamp":"2026-03-04T07:37:53.8741158+01:00","action":"create","task_id":475,"detail":"Wire ErrorJournal into daemon and agent error paths"}
+{"timestamp":"2026-03-04T07:37:54.7072796+01:00","action":"create","task_id":476,"detail":"Add sounddevice to voice extras in pyproject.toml"}
+{"timestamp":"2026-03-04T07:37:55.6524976+01:00","action":"create","task_id":477,"detail":"Add Field descriptions to all OwlBearSettings config fields"}
+{"timestamp":"2026-03-04T07:37:56.6519974+01:00","action":"create","task_id":478,"detail":"Fix TestLoadNfcorpus: add network marker and skip guard"}
+{"timestamp":"2026-03-04T07:37:57.4680505+01:00","action":"create","task_id":479,"detail":"Fix TestOrchestratorKanbanPrompt stale prompt assertions"}
+{"timestamp":"2026-03-04T07:37:58.1785841+01:00","action":"create","task_id":480,"detail":"Split bootstrap.py into focused submodules"}
+{"timestamp":"2026-03-04T07:37:58.8881777+01:00","action":"create","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-04T07:37:59.7617846+01:00","action":"create","task_id":482,"detail":"Extend ChannelPlugin protocol for rich capabilities"}
+{"timestamp":"2026-03-04T07:38:00.5072224+01:00","action":"create","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-04T07:38:01.2009365+01:00","action":"create","task_id":484,"detail":"Wire or remove EscalationHook"}
+{"timestamp":"2026-03-04T07:38:01.9694959+01:00","action":"create","task_id":485,"detail":"Wire or remove MemoryConsolidator"}
+{"timestamp":"2026-03-04T07:38:02.9058054+01:00","action":"create","task_id":486,"detail":"Fix or remove dead ks_refresh CLI command"}
+{"timestamp":"2026-03-04T07:38:03.856648+01:00","action":"create","task_id":487,"detail":"Extract toolset unwrap utility and remove string type dispatch"}
+{"timestamp":"2026-03-04T07:38:04.6178024+01:00","action":"create","task_id":488,"detail":"Auto-register toolset aliases instead of hardcoded map"}
+{"timestamp":"2026-03-04T07:38:05.3767964+01:00","action":"create","task_id":489,"detail":"Fix NotificationHook signature mismatch"}
+{"timestamp":"2026-03-04T07:38:06.1886804+01:00","action":"create","task_id":490,"detail":"Fix ContextInjectionHook blocking event loop"}
+{"timestamp":"2026-03-04T07:38:06.935794+01:00","action":"create","task_id":491,"detail":"Fix dual error handling on ON_ERROR events"}
+{"timestamp":"2026-03-04T07:38:07.6684177+01:00","action":"create","task_id":492,"detail":"Improve bootstrap error reporting with structured startup summary"}
+{"timestamp":"2026-03-04T07:38:08.5048646+01:00","action":"create","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-04T07:38:09.2372153+01:00","action":"create","task_id":494,"detail":"Expand command guard blocklist and document limitations"}
+{"timestamp":"2026-03-04T07:38:10.0080771+01:00","action":"create","task_id":495,"detail":"Isolate browser context in CDP mode"}
+{"timestamp":"2026-03-04T07:38:10.7278221+01:00","action":"create","task_id":496,"detail":"Add ReDoS protection to filesystem search content regex"}
+{"timestamp":"2026-03-04T07:38:11.4364368+01:00","action":"create","task_id":497,"detail":"Add path sandboxing to knowledge intake"}
+{"timestamp":"2026-03-04T07:38:12.119454+01:00","action":"create","task_id":498,"detail":"Add scope limits to approve-all session grants"}
+{"timestamp":"2026-03-04T07:38:12.8507347+01:00","action":"create","task_id":499,"detail":"Add import guard to FlagEmbedding reranker"}
+{"timestamp":"2026-03-04T07:38:13.5746188+01:00","action":"create","task_id":500,"detail":"Add import guard to bookmark_pipeline trafilatura"}
+{"timestamp":"2026-03-04T07:38:14.4132113+01:00","action":"create","task_id":501,"detail":"Wire KnowledgeSourceToolset in bootstrap build_toolsets"}
+{"timestamp":"2026-03-04T07:38:15.2370706+01:00","action":"create","task_id":502,"detail":"Break memory to tools upward dependency"}
+{"timestamp":"2026-03-04T07:38:16.0531586+01:00","action":"create","task_id":503,"detail":"Remove safety gate direct import of slack_templates"}
+{"timestamp":"2026-03-04T07:38:16.8847914+01:00","action":"create","task_id":504,"detail":"Wire or remove dead knowledge modules dedup and reranker"}
+{"timestamp":"2026-03-04T07:38:17.6668455+01:00","action":"create","task_id":505,"detail":"Sync copilot-instructions.md agent inventory with actual files"}
+{"timestamp":"2026-03-04T07:38:18.4462074+01:00","action":"create","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-04T07:38:19.2362042+01:00","action":"create","task_id":507,"detail":"Reuse httpx.AsyncClient in GitHubToolset"}
+{"timestamp":"2026-03-04T07:38:19.987013+01:00","action":"create","task_id":508,"detail":"Make openai import conditional in errors.py"}
+{"timestamp":"2026-03-04T07:38:20.7787743+01:00","action":"create","task_id":509,"detail":"Replace module-level _shutdown flag with asyncio.Event"}
+{"timestamp":"2026-03-04T07:38:21.7055244+01:00","action":"create","task_id":510,"detail":"Add prefix-stripping tests to copilot_multipliers"}
+{"timestamp":"2026-03-04T07:38:23.1675286+01:00","action":"create","task_id":511,"detail":"Validate IMPORTANCE_BY_TYPE keys match EntityType enum"}
+{"timestamp":"2026-03-04T07:38:23.8606586+01:00","action":"create","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-04T07:38:24.616185+01:00","action":"create","task_id":513,"detail":"Review Slack receive timeout behavior for daemon idle"}
+{"timestamp":"2026-03-04T07:38:25.3862321+01:00","action":"create","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-04T07:38:26.1444624+01:00","action":"create","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-04T07:38:26.7939519+01:00","action":"create","task_id":516,"detail":"Add concurrency limit to ingest background tasks"}
+{"timestamp":"2026-03-04T07:38:27.4766011+01:00","action":"create","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-04T07:38:28.1332482+01:00","action":"create","task_id":518,"detail":"Extract shared _emit_hook into HookMixin or utility"}
+{"timestamp":"2026-03-04T07:38:28.7762419+01:00","action":"create","task_id":519,"detail":"Extract shared sandbox_path utility from duplicated _safe_path"}
+{"timestamp":"2026-03-04T07:38:29.4396102+01:00","action":"create","task_id":520,"detail":"Extract _print_table helper in cli.py"}
+{"timestamp":"2026-03-04T07:38:30.0987155+01:00","action":"create","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-04T07:38:30.7371593+01:00","action":"create","task_id":522,"detail":"Define WorkspaceAware protocol for toolset root updates"}
+{"timestamp":"2026-03-04T07:38:31.3987165+01:00","action":"create","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-04T07:38:32.0283452+01:00","action":"create","task_id":524,"detail":"Expand validator role policy denied tools"}
+{"timestamp":"2026-03-04T07:38:32.6991443+01:00","action":"create","task_id":525,"detail":"Create dedicated security audit log"}
+{"timestamp":"2026-03-04T07:38:33.3345944+01:00","action":"create","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-04T07:38:34.0134294+01:00","action":"create","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-04T07:38:34.6966751+01:00","action":"create","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-04T07:38:35.418403+01:00","action":"create","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-04T07:38:36.1927164+01:00","action":"create","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-04T07:38:36.8914025+01:00","action":"create","task_id":531,"detail":"Add TypedDict for tool_stats return type"}
+{"timestamp":"2026-03-04T07:38:37.5863179+01:00","action":"create","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-04T07:38:38.4336655+01:00","action":"create","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-04T07:38:39.6311085+01:00","action":"create","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-04T07:38:40.4064854+01:00","action":"create","task_id":535,"detail":"Make logfire import conditional in daemon.py"}
+{"timestamp":"2026-03-04T07:38:41.3909006+01:00","action":"create","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-04T07:38:42.2620434+01:00","action":"create","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-04T07:38:43.2420439+01:00","action":"create","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-04T07:38:44.9699134+01:00","action":"create","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-04T07:38:45.7366311+01:00","action":"create","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-04T07:38:46.5025847+01:00","action":"create","task_id":542,"detail":"Handle channel failure in daemon _recover_from_error"}
+{"timestamp":"2026-03-04T07:38:47.2446717+01:00","action":"create","task_id":543,"detail":"Standardize docstring style to Google-style across codebase"}
+{"timestamp":"2026-03-04T07:38:48.0930781+01:00","action":"create","task_id":544,"detail":"Add version ceiling to pydantic-ai dependency"}
+{"timestamp":"2026-03-04T07:38:48.9845271+01:00","action":"create","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-04T07:38:49.8606407+01:00","action":"create","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-04T07:38:50.6900306+01:00","action":"create","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-04T07:38:51.5596427+01:00","action":"create","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-04T07:38:52.394044+01:00","action":"create","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-04T07:38:53.2533046+01:00","action":"create","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-04T07:38:54.1106162+01:00","action":"create","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-04T07:38:55.021884+01:00","action":"create","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-04T07:38:55.9714891+01:00","action":"create","task_id":553,"detail":"Nest BrowserConfig into OwlBearSettings"}
+{"timestamp":"2026-03-04T07:38:56.8420672+01:00","action":"create","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-04T07:38:57.7681522+01:00","action":"create","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-04T07:38:58.568974+01:00","action":"create","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-04T07:38:59.3940495+01:00","action":"create","task_id":557,"detail":"Add unit test for _default_web_read in bookmark_pipeline"}
+{"timestamp":"2026-03-04T07:39:00.3965569+01:00","action":"create","task_id":558,"detail":"Consider RichChannel protocol for approval gate"}
+{"timestamp":"2026-03-04T07:39:02.2077044+01:00","action":"create","task_id":559,"detail":"Add programmatic agent registration API"}
+{"timestamp":"2026-03-04T07:39:03.1716914+01:00","action":"create","task_id":560,"detail":"Rename ks_ CLI functions to full knowledge_source_ prefix"}
+{"timestamp":"2026-03-04T07:39:04.0616761+01:00","action":"create","task_id":561,"detail":"Apply role policy before Agent construction to avoid double-build"}
+{"timestamp":"2026-03-04T07:39:05.200549+01:00","action":"create","task_id":562,"detail":"Define named constant for prefetch multiplier in qdrant"}
+{"timestamp":"2026-03-04T07:39:06.1379922+01:00","action":"create","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-04T07:39:07.0159181+01:00","action":"create","task_id":564,"detail":"Consider Hook protocol for automated event registration"}
+{"timestamp":"2026-03-04T07:39:07.97079+01:00","action":"create","task_id":565,"detail":"Evaluate role system complexity for 2 roles"}
+{"timestamp":"2026-03-04T07:39:08.9292633+01:00","action":"create","task_id":566,"detail":"Consider sub-packages for knowledge/ directory (22 files)"}
+{"timestamp":"2026-03-04T07:39:09.7604523+01:00","action":"create","task_id":567,"detail":"Add dedup key to ErrorJournal entries"}
+{"timestamp":"2026-03-04T07:39:10.6327846+01:00","action":"create","task_id":568,"detail":"Tighten genai-prices version specifier"}
+{"timestamp":"2026-03-04T07:39:11.5058067+01:00","action":"create","task_id":569,"detail":"Consolidate trafilatura across extras groups"}
+{"timestamp":"2026-03-04T07:39:12.4721897+01:00","action":"create","task_id":570,"detail":"Monitor pyttsx3 maintenance and evaluate alternatives"}
+{"timestamp":"2026-03-04T07:39:13.3571365+01:00","action":"create","task_id":571,"detail":"Pin benchmark extra dependencies"}
+{"timestamp":"2026-03-04T07:39:14.2760481+01:00","action":"create","task_id":572,"detail":"Add module docstring and exports to planning/__init__.py"}
+{"timestamp":"2026-03-04T07:39:15.2977215+01:00","action":"create","task_id":573,"detail":"Add Prerequisites section to README"}
+{"timestamp":"2026-03-04T07:39:16.2262477+01:00","action":"create","task_id":574,"detail":"Add follow-up tasks to 3 research docs missing them"}
+{"timestamp":"2026-03-04T07:39:17.2230614+01:00","action":"create","task_id":575,"detail":"Close minor test coverage gaps across modules"}
+{"timestamp":"2026-03-04T07:39:54.4327143+01:00","action":"create","task_id":576,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-04T07:47:51.7772542+01:00","action":"move","task_id":433,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-04T07:49:18.2980261+01:00","action":"move","task_id":433,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-04T07:58:15.1064278+01:00","action":"move","task_id":433,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:15.8443446+01:00","action":"move","task_id":435,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:16.5504387+01:00","action":"move","task_id":436,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:17.2445903+01:00","action":"move","task_id":437,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:17.9254096+01:00","action":"move","task_id":438,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:18.5500299+01:00","action":"move","task_id":439,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:19.1718355+01:00","action":"move","task_id":440,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:19.8211713+01:00","action":"move","task_id":441,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:20.4510354+01:00","action":"move","task_id":442,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:21.0779453+01:00","action":"move","task_id":443,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:21.7615888+01:00","action":"move","task_id":444,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:22.4107394+01:00","action":"move","task_id":445,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:23.0833811+01:00","action":"move","task_id":446,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:23.7790167+01:00","action":"move","task_id":447,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:24.4666028+01:00","action":"move","task_id":448,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:25.2346178+01:00","action":"move","task_id":449,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:25.9312716+01:00","action":"move","task_id":450,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:26.6037163+01:00","action":"move","task_id":451,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:27.3024238+01:00","action":"move","task_id":452,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:27.9704509+01:00","action":"move","task_id":453,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:28.6347977+01:00","action":"move","task_id":454,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:29.3486484+01:00","action":"move","task_id":455,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-04T07:58:30.0092133+01:00","action":"move","task_id":456,"detail":"done -\u003e archived"}
