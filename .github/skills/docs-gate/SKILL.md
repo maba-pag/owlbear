@@ -1,0 +1,86 @@
+---
+name: docs-gate
+description: "Documentation gate checklist: verify and update docs before marking a task done. Use when a task reaches docs status."
+---
+
+# Docs Gate Workflow
+
+Step-by-step process for the documentation gate (docs → done).
+
+## Step 1 — Read task details
+
+1. `kanban\kanban-md.exe show {id}` — read full task details
+2. Verify task is in `docs` status
+3. Identify what changed: files created/modified, behavior added
+
+## Step 2 — Run docs-gate checklist
+
+Evaluate each item with evidence, not assumptions:
+
+### Item 1: Behavior/API change → copilot-instructions.md
+
+- Did the task change behavior, API, or conventions?
+- If yes: read `.github/copilot-instructions.md` and update the relevant tables/sections
+- If no: note "no behavior change"
+
+### Item 2: Module added/changed → docstrings
+
+- Did the task create or modify Python modules?
+- If yes: read source files, verify all public classes and functions have accurate docstrings
+- Edit `.py` files for docstrings ONLY — never change application logic
+
+### Item 3: External inspiration → docs/sources.md
+
+- Did the task use patterns from external repos, articles, or docs?
+- If yes: add a row to `docs/sources.md` (Source, URL, What, Where Used, Date)
+
+### Item 4: CLI commands changed → README.md
+
+- Did the task add or modify CLI commands?
+- If yes: update usage examples in `README.md`
+
+### Item 5: Research doc produced → archived/linked
+
+- Did the research phase produce a `docs/{slug}.md`?
+- If yes: verify it exists and is linked from the task body
+- Verify follow-up kanban tasks were created
+
+### Item 6: No impact
+
+- If none of items 1–5 apply: note "no docs impact" explicitly
+
+## Step 3 — Clean scratch files
+
+- Look for `docs/scratch/{task-id}-*` files
+- Delete any that exist
+
+## Step 4 — Advance
+
+```powershell
+kanban\kanban-md.exe move {id} done
+```
+
+## Docs gate output format
+
+```
+## DocsGateReport: #{id} — {title}
+
+### Docs-Gate Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+
+### Files Updated
+- {list or "None"}
+
+### Scratch Files Cleaned
+- {list or "None"}
+
+### Action Taken
+kanban\kanban-md.exe move {id} done
+```
+
+## Boundaries
+
+- Only edit: README.md, copilot-instructions.md, docs/*.md, docs/sources.md, and docstrings in .py files
+- Never change application logic — only documentation content
+- If you find untested behavior: reject to review with `kanban\kanban-md.exe move {id} review --block "reason"`
