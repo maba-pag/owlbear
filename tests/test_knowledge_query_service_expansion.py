@@ -43,9 +43,7 @@ def mock_graph_store() -> MagicMock:
 def mock_embedding_provider() -> MagicMock:
     """Mock with embed_hybrid support."""
     provider = MagicMock()
-    provider.embed_hybrid = MagicMock(
-        return_value=[HybridEmbedding(dense=[0.1, 0.2, 0.3])]
-    )
+    provider.embed_hybrid = MagicMock(return_value=[HybridEmbedding(dense=[0.1, 0.2, 0.3])])
     provider.embed = MagicMock(return_value=[[0.1, 0.2, 0.3]])
     return provider
 
@@ -90,9 +88,7 @@ class TestRetrieverNoneBackwardCompat:
             embedding_provider=mock_embedding_provider,
         )
         mock_vector_store.search_similar.return_value = [("doc-1", 0.90)]
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Title", "Content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Title", "Content")
 
         result = svc.query_for_context("test")
 
@@ -115,9 +111,7 @@ class TestRetrieverNoneBackwardCompat:
             embedding_provider=mock_embedding_provider,
         )
         mock_vector_store.search_similar.return_value = [("doc-1", 0.90)]
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Title", "Content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Title", "Content")
 
         result = svc.query_for_context("test")
 
@@ -146,9 +140,7 @@ class TestRetrieverDelegation:
             expansion_text="",
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Title", "Content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Title", "Content")
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -171,7 +163,9 @@ class TestRetrieverDelegation:
     ) -> None:
         """Retriever gets the top_k from query_for_context."""
         mock_retriever.retrieve.return_value = RetrievalResult(
-            chunks=[], expansion_text="", entities_found=0,
+            chunks=[],
+            expansion_text="",
+            entities_found=0,
         )
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
@@ -198,9 +192,7 @@ class TestRetrieverDelegation:
             expansion_text="",
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Resolved", "Doc content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Resolved", "Doc content")
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -236,9 +228,7 @@ class TestExpansionText:
             expansion_text="Entity A --[relates_to]--> Entity B: Description",
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Main Doc", "Main content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Main Doc", "Main content")
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -269,9 +259,7 @@ class TestExpansionText:
             expansion_text="",
             entities_found=0,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Title", "Content"
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Title", "Content")
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -306,9 +294,7 @@ class TestTokenBudgetWithExpansion:
             expansion_text="expansion " * 50,  # 50 words of expansion
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "Doc", "word " * 5
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "Doc", "word " * 5)
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -335,9 +321,7 @@ class TestTokenBudgetWithExpansion:
             expansion_text="expansion " * 100,  # 100 words
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "DocTitle", "word " * 5
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "DocTitle", "word " * 5)
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -366,9 +350,7 @@ class TestTokenBudgetWithExpansion:
             expansion_text="expansion " * 50,
             entities_found=1,
         )
-        mock_graph_store.get_document.return_value = _make_doc(
-            "doc-1", "BigDoc", "word " * 10
-        )
+        mock_graph_store.get_document.return_value = _make_doc("doc-1", "BigDoc", "word " * 10)
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
             graph_store=mock_graph_store,
@@ -464,7 +446,9 @@ class TestScopesForwarding:
     ) -> None:
         """Scopes from service constructor forwarded to retriever.retrieve()."""
         mock_retriever.retrieve.return_value = RetrievalResult(
-            chunks=[], expansion_text="", entities_found=0,
+            chunks=[],
+            expansion_text="",
+            entities_found=0,
         )
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
@@ -488,7 +472,9 @@ class TestScopesForwarding:
     ) -> None:
         """When scopes=None, retriever called without scopes kwarg."""
         mock_retriever.retrieve.return_value = RetrievalResult(
-            chunks=[], expansion_text="", entities_found=0,
+            chunks=[],
+            expansion_text="",
+            entities_found=0,
         )
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
@@ -521,7 +507,9 @@ class TestEmptyRetrieverResults:
     ) -> None:
         """Empty chunks list from retriever → None result."""
         mock_retriever.retrieve.return_value = RetrievalResult(
-            chunks=[], expansion_text="some expansion", entities_found=0,
+            chunks=[],
+            expansion_text="some expansion",
+            entities_found=0,
         )
         svc = KnowledgeQueryService(
             vector_store=mock_vector_store,
@@ -577,7 +565,7 @@ class TestBootstrapRetrieverWiring:
 
     def test_creates_retriever_when_expansion_enabled(self, tmp_path: Path) -> None:
         """knowledge_graph_expansion=True → retriever created, passed to service."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
         from owlbear.config import OwlBearSettings
 
         settings = OwlBearSettings(knowledge_graph_expansion=True)
@@ -593,8 +581,11 @@ class TestBootstrapRetrieverWiring:
                 return_value=None,
             ),
         ):
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
             result = _build_knowledge_toolset(
                 tmp_path,
+                infra,
                 knowledge_graph_expansion=settings.knowledge_graph_expansion,
             )
 
@@ -605,7 +596,7 @@ class TestBootstrapRetrieverWiring:
 
     def test_no_retriever_when_expansion_disabled(self, tmp_path: Path) -> None:
         """knowledge_graph_expansion=False → no retriever created."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
         from owlbear.config import OwlBearSettings
 
         settings = OwlBearSettings(knowledge_graph_expansion=False)
@@ -621,8 +612,11 @@ class TestBootstrapRetrieverWiring:
                 return_value=None,
             ),
         ):
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
             result = _build_knowledge_toolset(
                 tmp_path,
+                infra,
                 knowledge_graph_expansion=settings.knowledge_graph_expansion,
             )
 
@@ -642,14 +636,22 @@ class TestBootstrapRetrieverWiring:
         )
         hooks = HookRegistry()
         channel = MagicMock()
+        mock_infra = MagicMock()
 
-        with patch(
-            "owlbear.bootstrap._build_knowledge_toolset",
-            return_value=None,
-        ) as mock_build:
+        with (
+            patch(
+                "owlbear.bootstrap._build_knowledge_infra",
+                return_value=mock_infra,
+            ),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=None,
+            ) as mock_build,
+        ):
             build_toolsets(settings, tmp_path, hooks, channel)
 
         mock_build.assert_called_once()
         call_kwargs = mock_build.call_args
-        assert call_kwargs.kwargs.get("knowledge_graph_expansion") is False or \
-            (len(call_kwargs.args) > 2 and call_kwargs.args[2] is False)
+        assert call_kwargs.kwargs.get("knowledge_graph_expansion") is False or (
+            len(call_kwargs.args) > 2 and call_kwargs.args[2] is False
+        )

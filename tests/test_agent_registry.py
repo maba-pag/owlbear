@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pydantic_ai.models
 import pytest
 from pydantic_ai import Agent
+from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.agent_def import AgentDefinition  # noqa: F401
@@ -153,6 +154,14 @@ class TestAgentRegistryGet:
 
     def test_get_uses_default_model_when_none(self, agents_dir: Path) -> None:
         registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+        agent = registry.get("builder")
+        assert isinstance(agent, Agent)
+
+    def test_get_accepts_model_object_as_default(self, agents_dir: Path) -> None:
+        """default_model can be a PydanticAI Model instance (e.g. Copilot model)."""
+        fn_model = FunctionModel(lambda _messages, _info: "ok")
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=fn_model)
         registry.scan()
         agent = registry.get("builder")
         assert isinstance(agent, Agent)

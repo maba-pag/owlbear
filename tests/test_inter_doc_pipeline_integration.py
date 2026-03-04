@@ -522,7 +522,7 @@ class TestBootstrapInterDocBuilder:
 
     def test_inter_doc_builder_passed_when_enabled(self, tmp_path: object) -> None:
         """When inter_doc_graph_building=True, IngestPipeline gets an inter_doc_builder."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -543,8 +543,11 @@ class TestBootstrapInterDocBuilder:
                 return_value=None,
             ) as mock_init,
         ):
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
             _build_knowledge_toolset(
                 tmp_path,  # type: ignore[arg-type]
+                infra,
                 inter_doc_graph_building=True,
             )
 
@@ -556,7 +559,7 @@ class TestBootstrapInterDocBuilder:
 
     def test_inter_doc_builder_not_passed_when_disabled(self, tmp_path: object) -> None:
         """When inter_doc_graph_building=False (default), no inter_doc_builder."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -573,7 +576,9 @@ class TestBootstrapInterDocBuilder:
                 return_value=None,
             ) as mock_init,
         ):
-            _build_knowledge_toolset(tmp_path)  # type: ignore[arg-type]
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+            _build_knowledge_toolset(tmp_path, infra)  # type: ignore[arg-type]
 
         mock_init.assert_called_once()
         call_kwargs = mock_init.call_args[1]

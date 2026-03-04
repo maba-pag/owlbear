@@ -52,6 +52,7 @@ MINI_RESULTS: dict[str, dict[str, float]] = {
 # ===================================================================
 
 
+@pytest.mark.api
 @pytest.mark.benchmark
 class TestLoadNfcorpus:
     """Contract: load_nfcorpus() returns (corpus, queries, qrels)."""

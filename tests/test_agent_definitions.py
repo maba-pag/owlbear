@@ -1,4 +1,4 @@
-"""Tests for core agent definition files — orchestrator, coder, reviewer, researcher, writer."""
+"""Tests for core agent definition files — all 8 agents in the OwlBear inventory."""
 
 from __future__ import annotations
 
@@ -16,8 +16,14 @@ AGENTS_DIR = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "agent
 # Known toolset names that map to real Toolset classes.
 KNOWN_TOOLSETS = frozenset(
     {
-        "filesystem", "terminal", "ask_user", "browser",
-        "delegation", "kanban", "knowledge", "web_search",
+        "filesystem",
+        "terminal",
+        "ask_user",
+        "browser",
+        "delegation",
+        "kanban",
+        "knowledge",
+        "web_search",
     }
 )
 
@@ -26,44 +32,58 @@ EXPECTED_AGENTS: dict[str, dict] = {
     "orchestrator": {
         "description": "Routes tasks to specialist agents and plans work",
         "role": "builder",
-        "tools": ["delegation", "filesystem", "ask_user", "kanban"],
+        "tools": ["delegation", "filesystem", "ask_user", "kanban", "terminal"],
         "skills": ["kanban-md", "kanban-based-development"],
         "max_delegation_depth": 5,
     },
-    "coder": {
+    "kanban-planner": {
+        "description": "Entry gate for all task creation + feature decomposition",
+        "role": "builder",
+        "tools": ["filesystem", "ask_user", "kanban"],
+        "skills": ["kanban-md", "kanban-based-development", "project-definition"],
+        "max_delegation_depth": 3,
+    },
+    "builder": {
         "description": "Implements code using TDD workflow",
         "role": "builder",
         "tools": ["filesystem", "terminal"],
-        "skills": ["kanban-md"],
+        "skills": ["kanban-md", "tdd-workflow"],
         "max_delegation_depth": 2,
+    },
+    "researcher": {
+        "description": "Investigates topics and produces structured findings",
+        "role": "builder",
+        "tools": ["filesystem", "browser", "web_search", "knowledge", "ask_user"],
+        "skills": [],
+        "max_delegation_depth": 1,
+    },
+    "architect": {
+        "description": "Review researched tasks, refine AC, approve for development",
+        "role": "validator",
+        "tools": ["filesystem", "kanban", "ask_user"],
+        "skills": ["kanban-md"],
+        "max_delegation_depth": 1,
     },
     "reviewer": {
         "description": "Read-only quality verification of code and tests",
         "role": "validator",
         "tools": ["filesystem", "terminal"],
-        "skills": ["kanban-md"],
+        "skills": ["kanban-md", "code-review"],
         "max_delegation_depth": 0,
-    },
-    "researcher": {
-        "description": "Investigates topics and produces structured findings",
-        "role": "validator",
-        "tools": ["filesystem", "browser"],
-        "skills": [],
-        "max_delegation_depth": 1,
     },
     "writer": {
         "description": "Verifies and updates documentation",
         "role": "builder",
-        "tools": ["filesystem"],
-        "skills": ["kanban-md"],
+        "tools": ["filesystem", "terminal"],
+        "skills": ["kanban-md", "docs-gate"],
         "max_delegation_depth": 0,
     },
-    "planner": {
-        "description": "Decomposes ideas into structured project plans",
-        "role": "builder",
-        "tools": ["filesystem", "ask_user", "delegation", "knowledge", "web_search"],
-        "skills": ["kanban-md", "kanban-based-development", "project-definition"],
-        "max_delegation_depth": 3,
+    "closer": {
+        "description": "Verify done tasks, archive confirmed, commit + push",
+        "role": "validator",
+        "tools": ["filesystem", "terminal", "kanban", "ask_user"],
+        "skills": ["kanban-md", "task-verification"],
+        "max_delegation_depth": 0,
     },
 }
 
@@ -110,9 +130,9 @@ class TestAgentDefinitionFiles:
 
 
 class TestRegistryScanAgentsDir:
-    """AgentRegistry.scan() on agents dir loads all 6 definitions."""
+    """AgentRegistry.scan() on agents dir loads all 8 definitions."""
 
-    def test_scan_loads_all_six(self) -> None:
+    def test_scan_loads_all_eight(self) -> None:
         from pydantic_ai.toolsets import FunctionToolset
 
         registry = AgentRegistry(
@@ -121,10 +141,10 @@ class TestRegistryScanAgentsDir:
             default_model="test",
         )
         registry.scan()
-        assert len(registry.definitions) == 6
+        assert len(registry.definitions) == 8
         assert set(registry.definitions) == set(EXPECTED_AGENTS)
 
-    def test_get_planner_returns_agent_with_resolved_tools(self) -> None:
+    def test_get_kanban_planner_returns_agent_with_resolved_tools(self) -> None:
         from pydantic_ai import Agent
         from pydantic_ai.toolsets import FunctionToolset
 
@@ -140,11 +160,13 @@ class TestRegistryScanAgentsDir:
             default_model="test",
         )
         registry.scan()
-        agent = registry.get("planner")
+        agent = registry.get("kanban-planner")
 
         assert isinstance(agent, Agent)
         assert sorted(resolved_tools) == [
-            "ask_user", "delegation", "filesystem", "knowledge", "web_search",
+            "ask_user",
+            "filesystem",
+            "kanban",
         ]
 
 
@@ -161,11 +183,18 @@ class TestRoleValues:
         defn = parse_agent_definition(AGENTS_DIR / "reviewer.md")
         assert AgentRole(defn.role) is AgentRole.VALIDATOR
 
-    def test_researcher_is_validator(self) -> None:
-        defn = parse_agent_definition(AGENTS_DIR / "researcher.md")
+    def test_architect_is_validator(self) -> None:
+        defn = parse_agent_definition(AGENTS_DIR / "architect.md")
         assert AgentRole(defn.role) is AgentRole.VALIDATOR
 
-    @pytest.mark.parametrize("agent_name", ["orchestrator", "coder", "writer", "planner"])
+    def test_closer_is_validator(self) -> None:
+        defn = parse_agent_definition(AGENTS_DIR / "closer.md")
+        assert AgentRole(defn.role) is AgentRole.VALIDATOR
+
+    @pytest.mark.parametrize(
+        "agent_name",
+        ["orchestrator", "kanban-planner", "builder", "researcher", "writer"],
+    )
     def test_builders(self, agent_name: str) -> None:
         defn = parse_agent_definition(AGENTS_DIR / f"{agent_name}.md")
         assert AgentRole(defn.role) is AgentRole.BUILDER

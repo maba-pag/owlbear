@@ -274,6 +274,38 @@ class TestBuildAgentRegistry:
         # scan() should have been called — definitions dict is populated (empty is ok)
         assert hasattr(registry, "_definitions")
 
+    def test_passes_model_to_registry(self, tmp_path: Path) -> None:
+        """build_agent_registry propagates model kwarg to AgentRegistry."""
+        from pydantic_ai.models.function import FunctionModel
+
+        from owlbear.bootstrap import build_agent_registry
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        settings = OwlBearSettings(agents_dir=agents_dir)
+        fn_model = FunctionModel(lambda _messages, _info: "ok")
+        registry = build_agent_registry(
+            settings,
+            toolsets=[],
+            mcp_registry=None,
+            model=fn_model,
+        )
+        assert registry._default_model is fn_model
+
+    def test_defaults_to_settings_chat_model(self, tmp_path: Path) -> None:
+        """When model is None, falls back to settings.chat_model."""
+        from owlbear.bootstrap import build_agent_registry
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        settings = OwlBearSettings(agents_dir=agents_dir, chat_model="claude-3-opus")
+        registry = build_agent_registry(
+            settings,
+            toolsets=[],
+            mcp_registry=None,
+        )
+        assert registry._default_model == "claude-3-opus"
+
 
 # ---------------------------------------------------------------------------
 # bootstrap (integration-level unit test)
@@ -461,6 +493,7 @@ class TestBootstrapWithSkillsDir:
             result = await bootstrap(settings, workspace_root=tmp_path)
 
         assert result.agent is not None
+
 
 # ---------------------------------------------------------------------------
 # build_hooks — ProgressReporter wiring
@@ -888,7 +921,8 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_workspace_root_from_active_project(
-        self, project_config: tuple[Path, Path, Project],
+        self,
+        project_config: tuple[Path, Path, Project],
     ) -> None:
         """AC#2: workspace_root = project.workspace_path when project active."""
         from owlbear.bootstrap import bootstrap
@@ -914,7 +948,8 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_session_path_under_project(
-        self, project_config: tuple[Path, Path, Project],
+        self,
+        project_config: tuple[Path, Path, Project],
     ) -> None:
         """AC#4: SessionStore path = config_dir/projects/{id}/sessions/session.jsonl."""
         from owlbear.bootstrap import bootstrap
@@ -939,7 +974,8 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_toolsets_receive_project_workspace(
-        self, project_config: tuple[Path, Path, Project],
+        self,
+        project_config: tuple[Path, Path, Project],
     ) -> None:
         """AC#3: FileToolset, TerminalToolset, KanbanToolset receive project workspace."""
         from owlbear.bootstrap import bootstrap
@@ -965,7 +1001,8 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_project_toolset_added_when_project_active(
-        self, project_config: tuple[Path, Path, Project],
+        self,
+        project_config: tuple[Path, Path, Project],
     ) -> None:
         """AC#7: ProjectToolset added to toolsets when ProjectStore available."""
         from owlbear.bootstrap import bootstrap
@@ -1026,7 +1063,9 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_explicit_workspace_root_overrides_project(
-        self, tmp_path: Path, project_config: tuple[Path, Path, Project],
+        self,
+        tmp_path: Path,
+        project_config: tuple[Path, Path, Project],
     ) -> None:
         """When workspace_root is passed explicitly, it takes precedence."""
         from owlbear.bootstrap import bootstrap
@@ -1055,7 +1094,8 @@ class TestBootstrapProjectAwareness:
 
     @pytest.mark.asyncio
     async def test_no_project_toolset_when_no_active_project(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """AC#7: ProjectToolset not added when no active project."""
         from owlbear.bootstrap import bootstrap
@@ -1100,7 +1140,7 @@ class TestBuildKnowledgeToolset:
 
     def test_returns_toolset_on_success(self, tmp_path: Path) -> None:
         """AC#3: _build_knowledge_toolset returns a valid toolset."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1113,7 +1153,9 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path)
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
         toolset, _ = result
@@ -1121,7 +1163,7 @@ class TestBuildKnowledgeToolset:
 
     def test_passes_project_scope_when_provided(self, tmp_path: Path) -> None:
         """When project_id is passed, KnowledgeToolset receives project_scope."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1134,7 +1176,9 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path, project_id="proj-42")
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
 
         assert result is not None
         toolset, _ = result
@@ -1142,7 +1186,7 @@ class TestBuildKnowledgeToolset:
 
     def test_no_project_scope_when_none(self, tmp_path: Path) -> None:
         """When no project_id, KnowledgeToolset has no scope filter."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1155,7 +1199,9 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path)
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
         toolset, _ = result
@@ -1170,16 +1216,30 @@ class TestBuildToolsetsProjectScope:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
+        mock_infra = MagicMock()
 
-        with patch(
-            "owlbear.bootstrap._build_knowledge_toolset",
-        ) as mock_build_kt:
+        with (
+            patch(
+                "owlbear.bootstrap._build_knowledge_infra",
+                return_value=mock_infra,
+            ),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+            ) as mock_build_kt,
+        ):
             mock_build_kt.return_value = None
             build_toolsets(
-                settings, tmp_path, hooks, channel, active_project_id="proj-99",
+                settings,
+                tmp_path,
+                hooks,
+                channel,
+                active_project_id="proj-99",
             )
             mock_build_kt.assert_called_once_with(
-                tmp_path, project_id="proj-99", chat_model="gpt-4o",
+                tmp_path,
+                mock_infra,
+                project_id="proj-99",
+                chat_model="gpt-4o",
                 max_tokens=2000,
                 knowledge_graph_expansion=True,
                 inter_doc_graph_building=False,
@@ -1196,7 +1256,7 @@ class TestBuildKnowledgeToolsetReturnsService:
 
     def test_returns_tuple_with_service(self, tmp_path: Path) -> None:
         """_build_knowledge_toolset returns (KnowledgeToolset, KnowledgeQueryService)."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1209,7 +1269,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path)
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
         assert isinstance(result, tuple)
@@ -1220,7 +1282,7 @@ class TestBuildKnowledgeToolsetReturnsService:
 
     def test_service_receives_project_scopes(self, tmp_path: Path) -> None:
         """KnowledgeQueryService gets same scopes as KnowledgeToolset."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1233,7 +1295,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path, project_id="proj-42")
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
 
         assert result is not None
         _, service = result
@@ -1241,7 +1305,7 @@ class TestBuildKnowledgeToolsetReturnsService:
 
     def test_service_no_scopes_when_no_project(self, tmp_path: Path) -> None:
         """No scopes when project_id is None."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1254,7 +1318,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path)
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
         _, service = result
@@ -1262,7 +1328,7 @@ class TestBuildKnowledgeToolsetReturnsService:
 
     def test_max_tokens_stored_on_service(self, tmp_path: Path) -> None:
         """knowledge_context_tokens flows to service.default_max_tokens."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
@@ -1275,7 +1341,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_toolset(tmp_path, max_tokens=3000)
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra, max_tokens=3000)
 
         assert result is not None
         _, service = result
@@ -1283,14 +1351,10 @@ class TestBuildKnowledgeToolsetReturnsService:
 
     def test_returns_none_on_failure(self, tmp_path: Path) -> None:
         """When knowledge subsystem fails, returns None (unchanged)."""
-        from owlbear.bootstrap import _build_knowledge_toolset
+        from owlbear.bootstrap import _build_knowledge_infra
 
-        with patch(
-            "owlbear.memory.knowledge.qdrant.QdrantClient",
-            side_effect=RuntimeError("boom"),
-        ):
-            result = _build_knowledge_toolset(tmp_path)
-
+        result = _build_knowledge_infra(tmp_path)
+        # Without proper mocks, infra creation fails → None
         assert result is None
 
 
@@ -1393,9 +1457,16 @@ class TestBuildToolsetsKnowledgeService:
 
         mock_service = MagicMock()
         mock_toolset = MagicMock()
-        with patch(
-            "owlbear.bootstrap._build_knowledge_toolset",
-            return_value=(mock_toolset, mock_service),
+        mock_infra = MagicMock()
+        with (
+            patch(
+                "owlbear.bootstrap._build_knowledge_infra",
+                return_value=mock_infra,
+            ),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=(mock_toolset, mock_service),
+            ),
         ):
             result = build_toolsets(settings, tmp_path, hooks, channel)
 
@@ -1406,13 +1477,13 @@ class TestBuildToolsetsKnowledgeService:
         assert service is mock_service
 
     def test_knowledge_service_none_when_unavailable(self, tmp_path: Path) -> None:
-        """When knowledge build fails, service is None."""
+        """When knowledge infra fails, service is None."""
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
 
         with patch(
-            "owlbear.bootstrap._build_knowledge_toolset",
+            "owlbear.bootstrap._build_knowledge_infra",
             return_value=None,
         ):
             toolsets, service = build_toolsets(settings, tmp_path, hooks, channel)
@@ -1425,15 +1496,25 @@ class TestBuildToolsetsKnowledgeService:
         settings = OwlBearSettings(knowledge_context_tokens=5000, approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
+        mock_infra = MagicMock()
 
-        with patch(
-            "owlbear.bootstrap._build_knowledge_toolset",
-            return_value=None,
-        ) as mock_build:
+        with (
+            patch(
+                "owlbear.bootstrap._build_knowledge_infra",
+                return_value=mock_infra,
+            ),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=None,
+            ) as mock_build,
+        ):
             build_toolsets(settings, tmp_path, hooks, channel)
 
         mock_build.assert_called_once_with(
-            tmp_path, project_id=None, chat_model="gpt-4o",
+            tmp_path,
+            mock_infra,
+            project_id=None,
+            chat_model="gpt-4o",
             max_tokens=5000,
             knowledge_graph_expansion=True,
             inter_doc_graph_building=False,
@@ -1493,3 +1574,245 @@ class TestBootstrapKnowledgeServiceWiring:
             result = await bootstrap(settings, workspace_root=tmp_path)
 
         assert result.agent._knowledge_service is None
+
+
+# ---------------------------------------------------------------------------
+# Shared knowledge infrastructure — AC for task #455
+# ---------------------------------------------------------------------------
+
+
+class TestKnowledgeInfra:
+    """Verify _KnowledgeInfra dataclass and _build_knowledge_infra function."""
+
+    def test_knowledge_infra_dataclass_exists(self) -> None:
+        """_KnowledgeInfra is importable from bootstrap."""
+        from owlbear.bootstrap import _KnowledgeInfra
+
+        assert hasattr(_KnowledgeInfra, "__dataclass_fields__")
+
+    def test_knowledge_infra_has_expected_fields(self) -> None:
+        """_KnowledgeInfra has all shared infrastructure fields."""
+        from owlbear.bootstrap import _KnowledgeInfra
+
+        fields = set(_KnowledgeInfra.__dataclass_fields__)
+        assert fields == {
+            "conn",
+            "graph_store",
+            "vector_store",
+            "embedding_provider",
+            "entity_extractor",
+            "text_chunker",
+        }
+
+    def test_build_knowledge_infra_returns_infra(self, tmp_path: Path) -> None:
+        """_build_knowledge_infra returns a _KnowledgeInfra on success."""
+        from owlbear.bootstrap import _build_knowledge_infra, _KnowledgeInfra
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            result = _build_knowledge_infra(tmp_path)
+
+        assert result is not None
+        assert isinstance(result, _KnowledgeInfra)
+
+    def test_build_knowledge_infra_returns_none_on_failure(self, tmp_path: Path) -> None:
+        """_build_knowledge_infra returns None when creation fails."""
+        from owlbear.bootstrap import _build_knowledge_infra
+
+        with patch(
+            "owlbear.memory.knowledge.qdrant.QdrantClient",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = _build_knowledge_infra(tmp_path)
+
+        assert result is None
+
+
+class TestSharedKnowledgeInfra:
+    """AC: build_toolsets() creates shared knowledge infrastructure once."""
+
+    def test_qdrant_created_once_in_build_toolsets(self, tmp_path: Path) -> None:
+        """QdrantVectorStore constructor called exactly once (not twice)."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient") as mock_qc,
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        assert mock_qc.call_count == 1
+
+    def test_embedding_provider_created_once(self, tmp_path: Path) -> None:
+        """BgeM3EmbeddingProvider constructor called exactly once."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ) as mock_bge,
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        assert mock_bge.call_count == 1
+
+    def test_both_toolsets_created(self, tmp_path: Path) -> None:
+        """Both KnowledgeToolset and BookmarkToolset appear in toolsets."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+
+        type_names = [_inner_name(ts) for ts in toolsets]
+        assert "KnowledgeToolset" in type_names
+        assert "BookmarkToolset" in type_names
+
+    def test_no_bookmark_warning_logged(self, tmp_path: Path) -> None:
+        """No 'Failed to create BookmarkToolset' warning when infra shared."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+            patch("owlbear.bootstrap.logger") as mock_logger,
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        for call in mock_logger.warning.call_args_list:
+            assert "Failed to create BookmarkToolset" not in str(call)
+
+    def test_knowledge_toolset_accepts_infra_param(self, tmp_path: Path) -> None:
+        """_build_knowledge_toolset accepts _KnowledgeInfra parameter."""
+        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_knowledge_toolset(tmp_path, infra)
+
+        assert result is not None
+        toolset, service = result
+        assert type(toolset).__name__ == "KnowledgeToolset"
+        assert type(service).__name__ == "KnowledgeQueryService"
+
+    def test_bookmark_toolset_accepts_infra_param(self, tmp_path: Path) -> None:
+        """_build_bookmark_toolset accepts _KnowledgeInfra parameter."""
+        from owlbear.bootstrap import _build_bookmark_toolset, _build_knowledge_infra
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            infra = _build_knowledge_infra(tmp_path)
+            assert infra is not None
+            result = _build_bookmark_toolset(infra)
+
+        assert result is not None
+        assert type(result).__name__ == "BookmarkToolset"
+
+    def test_shared_object_identity(self, tmp_path: Path) -> None:
+        """Knowledge and bookmark builders receive the same infra objects."""
+        from owlbear.bootstrap import _build_knowledge_infra
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            infra = _build_knowledge_infra(tmp_path)
+
+        assert infra is not None
+        # All fields are the same object — identity, not equality
+        assert infra.vector_store is infra.vector_store  # sanity
+        assert infra.embedding_provider is infra.embedding_provider
+        assert infra.conn is infra.conn
