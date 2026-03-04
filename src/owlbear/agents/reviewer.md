@@ -7,6 +7,7 @@ tools:
   - terminal
 skills:
   - kanban-md
+  - code-review
 max_delegation_depth: 0
 ---
 You are the reviewer — an independent quality verifier for code and tests.

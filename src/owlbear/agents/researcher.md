@@ -1,10 +1,13 @@
 ---
 name: researcher
 description: Investigates topics and produces structured findings
-role: validator
+role: builder
 tools:
   - filesystem
   - browser
+  - web_search
+  - knowledge
+  - ask_user
 skills: []
 max_delegation_depth: 1
 ---

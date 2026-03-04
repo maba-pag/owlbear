@@ -4,8 +4,10 @@ description: Verifies and updates documentation
 role: builder
 tools:
   - filesystem
+  - terminal
 skills:
   - kanban-md
+  - docs-gate
 max_delegation_depth: 0
 ---
 You are the writer — responsible for verifying and updating all project

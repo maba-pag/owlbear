@@ -47,6 +47,7 @@ from owlbear.tools.mcp_servers import register_default_servers
 from owlbear.tools.terminal import TerminalToolset
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Callable
     from pathlib import Path
 
@@ -56,6 +57,11 @@ if TYPE_CHECKING:
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.progress import ProgressReporter
+    from owlbear.memory.knowledge.chunker import TextChunker
+    from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider
+    from owlbear.memory.knowledge.extractor import EntityExtractor
+    from owlbear.memory.knowledge.graph import GraphStore
+    from owlbear.memory.knowledge.qdrant import QdrantVectorStore
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.projects.models import Project
     from owlbear.skills.registry import SkillRegistry
@@ -242,42 +248,42 @@ def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugi
 # ---------------------------------------------------------------------------
 
 
-def _build_knowledge_toolset(  # noqa: PLR0913
+@dataclass
+class _KnowledgeInfra:
+    """Shared infrastructure objects for knowledge and bookmark toolsets.
+
+    Created once by :func:`_build_knowledge_infra` and passed to both
+    :func:`_build_knowledge_toolset` and :func:`_build_bookmark_toolset`
+    to avoid duplicate Qdrant clients (which would cause lock errors).
+    """
+
+    conn: sqlite3.Connection
+    graph_store: GraphStore
+    vector_store: QdrantVectorStore
+    embedding_provider: BgeM3EmbeddingProvider
+    entity_extractor: EntityExtractor
+    text_chunker: TextChunker
+
+
+def _build_knowledge_infra(
     workspace: Path,
-    project_id: str | None = None,
-    *,
     chat_model: str | Model = "gpt-4o",
-    max_tokens: int = 2000,
-    knowledge_graph_expansion: bool = True,
-    inter_doc_graph_building: bool = False,
-) -> tuple[AbstractToolset, KnowledgeQueryService] | None:
-    """Create a :class:`KnowledgeToolset` and :class:`KnowledgeQueryService`.
+) -> _KnowledgeInfra | None:
+    """Create shared knowledge infrastructure objects once.
 
     Args:
         workspace: Root directory for knowledge DB and vector store.
-        project_id: Optional active project ID.  When set, both the toolset
-            and service scope queries to ``["global", "project:{id}"]``.
         chat_model: Model identifier or PydanticAI ``Model`` instance for
-            agents used by :class:`EntityExtractor` and
-            :class:`InterDocGraphBuilder`.
-        max_tokens: Default token budget stored on the service as
-            ``default_max_tokens`` for per-turn context injection.
-        knowledge_graph_expansion: When ``True``, creates a
-            :class:`GraphAugmentedRetriever` and passes it to the service.
-        inter_doc_graph_building: When ``True``, creates an
-            :class:`InterDocGraphBuilder` and passes it to the
-            :class:`IngestPipeline` for cross-document relationship inference.
+            agents used by :class:`EntityExtractor`.
 
-    Returns ``None`` when the knowledge subsystem cannot be initialised
-    (e.g. missing DB, unavailable model).  All failures are logged at
-    ``WARNING`` and silently swallowed.
+    Returns ``None`` when the knowledge subsystem cannot be initialised.
+    All failures are logged at ``WARNING`` and silently swallowed.
     """
     try:
         import sqlite3  # noqa: PLC0415
 
         from owlbear.memory.knowledge import (  # noqa: PLC0415
             GraphStore,
-            IngestPipeline,
             TextChunker,
             init_db,
         )
@@ -286,10 +292,6 @@ def _build_knowledge_toolset(  # noqa: PLR0913
         )
         from owlbear.memory.knowledge.extractor import EntityExtractor  # noqa: PLC0415
         from owlbear.memory.knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
-        from owlbear.memory.knowledge.query_service import (  # noqa: PLC0415
-            KnowledgeQueryService,
-        )
-        from owlbear.tools.knowledge import KnowledgeToolset  # noqa: PLC0415
 
         owlbear_dir = workspace / ".owlbear"
         owlbear_dir.mkdir(parents=True, exist_ok=True)
@@ -304,6 +306,57 @@ def _build_knowledge_toolset(  # noqa: PLR0913
         entity_extractor = EntityExtractor(model=chat_model)
         text_chunker = TextChunker()
 
+        return _KnowledgeInfra(
+            conn=conn,
+            graph_store=graph_store,
+            vector_store=vector_store,
+            embedding_provider=embedding_provider,
+            entity_extractor=entity_extractor,
+            text_chunker=text_chunker,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create knowledge infrastructure", exc_info=True)
+        return None
+
+
+def _build_knowledge_toolset(  # noqa: PLR0913
+    workspace: Path,
+    infra: _KnowledgeInfra,
+    project_id: str | None = None,
+    *,
+    chat_model: str | Model = "gpt-4o",
+    max_tokens: int = 2000,
+    knowledge_graph_expansion: bool = True,
+    inter_doc_graph_building: bool = False,
+) -> tuple[AbstractToolset, KnowledgeQueryService] | None:
+    """Create a :class:`KnowledgeToolset` and :class:`KnowledgeQueryService`.
+
+    Args:
+        workspace: Root directory for knowledge DB and vector store.
+        infra: Shared knowledge infrastructure (DB, vector store, embeddings).
+        project_id: Optional active project ID.  When set, both the toolset
+            and service scope queries to ``["global", "project:{id}"]``.
+        chat_model: Model identifier or PydanticAI ``Model`` instance for
+            agents used by :class:`InterDocGraphBuilder`.
+        max_tokens: Default token budget stored on the service as
+            ``default_max_tokens`` for per-turn context injection.
+        knowledge_graph_expansion: When ``True``, creates a
+            :class:`GraphAugmentedRetriever` and passes it to the service.
+        inter_doc_graph_building: When ``True``, creates an
+            :class:`InterDocGraphBuilder` and passes it to the
+            :class:`IngestPipeline` for cross-document relationship inference.
+
+    Returns ``None`` when the knowledge subsystem cannot be initialised
+    (e.g. missing DB, unavailable model).  All failures are logged at
+    ``WARNING`` and silently swallowed.
+    """
+    try:
+        from owlbear.memory.knowledge import IngestPipeline  # noqa: PLC0415
+        from owlbear.memory.knowledge.query_service import (  # noqa: PLC0415
+            KnowledgeQueryService,
+        )
+        from owlbear.tools.knowledge import KnowledgeToolset  # noqa: PLC0415
+
         # Build optional inter-document graph builder.
         inter_doc_builder = None
         if inter_doc_graph_building:
@@ -313,17 +366,17 @@ def _build_knowledge_toolset(  # noqa: PLR0913
 
             inter_doc_builder = InterDocGraphBuilder(
                 model=chat_model,
-                vector_store=vector_store,
-                graph_store=graph_store,
+                vector_store=infra.vector_store,
+                graph_store=infra.graph_store,
             )
 
         ingest_pipeline = IngestPipeline(
-            conn=conn,
-            graph_store=graph_store,
-            vector_store=vector_store,
-            embedding_provider=embedding_provider,
-            entity_extractor=entity_extractor,
-            text_chunker=text_chunker,
+            conn=infra.conn,
+            graph_store=infra.graph_store,
+            vector_store=infra.vector_store,
+            embedding_provider=infra.embedding_provider,
+            entity_extractor=infra.entity_extractor,
+            text_chunker=infra.text_chunker,
             inter_doc_builder=inter_doc_builder,
         )
 
@@ -339,15 +392,15 @@ def _build_knowledge_toolset(  # noqa: PLR0913
             )
 
             retriever = GraphAugmentedRetriever(
-                vector_store=vector_store,
-                graph_store=graph_store,
-                embedding_provider=embedding_provider,
+                vector_store=infra.vector_store,
+                graph_store=infra.graph_store,
+                embedding_provider=infra.embedding_provider,
             )
 
         service = KnowledgeQueryService(
-            vector_store=vector_store,
-            graph_store=graph_store,
-            embedding_provider=embedding_provider,
+            vector_store=infra.vector_store,
+            graph_store=infra.graph_store,
+            embedding_provider=infra.embedding_provider,
             scopes=scopes,
             retriever=retriever,
         )
@@ -355,9 +408,9 @@ def _build_knowledge_toolset(  # noqa: PLR0913
 
         toolset = KnowledgeToolset(
             workspace_root=workspace,
-            vector_store=vector_store,
-            graph_store=graph_store,
-            embedding_provider=embedding_provider,
+            vector_store=infra.vector_store,
+            graph_store=infra.graph_store,
+            embedding_provider=infra.embedding_provider,
             ingest_pipeline=ingest_pipeline,
             project_scope=project_id,
         )
@@ -368,58 +421,40 @@ def _build_knowledge_toolset(  # noqa: PLR0913
 
 
 def _build_bookmark_toolset(
-    workspace: Path,
+    infra: _KnowledgeInfra,
     chat_model: str | Model = "gpt-4o",
     ingest_threshold: float = 0.7,
 ) -> AbstractToolset | None:
     """Create a :class:`BookmarkToolset` backed by the knowledge DB.
 
+    Args:
+        infra: Shared knowledge infrastructure (DB, vector store, embeddings).
+        chat_model: Model identifier or PydanticAI ``Model`` for the evaluator.
+        ingest_threshold: Minimum relevance score to auto-ingest a bookmark.
+
     Returns ``None`` when the bookmark subsystem cannot be initialised.
     All failures are logged at ``WARNING`` and silently swallowed.
     """
     try:
-        import sqlite3  # noqa: PLC0415
-
         from owlbear.memory.knowledge import (  # noqa: PLC0415
             BookmarkStore,
             IngestPipeline,
-            TextChunker,
-            init_db,
         )
         from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline  # noqa: PLC0415
         from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset  # noqa: PLC0415
-        from owlbear.memory.knowledge.embeddings import (  # noqa: PLC0415
-            BgeM3EmbeddingProvider,
-        )
         from owlbear.memory.knowledge.evaluator import SourceEvaluator  # noqa: PLC0415
-        from owlbear.memory.knowledge.extractor import EntityExtractor  # noqa: PLC0415
-        from owlbear.memory.knowledge.graph import GraphStore  # noqa: PLC0415
-        from owlbear.memory.knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
 
-        owlbear_dir = workspace / ".owlbear"
-        owlbear_dir.mkdir(parents=True, exist_ok=True)
-        db_path = owlbear_dir / "knowledge.db"
-
-        conn = sqlite3.connect(str(db_path))
-        init_db(conn)
-
-        bookmark_store = BookmarkStore(conn)
+        bookmark_store = BookmarkStore(infra.conn)
         evaluator = SourceEvaluator(model=chat_model)
 
-        # Build a lightweight ingest pipeline for bookmarks.
-        graph_store = GraphStore(conn)
-        embedding_provider = BgeM3EmbeddingProvider()
-        vector_store = QdrantVectorStore(location=str(owlbear_dir / "qdrant"))
-        entity_extractor = EntityExtractor(model=chat_model)
-        text_chunker = TextChunker()
-
+        # Build a lightweight ingest pipeline for bookmarks (no inter_doc_builder).
         ingest_pipeline = IngestPipeline(
-            conn=conn,
-            graph_store=graph_store,
-            vector_store=vector_store,
-            embedding_provider=embedding_provider,
-            entity_extractor=entity_extractor,
-            text_chunker=text_chunker,
+            conn=infra.conn,
+            graph_store=infra.graph_store,
+            vector_store=infra.vector_store,
+            embedding_provider=infra.embedding_provider,
+            entity_extractor=infra.entity_extractor,
+            text_chunker=infra.text_chunker,
         )
 
         pipeline = BookmarkPipeline(
@@ -551,27 +586,35 @@ def build_toolsets(  # noqa: PLR0913, C901
         except Exception:  # noqa: BLE001
             logger.warning("Failed to create GitHubToolset", exc_info=True)
 
-    # Knowledge toolset — conditional on knowledge components being available
+    # Knowledge infrastructure — shared between knowledge and bookmark toolsets
     knowledge_service: KnowledgeQueryService | None = None
-    knowledge_result = _build_knowledge_toolset(
+    infra = _build_knowledge_infra(
         workspace,
-        project_id=active_project_id,
         chat_model=chat_model or settings.chat_model,
-        max_tokens=settings.knowledge_context_tokens,
-        knowledge_graph_expansion=settings.knowledge_graph_expansion,
-        inter_doc_graph_building=settings.inter_doc_graph_building,
     )
-    if knowledge_result is not None:
-        knowledge_ts, knowledge_service = knowledge_result
-        raw.append(knowledge_ts)
 
-    # Bookmark toolset — conditional on knowledge components being available
-    bookmark_ts = _build_bookmark_toolset(
-        workspace,
-        chat_model=chat_model or settings.chat_model,
-    )
-    if bookmark_ts is not None:
-        raw.append(bookmark_ts)
+    if infra is not None:
+        # Knowledge toolset
+        knowledge_result = _build_knowledge_toolset(
+            workspace,
+            infra,
+            project_id=active_project_id,
+            chat_model=chat_model or settings.chat_model,
+            max_tokens=settings.knowledge_context_tokens,
+            knowledge_graph_expansion=settings.knowledge_graph_expansion,
+            inter_doc_graph_building=settings.inter_doc_graph_building,
+        )
+        if knowledge_result is not None:
+            knowledge_ts, knowledge_service = knowledge_result
+            raw.append(knowledge_ts)
+
+        # Bookmark toolset — shares infrastructure with knowledge
+        bookmark_ts = _build_bookmark_toolset(
+            infra,
+            chat_model=chat_model or settings.chat_model,
+        )
+        if bookmark_ts is not None:
+            raw.append(bookmark_ts)
 
     # Web search toolset — conditional on duckduckgo_search availability
     web_ts = _build_web_search_toolset()
@@ -656,6 +699,7 @@ def build_agent_registry(
     toolsets: list[AbstractToolset],
     mcp_registry: MCPServerRegistry | None,
     skill_registry: SkillRegistry | None = None,
+    model: str | Model | None = None,
 ) -> AgentRegistry:
     """Build and scan the :class:`AgentRegistry`.
 
@@ -664,6 +708,8 @@ def build_agent_registry(
         toolsets: Full toolset list for building the tool resolver.
         mcp_registry: Optional MCP registry for ``mcp:`` prefixed tools.
         skill_registry: Optional :class:`SkillRegistry` instance.
+        model: Default model for agents.  Falls back to
+            ``settings.chat_model`` when *None*.
 
     Returns:
         Scanned :class:`AgentRegistry`.
@@ -702,10 +748,13 @@ def build_agent_registry(
         msg = f"Unknown tool: {name!r}"
         raise KeyError(msg)
 
+    default_model = model if model is not None else settings.chat_model
+
     registry = AgentRegistry(
         agents_dir=settings.agents_dir,
         tool_resolver=_resolve,
         skill_registry=skill_registry,
+        default_model=default_model,
         mcp_registry=mcp_registry,
     )
     registry.scan()
@@ -851,7 +900,7 @@ async def bootstrap(
             skill_reg = inner
             break
 
-    agent_registry = build_agent_registry(settings, toolsets, mcp_registry, skill_reg)
+    agent_registry = build_agent_registry(settings, toolsets, mcp_registry, skill_reg, model=model)
 
     # 7. Session, context, tracker
     if active_project is not None:

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from pydantic_ai.models import Model
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
     from owlbear.core.deps import OwlBearDeps
@@ -50,8 +51,8 @@ class AgentRegistry:
         tool_resolver: Callback mapping tool name strings to
             :class:`AbstractToolset` instances.
         skill_registry: Optional :class:`SkillRegistry` for skill toolsets.
-        default_model: Model name used when an agent definition specifies
-            ``model: null``.
+        default_model: Model name or :class:`Model` instance used when an
+            agent definition specifies ``model: null``.
         mcp_registry: Optional :class:`MCPServerRegistry` for resolving
             ``mcp:<name>`` tool references.
     """
@@ -61,7 +62,7 @@ class AgentRegistry:
         agents_dir: Path,
         tool_resolver: Callable[[str], AbstractToolset],
         skill_registry: SkillRegistry | None = None,
-        default_model: str = "gpt-4o",
+        default_model: str | Model = "gpt-4o",
         mcp_registry: MCPServerRegistry | None = None,
     ) -> None:
         self._agents_dir = agents_dir
