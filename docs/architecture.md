@@ -1,9 +1,9 @@
 # OwlBear Architecture
 
-> **Version:** 0.2 (post-implementation audit)
-> **Date:** 2026-02-28
-> **Previous:** v0.1 (2026-02-26, pre-implementation)
-> **Based on:** Full code audit of all ~50 modules, [agent-patterns-research.md](agent-patterns-research.md), [daemon-bootstrap-research.md](daemon-bootstrap-research.md)
+> **Version:** 0.3 (codebase-aligned rewrite)
+> **Date:** 2026-03-06
+> **Previous:** v0.2 (2026-02-28, post-implementation audit)
+> **Based on:** Full code audit of all modules, bootstrap.py wiring verification, [architecture-rewrite-research.md](architecture-rewrite-research.md)
 
 ## 1. Vision
 
@@ -48,17 +48,17 @@ OwlBear is an always-on, laptop-resident AI development system. The user describ
 │ │Toolsets│ │  Hooks   │ │  Skills   │ │  Memory  │ │Agent Registry│        │
 │ │        │ │          │ │           │ │          │ │+ Delegation  │        │
 │ │File    │ │Command   │ │Progressive│ │Session   │ │              │        │
-│ │Terminal│ │  Guard   │ │ loading   │ │ (JSONL)  │ │5 agent defs  │        │
-│ │AskUser │ │Lint      │ │           │ │Context   │ │(coder,       │        │
-│ │GitHub  │ │Context   │ │           │ │ (.md)    │ │orchestrator, │        │
-│ │Git     │ │Notify    │ │           │ │Usage     │ │researcher,   │        │
-│ │Browser │ │Observe   │ │           │ │ tracker  │ │reviewer,     │        │
-│ │MCP     │ │Subagent  │ │           │ │          │ │writer)       │        │
-│ │Hooked  │ │Test      │ │           │ │Knowledge │ │              │        │
-│ └────────┘ └──────────┘ └───────────┘ │ pipeline │ └──────────────┘        │
-│                                        │(not wired│                         │
-│                                        │  yet)    │                         │
-│                                        └──────────┘                         │
+│ │Terminal│ │  Guard   │ │ loading   │ │ (JSONL)  │ │8 agent defs  │        │
+│ │AskUser │ │Lint      │ │           │ │Context   │ │(architect,   │        │
+│ │GitHub  │ │Context   │ │           │ │ (.md)    │ │builder,      │        │
+│ │Git     │ │Notify    │ │           │ │Usage     │ │closer,       │        │
+│ │Browser │ │Observe   │ │           │ │ tracker  │ │kanban-planner│        │
+│ │Kanban  │ │Subagent  │ │           │ │          │ │orchestrator, │        │
+│ │Knowledge│ │Test      │ │           │ │Knowledge │ │researcher,   │        │
+│ │Web     │ │Screenshot│ │           │ │ pipeline │ │reviewer,     │        │
+│ │MCP     │ │Escalation│ │           │ │          │ │writer)       │        │
+│ │Hooked  │ │Progress  │ │           │ │          │ │              │        │
+│ └────────┘ └──────────┘ └───────────┘ └──────────┘ └──────────────┘        │
 │                                                                             │
 │  ┌─ Auth ─────────────────┐  ┌─ Config ──────────────┐                     │
 │  │ Copilot OAuth          │  │ OwlBearSettings        │                     │
@@ -79,6 +79,7 @@ OwlBear is an always-on, laptop-resident AI development system. The user describ
 ```text
 src/owlbear/                          # Main Python package (v0.1.0)
 ├── __init__.py                       # Version: 0.1.0
+├── bootstrap.py                      # Procedural assembly of all components (~940 LOC)
 ├── config.py                         # OwlBearSettings (pydantic-settings)
 ├── daemon.py                         # PidFile, logging, OTEL, run_daemon()
 ├── py.typed                          # PEP 561 type marker
@@ -92,50 +93,84 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │   ├── agent.py                      # OwlBearAgent (wraps PydanticAI Agent)
 │   ├── agent_def.py                  # AgentDefinition (parsed from markdown YAML)
 │   ├── agent_registry.py             # AgentRegistry (scan .md, lazy-build agents)
-│   ├── deps.py                       # OwlBearDeps (shared dependency injection)
-│   ├── hooks.py                      # HookEvent enum, HookRegistry
-│   ├── roles.py                      # AgentRole, RolePolicy, apply_role_policy()
-│   ├── delegation.py                 # DelegationToolset (delegate_to_agent tool)
 │   ├── command_guard.py              # CommandSafetyGuard (PRE_TOOL_USE hook)
 │   ├── context_hook.py               # ContextInjectionHook (SESSION_START)
+│   ├── delegation.py                 # DelegationToolset (delegate_to_agent tool)
+│   ├── deps.py                       # OwlBearDeps (shared dependency injection)
+│   ├── errors.py                     # Custom exception hierarchy
+│   ├── escalation.py                 # EscalationHook (ON_ERROR → user prompt)
+│   ├── hooks.py                      # HookEvent enum, HookRegistry
 │   ├── lint_hook.py                  # AutoLintHook (POST_TOOL_USE)
 │   ├── notification_hook.py          # NotificationHook (console/winsound)
 │   ├── observability.py              # ObservabilityHook + EventStore (JSONL)
+│   ├── progress.py                   # ProgressReporter (periodic channel updates)
+│   ├── roles.py                      # AgentRole, RolePolicy, apply_role_policy()
 │   ├── subagent_hook.py              # SubagentVerificationHook
 │   └── test_hook.py                  # TestVerificationHook (SESSION_END)
 │
 ├── channels/
-│   ├── __init__.py                   # ⚠ Unconditional SlackChannel import (bug)
+│   ├── __init__.py
 │   ├── base.py                       # ChannelPlugin Protocol (name, send, receive)
-│   ├── cli.py                        # CLIChannel (stdin/stdout)
-│   └── slack.py                      # SlackChannel (SocketMode + AsyncWebClient)
+│   ├── cli.py                        # CLIChannel (stdin/stdout, send_file)
+│   ├── slack.py                      # SlackChannel (SocketMode + AsyncWebClient)
+│   ├── slack_mrkdwn.py               # Markdown → Slack mrkdwn converter
+│   └── slack_templates.py            # Block Kit builders (proposal, status, approval)
 │
 ├── memory/
 │   ├── __init__.py
+│   ├── consolidation.py              # LLM-based memory consolidation
 │   ├── context.py                    # ContextManager (context.md → instructions)
+│   ├── error_journal.py              # ErrorJournal (append-only JSONL, rotation)
 │   ├── session.py                    # SessionStore (JSONL persistence)
 │   ├── usage.py                      # UsageRecord, UsageTracker (JSONL)
 │   ├── usage_cost.py                 # calc_estimated_cost (genai_prices)
-│   └── knowledge/                    # Knowledge pipeline (14 files, ~2500 LOC)
+│   └── knowledge/                    # Knowledge pipeline (23 files)
 │       ├── __init__.py
-│       ├── schema.py                 # SQLite DDL, migrations (v1-v4)
-│       ├── qdrant.py                 # QdrantVectorStore (hybrid search, temporal decay)
-│       ├── embeddings.py             # EmbeddingProvider protocol + BgeM3EmbeddingProvider (idle-timeout)
-│       ├── graph.py                  # GraphStore (entity/edge CRUD)
-│       ├── graph_builder.py          # GraphBuilder (batch entity/edge construction)
-│       ├── models.py                 # Entity, Edge, Document Pydantic models
-│       ├── protocol.py               # KnowledgeStore protocol (query interface)
-│       ├── extractor.py              # LLM-based entity extraction
-│       ├── reranker.py               # BGE reranker (cross-encoder)
+│       ├── bookmark.py               # BookmarkStore (URL+scope dedup CRUD)
+│       ├── bookmark_pipeline.py      # BookmarkPipeline (extract→evaluate→ingest)
+│       ├── bookmark_toolset.py       # BookmarkToolset (bookmark_source, list_bookmarks)
 │       ├── chunker.py                # TextChunker (token-level splits)
 │       ├── dedup.py                  # Entity deduplication
+│       ├── embeddings.py             # EmbeddingProvider protocol + BgeM3EmbeddingProvider (idle-timeout)
+│       ├── evaluator.py              # SourceEvaluator (relevance scoring 0–1)
+│       ├── extractor.py              # LLM-based entity extraction
+│       ├── graph.py                  # GraphStore (entity/edge CRUD)
+│       ├── graph_builder.py          # GraphBuilder (batch entity/edge construction)
 │       ├── ingest.py                 # IngestPipeline orchestrator
-│       └── intake.py                 # File/URL/text readers
+│       ├── intake.py                 # File/URL/text readers
+│       ├── inter_doc_graph_builder.py # InterDocGraphBuilder (embedding similarity + LLM)
+│       ├── models.py                 # Entity, Edge, Document Pydantic models
+│       ├── protocol.py               # KnowledgeStore protocol (query interface)
+│       ├── qdrant.py                 # QdrantVectorStore (hybrid search, temporal decay)
+│       ├── query_service.py          # KnowledgeQueryService (per-turn context injection)
+│       ├── refresh.py                # RefreshOrchestrator (url_list, crawl, file_glob)
+│       ├── reranker.py               # BGE reranker (cross-encoder)
+│       ├── retrieval.py              # GraphAugmentedRetriever (graph-neighbor expansion)
+│       ├── schema.py                 # SQLite DDL, migrations (v1-v7)
+│       └── source_store.py           # KnowledgeSourceStore (source CRUD)
+│
+├── planning/
+│   ├── __init__.py
+│   ├── extractor.py                  # Plan extractor from LLM output
+│   ├── markdown.py                   # Markdown plan formatter
+│   └── models.py                     # Plan, Step Pydantic models
+│
+├── projects/
+│   ├── __init__.py
+│   ├── models.py                     # Project model
+│   ├── store.py                      # ProjectStore (JSON file CRUD)
+│   ├── toolset.py                    # ProjectToolset (switch, list, create)
+│   └── workspace.py                  # ProjectWorkspace (scaffold templates)
 │
 ├── providers/
 │   ├── __init__.py
-│   ├── copilot.py                    # create_copilot_client() → AsyncOpenAI
+│   ├── copilot.py                    # create_copilot_model() → OpenAIChatModel
 │   └── copilot_multipliers.py        # Premium request multipliers per model
+│
+├── safety/
+│   ├── __init__.py
+│   ├── gate.py                       # ApprovalGateToolset (wraps destructive tools)
+│   └── policy.py                     # ApprovalPolicy, ApprovalRule, ApprovalSession
 │
 ├── skills/
 │   ├── __init__.py
@@ -143,37 +178,47 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │
 ├── tools/
 │   ├── __init__.py
-│   ├── hooked.py                     # HookedToolset (WrapperToolset, PRE/POST hooks)
 │   ├── ask_user.py                   # AskUserToolset (via ChannelPlugin)
 │   ├── filesystem.py                 # FileToolset (read/write/create/list/search)
-│   ├── terminal.py                   # TerminalToolset (run_command, timeout)
-│   ├── github_api.py                 # GitHubToolset (REST: PRs, issues)
 │   ├── git_local.py                  # GitLocalToolset (git CLI wrapper)
-│   ├── mcp_registry.py              # MCPServerRegistry (lifecycle, health check)
+│   ├── github_api.py                 # GitHubToolset (REST: PRs, issues)
+│   ├── hooked.py                     # HookedToolset (WrapperToolset, PRE/POST hooks)
+│   ├── kanban.py                     # KanbanToolset (list, show, create, move, edit, pick, context)
+│   ├── knowledge.py                  # KnowledgeToolset (query, ingest, list_sources)
+│   ├── knowledge_source.py           # KnowledgeSourceToolset (add, list, refresh sources)
+│   ├── mcp_registry.py               # MCPServerRegistry (lifecycle, health check)
 │   ├── mcp_servers.py                # Factory: github, git, fetch servers
+│   ├── screenshot.py                 # ScreenshotService (capture/save/deliver)
+│   ├── screenshot_hook.py            # ScreenshotOnErrorHook (auto-capture on ON_ERROR)
+│   ├── terminal.py                   # TerminalToolset (run_command, timeout)
+│   ├── visual_feedback.py            # VisualFeedbackToolset (share_screenshot, share_terminal_output)
+│   ├── web_search.py                 # WebSearchToolset (web_search, web_read via ddgs + trafilatura)
 │   └── browser/                      # Browser automation (12 files, ~1200 LOC)
 │       ├── __init__.py
-│       ├── config.py                 # BrowserConfig (URL allow/block, CDP, viewport)
-│       ├── manager.py                # BrowserManager (launch/CDP modes, Playwright)
 │       ├── actions.py                # 6 browser actions (navigate, click, type, ...)
-│       ├── toolset.py                # BrowserToolset (FunctionToolset wrapping)
-│       ├── safety.py                 # URLSafetyGuard (blocklist/allowlist)
-│       ├── launcher.py               # Edge CDP launcher (find/launch/probe/kill)
+│       ├── config.py                 # BrowserConfig (URL allow/block, CDP, viewport)
 │       ├── content_extractor.py      # trafilatura-based extraction
 │       ├── crawler.py                # WebCrawler (async BFS, robots.txt)
 │       ├── crawl_config.py           # CrawlConfig model
-│       ├── url_utils.py              # URL normalize, discover_links, robots checker
-│       └── integration.py            # crawl_and_ingest bridge
+│       ├── integration.py            # crawl_and_ingest bridge
+│       ├── launcher.py               # Edge CDP launcher (find/launch/probe/kill)
+│       ├── manager.py                # BrowserManager (launch/CDP modes, Playwright)
+│       ├── safety.py                 # URLSafetyGuard (blocklist/allowlist)
+│       ├── toolset.py                # BrowserToolset (FunctionToolset wrapping)
+│       └── url_utils.py              # URL normalize, discover_links, robots checker
 │
 ├── voice/
 │   ├── __init__.py
-│   ├── stt.py                        # STTEngine (moonshine-voice batch mode)
+│   ├── channel.py                    # VoiceChannel (quick + brainstorm modes)
 │   ├── streaming_stt.py              # StreamingSTT (moonshine-voice MicTranscriber)
-│   ├── tts.py                        # TTSEngine (pyttsx3)
-│   └── channel.py                    # VoiceChannel (quick + brainstorm modes)
+│   ├── stt.py                        # STTEngine (moonshine-voice batch mode)
+│   └── tts.py                        # TTSEngine (pyttsx3)
 │
 └── agents/                           # Agent definitions (markdown + YAML frontmatter)
-    ├── coder.md                      # Builder role, TDD workflow
+    ├── architect.md                  # Validator role, gate: backlog → todo
+    ├── builder.md                    # Builder role, TDD workflow
+    ├── closer.md                     # Builder role, gate: done → archived
+    ├── kanban-planner.md             # Builder role, task decomposition
     ├── orchestrator.md               # Builder role, delegation, depth=5
     ├── researcher.md                 # Validator role, read-only, browser
     ├── reviewer.md                   # Validator role, read-only, depth=0
@@ -181,8 +226,9 @@ src/owlbear/                          # Main Python package (v0.1.0)
 
 src/bearclaw/                         # CLI package
 ├── __init__.py
-└── cli.py                            # Typer app (~860 LOC): auth, chat, run, stop,
-                                      # status, browser, slack, voice, usage
+└── cli.py                            # Typer app: auth, chat, run, stop,
+                                      # status, browser, slack, voice, usage,
+                                      # knowledge-source, project
 ```
 
 ## 4. Core Components
@@ -225,20 +271,29 @@ Event-driven system for cross-cutting concerns. 9 event types:
 
 ### 4.3 Toolsets (PydanticAI FunctionToolset-based)
 
-All toolsets extend `pydantic_ai.toolsets.FunctionToolset`. Composed at run-time via `toolsets=[...]` parameter.
+All toolsets extend `pydantic_ai.toolsets.FunctionToolset`. Composed at run-time in `bootstrap.py` via `build_toolsets()`. Non-delegation toolsets are wrapped in `HookedToolset` for PRE/POST hook emission. Destructive toolsets (`GitLocalToolset`, `TerminalToolset`, `GitHubToolset`) are optionally wrapped in `ApprovalGateToolset`.
 
 | Toolset | Tools | Status |
 |---------|-------|--------|
-| FileToolset | read_file, write_file, create_file, list_directory, search_files | ✅ Wired in `bearclaw chat` |
-| TerminalToolset | run_command | ✅ Wired in `bearclaw chat` |
-| AskUserToolset | ask_user | ✅ Wired in `bearclaw chat` |
-| SkillRegistry | list_skills, load_skill | ✅ Wired in `bearclaw chat` |
-| GitLocalToolset | git_status, git_diff, git_add, git_commit, git_branch, git_log, git_push | ✅ Wired in `bearclaw chat` |
-| GitHubToolset | create_pr, list_prs, list_issues, get_issue | ✅ Conditionally wired |
-| DelegationToolset | delegate_to_agent | ⚠ Built, not wired |
-| BrowserToolset | navigate, click, type_text, select_option, read_page_text, screenshot | ⚠ Built, not wired |
-| HookedToolset | _(wraps any toolset)_ | ⚠ Built, not wired |
-| MCPServerRegistry | _(dynamic MCP tools)_ | ⚠ Built, not wired |
+| FileToolset | read_file, write_file, create_file, list_directory, search_files | ✅ Wired |
+| TerminalToolset | run_command | ✅ Wired |
+| AskUserToolset | ask_user | ✅ Wired |
+| SkillRegistry | list_skills, load_skill | ✅ Wired (conditional) |
+| GitLocalToolset | git_status, git_diff, git_add, git_commit, git_branch, git_log, git_push | ✅ Wired |
+| GitHubToolset | create_pr, list_prs, list_issues, get_issue | ✅ Wired (conditional) |
+| BrowserToolset | navigate, click, type_text, select_option, read_page_text, screenshot | ✅ Wired |
+| KanbanToolset | kanban_list, kanban_show, kanban_create, kanban_move, kanban_edit, kanban_pick, kanban_context | ✅ Wired |
+| KnowledgeToolset | query_knowledge, ingest_document, list_knowledge_sources | ✅ Wired (conditional) |
+| KnowledgeSourceToolset | add_source, list_sources, refresh_source | ✅ Wired (conditional) |
+| BookmarkToolset | bookmark_source, list_bookmarks | ✅ Wired (conditional) |
+| WebSearchToolset | web_search, web_read | ✅ Wired (conditional) |
+| VisualFeedbackToolset | share_screenshot, share_terminal_output | ✅ Wired |
+| ProjectToolset | switch_project, list_projects, workspace_create_project | ✅ Wired (conditional) |
+| DelegationToolset | delegate_to_agent | ✅ Wired (unwrapped) |
+| HookedToolset | _(wraps any toolset with PRE/POST hooks)_ | ✅ Wired |
+| ApprovalGateToolset | _(wraps destructive toolsets)_ | ✅ Wired (conditional) |
+| MCPServerRegistry | _(dynamic MCP tools)_ | ✅ Wired (conditional) |
+| ScreenshotService | capture, save, deliver _(internal, used by VisualFeedbackToolset)_ | ✅ Wired |
 
 ### 4.4 Agent Framework (multi-agent)
 
@@ -250,7 +305,7 @@ PydanticAI-based multi-agent system:
 - **RolePolicy**: BUILDER (full access) vs VALIDATOR (read-only, denied: write_file, create_file)
 - **OwlBearDeps**: Shared dependency object injected into every agent run (hooks, tracker, registry, delegation depth)
 
-5 agent definitions: coder (builder, TDD), orchestrator (builder, delegation), researcher (validator, browser), reviewer (validator, read-only), writer (builder, filesystem).
+8 agent definitions: architect (validator, gate: backlog → todo), builder (builder, TDD), closer (builder, gate: done → archived), kanban-planner (builder, task decomposition), orchestrator (builder, delegation), researcher (validator, browser), reviewer (validator, read-only), writer (builder, filesystem).
 
 ### 4.5 Channels
 
@@ -268,7 +323,7 @@ PydanticAI-based multi-agent system:
 
 **Usage tracking**: `UsageTracker` records per-turn usage (tokens, cost, premium requests) as JSONL.
 
-**Knowledge pipeline** (built, not wired to agent): 13 modules covering chunking → entity extraction → graph store → vector embeddings → reranking → ingest pipeline. Uses SQLite (graph schema) + Qdrant (hybrid vector search) + BGE-M3 (embeddings with idle-timeout model unloading).
+**Knowledge pipeline** (23 modules): chunking → entity extraction → graph store → vector embeddings → reranking → ingest pipeline. Uses SQLite (graph schema v7) + Qdrant (hybrid vector search) + BGE-M3 (embeddings with idle-timeout model unloading). Subsystems: `BookmarkStore` + `BookmarkPipeline` (URL evaluate→ingest with dedup), `KnowledgeSourceStore` (source CRUD), `RefreshOrchestrator` (url_list, crawl, file_glob dispatch), `KnowledgeQueryService` (per-turn context injection, token-budgeted), `GraphAugmentedRetriever` (graph-neighbor expansion to vector results), `InterDocGraphBuilder` (cross-document edge inference via embedding similarity + LLM, opt-in).
 
 ### 4.7 Auth
 
@@ -319,7 +374,7 @@ OwlBearAgent.turn(prompt)
 CLIChannel.send(response)
 ```
 
-### 5.2 Target (after bootstrap, task #263)
+### 5.2 Current (after bootstrap)
 
 ```text
 User Input (CLI / Slack / Voice)
@@ -353,25 +408,22 @@ HookRegistry.emit(SESSION_END, data)      ← TestVerificationHook, SubagentHook
 ChannelPlugin.send(response)
 ```
 
-## 6. Assembly Gap (blocking issue)
+## 6. Bootstrap Layer
 
-As of v0.2, all individual modules are built and tested (1608 tests, 2 SSL-env failures), but **no bootstrap layer wires them into a working system**. The `bearclaw chat` command manually wires ~40% of components; the `bearclaw run` daemon wires ~10%.
+`bootstrap.py` (~940 LOC) provides procedural assembly of all OwlBear components into a working `BootstrapResult`. The main entry point is the async `bootstrap()` function, which wires everything in sequence:
 
-**What's wired today** (in `bearclaw chat`): FileToolset, TerminalToolset, AskUserToolset, SkillRegistry, GitLocalToolset, GitHubToolset (conditional), CommandSafetyGuard.
+1. **Project resolution** — reads `config_dir/active_project`, derives workspace path from the active `Project`
+2. **Channel creation** — `create_channel()` dispatches to CLI, Slack, or Voice adapter
+3. **Hook assembly** — `build_hooks()` registers all hooks: CommandSafetyGuard, AutoLintHook, SubagentVerificationHook, TestVerificationHook, ContextInjectionHook, NotificationHook, ObservabilityHook, ProgressReporter
+4. **Model creation** — `create_copilot_model()` produces an OpenAIChatModel for all agents
+5. **Toolset assembly** — `build_toolsets()` creates all toolsets, wraps non-delegation ones in `HookedToolset`, optionally wraps destructive toolsets in `ApprovalGateToolset`
+6. **Knowledge infrastructure** — `_build_knowledge_infra()` + `_build_knowledge_toolset()` + `_build_bookmark_toolset()` wire SQLite, Qdrant, BGE-M3, ingest pipeline, query service, and bookmark pipeline (all conditional, failure-tolerant)
+7. **MCP registry** — `build_mcp_registry()` registers configured MCP servers
+8. **Agent registry** — `build_agent_registry()` scans 8 agent definitions with alias-based tool resolution
+9. **Session / context / tracker** — per-project or per-workspace JSONL stores
+10. **Agent construction** — `OwlBearAgent` with all toolsets, hooks, knowledge service, and agent registry wired
 
-**What's NOT wired:**
-
-1. AgentRegistry + agent definitions (5 .md files, never loaded)
-2. DelegationToolset (never instantiated)
-3. BrowserToolset (never added to any agent)
-4. MCP servers (configured, never started)
-5. HookedToolset (never wraps toolsets)
-6. 6 of 7 hooks (only CommandSafetyGuard wired)
-7. Knowledge pipeline (no tool interface to agent)
-8. Daemon (creates toolset-less agent)
-9. create_copilot_client() → OpenAIChatModel bridge (orphaned)
-
-**Blocking task: #263** — Research bootstrap/assembly layer using nanobot patterns adapted for PydanticAI.
+Each `build_*` helper is independently testable. Conditional subsystems (knowledge, bookmarks, web search, GitHub, MCP) fail gracefully with warning logs — the system starts without them.
 
 ## 7. Implementation Phases
 
@@ -389,11 +441,9 @@ As of v0.2, all individual modules are built and tested (1608 tests, 2 SSL-env f
 | P9 | Knowledge Pipeline | #133-136, #247-262 | ✅ Done | Ingestion pipeline, Qdrant hybrid search, BGE-M3 embeddings |
 | P10 | External Connectors | #137-140 | ✅ Done | MCP client built |
 | P10.5 | Voice | #240-246 | 📋 Planned | Moonshine migration (research done) |
-| **PX** | **Bootstrap/Assembly** | **#263** | **🚨 Critical** | **Wire all modules into working system** |
+| PX | Bootstrap/Assembly | #263+ | ✅ Done | bootstrap.py wires all modules into working system |
 | P11 | Observability & UI | #141-144 | 📋 Planned | Admin dashboard, kanban replacement |
 | P12 | Advanced | #145-148 | 📋 Planned | Council system, self-improvement, cron |
-
-**Critical path:** PX (Bootstrap) unblocks everything. Without it, individual modules remain disconnected despite being individually tested.
 
 ## 8. Key Design Decisions
 

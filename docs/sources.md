@@ -27,6 +27,20 @@ External repos and resources studied during OwlBear development.
 | kanban-md v0.32.2 "Hotkey Net" release | <https://github.com/antopolskiy/kanban-md/releases/tag/v0.32.2> | MIT | TUI keyboard shortcuts, batch operations, compact output format | `.github/skills/kanban-md/SKILL.md` (TUI shortcuts section) | 2026-02-24 |
 | kanban-md v0.33.0 "True North" release | <https://github.com/antopolskiy/kanban-md/releases/tag/v0.33.0> | MIT | `pick` self-contained output (prints full task details), `--no-body` flag, automatic ID consistency repair, malformed task detection | `.github/skills/kanban-md/SKILL.md` (pick command docs), `.github/skills/kanban-based-development/SKILL.md` (removed redundant show-after-pick) | 2026-02-26 |
 
+## Error Recovery Research (Task #471)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python Logging Cookbook — Multiple handlers | <https://docs.python.org/3/howto/logging-cookbook.html> | PSF | Multi-handler pattern: if one sink fails, others capture. Validated that `logger.exception()` always reaches RotatingFileHandler. | `docs/recover-from-error-swallowing-research.md` | 2026-03-06 |
+| 12-Factor App — XI. Logs | <https://12factor.net/logs> | CC-BY | "Treat logs as event streams." Errors must never vanish; local file logging is the backstop. | `docs/recover-from-error-swallowing-research.md` | 2026-03-06 |
+
+## httpx Timeout Convention (Task #460)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| httpx Timeouts docs | <https://www.python-httpx.org/advanced/timeouts/> | BSD-3 | `httpx.Timeout` API — per-phase timeout configuration (connect, read, write, pool) | `docs/httpx-timeout-research.md`, all `httpx.AsyncClient` call sites | 2026-03-06 |
+| PydanticAI `cached_async_http_client` | <https://github.com/pydantic/pydantic-ai> | MIT | `DEFAULT_HTTP_TIMEOUT=600`, `connect=5` pattern for LLM streaming clients | `src/owlbear/providers/copilot.py` (`Timeout(600, connect=5)`) | 2026-03-06 |
+
 ## Copilot OAuth Research (Task #30)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -71,6 +85,14 @@ External repos and resources studied during OwlBear development.
 | SpeechRecognition | <https://pypi.org/project/SpeechRecognition/> | BSD-3 | Unified STT API wrapping Whisper, faster-whisper, Google, Vosk; PyAudio microphone abstraction; evaluated but not recommended (unnecessary abstraction layer) | `docs/voice-io-research.md` (comparison) | 2026-02-27 |
 | PyAudio | <https://pypi.org/project/PyAudio/> | MIT | PortAudio Python bindings for cross-platform mic capture; prebuilt Windows wheels; supports WASAPI, DirectSound, WDM-KS | `docs/voice-io-research.md` (audio input recommendation), future `src/owlbear/voice/recorder.py` | 2026-02-27 |
 | edge-tts | <https://github.com/rany2/edge-tts> | GPL-3.0 | Microsoft Edge online TTS: high-quality neural voices, async Python API; evaluated but not recommended for MVP (requires internet, violates offline-first principle) | `docs/voice-io-research.md` (TTS comparison) | 2026-02-27 |
+
+## Retry Decorators Research (Task #470)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| tenacity docs | <https://tenacity.readthedocs.io/en/latest/> | Apache-2.0 | `@retry` decorator API, `wait_exponential_jitter`, `retry_if_exception`, `before_sleep_log`, async support | `docs/retry-decorators-research.md` (retry policy design) | 2026-03-06 |
+| Slack SDK RetryHandler docs | <https://docs.slack.dev/tools/python-slack-sdk/web/#retryhandler> | N/A | Built-in `ConnectionErrorRetryHandler` + `RateLimitErrorRetryHandler`, backoff+jitter | `docs/retry-decorators-research.md` (Slack retry strategy) | 2026-03-06 |
+| AWS Exponential Backoff and Jitter | <https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/> | N/A | Full Jitter algorithm for distributed retry, thundering herd prevention | `docs/retry-decorators-research.md` (wait strategy rationale) | 2026-03-06 |
 
 ## CDP Tab Groups Research (Task #65)
 
@@ -289,6 +311,49 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | PydanticAI Retries docs | <https://ai.pydantic.dev/retries/> | MIT | `AsyncTenacityTransport`, `RetryConfig`, `wait_retry_after` for HTTP-level retry with Retry-After header support | `src/owlbear/providers/copilot.py` (`_build_retry_transport`, `create_copilot_client`) | 2026-03-01 |
+
+## JsonlStore Base Class Research (Task #465)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| LangChain BaseStore | <https://github.com/langchain-ai/langchain/blob/master/libs/core/langchain_core/stores.py> | MIT | `Generic[K, V]` ABC pattern for typed storage with abstract methods | `docs/jsonl-store-base-class-research.md` (design pattern reference) | 2026-03-06 |
+
+## SLF001 Public API Research (Task #466)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Ruff SLF001 rule | <https://docs.astral.sh/ruff/rules/private-member-access/> | MIT | Rule definition, Pythonic fix pattern (use public interface) | `docs/slf001-public-api-research.md` | 2026-03-06 |
+
+## Terminal CWD Confinement Research (Task #467)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Aider `Commands.cmd_run()` | <https://github.com/Aider-AI/aider/blob/main/aider/commands.py> | Apache-2.0 | Forces `cwd=self.coder.root` for all shell commands; path confinement via `startswith()` | `docs/terminal-cwd-confinement-research.md` | 2026-03-06 |
+
+## Restrict Token File Permissions Research (Task #468)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+
+## Copilot Transport Retry Network Errors Research (Task #469)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| httpx Exceptions docs | <https://www.python-httpx.org/exceptions/> | BSD-3 | Exception hierarchy: `ConnectError`/`TimeoutException` are `TransportError` subtypes, separate from `HTTPStatusError` | `docs/copilot-retry-network-errors-research.md` | 2026-03-06 |
+| tenacity API docs | <https://tenacity.readthedocs.io/en/latest/api.html> | Apache-2.0 | `retry_if_exception_type` accepts tuple of exception types for multi-type retry | `docs/copilot-retry-network-errors-research.md` | 2026-03-06 |
+| PydanticAI `retries.py` | <https://github.com/pydantic/pydantic-ai/blob/main/pydantic_ai_slim/pydantic_ai/retries.py> | MIT | `AsyncTenacityTransport` wraps inner transport call in tenacity `@retry` — network exceptions caught if retry condition matches | `docs/copilot-retry-network-errors-research.md` | 2026-03-06 |
+| Ansible VaultEditor.write_data() | <https://github.com/ansible/ansible/blob/devel/lib/ansible/parsing/vault/__init__.py> | GPL-3.0 | Secure file write pattern: `os.umask(0o077)` → `os.open(path, O_CREAT\|O_EXCL\|O_RDWR\|O_TRUNC, 0o600)` → `os.write()`. Atomic creation with restricted permissions, no TOCTOU race. | `docs/restrict-token-permissions-research.md` | 2026-03-06 |
+| Python `os.open()` / `os.chmod()` docs | <https://docs.python.org/3/library/os.html#os.open> | PSF | `os.open(path, flags, mode)` creates files atomically with permissions. On Windows, `os.chmod` only affects read-only flag; ACLs need `icacls` or `pywin32`. | `docs/restrict-token-permissions-research.md` | 2026-03-06 |
+| Python `pathlib.PurePath.is_relative_to()` | <https://docs.python.org/3/library/pathlib.html#pathlib.PurePath.is_relative_to> | PSF | String-based comparison; must call `.resolve()` first to eliminate `..` segments | `docs/terminal-cwd-confinement-research.md` | 2026-03-06 |
+| OWASP A01:2021 Broken Access Control | <https://owasp.org/Top10/A01_2021-Broken_Access_Control/> | CC BY-SA 4.0 | Path traversal as canonical broken-access-control vulnerability | `docs/terminal-cwd-confinement-research.md` | 2026-03-06 |
+| PEP 8 §Designing for Inheritance | <https://peps.python.org/pep-0008/#designing-for-inheritance> | PSF | "use properties to hide functional implementation behind simple data attribute access syntax" | `docs/slf001-public-api-research.md` | 2026-03-06 |
+| Real Python — property() | <https://realpython.com/python-property/> | — | Property/setter patterns for replacing private attribute access | `docs/slf001-public-api-research.md` | 2026-03-06 |
+| OWASP Error Handling Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html> | CC BY-SA 4.0 | Never expose implementation details to users; return generic messages; log details server-side | `docs/error-message-sanitization-research.md` | 2026-03-06 |
+| OWASP Logging Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html> | CC BY-SA 4.0 | Data to exclude from user-visible output: access tokens, session IDs, passwords, connection strings, file paths | `docs/error-message-sanitization-research.md` | 2026-03-06 |
+| Django SafeExceptionReporterFilter | <https://github.com/django/django/blob/main/django/views/debug.py> | BSD-3 | HIDDEN_SETTINGS regex for API/TOKEN/KEY/SECRET/PASS; cleansed_substitute pattern; type-based cleansing | `docs/error-message-sanitization-research.md` | 2026-03-06 |
+| Sentry Python SDK filtering | <https://docs.sentry.io/platforms/python/configuration/filtering/> | BSL-1.1 | before_send hook pattern — classify exception then modify/drop before external delivery | `docs/error-message-sanitization-research.md` | 2026-03-06 |
+| jsonlines library | <https://jsonlines.readthedocs.io/en/latest/> | BSD-3 | JSONL append/read patterns, custom serializer hooks, line-oriented persistence | `docs/jsonl-store-base-class-research.md` (design validation) | 2026-03-06 |
+| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/type_adapter/> | MIT | `TypeAdapter.dump_json`/`validate_json` for arbitrary types, create-once-reuse pattern | `docs/jsonl-store-base-class-research.md` (serialization approach) | 2026-03-06 |
 | tenacity docs | <https://tenacity.readthedocs.io/> | Apache-2.0 | `retry_if_exception_type`, `stop_after_attempt`, `wait_exponential` composable retry primitives | `src/owlbear/providers/copilot.py` (`_build_retry_transport`), `src/owlbear/core/errors.py` (classification categories aligned to retry policies) | 2026-03-01 |
 | PydanticAI ModelRetry docs | <https://ai.pydantic.dev/agents/#reflection-and-self-correction> | MIT | `ModelRetry` exception pattern — tool tells LLM "try again" with hint; informed TOOL_SEMANTIC error category design | `src/owlbear/core/errors.py` (`ErrorCategory.TOOL_SEMANTIC`) | 2026-03-01 |
 
@@ -353,3 +418,31 @@ External repos and resources studied during OwlBear development.
 | BGE-M3 paper (Chen et al. 2024) | <https://arxiv.org/abs/2402.03216> | N/A | MIRACL/MLDR benchmarks for dense/sparse/ColBERT quality comparison; self-knowledge distillation training methodology | `docs/bge-m3-evaluation.md` | 2026-03-03 |
 | Yannael — OpenAI vs open-source embeddings (TDS) | <https://towardsdatascience.com/openai-vs-open-source-multilingual-embedding-models-e5ccb7c90f05> | N/A | Independent MRR evaluation of bge-m3 vs OpenAI embeddings on multilingual retrieval tasks | `docs/bge-m3-evaluation.md` | 2026-03-03 |
 | FastEmbed issue #107 (bge-m3 support) | <https://github.com/qdrant/fastembed/issues/107> | N/A | 2+ year open issue tracking bge-m3 3-output support status (dense+sparse+ColBERT via ONNX) | `docs/bge-m3-evaluation.md` | 2026-03-03 |
+
+## Voice Channel Import Research (Task #458)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Rasa `core/channels/` | <https://github.com/RasaHQ/rasa/tree/main/rasa/core/channels> | MIT | Channel adapter organization: all channels (incl. `twilio_voice.py`) co-located in `channels/` dir; thin wrapper pattern | `docs/voice-channel-import-research.md` (prior art comparison for relocate-vs-fix decision) | 2026-03-06 |
+
+## SQLite Connection Lifecycle Research (Task #459)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python docs — `sqlite3.Connection.close()` | <https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.close> | PSF | `close()` is sync, rolls back pending txn, Python 3.13 emits `ResourceWarning` on unclosed connections | `docs/sqlite-connection-lifecycle-research.md` | 2026-03-06 |
+| Datasette `database.py` | <https://github.com/simonw/datasette/blob/main/datasette/database.py> | Apache 2.0 | Long-running daemon SQLite lifecycle: `_all_file_connections` tracking list, explicit `close()` iterates all | `docs/sqlite-connection-lifecycle-research.md` | 2026-03-06 |
+| Flask `ctx.py` teardown | <https://github.com/pallets/flask/blob/main/src/flask/ctx.py> | BSD-3 | Cleanup-list pattern: `pop()` iterates teardown callbacks with error suppression | `docs/sqlite-connection-lifecycle-research.md` | 2026-03-06 |
+
+## httpx Timeout Configuration Research (Task #460)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| httpx official docs — Timeouts | <https://www.python-httpx.org/advanced/timeouts/> | BSD-3 | `httpx.Timeout` fine-grained config (connect/read/write/pool), default 5s, per-client vs per-request | `docs/httpx-timeout-research.md` | 2026-03-06 |
+| PydanticAI `cached_async_http_client` | <https://github.com/pydantic/pydantic-ai/blob/main/pydantic_ai_slim/pydantic_ai/models/__init__.py> | MIT | `DEFAULT_HTTP_TIMEOUT=600`, `connect=5`, `httpx.Timeout(timeout=timeout, connect=connect)` pattern for LLM clients | `docs/httpx-timeout-research.md` | 2026-03-06 |
+
+## Ingest DRY Refactor Research (Task #464)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Refactoring.Guru — Extract Method | <https://refactoring.guru/extract-method> | N/A | Canonical Extract Method refactoring pattern: replace duplicated code fragment with call to extracted method | `docs/ingest-dry-refactor-research.md` | 2026-03-06 |
+| SourceMaking — Extract Method | <https://sourcemaking.com/refactoring/extract-method> | N/A | Independent reference for Extract Method: "Less code duplication. Replace duplicates with calls to your new method." | `docs/ingest-dry-refactor-research.md` | 2026-03-06 |

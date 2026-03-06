@@ -195,7 +195,7 @@ Anthropic: *"Finding the simplest solution possible, and only increasing complex
 | Delegation protocol | Prose workflow | Per-agent decision logic | Typed params per agent | Routing table + OODA |
 | Critical rules prominence | Buried in boundary lists | `<principles>` at top | `<operating_rules>` section | "Core Identity" paragraph |
 | Frontmatter `agents:` | Not used | Used (orchestrator lists 4 workers) | Not used | Not used |
-| `user-invokable: false` | Not used | Not used | Not used | Not used |
+| `user-invocable: false` | Not used | Not used | Not used | Not used |
 | Verification criteria | Informal ("run pytest + ruff") | Skill-based checklists | Structured YAML | Memory-based |
 
 ## 5. Decisions Already Made
@@ -242,7 +242,7 @@ The ~150 line target applies to the structural content. Concise good/bad example
 
 Each agent keeps ONLY:
 
-1. **Frontmatter** — name, description, tools, `agents:` (if dispatching), `user-invokable`
+1. **Frontmatter** — name, description, tools, `agents:` (if dispatching), `user-invocable`
 2. **`<persona>`** — 3–5 sentences defining WHO this agent is, with emotional motivation that makes quality intrinsic rather than directive
 3. **`<critical_rules>`** — 3–5 non-negotiable rules, bolded (D3)
 4. **`<multi_agent_context>`** — Pipeline position, handoff points
@@ -294,9 +294,9 @@ agents: [builder, reviewer, writer, closer, architect, researcher, kanban-planne
 # No other agent gets `agents:` — only orchestrator dispatches
 ```
 
-#### 6.7 Mark pipeline agents as non-user-invokable
+#### 6.7 Mark pipeline agents as non-user-invocable
 
-| Agent | `user-invokable` | Rationale |
+| Agent | `user-invocable` | Rationale |
 |-------|-----------------|-----------|
 | orchestrator | true | User entry point for board execution |
 | kanban-planner | true | User entry point for task creation |
@@ -323,7 +323,7 @@ agents: [builder, reviewer, writer, closer, architect, researcher, kanban-planne
 | Orchestrator delegation | Prose steps 1–7 | Triage + routing table + delegation template |
 | Task isolation | Contradictory (orchestrator vs. builder) | Single rule in orchestrator `<critical_rules>` |
 | XML structure | Partial | Full (`<persona>`, `<critical_rules>`, `<responsibilities>`, `<constraints>`, `<output_format>`) |
-| Frontmatter | Basic | + `agents:`, `user-invokable: false` |
+| Frontmatter | Basic | + `agents:`, `user-invocable: false` |
 
 ## 8. Implementation Sequence
 
@@ -343,7 +343,7 @@ agents: [builder, reviewer, writer, closer, architect, researcher, kanban-planne
 | T12 | Slim architect to ~150 lines + `<critical_rules>` | needed | T1, T2 |
 | T13 | Slim researcher to ~150 lines + `<critical_rules>` | needed | T1, T2 |
 | T14 | Slim kanban-planner to ~150 lines + `<critical_rules>` | needed | T1, T2 |
-| T15 | Set `user-invokable: false` on builder/reviewer/writer/closer | important | T8–T11 |
+| T15 | Set `user-invocable: false` on builder/reviewer/writer/closer | important | T8–T11 |
 | T16 | Update copilot-instructions.md agent/skill/instruction inventories | needed | T1–T14 |
 | T17 | End-to-end test: run orchestrator on a real task through the pipeline | needed | T7–T14 |
 
