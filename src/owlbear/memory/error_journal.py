@@ -11,18 +11,34 @@ Rotation: when the entry count exceeds :attr:`max_entries` after a
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, TypeAdapter
+
+from owlbear.core.jsonl_store import JsonlStore
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-__all__ = ["ErrorJournal"]
+__all__ = ["ErrorEntry", "ErrorJournal"]
 
 _DEFAULT_MAX_ENTRIES: int = 10_000
 
 
-class ErrorJournal:
+class ErrorEntry(BaseModel):
+    """A single error journal record."""
+
+    timestamp: str
+    error_type: str
+    tool_name: str
+    exception_message: str
+    action_taken: str
+    attempt_number: int
+    resolved: bool
+    session_id: str
+
+
+class ErrorJournal(JsonlStore[ErrorEntry]):
     """Append-only JSONL error log with query and rotation.
 
     Args:
@@ -32,15 +48,10 @@ class ErrorJournal:
     """
 
     def __init__(self, workspace: Path, *, max_entries: int = _DEFAULT_MAX_ENTRIES) -> None:
-        self._path = workspace / ".owlbear" / "error_journal.jsonl"
+        super().__init__(workspace / ".owlbear" / "error_journal.jsonl", ErrorEntry)
         self._max_entries = max_entries
 
     # -- properties ----------------------------------------------------------
-
-    @property
-    def path(self) -> Path:
-        """Location of the JSONL file."""
-        return self._path
 
     @property
     def max_entries(self) -> int:
@@ -62,19 +73,18 @@ class ErrorJournal:
         session_id: str,
     ) -> None:
         """Append an error entry, rotating if the cap is exceeded."""
-        entry = {
-            "timestamp": ts,
-            "error_type": error_type,
-            "tool_name": tool_name,
-            "exception_message": exc_message,
-            "action_taken": action_taken,
-            "attempt_number": attempt,
-            "resolved": resolved,
-            "session_id": session_id,
-        }
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry) + "\n")
+        self.append(
+            ErrorEntry(
+                timestamp=ts,
+                error_type=error_type,
+                tool_name=tool_name,
+                exception_message=exc_message,
+                action_taken=action_taken,
+                attempt_number=attempt,
+                resolved=resolved,
+                session_id=session_id,
+            )
+        )
         self._maybe_rotate()
 
     # -- read ----------------------------------------------------------------
@@ -85,37 +95,31 @@ class ErrorJournal:
         tool_name: str | None = None,
         error_type: str | None = None,
         last_n: int | None = None,
-    ) -> list[dict[str, object]]:
+    ) -> list[ErrorEntry]:
         """Return filtered journal entries.
 
         All filters are optional; when omitted, all entries are returned.
         ``last_n`` is applied **after** filtering — it returns the last *n*
         matching entries (most recent).
         """
-        entries = self._load_all()
+        entries = self.load()
         if tool_name is not None:
-            entries = [e for e in entries if e["tool_name"] == tool_name]
+            entries = [e for e in entries if e.tool_name == tool_name]
         if error_type is not None:
-            entries = [e for e in entries if e["error_type"] == error_type]
+            entries = [e for e in entries if e.error_type == error_type]
         if last_n is not None:
             entries = entries[-last_n:]
         return entries
 
     # -- internals -----------------------------------------------------------
 
-    def _load_all(self) -> list[dict[str, object]]:
-        """Deserialize every entry from the JSONL file."""
-        if not self._path.exists():
-            return []
-        lines = self._path.read_text(encoding="utf-8").strip().splitlines()
-        return [json.loads(line) for line in lines if line]
-
     def _maybe_rotate(self) -> None:
         """If entry count exceeds the cap, keep only the last *max_entries*."""
-        entries = self._load_all()
+        entries = self.load()
         if len(entries) <= self._max_entries:
             return
         trimmed = entries[-self._max_entries :]
+        adapter: TypeAdapter[ErrorEntry] = TypeAdapter(ErrorEntry)
         with self._path.open("w", encoding="utf-8") as fh:
             for entry in trimmed:
-                fh.write(json.dumps(entry) + "\n")
+                fh.write(adapter.dump_json(entry).decode("utf-8") + "\n")

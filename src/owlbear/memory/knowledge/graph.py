@@ -17,6 +17,7 @@ from owlbear.memory.knowledge.models import Document, Edge, Entity
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
     from owlbear.memory.knowledge.models import EntityType
 
@@ -300,6 +301,38 @@ class GraphStore:
         )
         self._conn.commit()
         return cursor.rowcount > 0
+
+    # ── Merge operations ───────────────────────────────────────────────────
+
+    def merge_entities(
+        self,
+        canonical_id: str,
+        duplicate_ids: Sequence[str],
+        merged_metadata: dict[str, object],
+    ) -> int:
+        """Merge *duplicate_ids* into *canonical_id*.
+
+        Updates canonical metadata, redirects all edges from each duplicate
+        to canonical, deletes duplicates, and commits.
+
+        Returns the number of duplicates merged.
+        """
+        self._conn.execute(
+            "UPDATE entities SET metadata = ? WHERE id = ?",
+            (self._dump_meta(merged_metadata), canonical_id),
+        )
+        for dup_id in duplicate_ids:
+            self._conn.execute(
+                "UPDATE edges SET source_id = ? WHERE source_id = ?",
+                (canonical_id, dup_id),
+            )
+            self._conn.execute(
+                "UPDATE edges SET target_id = ? WHERE target_id = ?",
+                (canonical_id, dup_id),
+            )
+            self.delete_entity(dup_id)
+        self._conn.commit()
+        return len(duplicate_ids)
 
     # ── Traversal operations ───────────────────────────────────────────────
 

@@ -6,9 +6,16 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from slack_sdk.socket_mode.aiohttp import SocketModeClient
-from slack_sdk.socket_mode.response import SocketModeResponse
-from slack_sdk.web.async_client import AsyncWebClient
+try:
+    from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+    from slack_sdk.socket_mode.aiohttp import SocketModeClient
+    from slack_sdk.socket_mode.response import SocketModeResponse
+    from slack_sdk.web.async_client import AsyncWebClient
+except ImportError:  # pragma: no cover
+    RateLimitErrorRetryHandler = None  # type: ignore[assignment]
+    SocketModeClient = None  # type: ignore[assignment]
+    SocketModeResponse = None  # type: ignore[assignment]
+    AsyncWebClient = None  # type: ignore[assignment]
 
 from owlbear.channels.slack_mrkdwn import markdown_to_mrkdwn
 
@@ -48,12 +55,19 @@ class SlackChannel:
         *,
         receive_timeout: float = 30.0,
     ) -> None:
+        if AsyncWebClient is None:  # pragma: no cover
+            msg = "slack_sdk is not installed. Install with: uv sync --extra slack"
+            raise ImportError(msg)
+
         self._app_token = app_token
         self._bot_token = bot_token
         self._channel_id = channel_id
         self._receive_timeout = receive_timeout
 
-        self._web_client = AsyncWebClient(token=bot_token)
+        self._web_client = AsyncWebClient(
+            token=bot_token,
+            retry_handlers=[RateLimitErrorRetryHandler(max_retry_count=1)],
+        )
         self._socket_client: SocketModeClient | None = None
         self._message_queue: asyncio.Queue[str | None] = asyncio.Queue()
         self._thread_registry: dict[str, str] = {}

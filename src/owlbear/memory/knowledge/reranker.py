@@ -43,7 +43,14 @@ class BGERerankerProvider:
     def _ensure_model(self) -> object:
         """Lazily create the ``FlagReranker`` instance."""
         if self._model is None:
-            from FlagEmbedding import FlagReranker  # noqa: PLC0415
+            try:
+                from FlagEmbedding import FlagReranker  # noqa: PLC0415
+            except ImportError:
+                msg = (
+                    "FlagEmbedding is required for BGERerankerProvider. "
+                    "Install it with: uv pip install FlagEmbedding"
+                )
+                raise ImportError(msg) from None
 
             self._model = FlagReranker(self.model_name)
         return self._model

@@ -92,15 +92,21 @@ class NotificationHook:
         self._backends = backends
         self._notification_events = notification_events
 
-    async def __call__(self, event: HookEvent, data: object) -> None:
-        """Dispatch a notification for *event* through the backend chain."""
-        if event.value not in self._notification_events:
+    async def __call__(self, data: object) -> None:
+        """Dispatch a notification through the backend chain."""
+        if isinstance(data, dict):
+            event: HookEvent | None = data.get("_hook_event")
+        else:
+            event = None
+
+        if event is not None and event.value not in self._notification_events:
             return
 
+        event_label = event.value if event is not None else "notification"
         message = (
-            data.get("message", f"OwlBear: {event.value}")
+            data.get("message", f"OwlBear: {event_label}")
             if isinstance(data, dict)
-            else f"OwlBear: {event.value}"
+            else f"OwlBear: {event_label}"
         )
 
         for backend in self._backends:
@@ -111,10 +117,10 @@ class NotificationHook:
                 logger.warning(
                     "Notification backend %r failed for %s",
                     backend.name,
-                    event.value,
+                    event_label,
                 )
 
-        logger.warning("All notification backends failed for event %s", event.value)
+        logger.warning("All notification backends failed for event %s", event_label)
 
     def register(self, hooks: HookRegistry) -> None:
         """Register this hook on all events in *notification_events*."""
@@ -129,9 +135,10 @@ class NotificationHook:
             hooks.register(event, self._make_handler(event))
 
     def _make_handler(self, event: HookEvent) -> Callable:
-        """Create a single-arg handler closure for the hook registry."""
+        """Create a single-arg handler closure that injects event into data."""
 
         async def _handler(data: object) -> None:
-            await self(event, data if isinstance(data, dict) else {})
+            merged = {"_hook_event": event, **(data if isinstance(data, dict) else {})}
+            await self(merged)
 
         return _handler

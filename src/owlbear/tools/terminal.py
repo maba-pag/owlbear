@@ -87,10 +87,14 @@ class TerminalToolset(FunctionToolset):
         max_output_bytes: int = 60_000,
     ) -> None:
         super().__init__()
-        self._workspace_root = workspace_root
+        self._workspace_root = workspace_root.resolve()
         self._hooks = hooks
         self._max_output_bytes = max_output_bytes
         self._register_tools()
+
+    def update_workspace(self, workspace: Path) -> None:
+        """Set the workspace root to *workspace*."""
+        self._workspace_root = workspace
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -164,8 +168,16 @@ class TerminalToolset(FunctionToolset):
         if working_dir is None:
             cwd = self._workspace_root
         else:
+            if "\x00" in working_dir:
+                msg = f"Path outside workspace: {working_dir!r}"
+                raise PermissionError(msg)
             cwd_path = Path(working_dir)
-            cwd = cwd_path if cwd_path.is_absolute() else self._workspace_root / cwd_path
+            cwd = (
+                cwd_path if cwd_path.is_absolute() else self._workspace_root / cwd_path
+            ).resolve()
+            if not cwd.is_relative_to(self._workspace_root):
+                msg = f"Path outside workspace: {working_dir}"
+                raise PermissionError(msg)
 
         # -- Launch subprocess --------------------------------------------
         logger.debug("run_command: %r  cwd=%s", command, cwd)

@@ -23,7 +23,7 @@ from pydantic_ai import RunContext  # noqa: TC002
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.deps import OwlBearDeps  # noqa: TC001
-from owlbear.core.errors import ErrorCategory, ToolError, classify_error
+from owlbear.core.errors import ErrorCategory, ToolError, classify_error, error_to_user_message
 
 __all__ = ["MAX_DELEGATION_DEPTH", "DelegationToolset"]
 
@@ -94,7 +94,7 @@ class DelegationToolset(FunctionToolset):
             )
 
         # -- Guard: depth limit -------------------------------------------
-        depth = ctx.deps._delegation_depth  # noqa: SLF001
+        depth = ctx.deps.delegation_depth
         if depth >= MAX_DELEGATION_DEPTH:
             return json.dumps(
                 ToolError(
@@ -123,7 +123,7 @@ class DelegationToolset(FunctionToolset):
         # -- Build child deps with incremented depth ----------------------
         inner_deps = dataclasses.replace(
             ctx.deps,
-            _delegation_depth=depth + 1,
+            delegation_depth=depth + 1,
         )
 
         # -- Run inner agent ----------------------------------------------
@@ -140,7 +140,7 @@ class DelegationToolset(FunctionToolset):
                 ToolError(
                     error_type=classify_error(exc),
                     tool_name="delegate_to_agent",
-                    message=f"delegation to '{agent_name}' failed: {exc}",
+                    message=f"delegation to '{agent_name}' failed: {error_to_user_message(exc)}",
                 ).to_dict()
             )
 

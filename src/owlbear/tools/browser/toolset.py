@@ -42,20 +42,19 @@ __all__ = ["BrowserToolset"]
 logger = logging.getLogger(__name__)
 
 # JS snippet that watches <title> for mutations and re-applies the OwlBear
-# prefix.  ``{prefix}`` is interpolated at call-time with the concrete
-# prefix string (e.g. ``[OwlBear Task 65]``).
+# prefix.  The prefix is passed as a safe argument via Playwright's
+# parameterized page.evaluate() — never interpolated into the JS string.
 _TITLE_OBSERVER_JS = """
-(() => {{
-    const PREFIX = '{prefix}';
+(prefix) => {
     const titleEl = document.querySelector('title');
     if (!titleEl) return;
-    const obs = new MutationObserver(() => {{
-        if (!document.title.startsWith(PREFIX)) {{
-            document.title = PREFIX + ' ' + document.title;
-        }}
-    }});
-    obs.observe(titleEl, {{ childList: true }});
-}})();
+    const obs = new MutationObserver(() => {
+        if (!document.title.startsWith(prefix)) {
+            document.title = prefix + ' ' + document.title;
+        }
+    });
+    obs.observe(titleEl, { childList: true });
+}
 """.strip()
 
 
@@ -107,8 +106,11 @@ class BrowserToolset(FunctionToolset):
 
         if self._config.cdp_endpoint:
             prefix = f"[OwlBear {task_label}]" if task_label else "[OwlBear]"
-            await self.page.evaluate(f"document.title = '{prefix} ' + document.title")
-            await self.page.evaluate(_TITLE_OBSERVER_JS.format(prefix=prefix))
+            await self.page.evaluate(
+                "(prefix) => { document.title = prefix + ' ' + document.title }",
+                prefix,
+            )
+            await self.page.evaluate(_TITLE_OBSERVER_JS, prefix)
             logger.warning("CDP mode: attached to user browser — full session access")
 
     async def teardown(self) -> None:

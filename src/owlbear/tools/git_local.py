@@ -59,6 +59,10 @@ class GitLocalToolset(FunctionToolset):
         self._hooks = hooks
         self._register_tools()
 
+    def update_workspace(self, workspace: Path) -> None:
+        """Set the workspace root to *workspace*."""
+        self._workspace_root = workspace
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

@@ -11,7 +11,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
+
+from owlbear.core.jsonl_store import JsonlStore
 
 if TYPE_CHECKING:
     from datetime import timedelta
@@ -53,10 +55,7 @@ class UsageSummary(BaseModel):
     models: list[str] = []
 
 
-_adapter: TypeAdapter[UsageRecord] = TypeAdapter(UsageRecord)
-
-
-class UsageTracker:
+class UsageTracker(JsonlStore[UsageRecord]):
     """Append-only JSONL store for :class:`UsageRecord`.
 
     Usage::
@@ -68,33 +67,7 @@ class UsageTracker:
     """
 
     def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def path(self) -> Path:
-        """Location of the JSONL file."""
-        return self._path
-
-    # -- write ---------------------------------------------------------------
-
-    def append(self, record: UsageRecord) -> None:
-        """Serialize *record* and append it as a new JSONL line."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        line = _adapter.dump_json(record).decode("utf-8")
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-
-    # -- read ----------------------------------------------------------------
-
-    def load(self) -> list[UsageRecord]:
-        """Deserialize all records from the JSONL file.
-
-        Returns an empty list when the file doesn't exist or is empty.
-        """
-        if not self._path.exists():
-            return []
-        lines = self._path.read_text(encoding="utf-8").strip().splitlines()
-        return [_adapter.validate_json(line) for line in lines if line]
+        super().__init__(path, UsageRecord)
 
     # -- query ---------------------------------------------------------------
 

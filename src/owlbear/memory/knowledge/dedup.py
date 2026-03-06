@@ -120,27 +120,11 @@ def deduplicate_entities(
             merged_meta.update(dup.metadata)
         merged_meta.update(canonical.metadata)
 
-        # Update canonical entity metadata in-place via SQL
-        graph._conn.execute(  # noqa: SLF001
-            "UPDATE entities SET metadata = ? WHERE id = ?",
-            (graph._dump_meta(merged_meta), canonical.id),  # noqa: SLF001
+        count = graph.merge_entities(
+            canonical.id,
+            [d.id for d in duplicates],
+            merged_meta,
         )
-
-        for dup in duplicates:
-            # Redirect edges: source_id
-            graph._conn.execute(  # noqa: SLF001
-                "UPDATE edges SET source_id = ? WHERE source_id = ?",
-                (canonical.id, dup.id),
-            )
-            # Redirect edges: target_id
-            graph._conn.execute(  # noqa: SLF001
-                "UPDATE edges SET target_id = ? WHERE target_id = ?",
-                (canonical.id, dup.id),
-            )
-            # Delete duplicate entity (cascade is safe — no edges reference it now)
-            graph.delete_entity(dup.id)
-            merged_count += 1
-
-        graph._conn.commit()  # noqa: SLF001
+        merged_count += count
 
     return DeduplicationResult(merged_count=merged_count, canonical_ids=canonical_ids)

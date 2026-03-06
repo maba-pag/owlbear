@@ -9,6 +9,8 @@ import anyio
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear.core.retry import TRANSIENT_RETRY
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -43,13 +45,17 @@ async def read_file(path: str | Path) -> IntakeResult:
     )
 
 
+@TRANSIENT_RETRY
 async def read_url(url: str) -> IntakeResult:
     """Fetch content from a URL via httpx and return an IntakeResult.
 
+    Retries transient HTTP errors (429, 502, 503, 504) and connection
+    failures up to 3 attempts with exponential backoff.
+
     Raises:
-        httpx.HTTPStatusError: If the response status is not 2xx.
+        httpx.HTTPStatusError: If the response status is permanently non-2xx.
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=5)) as client:
         response = await client.get(url)
         response.raise_for_status()
     return IntakeResult(

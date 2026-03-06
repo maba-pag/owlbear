@@ -7,8 +7,8 @@ files or failing commands are logged and silently degraded to empty strings.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,7 +27,7 @@ class ContextInjectionHook:
     On invocation the hook:
 
     1. Reads the project instructions file from *instructions_path*.
-    2. Runs the kanban summary command (*kanban_cmd*) via :mod:`subprocess`.
+    2. Runs the kanban summary command (*kanban_cmd*) via :func:`asyncio.create_subprocess_exec`.
     3. Stores both results under ``data["context"]`` as a dict with keys
        ``"instructions"`` and ``"kanban_summary"``.
 
@@ -65,8 +65,8 @@ class ContextInjectionHook:
         if not isinstance(data, dict):
             return
 
-        instructions = self._read_instructions()
-        kanban_summary = self._run_kanban()
+        instructions = await self._read_instructions()
+        kanban_summary = await self._run_kanban()
 
         data["context"] = {
             "instructions": instructions,
@@ -83,10 +83,12 @@ class ContextInjectionHook:
 
     # -- internal ------------------------------------------------------------
 
-    def _read_instructions(self) -> str:
+    async def _read_instructions(self) -> str:
         """Read the instructions file, returning empty string on failure."""
         try:
-            return self.instructions_path.read_text(encoding="utf-8")
+            return await asyncio.to_thread(
+                self.instructions_path.read_text, encoding="utf-8",
+            )
         except (FileNotFoundError, OSError) as exc:
             logger.warning(
                 "Could not read instructions file %s: %s",
@@ -95,25 +97,26 @@ class ContextInjectionHook:
             )
             return ""
 
-    def _run_kanban(self) -> str:
+    async def _run_kanban(self) -> str:
         """Run the kanban summary command, returning empty string on failure."""
         try:
-            result = subprocess.run(  # noqa: S603
-                self.kanban_cmd,
-                capture_output=True,
-                text=True,
-                check=False,
+            proc = await asyncio.create_subprocess_exec(
+                self.kanban_cmd[0],
+                *self.kanban_cmd[1:],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout_bytes, stderr_bytes = await proc.communicate()
         except OSError as exc:
             logger.warning("Kanban command %s error: %s", self.kanban_cmd, exc)
             return ""
 
-        if result.returncode != 0:
+        if proc.returncode != 0:
             logger.warning(
                 "Kanban command %s failed (rc=%d): %s",
                 self.kanban_cmd,
-                result.returncode,
-                result.stderr,
+                proc.returncode,
+                stderr_bytes.decode("utf-8", errors="replace"),
             )
             return ""
-        return result.stdout
+        return stdout_bytes.decode("utf-8", errors="replace")

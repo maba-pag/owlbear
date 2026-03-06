@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -25,73 +25,184 @@ class OwlBearSettings(BaseSettings):
     model_config = {"env_prefix": "OWLBEAR_"}
 
     # --- LLM provider ---
-    provider: Literal["copilot"] = "copilot"
-    copilot_token_path: Path = Path.home() / ".owlbear" / "copilot_token.json"
-    copilot_base_url: str = "https://api.individual.githubcopilot.com"
-    chat_model: str = "gpt-4o"
+    provider: Literal["copilot"] = Field(
+        default="copilot",
+        description="LLM provider backend. Currently only 'copilot' is supported.",
+    )
+    copilot_token_path: Path = Field(
+        default=Path.home() / ".owlbear" / "copilot_token.json",
+        description="Path to the cached GitHub Copilot OAuth token JSON file.",
+    )
+    copilot_base_url: str = Field(
+        default="https://api.individual.githubcopilot.com",
+        description="Base URL for the GitHub Copilot API.",
+    )
+    chat_model: str = Field(
+        default="gpt-4o",
+        description="Model identifier sent to the LLM provider for chat completions.",
+    )
 
     # --- Directories ---
-    config_dir: Path = Path.home() / ".owlbear"
-    agents_dir: Path = Path(__file__).parent / "agents"
-    project_root: Path = Path.home() / "projects"
+    config_dir: Path = Field(
+        default=Path.home() / ".owlbear",
+        description="Root directory for OwlBear configuration and state files.",
+    )
+    agents_dir: Path = Field(
+        default=Path(__file__).parent / "agents",
+        description="Directory containing agent definition YAML files.",
+    )
+    project_root: Path = Field(
+        default=Path.home() / "projects",
+        description="Root directory under which new projects are scaffolded.",
+    )
 
     # --- Slack ---
-    slack_app_token: SecretStr | None = None
-    slack_bot_token: SecretStr | None = None
-    slack_channel_id: str | None = None
+    slack_app_token: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Slack app-level token (xapp-...) for Socket Mode."
+            " All three Slack fields must be set together."
+        ),
+    )
+    slack_bot_token: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Slack bot user OAuth token (xoxb-...). All three Slack fields must be set together."
+        ),
+    )
+    slack_channel_id: str | None = Field(
+        default=None,
+        description=(
+            "Slack channel ID to post messages to. All three Slack fields must be set together."
+        ),
+    )
 
     # --- Knowledge ---
-    knowledge_db_path: Path = Path.home() / ".owlbear" / "knowledge.db"
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
-    knowledge_context_tokens: int = 2000
+    knowledge_db_path: Path = Field(
+        default=Path.home() / ".owlbear" / "knowledge.db",
+        description="Path to the SQLite knowledge graph database.",
+    )
+    embedding_model: str = Field(
+        default="BAAI/bge-small-en-v1.5",
+        description="HuggingFace model identifier for text embeddings.",
+    )
+    knowledge_context_tokens: int = Field(
+        default=2000,
+        description="Token budget for per-turn knowledge context injection. Must be > 0.",
+    )
 
     # --- Usage tracking ---
-    usage_path: Path = Path.home() / ".owlbear" / "usage.jsonl"
+    usage_path: Path = Field(
+        default=Path.home() / ".owlbear" / "usage.jsonl",
+        description="Path to the JSONL file for LLM usage tracking.",
+    )
 
     # --- Notifications ---
-    notification_events: list[str] = ["task_complete", "question_pending", "on_error"]
-    notification_backends: list[str] = ["bell", "sound"]
+    notification_events: list[str] = Field(
+        default=["task_complete", "question_pending", "on_error"],
+        description="Event names that trigger user notifications.",
+    )
+    notification_backends: list[str] = Field(
+        default=["bell", "sound"],
+        description="Notification delivery backends in priority order.",
+    )
 
     # --- GitHub ---
-    github_token: SecretStr | None = None
-    github_owner: str | None = None
-    github_repo: str | None = None
+    github_token: SecretStr | None = Field(
+        default=None,
+        description="GitHub personal access token for API operations.",
+    )
+    github_owner: str | None = Field(
+        default=None,
+        description="GitHub repository owner (user or org) for API operations.",
+    )
+    github_repo: str | None = Field(
+        default=None,
+        description="GitHub repository name for API operations.",
+    )
 
     # --- Observability ---
-    otel_endpoint: str | None = None
+    otel_endpoint: str | None = Field(
+        default=None,
+        description="OpenTelemetry collector endpoint URL. None disables tracing export.",
+    )
 
     # --- Embedding ---
-    embedding_idle_timeout: int = 600
+    embedding_idle_timeout: int = Field(
+        default=600,
+        description=(
+            "Seconds of inactivity before the embedding model is unloaded from memory. >= 0."
+        ),
+    )
 
     # --- Knowledge graph ---
-    knowledge_graph_expansion: bool = True
-    inter_doc_graph_building: bool = False
+    knowledge_graph_expansion: bool = Field(
+        default=True,
+        description="Enable graph-neighbor expansion in knowledge retrieval results.",
+    )
+    inter_doc_graph_building: bool = Field(
+        default=False,
+        description="Enable cross-document edge inference via embedding similarity and LLM.",
+    )
 
     # --- Temporal memory ---
-    temporal_decay_rate: float = 0.001
-    temporal_recency_weight: float = 0.1
+    temporal_decay_rate: float = Field(
+        default=0.001,
+        description=(
+            "Exponential decay rate for temporal memory scoring. Higher values decay faster. >= 0."
+        ),
+    )
+    temporal_recency_weight: float = Field(
+        default=0.1,
+        description="Weight of recency score in temporal memory ranking. 0.0-1.0.",
+    )
 
     # --- MCP servers ---
-    mcp_servers: dict[str, dict[str, Any]] | None = None
+    mcp_servers: dict[str, dict[str, Any]] | None = Field(
+        default=None,
+        description="MCP server configurations keyed by server name. None disables MCP.",
+    )
 
     # --- Approval gates ---
-    approval_policy: list[dict[str, Any]] = [
-        {"tool_name": "git_push"},
-        {"tool_name": "create_pr"},
-        {"tool_name": "deploy"},
-    ]
-    approval_timeout: float = 120.0
+    approval_policy: list[dict[str, Any]] = Field(
+        default=[
+            {"tool_name": "git_push"},
+            {"tool_name": "create_pr"},
+            {"tool_name": "deploy"},
+            {"tool_name": "run_command"},
+        ],
+        description="List of tool-name patterns that require user approval before execution.",
+    )
+    approval_timeout: float = Field(
+        default=120.0,
+        description="Seconds to wait for user approval before timing out. > 0.",
+    )
 
     # --- Progress reporting ---
-    progress_enabled: bool = True
-    progress_interval: float = 30.0
-    progress_detail: Literal["brief", "detailed"] = "brief"
+    progress_enabled: bool = Field(
+        default=True,
+        description="Enable periodic progress reports during long-running agent tasks.",
+    )
+    progress_interval: float = Field(
+        default=30.0,
+        description="Seconds between progress reports. Must be > 0.",
+    )
+    progress_detail: Literal["brief", "detailed"] = Field(
+        default="brief",
+        description="Level of detail in progress reports: 'brief' or 'detailed'.",
+    )
 
     # --- Browser / screenshots ---
-    screenshot_mode: Literal["auto", "manual", "on_error"] = "on_error"
+    screenshot_mode: Literal["auto", "manual", "on_error"] = Field(
+        default="on_error",
+        description="When to capture browser screenshots: 'auto', 'manual', or 'on_error'.",
+    )
 
     # --- Runtime ---
-    debug: bool = False
+    debug: bool = Field(
+        default=False,
+        description="Enable debug mode with verbose logging.",
+    )
 
     @field_validator("progress_interval")
     @classmethod

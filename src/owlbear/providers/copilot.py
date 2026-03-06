@@ -45,7 +45,8 @@ def _build_retry_transport(
     - Max 3 attempts
     - Exponential backoff: base 1 s, multiplier 2, max 30 s
     - Respects ``Retry-After`` header on 429 responses
-    - Only retries :class:`httpx.HTTPStatusError` (transient codes)
+    - Retries :class:`httpx.HTTPStatusError` (transient codes),
+      :class:`httpx.ConnectError`, and :class:`httpx.TimeoutException`
     - Re-raises the original exception after exhausting retries
 
     Args:
@@ -55,7 +56,9 @@ def _build_retry_transport(
         Configured :class:`AsyncTenacityTransport`.
     """
     config = RetryConfig(
-        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        retry=retry_if_exception_type(
+            (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_retry_after(
             fallback_strategy=wait_exponential(multiplier=2, min=1, max=30),
@@ -96,7 +99,10 @@ async def create_copilot_client(settings: OwlBearSettings | None = None) -> Asyn
     base_url = derive_base_url(token)
 
     transport = _build_retry_transport()
-    http_client = httpx.AsyncClient(transport=transport)
+    http_client = httpx.AsyncClient(
+        transport=transport,
+        timeout=httpx.Timeout(600, connect=5),
+    )
 
     return AsyncOpenAI(
         api_key=token,

@@ -30,6 +30,7 @@ from owlbear.auth.copilot import (
     save_token,
 )
 from owlbear.config import OwlBearSettings
+from owlbear.core.errors import error_to_user_message
 from owlbear.memory.session import SessionStore
 from owlbear.memory.usage import UsageRecord, UsageTracker
 from owlbear.tools.browser.launcher import (
@@ -395,21 +396,15 @@ def ks_add(  # noqa: PLR0913
     source_type: Annotated[
         str, typer.Option("--type", "-t", help="Source type: url_list, crawl, or file_glob.")
     ],
-    urls: Annotated[
-        str, typer.Option("--urls", help="Comma-separated URLs (for url_list).")
-    ] = "",
+    urls: Annotated[str, typer.Option("--urls", help="Comma-separated URLs (for url_list).")] = "",
     seeds: Annotated[
         str, typer.Option("--seeds", help="Comma-separated seed URLs (for crawl).")
     ] = "",
-    pattern: Annotated[
-        str, typer.Option("--pattern", help="Glob pattern (for file_glob).")
-    ] = "",
+    pattern: Annotated[str, typer.Option("--pattern", help="Glob pattern (for file_glob).")] = "",
     scope: Annotated[
         str, typer.Option("--scope", "-s", help="Scope (default: global).")
     ] = "global",
-    max_depth: Annotated[
-        int, typer.Option("--max-depth", help="Max crawl depth (for crawl).")
-    ] = 1,
+    max_depth: Annotated[int, typer.Option("--max-depth", help="Max crawl depth (for crawl).")] = 1,
     max_pages: Annotated[
         int, typer.Option("--max-pages", help="Max pages to crawl (for crawl).")
     ] = 50,
@@ -464,9 +459,7 @@ def ks_add(  # noqa: PLR0913
 
 @knowledge_source_app.command("list")
 def ks_list(
-    scope: Annotated[
-        str, typer.Option("--scope", "-s", help="Filter by scope.")
-    ] = "",
+    scope: Annotated[str, typer.Option("--scope", "-s", help="Filter by scope.")] = "",
 ) -> None:
     """List knowledge sources."""
     store = _get_source_store()
@@ -504,9 +497,7 @@ def ks_list(
 @knowledge_source_app.command("show")
 def ks_show(
     name: Annotated[str, typer.Argument(help="Name of the source to show.")],
-    scope: Annotated[
-        str, typer.Option("--scope", "-s", help="Source scope.")
-    ] = "global",
+    scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
 ) -> None:
     """Show details of a knowledge source."""
     import json  # noqa: PLC0415
@@ -530,15 +521,11 @@ def ks_show(
 
 @knowledge_source_app.command("refresh")
 def ks_refresh(
-    name: Annotated[
-        str, typer.Option("--name", "-n", help="Name of source to refresh.")
-    ] = "",
+    name: Annotated[str, typer.Option("--name", "-n", help="Name of source to refresh.")] = "",
     refresh_all: Annotated[  # noqa: FBT002
         bool, typer.Option("--all", "-a", help="Refresh all enabled sources.")
     ] = False,
-    scope: Annotated[
-        str, typer.Option("--scope", "-s", help="Source scope.")
-    ] = "global",
+    scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
 ) -> None:
     """Refresh knowledge sources."""
     if not name and not refresh_all:
@@ -574,9 +561,7 @@ def ks_refresh(
 @knowledge_source_app.command("remove")
 def ks_remove(
     name: Annotated[str, typer.Argument(help="Name of the source to remove.")],
-    scope: Annotated[
-        str, typer.Option("--scope", "-s", help="Source scope.")
-    ] = "global",
+    scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
 ) -> None:
     """Remove a knowledge source."""
     store = _get_source_store()
@@ -769,7 +754,7 @@ def slack_auth() -> None:
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
-        typer.echo(f"Error: Slack API request failed: {exc}")
+        typer.echo(f"Error: Slack API request failed: {error_to_user_message(exc)}")
         raise typer.Exit(code=1) from exc
 
     if not data.get("ok"):
@@ -799,7 +784,7 @@ def slack_test() -> None:
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
-        typer.echo(f"Error: Slack API request failed: {exc}")
+        typer.echo(f"Error: Slack API request failed: {error_to_user_message(exc)}")
         raise typer.Exit(code=1) from exc
 
     if not data.get("ok"):
@@ -897,7 +882,7 @@ def login() -> None:
     try:
         asyncio.run(_login_async())
     except Exception as exc:
-        typer.echo(f"Login failed: {exc}")
+        typer.echo(f"Login failed: {error_to_user_message(exc)}")
         raise typer.Exit(code=1) from exc
 
 
@@ -1096,7 +1081,7 @@ async def _chat_loop(agent: OwlBearAgent, channel: CLIChannel) -> None:
                 response = await agent.turn(text)
                 await channel.send(response)
             except Exception as exc:  # noqa: BLE001
-                await channel.send(f"Error: {exc}")
+                await channel.send(f"Error: {error_to_user_message(exc)}")
     except KeyboardInterrupt:
         pass
 
@@ -1172,6 +1157,7 @@ def run_cmd(
                 agent=result.agent,
                 config_dir=config_dir,
                 settings=settings,
+                error_journal=result.error_journal,
             )
         finally:
             if result.mcp_registry:

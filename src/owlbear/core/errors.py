@@ -16,15 +16,28 @@ Downstream consumers:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
 
 import httpx
-import openai
 import pydantic
 
+try:
+    import openai
+except ImportError:  # openai is an optional dependency
+    openai = None  # type: ignore[assignment]
+
 from owlbear.core.command_guard import BlockedCommandError
+
+# ---------------------------------------------------------------------------
+# Optional-dependency error tuples
+# ---------------------------------------------------------------------------
+
+_openai_auth_errors: tuple[type[Exception], ...] = (
+    (openai.AuthenticationError, openai.PermissionDeniedError) if openai is not None else ()
+)
 
 # ---------------------------------------------------------------------------
 # Error categories
@@ -76,13 +89,11 @@ def classify_error(exc: Exception) -> ErrorCategory:
         return _classify_http_status(exc.response.status_code)
 
     # --- Transient network / timeout errors --------------------------------
-    if isinstance(
-        exc, (httpx.ConnectError, httpx.TimeoutException, TimeoutError, ConnectionError)
-    ):
+    if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, TimeoutError, ConnectionError)):
         return ErrorCategory.TRANSIENT
 
     # --- Auth SDK errors ---------------------------------------------------
-    if isinstance(exc, (openai.AuthenticationError, openai.PermissionDeniedError)):
+    if _openai_auth_errors and isinstance(exc, _openai_auth_errors):
         return ErrorCategory.AUTH
 
     # --- Permanent (non-retryable) -----------------------------------------
@@ -129,3 +140,51 @@ class ToolError:
             "tool_name": self.tool_name,
             "message": self.message,
         }
+
+
+# ---------------------------------------------------------------------------
+# User-facing error sanitization
+# ---------------------------------------------------------------------------
+
+_SAFE_MESSAGES: dict[type[Exception], str] = {
+    httpx.ConnectError: "Connection failed",
+    httpx.TimeoutException: "Request timed out",
+    pydantic.ValidationError: "Validation error",
+    FileNotFoundError: "File not found",
+    PermissionError: "Permission denied",
+}
+if openai is not None:
+    _SAFE_MESSAGES[openai.AuthenticationError] = "Authentication failed"
+    _SAFE_MESSAGES[openai.PermissionDeniedError] = "Permission denied"
+
+_SCRUB_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"Bearer\s+\S+"), "[REDACTED]"),
+    (re.compile(r"(?i)(token|key|secret|password)=[^\s&]+"), r"\1=[REDACTED]"),
+    (re.compile(r"https?://\S+"), "[URL]"),
+    (re.compile(r"[A-Za-z]:\\[^\s]+"), "[PATH]"),
+    (re.compile(r"/(?:[^\s/]+/)+[^\s/]+"), "[PATH]"),
+]
+
+
+def error_to_user_message(exc: Exception) -> str:
+    """Return a safe, user-facing error description.
+
+    Pure function — no I/O, no logging, no side effects.  Uses a type-based
+    mapping for known exception types, with a regex-scrubbed fallback for
+    everything else.
+    """
+    # HTTPStatusError needs dynamic formatting (status code).
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP request failed (status {exc.response.status_code})"
+
+    # Check static safe-message mapping.
+    for exc_type, safe_msg in _SAFE_MESSAGES.items():
+        if isinstance(exc, exc_type):
+            return safe_msg
+
+    # Fallback: scrub sensitive patterns from the original message.
+    msg = str(exc)
+    for pattern, replacement in _SCRUB_PATTERNS:
+        msg = pattern.sub(replacement, msg)
+
+    return f"{type(exc).__name__}: {msg}"

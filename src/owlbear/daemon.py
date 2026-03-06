@@ -16,12 +16,13 @@ import os
 import random
 import signal
 import sys
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Self
 
 import logfire
 from pydantic_ai import Agent
 
-from owlbear.core.errors import ErrorCategory, classify_error
+from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
 from owlbear.providers.copilot import create_copilot_model
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.agent import OwlBearAgent
+    from owlbear.memory.error_journal import ErrorJournal
 
 logger = logging.getLogger(__name__)
 
@@ -180,13 +182,42 @@ def configure_otel(otel_endpoint: str) -> None:
     logger.info("OTel configured — exporting to %s", otel_endpoint)
 
 
-async def _recover_from_error(
+def _log_to_journal(  # noqa: PLR0913
+    journal: ErrorJournal | None,
+    *,
+    error_type: str,
+    exc: Exception,
+    action_taken: str,
+    attempt: int,
+    resolved: bool,
+    agent: OwlBearAgent,
+) -> None:
+    """Best-effort write to the error journal (never raises)."""
+    if journal is None:
+        return
+    try:
+        journal.log(
+            ts=datetime.now(UTC).isoformat(),
+            error_type=error_type,
+            tool_name="agent.turn",
+            exc_message=str(exc),
+            action_taken=action_taken,
+            attempt=attempt,
+            resolved=resolved,
+            session_id=str(agent.session.path),
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to write error journal entry", exc_info=True)
+
+
+async def _recover_from_error(  # noqa: PLR0913
     exc: Exception,
     message: str,
     *,
     agent: OwlBearAgent,
     channel: ChannelPlugin,
     settings: OwlBearSettings | None,
+    error_journal: ErrorJournal | None = None,
 ) -> None:
     """Apply classified recovery strategy for a failed ``agent.turn()`` call.
 
@@ -217,9 +248,30 @@ async def _recover_from_error(
                     retry_exc,
                 )
             else:
+                _log_to_journal(
+                    error_journal,
+                    error_type=category.value,
+                    exc=exc,
+                    action_taken="transient_retry",
+                    attempt=attempt,
+                    resolved=True,
+                    agent=agent,
+                )
                 return
+        _log_to_journal(
+            error_journal,
+            error_type=category.value,
+            exc=last_exc,
+            action_taken="transient_retries_exhausted",
+            attempt=_TRANSIENT_MAX_RETRIES,
+            resolved=False,
+            agent=agent,
+        )
         logger.exception("Transient retries exhausted", exc_info=last_exc)
-        await channel.send(f"Error: {last_exc}")
+        try:
+            await channel.send(f"Error: {error_to_user_message(last_exc)}")
+        except Exception:
+            logger.exception("Failed to send error to channel (original: %s)", last_exc)
 
     elif category is ErrorCategory.AUTH and settings is not None:
         try:
@@ -227,22 +279,56 @@ async def _recover_from_error(
             agent.update_model(new_model)
             response = await agent.turn(message)
             await channel.send(response)
+            _log_to_journal(
+                error_journal,
+                error_type=category.value,
+                exc=exc,
+                action_taken="auth_refresh",
+                attempt=1,
+                resolved=True,
+                agent=agent,
+            )
         except Exception as retry_exc:
+            _log_to_journal(
+                error_journal,
+                error_type=category.value,
+                exc=retry_exc,
+                action_taken="auth_refresh_failed",
+                attempt=1,
+                resolved=False,
+                agent=agent,
+            )
             logger.exception("Token refresh/retry failed")
-            await channel.send(f"Error: {retry_exc}")
+            try:
+                await channel.send(f"Error: {error_to_user_message(retry_exc)}")
+            except Exception:
+                logger.exception("Failed to send error to channel (original: %s)", retry_exc)  # noqa: TRY401
 
     else:  # PERMANENT, TOOL_SEMANTIC, or AUTH without settings
+        _log_to_journal(
+            error_journal,
+            error_type=category.value,
+            exc=exc,
+            action_taken="permanent",
+            attempt=1,
+            resolved=False,
+            agent=agent,
+        )
         logger.exception("Error processing message")
-        await channel.send(f"Error: {exc}")
+        try:
+            await channel.send(f"Error: {error_to_user_message(exc)}")
+        except Exception:
+            logger.exception("Failed to send error to channel (original: %s)", exc)
 
 
-async def run_daemon(
+async def run_daemon(  # noqa: PLR0913
     *,
     channel: ChannelPlugin,
     agent: OwlBearAgent,
     config_dir: Path,
     settings: OwlBearSettings | None = None,
     otel_endpoint: str | None = None,
+    error_journal: ErrorJournal | None = None,
 ) -> None:
     """Run the daemon receive → turn → send loop.
 
@@ -265,6 +351,10 @@ async def run_daemon(
     otel_endpoint:
         Optional OTLP endpoint URL. When set, Logfire SDK is configured
         before instrumentation.
+    error_journal:
+        Optional :class:`~owlbear.memory.error_journal.ErrorJournal` for
+        logging errors from ``_recover_from_error``.  When *None*, error
+        journal logging is silently skipped.
     """
     global _shutdown  # noqa: PLW0603
     _shutdown = False
@@ -307,7 +397,12 @@ async def run_daemon(
                 await channel.send(response)
             except Exception as exc:  # noqa: BLE001
                 await _recover_from_error(
-                    exc, message, agent=agent, channel=channel, settings=settings,
+                    exc,
+                    message,
+                    agent=agent,
+                    channel=channel,
+                    settings=settings,
+                    error_journal=error_journal,
                 )
 
     finally:

@@ -30,12 +30,14 @@ from owlbear.core.observability import EventStore, ObservabilityHook
 from owlbear.core.subagent_hook import SubagentVerificationHook
 from owlbear.core.test_hook import TestVerificationHook
 from owlbear.memory.context import ContextManager
+from owlbear.memory.error_journal import ErrorJournal
 from owlbear.memory.session import SessionStore
 from owlbear.memory.usage import UsageTracker
 from owlbear.projects.store import ProjectStore
 from owlbear.providers.copilot import create_copilot_model
 from owlbear.tools.ask_user import AskUserToolset
 from owlbear.tools.browser.config import BrowserConfig
+from owlbear.tools.browser.safety import URLSafetyGuard
 from owlbear.tools.browser.toolset import BrowserToolset
 from owlbear.tools.filesystem import FileToolset
 from owlbear.tools.git_local import GitLocalToolset
@@ -134,13 +136,15 @@ class BootstrapResult:
         cleanup callable that calls ``stop()`` is also appended to
         :attr:`cleanup` so teardown always cancels the timer.
     cleanup:
-        Async callables to invoke during shutdown (e.g. progress stop).
+        Callables to invoke during shutdown (e.g. ``progress_reporter.stop``,
+        ``conn.close``).  May include both sync and async callables.
     """
 
     agent: OwlBearAgent
     channel: ChannelPlugin
     mcp_registry: MCPServerRegistry | None
     hooks: HookRegistry
+    error_journal: ErrorJournal
     progress_reporter: ProgressReporter | None = None
     cleanup: list[Callable] = field(default_factory=list)
 
@@ -169,6 +173,7 @@ def build_hooks(
     hooks = HookRegistry()
 
     CommandSafetyGuard().register(hooks)
+    URLSafetyGuard(config=BrowserConfig()).register(hooks)
     AutoLintHook().register(hooks)
     SubagentVerificationHook().register(hooks)
     TestVerificationHook().register(hooks)
@@ -235,7 +240,7 @@ def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugi
         )
 
     if channel_name == "voice":
-        from owlbear.channels.voice import VoiceChannel  # noqa: PLC0415
+        from owlbear.voice import VoiceChannel  # noqa: PLC0415
 
         return VoiceChannel()
 
@@ -528,13 +533,14 @@ def _build_screenshot_components(
     return toolset
 
 
-def build_toolsets(  # noqa: PLR0913, C901
+def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
     settings: OwlBearSettings,
     workspace: Path,
     hooks: HookRegistry,
     channel: ChannelPlugin,
     active_project_id: str | None = None,
     chat_model: str | Model | None = None,
+    cleanup: list[Callable] | None = None,
 ) -> tuple[list[AbstractToolset], KnowledgeQueryService | None]:
     """Build all toolsets, wrapping non-delegation ones in :class:`HookedToolset`.
 
@@ -546,6 +552,9 @@ def build_toolsets(  # noqa: PLR0913, C901
         active_project_id: Optional active project ID for knowledge scoping.
         chat_model: Optional PydanticAI Model or model name for knowledge
             agents.  When ``None``, falls back to ``settings.chat_model``.
+        cleanup: Optional mutable list to which teardown callables (e.g.
+            ``conn.close``) are appended.  Passed in by :func:`bootstrap`
+            so infrastructure resources are closed during shutdown.
 
     Returns:
         Tuple of (toolset list, optional :class:`KnowledgeQueryService`).
@@ -594,6 +603,8 @@ def build_toolsets(  # noqa: PLR0913, C901
     )
 
     if infra is not None:
+        if cleanup is not None:
+            cleanup.append(infra.conn.close)
         # Knowledge toolset
         knowledge_result = _build_knowledge_toolset(
             workspace,
@@ -804,7 +815,7 @@ def _patch_project_toolset_agent(
         while hasattr(inner, "wrapped"):
             inner = inner.wrapped
         if type(inner).__name__ == "ProjectToolset":
-            inner._agent = agent  # noqa: SLF001
+            inner.bind_agent(agent)
             break
 
 
@@ -849,6 +860,9 @@ async def bootstrap(
     workspace = workspace_root or _Path.cwd()
     cleanup: list[Callable] = []
 
+    # 0b. Error journal
+    error_journal = ErrorJournal(workspace)
+
     # 1. Channel (created first so build_hooks can wire ProgressReporter)
     channel = create_channel(settings, channel_name)
 
@@ -874,6 +888,7 @@ async def bootstrap(
         channel,
         active_project_id=active_project.id if active_project else None,
         chat_model=model,
+        cleanup=cleanup,
     )
 
     # 4b. ProjectToolset — when an active project provides a store
@@ -926,7 +941,7 @@ async def bootstrap(
         toolsets=toolsets,
         knowledge_service=knowledge_service,
     )
-    agent._deps.agent_registry = agent_registry  # noqa: SLF001
+    agent.set_agent_registry(agent_registry)
 
     # Patch agent reference into ProjectToolset now that agent is created
     if active_project is not None:
@@ -937,6 +952,7 @@ async def bootstrap(
         channel=channel,
         mcp_registry=mcp_registry,
         hooks=hooks,
+        error_journal=error_journal,
         progress_reporter=progress_reporter,
         cleanup=cleanup,
     )

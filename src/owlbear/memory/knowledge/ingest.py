@@ -272,7 +272,6 @@ class IngestPipeline:
             Summary with document_id, counts, and final status.
         """
         source_str = str(source)
-        document_id: str | None = None
 
         try:
             # 1. Intake — read content from source.
@@ -302,61 +301,10 @@ class IngestPipeline:
                 )
                 self.delete_document_data(existing_doc_id)
 
-            # 3. Create new document tracking.
-            document_id = uuid4().hex
-            self._set_status(document_id, "pending", source=source_str, scope=scope)
-            self._set_status(document_id, "processing", scope=scope)
-
-            # 4. Chunk the content.
-            chunks = self._chunker.chunk(intake_result.content, metadata=intake_result.metadata)
-
-            # 5. Insert document record, then persist chunks.
-            self._insert_document(document_id, intake_result, scope=scope)
-            chunk_ids = self._store_chunks(document_id, chunks, scope=scope)
-
-            # 6. Parallel: embed (CPU-bound) + extract (LLM I/O-bound).
-            embed_result, extract_result = await asyncio.gather(
-                self._run_embed(chunks),
-                self._run_extract(chunks),
-                return_exceptions=True,
-            )
-
-            # 7. Store successful results, determine final status.
-            entity_count, edge_count, status = self._process_results(
-                document_id,
-                chunks,
-                embed_result,
-                extract_result,
-                scope=scope,
-                chunk_ids=chunk_ids,
-            )
-
-            self._set_status(document_id, status, scope=scope)
-
-            # 8. Record content hash for future delta checks.
-            self._update_content_hash(document_id, intake_result.content)
-
-            # 9. Schedule graph enrichment (non-blocking).
-            if not isinstance(extract_result, BaseException):
-                self._schedule_graph_enrichment(document_id, extract_result, scope)
-
-                # 9b. Schedule inter-document graph enrichment (non-blocking).
-                self._schedule_inter_doc_enrichment(document_id, extract_result, scope)
-
-            return IngestResult(
-                document_id=document_id,
-                chunk_count=len(chunks),
-                entity_count=entity_count,
-                edge_count=edge_count,
-                status=status,
-                source_pipeline=self._pipeline_name,
-            )
-
         except Exception as exc:  # noqa: BLE001
             logger.warning("Ingest failed for %s", source_str, exc_info=True)
-            if document_id is None:
-                document_id = uuid4().hex
-                self._set_status(document_id, "pending", source=source_str, scope=scope)
+            document_id = uuid4().hex
+            self._set_status(document_id, "pending", source=source_str, scope=scope)
             self._set_status(document_id, "failed", error=str(exc), scope=scope)
             return IngestResult(
                 document_id=document_id,
@@ -366,6 +314,9 @@ class IngestPipeline:
                 status="failed",
                 source_pipeline=self._pipeline_name,
             )
+
+        # 3-9. Delegate remaining pipeline steps.
+        return await self._ingest_from_intake(intake_result, scope=scope)
 
     async def ingest_text(
         self,

@@ -45,6 +45,10 @@ class FileToolset(FunctionToolset):
         self._root = workspace_root.resolve()
         self._register_tools()
 
+    def update_workspace(self, workspace: Path) -> None:
+        """Set the workspace root to *workspace* (stored resolved)."""
+        self._root = workspace.resolve()
+
     # ------------------------------------------------------------------
     # Path traversal guard
     # ------------------------------------------------------------------

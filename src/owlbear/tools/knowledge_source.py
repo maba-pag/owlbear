@@ -58,6 +58,10 @@ class KnowledgeSourceToolset(FunctionToolset):
         self._workspace_root = workspace_root
         self._register_tools()
 
+    def update_workspace(self, workspace: Path) -> None:
+        """Set the workspace root to *workspace*."""
+        self._workspace_root = workspace
+
     # ------------------------------------------------------------------
     # Tool registration
     # ------------------------------------------------------------------
@@ -76,10 +80,7 @@ class KnowledgeSourceToolset(FunctionToolset):
         self.add_function(
             self._list_sources,
             name="list_sources",
-            description=(
-                "List all registered knowledge sources, optionally "
-                "filtered by scope."
-            ),
+            description=("List all registered knowledge sources, optionally filtered by scope."),
         )
         self.add_function(
             self._refresh_source,

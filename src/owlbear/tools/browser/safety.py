@@ -35,7 +35,7 @@ class BlockedURLError(Exception):
 class URLSafetyGuard:
     """``PRE_TOOL_USE`` hook that blocks browser navigation to denied URLs.
 
-    The guard inspects tool-call payloads for ``navigate`` calls and checks
+    The guard inspects tool-call payloads for ``browser_navigate`` calls and checks
     the target URL against :pyattr:`BrowserConfig.blocked_urls` and
     :pyattr:`BrowserConfig.allowed_urls`.
 
@@ -67,7 +67,7 @@ class URLSafetyGuard:
         if not isinstance(data, dict):
             return
 
-        if data.get("tool_name") != "navigate":
+        if data.get("tool_name") != "browser_navigate":
             return
 
         args = data.get("args")

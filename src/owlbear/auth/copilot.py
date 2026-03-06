@@ -15,13 +15,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import ssl
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 import truststore
+
+from owlbear.core.retry import TRANSIENT_RETRY
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -64,13 +68,17 @@ def _ssl_context() -> ssl.SSLContext:
 # ---------------------------------------------------------------------------
 
 
+@TRANSIENT_RETRY
 async def request_device_code() -> dict[str, Any]:
     """Start the device-flow by requesting a device code from GitHub.
 
     Returns a dict with keys: ``device_code``, ``user_code``,
     ``verification_uri``, ``expires_in``, ``interval``.
     """
-    async with httpx.AsyncClient(verify=_ssl_context()) as client:
+    async with httpx.AsyncClient(
+        verify=_ssl_context(),
+        timeout=httpx.Timeout(10, connect=5),
+    ) as client:
         resp = await client.post(
             DEVICE_CODE_URL,
             data={"client_id": COPILOT_CLIENT_ID, "scope": "read:user"},
@@ -95,7 +103,10 @@ async def poll_for_access_token(
     Returns the GitHub access token string.
     """
     start = time.time()
-    async with httpx.AsyncClient(verify=_ssl_context()) as client:
+    async with httpx.AsyncClient(
+        verify=_ssl_context(),
+        timeout=httpx.Timeout(10, connect=5),
+    ) as client:
         while time.time() - start < expires_in:
             resp = await client.post(
                 ACCESS_TOKEN_URL,
@@ -126,13 +137,17 @@ async def poll_for_access_token(
     raise TimeoutError(msg)
 
 
+@TRANSIENT_RETRY
 async def exchange_for_copilot_token(access_token: str) -> dict[str, Any]:
     """Exchange a GitHub access token for a Copilot session token.
 
     Calls ``/copilot_internal/v2/token`` and returns the full
     response dict (contains ``token`` and ``expires_at``).
     """
-    async with httpx.AsyncClient(verify=_ssl_context()) as client:
+    async with httpx.AsyncClient(
+        verify=_ssl_context(),
+        timeout=httpx.Timeout(10, connect=5),
+    ) as client:
         resp = await client.get(
             COPILOT_TOKEN_URL,
             headers={
@@ -177,10 +192,22 @@ def save_token(token_data: dict[str, Any], path: Path | None = None) -> None:
     """Persist token data to a JSON file.
 
     Creates parent directories if they don't exist.
+    On Unix, the file is created with mode 0o600 (owner read/write only)
+    and the parent directory is set to 0o700 (owner only).
+    On Windows, falls back to Path.write_text() (ACL inheritance is sufficient).
     """
     path = path or _DEFAULT_TOKEN_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(token_data))
+
+    content = json.dumps(token_data)
+
+    if sys.platform != "win32":
+        path.parent.chmod(0o700)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+    else:
+        path.write_text(content)
 
 
 def load_token(path: Path | None = None) -> dict[str, Any] | None:

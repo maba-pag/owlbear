@@ -83,7 +83,7 @@ async def is_cdp_available(port: int = 9222) -> bool:
     """
     url = f"http://localhost:{port}/json/version"
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(3, connect=2)) as client:
             resp = await client.get(url)
             return resp.status_code == 200  # noqa: PLR2004
     except (httpx.ConnectError, httpx.TimeoutException):

@@ -122,9 +122,7 @@ class BookmarkPipeline:
             )
 
         # 3. Evaluate relevance
-        evaluation = await self._evaluator.evaluate(
-            content or "", project_context
-        )
+        evaluation = await self._evaluator.evaluate(content or "", project_context)
 
         # 4. Conditionally ingest
         ingested = False
@@ -138,9 +136,7 @@ class BookmarkPipeline:
         if should_ingest:
             assert self._ingest is not None  # for type narrowing
             assert content is not None  # guarded by `content` truthiness above
-            result = await self._ingest.ingest_text(
-                content, metadata={"url": url}, scope=scope
-            )
+            result = await self._ingest.ingest_text(content, metadata={"url": url}, scope=scope)
             ingested = not result.skipped
             if ingested:
                 document_id = result.document_id
@@ -178,13 +174,19 @@ async def _default_web_read(url: str) -> str | None:
     """Fetch *url* with httpx and extract text with trafilatura.
 
     This is the fallback used when no ``web_read_fn`` is provided to
-    :class:`BookmarkPipeline`.
+    :class:`BookmarkPipeline`.  Retries transient HTTP errors.
     """
     import httpx  # noqa: PLC0415
     import trafilatura  # noqa: PLC0415
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
+    from owlbear.core.retry import TRANSIENT_RETRY  # noqa: PLC0415
 
+    @TRANSIENT_RETRY
+    async def _fetch(target: str) -> httpx.Response:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+            resp = await client.get(target)
+            resp.raise_for_status()
+        return resp
+
+    resp = await _fetch(url)
     return trafilatura.extract(resp.text)

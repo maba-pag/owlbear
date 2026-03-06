@@ -17,7 +17,9 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
+
+from owlbear.core.jsonl_store import JsonlStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -53,15 +55,12 @@ class ObservabilityEvent(BaseModel, frozen=True):
     metadata: dict = {}
 
 
-_adapter: TypeAdapter[ObservabilityEvent] = TypeAdapter(ObservabilityEvent)
-
-
 # ---------------------------------------------------------------------------
 # EventStore — append-only JSONL persistence + aggregation
 # ---------------------------------------------------------------------------
 
 
-class EventStore:
+class EventStore(JsonlStore[ObservabilityEvent]):
     """Append-only JSONL store for :class:`ObservabilityEvent`.
 
     Usage::
@@ -73,33 +72,7 @@ class EventStore:
     """
 
     def __init__(self, path: Path) -> None:
-        self._path = path
-
-    @property
-    def path(self) -> Path:
-        """Location of the JSONL file."""
-        return self._path
-
-    # -- write ---------------------------------------------------------------
-
-    def append(self, event: ObservabilityEvent) -> None:
-        """Serialize *event* and append it as a new JSONL line."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        line = _adapter.dump_json(event).decode("utf-8")
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-
-    # -- read ----------------------------------------------------------------
-
-    def load(self) -> list[ObservabilityEvent]:
-        """Deserialize all events from the JSONL file.
-
-        Returns an empty list when the file doesn't exist or is empty.
-        """
-        if not self._path.exists():
-            return []
-        lines = self._path.read_text(encoding="utf-8").strip().splitlines()
-        return [_adapter.validate_json(line) for line in lines if line]
+        super().__init__(path, ObservabilityEvent)
 
     # -- query ---------------------------------------------------------------
 

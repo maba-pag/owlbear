@@ -23,6 +23,7 @@ import httpx
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.hooks import HookEvent
+from owlbear.core.retry import TRANSIENT_RETRY
 
 if TYPE_CHECKING:
     from pydantic import SecretStr
@@ -119,6 +120,21 @@ class GitHubToolset(FunctionToolset):
                 {"tool_name": tool_name, "args": args},
             )
 
+    @TRANSIENT_RETRY
+    async def _api_request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
+        """Send an HTTP request to the GitHub API with retry on transient errors.
+
+        Args:
+            method: HTTP method (``GET``, ``POST``, etc.).
+            url: Fully-qualified URL.
+            **kwargs: Forwarded to :meth:`httpx.AsyncClient.request`.
+
+        Returns:
+            The :class:`httpx.Response` on success or non-transient status.
+        """
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5)) as client:
+            return await client.request(method, url, headers=self._headers(), **kwargs)
+
     # ------------------------------------------------------------------
     # Tool registration
     # ------------------------------------------------------------------
@@ -173,8 +189,7 @@ class GitHubToolset(FunctionToolset):
         url = f"{_BASE_URL}/repos/{self._owner}/{self._repo}/pulls"
         payload = {"title": title, "head": head, "base": base, "body": body}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, headers=self._headers())
+        resp = await self._api_request("POST", url, json=payload)
 
         if resp.status_code >= _HTTP_ERROR_THRESHOLD:
             data = resp.json()
@@ -197,8 +212,7 @@ class GitHubToolset(FunctionToolset):
         url = f"{_BASE_URL}/repos/{self._owner}/{self._repo}/pulls"
         params = {"state": state, "per_page": per_page}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, params=params, headers=self._headers())
+        resp = await self._api_request("GET", url, params=params)
 
         if resp.status_code >= _HTTP_ERROR_THRESHOLD:
             data = resp.json()
@@ -224,8 +238,7 @@ class GitHubToolset(FunctionToolset):
         url = f"{_BASE_URL}/repos/{self._owner}/{self._repo}/issues"
         params = {"state": state, "per_page": per_page}
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, params=params, headers=self._headers())
+        resp = await self._api_request("GET", url, params=params)
 
         if resp.status_code >= _HTTP_ERROR_THRESHOLD:
             data = resp.json()
@@ -245,8 +258,7 @@ class GitHubToolset(FunctionToolset):
         """
         url = f"{_BASE_URL}/repos/{self._owner}/{self._repo}/issues/{number}"
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, headers=self._headers())
+        resp = await self._api_request("GET", url)
 
         if resp.status_code >= _HTTP_ERROR_THRESHOLD:
             data = resp.json()

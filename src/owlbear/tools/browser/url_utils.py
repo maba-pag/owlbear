@@ -167,7 +167,9 @@ class RobotsTxtChecker:
         robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10, connect=5),
+            ) as client:
                 response = await client.get(robots_url, follow_redirects=True)
 
             if response.status_code == 200:  # noqa: PLR2004

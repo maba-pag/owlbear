@@ -58,6 +58,10 @@ class ProjectToolset(FunctionToolset):
         self._project_root = project_root
         self._register_tools()
 
+    def bind_agent(self, agent: object) -> None:
+        """Replace the agent reference (used after deferred construction)."""
+        self._agent = agent
+
     def _register_tools(self) -> None:
         """Register project tools on this toolset."""
         self.add_function(self._switch_project, name="switch_project")
@@ -138,17 +142,14 @@ def _update_toolset_roots(toolsets: list[object], workspace: Path) -> None:
     Handles toolsets wrapped via ``wrapped`` attribute (e.g.
     :class:`~owlbear.tools.hooked.HookedToolset`).
 
-    Recognised attributes:
-
-    * ``_workspace_root`` — used by TerminalToolset, GitLocalToolset, etc.
-    * ``_root`` — used by FileToolset, KnowledgeToolset (stored resolved).
+    Uses the :class:`~owlbear.tools.protocols.WorkspaceAware` protocol
+    to detect toolsets that support workspace updates.
     """
-    resolved = workspace.resolve()
+    from owlbear.tools.protocols import WorkspaceAware  # noqa: PLC0415
+
     for ts in toolsets:
         inner = ts
         while hasattr(inner, "wrapped"):
             inner = inner.wrapped  # type: ignore[union-attr]
-        if hasattr(inner, "_workspace_root"):
-            inner._workspace_root = workspace  # noqa: SLF001
-        if hasattr(inner, "_root"):
-            inner._root = resolved  # noqa: SLF001
+        if isinstance(inner, WorkspaceAware):
+            inner.update_workspace(workspace)

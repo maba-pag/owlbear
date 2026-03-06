@@ -1,13 +1,20 @@
-"""Human escalation via ON_ERROR hook and channel prompt.
+"""Human escalation via channel prompt.
 
-When all retries are exhausted, :class:`EscalationHook` sends a structured
-error summary to the user through a :class:`~owlbear.channels.base.ChannelPlugin`
-and asks them to choose: **retry**, **skip**, or **abort**.
+:class:`EscalationHook` sends a structured error summary to the user through a
+:class:`~owlbear.channels.base.ChannelPlugin` and asks them to choose: **retry**,
+**skip**, or **abort**.
 
-Wire-up::
+The hook does **not** auto-register on ON_ERROR.  Call
+:meth:`~EscalationHook.register_on_error` explicitly if you want hook-driven
+escalation.  In the default OwlBear daemon, error recovery is owned by
+``_recover_from_error`` — this class is kept as a public API for programmatic use.
+
+Usage::
 
     hook = EscalationHook(hooks=registry, channel=channel)
-    # ... later, on retries exhausted:
+    # Explicit opt-in if you want hook-driven firing:
+    hook.register_on_error()
+    # ... or call escalate() directly:
     action = await hook.escalate(error=exc, tool_name="fetch", attempt=3)
 """
 
@@ -17,6 +24,7 @@ import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from owlbear.core.errors import error_to_user_message
 from owlbear.core.hooks import HookEvent
 
 if TYPE_CHECKING:
@@ -39,10 +47,13 @@ class EscalationAction(StrEnum):
 
 
 class EscalationHook:
-    """Registers on ON_ERROR; escalates to the user when retries fail.
+    """Escalates errors to the user via a channel prompt.
+
+    Does **not** auto-register on ON_ERROR.  Call :meth:`register_on_error`
+    to opt in to hook-driven escalation.
 
     Args:
-        hooks: The :class:`HookRegistry` to register on.
+        hooks: The :class:`HookRegistry` for optional registration.
         channel: Channel adapter used to communicate with the user.
     """
 
@@ -50,9 +61,12 @@ class EscalationHook:
         self._hooks = hooks
         self._channel = channel
         self._handler = self._on_error
-        hooks.register(HookEvent.ON_ERROR, self._handler)
 
     # -- public API ----------------------------------------------------------
+
+    def register_on_error(self) -> None:
+        """Opt-in: register the handler on ON_ERROR."""
+        self._hooks.register(HookEvent.ON_ERROR, self._handler)
 
     def unregister(self) -> None:
         """Remove the ON_ERROR handler from the hook registry."""
@@ -72,7 +86,7 @@ class EscalationHook:
         """
         message = (
             f"Error in tool '{tool_name}' after {attempt} attempt(s):\n"
-            f"  {error}\n\n"
+            f"  {error_to_user_message(error)}\n\n"
             "How would you like to proceed?\n"
             "[1] retry\n"
             "[2] skip\n"

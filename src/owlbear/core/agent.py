@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
     from owlbear.channels.base import ChannelPlugin
+    from owlbear.core.agent_registry import AgentRegistry
     from owlbear.memory.context import ContextManager
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
@@ -94,6 +95,10 @@ class OwlBearAgent:
         self.inner.model = new_model
         self._model_name = self._extract_model_name(new_model)
 
+    def set_agent_registry(self, registry: AgentRegistry) -> None:
+        """Assign the agent registry on the shared deps."""
+        self._deps.agent_registry = registry
+
     @staticmethod
     def _extract_model_name(model: str | Model) -> str:
         """Return a plain string model name for usage tracking."""
@@ -120,9 +125,7 @@ class OwlBearAgent:
         run_kwargs: dict[str, object] = {}
         if self._knowledge_service is not None:
             try:
-                run_kwargs["instructions"] = self._knowledge_service.query_for_context(
-                    prompt
-                )
+                run_kwargs["instructions"] = self._knowledge_service.query_for_context(prompt)
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Knowledge context injection failed for prompt: %s",

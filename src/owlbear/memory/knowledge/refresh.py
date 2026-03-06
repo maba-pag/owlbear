@@ -76,6 +76,10 @@ class RefreshOrchestrator:
         self._crawler = crawler
         self._workspace_root = workspace_root or Path.cwd()
 
+    def update_workspace(self, workspace: Path) -> None:
+        """Set the workspace root to *workspace*."""
+        self._workspace_root = workspace
+
     # -- public API ----------------------------------------------------------
 
     async def refresh(self, source: KnowledgeSource) -> RefreshResult:
@@ -103,9 +107,7 @@ class RefreshOrchestrator:
         self._update_source_record(source, result)
         return result
 
-    async def refresh_all(
-        self, scope: str | None = None
-    ) -> list[RefreshResult]:
+    async def refresh_all(self, scope: str | None = None) -> list[RefreshResult]:
         """Refresh all enabled sources, ordered by priority descending.
 
         Parameters
@@ -123,9 +125,7 @@ class RefreshOrchestrator:
 
     # -- handlers ------------------------------------------------------------
 
-    async def _handle_url_list(
-        self, source: KnowledgeSource
-    ) -> RefreshResult:
+    async def _handle_url_list(self, source: KnowledgeSource) -> RefreshResult:
         """Ingest each URL in ``config['urls']``."""
         urls: list[str] = source.config.get("urls", [])
         return await self._ingest_items(source.id, urls)
@@ -137,9 +137,7 @@ class RefreshOrchestrator:
             raise ValueError(msg)
 
         config = self._build_crawl_config(source.config)
-        ingest_results = await crawl_and_ingest(
-            self._crawler, self._pipeline, config
-        )
+        ingest_results = await crawl_and_ingest(self._crawler, self._pipeline, config)
 
         refreshed = sum(1 for r in ingest_results if not r.skipped)
         skipped = sum(1 for r in ingest_results if r.skipped)
@@ -152,9 +150,7 @@ class RefreshOrchestrator:
             errors=[],
         )
 
-    async def _handle_file_glob(
-        self, source: KnowledgeSource
-    ) -> RefreshResult:
+    async def _handle_file_glob(self, source: KnowledgeSource) -> RefreshResult:
         """Resolve file glob pattern and ingest each matching file."""
         pattern: str = source.config.get("pattern", "")
         base_dir_str: str | None = source.config.get("base_dir")
@@ -167,9 +163,7 @@ class RefreshOrchestrator:
 
     # -- helpers -------------------------------------------------------------
 
-    async def _ingest_items(
-        self, source_id: str, items: list[str]
-    ) -> RefreshResult:
+    async def _ingest_items(self, source_id: str, items: list[str]) -> RefreshResult:
         """Ingest a list of URLs or file paths, collecting per-item results."""
         refreshed = 0
         skipped = 0
@@ -199,16 +193,10 @@ class RefreshOrchestrator:
     @staticmethod
     def _build_crawl_config(config: dict[str, object]) -> CrawlConfig:
         """Build a :class:`CrawlConfig` from a source config dict."""
-        fields = {
-            k: v
-            for k, v in config.items()
-            if k in CrawlConfig.model_fields
-        }
+        fields = {k: v for k, v in config.items() if k in CrawlConfig.model_fields}
         return CrawlConfig(**fields)
 
-    def _update_source_record(
-        self, source: KnowledgeSource, result: RefreshResult
-    ) -> None:
+    def _update_source_record(self, source: KnowledgeSource, result: RefreshResult) -> None:
         """Persist refresh outcome on the source record."""
         now = datetime.now(tz=UTC).isoformat()
 

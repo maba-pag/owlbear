@@ -27,4 +27,4 @@ class OwlBearDeps:
     hooks: HookRegistry
     tracker: UsageTracker | None = field(default=None)
     agent_registry: AgentRegistry | None = field(default=None)
-    _delegation_depth: int = field(default=0)
+    delegation_depth: int = field(default=0)

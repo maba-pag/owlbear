@@ -23,6 +23,9 @@ import re
 import httpx
 from pydantic_ai.toolsets import FunctionToolset
 
+from owlbear.core.errors import error_to_user_message
+from owlbear.core.retry import TRANSIENT_RETRY
+
 try:
     from duckduckgo_search import DDGS
     from duckduckgo_search.exceptions import RatelimitException as _RatelimitException
@@ -63,12 +66,8 @@ class WebSearchToolset(FunctionToolset):
         allowed_urls: list[str] | None = None,
     ) -> None:
         super().__init__()
-        self._blocked_urls: list[re.Pattern[str]] = [
-            re.compile(p) for p in (blocked_urls or [])
-        ]
-        self._allowed_urls: list[re.Pattern[str]] = [
-            re.compile(p) for p in (allowed_urls or [])
-        ]
+        self._blocked_urls: list[re.Pattern[str]] = [re.compile(p) for p in (blocked_urls or [])]
+        self._allowed_urls: list[re.Pattern[str]] = [re.compile(p) for p in (allowed_urls or [])]
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -139,8 +138,7 @@ class WebSearchToolset(FunctionToolset):
         """
         if DDGS is None:
             msg = (
-                "duckduckgo_search is not installed. "
-                "Install with: uv add 'duckduckgo-search>=7.0'"
+                "duckduckgo_search is not installed. Install with: uv add 'duckduckgo-search>=7.0'"
             )
             raise ImportError(msg)
 
@@ -190,16 +188,21 @@ class WebSearchToolset(FunctionToolset):
         """
         self._check_url(url)
 
-        try:
+        @TRANSIENT_RETRY
+        async def _fetch_url(target: str) -> httpx.Response:
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=30, follow_redirects=True)
-                response.raise_for_status()
+                resp = await client.get(target, timeout=30, follow_redirects=True)
+                resp.raise_for_status()
+            return resp
+
+        try:
+            response = await _fetch_url(url)
         except httpx.TimeoutException:
             return f"Timeout fetching {url}"
         except httpx.HTTPStatusError as exc:
             return f"HTTP {exc.response.status_code}: {url}"
         except httpx.HTTPError as exc:
-            return f"Error fetching {url}: {exc}"
+            return f"Error fetching page: {error_to_user_message(exc)}"
 
         content = trafilatura.extract(  # type: ignore[union-attr]
             response.text,
