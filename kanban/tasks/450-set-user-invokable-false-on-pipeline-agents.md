@@ -1,6 +1,6 @@
 ---
 id: 450
-title: Set user-invokable false on pipeline agents
+title: Set user-invocable false on pipeline agents
 status: archived
 priority: important
 created: 2026-03-03T17:30:07.5852603+01:00
@@ -19,4 +19,4 @@ depends_on:
 class: standard
 ---
 
-Add user-invokable: false to builder, reviewer, writer, closer frontmatter. These agents should only be dispatched by orchestrator. User confirmed they never invoke these directly. See docs/agent-quality-analysis.md section 6.7.
+Add user-invocable: false to builder, reviewer, writer, closer frontmatter. These agents should only be dispatched by orchestrator. User confirmed they never invoke these directly. See docs/agent-quality-analysis.md section 6.7.

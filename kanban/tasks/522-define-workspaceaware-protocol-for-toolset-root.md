@@ -1,15 +1,19 @@
 ---
 id: 522
 title: Define WorkspaceAware protocol for toolset root updates
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-04T07:38:30.7335607+01:00
-updated: 2026-03-04T07:38:30.7335607+01:00
+updated: 2026-03-06T19:28:28.0055725+01:00
+started: 2026-03-06T19:28:28.0055725+01:00
+completed: 2026-03-06T19:28:28.0055725+01:00
 tags:
     - audit
     - refactor
     - scope:core
+blocked: true
+block_reason: 'Superseded by #466 sub-task 3 (WorkspaceAware protocol). Closing as duplicate.'
 class: standard
 ---
 
-ARC-06: _update_toolset_roots() walks toolsets mutating _workspace_root and _root by hasattr check. New toolsets with different attr names break silently. Define WorkspaceAware protocol with public update_workspace(root). AC: all workspace toolsets implement protocol, no hasattr checks. See docs/architecture-audit.md.
+CLOSED AS DUPLICATE: Superseded by #466 sub-task 3 (WorkspaceAware protocol + update_workspace). See docs/slf001-public-api-research.md section 4d.

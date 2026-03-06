@@ -15,22 +15,25 @@ class: standard
 ---
 
 ## Problem
+
 The agent refactoring (#436-#451) updated .github/agents/*.agent.md but NOT src/owlbear/agents/*.md. AgentRegistry scans the latter at runtime, so delegation fails with KeyError (e.g. 'builder' not found, available: coder, orchestrator, planner...).
 
 ## Reference
+
 See docs/agent-definitions-sync-research.md for full research findings and canonical mapping.
 
 ## Scope
-1. Rename coder.md â†’ builder.md, update all content (name, description, tools, skills, system prompt)
-2. Rename planner.md â†’ kanban-planner.md, update all content
-3. Create architect.md (new â€” role: validator, tools: filesystem+kanban+ask_user)
-4. Create closer.md (new â€” role: validator, tools: filesystem+terminal+kanban+ask_user)
-5. Update orchestrator.md: add terminal tool, update agent catalog from 5â†’8 entries, update intent routing table
-6. Update researcher.md: change role validatorâ†’builder, add web_search+knowledge+ask_user tools
+
+1. Rename coder.md → builder.md, update all content (name, description, tools, skills, system prompt)
+2. Rename planner.md → kanban-planner.md, update all content
+3. Create architect.md (new — role: validator, tools: filesystem+kanban+ask_user)
+4. Create closer.md (new — role: validator, tools: filesystem+terminal+kanban+ask_user)
+5. Update orchestrator.md: add terminal tool, update agent catalog from 5→8 entries, update intent routing table
+6. Update researcher.md: change role validator→builder, add web_search+knowledge+ask_user tools
 7. Update reviewer.md: add code-review skill
 8. Update writer.md: add terminal tool, add docs-gate skill
 9. Delete coder.md and planner.md
-10. Update tests/test_agent_definitions.py: EXPECTED_AGENTS 6â†’8, scan count 6â†’8, role parametrize lists, planner tracking test
+10. Update tests/test_agent_definitions.py: EXPECTED_AGENTS 6→8, scan count 6→8, role parametrize lists, planner tracking test
 
 ## Agent Specification (canonical mapping)
 
@@ -46,10 +49,11 @@ See docs/agent-definitions-sync-research.md for full research findings and canon
 | closer | validator | filesystem, terminal, kanban, ask_user | kanban-md, task-verification | 0 |
 
 ## Acceptance Criteria
+
 - [ ] All 8 agent .md files exist in src/owlbear/agents/: orchestrator, kanban-planner, builder, researcher, architect, reviewer, writer, closer
 - [ ] Agent names in YAML frontmatter match filenames: builder (not coder), kanban-planner (not planner)
-- [ ] Each agent's tools list matches the specification table above â€” verified by test_agent_definitions.py
-- [ ] Each agent's role matches the specification table â€” researcher is builder (not validator)
+- [ ] Each agent's tools list matches the specification table above — verified by test_agent_definitions.py
+- [ ] Each agent's role matches the specification table — researcher is builder (not validator)
 - [ ] Each agent's skills list matches the specification table
 - [ ] Orchestrator system prompt agent catalog lists all 8 agents with correct names and descriptions
 - [ ] Orchestrator intent routing table uses builder (not coder), kanban-planner (not planner)
@@ -63,7 +67,8 @@ See docs/agent-definitions-sync-research.md for full research findings and canon
 - [ ] uv run ruff check src/owlbear/agents/ tests/test_agent_definitions.py passes
 
 ## Notes
-- This is one atomic change â€” the files are tightly coupled (orchestrator references all others, test validates all)
+
+- This is one atomic change — the files are tightly coupled (orchestrator references all others, test validates all)
 - TDD approach: Update EXPECTED_AGENTS in test file first (watch it fail), then update agent definitions
-- test_intent_routing.py uses old names (planner, coder) in synthetic tests â€” will still pass but consider updating SPECIALIST_AGENTS as optional cleanup
-- test_integration_e2e.py uses coder in synthetic delegation test â€” will still pass, non-blocking
+- test_intent_routing.py uses old names (planner, coder) in synthetic tests — will still pass but consider updating SPECIALIST_AGENTS as optional cleanup
+- test_integration_e2e.py uses coder in synthetic delegation test — will still pass, non-blocking

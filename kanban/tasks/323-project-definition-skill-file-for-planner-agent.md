@@ -15,8 +15,9 @@ class: standard
 ---
 
 ## Acceptance Criteria
+
 - [ ] Create .github/skills/project-definition/SKILL.md
-- [ ] YAML frontmatter: name: project-definition, description (reference LLM-guided project scoping), user-invokable: false
+- [ ] YAML frontmatter: name: project-definition, description (reference LLM-guided project scoping), user-invocable: false
 - [ ] Workflow template section: 6 numbered steps (receive idea, clarify via ask_user, research via knowledge+web_search, propose definition, iterate with user, finalize)
 - [ ] ProjectDefinition field reference table (field, type, required/optional) for LLM context
 - [ ] Example ask_user interaction showing multi-option presentation pattern

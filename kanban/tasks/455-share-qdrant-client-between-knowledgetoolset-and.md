@@ -16,7 +16,7 @@ class: standard
 
 ## Problem
 
-`_build_knowledge_toolset()` and `_build_bookmark_toolset()` each independently create QdrantVectorStore, sqlite3 connection, GraphStore, BgeM3EmbeddingProvider, EntityExtractor, and TextChunker â€” all pointing at the same `.owlbear/` directory.  Qdrant local mode locks the storage folder, so the second QdrantVectorStore fails with RuntimeError.  BgeM3EmbeddingProvider loads the ~1 GB model twice.  BookmarkToolset silently fails.
+`_build_knowledge_toolset()` and `_build_bookmark_toolset()` each independently create QdrantVectorStore, sqlite3 connection, GraphStore, BgeM3EmbeddingProvider, EntityExtractor, and TextChunker — all pointing at the same `.owlbear/` directory.  Qdrant local mode locks the storage folder, so the second QdrantVectorStore fails with RuntimeError.  BgeM3EmbeddingProvider loads the ~1 GB model twice.  BookmarkToolset silently fails.
 
 ## AC
 
@@ -39,8 +39,8 @@ class: standard
 
 ### Verification
 
-- [ ] Test: mock `QdrantVectorStore` constructor â€” assert called exactly once per `build_toolsets()` invocation.
-- [ ] Test: mock `BgeM3EmbeddingProvider` constructor â€” assert called exactly once.
+- [ ] Test: mock `QdrantVectorStore` constructor — assert called exactly once per `build_toolsets()` invocation.
+- [ ] Test: mock `BgeM3EmbeddingProvider` constructor — assert called exactly once.
 - [ ] Test: when `_build_knowledge_infra` succeeds, no `'Failed to create BookmarkToolset'` WARNING in logs.
 - [ ] Test: when infra fails, both toolsets absent and exactly one WARNING logged.
 - [ ] Existing tests pass (`uv run pytest -q --tb=short`).
@@ -48,7 +48,7 @@ class: standard
 
 ## Architecture notes
 
-- `_KnowledgeInfra` is module-private (underscore prefix) â€” not part of the public API.
+- `_KnowledgeInfra` is module-private (underscore prefix) — not part of the public API.
 - Each builder still creates its own `IngestPipeline` to preserve existing behavior: knowledge pipeline gets optional `inter_doc_builder`; bookmark pipeline does not.  `IngestPipeline` is lightweight (just holds references).
 - `EntityExtractor` and `TextChunker` are cheap but shared to avoid duplication and keep both builders' `IngestPipeline`s consistent.
-- Existing `_build_knowledge_toolset` params (`project_id`, `max_tokens`, `knowledge_graph_expansion`, `inter_doc_graph_building`) stay on that builder â€” they are not infra concerns.
+- Existing `_build_knowledge_toolset` params (`project_id`, `max_tokens`, `knowledge_graph_expansion`, `inter_doc_graph_building`) stay on that builder — they are not infra concerns.
