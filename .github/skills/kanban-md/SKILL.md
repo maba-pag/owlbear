@@ -1,7 +1,7 @@
 ---
 name: kanban-md
 description: Manage project tasks using kanban-md, a file-based kanban board CLI.  Use when the user mentions tasks, kanban, board, backlog, sprint, project management, work items, priorities, blockers, or wants to track, create, list, move, edit, or delete tasks. Also use for standup, status update, sprint planning, triage, or project metrics.
-user-invokable: false
+user-invocable: false
 ---
 <!-- kanban-md-skill-version: 0.33.0 -->
 

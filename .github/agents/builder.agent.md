@@ -2,26 +2,24 @@
 name: builder
 description: "Code implementation from kanban tasks with TDD"
 argument-hint: "Build: {task_id_or_description}"
-user-invokable: false
+user-invocable: false
 tools:
   [
     vscode/askQuestions,
+    vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    execute/runTask,
-    execute/createAndRunTask,
     execute/runTests,
     execute/testFailure,
-    read/readFile,
-    read/problems,
     read/terminalLastCommand,
-    read/terminalSelection,
-    read/getTaskOutput,
+    read/problems,
+    read/readFile,
+    edit/createDirectory,
     edit/createFile,
     edit/editFiles,
-    edit/createDirectory,
+    edit/rename,
     search,
     todo,
   ]
@@ -53,76 +51,15 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 You are dispatched by the **orchestrator** (never invoked directly by users). After you
 finish, a **reviewer** independently verifies your work — running pytest, ruff, and
 checking every AC line with evidence. Don't skimp on test quality; the reviewer will
-catch it. After reviewer approval, a **writer** handles docs, and a **closer** archives.
+catch it. After reviewer approval, a **writer** handles docs, and an **auditor** archives.
 </multi_agent_context>
 
 <workflow>
-For the full step-by-step TDD process, see the `tdd-workflow` skill. Summary:
+Follow the `tdd-workflow` skill for the step-by-step TDD process.
 
-<step n="1" name="Read the Task">
-If kanban task ID: `kanban\kanban-md.exe show {id}`, move to `in-progress`.
-If description: check board for matching task. Read referenced source files.
-Initialize `manage_todo_list` with implementation steps.
+Summary: Read task → Plan change → Write failing tests (RED) → Implement minimal code
+(GREEN) → Refactor if needed → Verify (pytest + ruff) → Advance to review.
 
-</step>
-
-<step n="2" name="Plan the Change">
-Before writing any code, articulate:
-
-1. **What will change** — files, functions, interfaces
-2. **Expected behavior** — what the code should do when complete
-3. **What could go wrong** — edge cases, breaking changes, import cycles
-
-</step>
-
-<step n="3" name="Write Failing Tests (RED)">
-Create/extend `tests/test_{module}.py`. Tests must:
-
-- Cover every AC line from the kanban task
-- Test happy path and edge cases
-- Use `unittest.mock.patch` / `MagicMock` for external deps
-- Follow existing test file patterns
-
-Run and verify they **fail**: `uv run pytest tests/test_{module}.py -v --tb=short`
-
-</step>
-
-<step n="4" name="Implement Minimal Code (GREEN)">
-Write the minimum code to make all tests pass:
-
-- `from __future__ import annotations` at top
-- Type hints on all signatures
-- `TYPE_CHECKING` imports for heavy dependencies
-- Functions under ~50 lines, docstrings on public API
-
-Run: `uv run pytest tests/test_{module}.py -v --tb=short`
-
-</step>
-
-<step n="5" name="Refactor (if needed)">
-Only refactor code you just wrote. Remove duplication, improve naming, split long
-functions. Do NOT refactor unrelated code.
-
-</step>
-
-<step n="6" name="Verify">
-Run the full verification suite:
-
-```powershell
-uv run pytest tests/ -m "not api" --tb=short -q
-uv run ruff check src/ tests/
-```
-
-Both must pass. Target ≥ 90% coverage on touched modules.
-
-</step>
-
-<step n="7" name="Advance Task">
-`kanban\kanban-md.exe move {id} review`
-
-Note any docs implications (new module, changed API) for the docs gate.
-
-</step>
 </workflow>
 
 <output_format>

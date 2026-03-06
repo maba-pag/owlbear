@@ -26,10 +26,10 @@ When a command might produce more than a screenful of output:
 
 1. **Redirect to scratch file**, then read the file:
 
-   ```powershell
-   uv run pytest tests/ -m "not api" -q --tb=short 2>&1 | Out-File docs/scratch/pytest-output.txt
-   # Then use read_file on docs/scratch/pytest-output.txt
-   ```
+```powershell
+uv run pytest tests/ -m "not api" -q --tb=short 2>&1 | Out-File docs/scratch/pytest-output.txt
+# Then use read_file on docs/scratch/pytest-output.txt
+```
 
 2. **Never use `Select-Object`** to truncate terminal output — if output is too long, redirect to a file instead.
 

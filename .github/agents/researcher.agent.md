@@ -2,22 +2,25 @@
 name: researcher
 description: "Thorough research agent that produces structured findings and follow-up kanban tasks"
 argument-hint: "Research: {topic_or_question}"
-user-invokable: true
+user-invocable: true
 tools:
   [
     vscode/askQuestions,
+    vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    read/readFile,
-    read/problems,
     read/terminalLastCommand,
+    read/problems,
+    read/readFile,
+    "microsoft/markitdown/*",
+    edit/createDirectory,
     edit/createFile,
     edit/editFiles,
+    edit/rename,
     search,
     web,
-    "microsoft/markitdown/*",
     todo,
   ]
 ---

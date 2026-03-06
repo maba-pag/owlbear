@@ -2,16 +2,18 @@
 name: kanban-planner
 description: "Entry gate for all task creation + feature decomposition"
 argument-hint: "Plan: {feature_or_plan_description}"
-user-invokable: true
+user-invocable: true
 tools:
   [
     vscode/askQuestions,
+    vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    read/readFile,
     read/terminalLastCommand,
+    read/problems,
+    read/readFile,
     search,
     todo,
   ]
