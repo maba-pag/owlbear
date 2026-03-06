@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import types
+import unittest.mock
 
 import httpx
 import openai
@@ -296,3 +298,58 @@ class TestToolErrorToDict:
             err = ToolError(error_type=cat, tool_name="t", message="m")
             parsed = json.loads(json.dumps(err.to_dict()))
             assert parsed["error_type"] == cat.value
+
+
+# ---------------------------------------------------------------------------
+# classify_error / error_to_user_message — openai NOT importable
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyErrorWithoutOpenai:
+    """When openai is not installed, errors.py loads and degrades gracefully."""
+
+    def _reload_without_openai(self) -> types.ModuleType:
+        """Reload ``owlbear.core.errors`` with openai missing from sys.modules."""
+        import importlib
+        import sys
+
+        import owlbear.core.errors as mod
+
+        with unittest.mock.patch.dict(sys.modules, {"openai": None}):
+            importlib.reload(mod)
+        return mod
+
+    def teardown_method(self) -> None:
+        """Restore errors module to normal (with openai available)."""
+        import importlib
+
+        import owlbear.core.errors as mod
+
+        importlib.reload(mod)
+
+    def test_import_succeeds(self) -> None:
+        mod = self._reload_without_openai()
+        assert hasattr(mod, "classify_error")
+
+    def test_classify_runtime_error_returns_permanent(self) -> None:
+        mod = self._reload_without_openai()
+        assert mod.classify_error(RuntimeError("x")) is mod.ErrorCategory.PERMANENT
+
+    def test_classify_connect_error_returns_transient(self) -> None:
+        mod = self._reload_without_openai()
+        assert mod.classify_error(httpx.ConnectError("x")) is mod.ErrorCategory.TRANSIENT
+
+    def test_classify_value_error_returns_tool_semantic(self) -> None:
+        mod = self._reload_without_openai()
+        assert mod.classify_error(ValueError("x")) is mod.ErrorCategory.TOOL_SEMANTIC
+
+    def test_error_to_user_message_unknown_type(self) -> None:
+        mod = self._reload_without_openai()
+        result = mod.error_to_user_message(RuntimeError("boom"))
+        assert isinstance(result, str)
+        assert "RuntimeError" in result
+
+    def test_error_to_user_message_httpx_connect(self) -> None:
+        mod = self._reload_without_openai()
+        result = mod.error_to_user_message(httpx.ConnectError("fail"))
+        assert result == "Connection failed"

@@ -35,6 +35,7 @@ class TestBootstrapResult:
             channel=MagicMock(),
             mcp_registry=None,
             hooks=HookRegistry(),
+            error_journal=MagicMock(),
             cleanup=[],
         )
         assert result.agent is not None
@@ -50,6 +51,7 @@ class TestBootstrapResult:
             channel=MagicMock(),
             mcp_registry=None,
             hooks=HookRegistry(),
+            error_journal=MagicMock(),
             cleanup=[fn],
         )
         assert len(result.cleanup) == 1
@@ -190,6 +192,34 @@ class TestBuildToolsets:
         ]
         assert "SkillRegistry" in type_names
 
+    def test_conn_close_in_cleanup_when_infra_created(self, tmp_path: Path) -> None:
+        """When _build_knowledge_infra returns infra, conn.close is in cleanup."""
+        mock_conn = MagicMock()
+        mock_infra = MagicMock()
+        mock_infra.conn = mock_conn
+
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        cleanup: list = []
+
+        with patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra):
+            build_toolsets(settings, tmp_path, hooks, channel, cleanup=cleanup)
+
+        assert mock_conn.close in cleanup
+
+    def test_no_conn_close_in_cleanup_when_infra_none(self, tmp_path: Path) -> None:
+        """When _build_knowledge_infra returns None, cleanup has no conn.close."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        cleanup: list = []
+
+        with patch("owlbear.bootstrap._build_knowledge_infra", return_value=None):
+            build_toolsets(settings, tmp_path, hooks, channel, cleanup=cleanup)
+
+        assert len(cleanup) == 0
+
 
 # ---------------------------------------------------------------------------
 # create_channel
@@ -220,6 +250,14 @@ class TestCreateChannel:
         )
         with pytest.raises(ValueError, match="Slack channel requires"):
             create_channel(settings, "slack")
+
+    def test_voice_channel_import_resolves(self) -> None:
+        """Voice channel import must resolve without ImportError."""
+        settings = OwlBearSettings()
+        with patch("owlbear.voice.channel.VoiceChannel", autospec=True) as mock_cls:
+            mock_cls.return_value = MagicMock(spec=ChannelPlugin)
+            channel = create_channel(settings, "voice")
+            assert isinstance(channel, ChannelPlugin)
 
 
 # ---------------------------------------------------------------------------
@@ -747,12 +785,21 @@ class TestApprovalWrapping:
 class TestConfigApprovalFields:
     """Verify approval fields on OwlBearSettings (AC#1, AC#2)."""
 
-    def test_default_policy_has_three_rules(self) -> None:
-        """AC#1: Default rules for git_push, create_pr, deploy."""
+    def test_default_policy_has_four_rules(self) -> None:
+        """AC#1: Default rules for git_push, create_pr, deploy, run_command."""
         settings = OwlBearSettings()
-        assert len(settings.approval_policy) == 3
+        assert len(settings.approval_policy) == 4
         tool_names = {r["tool_name"] for r in settings.approval_policy}
-        assert tool_names == {"git_push", "create_pr", "deploy"}
+        assert tool_names == {"git_push", "create_pr", "deploy", "run_command"}
+
+    def test_run_command_triggers_approval(self) -> None:
+        """AC#3: ApprovalPolicy from defaults requires_approval('run_command', {})."""
+        from owlbear.safety.policy import ApprovalPolicy, ApprovalRule
+
+        settings = OwlBearSettings()
+        rules = [ApprovalRule(**r) for r in settings.approval_policy]
+        policy = ApprovalPolicy(rules=rules)
+        assert policy.requires_approval("run_command", {}) is True
 
     def test_default_timeout(self) -> None:
         """AC#2: approval_timeout defaults to 120.0."""

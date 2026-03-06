@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from owlbear.memory.error_journal import ErrorJournal
+from owlbear.core.jsonl_store import JsonlStore
+from owlbear.memory.error_journal import ErrorEntry, ErrorJournal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -164,7 +165,7 @@ class TestQuery:
         _log_entry(journal, tool_name="run_command")
         results = journal.query(tool_name="run_command")
         assert len(results) == 2
-        assert all(r["tool_name"] == "run_command" for r in results)
+        assert all(r.tool_name == "run_command" for r in results)
 
     def test_query_filter_by_error_type(self, tmp_path: Path) -> None:
         journal = _make_journal(tmp_path)
@@ -189,8 +190,8 @@ class TestQuery:
         results = journal.query(last_n=3)
         assert len(results) == 3
         # Should be the last 3 entries
-        assert results[0]["tool_name"] == "tool_7"
-        assert results[2]["tool_name"] == "tool_9"
+        assert results[0].tool_name == "tool_7"
+        assert results[2].tool_name == "tool_9"
 
     def test_query_last_n_with_filter(self, tmp_path: Path) -> None:
         journal = _make_journal(tmp_path)
@@ -200,8 +201,8 @@ class TestQuery:
         _log_entry(journal, tool_name="d", error_type="transient")
         results = journal.query(error_type="transient", last_n=2)
         assert len(results) == 2
-        assert results[0]["tool_name"] == "c"
-        assert results[1]["tool_name"] == "d"
+        assert results[0].tool_name == "c"
+        assert results[1].tool_name == "d"
 
     def test_query_last_n_exceeds_count(self, tmp_path: Path) -> None:
         journal = _make_journal(tmp_path)
@@ -216,11 +217,11 @@ class TestQuery:
         results = journal.query(tool_name="nonexistent")
         assert results == []
 
-    def test_query_returns_dicts(self, tmp_path: Path) -> None:
+    def test_query_returns_error_entries(self, tmp_path: Path) -> None:
         journal = _make_journal(tmp_path)
         _log_entry(journal)
         results = journal.query()
-        assert all(isinstance(r, dict) for r in results)
+        assert all(isinstance(r, ErrorEntry) for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -251,8 +252,8 @@ class TestRotation:
             _log_entry(journal, tool_name=f"tool_{i}")
         results = journal.query()
         # Should have entries tool_10 through tool_59 (the last 50)
-        assert results[0]["tool_name"] == "tool_10"
-        assert results[-1]["tool_name"] == "tool_59"
+        assert results[0].tool_name == "tool_10"
+        assert results[-1].tool_name == "tool_59"
 
     def test_rotation_triggers_on_log(self, tmp_path: Path) -> None:
         """Rotation happens during log(), not lazily."""
@@ -265,3 +266,31 @@ class TestRotation:
     def test_default_cap_is_10000(self, tmp_path: Path) -> None:
         journal = _make_journal(tmp_path)
         assert journal.max_entries == 10_000
+
+
+# ---------------------------------------------------------------------------
+# Model + inheritance
+# ---------------------------------------------------------------------------
+
+
+class TestModelAndInheritance:
+    """ErrorEntry is a BaseModel and ErrorJournal inherits JsonlStore."""
+
+    def test_error_journal_is_jsonl_store(self, tmp_path: Path) -> None:
+        journal = _make_journal(tmp_path)
+        assert isinstance(journal, JsonlStore)
+
+    def test_error_entry_has_expected_fields(self) -> None:
+        entry = ErrorEntry(
+            timestamp="2026-03-01T12:00:00Z",
+            error_type="transient",
+            tool_name="run_command",
+            exception_message="connection refused",
+            action_taken="retry",
+            attempt_number=1,
+            resolved=False,
+            session_id="sess-001",
+        )
+        assert entry.timestamp == "2026-03-01T12:00:00Z"
+        assert entry.attempt_number == 1
+        assert entry.resolved is False

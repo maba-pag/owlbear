@@ -322,8 +322,8 @@ class TestRetryConfig:
         assert transport.config.get("reraise") is True
 
     @pytest.mark.asyncio
-    async def test_retry_only_on_http_status_error(self) -> None:
-        """Retry should only trigger on HTTPStatusError."""
+    async def test_retry_covers_transient_exception_types(self) -> None:
+        """Retry should trigger on HTTPStatusError, ConnectError, and TimeoutException."""
         from tenacity.retry import retry_if_exception_type
 
         from owlbear.providers.copilot import create_copilot_client
@@ -334,6 +334,12 @@ class TestRetryConfig:
         transport = client._client._transport
         retry_config = transport.config["retry"]
         assert isinstance(retry_config, retry_if_exception_type)
+        # Must cover all three transient exception types
+        assert retry_config.exception_types == (
+            httpx.HTTPStatusError,
+            httpx.ConnectError,
+            httpx.TimeoutException,
+        )
 
 
 class TestExistingClientBehaviorPreserved:
@@ -462,3 +468,53 @@ class TestRetryTransportIntegration:
 
         assert response.status_code == 401
         assert len(calls) == 1  # no retry
+
+    @pytest.mark.asyncio
+    async def test_connect_error_triggers_retry(self) -> None:
+        """Transport retries on ConnectError twice then succeeds."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) < 3:
+                msg = "connection refused"
+                raise httpx.ConnectError(msg)
+            return httpx.Response(200, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 200
+        assert len(calls) == 3  # 2 ConnectError + 1 success
+
+    @pytest.mark.asyncio
+    async def test_timeout_exception_triggers_retry(self) -> None:
+        """Transport retries on TimeoutException twice then succeeds."""
+        from owlbear.providers.copilot import _build_retry_transport
+
+        calls: list[int] = []
+
+        async def mock_handle(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) < 3:
+                msg = "read timed out"
+                raise httpx.TimeoutException(msg)
+            return httpx.Response(200, request=request)
+
+        mock_inner = AsyncMock(spec=httpx.AsyncBaseTransport)
+        mock_inner.handle_async_request = mock_handle
+
+        transport = _build_retry_transport(inner_transport=mock_inner)
+
+        request = httpx.Request("GET", "https://example.com")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 200
+        assert len(calls) == 3  # 2 TimeoutException + 1 success

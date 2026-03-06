@@ -33,18 +33,26 @@ def _run(coro: object) -> Any:
 
 
 class TestRegistration:
-    """EscalationHook registers on ON_ERROR."""
+    """EscalationHook does NOT auto-register; opt-in via register_on_error()."""
 
-    def test_registers_on_error_handler(self) -> None:
+    def test_no_auto_registration_on_init(self) -> None:
+        hooks = HookRegistry()
+        channel = _make_channel()
+        EscalationHook(hooks=hooks, channel=channel)
+        assert hooks.handlers.get(HookEvent.ON_ERROR, []) == []
+
+    def test_register_on_error_adds_handler(self) -> None:
         hooks = HookRegistry()
         channel = _make_channel()
         hook = EscalationHook(hooks=hooks, channel=channel)
+        hook.register_on_error()
         assert hook._handler in hooks.handlers.get(HookEvent.ON_ERROR, [])
 
-    def test_unregister_removes_handler(self) -> None:
+    def test_unregister_after_register_on_error(self) -> None:
         hooks = HookRegistry()
         channel = _make_channel()
         hook = EscalationHook(hooks=hooks, channel=channel)
+        hook.register_on_error()
         hook.unregister()
         assert hook._handler not in hooks.handlers.get(HookEvent.ON_ERROR, [])
 
@@ -259,9 +267,25 @@ class TestEscalation:
 
 
 class TestHookIntegration:
-    """ON_ERROR emission triggers the escalation handler."""
+    """ON_ERROR emission triggers handler only after register_on_error()."""
 
-    def test_on_error_hook_calls_escalate(self) -> None:
+    def test_on_error_hook_calls_escalate_after_opt_in(self) -> None:
+        hooks = HookRegistry()
+        channel = _make_channel("skip")
+        hook = EscalationHook(hooks=hooks, channel=channel)
+        hook.register_on_error()
+
+        error_data = {
+            "error": RuntimeError("timeout"),
+            "tool_name": "fetch",
+            "attempt": 3,
+        }
+        _run(hooks.emit(HookEvent.ON_ERROR, error_data))
+
+        # Handler fires — channel.send should have been called
+        channel.send.assert_called_once()
+
+    def test_on_error_does_not_fire_without_opt_in(self) -> None:
         hooks = HookRegistry()
         channel = _make_channel("skip")
         EscalationHook(hooks=hooks, channel=channel)
@@ -273,5 +297,4 @@ class TestHookIntegration:
         }
         _run(hooks.emit(HookEvent.ON_ERROR, error_data))
 
-        # Handler fires — channel.send should have been called
-        channel.send.assert_called_once()
+        channel.send.assert_not_called()

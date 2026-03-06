@@ -10,6 +10,7 @@ Task: #381
 from __future__ import annotations
 
 from collections import defaultdict
+from unittest.mock import Mock
 
 import pytest
 
@@ -20,6 +21,27 @@ from tests.benchmarks.harness import (
     make_latency_tracker,
     record_latency,
 )
+
+# ---------------------------------------------------------------------------
+# Network-error skip guard for corpus downloads
+# ---------------------------------------------------------------------------
+
+_NETWORK_ERRORS: tuple[type[Exception], ...] = (ConnectionError, OSError)
+try:
+    from requests.exceptions import RequestException as _RequestException
+
+    _NETWORK_ERRORS = (*_NETWORK_ERRORS, _RequestException)
+except ImportError:
+    pass
+
+
+def _load_nfcorpus_or_skip() -> tuple[dict[str, str], dict[str, str], dict[str, dict[str, int]]]:
+    """Wrap :func:`load_nfcorpus` with a skip guard for network errors."""
+    try:
+        return load_nfcorpus()
+    except _NETWORK_ERRORS as exc:
+        pytest.skip(f"NFCorpus download unavailable: {exc}")
+
 
 # ---------------------------------------------------------------------------
 # Synthetic fixtures (no real BEIR data / model downloads)
@@ -48,6 +70,44 @@ MINI_RESULTS: dict[str, dict[str, float]] = {
 
 
 # ===================================================================
+# Skip-guard tests (no network needed)
+# ===================================================================
+
+
+class TestNfcorpusSkipGuard:
+    """Verify _load_nfcorpus_or_skip skips on network errors."""
+
+    @pytest.mark.parametrize("exc_type", [ConnectionError, OSError])
+    def test_skips_on_network_error(self, exc_type, monkeypatch):
+        monkeypatch.setattr(
+            "tests.test_benchmark_harness.load_nfcorpus",
+            Mock(side_effect=exc_type("network fail")),
+        )
+        with pytest.raises(pytest.skip.Exception, match="NFCorpus download unavailable"):
+            _load_nfcorpus_or_skip()
+
+    def test_returns_data_on_success(self, monkeypatch):
+        sentinel = ({"d1": "text"}, {"q1": "query"}, {"q1": {"d1": 1}})
+        monkeypatch.setattr(
+            "tests.test_benchmark_harness.load_nfcorpus",
+            Mock(return_value=sentinel),
+        )
+        assert _load_nfcorpus_or_skip() is sentinel
+
+    def test_skips_on_requests_error_if_available(self, monkeypatch):
+        try:
+            from requests.exceptions import RequestException
+        except ImportError:
+            pytest.skip("requests not installed")
+        monkeypatch.setattr(
+            "tests.test_benchmark_harness.load_nfcorpus",
+            Mock(side_effect=RequestException("timeout")),
+        )
+        with pytest.raises(pytest.skip.Exception, match="NFCorpus download unavailable"):
+            _load_nfcorpus_or_skip()
+
+
+# ===================================================================
 # Corpus loading tests
 # ===================================================================
 
@@ -59,13 +119,13 @@ class TestLoadNfcorpus:
 
     def test_returns_three_tuple(self):
         """load_nfcorpus must return exactly 3 elements."""
-        result = load_nfcorpus()
+        result = _load_nfcorpus_or_skip()
         assert isinstance(result, tuple)
         assert len(result) == 3
 
     def test_corpus_is_dict_str_str(self):
         """corpus maps doc_id (str) → doc_text (str)."""
-        corpus, _queries, _qrels = load_nfcorpus()
+        corpus, _queries, _qrels = _load_nfcorpus_or_skip()
         assert isinstance(corpus, dict)
         assert len(corpus) > 0
         for doc_id, text in corpus.items():
@@ -74,7 +134,7 @@ class TestLoadNfcorpus:
 
     def test_queries_is_dict_str_str(self):
         """queries maps query_id (str) → query_text (str)."""
-        _corpus, queries, _qrels = load_nfcorpus()
+        _corpus, queries, _qrels = _load_nfcorpus_or_skip()
         assert isinstance(queries, dict)
         assert len(queries) > 0
         for qid, text in queries.items():
@@ -83,7 +143,7 @@ class TestLoadNfcorpus:
 
     def test_qrels_structure(self):
         """qrels maps query_id → {doc_id: int_relevance}."""
-        _corpus, _queries, qrels = load_nfcorpus()
+        _corpus, _queries, qrels = _load_nfcorpus_or_skip()
         assert isinstance(qrels, dict)
         assert len(qrels) > 0
         for qid, judgments in qrels.items():
@@ -95,13 +155,13 @@ class TestLoadNfcorpus:
 
     def test_qrels_query_ids_subset_of_queries(self):
         """Every query_id in qrels should appear in queries."""
-        _corpus, queries, qrels = load_nfcorpus()
+        _corpus, queries, qrels = _load_nfcorpus_or_skip()
         for qid in qrels:
             assert qid in queries, f"qrels query_id {qid!r} not in queries"
 
     def test_qrels_doc_ids_subset_of_corpus(self):
         """Every doc_id in qrels should appear in corpus."""
-        corpus, _queries, qrels = load_nfcorpus()
+        corpus, _queries, qrels = _load_nfcorpus_or_skip()
         for judgments in qrels.values():
             for doc_id in judgments:
                 assert doc_id in corpus, f"qrels doc_id {doc_id!r} not in corpus"

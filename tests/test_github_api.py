@@ -69,8 +69,7 @@ def _make_response(
 def _make_client(response: httpx.Response) -> AsyncMock:
     """Build a mock httpx.AsyncClient that returns *response* for any method."""
     client = AsyncMock()
-    client.get = AsyncMock(return_value=response)
-    client.post = AsyncMock(return_value=response)
+    client.request = AsyncMock(return_value=response)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     return client
@@ -206,10 +205,10 @@ class TestCreatePr:
             ts = _toolset()
             await ts.create_pr(title="Fix bug", head="fix-branch", base="main")
 
-        client.post.assert_called_once()
-        call_args = client.post.call_args
-        url = call_args[0][0] if call_args[0] else call_args[1].get("url", "")
-        assert f"/repos/{OWNER}/{REPO}/pulls" in url
+        client.request.assert_called_once()
+        call_args = client.request.call_args
+        assert call_args[0][0] == "POST"
+        assert f"/repos/{OWNER}/{REPO}/pulls" in call_args[0][1]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_sends_correct_request_body(self) -> None:
@@ -225,7 +224,7 @@ class TestCreatePr:
                 body="Description here",
             )
 
-        call_kwargs = client.post.call_args[1]
+        call_kwargs = client.request.call_args[1]
         json_body = call_kwargs.get("json", {})
         assert json_body["title"] == "Add feature"
         assert json_body["head"] == "feature-branch"
@@ -241,7 +240,7 @@ class TestCreatePr:
             ts = _toolset()
             await ts.create_pr(title="T", head="h", base="b")
 
-        call_kwargs = client.post.call_args[1]
+        call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
         assert headers["Authorization"] == f"Bearer {_TOKEN_RAW}"
         assert headers["Accept"] == "application/vnd.github+json"
@@ -314,12 +313,12 @@ class TestCreatePrHookEmission:
 
         resp = _make_response(json_data={"number": 1, "html_url": "url"})
 
-        async def tracking_post(*_args: object, **_kwargs: object) -> httpx.Response:
+        async def tracking_request(*_args: object, **_kwargs: object) -> httpx.Response:
             call_order.append("api_call")
             return resp
 
         client = _make_client(resp)
-        client.post = AsyncMock(side_effect=tracking_post)
+        client.request = AsyncMock(side_effect=tracking_request)
 
         with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
             ts = _toolset(hooks=hooks)
@@ -375,10 +374,10 @@ class TestListPrs:
             ts = _toolset()
             await ts.list_prs()
 
-        client.get.assert_called_once()
-        call_args = client.get.call_args
-        url = call_args[0][0] if call_args[0] else call_args[1].get("url", "")
-        assert f"/repos/{OWNER}/{REPO}/pulls" in url
+        client.request.assert_called_once()
+        call_args = client.request.call_args
+        assert call_args[0][0] == "GET"
+        assert f"/repos/{OWNER}/{REPO}/pulls" in call_args[0][1]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_default_state_open(self) -> None:
@@ -389,7 +388,7 @@ class TestListPrs:
             ts = _toolset()
             await ts.list_prs()
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
         assert params["state"] == "open"
 
@@ -402,7 +401,7 @@ class TestListPrs:
             ts = _toolset()
             await ts.list_prs(state="closed", per_page=50)
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
         assert params["state"] == "closed"
         assert params["per_page"] == 50
@@ -416,7 +415,7 @@ class TestListPrs:
             ts = _toolset()
             await ts.list_prs()
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
         assert headers["Authorization"] == f"Bearer {_TOKEN_RAW}"
 
@@ -449,10 +448,10 @@ class TestListIssues:
             ts = _toolset()
             await ts.list_issues()
 
-        client.get.assert_called_once()
-        call_args = client.get.call_args
-        url = call_args[0][0] if call_args[0] else call_args[1].get("url", "")
-        assert f"/repos/{OWNER}/{REPO}/issues" in url
+        client.request.assert_called_once()
+        call_args = client.request.call_args
+        assert call_args[0][0] == "GET"
+        assert f"/repos/{OWNER}/{REPO}/issues" in call_args[0][1]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_default_state_open(self) -> None:
@@ -463,7 +462,7 @@ class TestListIssues:
             ts = _toolset()
             await ts.list_issues()
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
         assert params["state"] == "open"
 
@@ -476,7 +475,7 @@ class TestListIssues:
             ts = _toolset()
             await ts.list_issues(state="closed")
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
         assert params["state"] == "closed"
 
@@ -489,7 +488,7 @@ class TestListIssues:
             ts = _toolset()
             await ts.list_issues()
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
         assert headers["Authorization"] == f"Bearer {_TOKEN_RAW}"
         assert headers["Accept"] == "application/vnd.github+json"
@@ -530,10 +529,10 @@ class TestGetIssue:
             ts = _toolset()
             await ts.get_issue(number=42)
 
-        client.get.assert_called_once()
-        call_args = client.get.call_args
-        url = call_args[0][0] if call_args[0] else call_args[1].get("url", "")
-        assert f"/repos/{OWNER}/{REPO}/issues/42" in url
+        client.request.assert_called_once()
+        call_args = client.request.call_args
+        assert call_args[0][0] == "GET"
+        assert f"/repos/{OWNER}/{REPO}/issues/42" in call_args[0][1]
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_path_param_with_different_number(self) -> None:
@@ -544,7 +543,7 @@ class TestGetIssue:
             ts = _toolset()
             await ts.get_issue(number=99)
 
-        url = client.get.call_args[0][0]
+        url = client.request.call_args[0][1]
         assert "/issues/99" in url
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -556,7 +555,7 @@ class TestGetIssue:
             ts = _toolset()
             await ts.get_issue(number=1)
 
-        call_kwargs = client.get.call_args[1]
+        call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
         assert headers["Authorization"] == f"Bearer {_TOKEN_RAW}"
         assert headers["X-GitHub-Api-Version"] == "2022-11-28"
@@ -585,3 +584,87 @@ class TestGetIssue:
             result = await ts.get_issue(number=9999)
 
         assert "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# _api_request — retry behaviour via MockTransport
+# ---------------------------------------------------------------------------
+
+
+_RealAsyncClient = httpx.AsyncClient
+
+
+class TestApiRequestRetry:
+    """_api_request retries transient errors and surfaces permanent ones."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_retries_connect_error_then_succeeds(self) -> None:
+        """ConnectError on first call, 200 on second → retry + correct result."""
+        call_count = 0
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                msg = "connection refused"
+                raise httpx.ConnectError(msg)
+            return httpx.Response(
+                200,
+                json=[{"number": 7, "title": "PR seven"}],
+                request=request,
+            )
+
+        transport = httpx.MockTransport(handler)
+
+        ts = _toolset()
+        with patch(f"{MODULE}.httpx.AsyncClient") as mock_cls:
+            mock_cls.side_effect = lambda **kw: _RealAsyncClient(transport=transport, **kw)
+            result = await ts.list_prs()
+
+        assert call_count == 2
+        assert "PR seven" in result
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_permanent_422_not_retried(self) -> None:
+        """422 is permanent — _api_request returns response, no retry."""
+        call_count = 0
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(
+                422,
+                json={"message": "Validation Failed"},
+                request=request,
+            )
+
+        transport = httpx.MockTransport(handler)
+
+        ts = _toolset()
+        with patch(f"{MODULE}.httpx.AsyncClient") as mock_cls:
+            mock_cls.side_effect = lambda **kw: _RealAsyncClient(transport=transport, **kw)
+            result = await ts.create_pr(title="T", head="h", base="b")
+
+        assert call_count == 1
+        assert "error" in result.lower()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_api_request_method_exists(self) -> None:
+        """GitHubToolset has an _api_request method."""
+        ts = _toolset()
+        assert hasattr(ts, "_api_request")
+        assert callable(ts._api_request)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_all_methods_delegate_to_api_request(self) -> None:
+        """All 4 public methods call _api_request internally."""
+        ts = _toolset()
+        resp = _make_response(json_data={"message": "test"}, status_code=404)
+
+        with patch.object(ts, "_api_request", new_callable=AsyncMock, return_value=resp) as mock:
+            await ts.create_pr(title="T", head="h", base="b")
+            await ts.list_prs()
+            await ts.list_issues()
+            await ts.get_issue(number=1)
+
+        assert mock.call_count == 4

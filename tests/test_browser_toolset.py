@@ -467,7 +467,7 @@ class TestBrowserToolsetTabNaming:
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
     async def test_cdp_setup_with_task_label_sets_title(self, mock_mgr_cls: MagicMock) -> None:
-        """setup(task_label='Task 65') sets title containing [OwlBear Task 65]."""
+        """setup(task_label='Task 65') passes [OwlBear Task 65] as arg to evaluate."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -475,15 +475,16 @@ class TestBrowserToolsetTabNaming:
         toolset = BrowserToolset(config=CDP_CONFIG)
         await toolset.setup(task_label="Task 65")
 
-        title_call_js = page.evaluate.call_args_list[0].args[0]
-        assert "[OwlBear Task 65]" in title_call_js
+        # Prefix is passed as second positional arg (safe parameterized evaluate)
+        title_prefix = page.evaluate.call_args_list[0].args[1]
+        assert title_prefix == "[OwlBear Task 65]"
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
     async def test_cdp_setup_without_task_label_uses_default_prefix(
         self, mock_mgr_cls: MagicMock
     ) -> None:
-        """setup() with no task_label uses [OwlBear] prefix (backward compat)."""
+        """setup() with no task_label passes [OwlBear] as arg (backward compat)."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -491,8 +492,9 @@ class TestBrowserToolsetTabNaming:
         toolset = BrowserToolset(config=CDP_CONFIG)
         await toolset.setup()
 
-        title_call_js = page.evaluate.call_args_list[0].args[0]
-        assert "[OwlBear]" in title_call_js
+        # Prefix is passed as second positional arg (safe parameterized evaluate)
+        title_prefix = page.evaluate.call_args_list[0].args[1]
+        assert title_prefix == "[OwlBear]"
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
@@ -521,11 +523,14 @@ class TestBrowserToolsetTabNaming:
         assert page.evaluate.await_count == 2
         observer_js = page.evaluate.call_args_list[1].args[0]
         assert "MutationObserver" in observer_js
+        # Prefix passed as safe argument, not embedded in JS
+        observer_prefix = page.evaluate.call_args_list[1].args[1]
+        assert observer_prefix == "[OwlBear]"
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("owlbear.tools.browser.toolset.BrowserManager")
     async def test_mutation_observer_contains_correct_prefix(self, mock_mgr_cls: MagicMock) -> None:
-        """MutationObserver JS embeds the correct prefix for the given task_label."""
+        """MutationObserver receives the correct prefix as a safe argument."""
         page = _make_mock_page_with_evaluate()
         mock_mgr = _make_mock_manager(page)
         mock_mgr_cls.return_value = mock_mgr
@@ -533,8 +538,28 @@ class TestBrowserToolsetTabNaming:
         toolset = BrowserToolset(config=CDP_CONFIG)
         await toolset.setup(task_label="Task 65")
 
-        observer_js = page.evaluate.call_args_list[1].args[0]
-        assert "[OwlBear Task 65]" in observer_js
+        # Prefix passed as second positional arg, not interpolated into JS
+        observer_prefix = page.evaluate.call_args_list[1].args[1]
+        assert observer_prefix == "[OwlBear Task 65]"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("owlbear.tools.browser.toolset.BrowserManager")
+    async def test_cdp_setup_special_chars_in_task_label(self, mock_mgr_cls: MagicMock) -> None:
+        """task_label with quotes, braces, backslashes causes no error."""
+        page = _make_mock_page_with_evaluate()
+        mock_mgr = _make_mock_manager(page)
+        mock_mgr_cls.return_value = mock_mgr
+
+        dangerous_label = "Task'; alert('xss');// \"hello\" {} \\"
+        toolset = BrowserToolset(config=CDP_CONFIG)
+        await toolset.setup(task_label=dangerous_label)
+
+        # Prefix passed as safe argument — special chars don't break JS
+        expected_prefix = f"[OwlBear {dangerous_label}]"
+        title_prefix = page.evaluate.call_args_list[0].args[1]
+        assert title_prefix == expected_prefix
+        observer_prefix = page.evaluate.call_args_list[1].args[1]
+        assert observer_prefix == expected_prefix
 
 
 # ---------------------------------------------------------------------------

@@ -434,7 +434,7 @@ class TestOwlBearDeps:
     def test_delegation_depth_defaults_to_zero(self) -> None:
         hooks = HookRegistry()
         deps = OwlBearDeps(hooks=hooks)
-        assert deps._delegation_depth == 0
+        assert deps.delegation_depth == 0
 
     def test_construct_with_agent_registry_and_delegation_depth(self) -> None:
         hooks = HookRegistry()
@@ -442,19 +442,19 @@ class TestOwlBearDeps:
         deps = OwlBearDeps(
             hooks=hooks,
             agent_registry=mock_registry,
-            _delegation_depth=2,
+            delegation_depth=2,
         )
         assert deps.agent_registry is mock_registry
-        assert deps._delegation_depth == 2
+        assert deps.delegation_depth == 2
 
     def test_dataclass_replace_delegation_depth(self) -> None:
         import dataclasses
 
         hooks = HookRegistry()
         deps = OwlBearDeps(hooks=hooks)
-        replaced = dataclasses.replace(deps, _delegation_depth=3)
-        assert replaced._delegation_depth == 3
-        assert deps._delegation_depth == 0  # original unchanged
+        replaced = dataclasses.replace(deps, delegation_depth=3)
+        assert replaced.delegation_depth == 3
+        assert deps.delegation_depth == 0  # original unchanged
 
 
 # ---------------------------------------------------------------------------
@@ -719,9 +719,7 @@ class TestOwlBearAgentKnowledgeInjection:
         call_kwargs = agent.inner.run.call_args
         assert "instructions" not in call_kwargs.kwargs
 
-    def test_turn_passes_none_instructions_when_service_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_turn_passes_none_instructions_when_service_returns_none(self, tmp_path: Path) -> None:
         """When service returns None, instructions=None passed (PydanticAI ignores it)."""
         svc = MagicMock()
         svc.query_for_context.return_value = None
@@ -762,9 +760,7 @@ class TestOwlBearAgentKnowledgeInjection:
         call_kwargs = agent.inner.run.call_args
         assert "instructions" not in call_kwargs.kwargs
 
-    def test_turn_logs_warning_on_service_exception(
-        self, tmp_path: Path
-    ) -> None:
+    def test_turn_logs_warning_on_service_exception(self, tmp_path: Path) -> None:
         """Exception from knowledge_service is logged at WARNING level."""
         svc = MagicMock()
         svc.query_for_context.side_effect = RuntimeError("DB corrupt")

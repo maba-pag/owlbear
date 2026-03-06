@@ -38,13 +38,13 @@ class TestProjectDefinitionSkillFrontmatter:
         assert "scoping" in desc_lower or "definition" in desc_lower
 
     def test_user_invokable_false_in_frontmatter(self) -> None:
-        """YAML frontmatter should contain user-invokable: false."""
+        """YAML frontmatter should contain user-invocable: false."""
         import yaml
 
         text = _SKILL_FILE.read_text(encoding="utf-8")
         end = text.find("---", 3)
         data = yaml.safe_load(text[3:end])
-        assert data.get("user-invokable") is False
+        assert data.get("user-invocable") is False
 
 
 class TestProjectDefinitionSkillContent:

@@ -28,7 +28,7 @@ def _run(coro: object) -> None:
 
 def _navigate_data(url: str) -> dict[str, object]:
     """Build a PRE_TOOL_USE payload for a navigate call."""
-    return {"tool_name": "navigate", "args": {"url": url}}
+    return {"tool_name": "browser_navigate", "args": {"url": url}}
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ class TestURLSafetyGuardEdgeCases:
     def test_navigate_without_url_arg_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*"])
         guard = URLSafetyGuard(cfg)
-        data: dict[str, object] = {"tool_name": "navigate", "args": {}}
+        data: dict[str, object] = {"tool_name": "browser_navigate", "args": {}}
         _run(guard(data))  # no raise — no url to check
 
     def test_navigate_with_empty_url_ignored(self) -> None:
@@ -141,7 +141,7 @@ class TestURLSafetyGuardEdgeCases:
     def test_missing_args_key_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*"])
         guard = URLSafetyGuard(cfg)
-        data: dict[str, object] = {"tool_name": "navigate"}
+        data: dict[str, object] = {"tool_name": "browser_navigate"}
         _run(guard(data))  # no raise — no args dict
 
     def test_non_dict_data_ignored(self) -> None:
@@ -226,3 +226,64 @@ class TestURLSafetyGuardHookIntegration:
             )
         # Guard logged the blocked URL before raising.
         assert "evil.com" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# HookedToolset end-to-end integration
+# ---------------------------------------------------------------------------
+
+
+class TestURLSafetyGuardHookedToolsetIntegration:
+    """URLSafetyGuard fires when HookedToolset processes browser_navigate."""
+
+    def test_hooked_toolset_fires_url_guard_on_blocked_url(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """HookedToolset emits PRE_TOOL_USE which triggers URLSafetyGuard.
+
+        The guard detects the blocked URL and logs a warning (exception is
+        swallowed by HookRegistry.emit).
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from owlbear.tools.hooked import HookedToolset
+
+        cfg = BrowserConfig(blocked_urls=[r".*evil.*"])
+        guard = URLSafetyGuard(cfg)
+        hooks = HookRegistry()
+        guard.register(hooks)
+
+        mock_ts = MagicMock()
+        mock_ts.call_tool = AsyncMock(return_value="ok")
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"):
+            _run(hooked.call_tool("browser_navigate", {"url": "https://evil.com"}, ctx, tool))
+
+        assert "evil.com" in caplog.text
+
+    def test_hooked_toolset_allows_safe_url(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Safe URL passes through URLSafetyGuard without warnings."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from owlbear.tools.hooked import HookedToolset
+
+        cfg = BrowserConfig(blocked_urls=[r".*evil.*"])
+        guard = URLSafetyGuard(cfg)
+        hooks = HookRegistry()
+        guard.register(hooks)
+
+        mock_ts = MagicMock()
+        mock_ts.call_tool = AsyncMock(return_value="page loaded")
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"):
+            _run(hooked.call_tool("browser_navigate", {"url": "https://safe.com"}, ctx, tool))
+
+        assert "safe.com" not in caplog.text

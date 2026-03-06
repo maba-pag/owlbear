@@ -174,7 +174,8 @@ class TestWebSearch:
 
     @pytest.mark.asyncio
     async def test_empty_results_returns_no_results(
-        self, mock_ddgs: MagicMock,
+        self,
+        mock_ddgs: MagicMock,
     ) -> None:
         """Empty DDGS results return 'No results found'."""
         mock_ddgs.return_value.text.return_value = []
@@ -184,13 +185,15 @@ class TestWebSearch:
 
     @pytest.mark.asyncio
     async def test_calls_ddgs_with_correct_params(
-        self, mock_ddgs: MagicMock,
+        self,
+        mock_ddgs: MagicMock,
     ) -> None:
         """DDGS().text() is called with keywords and max_results."""
         ts = WebSearchToolset()
         await ts._web_search("test query", num_results=3)
         mock_ddgs.return_value.text.assert_called_once_with(
-            keywords="test query", max_results=3,
+            keywords="test query",
+            max_results=3,
         )
 
     @pytest.mark.asyncio
@@ -225,7 +228,8 @@ class TestWebSearch:
 
     @pytest.mark.asyncio
     async def test_all_results_blocked_returns_no_results(
-        self, mock_ddgs: MagicMock,
+        self,
+        mock_ddgs: MagicMock,
     ) -> None:
         """All results blocked returns 'No results found'."""
         mock_ddgs.return_value.text.return_value = [
@@ -247,7 +251,8 @@ class TestWebRead:
 
     @pytest.mark.asyncio
     async def test_fetches_and_extracts_content(
-        self, mock_httpx_client: AsyncMock,
+        self,
+        mock_httpx_client: AsyncMock,
     ) -> None:
         """web_read fetches URL via httpx and extracts content with trafilatura."""
         with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
@@ -293,7 +298,8 @@ class TestWebRead:
 
     @pytest.mark.asyncio
     async def test_web_read_passes_timeout_30(
-        self, mock_httpx_client: AsyncMock,
+        self,
+        mock_httpx_client: AsyncMock,
     ) -> None:
         """httpx.get is called with timeout=30."""
         with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
@@ -301,7 +307,9 @@ class TestWebRead:
             ts = WebSearchToolset()
             await ts._web_read("https://example.com")
             mock_httpx_client.get.assert_called_once_with(
-                "https://example.com", timeout=30, follow_redirects=True,
+                "https://example.com",
+                timeout=30,
+                follow_redirects=True,
             )
 
     @pytest.mark.asyncio
@@ -335,7 +343,9 @@ class TestWebRead:
         client = AsyncMock()
         client.get.return_value = response
         response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Not Found", request=MagicMock(), response=response,
+            "Not Found",
+            request=MagicMock(),
+            response=response,
         )
 
         cm = AsyncMock()
@@ -380,7 +390,8 @@ class TestWebSearchGaps:
 
     @pytest.mark.asyncio
     async def test_web_search_respects_allowlist(
-        self, mock_ddgs: MagicMock,
+        self,
+        mock_ddgs: MagicMock,
     ) -> None:
         """Only results matching allowed_urls returned when set."""
         mock_ddgs.return_value.text.return_value = [
@@ -411,13 +422,15 @@ class TestWebSearchGaps:
 
     @pytest.mark.asyncio
     async def test_web_search_num_results_param(
-        self, mock_ddgs: MagicMock,
+        self,
+        mock_ddgs: MagicMock,
     ) -> None:
         """Passes num_results to DDGS.text() max_results param."""
         ts = WebSearchToolset()
         await ts._web_search("test", num_results=10)
         mock_ddgs.return_value.text.assert_called_once_with(
-            keywords="test", max_results=10,
+            keywords="test",
+            max_results=10,
         )
 
     @pytest.mark.asyncio
@@ -427,3 +440,94 @@ class TestWebSearchGaps:
             ts = WebSearchToolset()
             with pytest.raises(ImportError, match="duckduckgo_search"):
                 await ts._web_search("test")
+
+
+# ---------------------------------------------------------------------------
+# web_read — retry behaviour via _fetch_url
+# ---------------------------------------------------------------------------
+
+
+class TestWebReadRetry:
+    """_web_read retries transient HTTP errors via decorated _fetch_url."""
+
+    @pytest.mark.asyncio
+    async def test_retries_connect_error_then_succeeds(self) -> None:
+        """ConnectError once then 200 — verify extracted text returned."""
+        resp_ok = MagicMock()
+        resp_ok.status_code = 200
+        resp_ok.text = "<html><body><p>Recovered</p></body></html>"
+        resp_ok.raise_for_status = MagicMock()
+
+        client = AsyncMock()
+        client.get = AsyncMock(
+            side_effect=[httpx.ConnectError("refused"), resp_ok],
+        )
+
+        cm = AsyncMock()
+        cm.__aenter__.return_value = client
+        cm.__aexit__.return_value = False
+
+        with (
+            patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm),
+            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+        ):
+            mock_traf.extract.return_value = "Recovered text"
+            ts = WebSearchToolset()
+            result = await ts._web_read("https://example.com/retry")
+
+        assert result == "Recovered text"
+        assert client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_404_no_retry_returns_error_string(self) -> None:
+        """404 is permanent — single call only, error string returned."""
+        resp_404 = MagicMock()
+        resp_404.status_code = 404
+
+        client = AsyncMock()
+        client.get.return_value = resp_404
+        resp_404.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Not Found",
+            request=MagicMock(),
+            response=resp_404,
+        )
+
+        cm = AsyncMock()
+        cm.__aenter__.return_value = client
+        cm.__aexit__.return_value = False
+
+        with patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm):
+            ts = WebSearchToolset()
+            result = await ts._web_read("https://example.com/missing")
+
+        assert result == "HTTP 404: https://example.com/missing"
+        assert client.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_preserves_timeout_and_redirects(self) -> None:
+        """_fetch_url still uses timeout=30, follow_redirects=True."""
+        resp_ok = MagicMock()
+        resp_ok.status_code = 200
+        resp_ok.text = "<html><body>ok</body></html>"
+        resp_ok.raise_for_status = MagicMock()
+
+        client = AsyncMock()
+        client.get = AsyncMock(return_value=resp_ok)
+
+        cm = AsyncMock()
+        cm.__aenter__.return_value = client
+        cm.__aexit__.return_value = False
+
+        with (
+            patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm),
+            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+        ):
+            mock_traf.extract.return_value = "content"
+            ts = WebSearchToolset()
+            await ts._web_read("https://example.com")
+
+        client.get.assert_called_once_with(
+            "https://example.com",
+            timeout=30,
+            follow_redirects=True,
+        )

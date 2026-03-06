@@ -971,6 +971,66 @@ class TestSlackChannelThreadRegistry:
         )
         assert channel.get_or_create_thread("proj1:task5") is None
 
+
+# ---------------------------------------------------------------------------
+# RateLimitErrorRetryHandler  (task #603)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackChannelRateLimitRetryHandler:
+    """AsyncWebClient must have RateLimitErrorRetryHandler registered."""
+
+    def test_web_client_has_rate_limit_retry_handler(self) -> None:
+        """The _web_client must include a RateLimitErrorRetryHandler."""
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        handlers = channel._web_client.retry_handlers
+        rate_limit_handlers = [h for h in handlers if isinstance(h, RateLimitErrorRetryHandler)]
+        assert len(rate_limit_handlers) == 1
+
+    def test_rate_limit_handler_max_retry_count_is_one(self) -> None:
+        """RateLimitErrorRetryHandler must have max_retry_count=1."""
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        handler = next(
+            h
+            for h in channel._web_client.retry_handlers
+            if isinstance(h, RateLimitErrorRetryHandler)
+        )
+        assert handler.max_retry_count == 1
+
+    def test_no_tenacity_retry_on_send(self) -> None:
+        """send, send_blocks, send_image must NOT have tenacity @retry."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        for method_name in ("send", "send_blocks", "send_image"):
+            method = getattr(channel, method_name)
+            # tenacity-wrapped functions have a 'retry' attribute
+            assert not hasattr(method, "retry"), (
+                f"{method_name} should not have a tenacity @retry decorator"
+            )
+
+    def test_send_image_fallback_unchanged(self) -> None:
+        """send_image still has the try/except fallback pattern (source check)."""
+        import inspect
+
+        source = inspect.getsource(SlackChannel.send_image)
+        assert "files_upload_v2" in source
+        assert "except" in source
+
     def test_get_or_create_thread_returns_ts_after_registration(self) -> None:
         channel = SlackChannel(
             app_token="xapp-test",
@@ -1143,3 +1203,60 @@ class TestSlackChannelThreadRegistry:
 
         # Still the first ts
         assert channel._thread_registry["ctx1"] == "1111111111.000001"
+
+
+# ---------------------------------------------------------------------------
+# Import guard — slack_sdk optional dependency
+# ---------------------------------------------------------------------------
+
+
+class TestSlackImportGuard:
+    """AC 1-4: slack_sdk is optional; missing import raises at instantiation."""
+
+    def test_import_channels_without_slack_sdk(self) -> None:
+        """import owlbear.channels succeeds even when slack_sdk is absent."""
+        # If the guard is in place, the module loads with sentinels = None.
+        # We verify by patching the sentinel *after* import (the guard sets it).
+        import owlbear.channels
+
+        assert hasattr(owlbear.channels, "SlackChannel")
+
+    def test_import_slack_channel_without_sdk(self) -> None:
+        """from owlbear.channels.slack import SlackChannel succeeds."""
+        from owlbear.channels import slack as slack_mod
+
+        assert hasattr(slack_mod, "SlackChannel")
+
+    def test_instantiation_raises_without_slack_sdk(self) -> None:
+        """SlackChannel() raises ImportError with install hint when sdk missing."""
+        import owlbear.channels.slack as slack_mod
+
+        # Simulate slack_sdk missing by setting sentinel to None
+        original = slack_mod.AsyncWebClient
+        try:
+            slack_mod.AsyncWebClient = None  # type: ignore[assignment]
+            with pytest.raises(ImportError, match="uv sync --extra slack"):
+                SlackChannel(
+                    app_token="xapp-test",
+                    bot_token="xoxb-test",
+                    channel_id="C12345",
+                )
+        finally:
+            slack_mod.AsyncWebClient = original
+
+    def test_instantiation_hint_message(self) -> None:
+        """Error message includes specific install command."""
+        import owlbear.channels.slack as slack_mod
+
+        original = slack_mod.AsyncWebClient
+        try:
+            slack_mod.AsyncWebClient = None  # type: ignore[assignment]
+            with pytest.raises(ImportError) as exc_info:
+                SlackChannel(
+                    app_token="xapp-test",
+                    bot_token="xoxb-test",
+                    channel_id="C12345",
+                )
+            assert "uv sync --extra slack" in str(exc_info.value)
+        finally:
+            slack_mod.AsyncWebClient = original

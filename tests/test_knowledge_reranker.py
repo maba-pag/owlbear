@@ -173,3 +173,26 @@ class TestRerankerEmptyPassages:
         assert result == []
         # Model should NOT be loaded for empty input
         mock_flag_module.FlagReranker.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# (6) Import guard — actionable ImportError when FlagEmbedding missing
+# ---------------------------------------------------------------------------
+
+
+class TestRerankerImportGuard:
+    """_ensure_model() raises ImportError with install instructions when FlagEmbedding missing."""
+
+    def test_import_error_message_when_flag_embedding_missing(self) -> None:
+        """ImportError message includes class name and install command."""
+        with patch.dict(sys.modules, {"FlagEmbedding": None}):
+            provider = BGERerankerProvider()
+            with pytest.raises(ImportError, match="BGERerankerProvider"):
+                provider.rerank("query", ["passage"])
+
+    def test_import_error_message_includes_install_instructions(self) -> None:
+        """ImportError message tells user how to install the package."""
+        with patch.dict(sys.modules, {"FlagEmbedding": None}):
+            provider = BGERerankerProvider()
+            with pytest.raises(ImportError, match="uv pip install FlagEmbedding"):
+                provider.rerank("query", ["passage"])

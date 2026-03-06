@@ -2,7 +2,8 @@
 
 Covers: PidFile context manager, stale PID detection, PID conflict,
 setup_logging, sentinel-based shutdown, run_daemon loop, signal handler,
-bearclaw stop/status CLI commands, Copilot token refresh on auth errors.
+bearclaw stop/status CLI commands, Copilot token refresh on auth errors,
+ErrorJournal integration.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import pytest
 
 from owlbear.core.errors import ErrorCategory
 from owlbear.daemon import PidFile, run_daemon, setup_logging
+from owlbear.memory.error_journal import ErrorJournal
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -793,8 +795,8 @@ class TestClassifiedErrorRecovery:
         assert mock_agent.turn.call_count == 4
         # 3 sleeps (one per retry)
         assert mock_sleep.call_count == 3
-        # Error sent to channel after retries exhausted
-        assert any("connection refused" in msg for msg in channel.sent)
+        # Error sent to channel after retries exhausted (sanitized)
+        assert any("Connection failed" in msg for msg in channel.sent)
 
     def test_transient_error_succeeds_on_second_retry(self, tmp_path: Path) -> None:
         """Transient error on first two attempts, success on third."""
@@ -863,7 +865,7 @@ class TestClassifiedErrorRecovery:
 
         # Only 1 call — no retry for permanent errors
         mock_agent.turn.assert_called_once()
-        assert any("missing.txt" in msg for msg in channel.sent)
+        assert any("File not found" in msg for msg in channel.sent)
 
     def test_tool_semantic_error_treated_as_permanent(self, tmp_path: Path) -> None:
         """Tool-semantic errors treated same as permanent at daemon level."""
@@ -903,8 +905,8 @@ class TestClassifiedErrorRecovery:
 
         # 4 calls for msg1 + 1 call for msg2
         assert mock_agent.turn.call_count == 5
-        # Error from msg1 and reply from msg2 both sent
-        assert any("timeout" in msg for msg in channel.sent)
+        # Error from msg1 (sanitized) and reply from msg2 both sent
+        assert any("Connection failed" in msg for msg in channel.sent)
         assert "reply2" in channel.sent
 
     def test_classify_error_is_used_not_is_auth_error(self, tmp_path: Path) -> None:
@@ -957,3 +959,334 @@ class TestClassifiedErrorRecovery:
         assert mock_agent.turn.call_count == 2
         assert any("oom" in msg for msg in channel.sent)
         assert "ok" in channel.sent
+
+
+# ---------------------------------------------------------------------------
+# Channel send failure — original error must still be logged (#471)
+# ---------------------------------------------------------------------------
+
+
+class TestChannelSendFailureLogsOriginalError:
+    """When channel.send() fails in _recover_from_error, the original error
+    must still be logged via logger.exception() so it is never silently lost.
+    """
+
+    def test_transient_exhausted_channel_failure_logs_original(self, tmp_path: Path) -> None:
+        """Transient retries exhausted + channel.send raises → original logged."""
+        original_exc = httpx.ConnectError("connection refused")
+        channel = MockChannel(["hello", None])
+        # Make channel.send raise on the error-report attempt
+        channel.send = AsyncMock(side_effect=OSError("channel dead"))  # type: ignore[assignment]
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=original_exc)
+
+        with (
+            patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock),
+            patch("owlbear.daemon.logger") as mock_logger,
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        # logger.exception must have been called with the original error context
+        exc_calls = mock_logger.exception.call_args_list
+        original_logged = any("connection refused" in str(call) for call in exc_calls)
+        assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
+
+    def test_auth_refresh_failed_channel_failure_logs_original(self, tmp_path: Path) -> None:
+        """Auth refresh fails + channel.send raises → original refresh error logged."""
+        auth_exc = _make_openai_auth_error()
+        refresh_exc = RuntimeError("refresh failed")
+        channel = MockChannel(["hello", None])
+        channel.send = AsyncMock(side_effect=OSError("channel dead"))  # type: ignore[assignment]
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=auth_exc)
+        mock_agent.update_model = MagicMock()
+
+        with (
+            patch(
+                "owlbear.daemon.create_copilot_model",
+                new_callable=AsyncMock,
+                side_effect=refresh_exc,
+            ),
+            patch("owlbear.daemon.logger") as mock_logger,
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    settings=MagicMock(),
+                )
+            )
+
+        exc_calls = mock_logger.exception.call_args_list
+        original_logged = any("refresh failed" in str(call) for call in exc_calls)
+        assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
+
+    def test_permanent_error_channel_failure_logs_original(self, tmp_path: Path) -> None:
+        """Permanent error + channel.send raises → original error logged."""
+        original_exc = FileNotFoundError("missing.txt")
+        channel = MockChannel(["hello", None])
+        channel.send = AsyncMock(side_effect=OSError("channel dead"))  # type: ignore[assignment]
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=original_exc)
+
+        with patch("owlbear.daemon.logger") as mock_logger:
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+        exc_calls = mock_logger.exception.call_args_list
+        original_logged = any("missing.txt" in str(call) for call in exc_calls)
+        assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
+
+    def test_channel_send_success_still_sends_error(self, tmp_path: Path) -> None:
+        """When channel.send succeeds, the error message is still delivered (AC5)."""
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("gone.txt"))
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        assert any("File not found" in msg for msg in channel.sent)
+
+    def test_recover_from_error_never_propagates(self, tmp_path: Path) -> None:
+        """_recover_from_error never lets an exception escape (AC4)."""
+        original_exc = FileNotFoundError("boom")
+        channel = MockChannel(["hello", None])
+        channel.send = AsyncMock(side_effect=OSError("channel dead"))  # type: ignore[assignment]
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=original_exc)
+
+        with patch("owlbear.daemon.logger"):
+            # Must not raise — the daemon loop should continue
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# ErrorJournal integration (#475)
+# ---------------------------------------------------------------------------
+
+
+class TestErrorJournalIntegration:
+    """run_daemon logs error entries to ErrorJournal when provided."""
+
+    def _make_journal(self, tmp_path: Path) -> ErrorJournal:
+        return ErrorJournal(tmp_path)
+
+    def test_transient_retries_exhausted_logs_entry(self, tmp_path: Path) -> None:
+        """All transient retries fail → journal entry resolved=False."""
+        journal = self._make_journal(tmp_path)
+        channel = MockChannel(["hello", None])
+
+        exc = httpx.ConnectError("connection refused")
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=exc)
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    error_journal=journal,
+                )
+            )
+
+        entries = journal.query()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.error_type == ErrorCategory.TRANSIENT.value
+        assert entry.action_taken == "transient_retries_exhausted"
+        assert entry.resolved is False
+        assert entry.tool_name == "agent.turn"
+        assert entry.session_id == str(Path("sessions/test.jsonl"))
+
+    def test_transient_retry_succeeds_logs_entry(self, tmp_path: Path) -> None:
+        """Transient error then success → journal entry resolved=True."""
+        journal = self._make_journal(tmp_path)
+        channel = MockChannel(["hello", None])
+
+        exc = httpx.ConnectError("connection refused")
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=[exc, "recovered"])
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    error_journal=journal,
+                )
+            )
+
+        entries = journal.query()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.action_taken == "transient_retry"
+        assert entry.resolved is True
+        assert entry.attempt_number == 1
+
+    def test_auth_refresh_succeeds_logs_entry(self, tmp_path: Path) -> None:
+        """Auth error → refresh → success → journal entry resolved=True."""
+        journal = self._make_journal(tmp_path)
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(
+            side_effect=[_make_openai_auth_error(), "refreshed"],
+        )
+        mock_agent.update_model = MagicMock()
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        with patch(
+            "owlbear.daemon.create_copilot_model",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    settings=MagicMock(),
+                    error_journal=journal,
+                )
+            )
+
+        entries = journal.query()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.action_taken == "auth_refresh"
+        assert entry.resolved is True
+        assert entry.error_type == ErrorCategory.AUTH.value
+
+    def test_auth_refresh_fails_logs_entry(self, tmp_path: Path) -> None:
+        """Auth error → refresh fails → journal entry resolved=False."""
+        journal = self._make_journal(tmp_path)
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=_make_openai_auth_error())
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        with patch(
+            "owlbear.daemon.create_copilot_model",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("network down"),
+        ):
+            _run(
+                run_daemon(
+                    channel=channel,
+                    agent=mock_agent,
+                    config_dir=tmp_path,
+                    settings=MagicMock(),
+                    error_journal=journal,
+                )
+            )
+
+        entries = journal.query()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.action_taken == "auth_refresh_failed"
+        assert entry.resolved is False
+
+    def test_permanent_error_logs_entry(self, tmp_path: Path) -> None:
+        """Permanent error → journal entry resolved=False."""
+        journal = self._make_journal(tmp_path)
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+                error_journal=journal,
+            )
+        )
+
+        entries = journal.query()
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.action_taken == "permanent"
+        assert entry.resolved is False
+        assert "missing.txt" in entry.exception_message
+
+    def test_no_journal_does_not_crash(self, tmp_path: Path) -> None:
+        """error_journal=None → no crash (backward compat)."""
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+                error_journal=None,
+            )
+        )
+
+        assert any("File not found" in msg for msg in channel.sent)
+
+    def test_journal_failure_does_not_break_recovery(self, tmp_path: Path) -> None:
+        """If journal.log() raises, recovery still works."""
+        journal = self._make_journal(tmp_path)
+        journal.log = MagicMock(side_effect=OSError("disk full"))  # type: ignore[assignment]
+        channel = MockChannel(["hello", None])
+
+        mock_agent = AsyncMock()
+        mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = Path("sessions/test.jsonl")
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+                error_journal=journal,
+            )
+        )
+
+        # Recovery still sent error to channel
+        assert any("File not found" in msg for msg in channel.sent)

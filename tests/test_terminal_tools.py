@@ -262,3 +262,19 @@ class TestWorkingDir:
             )
         )
         assert tmp_path.name in result.stdout
+
+    def test_working_dir_absolute_outside_raises(self, tmp_path: Path) -> None:
+        ts = TerminalToolset(workspace_root=tmp_path)
+        outside = "C:\\Windows" if sys.platform == "win32" else "/etc"
+        with pytest.raises(PermissionError, match="Path outside workspace"):
+            _run(ts.run_command("echo hi", working_dir=outside))
+
+    def test_working_dir_traversal_raises(self, tmp_path: Path) -> None:
+        ts = TerminalToolset(workspace_root=tmp_path)
+        with pytest.raises(PermissionError, match="Path outside workspace"):
+            _run(ts.run_command("echo hi", working_dir="../../escape"))
+
+    def test_working_dir_null_byte_raises(self, tmp_path: Path) -> None:
+        ts = TerminalToolset(workspace_root=tmp_path)
+        with pytest.raises(PermissionError, match="Path outside workspace"):
+            _run(ts.run_command("echo hi", working_dir="sub\x00dir"))

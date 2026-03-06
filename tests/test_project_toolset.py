@@ -428,9 +428,7 @@ class TestSwitchProjectContextUpdate:
         assert "gamma" in result
 
     @pytest.mark.asyncio
-    async def test_no_error_when_agent_lacks_context_attr(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_no_error_when_agent_lacks_context_attr(self, tmp_path: Path) -> None:
         """Agent without a context attribute (e.g. placeholder) doesn't crash."""
         workspace = tmp_path / "projects" / "kappa"
         workspace.mkdir(parents=True)
@@ -456,7 +454,7 @@ class TestSwitchProjectContextUpdate:
 
 
 class TestSwitchProjectToolsetRootUpdate:
-    """switch_project updates _workspace_root / _root on agent toolsets."""
+    """switch_project updates workspace root on WorkspaceAware toolsets."""
 
     @pytest.mark.asyncio
     async def test_toolset_workspace_root_updated(self, tmp_path: Path) -> None:
@@ -465,7 +463,14 @@ class TestSwitchProjectToolsetRootUpdate:
         project = _real_project("delta", workspace)
         store = _real_store(project)
 
-        fake_ts = SimpleNamespace(_workspace_root=Path("/old"))
+        class FakeToolset:
+            def __init__(self) -> None:
+                self.workspace: Path | None = None
+
+            def update_workspace(self, ws: Path) -> None:
+                self.workspace = ws
+
+        fake_ts = FakeToolset()
         agent = _agent_ns(toolsets=[fake_ts])
 
         config_dir = tmp_path / "config"
@@ -475,17 +480,24 @@ class TestSwitchProjectToolsetRootUpdate:
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("delta")
 
-        assert fake_ts._workspace_root == workspace
+        assert fake_ts.workspace == workspace
 
     @pytest.mark.asyncio
     async def test_toolset_root_updated(self, tmp_path: Path) -> None:
-        """Toolsets using _root (e.g. FileToolset, KnowledgeToolset) get updated."""
+        """Toolsets implementing WorkspaceAware get updated."""
         workspace = tmp_path / "projects" / "epsilon"
         workspace.mkdir(parents=True)
         project = _real_project("epsilon", workspace)
         store = _real_store(project)
 
-        fake_ts = SimpleNamespace(_root=Path("/old"))
+        class FakeToolset:
+            def __init__(self) -> None:
+                self.workspace: Path | None = None
+
+            def update_workspace(self, ws: Path) -> None:
+                self.workspace = ws
+
+        fake_ts = FakeToolset()
         agent = _agent_ns(toolsets=[fake_ts])
 
         config_dir = tmp_path / "config"
@@ -495,19 +507,24 @@ class TestSwitchProjectToolsetRootUpdate:
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("epsilon")
 
-        assert fake_ts._root == workspace.resolve()
+        assert fake_ts.workspace == workspace
 
     @pytest.mark.asyncio
-    async def test_wrapped_toolset_unwrapped_and_updated(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_wrapped_toolset_unwrapped_and_updated(self, tmp_path: Path) -> None:
         """Toolsets wrapped (e.g. HookedToolset) are unwrapped for update."""
         workspace = tmp_path / "projects" / "zeta"
         workspace.mkdir(parents=True)
         project = _real_project("zeta", workspace)
         store = _real_store(project)
 
-        inner_ts = SimpleNamespace(_workspace_root=Path("/old"))
+        class FakeToolset:
+            def __init__(self) -> None:
+                self.workspace: Path | None = None
+
+            def update_workspace(self, ws: Path) -> None:
+                self.workspace = ws
+
+        inner_ts = FakeToolset()
         wrapper = SimpleNamespace(wrapped=inner_ts)
         agent = _agent_ns(toolsets=[wrapper])
 
@@ -518,12 +535,10 @@ class TestSwitchProjectToolsetRootUpdate:
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("zeta")
 
-        assert inner_ts._workspace_root == workspace
+        assert inner_ts.workspace == workspace
 
     @pytest.mark.asyncio
-    async def test_no_error_when_agent_has_no_toolsets_attr(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_no_error_when_agent_has_no_toolsets_attr(self, tmp_path: Path) -> None:
         """Graceful when agent has no toolsets attribute."""
         workspace = tmp_path / "projects" / "theta"
         workspace.mkdir(parents=True)
@@ -561,8 +576,10 @@ class TestWorkspaceCreateProject:
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
-            store=mock_store, agent=mock_agent,
-            config_dir=config_dir, project_root=project_root,
+            store=mock_store,
+            agent=mock_agent,
+            config_dir=config_dir,
+            project_root=project_root,
         )
         expected_path = project_root / "my-app"
         with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
@@ -581,15 +598,15 @@ class TestWorkspaceCreateProject:
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
-            store=mock_store, agent=mock_agent,
-            config_dir=config_dir, project_root=project_root,
+            store=mock_store,
+            agent=mock_agent,
+            config_dir=config_dir,
+            project_root=project_root,
         )
         with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.return_value = tmp_path / "my-app"
             await ts._workspace_create_project("My App", "python-uv")
-        mock_ws_cls.return_value.create_project.assert_called_once_with(
-            "My App", "python-uv"
-        )
+        mock_ws_cls.return_value.create_project.assert_called_once_with("My App", "python-uv")
 
     @pytest.mark.asyncio
     async def test_invalid_template_returns_error(
@@ -601,8 +618,10 @@ class TestWorkspaceCreateProject:
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
-            store=mock_store, agent=mock_agent,
-            config_dir=config_dir, project_root=project_root,
+            store=mock_store,
+            agent=mock_agent,
+            config_dir=config_dir,
+            project_root=project_root,
         )
         with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.side_effect = ValueError(
@@ -620,7 +639,9 @@ class TestWorkspaceCreateProject:
     ) -> None:
         """Without project_root, tool returns an error message."""
         ts = ProjectToolset(
-            store=mock_store, agent=mock_agent, config_dir=config_dir,
+            store=mock_store,
+            agent=mock_agent,
+            config_dir=config_dir,
         )
         result = await ts._workspace_create_project("My App", "bare")
         assert "error" in result.lower()

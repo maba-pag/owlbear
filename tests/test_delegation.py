@@ -33,7 +33,7 @@ def _make_deps(
     return OwlBearDeps(
         hooks=HookRegistry(),
         agent_registry=registry,
-        _delegation_depth=depth,
+        delegation_depth=depth,
     )
 
 
@@ -175,7 +175,7 @@ class TestUsagePassthrough:
 
 
 class TestDepthIncrement:
-    """Delegation increments _delegation_depth in inner deps."""
+    """Delegation increments delegation_depth in inner deps."""
 
     def test_increments_depth_by_one(self) -> None:
         inner_agent = _make_agent(output="ok")
@@ -188,7 +188,7 @@ class TestDepthIncrement:
 
         call_kwargs = inner_agent.run.call_args[1]
         inner_deps = call_kwargs["deps"]
-        assert inner_deps._delegation_depth == 3
+        assert inner_deps.delegation_depth == 3
 
     def test_does_not_mutate_original_deps(self) -> None:
         inner_agent = _make_agent(output="ok")
@@ -199,7 +199,7 @@ class TestDepthIncrement:
 
         _run(ts._delegate(ctx, agent_name="builder", task="sub task"))
 
-        assert deps._delegation_depth == 1
+        assert deps.delegation_depth == 1
 
 
 # ---------------------------------------------------------------------------

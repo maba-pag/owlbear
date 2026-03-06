@@ -186,6 +186,7 @@ class TestReadUrl:
     @pytest.mark.anyio
     async def test_http_error_propagates(self) -> None:
         mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 500
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "Server Error",
             request=MagicMock(spec=httpx.Request),
@@ -231,3 +232,64 @@ class TestReadText:
         result = read_text("hello")
         assert "fetched_at" in result.metadata
         datetime.datetime.fromisoformat(result.metadata["fetched_at"])
+
+
+# -- read_url retry behaviour -------------------------------------------------
+
+
+class TestReadUrlRetry:
+    """read_url retries transient HTTP errors via TRANSIENT_RETRY."""
+
+    @pytest.mark.anyio
+    async def test_retries_502_then_succeeds(self) -> None:
+        """Mock 502 twice then 200 — verify IntakeResult returned with correct content."""
+        resp_502 = MagicMock(spec=httpx.Response)
+        resp_502.status_code = 502
+        resp_502.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Bad Gateway",
+            request=MagicMock(spec=httpx.Request),
+            response=resp_502,
+        )
+
+        resp_200 = MagicMock(spec=httpx.Response)
+        resp_200.text = "success content"
+        resp_200.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.get = AsyncMock(side_effect=[resp_502, resp_502, resp_200])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "owlbear.memory.knowledge.intake.httpx.AsyncClient",
+            return_value=mock_client,
+        ):
+            result = await read_url("https://example.com/retry")
+
+        assert isinstance(result, IntakeResult)
+        assert result.content == "success content"
+        assert mock_client.get.call_count == 3
+
+    @pytest.mark.anyio
+    async def test_preserves_timeout_config(self) -> None:
+        """httpx.Timeout(30, connect=5) is still passed to AsyncClient."""
+        resp_ok = MagicMock(spec=httpx.Response)
+        resp_ok.text = "ok"
+        resp_ok.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.get = AsyncMock(return_value=resp_ok)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "owlbear.memory.knowledge.intake.httpx.AsyncClient",
+            return_value=mock_client,
+        ) as mock_cls:
+            await read_url("https://example.com")
+
+        call_kwargs = mock_cls.call_args[1]
+        timeout = call_kwargs["timeout"]
+        assert isinstance(timeout, httpx.Timeout)
+        assert timeout.read == 30
+        assert timeout.connect == 5

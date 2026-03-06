@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import json
+import stat
+import sys
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from owlbear.auth.copilot import (
+    COPILOT_TOKEN_URL,
     DEFAULT_COPILOT_BASE,
+    DEVICE_CODE_URL,
     derive_base_url,
     exchange_for_copilot_token,
     load_or_refresh_token,
@@ -185,6 +190,158 @@ class TestExchangeForCopilotToken:
 
 
 # ---------------------------------------------------------------------------
+# TRANSIENT_RETRY integration — request_device_code
+# ---------------------------------------------------------------------------
+
+
+class TestRequestDeviceCodeRetry:
+    """Verify TRANSIENT_RETRY decorator on request_device_code."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_retries_on_502_then_succeeds(self) -> None:
+        """502 twice then 200 → 3 calls total, success returned."""
+        success_response = MagicMock()
+        success_response.json.return_value = {
+            "device_code": "abc",
+            "user_code": "XXXX",
+            "verification_uri": "https://github.com/login/device",
+            "expires_in": 900,
+            "interval": 5,
+        }
+        success_response.raise_for_status = MagicMock()
+
+        error_response_1 = httpx.Response(502, request=httpx.Request("POST", DEVICE_CODE_URL))
+        error_response_2 = httpx.Response(502, request=httpx.Request("POST", DEVICE_CODE_URL))
+
+        call_count = 0
+
+        async def _fake_post(*_args: object, **_kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                msg = "Server Error"
+                raise httpx.HTTPStatusError(
+                    msg,
+                    request=httpx.Request("POST", DEVICE_CODE_URL),
+                    response=error_response_1 if call_count == 1 else error_response_2,
+                )
+            return success_response
+
+        mock_client = AsyncMock()
+        mock_client.post = _fake_post
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("owlbear.auth.copilot.httpx.AsyncClient", return_value=mock_client):
+            result = await request_device_code()
+
+        assert result["device_code"] == "abc"
+        assert call_count == 3
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_retry_on_401(self) -> None:
+        """401 is non-transient → 1 call only, exception propagates."""
+        error_response = httpx.Response(401, request=httpx.Request("POST", DEVICE_CODE_URL))
+
+        call_count = 0
+
+        async def _fake_post(*_args: object, **_kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            msg = "Unauthorized"
+            raise httpx.HTTPStatusError(
+                msg,
+                request=httpx.Request("POST", DEVICE_CODE_URL),
+                response=error_response,
+            )
+
+        mock_client = AsyncMock()
+        mock_client.post = _fake_post
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("owlbear.auth.copilot.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(httpx.HTTPStatusError, match="Unauthorized"),
+        ):
+            await request_device_code()
+
+        assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# TRANSIENT_RETRY integration — exchange_for_copilot_token
+# ---------------------------------------------------------------------------
+
+
+class TestExchangeForCopilotTokenRetry:
+    """Verify TRANSIENT_RETRY decorator on exchange_for_copilot_token."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_retries_on_502_then_succeeds(self) -> None:
+        """502 twice then 200 → 3 calls total, success returned."""
+        success_response = MagicMock()
+        success_response.json.return_value = {
+            "token": "tid=ok",
+            "expires_at": 9999999999,
+        }
+        success_response.raise_for_status = MagicMock()
+
+        call_count = 0
+
+        async def _fake_get(*_args: object, **_kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                msg = "Bad Gateway"
+                raise httpx.HTTPStatusError(
+                    msg,
+                    request=httpx.Request("GET", COPILOT_TOKEN_URL),
+                    response=httpx.Response(502, request=httpx.Request("GET", COPILOT_TOKEN_URL)),
+                )
+            return success_response
+
+        mock_client = AsyncMock()
+        mock_client.get = _fake_get
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("owlbear.auth.copilot.httpx.AsyncClient", return_value=mock_client):
+            result = await exchange_for_copilot_token("ghu_token")
+
+        assert result["token"] == "tid=ok"
+        assert call_count == 3
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_retry_on_401(self) -> None:
+        """401 is non-transient → 1 call only, exception propagates."""
+        call_count = 0
+
+        async def _fake_get(*_args: object, **_kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            msg = "Unauthorized"
+            raise httpx.HTTPStatusError(
+                msg,
+                request=httpx.Request("GET", COPILOT_TOKEN_URL),
+                response=httpx.Response(401, request=httpx.Request("GET", COPILOT_TOKEN_URL)),
+            )
+
+        mock_client = AsyncMock()
+        mock_client.get = _fake_get
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("owlbear.auth.copilot.httpx.AsyncClient", return_value=mock_client),
+            pytest.raises(httpx.HTTPStatusError, match="Unauthorized"),
+        ):
+            await exchange_for_copilot_token("ghu_token")
+
+        assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
 # derive_base_url
 # ---------------------------------------------------------------------------
 
@@ -271,6 +428,40 @@ class TestTokenCaching:
         assert token_path.exists()
         loaded = json.loads(token_path.read_text())
         assert loaded["token"] == "nested"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix permissions only")
+    def test_save_sets_file_permissions_0600(self, tmp_path: Path) -> None:
+        """save_token should create the file with mode 0o600 on Unix."""
+        token_path = tmp_path / "copilot_token.json"
+        token_data = {"token": "secret", "expires_at": 9999999999}
+
+        save_token(token_data, token_path)
+
+        file_mode = stat.S_IMODE(token_path.stat().st_mode)
+        assert file_mode == 0o600
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix permissions only")
+    def test_save_sets_parent_dir_permissions_0700(self, tmp_path: Path) -> None:
+        """save_token should set parent directory mode to 0o700 on Unix."""
+        token_path = tmp_path / "newdir" / "copilot_token.json"
+        token_data = {"token": "secret", "expires_at": 9999999999}
+
+        save_token(token_data, token_path)
+
+        dir_mode = stat.S_IMODE(token_path.parent.stat().st_mode)
+        assert dir_mode == 0o700
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_save_uses_write_text_on_windows(self, tmp_path: Path) -> None:
+        """save_token should use Path.write_text() on Windows."""
+        token_path = tmp_path / "copilot_token.json"
+        token_data = {"token": "wintoken", "expires_at": 9999999999}
+
+        save_token(token_data, token_path)
+
+        # Verify file was created and data round-trips
+        loaded = json.loads(token_path.read_text())
+        assert loaded["token"] == "wintoken"
 
 
 # ---------------------------------------------------------------------------

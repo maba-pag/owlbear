@@ -18,6 +18,14 @@ from tests.benchmarks.indexer import embed_and_index
 if TYPE_CHECKING:
     from owlbear.memory.knowledge.qdrant import QdrantVectorStore
 
+_NETWORK_ERRORS: tuple[type[Exception], ...] = (ConnectionError, OSError)
+try:
+    from requests.exceptions import RequestException as _RequestException
+
+    _NETWORK_ERRORS = (*_NETWORK_ERRORS, _RequestException)
+except ImportError:
+    pass
+
 
 @pytest.fixture(scope="session")
 def nfcorpus() -> tuple[dict[str, str], dict[str, str], dict[str, dict[str, int]]]:
@@ -26,7 +34,10 @@ def nfcorpus() -> tuple[dict[str, str], dict[str, str], dict[str, dict[str, int]
     Returns:
         A 3-tuple of ``(corpus, queries, qrels)``.
     """
-    return load_nfcorpus()
+    try:
+        return load_nfcorpus()
+    except _NETWORK_ERRORS as exc:
+        pytest.skip(f"NFCorpus download unavailable: {exc}")
 
 
 @pytest.fixture(scope="session")

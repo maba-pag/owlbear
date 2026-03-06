@@ -1,4 +1,4 @@
-﻿"""Tests for owlbear.core.observability â€” ObservabilityHook JSONL event logging."""
+﻿"""Tests for owlbear.core.observability — ObservabilityHook JSONL event logging."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ class TestObservabilityEvent:
 
 
 # ---------------------------------------------------------------------------
-# EventStore â€” append / load
+# EventStore — append / load
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ class TestEventStoreLoad:
 
 
 # ---------------------------------------------------------------------------
-# EventStore â€” query (time window)
+# EventStore — query (time window)
 # ---------------------------------------------------------------------------
 
 
@@ -217,7 +217,7 @@ class TestEventStoreQuery:
 
 
 # ---------------------------------------------------------------------------
-# EventStore â€” summary aggregation
+# EventStore — summary aggregation
 # ---------------------------------------------------------------------------
 
 
@@ -305,7 +305,7 @@ class TestEventStoreSummary:
 
 
 # ---------------------------------------------------------------------------
-# EventStore â€” tool_stats aggregation
+# EventStore — tool_stats aggregation
 # ---------------------------------------------------------------------------
 
 
@@ -378,7 +378,7 @@ class TestEventStoreToolStats:
 
 
 # ---------------------------------------------------------------------------
-# ObservabilityHook â€” register + event handling
+# ObservabilityHook — register + event handling
 # ---------------------------------------------------------------------------
 
 

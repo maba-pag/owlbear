@@ -306,8 +306,8 @@ class TestErrorJournalEdgeCases:
         )
         results = journal.query()
         assert len(results) == 1
-        assert results[0]["tool_name"] == 'tool "with" quotes'
-        assert "line1\nline2" in results[0]["exception_message"]
+        assert results[0].tool_name == 'tool "with" quotes'
+        assert "line1\nline2" in results[0].exception_message
 
     def test_rotation_preserves_json_integrity(self, tmp_path: Path) -> None:
         """After rotation, every line is still valid JSON."""
@@ -326,7 +326,7 @@ class TestErrorJournalEdgeCases:
             _log_entry(journal, tool_name=f"tool_{i}")
         results = journal.query()
         assert len(results) == 3
-        assert results[-1]["tool_name"] == "tool_19"
+        assert results[-1].tool_name == "tool_19"
 
     def test_query_filter_combination_no_match(self, tmp_path: Path) -> None:
         """Query with filters that eliminate all entries returns []."""
@@ -440,7 +440,7 @@ class TestEndToEndErrorFlow:
 
         results = journal.query(tool_name="web_fetch", error_type="transient")
         assert len(results) == 1
-        assert results[0]["exception_message"] == "connection refused"
+        assert results[0].exception_message == "connection refused"
 
     def test_permanent_error_flows_through_pipeline(self, tmp_path: Path) -> None:
         exc = FileNotFoundError("missing.txt")
@@ -461,7 +461,7 @@ class TestEndToEndErrorFlow:
 
         results = journal.query(error_type="permanent")
         assert len(results) == 1
-        assert results[0]["resolved"] is True
+        assert results[0].resolved is True
 
     def test_auth_error_flows_through_pipeline(self, tmp_path: Path) -> None:
         exc = _http_status_error(401)
@@ -482,7 +482,7 @@ class TestEndToEndErrorFlow:
 
         results = journal.query(error_type="auth")
         assert len(results) == 1
-        assert results[0]["action_taken"] == "refresh_token"
+        assert results[0].action_taken == "refresh_token"
 
     def test_tool_semantic_error_flows_through_pipeline(self, tmp_path: Path) -> None:
         exc = ValueError("invalid argument")

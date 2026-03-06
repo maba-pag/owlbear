@@ -92,7 +92,7 @@ class TestNotificationHookDispatch:
         b1.notify, b2.notify = _b1, _b2
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        _run(hook(HookEvent.TASK_COMPLETE, {"message": "done"}))
+        _run(hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
         assert order == ["first", "second"]
 
     def test_stops_at_first_successful_backend(self) -> None:
@@ -101,7 +101,7 @@ class TestNotificationHookDispatch:
         b2 = _mock_backend("second", success=True)
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        _run(hook(HookEvent.TASK_COMPLETE, {"message": "done"}))
+        _run(hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
 
         b1.notify.assert_called_once()
         b2.notify.assert_not_called()
@@ -111,7 +111,7 @@ class TestNotificationHookDispatch:
         b1 = _mock_backend("b1")
 
         hook = NotificationHook(backends=[b1], notification_events=["task_complete"])
-        _run(hook(HookEvent.SESSION_START, {}))
+        _run(hook({"_hook_event": HookEvent.SESSION_START}))
 
         b1.notify.assert_not_called()
 
@@ -122,7 +122,7 @@ class TestNotificationHookDispatch:
         b2 = _mock_backend("second", success=True)
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        _run(hook(HookEvent.TASK_COMPLETE, {"message": "done"}))
+        _run(hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
 
         b2.notify.assert_called_once()
 
@@ -135,7 +135,7 @@ class TestNotificationHookDispatch:
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
         with caplog.at_level(logging.WARNING):
-            _run(hook(HookEvent.TASK_COMPLETE, {"message": "done"}))
+            _run(hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
 
         assert any(
             "all notification backends failed" in rec.message.lower() for rec in caplog.records

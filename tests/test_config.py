@@ -431,3 +431,20 @@ class TestScreenshotModeValidation:
         monkeypatch.setenv("OWLBEAR_SCREENSHOT_MODE", "always")
         with pytest.raises(ValidationError):
             OwlBearSettings()
+
+
+# ---------------------------------------------------------------------------
+# Field description metadata — task #477
+# ---------------------------------------------------------------------------
+
+
+class TestFieldDescriptions:
+    """Every OwlBearSettings field must have a non-empty Field description."""
+
+    def test_all_fields_have_descriptions(self) -> None:
+        """Iterate model_fields and assert every field has a non-empty description."""
+        missing: list[str] = []
+        for name, field_info in OwlBearSettings.model_fields.items():
+            if not field_info.description:
+                missing.append(name)
+        assert not missing, f"Fields missing description: {', '.join(missing)}"
