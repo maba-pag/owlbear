@@ -1,10 +1,11 @@
 ---
 id: 515
 title: Implement circuit breaker for Copilot API
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:26.1410302+01:00
-updated: 2026-03-04T07:38:26.1410302+01:00
+updated: 2026-03-06T23:55:13.4724724+01:00
+started: 2026-03-06T23:49:41.1231488+01:00
 tags:
     - audit
     - resilience

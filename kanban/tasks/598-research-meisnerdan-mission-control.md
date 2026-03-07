@@ -1,10 +1,11 @@
 ---
 id: 598
 title: 'Research: MeisnerDan/mission-control'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-05T23:52:23.8498228+01:00
-updated: 2026-03-05T23:52:23.8498228+01:00
+updated: 2026-03-06T23:03:36.0213839+01:00
+started: 2026-03-06T22:55:17.3328965+01:00
 tags:
     - research
     - phase-research

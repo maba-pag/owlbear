@@ -1,10 +1,11 @@
 ---
 id: 595
 title: 'Research: pinchtab/pinchtab'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-05T23:52:02.3474034+01:00
-updated: 2026-03-05T23:52:02.3474034+01:00
+updated: 2026-03-06T23:03:35.1711247+01:00
+started: 2026-03-06T21:44:38.2045628+01:00
 tags:
     - research
     - phase-research

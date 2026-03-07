@@ -1,10 +1,11 @@
 ---
 id: 498
 title: Add scope limits to approve-all session grants
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:12.1149492+01:00
-updated: 2026-03-04T07:38:12.1149492+01:00
+updated: 2026-03-06T23:38:01.8039246+01:00
+started: 2026-03-06T23:31:39.6261362+01:00
 tags:
     - audit
     - security

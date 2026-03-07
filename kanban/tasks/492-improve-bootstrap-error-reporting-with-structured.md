@@ -1,10 +1,11 @@
 ---
 id: 492
 title: Improve bootstrap error reporting with structured startup summary
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:07.6659001+01:00
-updated: 2026-03-04T07:38:07.6659001+01:00
+updated: 2026-03-06T23:31:00.3431207+01:00
+started: 2026-03-06T23:23:21.4960048+01:00
 tags:
     - audit
     - resilience

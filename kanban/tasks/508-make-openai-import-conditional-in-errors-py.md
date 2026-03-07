@@ -1,11 +1,12 @@
 ---
 id: 508
 title: Make openai import conditional in errors.py
-status: review
+status: archived
 priority: important
 created: 2026-03-04T07:38:19.9842385+01:00
-updated: 2026-03-06T19:27:53.9147605+01:00
+updated: 2026-03-07T18:07:58.9462884+01:00
 started: 2026-03-06T16:48:31.9821424+01:00
+completed: 2026-03-07T18:07:58.9462884+01:00
 tags:
     - audit
     - config

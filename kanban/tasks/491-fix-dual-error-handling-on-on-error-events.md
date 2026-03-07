@@ -1,17 +1,17 @@
 ---
 id: 491
 title: Fix dual error handling on ON_ERROR events
-status: review
+status: backlog
 priority: important
 created: 2026-03-04T07:38:06.9326328+01:00
-updated: 2026-03-06T19:27:46.6092667+01:00
+updated: 2026-03-07T04:06:51.2658301+01:00
 started: 2026-03-06T17:49:55.7317939+01:00
 tags:
     - audit
     - resilience
     - scope:core
 blocked: true
-block_reason: 'test_error_recovery.py::test_on_error_uses_defaults_for_missing_tool_name_and_attempt still expects auto-registration. Fix: call register_on_error() before emit.'
+block_reason: 'REVIEW FAIL: AC fundamentally invalid. #484 (done) deleted escalation.py and test_escalation.py entirely. All 9 AC lines target code that no longer exists. Task is moot -- close or redefine.'
 class: standard
 ---
 

@@ -1,10 +1,11 @@
 ---
 id: 497
 title: Add path sandboxing to knowledge intake
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:11.4324226+01:00
-updated: 2026-03-04T07:38:11.4324226+01:00
+updated: 2026-03-06T23:39:30.40319+01:00
+started: 2026-03-06T23:31:39.0730282+01:00
 tags:
     - audit
     - security

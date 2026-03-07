@@ -1,10 +1,11 @@
 ---
 id: 574
 title: Add follow-up tasks to 3 research docs missing them
-status: ideation
+status: backlog
 priority: someday
 created: 2026-03-04T07:39:16.215824+01:00
-updated: 2026-03-04T07:39:16.215824+01:00
+updated: 2026-03-07T04:53:05.0766832+01:00
+started: 2026-03-07T04:53:05.0766832+01:00
 tags:
     - audit
     - docs

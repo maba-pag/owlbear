@@ -1,10 +1,11 @@
 ---
 id: 597
 title: 'Research: raphaelmansuy/edgequake'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-05T23:52:17.6488934+01:00
-updated: 2026-03-05T23:52:17.6488934+01:00
+updated: 2026-03-06T23:03:07.7455383+01:00
+started: 2026-03-06T22:55:16.8271487+01:00
 tags:
     - research
     - phase-research

@@ -1,10 +1,11 @@
 ---
 id: 573
 title: Add Prerequisites section to README
-status: ideation
+status: backlog
 priority: someday
 created: 2026-03-04T07:39:15.2924485+01:00
-updated: 2026-03-04T07:39:15.2924485+01:00
+updated: 2026-03-07T04:53:04.5373163+01:00
+started: 2026-03-07T04:53:04.5373163+01:00
 tags:
     - audit
     - docs

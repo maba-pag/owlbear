@@ -1,10 +1,12 @@
 ---
 id: 584
 title: 'Research: openai/symphony'
-status: ideation
+status: archived
 priority: important
 created: 2026-03-05T23:50:29.3138583+01:00
-updated: 2026-03-05T23:50:29.3138583+01:00
+updated: 2026-03-07T18:08:08.3972022+01:00
+started: 2026-03-06T21:12:52.0403902+01:00
+completed: 2026-03-07T18:08:08.3972022+01:00
 tags:
     - research
     - phase-research
@@ -13,12 +15,27 @@ parent: 580
 class: standard
 ---
 
-**Source:** https://github.com/openai/symphony
-Analyze for multi-agent delegation, orchestration patterns, and task execution logic.
+**Source:** https://github.com/openai/symphony (Apache-2.0)
+Analyzed for multi-agent delegation, orchestration patterns, and task execution logic.
 
-**Workflow:**
-1. Update docs/sources.md with URL, license, what was studied, where used, and date.
-2. Clone repo to docs/research/symphony/ for analysis.
-3. Identify architectural patterns, prompts, MCP server ideas, or code fragments reusable in OwlBear.
-4. Document findings in task body or linked research doc.
-5. Create follow-up kanban tasks for any actionable patterns discovered.
+**Research doc:** See docs/symphony-research.md
+
+**Key findings:**
+- Poll-dispatch-reconcile daemon pattern (poll tick -> reconcile running -> validate -> fetch candidates -> sort -> dispatch)
+- Workspace isolation per task with lifecycle hooks
+- Continuation turns: re-check task state after completion, send continuation prompt
+- Exponential backoff retry at task level: min(10000 * 2^(attempt-1), max_backoff_ms)
+- Reconciliation: stall detection + state refresh each tick
+- WORKFLOW.md: YAML front matter config + Liquid template prompt
+- ExecPlan (PLANS.md): self-contained living execution documents
+
+**Recommendation (.85 confidence):** Adopt poll-dispatch-reconcile as OwlBear autonomous mode. Skip workspace isolation (single-repo), Linear adapter, HTTP dashboard.
+
+**Follow-up tasks:** 4 kanban tasks proposed in docs/symphony-research.md S5
+
+**Research checklist:**
+- [x] Theoretical validity - Sound, proven at OpenAI scale (1500+ PRs)
+- [x] Prior art - 3 sources (Symphony repo, Harness Engineering blog, Codex ExecPlans)
+- [x] Technical feasibility - Python asyncio + PydanticAI + kanban-md CLI, no blockers
+- [x] Architecture fit - Extends existing run_daemon() loop, HookRegistry, BootstrapResult
+- [x] Implementation approach - Documented in research doc S3.2 and S4

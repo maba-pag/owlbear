@@ -1,12 +1,12 @@
 ---
 id: 499
 title: Add import guard to FlagEmbedding reranker
-status: done
+status: archived
 priority: important
 created: 2026-03-04T07:38:12.8421182+01:00
-updated: 2026-03-06T19:20:21.4593014+01:00
+updated: 2026-03-07T18:07:56.3782241+01:00
 started: 2026-03-06T17:51:34.1058497+01:00
-completed: 2026-03-06T19:20:21.4593014+01:00
+completed: 2026-03-07T18:07:56.3782241+01:00
 tags:
     - audit
     - config

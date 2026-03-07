@@ -1,10 +1,11 @@
 ---
 id: 523
 title: Eliminate post-construction patching in bootstrap
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-03-04T07:38:31.3955566+01:00
-updated: 2026-03-04T07:38:31.3955566+01:00
+updated: 2026-03-07T00:12:22.3596401+01:00
+started: 2026-03-07T00:06:03.5267617+01:00
 tags:
     - audit
     - refactor

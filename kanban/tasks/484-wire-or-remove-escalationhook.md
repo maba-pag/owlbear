@@ -1,11 +1,12 @@
 ---
 id: 484
 title: Wire or remove EscalationHook
-status: backlog
+status: archived
 priority: important
 created: 2026-03-04T07:38:01.1970371+01:00
-updated: 2026-03-06T19:26:41.4864849+01:00
+updated: 2026-03-07T18:07:53.8074603+01:00
 started: 2026-03-06T19:26:41.4864849+01:00
+completed: 2026-03-07T18:07:53.8074603+01:00
 tags:
     - audit
     - yagni
@@ -14,19 +15,45 @@ tags:
 class: standard
 ---
 
-YAGNI-02/INT-03: EscalationHook is fully implemented and tested but never imported or registered in bootstrap.py. Orphan code.
+YAGNI-02/INT-03: EscalationHook is fully implemented and tested but never imported or registered in bootstrap.py. Orphan code. Decision: DELETE (.85 confidence). See docs/escalation-hook-research.md.
 
-**Research complete** (2026-03-06): See docs/escalation-hook-research.md
+## Acceptance Criteria
 
-**Recommendation (.85 confidence): DELETE.** _recover_from_error in daemon.py is the established error authority (classified recovery, backoff, auth refresh, journaling). Wiring EscalationHook creates a dual-prompt conflict (ARC-21) and requires fixing a data shape mismatch. No ROI.
+Delete all EscalationHook code, tests, and documentation references. No functional behavior changes (code was never wired).
 
-**Research checklist:**
-1. Theoretical validity: Sound concept, but redundant with existing daemon recovery
-2. Prior art: OwlBear's own _recover_from_error already covers all error categories
-3. Technical feasibility: Could be wired, but ARC-21 dual-prompt conflict blocks it
-4. Architecture fit: Conflicts with daemon error handling authority
-5. Implementation approach: Delete escalation.py + test_escalation.py + clean refs
-6. Testing strategy: Verify no import errors, ruff clean, all remaining tests pass
-7. Findings documented: docs/escalation-hook-research.md
+### Files to delete
 
-AC: no dead production code for this feature.
+- [ ] `src/owlbear/core/escalation.py` — entire module (EscalationHook, EscalationAction, ~131 LOC)
+- [ ] `tests/test_escalation.py` — dedicated test file
+
+### Files to edit
+
+- [ ] `tests/test_error_recovery.py`:
+  - Remove `from owlbear.core.escalation import EscalationAction, EscalationHook` (line 25)
+  - Remove module docstring reference to `owlbear.core.escalation` (line 6)
+  - Remove helper `_make_channel` (lines 46-51) — only used by EscalationHook tests
+  - Remove `class TestOnErrorEdgeCases` (lines ~148-207) — 6 tests exercising `_on_error`
+  - Remove `class TestParseResponseEdgeCases` (lines ~212-237) — 7 tests exercising `_parse_response`
+- [ ] `.github/copilot-instructions.md`:
+  - Safety row: remove `` `EscalationHook` wires ON_ERROR to user prompt (retry/skip/abort) when retries exhausted; `` from the Safety cell
+- [ ] `docs/architecture.md`:
+  - Remove directory listing line: `escalation.py  # EscalationHook (ON_ERROR -> user prompt)` (line 101)
+
+### Verification
+
+- [ ] `uv run ruff check src/ tests/` — clean (no F811/F401 from removed imports)
+- [ ] `uv run pytest -q --tb=short` — all remaining tests pass
+- [ ] `grep -r "EscalationHook" src/` — zero matches
+- [ ] `grep -r "from owlbear.core.escalation" src/ tests/` — zero matches
+
+### Out of scope
+
+- Do NOT edit audit/research docs (`docs/escalation-hook-research.md`, `docs/architecture-audit.md`, `docs/software-design-audit.md`, `docs/integration-audit.md`, `docs/executive-audit-report.md`, `docs/error-message-sanitization-research.md`). These are historical records and remain accurate as-is.
+- Do NOT delete `docs/escalation-hook-research.md` — it documents the decision rationale.
+
+### Patterns to follow
+
+- When removing test classes from `test_error_recovery.py`, preserve the section comment structure (numbered `# ===` blocks). Renumber remaining section headers if needed.
+- `_make_channel` helper is ONLY used by the EscalationHook test classes. Delete it (lines 46-51).
+
+See `docs/escalation-hook-research.md` for full analysis.

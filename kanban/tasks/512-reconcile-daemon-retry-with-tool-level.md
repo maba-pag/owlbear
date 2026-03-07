@@ -1,10 +1,11 @@
 ---
 id: 512
 title: Reconcile daemon retry with tool-level HookedToolset retry
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:23.8578187+01:00
-updated: 2026-03-04T07:38:23.8578187+01:00
+updated: 2026-03-06T23:46:41.429435+01:00
+started: 2026-03-06T23:40:09.5092711+01:00
 tags:
     - audit
     - resilience

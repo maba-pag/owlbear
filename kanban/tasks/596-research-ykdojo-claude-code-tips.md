@@ -1,10 +1,11 @@
 ---
 id: 596
 title: 'Research: ykdojo/claude-code-tips'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-05T23:52:10.8646625+01:00
-updated: 2026-03-05T23:52:10.8646625+01:00
+updated: 2026-03-06T23:04:21.2714245+01:00
+started: 2026-03-06T22:55:16.2812793+01:00
 tags:
     - research
     - phase-research

@@ -1,10 +1,11 @@
 ---
 id: 483
 title: Define typed payloads for hook events
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:00.5039018+01:00
-updated: 2026-03-04T07:38:00.5039018+01:00
+updated: 2026-03-06T23:22:47.1364333+01:00
+started: 2026-03-06T23:05:05.2610742+01:00
 tags:
     - audit
     - refactor

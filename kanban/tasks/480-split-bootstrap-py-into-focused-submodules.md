@@ -1,10 +1,11 @@
 ---
 id: 480
 title: Split bootstrap.py into focused submodules
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:37:58.1734377+01:00
-updated: 2026-03-04T07:37:58.1734377+01:00
+updated: 2026-03-06T23:22:14.0010406+01:00
+started: 2026-03-06T23:05:03.8938338+01:00
 tags:
     - audit
     - refactor

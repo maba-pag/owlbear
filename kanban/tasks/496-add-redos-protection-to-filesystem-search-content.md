@@ -1,10 +1,11 @@
 ---
 id: 496
 title: Add ReDoS protection to filesystem search content regex
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:10.724342+01:00
-updated: 2026-03-04T07:38:10.724342+01:00
+updated: 2026-03-06T23:36:43.6754103+01:00
+started: 2026-03-06T23:31:38.5259966+01:00
 tags:
     - audit
     - security

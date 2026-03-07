@@ -1,10 +1,11 @@
 ---
 id: 593
 title: 'Research: coleam00/excalidraw-diagram-skill'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-05T23:51:46.113192+01:00
-updated: 2026-03-05T23:51:46.113192+01:00
+updated: 2026-03-06T21:53:31.76484+01:00
+started: 2026-03-06T21:44:34.8174636+01:00
 tags:
     - research
     - phase-research
@@ -14,11 +15,16 @@ class: standard
 ---
 
 **Source:** https://github.com/coleam00/excalidraw-diagram-skill
-Analyze for Excalidraw skill patterns, diagram generation prompts, and MCP integration.
+Analyzed for Excalidraw skill patterns, diagram generation prompts, and MCP integration.
 
-**Workflow:**
-1. Update docs/sources.md with URL, license, what was studied, where used, and date.
-2. Clone repo to docs/research/excalidraw-diagram-skill/ for analysis.
-3. Identify architectural patterns, prompts, MCP server ideas, or code fragments reusable in OwlBear.
-4. Document findings in task body or linked research doc.
-5. Create follow-up kanban tasks for any actionable patterns discovered.
+**Research doc:** See docs/excalidraw-diagram-skill-research.md
+
+**Key findings:**
+- LLM-driven Excalidraw JSON generation is proven (coleam00 skill, yctimlin MCP 1.3k stars)
+- coleam00 skill pattern maps directly to OwlBear SkillRegistry
+- Render-view-fix loop uses Playwright headless (OwlBear has BrowserManager)
+- MCP server approach (yctimlin/lesleslie) is YAGNI for OwlBear
+
+**Recommendation (.85):** Adopt skill pattern + render service + diagram toolset (~200 LOC)
+
+**Follow-up tasks:** 3 tasks proposed in research doc section 5

@@ -4134,3 +4134,712 @@
 {"timestamp":"2026-03-06T19:28:35.3596692+01:00","action":"move","task_id":604,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-06T19:28:35.8254635+01:00","action":"move","task_id":605,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-06T19:28:36.3166432+01:00","action":"move","task_id":606,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-06T19:39:18.1541817+01:00","action":"move","task_id":486,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T19:41:36.5416378+01:00","action":"create","task_id":607,"detail":"Test import guard for bookmark_pipeline trafilatura"}
+{"timestamp":"2026-03-06T19:41:42.5303407+01:00","action":"move","task_id":607,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T19:42:09.7201824+01:00","action":"edit","task_id":486,"detail":"Fix or remove dead ks_refresh CLI command"}
+{"timestamp":"2026-03-06T19:42:23.8405951+01:00","action":"edit","task_id":500,"detail":"Add import guard to bookmark_pipeline trafilatura"}
+{"timestamp":"2026-03-06T19:42:25.5379974+01:00","action":"move","task_id":486,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T19:42:28.8881986+01:00","action":"move","task_id":500,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T19:43:04.8988474+01:00","action":"move","task_id":484,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T19:43:08.433277+01:00","action":"edit","task_id":504,"detail":"Delete dead knowledge modules: dedup.py and reranker.py"}
+{"timestamp":"2026-03-06T19:43:13.5389865+01:00","action":"move","task_id":504,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T19:44:15.3198895+01:00","action":"move","task_id":607,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T19:44:15.8477896+01:00","action":"move","task_id":504,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T19:44:16.3765665+01:00","action":"move","task_id":486,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T19:44:16.9442595+01:00","action":"move","task_id":484,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T19:48:09.4091665+01:00","action":"move","task_id":486,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T19:49:37.958141+01:00","action":"move","task_id":607,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T19:51:27.4892664+01:00","action":"move","task_id":504,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T19:55:19.2617171+01:00","action":"move","task_id":484,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T19:59:44.7971971+01:00","action":"move","task_id":607,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:02:36.7095496+01:00","action":"move","task_id":504,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:02:57.0683158+01:00","action":"move","task_id":486,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:10:55.5061198+01:00","action":"move","task_id":484,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-06T20:11:04.9831507+01:00","action":"edit","task_id":484,"detail":"Wire or remove EscalationHook"}
+{"timestamp":"2026-03-06T20:11:04.9857608+01:00","action":"block","task_id":484,"detail":"tests/test_error_sanitization_callsites.py still imports EscalationHook (lines 269-283) -\u003e ModuleNotFoundError. Delete TestEscalationSanitisesErrors class."}
+{"timestamp":"2026-03-06T20:11:29.8019226+01:00","action":"move","task_id":484,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:12:38.7701068+01:00","action":"edit","task_id":484,"detail":"Wire or remove EscalationHook"}
+{"timestamp":"2026-03-06T20:12:38.7732273+01:00","action":"unblock","task_id":484,"detail":"Wire or remove EscalationHook"}
+{"timestamp":"2026-03-06T20:12:43.3450965+01:00","action":"move","task_id":484,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:14:17.3528172+01:00","action":"move","task_id":607,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:14:19.9207855+01:00","action":"move","task_id":486,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:14:36.7386911+01:00","action":"move","task_id":504,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:22:47.3600831+01:00","action":"move","task_id":484,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:23:21.0686985+01:00","action":"move","task_id":500,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:24:48.1732834+01:00","action":"move","task_id":500,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:24:50.0276493+01:00","action":"move","task_id":484,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:27:38.0693178+01:00","action":"move","task_id":500,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:28:35.1251241+01:00","action":"move","task_id":500,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:32:11.0065346+01:00","action":"edit","task_id":511,"detail":"Validate IMPORTANCE_BY_TYPE keys match EntityType enum"}
+{"timestamp":"2026-03-06T20:32:11.4760566+01:00","action":"move","task_id":511,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:32:47.820596+01:00","action":"edit","task_id":503,"detail":"Remove safety gate direct import of slack_templates"}
+{"timestamp":"2026-03-06T20:32:52.5607191+01:00","action":"move","task_id":503,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:33:37.5671314+01:00","action":"edit","task_id":485,"detail":"Wire or remove MemoryConsolidator"}
+{"timestamp":"2026-03-06T20:33:45.893934+01:00","action":"move","task_id":485,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:34:33.6390043+01:00","action":"edit","task_id":501,"detail":"Wire KnowledgeSourceToolset in bootstrap build_toolsets"}
+{"timestamp":"2026-03-06T20:34:38.0232585+01:00","action":"move","task_id":501,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:37:14.2461192+01:00","action":"edit","task_id":511,"detail":"Validate IMPORTANCE_BY_TYPE keys match EntityType enum"}
+{"timestamp":"2026-03-06T20:37:18.8765487+01:00","action":"move","task_id":511,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T20:37:59.328287+01:00","action":"edit","task_id":485,"detail":"Wire or remove MemoryConsolidator"}
+{"timestamp":"2026-03-06T20:38:00.7231708+01:00","action":"move","task_id":503,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T20:38:04.2895891+01:00","action":"move","task_id":485,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T20:38:15.8365574+01:00","action":"edit","task_id":501,"detail":"Wire KnowledgeSourceToolset in bootstrap build_toolsets"}
+{"timestamp":"2026-03-06T20:38:22.5628669+01:00","action":"move","task_id":501,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T20:39:19.5679657+01:00","action":"move","task_id":485,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:39:20.0339964+01:00","action":"move","task_id":503,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:39:20.5293981+01:00","action":"move","task_id":511,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:39:21.0487623+01:00","action":"move","task_id":501,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T20:43:18.7475606+01:00","action":"move","task_id":511,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:44:24.2735796+01:00","action":"move","task_id":501,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:47:55.8981562+01:00","action":"move","task_id":485,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:52:54.4347978+01:00","action":"move","task_id":511,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:53:10.8692532+01:00","action":"move","task_id":485,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:53:26.4063829+01:00","action":"move","task_id":503,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T20:53:31.4411915+01:00","action":"move","task_id":503,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:53:40.726562+01:00","action":"move","task_id":501,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-06T20:54:55.5413384+01:00","action":"move","task_id":511,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:55:04.1093212+01:00","action":"move","task_id":503,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:55:10.6533771+01:00","action":"move","task_id":501,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:55:26.8093405+01:00","action":"move","task_id":485,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-06T20:57:16.0692465+01:00","action":"edit","task_id":510,"detail":"Add prefix-stripping tests to copilot_multipliers"}
+{"timestamp":"2026-03-06T20:57:21.0285496+01:00","action":"move","task_id":510,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:59:30.4991504+01:00","action":"edit","task_id":509,"detail":"Replace module-level _shutdown flag with asyncio.Event"}
+{"timestamp":"2026-03-06T20:59:36.3507291+01:00","action":"move","task_id":509,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T20:59:54.7565739+01:00","action":"move","task_id":487,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T21:05:34.4420968+01:00","action":"edit","task_id":488,"detail":"Auto-register toolset aliases instead of hardcoded map"}
+{"timestamp":"2026-03-06T21:05:41.2466196+01:00","action":"move","task_id":488,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-06T21:07:18.9757185+01:00","action":"move","task_id":510,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T21:08:48.825467+01:00","action":"edit","task_id":509,"detail":"Replace module-level _shutdown flag with asyncio.Event"}
+{"timestamp":"2026-03-06T21:08:54.0610078+01:00","action":"move","task_id":509,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T21:09:18.4950937+01:00","action":"edit","task_id":488,"detail":"Auto-register toolset aliases instead of hardcoded map"}
+{"timestamp":"2026-03-06T21:09:23.7556706+01:00","action":"move","task_id":488,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T21:10:44.4113048+01:00","action":"move","task_id":487,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-06T21:11:20.9541918+01:00","action":"move","task_id":487,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:11:21.4376118+01:00","action":"move","task_id":488,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:11:21.9288942+01:00","action":"move","task_id":509,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:11:22.4401188+01:00","action":"move","task_id":510,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:12:45.8913673+01:00","action":"move","task_id":510,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-06T21:12:52.0414286+01:00","action":"move","task_id":584,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:12:52.622762+01:00","action":"move","task_id":585,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:12:53.1352104+01:00","action":"move","task_id":586,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:12:53.6479329+01:00","action":"move","task_id":587,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:23:31.8698801+01:00","action":"edit","task_id":585,"detail":"Research: ComposioHQ/agent-orchestrator"}
+{"timestamp":"2026-03-06T21:23:39.7990027+01:00","action":"move","task_id":585,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:24:00.8849515+01:00","action":"edit","task_id":587,"detail":"Research: Ibrahim-3d/conductor-orchestrator-superpowers"}
+{"timestamp":"2026-03-06T21:24:07.3676872+01:00","action":"move","task_id":587,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:25:25.3264307+01:00","action":"edit","task_id":586,"detail":"Research: harshkedia177/axon"}
+{"timestamp":"2026-03-06T21:25:32.6501815+01:00","action":"move","task_id":586,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:25:35.5882628+01:00","action":"edit","task_id":584,"detail":"Research: openai/symphony"}
+{"timestamp":"2026-03-06T21:25:41.7650323+01:00","action":"move","task_id":584,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:26:11.8748118+01:00","action":"move","task_id":588,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:26:12.8044868+01:00","action":"move","task_id":589,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:26:13.6994242+01:00","action":"move","task_id":590,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:26:14.429745+01:00","action":"move","task_id":591,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:35:10.4038241+01:00","action":"edit","task_id":591,"detail":"Research: kevinho/clawfeed"}
+{"timestamp":"2026-03-06T21:35:15.9803247+01:00","action":"edit","task_id":588,"detail":"Research: quoroom-ai/room"}
+{"timestamp":"2026-03-06T21:35:18.1051635+01:00","action":"move","task_id":591,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:35:25.4012363+01:00","action":"move","task_id":588,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:36:54.0450557+01:00","action":"edit","task_id":590,"detail":"Research: OpenClaw skills (proactive, self-improving, browser, automation)"}
+{"timestamp":"2026-03-06T21:37:36.7632703+01:00","action":"move","task_id":590,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:43:26.780101+01:00","action":"edit","task_id":589,"detail":"Research: nWave-ai/nWave"}
+{"timestamp":"2026-03-06T21:43:45.6872345+01:00","action":"move","task_id":589,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:44:33.1799435+01:00","action":"move","task_id":592,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:44:34.8201207+01:00","action":"move","task_id":593,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:44:36.7916192+01:00","action":"move","task_id":594,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:44:38.2082924+01:00","action":"move","task_id":595,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T21:51:36.5571218+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-06T21:51:44.6608294+01:00","action":"move","task_id":594,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:53:23.8576276+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-06T21:53:31.7785584+01:00","action":"move","task_id":593,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T21:54:21.4810061+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-06T21:54:55.513854+01:00","action":"move","task_id":592,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T22:55:16.2823196+01:00","action":"move","task_id":596,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T22:55:16.8271487+01:00","action":"move","task_id":597,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T22:55:17.3328965+01:00","action":"move","task_id":598,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:03:07.7465386+01:00","action":"move","task_id":597,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:03:35.1721786+01:00","action":"move","task_id":595,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:03:36.0300959+01:00","action":"move","task_id":598,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:04:21.2714245+01:00","action":"move","task_id":596,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:05:03.894613+01:00","action":"move","task_id":480,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:05:04.3219877+01:00","action":"move","task_id":481,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:05:04.7783313+01:00","action":"move","task_id":482,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:05:05.2626494+01:00","action":"move","task_id":483,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:10:26.2720222+01:00","action":"edit","task_id":482,"detail":"Extend ChannelPlugin protocol for rich capabilities"}
+{"timestamp":"2026-03-06T23:10:35.4610665+01:00","action":"move","task_id":482,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:18:26.442486+01:00","action":"move","task_id":481,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:22:14.0010406+01:00","action":"move","task_id":480,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:22:47.1369413+01:00","action":"move","task_id":483,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:23:21.4973338+01:00","action":"move","task_id":492,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:23:21.9600262+01:00","action":"move","task_id":493,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:23:22.4464098+01:00","action":"move","task_id":494,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:23:22.9002157+01:00","action":"move","task_id":495,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:28:56.7835364+01:00","action":"edit","task_id":495,"detail":"Isolate browser context in CDP mode"}
+{"timestamp":"2026-03-06T23:29:02.1768718+01:00","action":"move","task_id":495,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:29:18.4581323+01:00","action":"move","task_id":494,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:30:05.4808065+01:00","action":"move","task_id":493,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:31:00.3449085+01:00","action":"move","task_id":492,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:31:38.5275877+01:00","action":"move","task_id":496,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:31:39.0740952+01:00","action":"move","task_id":497,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:31:39.6261362+01:00","action":"move","task_id":498,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:31:40.1597395+01:00","action":"move","task_id":502,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:36:43.6764443+01:00","action":"move","task_id":496,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:37:47.3226929+01:00","action":"edit","task_id":502,"detail":"Break memory to tools upward dependency"}
+{"timestamp":"2026-03-06T23:37:52.851948+01:00","action":"move","task_id":502,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:38:01.8049799+01:00","action":"move","task_id":498,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:39:30.4067988+01:00","action":"move","task_id":497,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:40:07.8559999+01:00","action":"move","task_id":505,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:40:08.3973062+01:00","action":"move","task_id":506,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:40:08.9526803+01:00","action":"move","task_id":507,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:40:09.5107765+01:00","action":"move","task_id":512,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:41:32.0760777+01:00","action":"edit","task_id":505,"detail":"Sync copilot-instructions.md agent inventory with actual files"}
+{"timestamp":"2026-03-06T23:41:36.6464506+01:00","action":"move","task_id":505,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:42:17.4978287+01:00","action":"edit","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-06T23:42:22.7336222+01:00","action":"move","task_id":506,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:46:41.4304772+01:00","action":"move","task_id":512,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:49:00.9759143+01:00","action":"edit","task_id":507,"detail":"Reuse httpx.AsyncClient in GitHubToolset"}
+{"timestamp":"2026-03-06T23:49:06.4584844+01:00","action":"move","task_id":507,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:49:40.0843799+01:00","action":"move","task_id":513,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:49:40.5848276+01:00","action":"move","task_id":514,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:49:41.1241857+01:00","action":"move","task_id":515,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:49:41.6607475+01:00","action":"move","task_id":516,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:54:06.5861921+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-06T23:54:11.8016658+01:00","action":"move","task_id":514,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:54:18.8469604+01:00","action":"edit","task_id":516,"detail":"Add concurrency limit to ingest background tasks"}
+{"timestamp":"2026-03-06T23:54:24.1978627+01:00","action":"move","task_id":516,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:55:13.4735335+01:00","action":"move","task_id":515,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:57:49.2113006+01:00","action":"move","task_id":513,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-06T23:58:22.1915447+01:00","action":"move","task_id":517,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:58:22.7353666+01:00","action":"move","task_id":518,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:58:23.3453666+01:00","action":"move","task_id":519,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-06T23:58:23.9539259+01:00","action":"move","task_id":520,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:00:04.7562726+01:00","action":"edit","task_id":520,"detail":"Extract _print_table helper in cli.py"}
+{"timestamp":"2026-03-07T00:00:09.5925657+01:00","action":"move","task_id":520,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:01:28.104938+01:00","action":"edit","task_id":518,"detail":"Extract shared _emit_hook into module-level utility in hooks.py"}
+{"timestamp":"2026-03-07T00:01:32.9397962+01:00","action":"move","task_id":518,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:01:52.4291547+01:00","action":"edit","task_id":519,"detail":"Extract shared sandbox_path utility from duplicated _safe_path"}
+{"timestamp":"2026-03-07T00:01:57.7896543+01:00","action":"move","task_id":519,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:05:18.6394663+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-07T00:05:24.4210157+01:00","action":"move","task_id":517,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:06:02.9227596+01:00","action":"move","task_id":521,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:06:03.5277884+01:00","action":"move","task_id":523,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:06:04.1601227+01:00","action":"move","task_id":524,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:06:04.8223256+01:00","action":"move","task_id":525,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:08:14.9964884+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-07T00:08:20.7912978+01:00","action":"move","task_id":521,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:12:22.3617252+01:00","action":"move","task_id":523,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:14:50.9291826+01:00","action":"edit","task_id":524,"detail":"Expand validator role policy denied tools"}
+{"timestamp":"2026-03-07T00:14:57.0652372+01:00","action":"move","task_id":524,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:15:27.0877339+01:00","action":"edit","task_id":525,"detail":"Create dedicated security audit log"}
+{"timestamp":"2026-03-07T00:15:49.8288514+01:00","action":"move","task_id":525,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:16:19.9599646+01:00","action":"move","task_id":526,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:16:20.5678579+01:00","action":"move","task_id":527,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:16:21.1426018+01:00","action":"move","task_id":528,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:16:21.6945901+01:00","action":"move","task_id":529,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:17:30.3796055+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-07T00:17:35.2857442+01:00","action":"move","task_id":529,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:18:55.4020064+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-07T00:19:00.3850072+01:00","action":"move","task_id":528,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:20:44.5783079+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-07T00:20:50.3184106+01:00","action":"move","task_id":527,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:25:35.5161611+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-07T00:25:41.4276325+01:00","action":"move","task_id":526,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:26:11.1528748+01:00","action":"move","task_id":530,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:26:11.7451548+01:00","action":"move","task_id":531,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:26:12.3336341+01:00","action":"move","task_id":532,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:26:12.9492444+01:00","action":"move","task_id":533,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:27:11.2878651+01:00","action":"edit","task_id":531,"detail":"Add TypedDict for tool_stats return type"}
+{"timestamp":"2026-03-07T00:27:11.9201584+01:00","action":"move","task_id":531,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:27:15.1136944+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-07T00:27:15.6680446+01:00","action":"move","task_id":530,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:28:16.6481217+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-07T00:28:21.5512299+01:00","action":"move","task_id":533,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:29:06.0850924+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-07T00:29:10.9407566+01:00","action":"move","task_id":532,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:29:36.335418+01:00","action":"move","task_id":534,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:29:36.8770742+01:00","action":"move","task_id":535,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:29:37.4148184+01:00","action":"move","task_id":536,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:29:37.9506144+01:00","action":"move","task_id":537,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:31:07.0169426+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-07T00:31:11.0463143+01:00","action":"edit","task_id":535,"detail":"Make logfire import conditional in daemon.py"}
+{"timestamp":"2026-03-07T00:31:11.9079009+01:00","action":"move","task_id":534,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:31:21.1425606+01:00","action":"move","task_id":535,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:32:48.7640577+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-07T00:32:53.9191874+01:00","action":"move","task_id":537,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:35:16.158246+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-07T00:35:22.4884409+01:00","action":"move","task_id":536,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:36:38.9464593+01:00","action":"move","task_id":538,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:36:39.5389988+01:00","action":"move","task_id":539,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:36:40.0727739+01:00","action":"move","task_id":540,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:36:40.6271575+01:00","action":"move","task_id":541,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:37:29.6211961+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-07T00:37:34.9293114+01:00","action":"move","task_id":540,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:41:01.3123581+01:00","action":"move","task_id":539,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:42:23.3153869+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-07T00:42:29.1024565+01:00","action":"move","task_id":538,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:43:53.5060121+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-07T00:43:58.2935654+01:00","action":"move","task_id":541,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:45:02.3988259+01:00","action":"move","task_id":542,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:45:02.850864+01:00","action":"move","task_id":543,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:45:03.3249432+01:00","action":"move","task_id":544,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:45:03.7737951+01:00","action":"move","task_id":545,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:47:32.4571024+01:00","action":"edit","task_id":542,"detail":"Handle channel failure in daemon _recover_from_error"}
+{"timestamp":"2026-03-07T00:47:37.3321256+01:00","action":"move","task_id":542,"detail":"in-progress -\u003e done"}
+{"timestamp":"2026-03-07T00:47:38.7125579+01:00","action":"edit","task_id":544,"detail":"Add version ceiling to pydantic-ai dependency"}
+{"timestamp":"2026-03-07T00:47:43.8186064+01:00","action":"move","task_id":544,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:48:48.7592291+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-07T00:49:22.656741+01:00","action":"move","task_id":545,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:49:23.227857+01:00","action":"edit","task_id":543,"detail":"Standardize docstring style to Google-style across codebase"}
+{"timestamp":"2026-03-07T00:49:27.5427274+01:00","action":"move","task_id":543,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:49:53.490445+01:00","action":"move","task_id":546,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:49:53.94046+01:00","action":"move","task_id":547,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:49:54.4409806+01:00","action":"move","task_id":548,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:49:54.9365804+01:00","action":"move","task_id":549,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:51:07.2747565+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-07T00:51:11.9883407+01:00","action":"move","task_id":548,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:52:49.438731+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-07T00:52:54.274397+01:00","action":"move","task_id":546,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:54:52.1990642+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-07T00:54:58.1681983+01:00","action":"move","task_id":549,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:54:58.7115615+01:00","action":"move","task_id":547,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T00:55:27.3565874+01:00","action":"move","task_id":550,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:55:27.8475567+01:00","action":"move","task_id":551,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:55:28.3918725+01:00","action":"move","task_id":552,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T00:55:28.950198+01:00","action":"move","task_id":553,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T01:01:32.4162456+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-07T01:01:37.4786806+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-07T01:01:38.2539183+01:00","action":"move","task_id":551,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:01:45.4507151+01:00","action":"move","task_id":552,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:02:23.9262658+01:00","action":"edit","task_id":553,"detail":"Nest BrowserConfig into OwlBearSettings"}
+{"timestamp":"2026-03-07T01:02:29.2506234+01:00","action":"move","task_id":553,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:04:47.6797362+01:00","action":"move","task_id":550,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:05:38.6164534+01:00","action":"move","task_id":554,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T01:05:39.1543037+01:00","action":"move","task_id":555,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T01:05:39.695559+01:00","action":"move","task_id":556,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T01:05:40.2133378+01:00","action":"move","task_id":557,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T01:09:44.2651291+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-07T01:09:50.0290943+01:00","action":"move","task_id":554,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:10:56.5347939+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-07T01:11:01.9930285+01:00","action":"move","task_id":555,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T01:11:09.8982008+01:00","action":"edit","task_id":557,"detail":"Add unit test for _default_web_read in bookmark_pipeline"}
+{"timestamp":"2026-03-07T01:11:17.5378714+01:00","action":"move","task_id":557,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T02:18:44.2868014+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-07T02:18:49.5397992+01:00","action":"move","task_id":556,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T02:20:25.6781674+01:00","action":"edit","task_id":576,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-07T02:20:25.6827947+01:00","action":"block","task_id":576,"detail":"Duplicate of #539 (already in backlog). Close or merge."}
+{"timestamp":"2026-03-07T02:20:41.5306587+01:00","action":"move","task_id":558,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T02:20:42.0733544+01:00","action":"move","task_id":559,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T02:20:42.6463875+01:00","action":"move","task_id":560,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T02:20:43.1610758+01:00","action":"move","task_id":561,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-07T02:25:59.6436132+01:00","action":"edit","task_id":558,"detail":"Consider RichChannel protocol for approval gate"}
+{"timestamp":"2026-03-07T02:26:09.3018834+01:00","action":"move","task_id":558,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T02:26:20.9919639+01:00","action":"edit","task_id":560,"detail":"Rename ks_ CLI functions to full knowledge_source_ prefix"}
+{"timestamp":"2026-03-07T02:26:30.756008+01:00","action":"move","task_id":560,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T02:27:23.3294908+01:00","action":"edit","task_id":559,"detail":"Add programmatic agent registration API"}
+{"timestamp":"2026-03-07T02:27:30.0237774+01:00","action":"move","task_id":559,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-07T03:08:36.7813875+01:00","action":"create","task_id":608,"detail":"Fix daemon test infinite loop (test_signal_handler_sets_shutdown_event)"}
+{"timestamp":"2026-03-07T03:08:45.1649395+01:00","action":"create","task_id":609,"detail":"Fix enum identity failures in test_error_recovery.py"}
+{"timestamp":"2026-03-07T03:08:55.8065907+01:00","action":"create","task_id":610,"detail":"Auto-skip test files with missing optional dependencies"}
+{"timestamp":"2026-03-07T03:09:06.1150842+01:00","action":"create","task_id":611,"detail":"Bootstrap should gracefully handle missing optional tools"}
+{"timestamp":"2026-03-07T04:01:18.5174805+01:00","action":"move","task_id":561,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-07T04:06:15.3267251+01:00","action":"move","task_id":491,"detail":"review -\u003e backlog"}
+{"timestamp":"2026-03-07T04:06:48.9681123+01:00","action":"edit","task_id":582,"detail":"Research: Visuals, Diagrams \u0026 MCP Integrations"}
+{"timestamp":"2026-03-07T04:06:51.2673264+01:00","action":"edit","task_id":491,"detail":"Fix dual error handling on ON_ERROR events"}
+{"timestamp":"2026-03-07T04:06:55.2825989+01:00","action":"move","task_id":582,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:07:05.27026+01:00","action":"move","task_id":608,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T04:07:19.6510049+01:00","action":"edit","task_id":608,"detail":"Fix daemon test infinite loop (test_signal_handler_sets_shutdown_event)"}
+{"timestamp":"2026-03-07T04:07:19.6566018+01:00","action":"block","task_id":608,"detail":"AC4 violated: daemon.py has production changes. New code adds ruff SIM105. Revert daemon.py OR update AC and fix ruff."}
+{"timestamp":"2026-03-07T04:08:08.3727375+01:00","action":"edit","task_id":580,"detail":"Research: Orchestration \u0026 Agent Frameworks"}
+{"timestamp":"2026-03-07T04:08:13.7575754+01:00","action":"move","task_id":580,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:08:36.5427504+01:00","action":"edit","task_id":581,"detail":"Research: OpenClaw Ecosystem \u0026 Skills"}
+{"timestamp":"2026-03-07T04:08:41.3253961+01:00","action":"move","task_id":581,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:10:07.7832295+01:00","action":"edit","task_id":611,"detail":"Bootstrap should gracefully handle missing optional tools"}
+{"timestamp":"2026-03-07T04:10:13.084771+01:00","action":"move","task_id":611,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:11:57.1740185+01:00","action":"edit","task_id":562,"detail":"Define named constant for prefetch multiplier in qdrant"}
+{"timestamp":"2026-03-07T04:12:01.5552881+01:00","action":"move","task_id":562,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:12:53.6241235+01:00","action":"move","task_id":610,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T04:12:59.7151062+01:00","action":"edit","task_id":610,"detail":"Auto-skip test files with missing optional dependencies"}
+{"timestamp":"2026-03-07T04:12:59.7177461+01:00","action":"block","task_id":610,"detail":"AC3 unmet: collect_ignore_glob silently drops files, no warnings.warn(). Also ruff ICN001 on conftest.py:17 (numpy not imported as np). Fix: add warnings.warn per skipped file + suppress ICN001."}
+{"timestamp":"2026-03-07T04:13:10.2581087+01:00","action":"move","task_id":609,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T04:13:43.5531091+01:00","action":"edit","task_id":576,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-07T04:13:47.9075155+01:00","action":"move","task_id":576,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:14:01.362834+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-07T04:18:00.6017891+01:00","action":"move","task_id":583,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:18:08.1362259+01:00","action":"edit","task_id":583,"detail":"Research: Workflow, Dashboards \u0026 Developer Tools"}
+{"timestamp":"2026-03-07T04:23:19.8123689+01:00","action":"move","task_id":608,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T04:23:42.6048773+01:00","action":"move","task_id":561,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:23:48.8892858+01:00","action":"edit","task_id":561,"detail":"Apply role policy before Agent construction to avoid double-build"}
+{"timestamp":"2026-03-07T04:24:35.5450014+01:00","action":"move","task_id":609,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T04:25:59.5006079+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-07T04:26:04.7091169+01:00","action":"move","task_id":563,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:26:09.9313836+01:00","action":"move","task_id":510,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T04:26:53.258584+01:00","action":"move","task_id":508,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T04:28:00.4759272+01:00","action":"edit","task_id":565,"detail":"Evaluate role system complexity for 2 roles"}
+{"timestamp":"2026-03-07T04:28:02.2809929+01:00","action":"edit","task_id":566,"detail":"Consider sub-packages for knowledge/ directory (22 files)"}
+{"timestamp":"2026-03-07T04:28:05.1736642+01:00","action":"move","task_id":565,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:28:06.9065098+01:00","action":"move","task_id":566,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:28:58.3228466+01:00","action":"move","task_id":608,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T04:29:06.7753737+01:00","action":"edit","task_id":608,"detail":"Fix daemon test infinite loop (test_signal_handler_sets_shutdown_event)"}
+{"timestamp":"2026-03-07T04:29:06.7784991+01:00","action":"unblock","task_id":608,"detail":"Fix daemon test infinite loop (test_signal_handler_sets_shutdown_event)"}
+{"timestamp":"2026-03-07T04:29:27.4340537+01:00","action":"move","task_id":610,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T04:29:45.8408057+01:00","action":"edit","task_id":564,"detail":"Consider Hook protocol for automated event registration"}
+{"timestamp":"2026-03-07T04:29:50.1410163+01:00","action":"move","task_id":564,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:30:20.7414944+01:00","action":"move","task_id":510,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T04:30:35.8313167+01:00","action":"move","task_id":508,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T04:33:17.5003886+01:00","action":"move","task_id":608,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T04:34:53.1738531+01:00","action":"edit","task_id":569,"detail":"Consolidate trafilatura across extras groups"}
+{"timestamp":"2026-03-07T04:34:56.9994317+01:00","action":"move","task_id":570,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:34:58.0499359+01:00","action":"move","task_id":569,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:35:02.5438383+01:00","action":"move","task_id":567,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:35:05.8779075+01:00","action":"edit","task_id":570,"detail":"Monitor pyttsx3 maintenance and evaluate alternatives"}
+{"timestamp":"2026-03-07T04:35:25.9000593+01:00","action":"edit","task_id":567,"detail":"Add dedup key to ErrorJournal entries"}
+{"timestamp":"2026-03-07T04:37:12.4526195+01:00","action":"edit","task_id":572,"detail":"Add module docstring and exports to planning/__init__.py"}
+{"timestamp":"2026-03-07T04:37:17.6840915+01:00","action":"move","task_id":572,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:48:32.344323+01:00","action":"move","task_id":610,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T04:50:05.491759+01:00","action":"move","task_id":608,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T04:52:07.8337611+01:00","action":"move","task_id":575,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:52:18.7671318+01:00","action":"edit","task_id":575,"detail":"Close minor test coverage gaps across modules"}
+{"timestamp":"2026-03-07T04:53:03.4918248+01:00","action":"move","task_id":568,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:53:04.0206441+01:00","action":"move","task_id":571,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:53:04.5390406+01:00","action":"move","task_id":573,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:53:05.0788051+01:00","action":"move","task_id":574,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T04:54:53.9694886+01:00","action":"move","task_id":610,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T04:55:20.4619233+01:00","action":"edit","task_id":610,"detail":"Auto-skip test files with missing optional dependencies"}
+{"timestamp":"2026-03-07T04:55:20.46515+01:00","action":"unblock","task_id":610,"detail":"Auto-skip test files with missing optional dependencies"}
+{"timestamp":"2026-03-07T04:57:40.9114246+01:00","action":"move","task_id":487,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T04:59:28.4306017+01:00","action":"move","task_id":610,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:01:15.6600796+01:00","action":"move","task_id":487,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T05:03:32.1665898+01:00","action":"move","task_id":509,"detail":"in-progress -\u003e docs"}
+{"timestamp":"2026-03-07T05:04:57.2565697+01:00","action":"move","task_id":487,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:05:12.3399104+01:00","action":"move","task_id":509,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:10:57.8727884+01:00","action":"move","task_id":488,"detail":"in-progress -\u003e docs"}
+{"timestamp":"2026-03-07T05:12:33.5283769+01:00","action":"move","task_id":488,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:18:28.9440285+01:00","action":"edit","task_id":611,"detail":"Bootstrap should gracefully handle missing optional tools"}
+{"timestamp":"2026-03-07T05:18:42.3215716+01:00","action":"create","task_id":612,"detail":"Test: AgentRegistry._build_agent skips missing tools"}
+{"timestamp":"2026-03-07T05:19:07.9681221+01:00","action":"create","task_id":613,"detail":"Implement graceful tool skip in AgentRegistry._build_agent"}
+{"timestamp":"2026-03-07T05:19:26.1167345+01:00","action":"move","task_id":611,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:20:31.0345211+01:00","action":"create","task_id":614,"detail":"Implement poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T05:20:40.2796581+01:00","action":"create","task_id":615,"detail":"WIP continuity store for multi-cycle agent execution"}
+{"timestamp":"2026-03-07T05:20:42.0014214+01:00","action":"create","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T05:20:46.6546854+01:00","action":"create","task_id":617,"detail":"Test DiagramService (Kroki HTTP API wrapper)"}
+{"timestamp":"2026-03-07T05:20:49.541902+01:00","action":"create","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-07T05:20:54.7739566+01:00","action":"create","task_id":619,"detail":"Implement context condenser as PydanticAI HistoryProcessor"}
+{"timestamp":"2026-03-07T05:20:55.5194797+01:00","action":"create","task_id":620,"detail":"Implement DiagramService wrapping Kroki HTTP API"}
+{"timestamp":"2026-03-07T05:20:58.8852446+01:00","action":"create","task_id":621,"detail":"Retrospective learning hook on task completion"}
+{"timestamp":"2026-03-07T05:21:06.0810275+01:00","action":"create","task_id":622,"detail":"Implement session-memory hook for context persistence across sessions"}
+{"timestamp":"2026-03-07T05:21:07.8301913+01:00","action":"create","task_id":623,"detail":"Stale execution detector for daemon loop"}
+{"timestamp":"2026-03-07T05:21:14.0415882+01:00","action":"create","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T05:21:17.2301866+01:00","action":"create","task_id":625,"detail":"Task-level retry with exponential backoff"}
+{"timestamp":"2026-03-07T05:21:20.0103084+01:00","action":"create","task_id":626,"detail":"Test DiagramToolset (generate_diagram agent tool)"}
+{"timestamp":"2026-03-07T05:21:22.7512525+01:00","action":"move","task_id":584,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:23.2665347+01:00","action":"move","task_id":585,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:23.8725809+01:00","action":"move","task_id":586,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:24.4375263+01:00","action":"move","task_id":587,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:24.9890286+01:00","action":"move","task_id":588,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:25.540851+01:00","action":"move","task_id":589,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:29.1319999+01:00","action":"edit","task_id":581,"detail":"Research: OpenClaw Ecosystem \u0026 Skills"}
+{"timestamp":"2026-03-07T05:21:30.0725452+01:00","action":"move","task_id":580,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:37.5090346+01:00","action":"move","task_id":581,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:41.0559184+01:00","action":"create","task_id":627,"detail":"Implement DiagramToolset exposing generate_diagram tool"}
+{"timestamp":"2026-03-07T05:21:42.8035287+01:00","action":"move","task_id":590,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:43.3129063+01:00","action":"move","task_id":591,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:21:58.5415794+01:00","action":"create","task_id":628,"detail":"Create Excalidraw diagram skill (SKILL.md + references)"}
+{"timestamp":"2026-03-07T05:22:03.4250603+01:00","action":"create","task_id":629,"detail":"Implement ExcalidrawRenderService using BrowserManager"}
+{"timestamp":"2026-03-07T05:22:32.4636204+01:00","action":"move","task_id":582,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:24:11.1657332+01:00","action":"move","task_id":611,"detail":"todo -\u003e done"}
+{"timestamp":"2026-03-07T05:24:27.2074341+01:00","action":"move","task_id":612,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:25:54.926923+01:00","action":"move","task_id":612,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T05:26:51.6912644+01:00","action":"create","task_id":630,"detail":"Replace hand-rolled CLI tables with rich.table.Table"}
+{"timestamp":"2026-03-07T05:27:00.1309116+01:00","action":"create","task_id":631,"detail":"Enhanced bearclaw status with rich.panel"}
+{"timestamp":"2026-03-07T05:27:09.1065253+01:00","action":"create","task_id":632,"detail":"Add rich.traceback and RichHandler to daemon logging"}
+{"timestamp":"2026-03-07T05:27:17.9135924+01:00","action":"create","task_id":633,"detail":"Evaluate Textual TUI dashboard for Phase 11+"}
+{"timestamp":"2026-03-07T05:27:23.8239681+01:00","action":"edit","task_id":520,"detail":"Extract _print_table helper in cli.py"}
+{"timestamp":"2026-03-07T05:27:23.827694+01:00","action":"block","task_id":520,"detail":"Superseded by #630 (rich.table.Table replacement). #583 research shows Rich is zero-cost (transitive dep) and covers DRY + formatting in one change. Close or delete this task."}
+{"timestamp":"2026-03-07T05:27:28.7431922+01:00","action":"move","task_id":583,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T05:28:05.2588151+01:00","action":"move","task_id":613,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:29:31.2053813+01:00","action":"move","task_id":613,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T05:31:34.9421981+01:00","action":"move","task_id":612,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T05:31:37.1100009+01:00","action":"move","task_id":613,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T05:31:45.7976224+01:00","action":"edit","task_id":612,"detail":"Test: AgentRegistry._build_agent skips missing tools"}
+{"timestamp":"2026-03-07T05:31:45.8012484+01:00","action":"block","task_id":612,"detail":"REVIEW FAIL: 2 AC lines unmet. (1) test_build_agent_logs_warning_for_skipped_tool missing. (2) test_build_agent_all_tools_present_unchanged missing."}
+{"timestamp":"2026-03-07T05:32:11.379912+01:00","action":"move","task_id":612,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:33:09.2024205+01:00","action":"move","task_id":613,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:33:51.2387361+01:00","action":"move","task_id":612,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T05:35:59.0005026+01:00","action":"move","task_id":612,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T05:36:09.3901759+01:00","action":"edit","task_id":612,"detail":"Test: AgentRegistry._build_agent skips missing tools"}
+{"timestamp":"2026-03-07T05:36:09.3949112+01:00","action":"unblock","task_id":612,"detail":"Test: AgentRegistry._build_agent skips missing tools"}
+{"timestamp":"2026-03-07T05:36:49.7532282+01:00","action":"move","task_id":612,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T05:43:50.9154033+01:00","action":"edit","task_id":614,"detail":"Implement poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T05:43:55.9752409+01:00","action":"move","task_id":614,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T05:45:57.1253784+01:00","action":"move","task_id":619,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T05:49:31.7662103+01:00","action":"move","task_id":617,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T05:49:32.2612751+01:00","action":"move","task_id":630,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T05:52:47.3546447+01:00","action":"edit","task_id":630,"detail":"Replace hand-rolled CLI tables with rich.table.Table"}
+{"timestamp":"2026-03-07T05:52:52.0291407+01:00","action":"move","task_id":630,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:52:53.77904+01:00","action":"create","task_id":634,"detail":"Test context condenser (SummarizingCondenser)"}
+{"timestamp":"2026-03-07T05:52:57.0681371+01:00","action":"edit","task_id":520,"detail":"Extract _print_table helper in cli.py"}
+{"timestamp":"2026-03-07T05:53:30.8318517+01:00","action":"move","task_id":634,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:53:36.3311386+01:00","action":"move","task_id":619,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:53:43.2976864+01:00","action":"edit","task_id":617,"detail":"Test DiagramService (Kroki HTTP API wrapper)"}
+{"timestamp":"2026-03-07T05:53:59.05822+01:00","action":"create","task_id":635,"detail":"Test poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T05:54:03.4648329+01:00","action":"edit","task_id":617,"detail":"Test DiagramService (Kroki HTTP API wrapper)"}
+{"timestamp":"2026-03-07T05:54:16.1270688+01:00","action":"move","task_id":617,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:54:50.2145783+01:00","action":"move","task_id":614,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:54:55.2220108+01:00","action":"move","task_id":635,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T05:56:15.2601936+01:00","action":"move","task_id":635,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:56:15.7442598+01:00","action":"move","task_id":634,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:56:16.2466099+01:00","action":"move","task_id":617,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T05:56:16.7568992+01:00","action":"move","task_id":630,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:02:34.2446062+01:00","action":"move","task_id":617,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:03:06.3285983+01:00","action":"move","task_id":635,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:03:11.7083833+01:00","action":"move","task_id":630,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:03:44.3362992+01:00","action":"move","task_id":634,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:05:43.1925053+01:00","action":"move","task_id":635,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:05:46.6926297+01:00","action":"move","task_id":617,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:05:57.7876338+01:00","action":"move","task_id":634,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:06:38.2468294+01:00","action":"move","task_id":630,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:07:51.0899885+01:00","action":"move","task_id":634,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:07:59.7149723+01:00","action":"move","task_id":630,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:08:17.6959728+01:00","action":"move","task_id":635,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:08:33.9269546+01:00","action":"move","task_id":617,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:09:08.3327563+01:00","action":"move","task_id":614,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:09:08.8502874+01:00","action":"move","task_id":619,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:15:25.2593701+01:00","action":"move","task_id":614,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:17:28.7080194+01:00","action":"move","task_id":619,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:17:59.1226496+01:00","action":"move","task_id":615,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:17:59.6293813+01:00","action":"move","task_id":616,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:22:30.7323312+01:00","action":"move","task_id":614,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T06:22:47.3809431+01:00","action":"edit","task_id":614,"detail":"Implement poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T06:22:47.3839861+01:00","action":"block","task_id":614,"detail":"REVIEW FAIL: AC6 run_daemon passes None for kanban and agent_registry. AC13 missing in-flight task cancellation grace period."}
+{"timestamp":"2026-03-07T06:23:27.4081629+01:00","action":"move","task_id":620,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:23:27.8957728+01:00","action":"move","task_id":626,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:23:40.9604805+01:00","action":"move","task_id":614,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:23:46.4168297+01:00","action":"edit","task_id":614,"detail":"Implement poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T06:23:46.4168297+01:00","action":"unblock","task_id":614,"detail":"Implement poll-dispatch-reconcile daemon loop"}
+{"timestamp":"2026-03-07T06:25:06.3239977+01:00","action":"move","task_id":619,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:26:03.5479717+01:00","action":"move","task_id":619,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:28:52.1917757+01:00","action":"move","task_id":614,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:30:09.4054125+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:30:14.2358056+01:00","action":"move","task_id":624,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:31:08.0668353+01:00","action":"move","task_id":618,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:33:25.4399132+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:33:30.634259+01:00","action":"move","task_id":624,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:34:08.4076194+01:00","action":"move","task_id":614,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:34:45.9867516+01:00","action":"create","task_id":636,"detail":"Test WipStore class"}
+{"timestamp":"2026-03-07T06:35:00.1543939+01:00","action":"create","task_id":637,"detail":"Implement WipStore class in owlbear.memory.wip"}
+{"timestamp":"2026-03-07T06:35:11.2862454+01:00","action":"create","task_id":638,"detail":"Tests for HeartbeatRunner"}
+{"timestamp":"2026-03-07T06:35:17.9662182+01:00","action":"create","task_id":639,"detail":"Test WIP injection into poll_tick dispatch prompt"}
+{"timestamp":"2026-03-07T06:35:26.8283126+01:00","action":"create","task_id":640,"detail":"Tests for HeartbeatRunner"}
+{"timestamp":"2026-03-07T06:35:32.1125975+01:00","action":"move","task_id":640,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-03-07T06:35:33.5488027+01:00","action":"create","task_id":641,"detail":"Wire WipStore into poll_tick and reconcile_tasks"}
+{"timestamp":"2026-03-07T06:35:48.3220177+01:00","action":"edit","task_id":615,"detail":"WIP continuity store for multi-cycle agent execution"}
+{"timestamp":"2026-03-07T06:35:53.4378015+01:00","action":"move","task_id":615,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T06:35:59.408868+01:00","action":"move","task_id":636,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:35:59.9538985+01:00","action":"move","task_id":637,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:36:03.1824314+01:00","action":"edit","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T06:36:04.7870483+01:00","action":"move","task_id":639,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:36:05.3375537+01:00","action":"move","task_id":641,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:37:19.5003012+01:00","action":"move","task_id":616,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T06:37:25.8383151+01:00","action":"edit","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T06:37:25.8423655+01:00","action":"block","task_id":616,"detail":"Depends on #640 (tests must be written first per TDD)"}
+{"timestamp":"2026-03-07T06:38:20.2430107+01:00","action":"move","task_id":624,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:38:20.7966998+01:00","action":"move","task_id":636,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:38:21.3718158+01:00","action":"move","task_id":640,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:40:45.7201006+01:00","action":"move","task_id":614,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:42:55.8627035+01:00","action":"move","task_id":624,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:45:09.2671601+01:00","action":"move","task_id":636,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:45:09.8138542+01:00","action":"move","task_id":640,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:46:41.0259486+01:00","action":"move","task_id":636,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:47:02.913219+01:00","action":"move","task_id":640,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T06:47:12.5853557+01:00","action":"move","task_id":624,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T06:47:33.046062+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:47:33.0487192+01:00","action":"block","task_id":624,"detail":"REVIEW FAIL: ruff F401 unused import HookEvent at tests/test_daemon.py:458. Remove the dead import."}
+{"timestamp":"2026-03-07T06:54:06.7241378+01:00","action":"move","task_id":621,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T06:54:36.346027+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:54:36.3488627+01:00","action":"unblock","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:54:36.857215+01:00","action":"move","task_id":624,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T06:54:58.9904167+01:00","action":"move","task_id":624,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T06:55:50.3344006+01:00","action":"move","task_id":636,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:56:11.9457948+01:00","action":"move","task_id":640,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T06:59:28.4062607+01:00","action":"move","task_id":624,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T06:59:44.2869243+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T06:59:44.2905481+01:00","action":"block","task_id":624,"detail":"REVIEW FAIL: broke 7 tests in test_otel_config.py. Fix: set agent.hooks.emit=AsyncMock() in each otel test."}
+{"timestamp":"2026-03-07T07:04:24.5353189+01:00","action":"move","task_id":622,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T07:04:49.7904201+01:00","action":"edit","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T07:04:49.7965938+01:00","action":"unblock","task_id":624,"detail":"Add DAEMON_STARTUP hook event"}
+{"timestamp":"2026-03-07T07:04:50.3079057+01:00","action":"move","task_id":624,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:04:50.8152026+01:00","action":"move","task_id":637,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:04:51.3186217+01:00","action":"move","task_id":616,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:04:51.8192785+01:00","action":"edit","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T07:04:51.8254808+01:00","action":"unblock","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T07:07:28.09622+01:00","action":"move","task_id":637,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:09:14.1269056+01:00","action":"edit","task_id":623,"detail":"Stale execution detector for daemon loop"}
+{"timestamp":"2026-03-07T07:09:19.2009641+01:00","action":"move","task_id":623,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T07:15:39.8327625+01:00","action":"move","task_id":616,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:15:59.9675779+01:00","action":"move","task_id":624,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:18:03.991239+01:00","action":"move","task_id":637,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T07:19:39.0499257+01:00","action":"edit","task_id":616,"detail":"Implement HeartbeatRunner for proactive agent autonomy"}
+{"timestamp":"2026-03-07T07:36:48.6063159+01:00","action":"move","task_id":624,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T07:41:04.8891327+01:00","action":"move","task_id":624,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T07:41:16.6555692+01:00","action":"move","task_id":637,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T07:43:10.123919+01:00","action":"move","task_id":616,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T07:44:59.1111916+01:00","action":"move","task_id":639,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:47:47.4982904+01:00","action":"edit","task_id":620,"detail":"Implement DiagramService wrapping Kroki HTTP API"}
+{"timestamp":"2026-03-07T07:47:52.9685463+01:00","action":"move","task_id":620,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T07:48:26.6130345+01:00","action":"move","task_id":639,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:48:57.4394971+01:00","action":"edit","task_id":626,"detail":"Test DiagramToolset (generate_diagram agent tool)"}
+{"timestamp":"2026-03-07T07:49:02.5919629+01:00","action":"move","task_id":626,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T07:52:06.2018487+01:00","action":"edit","task_id":631,"detail":"Enhanced bearclaw status with rich.panel"}
+{"timestamp":"2026-03-07T07:52:11.022475+01:00","action":"move","task_id":631,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T07:52:51.3683668+01:00","action":"move","task_id":620,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:52:51.881627+01:00","action":"move","task_id":626,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T07:54:58.6777532+01:00","action":"move","task_id":639,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T07:56:23.9032208+01:00","action":"create","task_id":642,"detail":"Extract _is_process_alive to shared utility"}
+{"timestamp":"2026-03-07T07:56:36.4448691+01:00","action":"create","task_id":643,"detail":"Test: enhanced bearclaw status rich.Panel display"}
+{"timestamp":"2026-03-07T07:57:21.8253463+01:00","action":"move","task_id":631,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T07:57:24.5561601+01:00","action":"move","task_id":626,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:57:56.5732541+01:00","action":"move","task_id":620,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T07:58:25.4565901+01:00","action":"move","task_id":643,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:00:56.6163432+01:00","action":"move","task_id":639,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T08:01:23.8217294+01:00","action":"move","task_id":626,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T08:01:24.3410204+01:00","action":"edit","task_id":626,"detail":"Test DiagramToolset (generate_diagram agent tool)"}
+{"timestamp":"2026-03-07T08:01:24.3453337+01:00","action":"block","task_id":626,"detail":"REVIEW FAIL: AC line ValueError not implemented or tested. toolset.py only catches DiagramError but DiagramService.generate raises ValueError for invalid inputs. Need except ValueError handler + test."}
+{"timestamp":"2026-03-07T08:04:17.2057254+01:00","action":"move","task_id":620,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T08:04:49.7013988+01:00","action":"move","task_id":643,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:04:50.2214144+01:00","action":"move","task_id":641,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:04:50.7462068+01:00","action":"move","task_id":626,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:06:48.536772+01:00","action":"move","task_id":626,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:07:03.1355435+01:00","action":"move","task_id":620,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T08:07:29.1131155+01:00","action":"move","task_id":643,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T08:10:17.5393568+01:00","action":"move","task_id":641,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:12:28.7490091+01:00","action":"move","task_id":626,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T08:15:39.9088961+01:00","action":"move","task_id":641,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T08:15:52.1970723+01:00","action":"edit","task_id":641,"detail":"Wire WipStore into poll_tick and reconcile_tasks"}
+{"timestamp":"2026-03-07T08:15:52.2011115+01:00","action":"block","task_id":641,"detail":"REVIEW FAIL: wip_store.save() on failure is dead code. asyncio.Task.result() re-raises when .exception() is non-None. Tests use unfaithful MagicMock."}
+{"timestamp":"2026-03-07T08:16:29.7581036+01:00","action":"edit","task_id":621,"detail":"Emit TASK_COMPLETE from reconcile_tasks"}
+{"timestamp":"2026-03-07T08:17:02.344945+01:00","action":"edit","task_id":621,"detail":"Emit TASK_COMPLETE from reconcile_tasks"}
+{"timestamp":"2026-03-07T08:17:36.5325254+01:00","action":"edit","task_id":621,"detail":"Emit TASK_COMPLETE from reconcile_tasks"}
+{"timestamp":"2026-03-07T08:17:51.7168679+01:00","action":"create","task_id":644,"detail":"Test: RetrospectiveHook triviality filter and KG ingest"}
+{"timestamp":"2026-03-07T08:18:20.3158996+01:00","action":"create","task_id":645,"detail":"Implement RetrospectiveHook with triviality filter and KG ingest"}
+{"timestamp":"2026-03-07T08:18:34.2411408+01:00","action":"move","task_id":621,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T08:19:27.7009063+01:00","action":"move","task_id":641,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:19:28.2576586+01:00","action":"move","task_id":621,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:19:28.7965911+01:00","action":"move","task_id":631,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T08:21:20.3585168+01:00","action":"move","task_id":626,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T08:23:31.2109152+01:00","action":"move","task_id":631,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:24:45.4955042+01:00","action":"move","task_id":641,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:26:08.5798266+01:00","action":"move","task_id":621,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T08:32:36.8678016+01:00","action":"move","task_id":631,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T08:32:47.9973679+01:00","action":"edit","task_id":631,"detail":"Enhanced bearclaw status with rich.panel"}
+{"timestamp":"2026-03-07T08:32:48.0015974+01:00","action":"block","task_id":631,"detail":"REVIEW FAIL: (1) Uptime reads owlbear.start but nothing creates it - broken in production. AC says use owlbear.pid mtime. (2) Detail missing Slack Channel row per AC."}
+{"timestamp":"2026-03-07T13:56:06.3857613+01:00","action":"move","task_id":627,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T13:56:47.0743479+01:00","action":"edit","task_id":628,"detail":"Create Excalidraw diagram skill (SKILL.md + references)"}
+{"timestamp":"2026-03-07T13:56:52.5510617+01:00","action":"move","task_id":628,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T13:58:57.0440798+01:00","action":"move","task_id":625,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T13:59:31.124357+01:00","action":"move","task_id":638,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T14:03:23.1166879+01:00","action":"move","task_id":633,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T14:03:30.6574602+01:00","action":"move","task_id":632,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T14:06:09.5194509+01:00","action":"move","task_id":629,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T14:10:52.5857453+01:00","action":"move","task_id":631,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T14:11:03.4301397+01:00","action":"edit","task_id":631,"detail":"Enhanced bearclaw status with rich.panel"}
+{"timestamp":"2026-03-07T14:11:03.4337498+01:00","action":"unblock","task_id":631,"detail":"Enhanced bearclaw status with rich.panel"}
+{"timestamp":"2026-03-07T14:14:04.4806392+01:00","action":"move","task_id":621,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T14:15:16.4427766+01:00","action":"move","task_id":631,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T15:12:58.2387575+01:00","action":"move","task_id":621,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T15:14:38.8013739+01:00","action":"move","task_id":631,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T15:16:44.5490931+01:00","action":"move","task_id":641,"detail":"review -\u003e backlog"}
+{"timestamp":"2026-03-07T15:16:57.7326614+01:00","action":"edit","task_id":641,"detail":"Wire WipStore into poll_tick and reconcile_tasks"}
+{"timestamp":"2026-03-07T15:21:19.3012969+01:00","action":"move","task_id":631,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T15:22:48.231362+01:00","action":"edit","task_id":627,"detail":"Implement DiagramToolset exposing generate_diagram tool"}
+{"timestamp":"2026-03-07T15:23:04.0612248+01:00","action":"edit","task_id":626,"detail":"Test DiagramToolset (generate_diagram agent tool)"}
+{"timestamp":"2026-03-07T15:23:04.0649062+01:00","action":"unblock","task_id":626,"detail":"Test DiagramToolset (generate_diagram agent tool)"}
+{"timestamp":"2026-03-07T15:23:10.5847693+01:00","action":"move","task_id":627,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T15:23:13.4400567+01:00","action":"edit","task_id":641,"detail":"Wire WipStore into poll_tick and reconcile_tasks"}
+{"timestamp":"2026-03-07T15:23:13.4453006+01:00","action":"unblock","task_id":641,"detail":"Wire WipStore into poll_tick and reconcile_tasks"}
+{"timestamp":"2026-03-07T15:23:18.099815+01:00","action":"move","task_id":641,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T15:24:14.0796861+01:00","action":"edit","task_id":644,"detail":"Test: RetrospectiveHook triviality filter and KG ingest"}
+{"timestamp":"2026-03-07T15:24:31.8140918+01:00","action":"edit","task_id":645,"detail":"Implement RetrospectiveHook with triviality filter and KG ingest"}
+{"timestamp":"2026-03-07T15:24:51.655411+01:00","action":"move","task_id":644,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T15:25:43.7018165+01:00","action":"move","task_id":627,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T15:25:43.7082014+01:00","action":"move","task_id":641,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T15:25:43.7133319+01:00","action":"move","task_id":644,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T15:28:00.9119299+01:00","action":"move","task_id":641,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T15:28:48.4768567+01:00","action":"move","task_id":627,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T15:34:44.160863+01:00","action":"move","task_id":644,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T15:37:37.4839569+01:00","action":"move","task_id":641,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T15:38:10.4949473+01:00","action":"move","task_id":644,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T16:49:17.774397+01:00","action":"create","task_id":646,"detail":"Fix pytest-cov + pydantic v2.12 RootModel MRO crash"}
+{"timestamp":"2026-03-07T16:51:16.3978125+01:00","action":"move","task_id":644,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T16:51:23.8440816+01:00","action":"move","task_id":627,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T16:51:53.1835997+01:00","action":"move","task_id":641,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T16:53:51.1572684+01:00","action":"move","task_id":627,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T17:00:40.9946983+01:00","action":"edit","task_id":645,"detail":"Implement RetrospectiveHook with triviality filter and KG ingest"}
+{"timestamp":"2026-03-07T17:00:46.4337387+01:00","action":"move","task_id":645,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T17:01:47.643699+01:00","action":"move","task_id":645,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T17:15:25.6696561+01:00","action":"move","task_id":645,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T17:19:25.9532468+01:00","action":"move","task_id":645,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T17:21:27.0414826+01:00","action":"move","task_id":645,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T17:37:35.9474923+01:00","action":"move","task_id":646,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-07T17:37:48.7442678+01:00","action":"edit","task_id":646,"detail":"Fix pytest-cov + pydantic v2.12 RootModel MRO crash"}
+{"timestamp":"2026-03-07T17:37:56.9132617+01:00","action":"move","task_id":646,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T17:38:02.812387+01:00","action":"move","task_id":646,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T17:39:01.7938271+01:00","action":"move","task_id":646,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T17:40:28.4816087+01:00","action":"move","task_id":646,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T17:41:30.0769301+01:00","action":"move","task_id":646,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T18:07:53.8142485+01:00","action":"move","task_id":484,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:54.3315806+01:00","action":"move","task_id":485,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:54.8564261+01:00","action":"move","task_id":486,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:55.3931099+01:00","action":"move","task_id":487,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:55.8818848+01:00","action":"move","task_id":488,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:56.3799735+01:00","action":"move","task_id":499,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:56.8985618+01:00","action":"move","task_id":500,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:57.3947716+01:00","action":"move","task_id":501,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:57.8987143+01:00","action":"move","task_id":503,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:58.4499168+01:00","action":"move","task_id":504,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:58.9473302+01:00","action":"move","task_id":508,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:07:59.4997397+01:00","action":"move","task_id":509,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:00.0025555+01:00","action":"move","task_id":510,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:00.554088+01:00","action":"move","task_id":511,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:01.0832601+01:00","action":"move","task_id":542,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:06.3203608+01:00","action":"move","task_id":580,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:06.8325339+01:00","action":"move","task_id":581,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:07.3442418+01:00","action":"move","task_id":582,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:07.8942532+01:00","action":"move","task_id":583,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:08.3983338+01:00","action":"move","task_id":584,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:08.9346551+01:00","action":"move","task_id":585,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:09.4653753+01:00","action":"move","task_id":586,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:09.9736592+01:00","action":"move","task_id":587,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:10.5274263+01:00","action":"move","task_id":588,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:11.0265638+01:00","action":"move","task_id":589,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:11.5310257+01:00","action":"move","task_id":590,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:12.0499108+01:00","action":"move","task_id":591,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:17.8431328+01:00","action":"move","task_id":607,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:18.3495356+01:00","action":"move","task_id":608,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:18.8547647+01:00","action":"move","task_id":609,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:19.3574133+01:00","action":"move","task_id":610,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:19.8770629+01:00","action":"move","task_id":611,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:20.4092608+01:00","action":"move","task_id":612,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:20.9220884+01:00","action":"move","task_id":613,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:21.4822864+01:00","action":"move","task_id":614,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:22.0003825+01:00","action":"move","task_id":615,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:22.5130125+01:00","action":"move","task_id":616,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:23.026378+01:00","action":"move","task_id":617,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:23.5445059+01:00","action":"move","task_id":619,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:24.05247+01:00","action":"move","task_id":620,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:24.6311556+01:00","action":"move","task_id":621,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:25.1328314+01:00","action":"move","task_id":624,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:25.684146+01:00","action":"move","task_id":626,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:26.2060222+01:00","action":"move","task_id":627,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:26.713171+01:00","action":"move","task_id":630,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:27.3570337+01:00","action":"move","task_id":631,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:27.8662405+01:00","action":"move","task_id":634,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:28.4155391+01:00","action":"move","task_id":635,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:28.9408961+01:00","action":"move","task_id":636,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:29.4772658+01:00","action":"move","task_id":637,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:29.9844213+01:00","action":"move","task_id":639,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:30.5312413+01:00","action":"move","task_id":640,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:31.0681288+01:00","action":"move","task_id":641,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:31.6420681+01:00","action":"move","task_id":643,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:32.1587543+01:00","action":"move","task_id":644,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:32.6899845+01:00","action":"move","task_id":645,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T18:08:33.236037+01:00","action":"move","task_id":646,"detail":"done -\u003e archived"}

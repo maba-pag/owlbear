@@ -1,10 +1,11 @@
 ---
 id: 494
 title: Expand command guard blocklist and document limitations
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-04T07:38:09.2339754+01:00
-updated: 2026-03-04T07:38:09.2339754+01:00
+updated: 2026-03-06T23:29:18.4565431+01:00
+started: 2026-03-06T23:23:22.4453535+01:00
 tags:
     - audit
     - security
