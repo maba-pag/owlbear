@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from owlbear.channels.slack_templates import format_approval_blocks
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.safety.policy import ApprovalPolicy, ApprovalSession
 
@@ -102,6 +101,8 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
             self.channel.send_blocks
         ):
             # Slack path: Block Kit approval buttons
+            from owlbear.channels.slack_templates import format_approval_blocks  # noqa: PLC0415
+
             action_id_prefix = f"approval_{name}"
             blocks = format_approval_blocks(action_description, action_id_prefix)
             text_fallback = f"Approval required: {action_description}"

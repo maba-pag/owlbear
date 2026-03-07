@@ -19,12 +19,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from typing import TYPE_CHECKING
 
 import httpx
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.errors import error_to_user_message
 from owlbear.core.retry import TRANSIENT_RETRY
+
+if TYPE_CHECKING:
+    from typing import ClassVar
 
 try:
     from duckduckgo_search import DDGS
@@ -59,6 +63,8 @@ class WebSearchToolset(FunctionToolset):
         blocked_urls: Regex patterns for URLs to reject.
         allowed_urls: Regex patterns for URLs to allow (allowlist mode).
     """
+
+    tool_alias: ClassVar[str] = "web_search"
 
     def __init__(
         self,

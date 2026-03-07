@@ -28,6 +28,7 @@ from pydantic_ai.toolsets import FunctionToolset
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+    from typing import ClassVar
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.tools.screenshot import ScreenshotService
@@ -46,6 +47,8 @@ class VisualFeedbackToolset(FunctionToolset):
         page_getter: Callable returning the active Playwright page.
         workspace: Workspace root directory for saving files.
     """
+
+    tool_alias: ClassVar[str] = "visual_feedback"
 
     def __init__(
         self,

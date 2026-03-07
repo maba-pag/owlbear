@@ -28,6 +28,7 @@ from owlbear.memory.knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
     from owlbear.memory.knowledge.refresh import RefreshOrchestrator
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
@@ -45,6 +46,8 @@ class KnowledgeSourceToolset(FunctionToolset):
         orchestrator: :class:`RefreshOrchestrator` for triggering refreshes.
         workspace_root: Optional root directory (reserved for future use).
     """
+
+    tool_alias: ClassVar[str] = "knowledge_source"
 
     def __init__(
         self,

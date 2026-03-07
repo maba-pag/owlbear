@@ -426,15 +426,76 @@ class TestRunDaemon:
 
 
 # ---------------------------------------------------------------------------
+# DAEMON_STARTUP hook
+# ---------------------------------------------------------------------------
+
+
+class TestDaemonStartupHook:
+    """DAEMON_STARTUP hook is emitted once with correct payload before receive."""
+
+    def test_emit_called_once_with_correct_event_and_payload(self, tmp_path: Path) -> None:
+        """run_daemon emits DAEMON_STARTUP with channel name and config_dir."""
+        from owlbear.core.hooks import HookEvent
+
+        channel = MockChannel([None])
+        mock_agent = AsyncMock()
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        mock_agent.hooks.emit.assert_any_call(
+            HookEvent.DAEMON_STARTUP,
+            {"channel": "mock", "config_dir": str(tmp_path)},
+        )
+
+    def test_emit_occurs_before_first_receive(self, tmp_path: Path) -> None:
+        """DAEMON_STARTUP emit happens before the first channel.receive()."""
+        call_order: list[str] = []
+
+        channel = MockChannel([None])
+        original_receive = channel.receive
+
+        async def tracking_receive(*, prompt: str | None = None) -> str | None:  # noqa: ARG001
+            call_order.append("receive")
+            return await original_receive()
+
+        channel.receive = tracking_receive  # type: ignore[assignment]
+
+        mock_agent = AsyncMock()
+
+        async def tracking_emit(event: object, data: object) -> None:  # noqa: ARG001
+            call_order.append("emit")
+
+        mock_agent.hooks.emit = AsyncMock(side_effect=tracking_emit)
+
+        _run(
+            run_daemon(
+                channel=channel,
+                agent=mock_agent,
+                config_dir=tmp_path,
+            )
+        )
+
+        assert "emit" in call_order
+        assert "receive" in call_order
+        assert call_order.index("emit") < call_order.index("receive")
+
+
+# ---------------------------------------------------------------------------
 # Signal handler
 # ---------------------------------------------------------------------------
 
 
 class TestSignalHandler:
-    """SIGINT sets shutdown flag (same as sentinel check)."""
+    """SIGINT sets shutdown event (same as sentinel check)."""
 
-    def test_signal_handler_sets_shutdown_flag(self, tmp_path: Path) -> None:
-        """Signal handler installed by run_daemon sets _shutdown flag."""
+    def test_signal_handler_sets_shutdown_event(self, tmp_path: Path) -> None:
+        """Signal handler installed by run_daemon triggers shutdown."""
 
         call_count = 0
         captured_handlers: dict[int, object] = {}
@@ -449,10 +510,12 @@ class TestSignalHandler:
             call_count += 1
             if call_count == 1:
                 return "hello"
-            # Invoke the captured SIGINT handler directly to simulate signal
+            # Invoke the captured SIGINT handler directly to simulate signal.
+            # Yield to the event loop so any call_soon_threadsafe callbacks fire.
             handler = captured_handlers.get(signal.SIGINT)
             if callable(handler):
                 handler(signal.SIGINT, None)
+                await asyncio.sleep(0)
             return "after-signal"
 
         channel = MockChannel([])
@@ -470,8 +533,37 @@ class TestSignalHandler:
                 )
             )
 
-        # First message processed; "after-signal" skipped due to shutdown flag
+        # First message processed; "after-signal" skipped due to shutdown
         mock_agent.turn.assert_called_once_with("hello")
+
+    def test_signal_handler_tolerates_closed_loop(self) -> None:
+        """Signal handler swallows RuntimeError when loop is already closed."""
+        from owlbear.daemon import _make_signal_handler
+
+        event = asyncio.Event()
+
+        # Simulate a loop whose call_soon_threadsafe raises RuntimeError
+        mock_loop = MagicMock()
+        mock_loop.call_soon_threadsafe.side_effect = RuntimeError("Event loop is closed")
+
+        handler = _make_signal_handler(mock_loop, event)
+        # Should NOT raise even though call_soon_threadsafe fails
+        handler(signal.SIGINT, None)
+
+        # Event was NOT set (call_soon_threadsafe never executed the callback)
+        assert not event.is_set()
+
+    def test_signal_handler_uses_call_soon_threadsafe(self) -> None:
+        """Signal handler delegates to loop.call_soon_threadsafe(event.set)."""
+        from owlbear.daemon import _make_signal_handler
+
+        event = asyncio.Event()
+        mock_loop = MagicMock()
+
+        handler = _make_signal_handler(mock_loop, event)
+        handler(signal.SIGINT, None)
+
+        mock_loop.call_soon_threadsafe.assert_called_once_with(event.set)
 
     def test_signal_handlers_restored_after_run(self, tmp_path: Path) -> None:
         """Signal handlers are restored to their previous values after run_daemon."""
@@ -546,31 +638,41 @@ class TestBearclawStop:
 
 
 class TestBearclawStatus:
-    """bearclaw status reports running/not-running/stale."""
+    """bearclaw status reports running/stopped/stale via rich.Panel."""
+
+    @staticmethod
+    def _mock_settings(tmp_path: Path) -> MagicMock:
+        s = MagicMock()
+        s.config_dir = str(tmp_path)
+        s.chat_model = "gpt-4o"
+        s.autonomous_mode = False
+        s.heartbeat_enabled = False
+        s.heartbeat_interval = 1800
+        return s
 
     def test_not_running(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         from bearclaw.cli import _daemon_status
 
-        with patch("bearclaw.cli._get_config_dir", return_value=tmp_path):
+        with patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)):
             _daemon_status()
 
         captured = capsys.readouterr()
-        assert "not running" in captured.out.lower()
+        assert "Stopped" in captured.out
 
     def test_running(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         from bearclaw.cli import _daemon_status
 
         pid_path = tmp_path / "owlbear.pid"
-        pid_path.write_text(str(os.getpid()))  # current process is alive
+        pid_path.write_text(str(os.getpid()))
 
         with (
-            patch("bearclaw.cli._get_config_dir", return_value=tmp_path),
+            patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)),
             patch("bearclaw.cli._is_process_alive", return_value=True),
         ):
             _daemon_status()
 
         captured = capsys.readouterr()
-        assert "running" in captured.out.lower()
+        assert "Running" in captured.out
         assert str(os.getpid()) in captured.out
 
     def test_stale_pid(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -580,13 +682,13 @@ class TestBearclawStatus:
         pid_path.write_text("99999999")
 
         with (
-            patch("bearclaw.cli._get_config_dir", return_value=tmp_path),
+            patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)),
             patch("bearclaw.cli._is_process_alive", return_value=False),
         ):
             _daemon_status()
 
         captured = capsys.readouterr()
-        assert "stale" in captured.out.lower()
+        assert "Stale" in captured.out
 
 
 # ---------------------------------------------------------------------------

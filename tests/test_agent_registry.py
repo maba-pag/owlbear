@@ -165,3 +165,121 @@ class TestAgentRegistryGet:
         registry.scan()
         agent = registry.get("builder")
         assert isinstance(agent, Agent)
+
+
+class TestBuildAgentMissingTools:
+    """Tests that _build_agent degrades gracefully when tools are missing."""
+
+    def test_build_agent_skips_unavailable_tool(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Agent def with tools=['a','b'], resolver raises KeyError for 'b'.
+
+        Expected: agent created with 1 toolset (only 'a'), warning logged, no exception.
+        """
+        md = tmp_path / "partial.md"
+        md.write_text(
+            "---\nname: partial\ndescription: Has two tools\ntools:\n  - a\n  - b\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        good_toolset = FunctionToolset()
+
+        def selective_resolver(name: str) -> FunctionToolset:
+            if name == "b":
+                raise KeyError(name)
+            return good_toolset
+
+        registry = AgentRegistry(tmp_path, selective_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+
+        with caplog.at_level(logging.WARNING):
+            agent = registry.get("partial")
+
+        assert isinstance(agent, Agent)
+        # Should have logged a warning about the missing tool 'b'.
+        assert any("b" in r.message for r in caplog.records)
+
+    def test_build_agent_skips_mcp_tool_when_missing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Agent def has tools=['mcp:missing'], no MCP registry configured.
+
+        Expected: KeyError caught, agent still created (0 toolsets), warning logged.
+        """
+        md = tmp_path / "mcp_agent.md"
+        md.write_text(
+            "---\nname: mcp_agent\ndescription: Uses MCP tool\n"
+            "tools:\n  - mcp:missing\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        registry = AgentRegistry(
+            tmp_path, _dummy_resolver, default_model=_TEST_MODEL, mcp_registry=None
+        )
+        registry.scan()
+
+        with caplog.at_level(logging.WARNING):
+            agent = registry.get("mcp_agent")
+
+        assert isinstance(agent, Agent)
+        # Should have logged a warning about the missing MCP tool.
+        assert any("mcp:missing" in r.message for r in caplog.records)
+
+    def test_build_agent_logs_warning_for_skipped_tool(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Warning message must include both the agent name and the tool name."""
+        md = tmp_path / "test_agent.md"
+        md.write_text(
+            "---\nname: test_agent\ndescription: Agent for log test\n"
+            "tools:\n  - good_tool\n  - bad_tool\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        def selective_resolver(name: str) -> FunctionToolset:
+            if name == "bad_tool":
+                raise KeyError(name)
+            return FunctionToolset()
+
+        registry = AgentRegistry(tmp_path, selective_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+
+        with caplog.at_level(logging.WARNING):
+            registry.get("test_agent")
+
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) >= 1
+        msg = warnings[0].message
+        assert "test_agent" in msg
+        assert "bad_tool" in msg
+
+    def test_build_agent_all_tools_present_unchanged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When all tools resolve, agent gets the full toolset with no warnings."""
+        md = tmp_path / "full.md"
+        md.write_text(
+            "---\nname: full\ndescription: All tools resolve\n"
+            "tools:\n  - x\n  - y\n  - z\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        resolved: list[str] = []
+
+        def tracking_resolver(name: str) -> FunctionToolset:
+            resolved.append(name)
+            return FunctionToolset()
+
+        registry = AgentRegistry(tmp_path, tracking_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+
+        with caplog.at_level(logging.WARNING):
+            agent = registry.get("full")
+
+        assert isinstance(agent, Agent)
+        # All three tools were resolved.
+        assert resolved == ["x", "y", "z"]
+        # No warnings logged.
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings == []

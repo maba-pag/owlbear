@@ -4,12 +4,18 @@ Provides the building blocks for ``bearclaw run``:
 
 - :class:`PidFile` — context manager that writes/removes ``owlbear.pid``
 - :func:`setup_logging` — ``RotatingFileHandler`` + stderr ``StreamHandler``
-- :func:`run_daemon` — async receive → turn → send loop with sentinel shutdown
+- :func:`run_daemon` — async daemon loop; runs ``channel_loop`` alone or
+  both ``channel_loop`` + ``poll_loop`` (autonomous mode) in a ``TaskGroup``
+- :class:`OrchestratorState` / :class:`RunningTask` — in-memory state for
+  the poll-dispatch-reconcile loop
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import dataclasses
+import json
 import logging
 import logging.handlers
 import os
@@ -23,6 +29,7 @@ import logfire
 from pydantic_ai import Agent
 
 from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
+from owlbear.core.hooks import HookEvent
 from owlbear.providers.copilot import create_copilot_model
 
 if TYPE_CHECKING:
@@ -33,7 +40,11 @@ if TYPE_CHECKING:
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.agent import OwlBearAgent
+    from owlbear.core.agent_registry import AgentRegistry
+    from owlbear.core.hooks import HookRegistry
     from owlbear.memory.error_journal import ErrorJournal
+    from owlbear.memory.wip import WipStore
+    from owlbear.tools.kanban import KanbanToolset
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +52,29 @@ _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 _BACKUP_COUNT = 3
 
+# WIP injection prefix (Quoorum-pattern)
+CONTINUE_FORWARD_PREFIX = (
+    "## CONTINUE FORWARD\n\n"
+    "You attempted this task in a previous cycle. "
+    "Here is your work-in-progress summary:\n\n"
+)
+
+_WIP_MAX_CHARS = 500
+
 # Transient retry constants
 _TRANSIENT_MAX_RETRIES = 3
 _TRANSIENT_BACKOFF_BASE = 1.0  # seconds
 _TRANSIENT_BACKOFF_MAX = 30.0  # seconds
 _JITTER_FACTOR = 0.5
+
+# Priority sort order (highest first)
+_PRIORITY_ORDER: dict[str, int] = {
+    "critical": 0,
+    "needed": 1,
+    "important": 2,
+    "nice-to-have": 3,
+    "someday": 4,
+}
 
 
 def _is_process_alive(pid: int) -> bool:
@@ -56,6 +85,28 @@ def _is_process_alive(pid: int) -> bool:
         return False
     else:
         return True
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator state
+# ---------------------------------------------------------------------------
+
+
+@dataclasses.dataclass
+class RunningTask:
+    """Tracks a single dispatched autonomous task."""
+
+    task_id: str
+    asyncio_task: asyncio.Task[object]
+    started_at: datetime = dataclasses.field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclasses.dataclass
+class OrchestratorState:
+    """Mutable state for the poll-dispatch-reconcile loop."""
+
+    running: dict[str, RunningTask] = dataclasses.field(default_factory=dict)
+    claimed: set[str] = dataclasses.field(default_factory=set)
 
 
 # ---------------------------------------------------------------------------
@@ -151,17 +202,22 @@ def setup_logging(log_file: Path) -> logging.Logger:
 # Daemon loop
 # ---------------------------------------------------------------------------
 
-# Module-level shutdown flag set by signal handlers
-_shutdown: bool = False
 
+def _make_signal_handler(
+    loop: asyncio.AbstractEventLoop,
+    shutdown_event: asyncio.Event,
+) -> Callable[[int, FrameType | None], None]:
+    """Return a signal handler that sets *shutdown_event* via the event loop.
 
-def _make_signal_handler() -> Callable[[int, FrameType | None], None]:
-    """Return a signal handler that sets the module-level shutdown flag."""
+    Uses :meth:`loop.call_soon_threadsafe` so the event is set from the
+    correct thread.  A ``RuntimeError`` is caught silently — this can
+    happen when the loop is already closed during a shutdown race.
+    """
 
     def _handler(signum: int, frame: FrameType | None) -> None:  # noqa: ARG001
-        global _shutdown  # noqa: PLW0603
         logger.info("Received signal %s — shutting down", signum)
-        _shutdown = True
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(shutdown_event.set)
 
     return _handler
 
@@ -321,6 +377,198 @@ async def _recover_from_error(  # noqa: PLR0913
             logger.exception("Failed to send error to channel (original: %s)", exc)
 
 
+async def channel_loop(  # noqa: PLR0913
+    shutdown_event: asyncio.Event,
+    sentinel: Path,
+    channel: ChannelPlugin,
+    agent: OwlBearAgent,
+    settings: OwlBearSettings | None = None,
+    error_journal: ErrorJournal | None = None,
+) -> None:
+    """Receive-turn-send loop extracted from run_daemon."""
+    while not shutdown_event.is_set():
+        if sentinel.exists():  # noqa: ASYNC240
+            logger.info("Sentinel file detected — shutting down")
+            shutdown_event.set()
+            break
+
+        message = await channel.receive()
+        if message is None:
+            logger.info("Channel returned None — shutting down")
+            shutdown_event.set()
+            break
+
+        if shutdown_event.is_set():
+            break
+
+        if not message.strip():
+            continue
+
+        try:
+            response = await agent.turn(message)
+            await channel.send(response)
+        except Exception as exc:  # noqa: BLE001
+            await _recover_from_error(
+                exc,
+                message,
+                agent=agent,
+                channel=channel,
+                settings=settings,
+                error_journal=error_journal,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Poll-dispatch-reconcile
+# ---------------------------------------------------------------------------
+
+
+async def reconcile_tasks(
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    wip_store: WipStore | None = None,
+    hooks: HookRegistry | None = None,
+) -> None:
+    """Check completed/failed asyncio Tasks and update state + kanban.
+
+    When *wip_store* is provided, clears WIP on success and saves a
+    truncated failure summary (up to :data:`_WIP_MAX_CHARS` chars) on
+    failure so the next poll cycle can resume with context.
+
+    Emits :attr:`HookEvent.TASK_COMPLETE` with ``{task_id, outcome}``
+    for each finished task when *hooks* is provided.
+    """
+    done_ids = [tid for tid, rt in state.running.items() if rt.asyncio_task.done()]
+    for tid in done_ids:
+        rt = state.running.pop(tid)
+        exc = rt.asyncio_task.exception()
+        if exc is not None:
+            logger.error("Task %s failed: %s", tid, exc)
+            if wip_store is not None:
+                summary = f"Failed: {type(exc).__name__}: {exc}"
+                wip_store.save(
+                    agent="builder",
+                    task_id=tid,
+                    summary=summary[:_WIP_MAX_CHARS],
+                )
+            if hooks is not None:
+                await hooks.emit(
+                    HookEvent.TASK_COMPLETE,
+                    {"task_id": tid, "outcome": "failure"},
+                )
+            state.claimed.discard(tid)
+        else:
+            if wip_store is not None:
+                wip_store.clear(agent="builder", task_id=tid)
+            await kanban.kanban_move(tid, "review")
+            if hooks is not None:
+                await hooks.emit(
+                    HookEvent.TASK_COMPLETE,
+                    {"task_id": tid, "outcome": "success"},
+                )
+            state.claimed.discard(tid)
+
+
+async def poll_tick(  # noqa: PLR0913
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    agent_registry: AgentRegistry,
+    max_concurrent: int,
+    shutdown_event: asyncio.Event,
+    wip_store: WipStore | None = None,
+    hooks: HookRegistry | None = None,
+) -> None:
+    """Single poll tick: reconcile → fetch todo → sort → dispatch.
+
+    When *wip_store* is provided, loads any existing WIP summary for each
+    dispatched task and prepends :data:`CONTINUE_FORWARD_PREFIX` to the
+    prompt so the builder agent can resume with prior context.
+    """
+    # 1. Reconcile completed/failed tasks
+    await reconcile_tasks(state=state, kanban=kanban, wip_store=wip_store, hooks=hooks)
+
+    # 2. Available slots
+    available = max_concurrent - len(state.running)
+    if available <= 0:
+        return
+
+    # 3. Fetch todo tasks
+    raw = await kanban.kanban_list(status="todo", format="json")
+    if shutdown_event.is_set():
+        return
+    tasks: list[dict[str, str]] = json.loads(raw)
+
+    # 4. Filter already-claimed
+    tasks = [t for t in tasks if t["id"] not in state.claimed]
+
+    # 5. Sort by priority
+    tasks.sort(key=lambda t: _PRIORITY_ORDER.get(t.get("priority", "important"), 2))
+
+    # 6. Dispatch up to available slots
+    for task_info in tasks[:available]:
+        if shutdown_event.is_set():
+            return
+        task_id = task_info["id"]
+
+        # Move to in-progress
+        await kanban.kanban_move(task_id, "in-progress")
+        state.claimed.add(task_id)
+
+        # Get task details for prompt
+        details_raw = await kanban.kanban_show(task_id)
+        details = json.loads(details_raw)
+        prompt = f"Build task #{task_id}: {details['title']}\n\n{details.get('body', '')}"
+
+        # Load WIP context and prepend if available
+        if wip_store is not None:
+            wip_summary = wip_store.load(agent="builder", task_id=task_id)
+            if wip_summary is not None:
+                prompt = CONTINUE_FORWARD_PREFIX + wip_summary + "\n\n" + prompt
+
+        # Resolve builder agent and spawn
+        builder = agent_registry.get("builder")
+        async_task = asyncio.create_task(
+            builder.run(prompt),
+            name=f"poll-task-{task_id}",
+        )
+        state.running[task_id] = RunningTask(task_id=task_id, asyncio_task=async_task)
+
+
+async def poll_loop(  # noqa: PLR0913
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    agent_registry: AgentRegistry,
+    settings: OwlBearSettings,
+    shutdown_event: asyncio.Event,
+    wip_store: WipStore | None = None,
+    hooks: HookRegistry | None = None,
+) -> None:
+    """Periodic poll-dispatch-reconcile loop."""
+    while not shutdown_event.is_set():
+        try:
+            await poll_tick(
+                state=state,
+                kanban=kanban,
+                agent_registry=agent_registry,
+                max_concurrent=settings.max_concurrent_tasks,
+                shutdown_event=shutdown_event,
+                wip_store=wip_store,
+                hooks=hooks,
+            )
+        except Exception:
+            logger.exception("poll_tick failed")
+
+        # Sleep interruptibly
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(
+                shutdown_event.wait(),
+                timeout=settings.poll_interval,
+            )
+
+
 async def run_daemon(  # noqa: PLR0913
     *,
     channel: ChannelPlugin,
@@ -329,14 +577,21 @@ async def run_daemon(  # noqa: PLR0913
     settings: OwlBearSettings | None = None,
     otel_endpoint: str | None = None,
     error_journal: ErrorJournal | None = None,
+    kanban_toolset: KanbanToolset | None = None,
+    agent_registry: AgentRegistry | None = None,
 ) -> None:
-    """Run the daemon receive → turn → send loop.
+    """Run the daemon loop.
+
+    When ``autonomous_mode`` is enabled in *settings* (and *kanban_toolset* /
+    *agent_registry* are provided), runs both ``channel_loop`` and ``poll_loop``
+    concurrently in an ``asyncio.TaskGroup``.  Otherwise only ``channel_loop``
+    is started.
 
     The loop exits when any of the following occurs:
 
     - The channel returns ``None`` (EOF / disconnect)
     - The sentinel file ``config_dir / "owlbear.stop"`` appears
-    - A signal (SIGINT / SIGTERM) sets the shutdown flag
+    - A signal (SIGINT / SIGTERM) sets the shutdown event
 
     Parameters
     ----------
@@ -347,7 +602,8 @@ async def run_daemon(  # noqa: PLR0913
     config_dir:
         Directory containing PID and sentinel files.
     settings:
-        Optional application settings for downstream token refresh.
+        Optional application settings.  Enables token refresh and, when
+        ``autonomous_mode`` is ``True``, the poll-dispatch-reconcile loop.
     otel_endpoint:
         Optional OTLP endpoint URL. When set, Logfire SDK is configured
         before instrumentation.
@@ -355,9 +611,15 @@ async def run_daemon(  # noqa: PLR0913
         Optional :class:`~owlbear.memory.error_journal.ErrorJournal` for
         logging errors from ``_recover_from_error``.  When *None*, error
         journal logging is silently skipped.
+    kanban_toolset:
+        Required for autonomous mode.  Provides board I/O (list, show,
+        move) used by the poll-dispatch-reconcile loop.
+    agent_registry:
+        Required for autonomous mode.  Supplies the ``'builder'`` agent
+        used to execute dispatched tasks.
     """
-    global _shutdown  # noqa: PLW0603
-    _shutdown = False
+    shutdown_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
 
     # --- Observability bootstrap ---
     if otel_endpoint:
@@ -367,45 +629,96 @@ async def run_daemon(  # noqa: PLR0913
     sentinel = config_dir / "owlbear.stop"
 
     # Install signal handlers (cross-platform — NOT loop.add_signal_handler)
-    handler = _make_signal_handler()
+    handler = _make_signal_handler(loop, shutdown_event)
     prev_sigint = signal.signal(signal.SIGINT, handler)
     prev_sigterm = signal.signal(signal.SIGTERM, handler)
 
     try:
+        await agent.hooks.emit(
+            HookEvent.DAEMON_STARTUP,
+            {"channel": channel.name, "config_dir": str(config_dir)},
+        )
         logger.info("Daemon started on channel '%s'", channel.name)
 
-        while not _shutdown:
-            # Check sentinel each iteration
-            if sentinel.exists():
-                logger.info("Sentinel file detected — shutting down")
-                break
+        # --- Heartbeat runner ---
+        heartbeat_task: asyncio.Task[None] | None = None
+        if settings is not None and settings.heartbeat_enabled:
+            from owlbear.heartbeat import HeartbeatRunner  # noqa: PLC0415
 
-            message = await channel.receive()
-            if message is None:
-                logger.info("Channel returned None — shutting down")
-                break
+            hb_runner = HeartbeatRunner(
+                agent=agent,
+                channel=channel,
+                interval_seconds=settings.heartbeat_interval,
+                active_hours=settings.heartbeat_active_hours,
+                shutdown_event=shutdown_event,
+                heartbeat_path=config_dir / "HEARTBEAT.md",
+            )
+            heartbeat_task = asyncio.create_task(hb_runner.run(), name="heartbeat")
 
-            # Re-check shutdown after potentially blocking receive
-            if _shutdown:
-                break
+        autonomous = (
+            settings is not None
+            and settings.autonomous_mode
+            and kanban_toolset is not None
+            and agent_registry is not None
+        )
+        if autonomous and settings is not None:
+            if kanban_toolset is None or agent_registry is None:  # pragma: no cover - guarded above
+                msg = "autonomous_mode requires kanban_toolset and agent_registry"
+                raise RuntimeError(msg)
+            from owlbear.memory.wip import WipStore as _WipStore  # noqa: PLC0415
 
-            if not message.strip():
-                continue
-
+            wip_store = _WipStore(config_dir)
+            state = OrchestratorState()
             try:
-                response = await agent.turn(message)
-                await channel.send(response)
-            except Exception as exc:  # noqa: BLE001
-                await _recover_from_error(
-                    exc,
-                    message,
-                    agent=agent,
-                    channel=channel,
-                    settings=settings,
-                    error_journal=error_journal,
-                )
+                async with asyncio.TaskGroup() as tg:
+                    tg.create_task(
+                        channel_loop(
+                            shutdown_event,
+                            sentinel,
+                            channel,
+                            agent,
+                            settings,
+                            error_journal,
+                        )
+                    )
+                    tg.create_task(
+                        poll_loop(
+                            state=state,
+                            kanban=kanban_toolset,
+                            agent_registry=agent_registry,
+                            settings=settings,
+                            shutdown_event=shutdown_event,
+                            wip_store=wip_store,
+                            hooks=agent.hooks,
+                        )
+                    )
+            finally:
+                # Cancel in-flight tasks spawned by poll_loop
+                inflight = [
+                    rt.asyncio_task for rt in state.running.values() if not rt.asyncio_task.done()
+                ]
+                for t in inflight:
+                    t.cancel()
+                if inflight:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await asyncio.wait(inflight, timeout=5.0)
+        else:
+            await channel_loop(
+                shutdown_event,
+                sentinel,
+                channel,
+                agent,
+                settings,
+                error_journal,
+            )
 
     finally:
+        # Cancel heartbeat if running
+        if heartbeat_task is not None and not heartbeat_task.done():
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
+
         # Restore previous signal handlers
         signal.signal(signal.SIGINT, prev_sigint)
         signal.signal(signal.SIGTERM, prev_sigterm)

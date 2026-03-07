@@ -177,7 +177,15 @@ async def _default_web_read(url: str) -> str | None:
     :class:`BookmarkPipeline`.  Retries transient HTTP errors.
     """
     import httpx  # noqa: PLC0415
-    import trafilatura  # noqa: PLC0415
+
+    try:
+        import trafilatura  # noqa: PLC0415
+    except ImportError:
+        msg = (
+            "trafilatura is required for _default_web_read. "
+            "Install it with: uv pip install 'owlbear[search]'"
+        )
+        raise ImportError(msg) from None
 
     from owlbear.core.retry import TRANSIENT_RETRY  # noqa: PLC0415
 

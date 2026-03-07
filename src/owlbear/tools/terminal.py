@@ -27,6 +27,8 @@ from pydantic_ai.toolsets import FunctionToolset
 from owlbear.core.hooks import HookEvent
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from owlbear.core.hooks import HookRegistry
 
 __all__ = ["TerminalResult", "TerminalToolset"]
@@ -78,6 +80,8 @@ class TerminalToolset(FunctionToolset):
         max_output_bytes: Maximum length (in characters) for stdout/stderr
             before head+tail truncation kicks in.  Defaults to ``60_000``.
     """
+
+    tool_alias: ClassVar[str] = "terminal"
 
     def __init__(
         self,

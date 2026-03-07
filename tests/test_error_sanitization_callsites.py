@@ -261,32 +261,6 @@ class TestCliLoginSanitisesErrors:
 
 
 # ---------------------------------------------------------------------------
-# escalation.py — error in escalation message
-# ---------------------------------------------------------------------------
-
-
-class TestEscalationSanitisesErrors:
-    """EscalationHook.escalate wraps error in error_to_user_message."""
-
-    def test_escalation_error_sanitized(self) -> None:
-        from owlbear.core.escalation import EscalationHook
-
-        hooks = HookRegistry()
-        channel = AsyncMock()
-        channel.receive = AsyncMock(return_value="retry")
-        hook = EscalationHook(hooks=hooks, channel=channel)
-
-        error = RuntimeError("connect to https://internal.corp/api?key=secret123 failed")
-
-        _run(hook.escalate(error=error, tool_name="fetch", attempt=3))
-
-        sent_msg = channel.send.call_args[0][0]
-        # URL with secret key must be scrubbed
-        assert "secret123" not in sent_msg
-        assert "key=" not in sent_msg or "REDACTED" in sent_msg
-
-
-# ---------------------------------------------------------------------------
 # web_search.py — URL not leaked in error
 # ---------------------------------------------------------------------------
 

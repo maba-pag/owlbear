@@ -76,12 +76,15 @@ class OwlBearAgent:
         self._knowledge_service = knowledge_service
 
         instructions = context.instructions if context else ""
+        hp = list(history_processors or [])
         self.inner: Agent[OwlBearDeps, str] = Agent(
             model,
             instructions=instructions or None,
             toolsets=toolsets or [],
-            history_processors=history_processors,
+            history_processors=hp,
         )
+        # Explicit assignment ensures accessibility when Agent is mocked in tests
+        self.inner.history_processors = hp
 
     def update_model(self, new_model: str | Model) -> None:
         """Replace the inner Agent's model in-place.

@@ -272,3 +272,19 @@ class TestUsagePremiumCost:
 
         assert result.exit_code == 0
         assert "Premium" not in result.output
+
+    def test_usage_table_renders_rich_table(self, tmp_path: Path) -> None:
+        """Usage table renders via Rich with box-drawing and TOTAL row."""
+        usage_file = tmp_path / "usage.jsonl"
+        lines = [
+            _usage_jsonl_line(minutes_ago=5, model="gpt-4o"),
+            _usage_jsonl_line(minutes_ago=10, model="gpt-3.5-turbo"),
+        ]
+        _write_mock_jsonl(usage_file, lines)
+
+        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+            result = runner.invoke(app, ["usage"])
+
+        assert result.exit_code == 0
+        assert "TOTAL" in result.output
+        assert "\u2502" in result.output  # │ box-drawing vertical from Rich Table

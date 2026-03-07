@@ -35,6 +35,8 @@ from owlbear.tools.browser.config import BrowserConfig
 from owlbear.tools.browser.manager import BrowserManager
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from playwright.async_api import Page
 
 __all__ = ["BrowserToolset"]
@@ -69,6 +71,8 @@ class BrowserToolset(FunctionToolset):
         config: Browser configuration.  Defaults to :class:`BrowserConfig`
             with all default values when ``None``.
     """
+
+    tool_alias: ClassVar[str] = "browser"
 
     def __init__(self, config: BrowserConfig | None = None) -> None:
         super().__init__()

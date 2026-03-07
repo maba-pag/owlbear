@@ -390,3 +390,25 @@ class TestLazyCollectionInit:
         # Search on empty store should work (returns empty)
         results = store.search_similar(_dense_vec(0.1), top_k=5)
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# IMPORTANCE_BY_TYPE keys match EntityType enum
+# ---------------------------------------------------------------------------
+
+
+class TestImportanceByTypeKeys:
+    """IMPORTANCE_BY_TYPE must have exactly one entry per EntityType member."""
+
+    def test_keys_match_entity_type_enum(self) -> None:
+        from owlbear.memory.knowledge.models import EntityType
+        from owlbear.memory.knowledge.qdrant import IMPORTANCE_BY_TYPE
+
+        assert set(IMPORTANCE_BY_TYPE) == set(EntityType)
+
+    def test_keys_are_entity_type_instances(self) -> None:
+        from owlbear.memory.knowledge.models import EntityType
+        from owlbear.memory.knowledge.qdrant import IMPORTANCE_BY_TYPE
+
+        for key in IMPORTANCE_BY_TYPE:
+            assert isinstance(key, EntityType), f"{key!r} is not an EntityType"

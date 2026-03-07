@@ -198,11 +198,82 @@ class OwlBearSettings(BaseSettings):
         description="When to capture browser screenshots: 'auto', 'manual', or 'on_error'.",
     )
 
+    # --- Diagrams (Kroki) ---
+    kroki_server_url: str = Field(
+        default="https://kroki.io",
+        description="Base URL of the Kroki diagram rendering server.",
+    )
+
+    # --- Autonomous mode ---
+    autonomous_mode: bool = Field(
+        default=False,
+        description="Enable autonomous poll-dispatch-reconcile loop alongside the channel loop.",
+    )
+    poll_interval: float = Field(
+        default=30.0,
+        description="Seconds between poll ticks in autonomous mode. Must be > 0.",
+    )
+    max_concurrent_tasks: int = Field(
+        default=3,
+        description="Maximum concurrent autonomous tasks. Must be > 0.",
+    )
+
+    # --- Context condenser ---
+    condenser_enabled: bool = Field(
+        default=False,
+        description="Enable LLM-summarizing context condenser for long conversations.",
+    )
+    condenser_max_events: int = Field(
+        default=120,
+        description="Message count threshold that triggers context condensation.",
+    )
+
+    # --- Heartbeat ---
+    heartbeat_enabled: bool = Field(
+        default=False,
+        description="Enable proactive heartbeat wakeups via HEARTBEAT.md.",
+    )
+    heartbeat_interval: int = Field(
+        default=1800,
+        description="Seconds between heartbeat ticks. Must be > 0.",
+    )
+    heartbeat_active_hours: tuple[int, int] = Field(
+        default=(8, 22),
+        description="UTC hour window (start, end) for heartbeat ticks.",
+    )
+
     # --- Runtime ---
     debug: bool = Field(
         default=False,
         description="Enable debug mode with verbose logging.",
     )
+
+    @field_validator("heartbeat_interval")
+    @classmethod
+    def _validate_heartbeat_interval(cls, v: int) -> int:
+        """heartbeat_interval must be strictly positive."""
+        if v <= 0:
+            msg = "heartbeat_interval must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("poll_interval")
+    @classmethod
+    def _validate_poll_interval(cls, v: float) -> float:
+        """poll_interval must be strictly positive."""
+        if v <= 0:
+            msg = "poll_interval must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("max_concurrent_tasks")
+    @classmethod
+    def _validate_max_concurrent_tasks(cls, v: int) -> int:
+        """max_concurrent_tasks must be strictly positive."""
+        if v <= 0:
+            msg = "max_concurrent_tasks must be greater than 0"
+            raise ValueError(msg)
+        return v
 
     @field_validator("progress_interval")
     @classmethod

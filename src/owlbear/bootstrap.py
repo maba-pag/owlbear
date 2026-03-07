@@ -21,6 +21,7 @@ from owlbear.channels.cli import CLIChannel
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.agent_registry import AgentRegistry
 from owlbear.core.command_guard import CommandSafetyGuard
+from owlbear.core.condenser import SummarizingCondenser
 from owlbear.core.context_hook import ContextInjectionHook
 from owlbear.core.delegation import DelegationToolset
 from owlbear.core.hooks import HookRegistry
@@ -46,6 +47,7 @@ from owlbear.tools.hooked import HookedToolset
 from owlbear.tools.kanban import KanbanToolset
 from owlbear.tools.mcp_registry import MCPServerRegistry
 from owlbear.tools.mcp_servers import register_default_servers
+from owlbear.tools.protocols import find_toolset, unwrap
 from owlbear.tools.terminal import TerminalToolset
 
 if TYPE_CHECKING:
@@ -63,6 +65,7 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider
     from owlbear.memory.knowledge.extractor import EntityExtractor
     from owlbear.memory.knowledge.graph import GraphStore
+    from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.qdrant import QdrantVectorStore
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.projects.models import Project
@@ -333,7 +336,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     max_tokens: int = 2000,
     knowledge_graph_expansion: bool = True,
     inter_doc_graph_building: bool = False,
-) -> tuple[AbstractToolset, KnowledgeQueryService] | None:
+) -> tuple[AbstractToolset, KnowledgeQueryService, IngestPipeline] | None:
     """Create a :class:`KnowledgeToolset` and :class:`KnowledgeQueryService`.
 
     Args:
@@ -419,7 +422,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
             ingest_pipeline=ingest_pipeline,
             project_scope=project_id,
         )
-        return toolset, service  # noqa: TRY300
+        return toolset, service, ingest_pipeline  # noqa: TRY300
     except Exception:  # noqa: BLE001
         logger.warning("Failed to create KnowledgeToolset", exc_info=True)
         return None
@@ -472,6 +475,52 @@ def _build_bookmark_toolset(
         return BookmarkToolset(pipeline=pipeline, store=bookmark_store)
     except Exception:  # noqa: BLE001
         logger.warning("Failed to create BookmarkToolset", exc_info=True)
+        return None
+
+
+def _build_knowledge_source_toolset(
+    infra: _KnowledgeInfra,
+    workspace: Path,
+) -> AbstractToolset | None:
+    """Create a :class:`KnowledgeSourceToolset` backed by the knowledge DB.
+
+    Args:
+        infra: Shared knowledge infrastructure (DB, vector store, embeddings).
+        workspace: Workspace root directory for file-glob sources.
+
+    Returns ``None`` when the toolset cannot be initialised.
+    All failures are logged at ``WARNING`` and silently swallowed.
+    """
+    try:
+        from owlbear.memory.knowledge import IngestPipeline  # noqa: PLC0415
+        from owlbear.memory.knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+        from owlbear.memory.knowledge.source_store import KnowledgeSourceStore  # noqa: PLC0415
+        from owlbear.tools.knowledge_source import KnowledgeSourceToolset  # noqa: PLC0415
+
+        source_store = KnowledgeSourceStore(infra.conn)
+
+        ingest_pipeline = IngestPipeline(
+            conn=infra.conn,
+            graph_store=infra.graph_store,
+            vector_store=infra.vector_store,
+            embedding_provider=infra.embedding_provider,
+            entity_extractor=infra.entity_extractor,
+            text_chunker=infra.text_chunker,
+        )
+
+        orchestrator = RefreshOrchestrator(
+            store=source_store,
+            pipeline=ingest_pipeline,
+            workspace_root=workspace,
+        )
+
+        return KnowledgeSourceToolset(
+            store=source_store,
+            orchestrator=orchestrator,
+            workspace_root=workspace,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to create KnowledgeSourceToolset", exc_info=True)
         return None
 
 
@@ -541,7 +590,7 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
     active_project_id: str | None = None,
     chat_model: str | Model | None = None,
     cleanup: list[Callable] | None = None,
-) -> tuple[list[AbstractToolset], KnowledgeQueryService | None]:
+) -> tuple[list[AbstractToolset], KnowledgeQueryService | None, IngestPipeline | None]:
     """Build all toolsets, wrapping non-delegation ones in :class:`HookedToolset`.
 
     Args:
@@ -557,7 +606,8 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
             so infrastructure resources are closed during shutdown.
 
     Returns:
-        Tuple of (toolset list, optional :class:`KnowledgeQueryService`).
+        Tuple of (toolset list, optional :class:`KnowledgeQueryService`,
+        optional :class:`IngestPipeline`).
     """
     raw: list[AbstractToolset] = []
 
@@ -597,6 +647,7 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
 
     # Knowledge infrastructure — shared between knowledge and bookmark toolsets
     knowledge_service: KnowledgeQueryService | None = None
+    ingest_pipeline: IngestPipeline | None = None
     infra = _build_knowledge_infra(
         workspace,
         chat_model=chat_model or settings.chat_model,
@@ -616,7 +667,7 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
             inter_doc_graph_building=settings.inter_doc_graph_building,
         )
         if knowledge_result is not None:
-            knowledge_ts, knowledge_service = knowledge_result
+            knowledge_ts, knowledge_service, ingest_pipeline = knowledge_result
             raw.append(knowledge_ts)
 
         # Bookmark toolset — shares infrastructure with knowledge
@@ -627,6 +678,11 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
         if bookmark_ts is not None:
             raw.append(bookmark_ts)
 
+        # Knowledge source toolset — shares infrastructure with knowledge
+        source_ts = _build_knowledge_source_toolset(infra, workspace)
+        if source_ts is not None:
+            raw.append(source_ts)
+
     # Web search toolset — conditional on duckduckgo_search availability
     web_ts = _build_web_search_toolset()
     if web_ts is not None:
@@ -636,7 +692,7 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
     wrapped: list[AbstractToolset] = [HookedToolset(wrapped=ts, hooks=hooks) for ts in raw]
 
     # Approval gate wrapping — destructive toolsets get gated
-    _destructive = {"GitLocalToolset", "TerminalToolset", "GitHubToolset"}
+    _destructive_types = (GitLocalToolset, TerminalToolset, GitHubToolset)
 
     if settings.approval_policy:
         from owlbear.safety.gate import ApprovalGateToolset  # noqa: PLC0415
@@ -654,8 +710,8 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
 
         gated: list[AbstractToolset] = []
         for ts in wrapped:
-            inner = ts.wrapped if isinstance(ts, HookedToolset) else ts
-            if type(inner).__name__ in _destructive:
+            inner = unwrap(ts)
+            if isinstance(inner, _destructive_types):
                 gated.append(
                     ApprovalGateToolset(
                         wrapped=ts,
@@ -672,7 +728,7 @@ def build_toolsets(  # noqa: PLR0913, PLR0912, PLR0915, C901
     # DelegationToolset is NOT wrapped — it's internal dispatch
     wrapped.append(DelegationToolset())
 
-    return wrapped, knowledge_service
+    return wrapped, knowledge_service, ingest_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -727,28 +783,17 @@ def build_agent_registry(
     """
     # Build a name → toolset resolver from the toolsets list.
     # Agent definitions use short names (e.g. "filesystem", "kanban");
-    # the alias map translates these to class names for lookup.
-    _aliases: dict[str, str] = {
-        "filesystem": "FileToolset",
-        "terminal": "TerminalToolset",
-        "ask_user": "AskUserToolset",
-        "browser": "BrowserToolset",
-        "delegation": "DelegationToolset",
-        "git_local": "GitLocalToolset",
-        "github": "GitHubToolset",
-        "kanban": "KanbanToolset",
-        "knowledge": "KnowledgeToolset",
-        "web_search": "WebSearchToolset",
-        "skills": "SkillRegistry",
-    }
+    # aliases are read dynamically from each toolset's tool_alias attribute.
 
     tool_map: dict[str, AbstractToolset] = {}
+    _aliases: dict[str, str] = {}
     for ts in toolsets:
-        inner = ts
-        while hasattr(inner, "wrapped"):
-            inner = inner.wrapped
+        inner = unwrap(ts)
         name = type(inner).__name__
         tool_map[name] = ts
+        alias = getattr(inner, "tool_alias", None)
+        if alias:
+            _aliases[alias] = name
 
     def _resolve(name: str) -> AbstractToolset:
         if name in tool_map:
@@ -810,13 +855,11 @@ def _patch_project_toolset_agent(
     agent: OwlBearAgent,
 ) -> None:
     """Replace the placeholder agent reference inside :class:`ProjectToolset`."""
-    for ts in toolsets:
-        inner = ts
-        while hasattr(inner, "wrapped"):
-            inner = inner.wrapped
-        if type(inner).__name__ == "ProjectToolset":
-            inner.bind_agent(agent)
-            break
+    from owlbear.projects.toolset import ProjectToolset  # noqa: PLC0415
+
+    match = find_toolset(toolsets, ProjectToolset)
+    if match is not None:
+        match.bind_agent(agent)
 
 
 # ---------------------------------------------------------------------------
@@ -881,7 +924,7 @@ async def bootstrap(
     model = await create_copilot_model(settings)
 
     # 4. Toolsets
-    toolsets, knowledge_service = build_toolsets(
+    toolsets, knowledge_service, ingest_pipeline = build_toolsets(
         settings,
         workspace,
         hooks,
@@ -890,6 +933,16 @@ async def bootstrap(
         chat_model=model,
         cleanup=cleanup,
     )
+
+    # 4b. RetrospectiveHook — requires model (step 3) and IngestPipeline (step 4)
+    if ingest_pipeline is not None:
+        from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
+
+        RetrospectiveHook(
+            model=model,
+            ingest_pipeline=ingest_pipeline,
+            kanban_root=workspace / "kanban",
+        ).register(hooks)
 
     # 4b. ProjectToolset — when an active project provides a store
     if active_project is not None and project_store is not None:
@@ -906,14 +959,9 @@ async def bootstrap(
 
     # 6. Agent registry
     # Find SkillRegistry if present
-    skill_reg = None
-    for ts in toolsets:
-        inner = ts
-        while hasattr(inner, "wrapped"):
-            inner = inner.wrapped
-        if type(inner).__name__ == "SkillRegistry":
-            skill_reg = inner
-            break
+    from owlbear.skills.registry import SkillRegistry  # noqa: PLC0415
+
+    skill_reg = find_toolset(toolsets, SkillRegistry)
 
     agent_registry = build_agent_registry(settings, toolsets, mcp_registry, skill_reg, model=model)
 
@@ -929,7 +977,13 @@ async def bootstrap(
     context = ContextManager(workspace)
     tracker = UsageTracker(settings.usage_path)
 
-    # 8. Construct agent
+    # 8. Context condenser (optional)
+    history_processors = None
+    if settings.condenser_enabled:
+        condenser = SummarizingCondenser(max_events=settings.condenser_max_events, model=model)
+        history_processors = [condenser]
+
+    # 9. Construct agent
     agent = OwlBearAgent(
         model=model,
         session=session,
@@ -940,6 +994,7 @@ async def bootstrap(
         provider=settings.provider,
         toolsets=toolsets,
         knowledge_service=knowledge_service,
+        history_processors=history_processors,
     )
     agent.set_agent_registry(agent_registry)
 

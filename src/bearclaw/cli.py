@@ -43,7 +43,6 @@ from owlbear.tools.github_api import parse_git_remote
 if TYPE_CHECKING:
     from owlbear.channels.cli import CLIChannel
     from owlbear.core.agent import OwlBearAgent
-    from owlbear.memory.knowledge.refresh import RefreshOrchestrator
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
     from owlbear.projects.store import ProjectStore
 
@@ -147,28 +146,18 @@ def project_list(
         typer.echo("No projects found.")
         return
 
-    # Table header
-    headers = ["Name", "Workspace", "Last Active", "Status"]
-    rows = [
-        [
+    from rich.console import Console  # noqa: PLC0415
+    from rich.table import Table  # noqa: PLC0415
+
+    table = Table("Name", "Workspace", "Last Active", "Status")
+    for p in projects:
+        table.add_row(
             p.name,
             str(p.workspace_path),
             p.last_active.strftime("%Y-%m-%d %H:%M"),
             p.status,
-        ]
-        for p in projects
-    ]
-
-    col_widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(cell))
-
-    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
-    typer.echo(fmt.format(*headers))
-    typer.echo("  ".join("-" * w for w in col_widths))
-    for row in rows:
-        typer.echo(fmt.format(*row))
+        )
+    Console().print(table)
 
 
 @project_app.command("switch")
@@ -367,26 +356,6 @@ def _get_source_store() -> KnowledgeSourceStore:
     return KnowledgeSourceStore(conn)
 
 
-def _make_refresh_orchestrator(
-    store: KnowledgeSourceStore,
-) -> RefreshOrchestrator:
-    """Build a :class:`RefreshOrchestrator` for the CLI.
-
-    Requires a fully initialized knowledge DB with all supporting stores.
-    In tests, this function is mocked entirely.
-    """
-    # Full pipeline wiring requires graph_store, vector_store, embedding,
-    # entity extractor, and chunker.  For now, the CLI refresh path is
-    # expected to be invoked through the daemon where these are already
-    # constructed.  This factory is primarily a seam for test mocking.
-    msg = (
-        "Direct CLI refresh requires the daemon's knowledge infrastructure. "
-        "Use 'bearclaw run' and invoke refresh through the agent, or mock "
-        "this function in tests."
-    )
-    raise NotImplementedError(msg)
-
-
 _VALID_SOURCE_TYPES = ("url_list", "crawl", "file_glob")
 
 
@@ -470,28 +439,19 @@ def ks_list(
         typer.echo("No knowledge sources found.")
         return
 
-    headers = ["Name", "Type", "Scope", "Enabled", "Last Refreshed"]
-    rows = [
-        [
+    from rich.console import Console  # noqa: PLC0415
+    from rich.table import Table  # noqa: PLC0415
+
+    table = Table("Name", "Type", "Scope", "Enabled", "Last Refreshed")
+    for s in sources:
+        table.add_row(
             s.name,
             str(s.source_type),
             s.scope,
             "yes" if s.enabled else "no",
             s.last_refreshed_at or "never",
-        ]
-        for s in sources
-    ]
-
-    col_widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(cell))
-
-    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
-    typer.echo(fmt.format(*headers))
-    typer.echo("  ".join("-" * w for w in col_widths))
-    for row in rows:
-        typer.echo(fmt.format(*row))
+        )
+    Console().print(table)
 
 
 @knowledge_source_app.command("show")
@@ -517,45 +477,6 @@ def ks_show(
     typer.echo(f"Last Refreshed: {source.last_refreshed_at or 'never'}")
     typer.echo(f"Last Error:     {source.last_error or 'none'}")
     typer.echo(f"Created:        {source.created_at}")
-
-
-@knowledge_source_app.command("refresh")
-def ks_refresh(
-    name: Annotated[str, typer.Option("--name", "-n", help="Name of source to refresh.")] = "",
-    refresh_all: Annotated[  # noqa: FBT002
-        bool, typer.Option("--all", "-a", help="Refresh all enabled sources.")
-    ] = False,
-    scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
-) -> None:
-    """Refresh knowledge sources."""
-    if not name and not refresh_all:
-        typer.echo("Error: Provide --name or --all.")
-        raise typer.Exit(code=1)
-
-    store = _get_source_store()
-
-    if name:
-        source = store.get_by_name(name, scope=scope)
-        if source is None:
-            typer.echo(f"Error: No knowledge source named '{name}'")
-            raise typer.Exit(code=1)
-        orch = _make_refresh_orchestrator(store)
-        result = asyncio.run(orch.refresh(source))
-        typer.echo(
-            f"Refreshed '{name}': {result.refreshed} refreshed, "
-            f"{result.skipped} skipped, {result.failed} failed"
-        )
-    else:
-        orch = _make_refresh_orchestrator(store)
-        results = asyncio.run(orch.refresh_all())
-        total_refreshed = sum(r.refreshed for r in results)
-        total_skipped = sum(r.skipped for r in results)
-        total_failed = sum(r.failed for r in results)
-        typer.echo(
-            f"Refreshed all: {total_refreshed} refreshed, "
-            f"{total_skipped} skipped, {total_failed} failed "
-            f"({len(results)} sources)"
-        )
 
 
 @knowledge_source_app.command("remove")
@@ -631,19 +552,21 @@ def _print_usage_table(
     has_premium: bool,
 ) -> None:
     """Format *model_data* as a table and print with a totals row."""
-    headers = [
-        "Model",
-        "Requests",
-        "Input Tokens",
-        "Output Tokens",
-        "Total Tokens",
-        "Est. Cost (USD)",
-    ]
-    if has_premium:
-        headers.append("Premium Requests")
+    from rich.console import Console  # noqa: PLC0415
+    from rich.table import Table  # noqa: PLC0415
 
-    def _row(label: str, s: dict[str, float]) -> list[str]:
-        row = [
+    table = Table()
+    table.add_column("Model")
+    table.add_column("Requests")
+    table.add_column("Input Tokens")
+    table.add_column("Output Tokens")
+    table.add_column("Total Tokens")
+    table.add_column("Est. Cost (USD)")
+    if has_premium:
+        table.add_column("Premium Requests")
+
+    def _cells(label: str, s: dict[str, float]) -> list[str]:
+        cells = [
             label,
             str(int(s["requests"])),
             str(int(s["input_tokens"])),
@@ -652,29 +575,19 @@ def _print_usage_table(
             f"${s['cost']:.4f}",
         ]
         if has_premium:
-            row.append(str(int(s["premium"])))
-        return row
+            cells.append(str(int(s["premium"])))
+        return cells
 
-    rows = [_row(model, s) for model, s in sorted(model_data.items())]
+    for model in sorted(model_data):
+        table.add_row(*_cells(model, model_data[model]))
 
-    # Summary totals
+    # Summary totals with section separator
     keys = next(iter(model_data.values()))
     agg: dict[str, float] = {k: sum(s[k] for s in model_data.values()) for k in keys}
-    totals = _row("TOTAL", agg)
+    table.add_section()
+    table.add_row(*_cells("TOTAL", agg))
 
-    col_widths = [len(h) for h in headers]
-    for row in [*rows, totals]:
-        for i, cell in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(cell))
-
-    fmt = "  ".join(f"{{:<{w}}}" for w in col_widths)
-    separator = "  ".join("-" * w for w in col_widths)
-    typer.echo(fmt.format(*headers))
-    typer.echo(separator)
-    for row in rows:
-        typer.echo(fmt.format(*row))
-    typer.echo(separator)
-    typer.echo(fmt.format(*totals))
+    Console().print(table)
 
 
 @usage_app.callback(invoke_without_command=True)
@@ -1210,26 +1123,77 @@ def stop_cmd() -> None:
     _daemon_stop()
 
 
-def _daemon_status() -> None:
-    """Report daemon status."""
-    config_dir = _get_config_dir()
+def _daemon_status(*, detail: bool = False) -> None:
+    """Report daemon status using a rich Panel."""
+    import time  # noqa: PLC0415
+
+    from rich.console import Console  # noqa: PLC0415
+    from rich.panel import Panel  # noqa: PLC0415
+    from rich.table import Table  # noqa: PLC0415
+
+    settings = OwlBearSettings()
+    config_dir = Path(str(settings.config_dir))
     pid_path = config_dir / "owlbear.pid"
 
-    if not pid_path.exists():
-        typer.echo("Status: not running")
-        return
-
-    pid = int(pid_path.read_text().strip())
-    if _is_process_alive(pid):
-        typer.echo(f"Status: running (PID {pid})")
+    # Determine state
+    pid: int | None = None
+    if pid_path.exists():
+        pid = int(pid_path.read_text().strip())
+        alive = _is_process_alive(pid)
+        state, border = ("Running", "green") if alive else ("Stale", "red")
     else:
-        typer.echo(f"Status: stale PID file (PID {pid} is not alive)")
+        alive = False
+        state, border = "Stopped", "red"
+
+    # Build table (headerless key-value rows)
+    table = Table(show_header=False, box=None)
+    table.add_row("Status", state)
+    table.add_row("PID", str(pid) if pid is not None else "\u2014")
+
+    # Uptime (only when running)
+    if alive:
+        elapsed = int(time.time() - pid_path.stat().st_mtime)
+        days, rem = divmod(elapsed, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        uptime = f"{days}d {hours}h" if days else f"{hours}h {minutes}m"
+        table.add_row("Uptime", uptime)
+
+    # Active project
+    active_path = config_dir / "active_project"
+    project_name = "None"
+    if active_path.exists():
+        text = active_path.read_text(encoding="utf-8").strip()
+        if text:
+            project_name = text
+    table.add_row("Project", project_name)
+
+    # Detail rows
+    if detail:
+        table.add_row("Model", settings.chat_model)
+        table.add_row("Autonomous", "on" if settings.autonomous_mode else "off")
+        if settings.heartbeat_enabled:
+            table.add_row("Heartbeat", f"enabled ({settings.heartbeat_interval}s)")
+        else:
+            table.add_row("Heartbeat", "disabled")
+        table.add_row(
+            "Slack Channel",
+            settings.slack_channel_id or "\u2014",
+        )
+
+    panel = Panel.fit(table, title="OwlBear Status", border_style=border)
+    Console().print(panel)
 
 
 @app.command(name="status")
-def status_cmd() -> None:
+def status_cmd(
+    detail: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--detail", help="Show detailed configuration info."),
+    ] = False,
+) -> None:
     """Show OwlBear daemon status."""
-    _daemon_status()
+    _daemon_status(detail=detail)
 
 
 # ---------------------------------------------------------------------------

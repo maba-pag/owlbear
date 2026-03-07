@@ -1,15 +1,14 @@
 """Tests for bearclaw knowledge-source CLI subcommands.
 
 TDD red-phase: tests define expected behavior of the knowledge-source subcommand
-group (add, list, show, refresh, remove) using CliRunner and mocked
-KnowledgeSourceStore / RefreshOrchestrator.
+group (add, list, show, remove) using CliRunner and mocked KnowledgeSourceStore.
 
 See kanban tasks #431 (tests) and #385 (implementation) for acceptance criteria.
 """
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
@@ -76,7 +75,7 @@ class TestKnowledgeSourceHelp:
     def test_knowledge_source_help_lists_subcommands(self) -> None:
         result = runner.invoke(app, ["knowledge-source", "--help"])
         assert result.exit_code == 0
-        for cmd in ("add", "list", "show", "refresh", "remove"):
+        for cmd in ("add", "list", "show", "remove"):
             assert cmd in result.output
 
 
@@ -301,13 +300,22 @@ class TestKnowledgeSourceList:
         assert "url_list" in result.output
 
     @patch("bearclaw.cli._get_source_store")
+    def test_list_renders_rich_table(self, mock_get_store: MagicMock) -> None:
+        """knowledge-source list renders a Rich table with box-drawing characters."""
+        src = _make_source(name="docs", source_type="url_list")
+        store = _mock_store(sources=[src])
+        mock_get_store.return_value = store
+
+        result = runner.invoke(app, ["knowledge-source", "list"])
+        assert result.exit_code == 0
+        assert "\u2502" in result.output  # │ box-drawing vertical from Rich Table
+
+    @patch("bearclaw.cli._get_source_store")
     def test_list_with_scope_filter(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
 
-        runner.invoke(
-            app, ["knowledge-source", "list", "--scope", "my-project"]
-        )
+        runner.invoke(app, ["knowledge-source", "list", "--scope", "my-project"])
         store.list_all.assert_called_once_with(scope="my-project")
 
     @patch("bearclaw.cli._get_source_store")
@@ -372,86 +380,6 @@ class TestKnowledgeSourceShow:
         assert result.exit_code == 0
         # Config should be shown as JSON
         assert "https://a.com" in result.output
-
-
-# ---------------------------------------------------------------------------
-# refresh
-# ---------------------------------------------------------------------------
-
-
-class TestKnowledgeSourceRefresh:
-    """bearclaw knowledge-source refresh — invoke RefreshOrchestrator."""
-
-    @patch("bearclaw.cli._make_refresh_orchestrator")
-    @patch("bearclaw.cli._get_source_store")
-    def test_refresh_single_source(
-        self,
-        mock_get_store: MagicMock,
-        mock_make_orch: MagicMock,
-    ) -> None:
-        src = _make_source(name="docs")
-        store = _mock_store()
-        store.get_by_name.return_value = src
-        mock_get_store.return_value = store
-
-        orch = MagicMock()
-        refresh_result = MagicMock()
-        refresh_result.refreshed = 3
-        refresh_result.skipped = 1
-        refresh_result.failed = 0
-        refresh_result.errors = []
-        orch.refresh = AsyncMock(return_value=refresh_result)
-        mock_make_orch.return_value = orch
-
-        result = runner.invoke(
-            app, ["knowledge-source", "refresh", "--name", "docs"]
-        )
-        assert result.exit_code == 0
-        assert "3" in result.output  # refreshed count
-        orch.refresh.assert_awaited_once()
-
-    @patch("bearclaw.cli._make_refresh_orchestrator")
-    @patch("bearclaw.cli._get_source_store")
-    def test_refresh_all_sources(
-        self,
-        mock_get_store: MagicMock,
-        mock_make_orch: MagicMock,
-    ) -> None:
-        store = _mock_store()
-        mock_get_store.return_value = store
-
-        orch = MagicMock()
-        r1 = MagicMock(refreshed=2, skipped=0, failed=0, errors=[])
-        r2 = MagicMock(refreshed=1, skipped=1, failed=0, errors=[])
-        orch.refresh_all = AsyncMock(return_value=[r1, r2])
-        mock_make_orch.return_value = orch
-
-        result = runner.invoke(
-            app, ["knowledge-source", "refresh", "--all"]
-        )
-        assert result.exit_code == 0
-        orch.refresh_all.assert_awaited_once()
-
-    @patch("bearclaw.cli._get_source_store")
-    def test_refresh_nonexistent_source(
-        self, mock_get_store: MagicMock
-    ) -> None:
-        store = _mock_store()
-        store.get_by_name.return_value = None
-        mock_get_store.return_value = store
-
-        result = runner.invoke(
-            app, ["knowledge-source", "refresh", "--name", "ghost"]
-        )
-        assert result.exit_code == 1
-        assert "ghost" in result.output.lower()
-
-    def test_refresh_requires_name_or_all(self) -> None:
-        """Must provide --name or --all, not neither."""
-        with patch("bearclaw.cli._get_source_store") as mock_get_store:
-            mock_get_store.return_value = _mock_store()
-            result = runner.invoke(app, ["knowledge-source", "refresh"])
-            assert result.exit_code == 1
 
 
 # ---------------------------------------------------------------------------

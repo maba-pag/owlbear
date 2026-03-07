@@ -19,6 +19,7 @@ import pytest
 from owlbear.memory.context import ContextManager
 from owlbear.projects.models import Project
 from owlbear.projects.toolset import ProjectToolset
+from owlbear.tools.hooked import HookedToolset
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -525,7 +526,7 @@ class TestSwitchProjectToolsetRootUpdate:
                 self.workspace = ws
 
         inner_ts = FakeToolset()
-        wrapper = SimpleNamespace(wrapped=inner_ts)
+        wrapper = HookedToolset(wrapped=inner_ts, hooks=MagicMock())
         agent = _agent_ns(toolsets=[wrapper])
 
         config_dir = tmp_path / "config"

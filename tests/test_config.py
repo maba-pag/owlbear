@@ -438,6 +438,29 @@ class TestScreenshotModeValidation:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Kroki / diagram settings — task #620
+# ---------------------------------------------------------------------------
+
+
+class TestKrokiServerUrlDefault:
+    """Verify kroki_server_url defaults to 'https://kroki.io'."""
+
+    def test_kroki_server_url_default(self, default_settings: OwlBearSettings) -> None:
+        """kroki_server_url should default to 'https://kroki.io'."""
+        assert default_settings.kroki_server_url == "https://kroki.io"
+
+
+class TestKrokiServerUrlEnvOverride:
+    """Verify OWLBEAR_KROKI_SERVER_URL env var overrides the default."""
+
+    def test_kroki_server_url_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_KROKI_SERVER_URL should override the default."""
+        monkeypatch.setenv("OWLBEAR_KROKI_SERVER_URL", "http://localhost:8000")
+        settings = OwlBearSettings()
+        assert settings.kroki_server_url == "http://localhost:8000"
+
+
 class TestFieldDescriptions:
     """Every OwlBearSettings field must have a non-empty Field description."""
 

@@ -79,18 +79,14 @@ class TestProjectCreate:
     def test_create_duplicate_name_errors(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
         runner.invoke(app, ["project", "create", "--name", "Dup", "--workspace", ws])
-        result = runner.invoke(
-            app, ["project", "create", "--name", "Dup", "--workspace", ws]
-        )
+        result = runner.invoke(app, ["project", "create", "--name", "Dup", "--workspace", ws])
         assert result.exit_code == 1
         assert "already exists" in result.output
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_create_persists_json_file(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Persisted", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Persisted", "--workspace", ws])
         projects_dir = tmp_path / "projects"
         json_files = list(projects_dir.glob("*.json"))
         assert len(json_files) == 1
@@ -107,9 +103,7 @@ class TestProjectList:
     @pytest.mark.usefixtures("_mock_settings")
     def test_list_shows_active_project(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Listed", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Listed", "--workspace", ws])
         result = runner.invoke(app, ["project", "list"])
         assert result.exit_code == 0
         assert "Listed" in result.output
@@ -117,9 +111,7 @@ class TestProjectList:
     @pytest.mark.usefixtures("_mock_settings")
     def test_list_hides_archived_by_default(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Hidden", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Hidden", "--workspace", ws])
         runner.invoke(app, ["project", "archive", "Hidden"])
         result = runner.invoke(app, ["project", "list"])
         assert result.exit_code == 0
@@ -128,14 +120,22 @@ class TestProjectList:
     @pytest.mark.usefixtures("_mock_settings")
     def test_list_all_includes_archived(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Visible", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Visible", "--workspace", ws])
         runner.invoke(app, ["project", "archive", "Visible"])
         result = runner.invoke(app, ["project", "list", "--all"])
         assert result.exit_code == 0
         assert "Visible" in result.output
         assert "archived" in result.output
+
+    @pytest.mark.usefixtures("_mock_settings")
+    def test_list_renders_rich_table(self, tmp_path: Path) -> None:
+        """project list renders a Rich table with box-drawing characters."""
+        ws = str(tmp_path / "workspace")
+        runner.invoke(app, ["project", "create", "--name", "RichTest", "--workspace", ws])
+        result = runner.invoke(app, ["project", "list"])
+        assert result.exit_code == 0
+        assert "RichTest" in result.output
+        assert "\u2502" in result.output  # │ box-drawing vertical from Rich Table
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_list_empty_prints_message(self) -> None:
@@ -155,9 +155,7 @@ class TestProjectSwitch:
     @pytest.mark.usefixtures("_mock_settings")
     def test_switch_writes_active_project_file(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Switchable", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Switchable", "--workspace", ws])
         result = runner.invoke(app, ["project", "switch", "Switchable"])
         assert result.exit_code == 0
 
@@ -174,9 +172,7 @@ class TestProjectSwitch:
     @pytest.mark.usefixtures("_mock_settings")
     def test_switch_prints_confirmation(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Confirmed", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Confirmed", "--workspace", ws])
         result = runner.invoke(app, ["project", "switch", "Confirmed"])
         assert result.exit_code == 0
         assert "Confirmed" in result.output
@@ -193,9 +189,7 @@ class TestProjectArchive:
     @pytest.mark.usefixtures("_mock_settings")
     def test_archive_success(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "Archivable", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "Archivable", "--workspace", ws])
         result = runner.invoke(app, ["project", "archive", "Archivable"])
         assert result.exit_code == 0
         assert "Archivable" in result.output
@@ -209,9 +203,7 @@ class TestProjectArchive:
     @pytest.mark.usefixtures("_mock_settings")
     def test_archive_makes_project_inactive(self, tmp_path: Path) -> None:
         ws = str(tmp_path / "workspace")
-        runner.invoke(
-            app, ["project", "create", "--name", "GoingAway", "--workspace", ws]
-        )
+        runner.invoke(app, ["project", "create", "--name", "GoingAway", "--workspace", ws])
         runner.invoke(app, ["project", "archive", "GoingAway"])
         # Verify it's archived in list --all
         result = runner.invoke(app, ["project", "list", "--all"])
@@ -234,60 +226,42 @@ class TestProjectNew:
     def test_new_default_bare_template(self, tmp_path: Path) -> None:
         """Default template is 'bare' when --template is omitted."""
         expected = tmp_path / "project-root" / "my-app"
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.return_value = expected
             result = runner.invoke(app, ["project", "new", "My App"])
         assert result.exit_code == 0
-        mock_ws_cls.return_value.create_project.assert_called_once_with(
-            "My App", "bare"
-        )
+        mock_ws_cls.return_value.create_project.assert_called_once_with("My App", "bare")
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_new_with_template_option(self, tmp_path: Path) -> None:
         expected = tmp_path / "project-root" / "my-app"
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.return_value = expected
-            result = runner.invoke(
-                app, ["project", "new", "My App", "--template", "python-uv"]
-            )
+            result = runner.invoke(app, ["project", "new", "My App", "--template", "python-uv"])
         assert result.exit_code == 0
-        mock_ws_cls.return_value.create_project.assert_called_once_with(
-            "My App", "python-uv"
-        )
+        mock_ws_cls.return_value.create_project.assert_called_once_with("My App", "python-uv")
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_new_prints_path(self, tmp_path: Path) -> None:
         expected = tmp_path / "project-root" / "my-app"
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.return_value = expected
             result = runner.invoke(app, ["project", "new", "My App"])
         assert str(expected) in result.output
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_new_invalid_template_errors(self) -> None:
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.side_effect = ValueError(
                 "Unknown template 'bad'. Valid: ['bare', 'node', 'python-pip', 'python-uv']"
             )
-            result = runner.invoke(
-                app, ["project", "new", "My App", "--template", "bad"]
-            )
+            result = runner.invoke(app, ["project", "new", "My App", "--template", "bad"])
         assert result.exit_code == 1
         assert "Error" in result.output
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_new_duplicate_name_errors(self) -> None:
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.side_effect = ValueError(
                 "Project 'My App' already exists"
             )
@@ -297,9 +271,7 @@ class TestProjectNew:
 
     @pytest.mark.usefixtures("_mock_settings")
     def test_new_dir_exists_errors(self) -> None:
-        with patch(
-            "owlbear.projects.workspace.ProjectWorkspace"
-        ) as mock_ws_cls:
+        with patch("owlbear.projects.workspace.ProjectWorkspace") as mock_ws_cls:
             mock_ws_cls.return_value.create_project.side_effect = FileExistsError(
                 "Directory already exists: /some/path"
             )

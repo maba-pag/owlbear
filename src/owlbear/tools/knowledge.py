@@ -27,6 +27,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
     from owlbear.memory.knowledge.embeddings import EmbeddingProvider
     from owlbear.memory.knowledge.graph import GraphStore
@@ -53,6 +54,8 @@ class KnowledgeToolset(FunctionToolset):
         project_scope: Optional project ID. When set, queries are filtered
             to ``["global", "project:{id}"]`` scopes.
     """
+
+    tool_alias: ClassVar[str] = "knowledge"
 
     def __init__(  # noqa: PLR0913
         self,

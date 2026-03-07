@@ -39,6 +39,9 @@ class TestHookEvent:
     def test_has_question_pending(self) -> None:
         assert HookEvent.QUESTION_PENDING == "question_pending"
 
+    def test_has_daemon_startup(self) -> None:
+        assert HookEvent.DAEMON_STARTUP == "daemon_startup"
+
 
 class TestHookRegistrySync:
     """Synchronous handler registration and emission."""

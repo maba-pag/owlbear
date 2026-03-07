@@ -21,6 +21,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
 __all__ = ["FileToolset"]
 
@@ -39,6 +40,8 @@ class FileToolset(FunctionToolset):
         workspace_root: Root directory for all file operations.
             Must be an existing directory.  Stored resolved (absolute).
     """
+
+    tool_alias: ClassVar[str] = "filesystem"
 
     def __init__(self, workspace_root: Path) -> None:
         super().__init__()

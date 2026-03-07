@@ -61,6 +61,7 @@ class TestInstrumentAllAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         with patch("owlbear.daemon.Agent") as mock_agent_cls:
             from owlbear.daemon import run_daemon
@@ -86,6 +87,7 @@ class TestInstrumentAllAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         with patch("owlbear.daemon.Agent") as mock_agent_cls:
             mock_agent_cls.instrument_all.side_effect = lambda: call_order.append("instrument_all")
@@ -106,6 +108,7 @@ class TestInstrumentAllAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         # Don't mock Agent — let the real instrument_all() run (it's a no-op)
         from owlbear.daemon import run_daemon
@@ -132,6 +135,7 @@ class TestLogfireConfigureAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         with (
             patch("owlbear.daemon.Agent"),
@@ -164,6 +168,7 @@ class TestLogfireConfigureAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         captured_env: dict[str, str | None] = {}
 
@@ -200,6 +205,7 @@ class TestLogfireConfigureAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         with (
             patch("owlbear.daemon.Agent"),
@@ -227,6 +233,7 @@ class TestLogfireConfigureAtStartup:
 
         agent = MagicMock()
         agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
 
         with (
             patch("owlbear.daemon.Agent") as mock_agent_cls,

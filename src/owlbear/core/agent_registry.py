@@ -165,13 +165,20 @@ class AgentRegistry:
         return self._tool_resolver(tool_name)
 
     def _build_agent(self, defn: AgentDefinition) -> Agent[OwlBearDeps, str]:
-        """Instantiate a PydanticAI Agent from an AgentDefinition."""
+        """Instantiate a PydanticAI Agent from an AgentDefinition.
+
+        Unavailable tools (those raising :exc:`KeyError` during resolution)
+        are skipped with a warning log rather than aborting agent creation.
+        """
         model = defn.model or self._default_model
 
         # Resolve toolsets from tool names.
-        toolsets: list[AbstractToolset] = [
-            self._resolve_tool(tool_name) for tool_name in defn.tools
-        ]
+        toolsets: list[AbstractToolset] = []
+        for tool_name in defn.tools:
+            try:
+                toolsets.append(self._resolve_tool(tool_name))
+            except KeyError:
+                logger.warning("Agent %r: skipping unavailable tool %r", defn.name, tool_name)
 
         # Add skill registry if available and the definition lists skills.
         if self._skill_registry is not None and defn.skills:

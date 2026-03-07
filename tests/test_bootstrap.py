@@ -1,4 +1,4 @@
-"""Tests for owlbear.bootstrap — component wiring."""
+"""Tests for owlbear.bootstrap â€” component wiring."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.projects.models import Project
 from owlbear.safety.gate import ApprovalGateToolset
 from owlbear.tools.hooked import HookedToolset
+from owlbear.tools.protocols import unwrap
 
 # ---------------------------------------------------------------------------
 # BootstrapResult dataclass shape
@@ -106,7 +107,7 @@ class TestBuildHooks:
     def test_observability_hook_with_workspace(self, tmp_path: Path) -> None:
         settings = OwlBearSettings()
         hooks, _ = build_hooks(settings, workspace_root=tmp_path)
-        # ObservabilityHook registers on ALL events — check a few
+        # ObservabilityHook registers on ALL events â€” check a few
         for event in HookEvent:
             assert len(hooks.handlers.get(event, [])) >= 1
 
@@ -123,7 +124,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         assert isinstance(toolsets, list)
         assert len(toolsets) >= 4  # at minimum: File, Terminal, AskUser, Delegation
 
@@ -133,7 +134,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         delegation = [t for t in toolsets if isinstance(t, DelegationToolset)]
         assert len(delegation) == 1
 
@@ -143,7 +144,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         for ts in toolsets:
             if isinstance(ts, DelegationToolset):
                 continue
@@ -155,7 +156,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings(github_token=SecretStr("ghp_test123"), approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         # Should have one more toolset than without token
         type_names = [
             t.wrapped.__class__.__name__ if isinstance(t, HookedToolset) else type(t).__name__
@@ -167,7 +168,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         type_names = [
             t.wrapped.__class__.__name__ if isinstance(t, HookedToolset) else type(t).__name__
             for t in toolsets
@@ -185,7 +186,7 @@ class TestBuildToolsets:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         type_names = [
             t.wrapped.__class__.__name__ if isinstance(t, HookedToolset) else type(t).__name__
             for t in toolsets
@@ -309,7 +310,7 @@ class TestBuildAgentRegistry:
         agents_dir.mkdir()
         settings = OwlBearSettings(agents_dir=agents_dir)
         registry = build_agent_registry(settings, toolsets=[], mcp_registry=None)
-        # scan() should have been called — definitions dict is populated (empty is ok)
+        # scan() should have been called â€” definitions dict is populated (empty is ok)
         assert hasattr(registry, "_definitions")
 
     def test_passes_model_to_registry(self, tmp_path: Path) -> None:
@@ -441,7 +442,7 @@ class TestBuildToolsetsEdgeCases:
             "owlbear.skills.registry.SkillRegistry",
             side_effect=RuntimeError("boom"),
         ):
-            toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+            toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         type_names = [
             t.wrapped.__class__.__name__ if isinstance(t, HookedToolset) else type(t).__name__
             for t in toolsets
@@ -459,7 +460,7 @@ class TestBuildToolsetsEdgeCases:
         )
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         type_names = [
             t.wrapped.__class__.__name__ if isinstance(t, HookedToolset) else type(t).__name__
             for t in toolsets
@@ -534,7 +535,7 @@ class TestBootstrapWithSkillsDir:
 
 
 # ---------------------------------------------------------------------------
-# build_hooks — ProgressReporter wiring
+# build_hooks â€” ProgressReporter wiring
 # ---------------------------------------------------------------------------
 
 
@@ -548,7 +549,7 @@ class TestBuildHooksProgress:
         assert len(result) == 2
         hooks, reporter = result
         assert isinstance(hooks, HookRegistry)
-        assert reporter is None  # no channel → no reporter
+        assert reporter is None  # no channel â†’ no reporter
 
     def test_progress_enabled_with_channel_creates_reporter(self) -> None:
         from owlbear.core.progress import ProgressReporter
@@ -586,7 +587,7 @@ class TestBuildHooksProgress:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap — ProgressReporter integration
+# bootstrap â€” ProgressReporter integration
 # ---------------------------------------------------------------------------
 
 
@@ -681,16 +682,13 @@ class TestBootstrapProgress:
 
 
 # ---------------------------------------------------------------------------
-# Approval gate wrapping — AC for task #342
+# Approval gate wrapping â€” AC for task #342
 # ---------------------------------------------------------------------------
 
 
 def _inner_name(ts: object) -> str:
     """Get the class name of the innermost raw toolset (unwrap all wrappers)."""
-    inner = ts
-    while hasattr(inner, "wrapped"):
-        inner = inner.wrapped
-    return type(inner).__name__
+    return type(unwrap(ts)).__name__
 
 
 class TestApprovalWrapping:
@@ -701,7 +699,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings()  # default has non-empty approval_policy
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         destructive = {"GitLocalToolset", "TerminalToolset"}
         for ts in toolsets:
@@ -716,7 +714,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         non_destructive = {"FileToolset", "AskUserToolset", "BrowserToolset", "KanbanToolset"}
         for ts in toolsets:
@@ -731,7 +729,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         for ts in toolsets:
             if isinstance(ts, ApprovalGateToolset):
@@ -745,7 +743,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings()
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         sessions = [ts.session for ts in toolsets if isinstance(ts, ApprovalGateToolset)]
         assert len(sessions) >= 2  # at least GitLocal and Terminal
@@ -756,7 +754,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         for ts in toolsets:
             assert not isinstance(ts, ApprovalGateToolset), (
@@ -771,7 +769,7 @@ class TestApprovalWrapping:
         settings = OwlBearSettings(github_token=SecretStr("ghp_test123"))
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         found = False
         for ts in toolsets:
@@ -816,7 +814,7 @@ class TestConfigApprovalFields:
 
 
 class TestBootstrapApprovalIntegration:
-    """AC#7: Integration test — bootstrap with approval-wrapped toolsets."""
+    """AC#7: Integration test â€” bootstrap with approval-wrapped toolsets."""
 
     @pytest.mark.asyncio
     async def test_bootstrap_with_default_policy(self, tmp_path: Path) -> None:
@@ -862,7 +860,7 @@ class TestBootstrapApprovalIntegration:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_active_project — AC#1, AC#2, AC#6
+# _resolve_active_project â€” AC#1, AC#2, AC#6
 # ---------------------------------------------------------------------------
 
 
@@ -941,7 +939,7 @@ class TestResolveActiveProject:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap with active project — AC#2, AC#3, AC#4, AC#5, AC#7
+# bootstrap with active project â€” AC#2, AC#3, AC#4, AC#5, AC#7
 # ---------------------------------------------------------------------------
 
 
@@ -1042,7 +1040,7 @@ class TestBootstrapProjectAwareness:
         ):
             result = await bootstrap(settings)
 
-        # The FileToolset received `workspace` — verify via session path
+        # The FileToolset received `workspace` â€” verify via session path
         expected_session = config_dir / "projects" / project.id / "sessions" / "session.jsonl"
         assert result.agent.session.path == expected_session
 
@@ -1069,15 +1067,10 @@ class TestBootstrapProjectAwareness:
         ):
             await bootstrap(settings)
 
-        # The Agent constructor receives toolsets= kwarg — inspect it
+        # The Agent constructor receives toolsets= kwarg â€” inspect it
         call_kwargs = mock_agent_cls.call_args
         toolsets_arg = call_kwargs.kwargs.get("toolsets", call_kwargs[1].get("toolsets", []))
-        type_names = []
-        for ts in toolsets_arg:
-            inner = ts
-            while hasattr(inner, "wrapped"):
-                inner = inner.wrapped
-            type_names.append(type(inner).__name__)
+        type_names = [type(unwrap(ts)).__name__ for ts in toolsets_arg]
 
         assert "ProjectToolset" in type_names
 
@@ -1164,15 +1157,10 @@ class TestBootstrapProjectAwareness:
         ):
             await bootstrap(settings, workspace_root=tmp_path)
 
-        type_names = []
-        # The Agent constructor receives toolsets= kwarg — inspect it
+        # The Agent constructor receives toolsets= kwarg â€” inspect it
         call_kwargs = mock_agent_cls.call_args
         toolsets_arg = call_kwargs.kwargs.get("toolsets", call_kwargs[1].get("toolsets", []))
-        for ts in toolsets_arg:
-            inner = ts
-            while hasattr(inner, "wrapped"):
-                inner = inner.wrapped
-            type_names.append(type(inner).__name__)
+        type_names = [type(unwrap(ts)).__name__ for ts in toolsets_arg]
 
         assert "ProjectToolset" not in type_names
 
@@ -1205,7 +1193,7 @@ class TestBuildKnowledgeToolset:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        toolset, _ = result
+        toolset, *_ = result
         assert type(toolset).__name__ == "KnowledgeToolset"
 
     def test_passes_project_scope_when_provided(self, tmp_path: Path) -> None:
@@ -1228,7 +1216,7 @@ class TestBuildKnowledgeToolset:
             result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
 
         assert result is not None
-        toolset, _ = result
+        toolset, *_ = result
         assert toolset._scopes == ["global", "project:proj-42"]
 
     def test_no_project_scope_when_none(self, tmp_path: Path) -> None:
@@ -1251,7 +1239,7 @@ class TestBuildKnowledgeToolset:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        toolset, _ = result
+        toolset, *_ = result
         assert toolset._scopes is None
 
 
@@ -1294,7 +1282,7 @@ class TestBuildToolsetsProjectScope:
 
 
 # ---------------------------------------------------------------------------
-# KnowledgeQueryService bootstrap wiring — AC for tasks #426/#409
+# KnowledgeQueryService bootstrap wiring â€” AC for tasks #426/#409
 # ---------------------------------------------------------------------------
 
 
@@ -1322,8 +1310,8 @@ class TestBuildKnowledgeToolsetReturnsService:
 
         assert result is not None
         assert isinstance(result, tuple)
-        assert len(result) == 2
-        toolset, service = result
+        assert len(result) == 3
+        toolset, service, _pipeline = result
         assert type(toolset).__name__ == "KnowledgeToolset"
         assert type(service).__name__ == "KnowledgeQueryService"
 
@@ -1347,7 +1335,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
 
         assert result is not None
-        _, service = result
+        _, service, _ = result
         assert service._scopes == ["global", "project:proj-42"]
 
     def test_service_no_scopes_when_no_project(self, tmp_path: Path) -> None:
@@ -1370,7 +1358,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        _, service = result
+        _, service, _ = result
         assert service._scopes is None
 
     def test_max_tokens_stored_on_service(self, tmp_path: Path) -> None:
@@ -1393,7 +1381,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra, max_tokens=3000)
 
         assert result is not None
-        _, service = result
+        _, service, _ = result
         assert service.default_max_tokens == 3000
 
     def test_returns_none_on_failure(self, tmp_path: Path) -> None:
@@ -1401,12 +1389,12 @@ class TestBuildKnowledgeToolsetReturnsService:
         from owlbear.bootstrap import _build_knowledge_infra
 
         result = _build_knowledge_infra(tmp_path)
-        # Without proper mocks, infra creation fails → None
+        # Without proper mocks, infra creation fails â†’ None
         assert result is None
 
 
 # ---------------------------------------------------------------------------
-# Screenshot wiring — AC for task #396
+# Screenshot wiring â€” AC for task #396
 # ---------------------------------------------------------------------------
 
 
@@ -1418,7 +1406,7 @@ class TestScreenshotWiring:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         type_names = [_inner_name(ts) for ts in toolsets]
         assert "VisualFeedbackToolset" in type_names
 
@@ -1457,7 +1445,7 @@ class TestScreenshotWiring:
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
-        toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+        toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
         for ts in toolsets:
             if _inner_name(ts) == "VisualFeedbackToolset":
                 assert isinstance(ts, HookedToolset)
@@ -1504,6 +1492,7 @@ class TestBuildToolsetsKnowledgeService:
 
         mock_service = MagicMock()
         mock_toolset = MagicMock()
+        mock_pipeline = MagicMock()
         mock_infra = MagicMock()
         with (
             patch(
@@ -1512,14 +1501,14 @@ class TestBuildToolsetsKnowledgeService:
             ),
             patch(
                 "owlbear.bootstrap._build_knowledge_toolset",
-                return_value=(mock_toolset, mock_service),
+                return_value=(mock_toolset, mock_service, mock_pipeline),
             ),
         ):
             result = build_toolsets(settings, tmp_path, hooks, channel)
 
         assert isinstance(result, tuple)
-        assert len(result) == 2
-        toolsets, service = result
+        assert len(result) == 3
+        toolsets, service, _pipeline = result
         assert isinstance(toolsets, list)
         assert service is mock_service
 
@@ -1533,7 +1522,7 @@ class TestBuildToolsetsKnowledgeService:
             "owlbear.bootstrap._build_knowledge_infra",
             return_value=None,
         ):
-            toolsets, service = build_toolsets(settings, tmp_path, hooks, channel)
+            toolsets, service, _ = build_toolsets(settings, tmp_path, hooks, channel)
 
         assert isinstance(toolsets, list)
         assert service is None
@@ -1590,7 +1579,7 @@ class TestBootstrapKnowledgeServiceWiring:
             patch("owlbear.core.agent.Agent"),
             patch(
                 "owlbear.bootstrap.build_toolsets",
-                return_value=([], mock_service),
+                return_value=([], mock_service, None),
             ),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
@@ -1615,7 +1604,7 @@ class TestBootstrapKnowledgeServiceWiring:
             patch("owlbear.core.agent.Agent"),
             patch(
                 "owlbear.bootstrap.build_toolsets",
-                return_value=([], None),
+                return_value=([], None, None),
             ),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
@@ -1624,7 +1613,7 @@ class TestBootstrapKnowledgeServiceWiring:
 
 
 # ---------------------------------------------------------------------------
-# Shared knowledge infrastructure — AC for task #455
+# Shared knowledge infrastructure â€” AC for task #455
 # ---------------------------------------------------------------------------
 
 
@@ -1758,7 +1747,7 @@ class TestSharedKnowledgeInfra:
                 return_value=None,
             ),
         ):
-            toolsets, _ = build_toolsets(settings, tmp_path, hooks, channel)
+            toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
 
         type_names = [_inner_name(ts) for ts in toolsets]
         assert "KnowledgeToolset" in type_names
@@ -1811,7 +1800,7 @@ class TestSharedKnowledgeInfra:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        toolset, service = result
+        toolset, service, _ = result
         assert type(toolset).__name__ == "KnowledgeToolset"
         assert type(service).__name__ == "KnowledgeQueryService"
 
@@ -1859,7 +1848,213 @@ class TestSharedKnowledgeInfra:
             infra = _build_knowledge_infra(tmp_path)
 
         assert infra is not None
-        # All fields are the same object — identity, not equality
+        # All fields are the same object â€” identity, not equality
         assert infra.vector_store is infra.vector_store  # sanity
         assert infra.embedding_provider is infra.embedding_provider
         assert infra.conn is infra.conn
+
+
+# ---------------------------------------------------------------------------
+# _build_knowledge_source_toolset â€” AC#6, AC#7, AC#8
+# ---------------------------------------------------------------------------
+
+
+class TestBuildKnowledgeSourceToolset:
+    """Tests for _build_knowledge_source_toolset helper (AC#6-#8)."""
+
+    def test_toolset_included_when_infra_available(self, tmp_path: Path) -> None:
+        """AC#6: build_toolsets output includes KnowledgeSourceToolset when
+        knowledge infra is available (mock Qdrant + BGE-M3 + EntityExtractor).
+        """
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
+
+        type_names = [_inner_name(ts) for ts in toolsets]
+        assert "KnowledgeSourceToolset" in type_names
+
+    def test_toolset_omitted_when_infra_none(self, tmp_path: Path) -> None:
+        """AC#7: build_toolsets omits KnowledgeSourceToolset when
+        _build_knowledge_infra returns None.
+        """
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with patch("owlbear.bootstrap._build_knowledge_infra", return_value=None):
+            toolsets, *_ = build_toolsets(settings, tmp_path, hooks, channel)
+
+        type_names = [_inner_name(ts) for ts in toolsets]
+        assert "KnowledgeSourceToolset" not in type_names
+
+    def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
+        """AC#8: _build_knowledge_source_toolset returns None and logs WARNING
+        when constructor raises.
+        """
+        from owlbear.bootstrap import _build_knowledge_source_toolset
+
+        mock_infra = MagicMock()
+        with (
+            patch(
+                "owlbear.memory.knowledge.source_store.KnowledgeSourceStore",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("owlbear.bootstrap.logger") as mock_logger,
+        ):
+            result = _build_knowledge_source_toolset(mock_infra, tmp_path)
+
+        assert result is None
+        mock_logger.warning.assert_called_once()
+        assert "Failed to create KnowledgeSourceToolset" in mock_logger.warning.call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# Tool alias auto-registration â€” AC for task #488
+# ---------------------------------------------------------------------------
+
+# Expected alias mapping from the task AC
+_EXPECTED_ALIASES = {
+    "FileToolset": "filesystem",
+    "TerminalToolset": "terminal",
+    "AskUserToolset": "ask_user",
+    "BrowserToolset": "browser",
+    "DelegationToolset": "delegation",
+    "GitLocalToolset": "git_local",
+    "GitHubToolset": "github",
+    "KanbanToolset": "kanban",
+    "KnowledgeToolset": "knowledge",
+    "WebSearchToolset": "web_search",
+    "BookmarkToolset": "bookmark",
+    "VisualFeedbackToolset": "visual_feedback",
+    "KnowledgeSourceToolset": "knowledge_source",
+    "ProjectToolset": "project",
+    "SkillRegistry": "skills",
+}
+
+
+class TestToolAliasAttribute:
+    """AC#5: Every FunctionToolset subclass declares tool_alias matching table."""
+
+    @pytest.mark.parametrize(
+        ("import_path", "class_name", "expected_alias"),
+        [
+            ("owlbear.tools.filesystem", "FileToolset", "filesystem"),
+            ("owlbear.tools.terminal", "TerminalToolset", "terminal"),
+            ("owlbear.tools.ask_user", "AskUserToolset", "ask_user"),
+            ("owlbear.tools.browser.toolset", "BrowserToolset", "browser"),
+            ("owlbear.core.delegation", "DelegationToolset", "delegation"),
+            ("owlbear.tools.git_local", "GitLocalToolset", "git_local"),
+            ("owlbear.tools.github_api", "GitHubToolset", "github"),
+            ("owlbear.tools.kanban", "KanbanToolset", "kanban"),
+            ("owlbear.tools.knowledge", "KnowledgeToolset", "knowledge"),
+            ("owlbear.tools.web_search", "WebSearchToolset", "web_search"),
+            ("owlbear.memory.knowledge.bookmark_toolset", "BookmarkToolset", "bookmark"),
+            ("owlbear.tools.visual_feedback", "VisualFeedbackToolset", "visual_feedback"),
+            ("owlbear.tools.knowledge_source", "KnowledgeSourceToolset", "knowledge_source"),
+            ("owlbear.projects.toolset", "ProjectToolset", "project"),
+            ("owlbear.skills.registry", "SkillRegistry", "skills"),
+        ],
+        ids=list(_EXPECTED_ALIASES.values()),
+    )
+    def test_tool_alias_declared(
+        self, import_path: str, class_name: str, expected_alias: str
+    ) -> None:
+        """Each toolset class has a non-empty tool_alias matching the mapping table."""
+        import importlib
+
+        mod = importlib.import_module(import_path)
+        cls = getattr(mod, class_name)
+        alias = getattr(cls, "tool_alias", None)
+        assert alias is not None, f"{class_name} missing tool_alias attribute"
+        assert alias == expected_alias, (
+            f"{class_name}.tool_alias={alias!r}, expected {expected_alias!r}"
+        )
+        assert isinstance(alias, str), f"{class_name}.tool_alias must be str"
+        assert alias, f"{class_name}.tool_alias must be non-empty"
+
+
+class TestAliasResolution:
+    """AC#6: build_agent_registry builds _aliases dynamically from tool_alias."""
+
+    def test_alias_resolves_mock_toolset(self, tmp_path: Path) -> None:
+        """build_agent_registry resolves a mock toolset by its tool_alias."""
+        from owlbear.bootstrap import build_agent_registry
+
+        # Create a mock toolset with tool_alias
+        mock_ts = MagicMock()
+        mock_ts.tool_alias = "my_alias"
+        # Ensure unwrap chain terminates (no .wrapped attr)
+        del mock_ts.wrapped
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        settings = OwlBearSettings(agents_dir=agents_dir)
+        registry = build_agent_registry(settings, toolsets=[mock_ts], mcp_registry=None)
+
+        # Should resolve by alias
+        resolved = registry._tool_resolver("my_alias")
+        assert resolved is mock_ts
+
+    def test_alias_and_class_name_both_resolve(self, tmp_path: Path) -> None:
+        """build_agent_registry resolves both class name and tool_alias."""
+        from pydantic_ai.toolsets import FunctionToolset
+
+        from owlbear.bootstrap import build_agent_registry
+
+        class FakeToolset(FunctionToolset):
+            tool_alias = "my_alias"
+
+        fake_ts = FakeToolset()
+
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        settings = OwlBearSettings(agents_dir=agents_dir)
+        registry = build_agent_registry(settings, toolsets=[fake_ts], mcp_registry=None)
+
+        # Resolves by class name
+        assert registry._tool_resolver("FakeToolset") is fake_ts
+        # Resolves by alias
+        assert registry._tool_resolver("my_alias") is fake_ts
+
+    def test_no_hardcoded_aliases_dict(self) -> None:
+        """AC#3: The hardcoded _aliases dict is deleted from build_agent_registry."""
+        import ast
+        import inspect
+
+        from owlbear.bootstrap import build_agent_registry
+
+        source = inspect.getsource(build_agent_registry)
+        tree = ast.parse(source)
+
+        # Look for a dict literal assigned to _aliases with > 3 entries
+        # (the dynamic one is built incrementally, not as a dict literal)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Name)
+                        and target.id == "_aliases"
+                        and isinstance(node.value, ast.Dict)
+                        and len(node.value.keys) > 3
+                    ):
+                        pytest.fail(
+                            "Found hardcoded _aliases dict literal with "
+                            f"{len(node.value.keys)} entries â€” should be built dynamically"
+                        )

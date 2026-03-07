@@ -30,12 +30,11 @@ def _make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
 
 def _toolset_names(result: BootstrapResult) -> set[str]:
     """Extract inner toolset class names from a bootstrap result."""
+    from owlbear.tools.protocols import unwrap
+
     names: set[str] = set()
     for ts in result.agent.inner._user_toolsets:
-        inner = ts
-        while hasattr(inner, "wrapped"):
-            inner = inner.wrapped
-        names.add(type(inner).__name__)
+        names.add(type(unwrap(ts)).__name__)
     return names
 
 

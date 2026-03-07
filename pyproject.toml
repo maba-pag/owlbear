@@ -99,6 +99,7 @@ targets = ["src/"]
 
 [tool.coverage.run]
 source = ["src/owlbear", "src/bearclaw"]
+parallel = true
 
 [tool.coverage.report]
 show_missing = true

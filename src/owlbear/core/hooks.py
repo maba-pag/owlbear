@@ -30,6 +30,7 @@ class HookEvent(StrEnum):
     SUBAGENT_COMPLETE = "subagent_complete"
     TASK_COMPLETE = "task_complete"
     QUESTION_PENDING = "question_pending"
+    DAEMON_STARTUP = "daemon_startup"
 
 
 class HookRegistry:

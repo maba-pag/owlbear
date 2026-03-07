@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from owlbear.memory.knowledge.bookmark import BookmarkStore
     from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline
 
@@ -36,6 +38,8 @@ class BookmarkToolset(FunctionToolset):
         pipeline: :class:`BookmarkPipeline` for URL evaluation and storage.
         store: :class:`BookmarkStore` for querying saved bookmarks.
     """
+
+    tool_alias: ClassVar[str] = "bookmark"
 
     def __init__(
         self,

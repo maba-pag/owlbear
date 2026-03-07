@@ -18,11 +18,15 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from pydantic_ai import RunContext  # noqa: TC002
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.deps import OwlBearDeps  # noqa: TC001
+
+if TYPE_CHECKING:
+    from typing import ClassVar
 from owlbear.core.errors import ErrorCategory, ToolError, classify_error, error_to_user_message
 
 __all__ = ["MAX_DELEGATION_DEPTH", "DelegationToolset"]
@@ -40,6 +44,8 @@ class DelegationToolset(FunctionToolset):
     :class:`~owlbear.core.deps.OwlBearDeps`, looks up the target agent
     by name, and runs it with incremented delegation depth.
     """
+
+    tool_alias: ClassVar[str] = "delegation"
 
     def __init__(self) -> None:
         super().__init__()

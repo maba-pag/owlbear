@@ -22,6 +22,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
 __all__ = ["SkillMeta", "SkillRegistry"]
 
@@ -46,6 +47,8 @@ class SkillRegistry(FunctionToolset):
     * **list_skills** — returns a summary of all available skills.
     * **load_skill** — loads the full content of a skill by name.
     """
+
+    tool_alias: ClassVar[str] = "skills"
 
     def __init__(self, skills_dir: Path) -> None:
         super().__init__()

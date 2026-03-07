@@ -54,3 +54,27 @@ class TestReasoningModels:
     def test_reasoning_multiplier_is_float(self) -> None:
         result = get_premium_requests("o1")
         assert isinstance(result, float)
+
+
+# ---------------------------------------------------------------------------
+# Prefix stripping — provider-prefixed model names
+# ---------------------------------------------------------------------------
+
+
+class TestPrefixStripping:
+    """Provider prefixes are stripped before lookup."""
+
+    def test_openai_prefix_gpt4o(self) -> None:
+        assert get_premium_requests("openai:gpt-4o") == 1.0
+
+    def test_copilot_prefix_o1(self) -> None:
+        assert get_premium_requests("copilot:o1") == 10.0
+
+    def test_prefixed_unknown_model_defaults_to_one(self) -> None:
+        assert get_premium_requests("openai:nonexistent-model") == 1.0
+
+    def test_copilot_prefixed_unknown_defaults_to_one(self) -> None:
+        assert get_premium_requests("copilot:nonexistent-model") == 1.0
+
+    def test_unknown_prefix_not_stripped(self) -> None:
+        assert get_premium_requests("anthropic:gpt-4o") == 1.0

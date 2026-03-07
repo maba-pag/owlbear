@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING
 from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from owlbear.channels.base import ChannelPlugin
 
 __all__ = ["AskUserTimeoutError", "AskUserToolset", "TimeoutAction"]
@@ -52,6 +54,8 @@ class AskUserToolset(FunctionToolset):
         timeout_action: Behaviour on timeout or retry exhaustion.
         default_response: String returned when ``timeout_action`` is SKIP.
     """
+
+    tool_alias: ClassVar[str] = "ask_user"
 
     def __init__(
         self,

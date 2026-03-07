@@ -6,14 +6,19 @@ SourceEvaluator, IngestPipeline, BookmarkStore) are mocked.
 
 from __future__ import annotations
 
+import builtins
 import sqlite3
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
-from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
+from owlbear.memory.knowledge.bookmark_pipeline import (
+    BookmarkPipeline,
+    BookmarkResult,
+    _default_web_read,
+)
 from owlbear.memory.knowledge.evaluator import EvaluationResult
 from owlbear.memory.knowledge.ingest import IngestResult
 
@@ -209,9 +214,7 @@ class TestBookmarkPipelineHappyPath:
         mock_web_read.assert_awaited_once_with(SAMPLE_URL)
 
         # evaluator was called with extracted content
-        mock_evaluator.evaluate.assert_awaited_once_with(
-            SAMPLE_CONTENT, SAMPLE_PROJECT_CONTEXT
-        )
+        mock_evaluator.evaluate.assert_awaited_once_with(SAMPLE_CONTENT, SAMPLE_PROJECT_CONTEXT)
 
         # ingest was called (high score + worth_ingesting)
         mock_ingest.ingest_text.assert_awaited_once()
@@ -563,3 +566,45 @@ class TestBookmarkPipelineEdgeCases:
 
         assert result.evaluation is not None
         assert result.bookmark is not None
+
+
+# ===========================================================================
+# Import guard — _default_web_read trafilatura
+# ===========================================================================
+
+
+class TestDefaultWebReadImportGuard:
+    """_default_web_read raises ImportError with install hint when trafilatura missing."""
+
+    @pytest.mark.asyncio
+    async def test_raises_import_error_when_trafilatura_unavailable(self) -> None:
+        """Calling _default_web_read without trafilatura raises ImportError."""
+        _real_import = builtins.__import__
+
+        def _deny_trafilatura(name: str, *args: object, **kwargs: object) -> object:
+            if name == "trafilatura":
+                msg = f"No module named '{name}'"
+                raise ModuleNotFoundError(msg)
+            return _real_import(name, *args, **kwargs)
+
+        with (
+            patch("builtins.__import__", side_effect=_deny_trafilatura),
+            pytest.raises(ImportError, match=r"uv pip install 'owlbear\[search\]'"),
+        ):
+            await _default_web_read("https://example.com")
+
+    @pytest.mark.asyncio
+    async def test_error_message_contains_install_command(self) -> None:
+        """The ImportError message includes the exact install command."""
+        _real_import = builtins.__import__
+
+        def _deny_trafilatura(name: str, *args: object, **kwargs: object) -> object:
+            if name == "trafilatura":
+                msg = f"No module named '{name}'"
+                raise ModuleNotFoundError(msg)
+            return _real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=_deny_trafilatura):
+            with pytest.raises(ImportError) as exc_info:
+                await _default_web_read("https://example.com")
+            assert "uv pip install 'owlbear[search]'" in str(exc_info.value)

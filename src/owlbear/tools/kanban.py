@@ -25,6 +25,7 @@ from owlbear.core.hooks import HookEvent
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
     from owlbear.core.hooks import HookRegistry
 
@@ -48,6 +49,8 @@ class KanbanToolset(FunctionToolset):
         hooks: Optional :class:`HookRegistry` for hook emission on
             mutating operations.
     """
+
+    tool_alias: ClassVar[str] = "kanban"
 
     def __init__(
         self,

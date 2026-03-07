@@ -3,7 +3,6 @@
 Targets >= 90 % coverage on:
 - owlbear.core.errors (ErrorCategory, classify_error, ToolError)
 - owlbear.tools.hooked (HookedToolset retry logic)
-- owlbear.core.escalation (EscalationHook, _parse_response, _on_error)
 - owlbear.memory.error_journal (ErrorJournal log/query/rotate)
 
 Task: #364
@@ -15,14 +14,13 @@ import asyncio
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 
 from owlbear.core.command_guard import BlockedCommandError
 from owlbear.core.errors import ErrorCategory, ToolError, classify_error
-from owlbear.core.escalation import EscalationAction, EscalationHook
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.memory.error_journal import ErrorJournal
 from owlbear.tools.hooked import HookedToolset, _is_transient
@@ -41,14 +39,6 @@ def _http_status_error(code: int) -> httpx.HTTPStatusError:
     """Build an ``httpx.HTTPStatusError`` with the given status code."""
     response = httpx.Response(code, request=httpx.Request("GET", "https://x"))
     return httpx.HTTPStatusError("err", request=response.request, response=response)
-
-
-def _make_channel(response: str | None = "retry") -> AsyncMock:
-    """Create a mock ChannelPlugin."""
-    channel = AsyncMock()
-    type(channel).name = PropertyMock(return_value="test")
-    channel.receive = AsyncMock(return_value=response)
-    return channel
 
 
 def _make_journal(tmp_path: Path) -> ErrorJournal:
@@ -90,22 +80,22 @@ class TestClassifyHttpStatusPermanent:
     """HTTP status codes that are neither transient nor auth → PERMANENT."""
 
     def test_http_500_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(500)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(500)) == ErrorCategory.PERMANENT
 
     def test_http_404_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(404)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(404)) == ErrorCategory.PERMANENT
 
     def test_http_400_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(400)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(400)) == ErrorCategory.PERMANENT
 
     def test_http_422_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(422)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(422)) == ErrorCategory.PERMANENT
 
     def test_http_405_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(405)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(405)) == ErrorCategory.PERMANENT
 
     def test_http_409_is_permanent(self) -> None:
-        assert classify_error(_http_status_error(409)) is ErrorCategory.PERMANENT
+        assert classify_error(_http_status_error(409)) == ErrorCategory.PERMANENT
 
 
 # ===========================================================================
@@ -143,101 +133,7 @@ class TestIsTransient:
 
 
 # ===========================================================================
-# 3. EscalationHook._on_error edge cases — coverage gaps lines 91, 94
-# ===========================================================================
-
-
-class TestOnErrorEdgeCases:
-    """_on_error early-return paths — non-dict data, missing error key."""
-
-    def test_on_error_ignores_non_dict_data(self) -> None:
-        """When data is not a dict, _on_error returns without escalating."""
-        hooks = HookRegistry()
-        channel = _make_channel("retry")
-        EscalationHook(hooks=hooks, channel=channel)
-
-        # Emit ON_ERROR with a string (not a dict)
-        _run(hooks.emit(HookEvent.ON_ERROR, "not a dict"))
-
-        # channel.send should NOT have been called
-        channel.send.assert_not_called()
-
-    def test_on_error_ignores_none_data(self) -> None:
-        """When data is None, _on_error returns without escalating."""
-        hooks = HookRegistry()
-        channel = _make_channel("retry")
-        EscalationHook(hooks=hooks, channel=channel)
-
-        _run(hooks.emit(HookEvent.ON_ERROR, None))
-
-        channel.send.assert_not_called()
-
-    def test_on_error_ignores_dict_without_error_key(self) -> None:
-        """When dict has no 'error' key or it's not an Exception, skip."""
-        hooks = HookRegistry()
-        channel = _make_channel("retry")
-        EscalationHook(hooks=hooks, channel=channel)
-
-        _run(hooks.emit(HookEvent.ON_ERROR, {"tool_name": "fetch", "attempt": 3}))
-
-        channel.send.assert_not_called()
-
-    def test_on_error_ignores_non_exception_error_value(self) -> None:
-        """When 'error' key is a string (not Exception), skip."""
-        hooks = HookRegistry()
-        channel = _make_channel("retry")
-        EscalationHook(hooks=hooks, channel=channel)
-
-        _run(hooks.emit(HookEvent.ON_ERROR, {"error": "just a string", "tool_name": "x"}))
-
-        channel.send.assert_not_called()
-
-    def test_on_error_uses_defaults_for_missing_tool_name_and_attempt(self) -> None:
-        """When tool_name/attempt are missing, defaults to 'unknown'/0."""
-        hooks = HookRegistry()
-        channel = _make_channel("skip")
-        EscalationHook(hooks=hooks, channel=channel)
-
-        _run(hooks.emit(HookEvent.ON_ERROR, {"error": RuntimeError("boom")}))
-
-        channel.send.assert_called_once()
-        sent_msg = channel.send.call_args[0][0]
-        assert "unknown" in sent_msg
-        assert "0" in sent_msg
-
-
-# ===========================================================================
-# 4. EscalationHook._parse_response — additional edge cases
-# ===========================================================================
-
-
-class TestParseResponseEdgeCases:
-    """_parse_response boundary conditions beyond the main test file."""
-
-    def test_whitespace_retry(self) -> None:
-        assert EscalationHook._parse_response("  retry  ") is EscalationAction.RETRY
-
-    def test_uppercase_skip(self) -> None:
-        assert EscalationHook._parse_response("SKIP") is EscalationAction.SKIP
-
-    def test_mixed_case_abort(self) -> None:
-        assert EscalationHook._parse_response("Abort") is EscalationAction.ABORT
-
-    def test_empty_string_aborts(self) -> None:
-        assert EscalationHook._parse_response("") is EscalationAction.ABORT
-
-    def test_numeric_with_whitespace(self) -> None:
-        assert EscalationHook._parse_response("  2  ") is EscalationAction.SKIP
-
-    def test_out_of_range_number(self) -> None:
-        assert EscalationHook._parse_response("4") is EscalationAction.ABORT
-
-    def test_zero_is_invalid(self) -> None:
-        assert EscalationHook._parse_response("0") is EscalationAction.ABORT
-
-
-# ===========================================================================
-# 5. ToolError — integration with classify_error
+# 3. ToolError — integration with classify_error
 # ===========================================================================
 
 
@@ -260,7 +156,7 @@ class TestToolErrorIntegration:
         cat = classify_error(exc)
         err = ToolError(error_type=cat, tool_name="run_command", message=str(exc))
 
-        assert err.error_type is ErrorCategory.PERMANENT
+        assert err.error_type == ErrorCategory.PERMANENT
         assert err.to_dict()["status"] == "error"
 
     def test_tool_error_all_categories_round_trip_json(self) -> None:
@@ -279,7 +175,7 @@ class TestToolErrorIntegration:
 
 
 # ===========================================================================
-# 6. ErrorJournal — additional edge cases
+# 4. ErrorJournal — additional edge cases
 # ===========================================================================
 
 
@@ -338,7 +234,7 @@ class TestErrorJournalEdgeCases:
 
 
 # ===========================================================================
-# 7. HookedToolset retry — additional integration scenarios
+# 5. HookedToolset retry — additional integration scenarios
 # ===========================================================================
 
 
@@ -413,7 +309,7 @@ class TestHookedToolsetRetryEdgeCases:
 
 
 # ===========================================================================
-# 8. End-to-end: classify → ToolError → journal log
+# 6. End-to-end: classify → ToolError → journal log
 # ===========================================================================
 
 
@@ -487,7 +383,7 @@ class TestEndToEndErrorFlow:
     def test_tool_semantic_error_flows_through_pipeline(self, tmp_path: Path) -> None:
         exc = ValueError("invalid argument")
         cat = classify_error(exc)
-        assert cat is ErrorCategory.TOOL_SEMANTIC
+        assert cat == ErrorCategory.TOOL_SEMANTIC
 
         tool_err = ToolError(error_type=cat, tool_name="compute", message=str(exc))
         journal = _make_journal(tmp_path)

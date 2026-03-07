@@ -23,6 +23,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import ClassVar
 
     from owlbear.projects.store import ProjectStore
 
@@ -42,6 +43,8 @@ class ProjectToolset(FunctionToolset):
         project_root: Base directory for new projects.  When supplied,
             ``workspace_create_project`` can scaffold new workspaces.
     """
+
+    tool_alias: ClassVar[str] = "project"
 
     def __init__(
         self,
@@ -145,11 +148,9 @@ def _update_toolset_roots(toolsets: list[object], workspace: Path) -> None:
     Uses the :class:`~owlbear.tools.protocols.WorkspaceAware` protocol
     to detect toolsets that support workspace updates.
     """
-    from owlbear.tools.protocols import WorkspaceAware  # noqa: PLC0415
+    from owlbear.tools.protocols import WorkspaceAware, unwrap  # noqa: PLC0415
 
     for ts in toolsets:
-        inner = ts
-        while hasattr(inner, "wrapped"):
-            inner = inner.wrapped  # type: ignore[union-attr]
+        inner = unwrap(ts)
         if isinstance(inner, WorkspaceAware):
             inner.update_workspace(workspace)

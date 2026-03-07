@@ -26,6 +26,8 @@ from owlbear.core.hooks import HookEvent
 from owlbear.core.retry import TRANSIENT_RETRY
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from pydantic import SecretStr
 
     from owlbear.core.hooks import HookRegistry
@@ -80,6 +82,8 @@ class GitHubToolset(FunctionToolset):
         hooks: Optional :class:`HookRegistry` for hook emission on
             destructive operations.
     """
+
+    tool_alias: ClassVar[str] = "github"
 
     def __init__(
         self,

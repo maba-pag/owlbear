@@ -164,7 +164,7 @@ class TestDaemonStatus:
         with patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings):
             _daemon_status()
         captured = capsys.readouterr()
-        assert "not running" in captured.out
+        assert "Stopped" in captured.out
 
     def test_alive_pid_reports_running(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -179,7 +179,7 @@ class TestDaemonStatus:
         ):
             _daemon_status()
         captured = capsys.readouterr()
-        assert "running" in captured.out
+        assert "Running" in captured.out
         assert "12345" in captured.out
 
     def test_dead_pid_reports_stale(
@@ -195,7 +195,7 @@ class TestDaemonStatus:
         ):
             _daemon_status()
         captured = capsys.readouterr()
-        assert "stale" in captured.out
+        assert "Stale" in captured.out
 
 
 # ---------------------------------------------------------------------------

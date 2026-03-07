@@ -13,6 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Literal
 
+from owlbear.memory.knowledge.models import EntityType
 from owlbear.memory.knowledge.protocol import HybridEmbedding
 
 try:
@@ -32,13 +33,13 @@ COLLECTION_NAME = "owlbear_vectors"
 DENSE_DIM = 1024
 """Dimensionality of the dense embedding vectors."""
 
-IMPORTANCE_BY_TYPE: dict[str, float] = {
-    "decision": 0.9,
-    "pattern": 0.8,
-    "concept": 0.7,
-    "class_": 0.5,
-    "function": 0.4,
-    "file": 0.3,
+IMPORTANCE_BY_TYPE: dict[EntityType, float] = {
+    EntityType.DECISION: 0.9,
+    EntityType.PATTERN: 0.8,
+    EntityType.CONCEPT: 0.7,
+    EntityType.CLASS_: 0.5,
+    EntityType.FUNCTION: 0.4,
+    EntityType.FILE: 0.3,
 }
 """Maps entity type values to importance weights for temporal decay."""
 
