@@ -42,7 +42,7 @@ system correctness.
 | slack_sdk | `>=3.27.0` | Active | **High** | **No import guard** (see F-03) |
 | moonshine-voice | `>=0.0.49,<0.1.0` | Low maturity | **Medium** | Pre-1.0; upper bound is good |
 | numpy | `>=1.26` | Active | Low | |
-| pyttsx3 | `>=2.90` | Dormant | **Medium** | Last PyPI release 2023; alternatives exist |
+| pyttsx3 | `>=2.90` | Moderate | Low | Releases resumed 2024; v2.99 Jul 2025 |
 | sounddevice | *(missing)* | Active | **High** | Used but not declared (see F-05) |
 | beir | *(unpinned)* | Active | Low | Benchmark-only |
 | ranx | *(unpinned)* | Active | Low | Benchmark-only |
@@ -177,14 +177,15 @@ docs to reflect env-vars-only.
 
 ---
 
-#### F-10 — Severity: LOW — `pyttsx3` maintenance risk
+#### F-10 — Severity: LOW — `pyttsx3` maintenance risk (UPDATED 2026-03-07)
 
-`pyttsx3` last published to PyPI in 2023. The project has open issues with
-Python 3.12 compatibility on some platforms. Works on Windows but problematic
-on macOS/Linux.
+~~`pyttsx3` last published to PyPI in 2023.~~ **Corrected:** pyttsx3 released
+v2.92-2.99 between Sep 2024 and Jul 2025. The project is no longer dormant.
+74 open issues remain (macOS NSSpeechSynthesizer deprecation, run-loop bugs).
+Works on Windows; macOS driver is deprecated by Apple.
 
-**Recommendation:** Monitor; consider `edge-tts` or system TTS as fallback.
-Low urgency since voice is optional and planned.
+**Recommendation:** Keep pyttsx3. Risk downgraded to Low. See
+`docs/pyttsx3-tts-alternatives-research.md` for full analysis.
 
 ---
 
@@ -251,7 +252,7 @@ unpinned deps can break CI unexpectedly.
 | F-14 | LOW | .85 | Small — add validators |
 | F-01 | LOW | .75 | Trivial — tighten version spec |
 | F-08 | LOW | .70 | Medium — restructure extras |
-| F-10 | LOW | .65 | N/A — monitor only |
+| F-10 | LOW | .80 | N/A — risk downgraded; see `docs/pyttsx3-tts-alternatives-research.md` |
 | F-11 | LOW | .80 | Small — lazy import |
 | F-15 | LOW | .75 | Trivial — add version specs |
 

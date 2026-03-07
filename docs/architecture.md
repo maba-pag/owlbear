@@ -56,8 +56,8 @@ OwlBear is an always-on, laptop-resident AI development system. The user describ
 │ │Kanban  │ │Subagent  │ │           │ │          │ │orchestrator, │        │
 │ │Knowledge│ │Test      │ │           │ │Knowledge │ │researcher,   │        │
 │ │Web     │ │Screenshot│ │           │ │ pipeline │ │reviewer,     │        │
-│ │MCP     │ │Escalation│ │           │ │          │ │writer)       │        │
-│ │Hooked  │ │Progress  │ │           │ │          │ │              │        │
+│ │MCP     │ │Progress  │ │           │ │          │ │writer)       │        │
+│ │Hooked  │ │          │ │           │ │          │ │              │        │
 │ └────────┘ └──────────┘ └───────────┘ └──────────┘ └──────────────┘        │
 │                                                                             │
 │  ┌─ Auth ─────────────────┐  ┌─ Config ──────────────┐                     │
@@ -98,7 +98,6 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │   ├── delegation.py                 # DelegationToolset (delegate_to_agent tool)
 │   ├── deps.py                       # OwlBearDeps (shared dependency injection)
 │   ├── errors.py                     # Custom exception hierarchy
-│   ├── escalation.py                 # EscalationHook (ON_ERROR → user prompt)
 │   ├── hooks.py                      # HookEvent enum, HookRegistry
 │   ├── lint_hook.py                  # AutoLintHook (POST_TOOL_USE)
 │   ├── notification_hook.py          # NotificationHook (console/winsound)
@@ -118,19 +117,17 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │
 ├── memory/
 │   ├── __init__.py
-│   ├── consolidation.py              # LLM-based memory consolidation
 │   ├── context.py                    # ContextManager (context.md → instructions)
 │   ├── error_journal.py              # ErrorJournal (append-only JSONL, rotation)
 │   ├── session.py                    # SessionStore (JSONL persistence)
 │   ├── usage.py                      # UsageRecord, UsageTracker (JSONL)
 │   ├── usage_cost.py                 # calc_estimated_cost (genai_prices)
-│   └── knowledge/                    # Knowledge pipeline (23 files)
+│   └── knowledge/                    # Knowledge pipeline (21 files)
 │       ├── __init__.py
 │       ├── bookmark.py               # BookmarkStore (URL+scope dedup CRUD)
 │       ├── bookmark_pipeline.py      # BookmarkPipeline (extract→evaluate→ingest)
 │       ├── bookmark_toolset.py       # BookmarkToolset (bookmark_source, list_bookmarks)
 │       ├── chunker.py                # TextChunker (token-level splits)
-│       ├── dedup.py                  # Entity deduplication
 │       ├── embeddings.py             # EmbeddingProvider protocol + BgeM3EmbeddingProvider (idle-timeout)
 │       ├── evaluator.py              # SourceEvaluator (relevance scoring 0–1)
 │       ├── extractor.py              # LLM-based entity extraction
@@ -144,7 +141,6 @@ src/owlbear/                          # Main Python package (v0.1.0)
 │       ├── qdrant.py                 # QdrantVectorStore (hybrid search, temporal decay)
 │       ├── query_service.py          # KnowledgeQueryService (per-turn context injection)
 │       ├── refresh.py                # RefreshOrchestrator (url_list, crawl, file_glob)
-│       ├── reranker.py               # BGE reranker (cross-encoder)
 │       ├── retrieval.py              # GraphAugmentedRetriever (graph-neighbor expansion)
 │       ├── schema.py                 # SQLite DDL, migrations (v1-v7)
 │       └── source_store.py           # KnowledgeSourceStore (source CRUD)
@@ -266,7 +262,7 @@ Event-driven system for cross-cutting concerns. 9 event types:
 | `ON_MESSAGE` | On user message | _(none yet)_ |
 | `ON_ERROR` | On exception | _(none yet)_ |
 | `SUBAGENT_COMPLETE` | After sub-agent finishes | SubagentVerificationHook |
-| `TASK_COMPLETE` | After kanban task done | _(none yet)_ |
+| `TASK_COMPLETE` | After kanban task done | `reconcile_tasks` (daemon.py) |
 | `QUESTION_PENDING` | User question queued | NotificationHook |
 
 ### 4.3 Toolsets (PydanticAI FunctionToolset-based)
@@ -323,7 +319,7 @@ PydanticAI-based multi-agent system:
 
 **Usage tracking**: `UsageTracker` records per-turn usage (tokens, cost, premium requests) as JSONL.
 
-**Knowledge pipeline** (23 modules): chunking → entity extraction → graph store → vector embeddings → reranking → ingest pipeline. Uses SQLite (graph schema v7) + Qdrant (hybrid vector search) + BGE-M3 (embeddings with idle-timeout model unloading). Subsystems: `BookmarkStore` + `BookmarkPipeline` (URL evaluate→ingest with dedup), `KnowledgeSourceStore` (source CRUD), `RefreshOrchestrator` (url_list, crawl, file_glob dispatch), `KnowledgeQueryService` (per-turn context injection, token-budgeted), `GraphAugmentedRetriever` (graph-neighbor expansion to vector results), `InterDocGraphBuilder` (cross-document edge inference via embedding similarity + LLM, opt-in).
+**Knowledge pipeline** (21 modules): chunking → entity extraction → graph store → vector embeddings → ingest pipeline. Uses SQLite (graph schema v7) + Qdrant (hybrid vector search) + BGE-M3 (embeddings with idle-timeout model unloading). Subsystems: `BookmarkStore` + `BookmarkPipeline` (URL evaluate→ingest with dedup), `KnowledgeSourceStore` (source CRUD), `RefreshOrchestrator` (url_list, crawl, file_glob dispatch), `KnowledgeQueryService` (per-turn context injection, token-budgeted), `GraphAugmentedRetriever` (graph-neighbor expansion to vector results), `InterDocGraphBuilder` (cross-document edge inference via embedding similarity + LLM, opt-in).
 
 ### 4.7 Auth
 
@@ -481,7 +477,6 @@ OwlBear draws architectural patterns from [nanobot](https://github.com/HKUDS/nan
 
 - Wiring pattern: how AgentLoop.**init** composes all tools/contexts/sessions
 - ContextBuilder approach: bootstrap files loaded at startup
-- Memory consolidation: LLM-based MEMORY.md + HISTORY.md archiving
 - ChannelManager concept for multi-channel routing (when needed)
 
 **Not applicable:** LiteLLM loop (PydanticAI manages this), raw Tool ABC, most channel adapters (we need CLI + Slack only).
