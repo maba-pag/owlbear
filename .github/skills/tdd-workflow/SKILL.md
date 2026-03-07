@@ -34,6 +34,12 @@ Create or extend `tests/test_{module}.py`:
 Run and verify they **fail**:
 
 ```powershell
+uv run pytest tests/test_{module}.py -q --tb=short
+```
+
+Expect failures in the output. For verbose traceback detail:
+
+```powershell
 uv run pytest tests/test_{module}.py -v --tb=short
 ```
 
@@ -50,8 +56,10 @@ Write the minimum code to make all tests pass:
 Run and verify they **pass**:
 
 ```powershell
-uv run pytest tests/test_{module}.py -v --tb=short
+uv run pytest tests/test_{module}.py -q --tb=short
 ```
+
+Expect all tests passing, zero failures.
 
 ## Step 5 — Refactor (if needed)
 
@@ -64,14 +72,19 @@ Only refactor code you just wrote:
 
 ## Step 6 — Verify
 
-Run the full verification suite:
+Run the verification suite. **Always scope test runs** — the full suite has hundreds of
+tests and will time out.
 
 ```powershell
-uv run pytest tests/ -m "not api" --tb=short -q
+uv run pytest tests/test_{module}.py -q --tb=short
+uv run pytest tests/test_{module}.py --cov=src/owlbear/{path} --cov-report=term-missing -q
 uv run ruff check src/ tests/
 ```
 
-Both must pass. Target ≥ 90% coverage on touched modules.
+Use the **directory path** for `--cov`, not a dotted module name (dotted names
+trigger a pydantic MRO crash via coverage.py's import instrumentation).
+
+All must pass. Target ≥ 90% coverage on touched modules.
 
 ## Step 7 — Advance
 

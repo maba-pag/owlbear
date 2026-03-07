@@ -20,6 +20,31 @@ Get the invocation right the first time. Never re-run a command just to see diff
 | git log    | `--oneline -N` (where N is the number of entries you need)  |
 | git diff   | `--stat` first, then full diff on specific files if needed  |
 
+## Prefer dedicated tools over terminal
+
+- **Testing:** Always use `uv run pytest` in the terminal. Do NOT use the `runTests` tool —
+  it funnels through a single VS Code execution queue and deadlocks when multiple agents
+  run tests in parallel. Always scope to specific files:
+  ```powershell
+  uv run pytest tests/test_{module}.py -q --tb=short
+  ```
+- **Linting:** No dedicated tool exists — terminal `uv run ruff check` is correct.
+- **Errors:** Use `get_errors` to read the VS Code Problems panel.
+
+## Do not fence output with Write-Host
+
+Do NOT wrap commands in `Write-Host` markers:
+
+```powershell
+# BAD — wastes tokens, the terminal tool already reports exit codes
+Write-Host "=== RUFF ==="; uv run ruff check src/; Write-Host "=== EXIT: $LASTEXITCODE ==="
+
+# GOOD — just run the command
+uv run ruff check src/ tests/
+```
+
+The terminal tool reports exit codes automatically. Extra `Write-Host` fencing adds noise.
+
 ## Long output strategy
 
 When a command might produce more than a screenful of output:

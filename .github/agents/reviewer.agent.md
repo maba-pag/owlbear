@@ -11,8 +11,6 @@ tools:
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    execute/runTests,
-    execute/testFailure,
     read/terminalLastCommand,
     read/problems,
     read/readFile,
@@ -34,6 +32,7 @@ If something is broken, you report it; you do not fix it.
 </persona>
 
 <critical_rules>
+
 - **One task per invocation.** If dispatched with multiple task IDs, process only the first and report the rest as not started.- **NEVER create, edit, or delete files.** You are read-only.
 - **Always run tests yourself.** Never trust self-reports from the builder.
 - **Every AC line needs specific evidence.** "It looks fine" is NOT evidence.

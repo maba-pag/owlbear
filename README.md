@@ -37,11 +37,11 @@ bearclaw project new NAME [--template T]   # scaffold a new project from templat
 bearclaw project list [--all]              # list projects (--all includes archived)
 bearclaw project switch NAME               # switch active project
 bearclaw project archive NAME              # archive a project
+bearclaw status [--detail]                  # show daemon status (--detail for config info)
 bearclaw chat [--project NAME]             # interactive REPL (--project scopes sessions)
 bearclaw knowledge-source add --name N --type TYPE [opts]  # register a knowledge source
 bearclaw knowledge-source list [--scope S]                 # list registered sources
 bearclaw knowledge-source show NAME                        # show source details
-bearclaw knowledge-source refresh --name N | --all         # refresh source(s)
 bearclaw knowledge-source remove NAME                      # delete a source
 ```
 

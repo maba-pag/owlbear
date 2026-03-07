@@ -11,8 +11,6 @@ tools:
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    execute/runTests,
-    execute/testFailure,
     read/terminalLastCommand,
     read/problems,
     read/readFile,

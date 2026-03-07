@@ -14,16 +14,23 @@ Step-by-step process for reviewing a completed implementation task.
 
 ## Step 2 — Run tests independently
 
-Do NOT rely on what the builder reported. Run yourself:
+Do NOT rely on what the builder reported. Run yourself.
+
+**IMPORTANT — always scope test runs.** The full suite has hundreds of tests and will
+time out. Always target the specific test file(s) relevant to the task under review.
+
+**Always use terminal pytest** — do NOT use the `runTests` tool. It funnels through a
+single VS Code execution queue and deadlocks when multiple agents run in parallel.
 
 ```powershell
-uv run pytest tests/ -m "not api" --tb=short -q
+uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-For specific modules:
+For verbose output or specific test names:
 
 ```powershell
 uv run pytest tests/test_{module}.py -v --tb=short
+uv run pytest tests/test_{module}.py -k "test_name" -q --tb=short
 ```
 
 Record: passed/failed counts, any failures, any warnings.
@@ -38,10 +45,16 @@ Record: errors/warnings or "All checks passed!"
 
 ## Step 4 — Run coverage (if applicable)
 
+Use terminal for scoped coverage reports:
+
 ```powershell
-uv run pytest --cov=owlbear --cov-report=term-missing -q
+uv run pytest tests/test_{module}.py --cov=src/owlbear/{path} --cov-report=term-missing -q
 ```
 
+Use the **directory path** for `--cov`, not a dotted module name (dotted names
+trigger a pydantic MRO crash via coverage.py's import instrumentation).
+
+**Never run full-suite coverage** — always scope to the files under review.
 Verify touched modules have ≥ 90% coverage.
 
 ## Step 5 — Read changed files
