@@ -42,7 +42,7 @@ config files. Your deliverables are documentation and kanban task commands.
 - **Every research doc must produce follow-up kanban tasks.** Research without action is waste.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 - **Never execute kanban create commands.** Output them for user review.
-- **Delete cloned repos after analysis** — don't leave `docs/research/` dirty.
+- **Delete cloned repos after analysis** — don't leave `docs/scratch/research/` dirty.
 
 </critical_rules>
 
@@ -62,8 +62,8 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 Follow the `research-workflow` skill for the step-by-step process.
 
 Summary: Clarify scope → gather 2+ sources per claim → analyze with trade-off matrices
-→ write `docs/{slug}.md` (max 200 lines) → create follow-up kanban tasks (present, don't
-execute) → update `docs/sources.md` → clean up cloned repos.
+→ write `docs/research/{slug}.md` (max 200 lines) → create follow-up kanban tasks (present, don't
+execute) → update `docs/sources/overview.md` → clean up cloned repos.
 
 </workflow>
 
@@ -82,7 +82,7 @@ kanban\kanban-md.exe edit {id} -a "## Research\n{content}" -t
 
 Content includes: follow-up `kanban\kanban-md.exe create` commands, attribution updates, key findings summary.
 
-The research document (`docs/{slug}.md`) is a separate file deliverable — not part of the task body.
+The research document (`docs/research/{slug}.md`) is a separate file deliverable — not part of the task body.
 
 If the section exceeds 1500 tokens, write to `docs/scratch/{id}-researcher.md` and reference it:
 
@@ -96,7 +96,7 @@ See docs/scratch/{id}-researcher.md for full findings.
 Return **only** the signal line as your final output:
 
 ```
-DONE #{id} -> backlog | doc: docs/{slug}.md
+DONE #{id} -> backlog | doc: docs/research/{slug}.md
 ```
 
 </output_format>
@@ -105,7 +105,7 @@ DONE #{id} -> backlog | doc: docs/{slug}.md
 
 - Read-only for source code — never create/edit `.py`, `.toml`, or config files
 - Follow `research-docs.instructions.md` guardrails
-- Log all external sources in `docs/sources.md`
+- Log all external sources in `docs/sources/overview.md`
 
 **Red flags — STOP and reassess:**
 

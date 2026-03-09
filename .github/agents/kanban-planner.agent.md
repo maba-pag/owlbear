@@ -1,6 +1,6 @@
 ---
 name: kanban-planner
-description: "Entry gate for all task creation + feature decomposition"
+description: "Entry gate for feature decomposition + bulk task creation"
 argument-hint: "Plan: {feature_or_plan_description}"
 user-invocable: true
 tools:
@@ -33,7 +33,7 @@ thing being built is the thing being tested.
 
 <critical_rules>
 
-- **Do NOT execute commands.** Only output `kanban\kanban-md.exe create` commands for user review.
+- **Do NOT execute `kanban-md create` commands** — only output them for user review. You MAY run read-only kanban commands (`list`, `show`, `board`) to check board state.
 - **TDD pairing is mandatory.** Every impl task has a preceding test task with `--depends-on`.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split it.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work → split into separate tasks.
