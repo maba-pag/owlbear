@@ -133,7 +133,7 @@ Return **only** the signal line — no other text after it.
 
 **Red flags — stop and ask the user:**
 
-- Confidence < .70 on multiple tasks (systemic quality issue)
+- Confidence < .80 on multiple tasks (systemic quality issue)
 - Uncommitted work that doesn't map to any done task
 - Force-push needed or merge conflicts
 - Tasks in `done` with no implementation evidence at all

@@ -159,13 +159,11 @@ The auditor intentionally runs unscoped tests because that's its PURPOSE — cat
 
 ## Confidence thresholds
 
-| Agent/Mode         | Threshold | Meaning                                |
-| ------------------ | --------- | -------------------------------------- |
-| Reviewer           | ≥ .90     | PASS — code quality meets bar          |
-| Planner (evaluate) | ≥ .80     | ADVANCE — task meets pipeline criteria |
-| Planner (evaluate) | < .50     | ESCALATE — bring human in              |
-| Auditor            | ≥ .95     | Archive — all AC verified              |
-| Auditor            | < .85     | Reject — incomplete or unverifiable    |
+| Agent/Mode | Threshold | Meaning                             |
+| ---------- | --------- | ----------------------------------- |
+| Reviewer   | ≥ .90     | PASS — code quality meets bar       |
+| Auditor    | ≥ .95     | Archive — all AC verified           |
+| Auditor    | < .85     | Reject — incomplete or unverifiable |
 
 Individual agents reference these thresholds in context. This table is the single source of truth.
 
@@ -181,7 +179,9 @@ Your **final return text** must be at most 2 lines in this format:
 {VERDICT} #{id} -> {target_status} | {one-line evidence}
 ```
 
-The orchestrator reads **only** this signal for dispatch decisions. It never reads task body content.
+Channel A is a **diagnostic convention** — it keeps subagent returns concise and
+prevents the orchestrator from accumulating rich context. The orchestrator does not
+parse or interpret these signals; it re-plans from fresh board state each cycle.
 
 ### Channel B — Task body (written to kanban)
 
@@ -231,6 +231,6 @@ Remove-Item "docs/scratch/$id-notes.tmp"
 
 ### Reading rules
 
-- **Orchestrator / planner (evaluate mode):** reads ONLY Channel A (routing signals). Never reads task body.
+- **Orchestrator:** does not read Channel A signals or task bodies. It re-plans from fresh board state each cycle.
 - **Pipeline agents** (reviewer, writer, auditor): read task body via `kanban\kanban-md.exe show {ID}` to access predecessor notes.
 - **Architect / builder:** read task body for AC, architecture notes, and research pointers.
