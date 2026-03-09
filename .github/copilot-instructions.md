@@ -97,48 +97,50 @@ Use `depends_on` in task frontmatter + kanban-md flags (`--blocked`, `--not-bloc
 
 Tags are free-form (no config file — just `--tags` on create/edit). Use these conventions:
 
-| Category     | Tags                                                        | Purpose                         |
-| ------------ | ----------------------------------------------------------- | ------------------------------- |
-| Phase        | `phase-1` … `phase-12`                                      | Group tasks by project phase    |
-| Category     | `config`, `tooling`, `docs`, `test`, `cli`, `auth`, `agent` | What area the task touches      |
-| Specialty    | `hooks`, `model`, `rename`, `research`                      | Specific concern                |
-| Type prefix  | `type:build`, `type:test`, `type:docs`, `type:deploy`       | Task nature (what kind of work) |
-| Block prefix | `blocked:user-decision`, `blocked:external`                 | Why a task is blocked           |
-| Scope prefix | `scope:copilot`, `scope:core`, `scope:cli`                  | Which part of the codebase      |
+| Category     | Tags                                                        | Purpose                                     |
+| ------------ | ----------------------------------------------------------- | ------------------------------------------- |
+| Phase        | `phase-1` … `phase-12`                                      | Group tasks by project phase                |
+| Category     | `config`, `tooling`, `docs`, `test`, `cli`, `auth`, `agent` | What area the task touches                  |
+| Specialty    | `hooks`, `model`, `rename`, `research`                      | Specific concern                            |
+| Type prefix  | `type:build`, `type:test`, `type:docs`, `type:deploy`       | Task nature (what kind of work)             |
+| Block prefix | `blocked:user-decision`, `blocked:external`                 | Why a task is blocked                       |
+| Scope prefix | `scope:copilot`, `scope:core`, `scope:cli`                  | Which part of the codebase                  |
+| Rigor prefix | `rigor:lean`, `rigor:standard`, `rigor:thorough`            | Quality-vs-speed profile for task execution |
 
 Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,auth`.
 
 ### Research tasks
 
 Tag research tasks with `research`. Follow the research-docs instruction (`docs/*.md`). The research lifecycle is: complete checklist → write doc → create follow-up kanban tasks → move to `backlog`.
-It is encouraged to clone repos that are the subject of research into `docs/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
+It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
 
 ## Directory structure
 
-| Directory           | Purpose                                            |
-| ------------------- | -------------------------------------------------- |
-| `src/owlbear/`      | Main Python package                                |
-| `src/bearclaw/`     | CLI python                                         |
-| `tests/`            | pytest test suite (unit + integration)             |
-| `tests/benchmarks/` | Performance benchmark scripts                      |
-| `docs/`             | Research and analysis documents                    |
-| `docs/research/`    | Cloned third-party repos for analysis (gitignored) |
-| `docs/scratch/`     | Ephemeral working files (gitignored)               |
-| `kanban/`           | kanban-md board, binary, and setup script          |
-| `.github/`          | Copilot instructions, agent/skill/prompt files     |
+| Directory           | Purpose                                             |
+| ------------------- | --------------------------------------------------- |
+| `src/owlbear/`      | Main Python package                                 |
+| `src/bearclaw/`     | CLI python                                          |
+| `tests/`            | pytest test suite (unit + integration)              |
+| `tests/benchmarks/` | Performance benchmark scripts                       |
+| `docs/`             | Non-research documents (architecture, audits, etc.) |
+| `docs/research/`    | Research and analysis documents                     |
+| `docs/sources/`     | External attribution and sources                    |
+| `docs/scratch/`     | Ephemeral working files (gitignored)                |
+| `kanban/`           | kanban-md board, binary, and setup script           |
+| `.github/`          | Copilot instructions, agent/skill/prompt files      |
 
 ## File placement rules
 
 Keep the project root clean. Every file created during a task must go to the right location:
 
-| File type             | Location            | Naming                               | Tracked?        |
-| --------------------- | ------------------- | ------------------------------------ | --------------- |
-| Temp/debug output     | `docs/scratch/`     | `{task-id}-{desc}.{ext}`             | No (gitignored) |
-| Research documents    | `docs/`             | `{slug}.md` with task ref in content | Yes             |
-| Cloned external repos | `docs/research/`    | `{repo-name}/`                       | No (gitignored) |
-| Benchmark scripts     | `tests/benchmarks/` | descriptive `.py` name               | Yes             |
-| Source code           | `src/`              | follow existing package structure    | Yes             |
-| Tests                 | `tests/`            | `test_{module}.py`                   | Yes             |
+| File type             | Location                 | Naming                               | Tracked?        |
+| --------------------- | ------------------------ | ------------------------------------ | --------------- |
+| Temp/debug output     | `docs/scratch/`          | `{task-id}-{desc}.{ext}`             | No (gitignored) |
+| Research documents    | `docs/research/`         | `{slug}.md` with task ref in content | Yes             |
+| Cloned external repos | `docs/scratch/research/` | `{repo-name}/`                       | No (gitignored) |
+| Benchmark scripts     | `tests/benchmarks/`      | descriptive `.py` name               | Yes             |
+| Source code           | `src/`                   | follow existing package structure    | Yes             |
+| Tests                 | `tests/`                 | `test_{module}.py`                   | Yes             |
 
 Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task. See `docs/scratch/.instructions.md` for details.
 
@@ -148,7 +150,7 @@ When presenting proposals via askQuestions, prefix each option label with a conf
 
 ## Attribution
 
-All code and patterns taken from external sources must be logged in `docs/sources.md`.
+All code and patterns taken from external sources must be logged in `docs/sources/overview.md`.
 
 | Column     | Description                                               |
 | ---------- | --------------------------------------------------------- |
@@ -158,4 +160,4 @@ All code and patterns taken from external sources must be logged in `docs/source
 | Where Used | Where it appears in OwlBear (file path or module)         |
 | Date       | When it was adopted                                       |
 
-Update `docs/sources.md` whenever adopting external patterns. This ensures proper credit and traceability.
+Update `docs/sources/overview.md` whenever adopting external patterns. This ensures proper credit and traceability.
