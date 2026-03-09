@@ -32,6 +32,11 @@ If the research doc recommends zero follow-up tasks, that's a red flag — expli
 
 Tag research tasks with `research`. Flow: `backlog` → `todo` → `in-progress` (write doc) → `review` (create follow-up kanban tasks) → `done`.
 
+> **Pipeline dispatch note:** Research-tagged tasks follow a different dispatch path
+> than implementation tasks. In `todo`, they skip the test-writer and transition
+> directly to `in-progress` (see wave-planning dispatch mapping, "Non-implementation
+> task exception").
+
 ## Common failure mode
 
 Writing the doc, closing the kanban task, and moving on — without ever creating the follow-up tasks the doc recommends. This leaves actionable findings stranded in prose that nobody reads. **Don't do this.**

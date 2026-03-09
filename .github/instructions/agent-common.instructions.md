@@ -1,11 +1,15 @@
 ---
-applyTo: ".github/agents/**"
+applyTo: "**"
 description: "Cross-agent rules that apply to all OwlBear agents"
 ---
 
 # Cross-Agent Rules
 
 All agents inherit project conventions from `copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
+
+> **Loading note:** `applyTo: "**"` ensures these rules load regardless of which files
+> the agent touches (src/, tests/, etc.). Previously scoped to `.github/agents/**`,
+> which risked not loading when agents worked exclusively on source files.
 
 ## Task discipline
 
