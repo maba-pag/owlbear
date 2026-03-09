@@ -284,6 +284,79 @@ class TestRecencyWeight:
         for _id, score in results:
             assert score > 0
 
+    def test_batch_retrieve_single_call(self, store) -> None:
+        """retrieve() is called exactly once with all point IDs (AC #1, #9)."""
+        from unittest.mock import MagicMock, patch
+
+        from owlbear.memory.knowledge.qdrant import _point_id
+
+        now_iso = datetime.now(UTC).isoformat()
+        # Build fake points that retrieve() would return
+        ids = ["doc_a", "doc_b", "doc_c", "doc_d"]
+        fake_points = []
+        for doc_id in ids:
+            pt = MagicMock()
+            pt.id = _point_id(doc_id)
+            pt.payload = {"created_at": now_iso, "entity_or_doc_id": doc_id}
+            fake_points.append(pt)
+
+        results: list[tuple[str, float]] = [(did, 0.5 + i * 0.1) for i, did in enumerate(ids)]
+
+        with patch.object(store._client, "retrieve", return_value=fake_points) as mock_retrieve:
+            boosted = store._apply_temporal_boost(results, recency_weight=0.1, decay_rate=0.001)
+
+        # Exactly one call to retrieve (AC #1)
+        mock_retrieve.assert_called_once()
+        # All IDs passed in a single call (AC #2)
+        call_ids = mock_retrieve.call_args.kwargs.get("ids") or mock_retrieve.call_args[1].get(
+            "ids"
+        )
+        if call_ids is None:
+            call_ids = (
+                mock_retrieve.call_args[0][1] if len(mock_retrieve.call_args[0]) > 1 else None
+            )
+        expected_ids = [_point_id(did) for did in ids]
+        assert sorted(str(i) for i in call_ids) == sorted(str(i) for i in expected_ids)
+        # Return type and length preserved (AC #5)
+        assert len(boosted) == len(ids)
+        # Sorted descending by score (AC #5)
+        scores = [s for _, s in boosted]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_empty_results_no_retrieve(self, store) -> None:
+        """retrieve() is NOT called when results is empty (AC #6)."""
+        from unittest.mock import patch
+
+        with patch.object(store._client, "retrieve") as mock_retrieve:
+            boosted = store._apply_temporal_boost([], recency_weight=0.1, decay_rate=0.001)
+
+        mock_retrieve.assert_not_called()
+        assert boosted == []
+
+    def test_missing_point_gets_no_boost(self, store) -> None:
+        """Points missing from batch response keep original score (AC #7)."""
+        from unittest.mock import MagicMock, patch
+
+        from owlbear.memory.knowledge.qdrant import _point_id
+
+        now_iso = datetime.now(UTC).isoformat()
+        # Only return point for doc_a, not doc_b
+        pt = MagicMock()
+        pt.id = _point_id("doc_a")
+        pt.payload = {"created_at": now_iso, "entity_or_doc_id": "doc_a"}
+
+        results: list[tuple[str, float]] = [("doc_a", 0.8), ("doc_b", 0.7)]
+
+        with patch.object(store._client, "retrieve", return_value=[pt]) as mock_retrieve:
+            boosted = store._apply_temporal_boost(results, recency_weight=0.1, decay_rate=0.001)
+
+        mock_retrieve.assert_called_once()
+        boosted_dict = dict(boosted)
+        # doc_a got a boost (score > original 0.8)
+        assert boosted_dict["doc_a"] > 0.8
+        # doc_b missing from retrieve — keeps original score
+        assert boosted_dict["doc_b"] == pytest.approx(0.7)
+
 
 # ---------------------------------------------------------------------------
 # Hybrid search fallback (no ColBERT)

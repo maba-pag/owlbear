@@ -447,15 +447,28 @@ class QdrantVectorStore:
         decay_rate: float,
     ) -> list[tuple[str, float]]:
         """Re-score results using temporal freshness (higher = better)."""
+        if not results:
+            return []
+
+        # Batch-retrieve all points in a single call
+        ids = [_point_id(rid) for rid, _ in results]
+        points = self._client.retrieve(
+            collection_name=self._collection,
+            ids=ids,
+            with_payload=True,
+        )
+
+        # Build lookup keyed by str(point.id)
+        lookup: dict[str, dict] = {}
+        for p in points:
+            if p.payload:
+                lookup[str(p.id)] = p.payload
+
         adjusted: list[tuple[str, float]] = []
         for rid, score in results:
-            point = self._client.retrieve(
-                collection_name=self._collection,
-                ids=[_point_id(rid)],
-                with_payload=True,
-            )
-            if point and point[0].payload:
-                created_at = point[0].payload.get("created_at")
+            payload = lookup.get(str(_point_id(rid)))
+            if payload:
+                created_at = payload.get("created_at")
                 if created_at:
                     recency = _compute_recency_score(created_at, decay_rate)
                     adjusted.append((rid, score + recency_weight * recency))
