@@ -5892,3 +5892,11 @@
 {"timestamp":"2026-03-09T20:12:35.7871181+01:00","action":"edit","task_id":494,"detail":"Expand command guard blocklist and document limitations"}
 {"timestamp":"2026-03-09T20:13:12.0821602+01:00","action":"move","task_id":494,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-09T20:16:21.1652923+01:00","action":"move","task_id":482,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T20:33:12.899504+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-09T20:33:14.570417+01:00","action":"edit","task_id":492,"detail":"Improve bootstrap error reporting with structured startup summary"}
+{"timestamp":"2026-03-09T20:33:22.0996311+01:00","action":"move","task_id":492,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T20:33:38.8797458+01:00","action":"move","task_id":493,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T20:33:39.504928+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-09T20:33:39.5101959+01:00","action":"block","task_id":493,"detail":"AC #4 not met: copilot-instructions.md Safety row does not reference SECURITY.md"}
+{"timestamp":"2026-03-09T20:37:38.3905048+01:00","action":"move","task_id":498,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T20:41:04.3216678+01:00","action":"edit","task_id":495,"detail":"Isolate browser context in CDP mode"}
