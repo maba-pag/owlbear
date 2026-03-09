@@ -1,12 +1,12 @@
 ---
 id: 507
 title: Reuse httpx.AsyncClient in GitHubToolset
-status: done
+status: archived
 priority: important
 created: 2026-03-04T07:38:19.232432+01:00
-updated: 2026-03-07T23:04:58.3847884+01:00
+updated: 2026-03-09T21:10:00.9211308+01:00
 started: 2026-03-06T23:40:08.9526803+01:00
-completed: 2026-03-07T23:04:58.3847884+01:00
+completed: 2026-03-09T21:10:00.9211308+01:00
 tags:
     - audit
     - performance
@@ -37,3 +37,26 @@ See docs/httpx-client-reuse-research.md for research (~18 LOC change).
 - httpx.AsyncClient is concurrency-safe for async  multiple concurrent tool calls are fine
 - No base_url or shared headers on client (YAGNI per research S3.6)
 - depends_on: #648 (test task)
+
+[[2026-03-09]] Mon 21:09
+## Audit
+### AC Verification
+| AC | Evidence | Status |
+|---|---|---|
+| 1. __init__ creates single httpx.AsyncClient(timeout=Timeout(15,connect=5)) stored as self._client | github_api.py L109: `self._client = _client or httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5))` | PASS |
+| 2. _api_request uses self._client.request() directly, no per-call client | github_api.py L143: `return await self._client.request(method, url, headers=self._headers(), **kwargs)` — no `async with` | PASS |
+| 3. aclose() calls self._client.aclose() | github_api.py L146: `async def aclose` → `await self._client.aclose()` | PASS |
+| 4. bootstrap registers github_toolset.aclose in cleanup list | toolsets.py L312: `cleanup.append(github_toolset.aclose)` | PASS |
+| 5. @TRANSIENT_RETRY remains on _api_request | github_api.py L135: `@TRANSIENT_RETRY` decorator present | PASS |
+| 6. _headers() called per-request, not baked into client | github_api.py L143: `headers=self._headers()` in each request call | PASS |
+| 7. All tests in test_github_api.py pass | 47 passed in 7.51s | PASS |
+| 8. ruff check clean on github_api.py and bootstrap/toolsets.py | `All checks passed!` on both files + tests | PASS |
+
+### Test Results
+- pytest (scoped): 47/47 passed (test_github_api.py)
+- pytest (regression): 211 passed (github_api + bootstrap + bootstrap_integration + bootstrap_structure)
+- Full suite: numpy import stall (environment issue, unrelated to #507)
+- ruff: All checks passed
+
+### Confidence: .97
+### Action: archive
