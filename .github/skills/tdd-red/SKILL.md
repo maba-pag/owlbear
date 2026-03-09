@@ -10,8 +10,25 @@ Step-by-step process for the test-writer to produce failing tests from a task's 
 ## Step 1 — Read the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
-2. Identify referenced source files, modules, and interfaces in the AC
-3. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
+2. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, or `type:docs`). If so, go to **Step 1a — Pass-through**.
+3. Identify referenced source files, modules, and interfaces in the AC
+4. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
+
+### Step 1a — Pass-through for non-implementation tasks
+
+Some tasks don't have testable implementation (research, documentation, config). When
+you encounter one:
+
+1. Append a brief note to the task body:
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder." -t
+   ```
+2. Move the task: `kanban\kanban-md.exe move {id} in-progress`
+3. Return the signal:
+   ```
+   DONE #{id} -> in-progress | non-impl pass-through, no tests needed
+   ```
+4. **Stop here.** Do not proceed to Step 2.
 
 ## Step 2 — Search codebase
 

@@ -1,12 +1,13 @@
 ---
 name: wave-planning
-description: "Wave planning workflow: read board → build DAG → gate checks → produce WAVE_PLAN. Also covers EVALUATE mode for assessing subagent results. Used by the planner agent."
+description: "Wave planning workflow: read board → build DAG → gate checks → produce DISPATCH_LIST. Used by the planner agent."
 ---
 
 # Wave Planning
 
-Step-by-step process for planning execution waves from a kanban board and evaluating
-subagent results. The planner operates in two modes: PLAN and EVALUATE.
+Step-by-step process for producing a dispatch list from a kanban board. The planner
+reads the board, classifies tasks, checks gates, and outputs a flat list of tasks the
+orchestrator should dispatch in parallel.
 
 ## Agent dispatch mapping
 
@@ -24,19 +25,19 @@ The planner assigns agents based on task status:
 Tasks in `ideation` are never dispatched directly. `ideation` tasks need
 research first (orchestrator routes to `researcher`).
 
-**Non-implementation task exception:** Tasks tagged `research`, `docs`, `type:config`,
-or `type:docs` in `todo` skip the test-writer and transition directly to `in-progress`
-(the orchestrator dispatches the appropriate agent — researcher, writer, or builder —
-based on the task's tags and nature). The architect is responsible for tagging tasks
-correctly during backlog → todo approval.
+**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`, or
+`type:docs` still flow through the standard pipeline (`todo → test-writer → in-progress
+→ builder`). The test-writer recognizes them and passes them through without writing
+tests (see tdd-red skill, Step 1a). This keeps the dispatch table simple and avoids
+special-case routing. The architect is responsible for tagging tasks correctly during
+backlog → todo approval.
 
 ---
 
-## PLAN mode
+## Step 1 — Receive scope
 
-### Step 1 — Receive scope
-
-The orchestrator passes a scope filter: a tag, status, ID range, or `"all"`.
+The orchestrator passes a scope filter and optional failure context from the previous
+cycle.
 
 Apply the filter to `kanban\kanban-md.exe list --compact`. Examples:
 
@@ -44,9 +45,14 @@ Apply the filter to `kanban\kanban-md.exe list --compact`. Examples:
 - Status filter: `kanban\kanban-md.exe list --compact --status todo,review`
 - All: `kanban\kanban-md.exe list --compact`
 
-If the scope returns 0 tasks, output an empty WAVE_PLAN (no waves) and stop.
+If the scope returns 0 tasks, output an empty DISPATCH_LIST and stop.
 
-### Step 2 — Read board
+**Failure context:** If the orchestrator reports tasks that failed in the previous cycle,
+note them. If a task appears at the same status it was dispatched from last cycle (it
+hasn't moved), flag it as STALE in the BLOCKED section — the agent ran but nothing
+changed, which indicates a structural problem that a retry won't fix.
+
+## Step 2 — Read board
 
 For each candidate task from Step 1, run:
 
@@ -64,7 +70,7 @@ and needed priority first, (2) tasks closest to `done` in the pipeline (docs > r
 todo > backlog). Read details for the top 20 only — report the rest as SKIPPED with
 gate: `scope_overflow`.
 
-### Step 3 — Build DAG
+## Step 3 — Build DAG
 
 Construct a dependency graph from task metadata:
 
@@ -81,10 +87,10 @@ Classify each task:
 
 External-blocked tasks go to the BLOCKED section with the out-of-scope dependency noted.
 
-### Step 4 — Gate checks
+## Step 4 — Gate checks
 
 For each **ready** task (not blocked, not external), run all 5 gate checks. A task must
-pass ALL gates to enter a wave. Any failure → SKIPPED with the gate name and reason.
+pass ALL gates to be dispatched. Any failure → SKIPPED with the gate name and reason.
 
 **Gate 1 — Status gate:**
 Task status must match a dispatchable status in the agent dispatch mapping above.
@@ -99,54 +105,55 @@ concerns (e.g., "Implement parser and update config"). Related concerns joined b
 are fine (e.g., "Read board and build DAG" — both are planning sub-steps).
 
 **Gate 4 — TDD gate (safety net):**
-For `in-progress` implementation tasks (not research, docs, test, or config), verify that
-the task body contains `## Test-Writer Notes` (written by the test-writer during RED
-phase). If present → gate passes. If absent → something went wrong (task reached
-`in-progress` without the test-writer running). Block the task and flag the anomaly.
+For `in-progress` tasks, verify that the task body contains `## Test-Writer Notes`
+(written by the test-writer during RED phase or pass-through). If present → gate passes.
+If absent → something went wrong (task reached `in-progress` without the test-writer
+running). Block the task and flag the anomaly.
 As a fallback, a linked test task in `done` status also satisfies this gate.
-Skip for non-implementation tasks.
 
 This gate catches tasks that reached `in-progress` without proper test-writer processing
-(e.g., manually moved tasks). When the pipeline works correctly, this gate is redundant
-— which is by design (belt-and-suspenders).
+(e.g., manually moved tasks). Non-implementation tasks will have a pass-through note
+instead of test details — both satisfy this gate. When the pipeline works correctly,
+this gate is redundant — which is by design (belt-and-suspenders).
 
 **Gate 5 — Clarity gate:**
 Task body contains non-empty acceptance criteria with at least one bullet point
 (`- ` or `- [ ]`) describing a verifiable criterion.
 Tasks with empty or missing AC fail this gate.
 
-### Step 5 — Wave grouping
+## Step 5 — Filter, deconflict, prioritize
 
-Group all gate-passing tasks into execution waves:
+From the gate-passing tasks, build the dispatch list:
 
-- **Wave 1:** Tasks whose ALL dependencies are already `done` (no in-scope predecessors)
-- **Wave N+1:** Tasks whose dependencies are satisfied by completions in Wave N or earlier
-- **Within a wave:** Tasks are independent — they can run in parallel
-- **Max 4 tasks per wave.** If more than 4 tasks qualify for the same wave, split them
-  across consecutive waves, prioritizing by: (1) `critical` > `needed` > `important`,
-  (2) tasks that unblock the most downstream dependents
+1. **Dependency filter:** Only include tasks whose ALL `depends_on` are `done`. Tasks
+   that depend on other gate-passing tasks go to later cycles naturally — the orchestrator
+   will re-plan after this batch completes, and those tasks will then be dispatchable.
 
-### Step 6 — Annotate
+2. **Builder domain deconfliction:** At most **one builder task per domain** in a single
+   dispatch list. Builders modify existing code — two builders in the same domain risk
+   file conflicts. All other agent types (reviewer, auditor, writer, architect,
+   test-writer, researcher) are safe to parallelize within a domain because they either
+   read only or create new files.
 
-For each task that appears in a WAVE (not BLOCKED, not SKIPPED), write the wave
-assignment to the task body as an audit trail:
+   Domain is determined by the task's `scope:{domain}` tag (see kanban-planner domain
+   table). Tasks without a `scope:` tag are treated as unique domains (no conflict).
+
+3. **Priority ordering:** Sort by: (1) `critical` > `needed` > `important` >
+   `nice-to-have` > `someday`, (2) pipeline proximity — tasks closer to `done` first
+   (docs > review > in-progress > todo > backlog), (3) tasks that unblock the most
+   downstream dependents.
+
+4. **Batch size cap:** Max 8 tasks per dispatch list. If more qualify, take the top 8
+   by priority. The rest will be picked up in the next planning cycle.
+
+## Step 6 — Output DISPATCH_LIST
+
+Produce the structured output as the final response. Format:
 
 ```
-kanban\kanban-md.exe edit {id} --append-body "Wave {n}, agent: {agent_name}" --timestamp
-```
-
-This is non-destructive (append-only) and persists beyond the planner's context window.
-
-### Step 7 — Output WAVE_PLAN
-
-Produce the structured WAVE_PLAN output as the final response. Format:
-
-```
-WAVE_PLAN
-WAVE 1:
+DISPATCH_LIST
   #{id} {agent_name} "{one-line AC summary}"
   #{id} {agent_name} "{one-line AC summary}"
-WAVE 2:
   #{id} {agent_name} "{one-line AC summary}"
 BLOCKED:
   #{id} "{reason — which dependency is unmet or why blocked}"
@@ -157,153 +164,12 @@ END_PLAN
 
 **Rules:**
 
-- `WAVE_PLAN` and `END_PLAN` are the opening and closing delimiters
-- Each `WAVE N:` header is followed by indented task lines
+- `DISPATCH_LIST` and `END_PLAN` are the opening and closing delimiters
 - Task lines: `#{id} {agent_name} "{one-line summary}"` — agent name from the dispatch mapping
-- `BLOCKED:` section lists tasks with unmet dependencies or explicit blocks
+- `BLOCKED:` section lists tasks with unmet dependencies, explicit blocks, or stale tasks
 - `SKIPPED:` section lists tasks that failed gate checks, with the gate name
-- If no tasks are dispatchable, output `WAVE_PLAN` / `END_PLAN` with only BLOCKED/SKIPPED sections
+- If no tasks are dispatchable, output `DISPATCH_LIST` / `END_PLAN` with only BLOCKED/SKIPPED sections
 - Gate names in SKIPPED: `status`, `dependency`, `atomicity`, `tdd`, `clarity`, `scope_overflow`
-
----
-
-## EVALUATE mode
-
-When dispatched with a prompt starting with "Evaluate wave:", switch to EVALUATE mode.
-You receive raw Channel A signals from subagents and produce per-task routing verdicts.
-
-### Step 1 — Parse dispatch prompt
-
-Extract pipeline stage, per-task Channel A signals, and retry counts.
-
-### Step 2 — Read AC for each task
-
-Run `kanban\kanban-md.exe show {id}` to read the full acceptance criteria. Do not rely on the
-orchestrator's summary.
-
-### Step 3 — Assess each AC line
-
-Check every AC line against the subagent's signal for specific evidence (test names,
-file paths, command output). Track: MET / NOT MET / PARTIAL.
-
-### Step 4 — Produce per-task verdict
-
-Apply verdict semantics:
-
-| Verdict    | When                                                                      | Orchestrator action                   |
-| ---------- | ------------------------------------------------------------------------- | ------------------------------------- |
-| `ADVANCE`  | AC evidence sufficient, confidence >= .80                                 | Proceed to next pipeline stage        |
-| `RETRY`    | Fixable failure, `retry_count` below 2                                    | Re-dispatch with `retry_hint` context |
-| `BLOCK`    | Unfixable without redesign, missing prerequisite, or external dependency  | Report to user                        |
-| `ESCALATE` | 2+ prior failures (`retry_count >= 2`) OR confidence < .50               | Alert user, pause task                |
-
-**ADVANCE** requires confidence >= .80. Below .80 does not advance.
-**RETRY** requires a non-empty `retry_hint` — specific verbal feedback for the next attempt.
-**ESCALATE** is the safety valve. Never let a task cycle endlessly.
-
-### Step 5 — Append notes to task body
-
-```
-kanban\kanban-md.exe edit {id} -a "## Planner Evaluation\n{notes}" -t
-```
-
-Add context for the downstream agent.
-
-### EVALUATE output format
-
-Per task:
-
-```
-## Evaluation: #{id} — {title}
-
-### AC Assessment
-| AC Line | Evidence | Status |
-|---------|----------|--------|
-| {line}  | {evidence or "NO EVIDENCE"} | MET / NOT MET / PARTIAL |
-
-### Verdict
-- task_id: {id}
-- verdict: ADVANCE | RETRY | BLOCK | ESCALATE
-- target_status: {next status}
-- confidence: {0.0-1.0}
-- reason: {one-line, evidence-backed}
-- notes_for_next_agent: {context for downstream agent}
-- retry_hint: {required when verdict=RETRY}
-```
-
-Wave summary:
-
-```
-## Wave Summary
-- Tasks evaluated: {N}
-- ADVANCE: {count}
-- RETRY: {count}
-- BLOCK: {count}
-- ESCALATE: {count}
-```
-
-### EVALUATE examples
-
-**Bad — rubber-stamp with no evidence:**
-
-```
-Builder output looks complete. Tests pass. ADVANCE.
-```
-
-No AC assessment table, no per-line evidence, no confidence score. This is the failure
-mode evaluation exists to prevent.
-
-**Bad — RETRY without retry_hint:**
-
-```
-- verdict: RETRY
-- retry_hint:
-```
-
-The builder has no guidance on what to fix. `retry_hint` must be specific.
-
-**Good — evidence-based ADVANCE:**
-
-```
-### AC Assessment
-| AC Line                       | Evidence                                                       | Status |
-| ----------------------------- | -------------------------------------------------------------- | ------ |
-| OAuth device flow implemented | `test_device_flow_initiates` passes, `auth.py` L24-48         | MET    |
-| Token refresh on 401          | `test_refresh_on_401` passes, retry logic at `client.py` L67  | MET    |
-| Credentials stored in keyring | `test_keyring_store` + `test_keyring_retrieve` pass            | MET    |
-
-### Verdict
-- verdict: ADVANCE
-- confidence: .92
-- reason: All 3 AC lines met with specific test evidence and code references
-- notes_for_next_agent: Focus review on token refresh edge cases
-```
-
-**Good — evidence-based RETRY with specific hint:**
-
-```
-### AC Assessment
-| AC Line                             | Evidence                                 | Status  |
-| ----------------------------------- | ---------------------------------------- | ------- |
-| Pydantic model validates all fields | `test_config_validation` passes          | MET     |
-| Invalid config raises ConfigError   | NO EVIDENCE — no test for invalid input  | NOT MET |
-
-### Verdict
-- verdict: RETRY
-- confidence: .55
-- reason: AC line 2 has no test — invalid config path untested
-- retry_hint: Add test that passes invalid config values and asserts ConfigError is raised.
-```
-
-**Good — ESCALATE after retry exhaustion:**
-
-```
-### Verdict
-- verdict: ESCALATE
-- confidence: .30
-- reason: retry_count=2, CDP attach fails consistently — likely environment issue
-- notes_for_next_agent: Human investigation needed — two prior attempts failed identically.
-```
 
 ---
 
@@ -315,14 +181,14 @@ Before outputting:
 - [ ] Every candidate task was read with `kanban\kanban-md.exe show {id}` (not just list output)
 - [ ] DAG was built — tasks classified as ready, blocked, or external
 - [ ] All 5 gate checks were run on every ready task
-- [ ] No task in a WAVE failed any gate check
-- [ ] Waves respect dependency ordering — Wave N+1 depends only on Wave N or earlier
-- [ ] No wave exceeds 4 tasks
-- [ ] Agent names in WAVE lines match the dispatch mapping
-- [ ] BLOCKED section includes all tasks with unmet dependencies and reasons
+- [ ] No task in the DISPATCH_LIST failed any gate check
+- [ ] At most one builder per `scope:{domain}` in the list
+- [ ] Batch does not exceed 8 tasks
+- [ ] Agent names match the dispatch mapping
+- [ ] BLOCKED section includes all tasks with unmet dependencies, blocks, and stale flags
 - [ ] SKIPPED section includes all gate-failed tasks with gate name and reason
-- [ ] Wave annotations written to task bodies via `--append-body --timestamp`
-- [ ] Output uses WAVE_PLAN format, not prose or markdown tables
+- [ ] Failure context from orchestrator was checked for stale tasks
+- [ ] Output uses DISPATCH_LIST format, not prose or markdown tables
 - [ ] No `kanban-md move` commands were run
 - [ ] No subagents were dispatched
 - [ ] No source/test files were edited

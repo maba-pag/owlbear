@@ -70,7 +70,7 @@ Follow the `tdd-red` skill for the step-by-step RED phase process.
 
 Summary:
 
-1. **Read task AC** — `kanban-md show {id}`, understand the contract
+1. **Read task AC** — `kanban-md show {id}`, understand the contract. If non-implementation task (research, docs, config) → pass through (see Step 1a in skill)
 2. **Read existing codebase** — understand interfaces, types, patterns the new code must integrate with (read-only — never modify)
 3. **Plan test categories** — map each AC line to: happy paths, edge cases, error paths, boundary conditions
 4. **Write tests** — `TestFromAC_{Feature}` classes, one class per logical AC group
@@ -194,19 +194,29 @@ Step 5: pytest tests/test_query_cache.py — 10 failed, 0 passed ✓
 AC coverage: every AC line has 2+ tests.
 </good_example>
 
+<good_example why="Non-implementation task pass-through">
+Task: #73 — Research circuit-breaker patterns (tagged: research)
+
+Step 1: Read AC — task is tagged `research`. This is a non-implementation task.
+No testable code will be produced. Passing through.
+
+Appended to task body: "## Test-Writer Notes — Non-implementation task (tagged research) — no tests applicable. Passing through to builder."
+Moved task to `in-progress`.
+
+Signal: DONE #73 -> in-progress | non-impl pass-through, no tests needed
+</good_example>
+
 </examples>
 
 <self_critique>
-Before completing:
+See the `tdd-red` skill verification checklist for the full pre-completion check.
 
-- [ ] Every AC line has at least one test
-- [ ] All tests are contract-level (no implementation assumptions)
+Quick checks:
+
+- [ ] Every AC line has at least one test (or non-impl pass-through)
+- [ ] All tests FAIL (no passes, no SyntaxErrors)
 - [ ] `TestFromAC_{Feature}` naming on all classes
-- [ ] pytest confirms all tests FAIL
-- [ ] ruff clean on test file
-- [ ] No source files created or edited
-- [ ] `from __future__ import annotations` on new files
-- [ ] Output summary produced with AC coverage table
-- [ ] Task moved to `in-progress` via `kanban-md move`
+- [ ] No source files created or edited — test files only
+- [ ] Task moved to `in-progress` via kanban-md move
 
 </self_critique>
