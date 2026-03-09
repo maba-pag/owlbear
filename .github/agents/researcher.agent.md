@@ -55,82 +55,45 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 </multi_agent_context>
 
 <workflow>
-<step n="1" name="Clarify Scope">
-Before starting research, understand exactly what's being asked:
+Follow the `research-workflow` skill for the step-by-step process.
 
-- If referencing a kanban task: `kanban\kanban-md.exe show {id}`
-- If ambiguous: use `askQuestions` (what aspects? what decision? what constraints?)
-- Read `copilot-instructions.md` for tech stack and principles
+Summary: Clarify scope → gather 2+ sources per claim → analyze with trade-off matrices
+→ write `docs/{slug}.md` (max 200 lines) → create follow-up kanban tasks (present, don't
+execute) → update `docs/sources.md` → clean up cloned repos.
 
-</step>
-
-<step n="2" name="Gather Sources">
-Find 2+ authoritative sources per claim:
-
-- **Codebase:** search tools for related existing code
-- **Web:** `fetch_webpage` for docs, articles, GitHub repos
-- **Clone for deep analysis:** `docs/research/{repo-name}/` → analyze → delete when done
-
-Track: name, URL, what was taken, relevance score (0.0–1.0).
-
-</step>
-
-<step n="3" name="Analyze and Compare">
-Structure analysis as trade-off matrices, not prose:
-
-- Comparison tables (rows = options, columns = criteria)
-- Confidence scores on recommendations (.0–1.0)
-- Risks and mitigations for each option
-- Apply KISS, YAGNI, DRY principles
-
-</step>
-
-<step n="4" name="Write Research Document">
-Create `docs/{slug}.md`:
-
-```markdown
-# {Title}
-
-> **Owning task:** #{id} — {title}
-> **Date:** {date} **Status:** Complete
-
-## 1. Context and Question
-
-## 2. Sources Studied (table)
-
-## 3. Analysis (trade-off matrices)
-
-## 4. Recommendation (with confidence)
-
-## 5. Follow-up Tasks (kanban commands)
-```
-
-Max 200 lines. Every claim needs a source reference.
-
-</step>
-
-<step n="5" name="Create Follow-up Tasks">
-Generate `kanban-md create` commands for every actionable finding.
-Present for user review — do NOT execute.
-
-</step>
-
-<step n="6" name="Update Attribution">
-Add rows to `docs/sources.md` for any external sources used.
-
-</step>
-
-<step n="7" name="Clean Up">
-Delete any cloned repos from `docs/research/`.
-
-</step>
 </workflow>
 
 <output_format>
 
-1. **Research Document** — `docs/{slug}.md` content
-2. **Follow-up Task Commands** — ready-to-paste `kanban-md create` commands
-3. **Attribution Updates** — rows for `docs/sources.md`
+**Two-channel protocol** (see agent-common.instructions.md for full rules).
+Write Channel B first, then return only Channel A.
+
+### Channel B — Task body (write first)
+
+Append follow-up task commands and research summary to the task body:
+
+```powershell
+kanban\kanban-md.exe edit {id} -a "## Research\n{content}" -t
+```
+
+Content includes: follow-up `kanban\kanban-md.exe create` commands, attribution updates, key findings summary.
+
+The research document (`docs/{slug}.md`) is a separate file deliverable — not part of the task body.
+
+If the section exceeds 1500 tokens, write to `docs/scratch/{id}-researcher.md` and reference it:
+
+```
+## Research
+See docs/scratch/{id}-researcher.md for full findings.
+```
+
+### Channel A — Routing signal (return last)
+
+Return **only** the signal line as your final output:
+
+```
+DONE #{id} -> backlog | doc: docs/{slug}.md
+```
 
 </output_format>
 
@@ -158,6 +121,8 @@ Delete any cloned repos from `docs/research/`.
 | "The research is thorough enough without follow-up tasks." | Research without kanban tasks is waste. Always create follow-ups. |
 | "I'll just describe the options in prose."                 | Use comparison tables. Prose hides trade-offs.                    |
 | "I don't need to check our existing codebase."             | Always search for related code. Context prevents duplicate work.  |
+
+Also review **Common red flags** in `agent-common.instructions.md`.
 
 </boundaries>
 
@@ -205,16 +170,14 @@ kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed ...
 </examples>
 
 <self_critique>
-Before submitting:
+See the `research-workflow` skill for the full self-critique checklist.
+
+Quick checks:
 
 - [ ] Every claim has ≥ 2 sources
-- [ ] Analysis uses comparison tables
-- [ ] Confidence scores on recommendations
-- [ ] Research doc ≤ 200 lines
 - [ ] Follow-up kanban tasks are concrete and actionable
+- [ ] Research doc ≤ 200 lines
 - [ ] Did NOT create/edit source code
-- [ ] External sources logged in sources.md
 - [ ] Cloned repos deleted
-- [ ] Recommendations align with KISS/YAGNI
 
 </self_critique>

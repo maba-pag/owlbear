@@ -33,9 +33,27 @@ thing being built is the thing being tested.
 
 <critical_rules>
 
-- **Do NOT execute commands.** Only output `kanban-md create` commands for user review.
+- **Do NOT execute commands.** Only output `kanban\kanban-md.exe create` commands for user review.
 - **TDD pairing is mandatory.** Every impl task has a preceding test task with `--depends-on`.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split it.
+- **Single domain per task.** Each task targets exactly one domain. Multi-domain work → split into separate tasks.
+
+  | Domain       | Module path scope                                                    |
+  | ------------ | -------------------------------------------------------------------- |
+  | config       | `config.py`                                                          |
+  | memory       | `memory/`                                                            |
+  | core         | `core/`, `safety/`                                                   |
+  | tools        | `tools/`, `projects/`, `planning/`                                   |
+  | channels     | `channels/`                                                          |
+  | bootstrap    | `bootstrap/`, `daemon.py`, `heartbeat.py`                            |
+  | providers    | `providers/`, `auth/`                                                |
+  | cli          | `bearclaw/`                                                          |
+  | agent-config | `.github/agents,skills,instructions,prompts/`, `src/owlbear/agents/` |
+  | test-infra   | shared conftest, fixtures, factories (not individual test files)     |
+  | docs         | `docs/`, `README.md`, `SECURITY.md`                                  |
+
+  **Edge case:** Adding a `config.py` field as part of a core feature is NOT a domain violation — domain = primary concern.
+
 - **Max 20 tasks per invocation.** Split larger plans into multiple calls.
 - **Every task needs AC** in `--body` describing what "done" looks like.
 
@@ -49,84 +67,45 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 </multi_agent_context>
 
 <workflow>
-<step n="1" name="Read the Plan">
-Read input (free-text, plan doc section, or requirements). Identify phase number,
-deliverables, implicit ordering.
+Follow the `task-decomposition` skill for the step-by-step process.
 
-Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
+Summary: Read plan → check board state → decompose into atomic single-domain tasks
+with TDD pairs → build dependency graph → assign priority/tags → generate `kanban-md
+create` commands (for user review, not execution) → visualize with Mermaid.
 
-</step>
-
-<step n="2" name="Check Board State">
-```powershell
-kanban\kanban-md.exe list --compact
-```
-
-Note: highest existing ID, existing dependencies, current phase landscape.
-
-</step>
-
-<step n="3" name="Decompose into Atomic Tasks">
-- **Single responsibility:** one module, one function, one config per task
-- **Testable:** clear pass/fail criterion
-- **Small:** ≤ 2 hours of focused work
-- **TDD pairs:** test task before implementation task
-
-Ordering heuristic:
-
-1. Model/schema tasks first (data structures)
-2. Test tasks before their implementation counterparts
-3. Integration tests after unit components are done
-4. CLI/UI tasks last (they depend on core logic)
-
-</step>
-
-<step n="4" name="Identify Dependencies">
-Build explicit graph:
-
-- Test → impl (impl depends on test)
-- Schema → CRUD → agent → CLI (layered architecture)
-- Cross-phase only when strictly necessary
-- Every `--depends-on` references a concrete task ID
-
-</step>
-
-<step n="5" name="Assign Priority and Tags">
-- **Priority:** count dependents (critical ≥ 3, needed 1–2, important otherwise)
-- **Tags:** always `phase-{n}` + at least one category tag
-
-</step>
-
-<step n="6" name="Generate Commands">
-**Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan,
-sequence `nn` zero-padded, unique within phase.
-
-One command per task:
-
-```
-kanban\kanban-md.exe create "P{phase}-{nn}: {Title}" --priority {p} --tags "{tags}" --depends-on {id} --body "{AC}"
-```
-
-Group by dependency layer (independent first, then dependents).
-
-</step>
-
-<step n="7" name="Visualize Dependencies">
-Mermaid diagram showing task relationships. Arrows: dependency → dependent.
-
-</step>
 </workflow>
 
 <output_format>
 
-**1. Task Breakdown Table**
+**Two-channel protocol** (see agent-common.instructions.md for full rules).
+Write body FIRST, then return ONLY the signal.
 
-| #   | Title | Priority | Tags | Depends On | AC Summary |
-| --- | ----- | -------- | ---- | ---------- | ---------- |
+### Channel B — Task body (write first, when parent task ID exists)
 
-**2. kanban-md Commands** — grouped by layer with comments
+When dispatched with a parent task ID, append the planning breakdown to that task:
 
-**3. Dependency Graph** — Mermaid diagram
+```powershell
+kanban\kanban-md.exe edit {parent_id} -a "## Planning\n{content}" -t
+```
+
+Content includes: task breakdown table, dependency graph, `kanban\kanban-md.exe create` commands.
+
+If the section exceeds 1500 tokens, write to `docs/scratch/{parent_id}-planner.md` and reference it:
+
+```
+## Planning
+See docs/scratch/{parent_id}-planner.md for full breakdown.
+```
+
+**When user-invoked without a parent task ID:** Channel B does not apply. Return the full breakdown (table, commands, Mermaid diagram) directly to the user.
+
+### Channel A — Routing signal (return last)
+
+Return **only** the signal line as your final output:
+
+```
+DONE | {N} tasks created
+```
 
 </output_format>
 
@@ -141,6 +120,7 @@ Mermaid diagram showing task relationships. Arrows: dependency → dependent.
 **Red flags — STOP and reassess:**
 
 - A task title contains "and" joining two unrelated concerns (split it)
+- A task touches modules from two or more domains (split by domain)
 - An implementation task has no preceding test task in the batch
 - Sequence numbers collide with existing tasks
 - A task body is empty or contains only "implement this"
@@ -168,12 +148,32 @@ kanban\kanban-md.exe create "P2-01: Implement parser, tests, and CLI" ...
 Three responsibilities in one task. Should be ≥ 5 separate tasks.
 </bad_example>
 
+<bad_example why="Multi-domain — crosses domain boundaries">
+kanban\kanban-md.exe create "P3-05: Implement web_read tool and add bearclaw web read CLI command" --tags "phase-3,tools,cli" ...
+
+Two domains: tools (`tools/`) and cli (`bearclaw/`). Split into:
+
+- "P3-05: Implement web_read tool" (scope:tools)
+- "P3-06: Add bearclaw web read CLI command" (scope:cli, depends on P3-05)
+  </bad_example>
+
 <bad_example why="Backwards TDD — tests depend on implementation">
 create "P2-01: Implement models" ...
 create "P2-02: Test models" --depends-on P2-01 ...
 
 Tests depend on implementation — this is backwards. Test task must come first.
 </bad_example>
+
+<good_example why="Multi-domain feature decomposed into single-domain tasks">
+
+# Feature: "Add diagram generation" spans tools + cli + docs
+
+kanban\kanban-md.exe create "P5-01: Test DiagramService" --priority critical --tags "phase-5,scope:tools,test" --body "Pytest cases for DiagramService: render mermaid, handle errors, timeout."
+kanban\kanban-md.exe create "P5-02: Implement DiagramService" --priority critical --tags "phase-5,scope:tools" --depends-on P5-01 --body "DiagramService in tools/diagram/service.py. Must pass P5-01 tests."
+kanban\kanban-md.exe create "P5-03: Test bearclaw diagram CLI" --priority needed --tags "phase-5,scope:cli,test" --depends-on P5-02 --body "Pytest cases for bearclaw diagram subcommand."
+kanban\kanban-md.exe create "P5-04: Implement bearclaw diagram CLI" --priority needed --tags "phase-5,scope:cli" --depends-on P5-03 --body "Typer command in bearclaw/. Must pass P5-03 tests."
+kanban\kanban-md.exe create "P5-05: Document diagram generation" --priority important --tags "phase-5,scope:docs" --depends-on P5-04 --body "Update README with diagram usage. Update copilot-instructions.md if needed."
+</good_example>
 
 <good_example why="Atomic TDD pair with correct dependency direction">
 
@@ -195,16 +195,12 @@ kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --
 </examples>
 
 <self_critique>
-Before submitting:
+See the `task-decomposition` skill for the full self-critique checklist.
 
-- [ ] Announced decomposition plan and expected count
+Quick checks:
+
 - [ ] Every impl task has preceding test task with `--depends-on`
-- [ ] No task has multiple responsibilities
-- [ ] Sequence numbers unique and zero-padded
-- [ ] Priority reflects blocking potential
-- [ ] Tags include `phase-{n}` + category
-- [ ] No cycles in dependency graph
-- [ ] Mermaid diagram matches command list
+- [ ] No task has multiple responsibilities or multiple domains
 - [ ] Total ≤ 20 tasks
 - [ ] AC describes "done", not "how"
 

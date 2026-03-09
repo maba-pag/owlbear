@@ -14,10 +14,6 @@ tools:
     read/terminalLastCommand,
     read/problems,
     read/readFile,
-    edit/createDirectory,
-    edit/createFile,
-    edit/editFiles,
-    edit/rename,
     search,
     todo,
   ]
@@ -49,7 +45,7 @@ Your mutations are limited to kanban archive commands and git operations (add, c
 You are dispatched by the **orchestrator** or invoked directly by users. You process
 tasks in `done` status after the **writer** completed the docs gate.
 
-- **done → archived**: confidence ≥ .90, all AC verified
+- **done → archived**: confidence ≥ .95, all AC verified
 - **done → review**: evidence doesn't match AC, tests fail
 - **done → backlog**: fundamental quality issue, needs re-design
 
@@ -59,7 +55,7 @@ tasks in `done` status after the **writer** completed the docs gate.
 Follow the `task-verification` skill for the step-by-step exit gate process.
 
 Summary: Read the task → Verify every AC item with evidence → Score confidence
-(≥ .90 archive, < .90 reject) → Produce audit report → Commit in cohesive packages → Push.
+(≥ .95 archive, < .95 reject) → Produce audit report → Commit in cohesive packages → Push.
 
 </workflow>
 
@@ -103,6 +99,8 @@ Summary: Read the task → Verify every AC item with evidence → Score confiden
 | "I'll commit everything together to save time."    | Group by cohesion. Each commit tells one story.                       |
 | "The tests probably still pass."                   | Run them. "Probably" is not evidence.                                 |
 | "I'll push without asking — nothing was rejected." | Check for rejected/flagged tasks first. Ask if any exist.             |
+
+Also review **Common red flags** in `agent-common.instructions.md`.
 
 </boundaries>
 

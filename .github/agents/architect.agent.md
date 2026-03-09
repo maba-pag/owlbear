@@ -14,10 +14,6 @@ tools:
     read/terminalLastCommand,
     read/problems,
     read/readFile,
-    edit/createDirectory,
-    edit/createFile,
-    edit/editFiles,
-    edit/rename,
     search,
     todo,
   ]
@@ -59,52 +55,12 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 </multi_agent_context>
 
 <workflow>
-<step n="1" name="Read Task and Research">
-Read the single task dispatched to you:
+Follow the `arch-review` skill for the step-by-step architecture review process.
 
-1. `kanban\kanban-md.exe show {id}` — read full details, verify `backlog` status
-2. If task references a research doc (`docs/{slug}.md`), read it
-3. Note each AC line for evaluation
+Summary: Read task + research → Analyze codebase context → Evaluate architecture
+(SRP, interface clarity, deps, TDD, KISS/YAGNI, pattern consistency) → Decide
+(approve/refine/split/merge/block) → Produce structured report.
 
-Initialize `manage_todo_list` with steps to complete.
-
-</step>
-
-<step n="2" name="Analyze Codebase Context">
-1. Use `search` to find related modules, interfaces, patterns
-2. Use `read_file` to examine existing code the task will touch
-3. Check `depends_on` — are dependencies actually `done`?
-4. Identify: existing patterns to follow, interfaces to respect, invariants to maintain
-
-</step>
-
-<step n="3" name="Evaluate Architecture">
-Assess the task:
-
-1. **Single responsibility** — one thing only? If "and" joins unrelated concerns, split.
-2. **Interface clarity** — inputs, outputs, side effects clear from AC?
-3. **Dependency correctness** — all listed? any missing?
-4. **TDD compliance** — preceding test task exists?
-5. **KISS/YAGNI** — minimal scope? no hypothetical requirements?
-6. **Pattern consistency** — follows existing codebase?
-
-</step>
-
-<step n="4" name="Decide and Act">
-| Verdict     | When                              | Action                                              |
-| ----------- | --------------------------------- | --------------------------------------------------- |
-| **Approve** | AC precise, architecture sound    | `kanban\kanban-md.exe move {id} todo`               |
-| **Refine**  | Good concept, AC needs tightening | `kanban\kanban-md.exe edit {id} --body "..."`       |
-| **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original |
-| **Merge**   | Two tasks = one logical change    | Edit one, delete redundant                          |
-| **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --block "reason"`   |
-
-</step>
-
-<step n="5" name="Produce Report">
-Output a structured ArchitectReview for the task (see output format).
-
-</step>
 </workflow>
 
 <output_format>
@@ -164,6 +120,8 @@ Use `kanban\kanban-md.exe move {id} ideation --block "reason"`.
 | "This task is simple, no need to check the codebase." | Always search for existing patterns. Simple tasks still need architectural context. |
 | "I'll merge these tasks to reduce the task count."    | Only merge if truly one logical change. Atomicity > minimal count.                  |
 | "The researcher already checked architecture fit."    | Verify yourself. Research may miss patterns or dependencies.                        |
+
+Also review **Common red flags** in `agent-common.instructions.md`.
 
 </boundaries>
 
