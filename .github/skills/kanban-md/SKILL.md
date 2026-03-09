@@ -11,6 +11,8 @@ Manage kanban boards stored as Markdown files with YAML frontmatter.
 Each task is a `.md` file in `kanban/tasks/`. The CLI is `kanban-md`
 (alias `kbmd` if installed via Homebrew).
 
+> **OwlBear convention:** Use `kanban\kanban-md.exe` (full path) in all commands. The binary lives in the `kanban/` directory.
+
 ## Current Board State
 
 !`kanban-md board 2>/dev/null || echo 'No board found — run: kanban-md init --name PROJECT_NAME'`

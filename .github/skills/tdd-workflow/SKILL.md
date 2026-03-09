@@ -1,6 +1,6 @@
 ---
 name: tdd-workflow
-description: "TDD implementation workflow: read AC → write failing tests → implement → verify → advance. Use when building features or fixing bugs with test-driven development."
+description: "TDD GREEN phase workflow: read existing tests → verify they fail → implement → verify → advance. Use when building features or fixing bugs with test-driven development."
 ---
 
 # TDD Workflow
@@ -10,7 +10,7 @@ Step-by-step process for implementing a kanban task using test-driven developmen
 ## Step 1 — Read the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
-2. `kanban\kanban-md.exe move {id} in-progress`
+2. Verify task is in `in-progress` status (the test-writer already moved it here)
 3. Read referenced source files to understand existing code
 4. Initialize `manage_todo_list` with implementation steps
 
@@ -22,26 +22,28 @@ Before writing any code, articulate:
 - **Expected behavior** — what the code should do when complete
 - **What could go wrong** — edge cases, breaking changes, import cycles
 
-## Step 3 — Write failing tests (RED)
+## Step 3 — Read existing tests
 
-Create or extend `tests/test_{module}.py`:
+The test-writer has already created `TestFromAC_*` classes in `tests/test_{module}.py`.
+Your job is to understand what they expect and make them pass.
 
-- Cover every AC line from the kanban task
-- Test happy path and edge cases
-- Use `unittest.mock.patch` / `MagicMock` for external dependencies
-- Follow existing test file patterns in the project
+1. Read the test file — identify every `TestFromAC_*` class
+2. Extract the expected interfaces: function signatures, class names, error types,
+   return values, and import paths the tests assume
+3. Plan your implementation approach based on these interfaces
 
-Run and verify they **fail**:
+Verify all `TestFromAC_*` tests currently **fail**:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-Expect failures in the output. For verbose traceback detail:
+Expect failures. If any `TestFromAC_*` tests already pass, something already exists —
+investigate before implementing.
 
-```powershell
-uv run pytest tests/test_{module}.py -v --tb=short
-```
+> **Backward compatibility:** When no `TestFromAC_*` classes exist (old-style
+> single-agent TDD or standalone builder work), fall back to the full RED+GREEN
+> workflow — write failing tests yourself, then implement.
 
 ## Step 4 — Implement minimal code (GREEN)
 
@@ -61,7 +63,21 @@ uv run pytest tests/test_{module}.py -q --tb=short
 
 Expect all tests passing, zero failures.
 
-## Step 5 — Refactor (if needed)
+## Step 5 — Add builder-discovered tests (optional)
+
+During implementation you may discover edge cases not covered by the test-writer's
+`TestFromAC_*` tests. You may add these in a **separate** `TestBuilderDiscovered` class
+in the same test file. Never add them to `TestFromAC_*` classes.
+
+Each builder-discovered test must follow RED-GREEN within this step:
+
+1. Write the test in `TestBuilderDiscovered` — verify it **fails**
+2. Implement the fix — verify it **passes**
+
+This step is optional. Skip it if the `TestFromAC_*` tests already cover the behavior
+adequately.
+
+## Step 6 — Refactor (if needed)
 
 Only refactor code you just wrote:
 
@@ -70,23 +86,24 @@ Only refactor code you just wrote:
 - Split functions if too long
 - Do NOT refactor unrelated code
 
-## Step 6 — Verify
+## Step 7 — Verify
 
 Run the verification suite. **Always scope test runs** — the full suite has hundreds of
 tests and will time out.
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
-uv run pytest tests/test_{module}.py --cov=src/owlbear/{path} --cov-report=term-missing -q
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 uv run ruff check src/ tests/
 ```
 
-Use the **directory path** for `--cov`, not a dotted module name (dotted names
-trigger a pydantic MRO crash via coverage.py's import instrumentation).
+Run plain — never pipe through PS cmdlets. See the `pytest-and-linting` skill
+for the full rules. If coverage measurement fails,
+re-read that section before retrying — do NOT iterate through flag variations.
 
 All must pass. Target ≥ 90% coverage on touched modules.
 
-## Step 7 — Advance
+## Step 8 — Advance
 
 ```powershell
 kanban\kanban-md.exe move {id} review
@@ -94,7 +111,10 @@ kanban\kanban-md.exe move {id} review
 
 ## Verification checklist
 
-- [ ] Tests written BEFORE implementation (saw them fail)
+- [ ] Test-writer's `TestFromAC_*` tests verified as failing before implementation
+- [ ] All `TestFromAC_*` tests pass after implementation
+- [ ] No `TestFromAC_*` classes modified
+- [ ] Any builder-added tests are in `TestBuilderDiscovered` class
 - [ ] Implementation is the minimum code to pass all tests
 - [ ] `pytest` all pass, `ruff` clean
 - [ ] Coverage ≥ 90% on touched modules

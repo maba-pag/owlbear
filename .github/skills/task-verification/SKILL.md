@@ -21,7 +21,16 @@ For every AC item on every task, collect concrete evidence:
 
 - **File exists:** `read_file` — verify the file, don't assume
 - **Code matches AC:** grep or read for specific classes, functions, signatures
-- **Tests pass:** Run `uv run pytest tests/ -m "not api" --tb=short -q` once for full suite
+- **Tests pass:** Run the full suite plain (see the `pytest-and-linting` skill
+  for piping rules and the Python fallback):
+
+  ```powershell
+  uv run pytest tests/ -m "not api" -q --tb=short
+  ```
+
+  **NOTE:** Unlike the reviewer (who scopes tests to task-specific files), the auditor
+  intentionally runs the FULL test suite. As 3rd-line defense, the auditor checks for
+  cross-task regressions that scoped runs would miss. This is by design.
 - **Lint clean:** Run `uv run ruff check src/ tests/` once
 - **AC deviations:** Note differences between AC and implementation
   - Minor deviations (better naming, improved path): acceptable if intent is met
@@ -32,14 +41,14 @@ For every AC item on every task, collect concrete evidence:
 | Score | Meaning | Action |
 |-------|---------|--------|
 | `1.0` | Every AC verified, no deviations | Archive |
-| `.90` | All AC met, minor naming/path deviations | Archive |
-| `.80` | Most AC met, one non-trivial deviation | Archive |
-| `.70` | Functional but multiple deviations | Reject to review |
-| `< .70` | Incomplete or unverifiable | Reject to backlog |
+| `.95` | All AC met, minor naming/path deviations | Archive |
+| `.90` | Most AC met, trivial cosmetic deviation | Reject to review |
+| `.85` | Functional, minor non-trivial deviation | Reject to review |
+| `< .85` | Incomplete or unverifiable | Reject to backlog |
 
-- **≥ .80:** `kanban\kanban-md.exe archive {id}`
-- **< .80 fixable:** `kanban\kanban-md.exe move {id} review --block "reason"`
-- **< .80 fundamental:** `kanban\kanban-md.exe move {id} backlog --block "reason"`
+- **≥ .95:** `kanban\kanban-md.exe archive {id}`
+- **< .95 fixable:** `kanban\kanban-md.exe move {id} review --block "reason"`
+- **< .95 fundamental:** `kanban\kanban-md.exe move {id} backlog --block "reason"`
 
 ## Step 4 — Audit report
 

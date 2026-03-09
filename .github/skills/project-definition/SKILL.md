@@ -7,9 +7,8 @@ user-invocable: false
 # Project Definition Workflow
 
 Structured workflow for turning a user's idea into an actionable project
-definition. The planner agent loads this skill to guide the idea-to-spec
-pipeline — producing a `ProjectDefinition` that downstream agents can
-decompose into kanban tasks.
+definition. This skill is user-invocable for ad-hoc project scoping —
+producing a `ProjectDefinition` that can be decomposed into kanban tasks.
 
 ## Workflow Template
 
@@ -26,11 +25,12 @@ to keep the user in the loop and avoid building on assumptions.
    (see the example interaction below). Continue until no open questions
    remain or the user explicitly says "that's enough."
 
-3. **Research via knowledge + web_search** — Search the knowledge base
-   (`query_knowledge`) for relevant prior art, patterns, and existing
-   components. Use `web_search` to find libraries, frameworks, or similar
-   projects. Summarize findings and surface any risks or blockers
-   discovered during research.
+3. **Research via web search** — Use `web_search` to find libraries,
+   frameworks, or similar projects. Check existing codebase for relevant
+   prior art, patterns, and existing components. Summarize findings and
+   surface any risks or blockers discovered during research.
+
+<!-- DEACTIVATED: knowledge graph (`query_knowledge`) not yet available in VS Code agents. -->
 
 4. **Propose definition** — Draft a `ProjectDefinition` covering all fields
    in the reference table below. Present it to the user as a structured
