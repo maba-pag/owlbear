@@ -3,6 +3,10 @@
 Provides :class:`CommandSafetyGuard` — a ``PRE_TOOL_USE`` hook that inspects
 tool-call payloads and blocks dangerous shell commands or file operations.
 Raises :class:`BlockedCommandError` for denied commands or file paths.
+
+NOTE: This blocklist is defense-in-depth only — it is NOT a security boundary.
+The approval gate on run_command is the primary control. Regex blocklists
+are provably insufficient for shell command safety.
 """
 
 from __future__ import annotations
@@ -21,12 +25,30 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DEFAULT_BLOCKED_COMMANDS: list[str] = [
+    # rm: -rf combined, -r -f separated, --recursive --force long flags
     r"rm\s+-rf\s+/",
+    r"rm\s+(-[a-z]*r[a-z]*\s+)*-[a-z]*f[a-z]*\s+/",
+    r"rm\s+(-[a-z]*f[a-z]*\s+)*-[a-z]*r[a-z]*\s+/",
+    r"rm\s+--recursive\s+--force\b",
+    r"rm\s+--force\s+--recursive\b",
+    r"sudo\s+rm",
+    # git push: --force, -f, --force-with-lease
     r"git\s+push\s+--force",
+    r"git\s+push\s+-f\b",
+    # pip: bare pip and python -m pip
     r"(?<!uv )(?<!uv run )pip\s+install",
+    r"python\d?\s+-m\s+pip\s+install",
+    # Windows: format, del, Remove-Item -Recurse -Force
     r"format\s+[cC]:",
     r"del\s+/[sS]\s+/[qQ]",
-    r"sudo\s+rm",
+    r"(?i)Remove-Item\s+.*-Recurse.*-Force",
+    r"(?i)Remove-Item\s+.*-Force.*-Recurse",
+    # System: chmod 777, mkfs, dd if=, shutdown, reboot
+    r"chmod\s+777\b",
+    r"mkfs",
+    r"\bdd\s+if=",
+    r"(?:sudo\s+)?shutdown\b",
+    r"(?:sudo\s+)?reboot\b",
 ]
 
 DEFAULT_BLOCKED_FILES: list[str] = [

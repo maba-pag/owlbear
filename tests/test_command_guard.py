@@ -76,7 +76,7 @@ class TestDefaultPatterns:
     """Module-level defaults are populated."""
 
     def test_default_blocked_commands_is_non_empty(self) -> None:
-        assert len(DEFAULT_BLOCKED_COMMANDS) >= 6
+        assert len(DEFAULT_BLOCKED_COMMANDS) >= 15
 
     def test_default_blocked_files_is_non_empty(self) -> None:
         assert len(DEFAULT_BLOCKED_FILES) >= 1
@@ -312,3 +312,127 @@ class TestCommandSafetyGuardHookIntegration:
                 )
             )
         assert "rm -rf /" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Expanded blocklist patterns (SEC-04)
+# ---------------------------------------------------------------------------
+
+
+class TestExpandedRmPatterns:
+    """rm variants: -r -f separated flags, --recursive --force long flags."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "rm -r -f /home",
+            "rm -f -r /tmp",
+            "rm --recursive --force /var",
+            "rm --force --recursive /etc",
+            "rm -r -f  /data",
+        ],
+    )
+    def test_blocks_rm_recursive_force_variants(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
+
+    def test_allows_rm_single_file(self) -> None:
+        guard = CommandSafetyGuard()
+        _run(guard(_shell_data("rm file.txt")))
+
+    def test_allows_rm_single_flag(self) -> None:
+        guard = CommandSafetyGuard()
+        _run(guard(_shell_data("rm -r dir/")))
+
+
+class TestExpandedGitPushPatterns:
+    """git push: -f shorthand and --force-with-lease."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git push -f",
+            "git push -f origin main",
+            "git push --force-with-lease",
+            "git push --force-with-lease origin main",
+        ],
+    )
+    def test_blocks_force_push_variants(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
+
+    def test_allows_normal_push(self) -> None:
+        guard = CommandSafetyGuard()
+        _run(guard(_shell_data("git push origin main")))
+
+
+class TestPythonMPipPattern:
+    """python -m pip should be blocked like bare pip."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "python -m pip install requests",
+            "python3 -m pip install flask",
+            "python -m pip install -r requirements.txt",
+        ],
+    )
+    def test_blocks_python_m_pip(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
+
+    def test_blocks_uv_run_python_m_pip(self) -> None:
+        """uv run python -m pip still invokes system pip — blocked."""
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data("uv run python -m pip install requests")))
+
+
+class TestRemoveItemPattern:
+    """PowerShell Remove-Item -Recurse -Force variants."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "Remove-Item -Recurse -Force C:\\dir",
+            "Remove-Item -Force -Recurse .",
+            "Remove-Item -Recurse -Force -Path C:\\data",
+        ],
+    )
+    def test_blocks_remove_item_recursive_force(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
+
+    def test_allows_remove_item_single_file(self) -> None:
+        guard = CommandSafetyGuard()
+        _run(guard(_shell_data("Remove-Item file.txt")))
+
+
+class TestAdditionalDangerousCommands:
+    """chmod 777, mkfs, dd if=, shutdown, reboot."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "chmod 777 /var/www",
+            "chmod 777 file.sh",
+            "mkfs /dev/sda1",
+            "mkfs.ext4 /dev/sda1",
+            "dd if=/dev/zero of=/dev/sda",
+            "dd if=/dev/urandom of=/dev/sdb bs=1M",
+            "shutdown -h now",
+            "shutdown /s",
+            "reboot",
+            "reboot -f",
+            "sudo reboot",
+            "sudo shutdown now",
+        ],
+    )
+    def test_blocks_dangerous_system_commands(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
