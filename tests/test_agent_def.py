@@ -143,3 +143,15 @@ class TestParseAgentDefinition:
         )
         defn = parse_agent_definition(md)
         assert defn.system_prompt == body
+
+    def test_no_closing_delimiter_raises(self, tmp_path: Path) -> None:
+        md = tmp_path / "unclosed.md"
+        md.write_text("---\nname: oops\ndescription: Missing close\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="closing frontmatter delimiter"):
+            parse_agent_definition(md)
+
+    def test_yaml_not_mapping_raises(self, tmp_path: Path) -> None:
+        md = tmp_path / "list_yaml.md"
+        md.write_text("---\n- item1\n- item2\n---\nBody.\n", encoding="utf-8")
+        with pytest.raises(TypeError, match="not a mapping"):
+            parse_agent_definition(md)
