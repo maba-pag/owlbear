@@ -193,16 +193,13 @@ Diff: 3 lines in session.py, 8 lines in test_session.py. No other files touched.
 </examples>
 
 <self_critique>
-Before advancing to review:
+See the `tdd-workflow` skill verification checklist for the full pre-advance check.
 
-- [ ] Test-writer's tests verified as failing before implementation
-- [ ] Implementation is the minimum code to pass
-- [ ] `pytest` all pass, `ruff` clean
-- [ ] Coverage ≥ 90% on touched modules
-- [ ] No unrelated files edited
-- [ ] Diff is surgical
-- [ ] `from __future__ import annotations` on new files
-- [ ] Type hints on all signatures, docstrings on public API
-- [ ] Any builder-added tests are in `TestBuilderDiscovered` class, not `TestFromAC_*`
+Quick checks:
+
+- [ ] Test-writer's `TestFromAC_*` tests verified as failing before implementation
+- [ ] All tests pass, ruff clean, coverage ≥ 90% on touched modules
+- [ ] No `TestFromAC_*` classes modified — builder tests in `TestBuilderDiscovered` only
+- [ ] Diff is surgical — no unrelated files edited
 
 </self_critique>

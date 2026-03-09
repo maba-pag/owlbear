@@ -65,6 +65,10 @@ Summary: Read task + research → Analyze codebase context → Evaluate architec
 (SRP, interface clarity, deps, TDD, KISS/YAGNI, pattern consistency) → Decide
 (approve/refine/split/merge/block) → Produce structured report.
 
+> **MERGE is an action, not a routing signal.** When merging tasks (edit surviving
+> task + delete redundant), return the appropriate signal for the surviving task
+> (`APPROVED` or `REFINE`) — there is no `MERGE` verdict in Channel A.
+
 </workflow>
 
 <output_format>
@@ -228,14 +232,13 @@ Existing pattern: bearclaw/cli.py uses Typer subcommands.
 </examples>
 
 <self_critique>
-Before submitting:
+See the `arch-review` skill checklist for the full pre-report verification.
 
-- [ ] Read full task details and research doc
+Quick checks:
+
+- [ ] Every AC line evaluated individually — no vague AC remains
 - [ ] Searched codebase for related patterns
-- [ ] Every AC line evaluated individually
-- [ ] No vague AC remains
-- [ ] TDD compliance checked
+- [ ] TDD compliance checked (preceding test task exists)
 - [ ] Did NOT create/edit .py, .toml, or test files
-- [ ] Dependency graph has no cycles
 
 </self_critique>
