@@ -7,6 +7,8 @@ description: "Guardrails for research/analysis documents — ensures findings be
 
 Research and analysis documents (`docs/*.md`) are **supporting artifacts, never deliverables**. The deliverable is always kanban tasks and working code.
 
+For the complete research procedure and task lifecycle, see the `research-workflow` skill.
+
 ## Before writing a research doc
 
 - Confirm the kanban task that owns this research (e.g., `#72 — Plan removal of GitHub Models API`).
@@ -19,23 +21,13 @@ Research and analysis documents (`docs/*.md`) are **supporting artifacts, never 
 
 ## After writing the research doc
 
-**Move the owning task to `review`** (`kanban-md move <id> review`). The task is NOT done until:
+The task is NOT done until:
 
 1. Every recommended action from the doc exists as a kanban task (`kanban-md create ...`).
 2. Each kanban task body links back to the research doc (e.g., `See docs/p7-research.md §4`).
 3. You have verified the tasks exist on the board (`kanban-md list --compact`).
-4. Move the owning task to `done` only after all follow-up tasks are on the board.
 
 If the research doc recommends zero follow-up tasks, that's a red flag — explicitly state why no action is needed.
-
-### Research task lifecycle
-
-Tag research tasks with `research`. Flow: `backlog` → `todo` → `in-progress` (write doc) → `review` (create follow-up kanban tasks) → `done`.
-
-> **Pipeline dispatch note:** Research-tagged tasks follow a different dispatch path
-> than implementation tasks. In `todo`, they skip the test-writer and transition
-> directly to `in-progress` (see wave-planning dispatch mapping, "Non-implementation
-> task exception").
 
 ## Common failure mode
 
