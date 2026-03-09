@@ -5857,3 +5857,37 @@
 {"timestamp":"2026-03-09T19:42:51.1446931+01:00","action":"edit","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
 {"timestamp":"2026-03-09T19:42:57.9610335+01:00","action":"edit","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
 {"timestamp":"2026-03-09T19:43:03.2736907+01:00","action":"move","task_id":667,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T19:44:30.3008818+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-09T19:44:36.5691344+01:00","action":"move","task_id":578,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T19:45:09.6937794+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T19:45:14.6142875+01:00","action":"move","task_id":577,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T19:46:31.1526264+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T19:46:31.1573299+01:00","action":"claim","task_id":704,"detail":"builder"}
+{"timestamp":"2026-03-09T19:47:39.9370808+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T19:47:44.2901165+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T19:47:49.1758768+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T19:47:55.9340374+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T19:48:48.771602+01:00","action":"move","task_id":712,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T19:48:53.7087898+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T19:48:53.7142488+01:00","action":"block","task_id":712,"detail":"1 failing test: TestFromACExtractFilePaths::test_relative_path fixture bug  test-writer must fix line 98"}
+{"timestamp":"2026-03-09T19:54:20.9537706+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T19:54:26.0016962+01:00","action":"move","task_id":704,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T20:02:01.6616517+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-09T20:02:06.5146524+01:00","action":"move","task_id":578,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T20:05:20.2309005+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T20:05:20.235192+01:00","action":"release","task_id":681,"detail":"researcher"}
+{"timestamp":"2026-03-09T20:05:20.7241284+01:00","action":"move","task_id":681,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-09T20:05:30.9697059+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T20:05:30.9740432+01:00","action":"block","task_id":681,"detail":"Research concludes standalone evaluator unnecessary (KISS/YAGNI). User decision required: close or restore."}
+{"timestamp":"2026-03-09T20:05:42.6941573+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T20:05:42.6978083+01:00","action":"release","task_id":681,"detail":"architect"}
+{"timestamp":"2026-03-09T20:06:47.3617903+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T20:06:59.8257277+01:00","action":"move","task_id":704,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T20:07:05.1038081+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T20:07:05.1090529+01:00","action":"block","task_id":704,"detail":"LintGateError dead code + duplicate retry logic. Architect refine AC3+AC4. Builder extract _schedule_retry helper."}
+{"timestamp":"2026-03-09T20:09:26.3743621+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T20:09:32.7500189+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T20:09:37.8151354+01:00","action":"move","task_id":713,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T20:12:32.2920165+01:00","action":"edit","task_id":494,"detail":"Expand command guard blocklist and document limitations"}
+{"timestamp":"2026-03-09T20:12:35.7871181+01:00","action":"edit","task_id":494,"detail":"Expand command guard blocklist and document limitations"}
+{"timestamp":"2026-03-09T20:13:12.0821602+01:00","action":"move","task_id":494,"detail":"done -\u003e archived"}
