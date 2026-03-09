@@ -8,6 +8,7 @@ file_glob).  Collects per-item results into a :class:`RefreshResult` summary.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,16 +16,21 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict
 
 from owlbear.memory.knowledge.models import SourceType
-from owlbear.tools.browser.crawl_config import CrawlConfig
-from owlbear.tools.browser.integration import crawl_and_ingest
+from owlbear.paths import sandbox_path
 
 if TYPE_CHECKING:
     from owlbear.memory.knowledge.ingest import IngestPipeline, IngestResult
     from owlbear.memory.knowledge.models import KnowledgeSource
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
-    from owlbear.tools.browser.crawler import WebCrawler
 
 logger = logging.getLogger(__name__)
+
+CrawlHandler = Callable[[dict[str, object]], Awaitable[list["IngestResult"]]]
+"""Callback that receives a raw source config dict and returns ingest results.
+
+The bootstrap layer is responsible for constructing the appropriate CrawlConfig
+and wiring crawler + pipeline into the closure that implements this signature.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -58,8 +64,9 @@ class RefreshOrchestrator:
         CRUD store for knowledge source records.
     pipeline:
         Async ingestion pipeline (handles delta detection internally).
-    crawler:
-        Optional web crawler for ``crawl`` source types.
+    crawl_handler:
+        Optional callback for ``crawl`` source types.  Receives the raw
+        source config dict and returns a list of :class:`IngestResult`.
     workspace_root:
         Root path used as default ``base_dir`` for ``file_glob`` sources.
     """
@@ -68,12 +75,12 @@ class RefreshOrchestrator:
         self,
         store: KnowledgeSourceStore,
         pipeline: IngestPipeline,
-        crawler: WebCrawler | None = None,
+        crawl_handler: CrawlHandler | None = None,
         workspace_root: Path | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
-        self._crawler = crawler
+        self._crawl_handler = crawl_handler
         self._workspace_root = workspace_root or Path.cwd()
 
     def update_workspace(self, workspace: Path) -> None:
@@ -131,13 +138,12 @@ class RefreshOrchestrator:
         return await self._ingest_items(source.id, urls)
 
     async def _handle_crawl(self, source: KnowledgeSource) -> RefreshResult:
-        """Build CrawlConfig and delegate to crawl_and_ingest."""
-        if self._crawler is None:
-            msg = "Cannot refresh crawl source: crawler is not configured"
+        """Delegate to the injected crawl handler callback."""
+        if self._crawl_handler is None:
+            msg = "Cannot refresh crawl source: crawl handler is not configured"
             raise ValueError(msg)
 
-        config = self._build_crawl_config(source.config)
-        ingest_results = await crawl_and_ingest(self._crawler, self._pipeline, config)
+        ingest_results = await self._crawl_handler(source.config)
 
         refreshed = sum(1 for r in ingest_results if not r.skipped)
         skipped = sum(1 for r in ingest_results if r.skipped)
@@ -151,15 +157,44 @@ class RefreshOrchestrator:
         )
 
     async def _handle_file_glob(self, source: KnowledgeSource) -> RefreshResult:
-        """Resolve file glob pattern and ingest each matching file."""
+        """Resolve file glob pattern and ingest matching files.
+
+        Both ``base_dir`` (when provided) and each resolved glob path are
+        validated with :func:`~owlbear.paths.sandbox_path` to prevent
+        path-traversal escapes outside the workspace root.
+        """
         pattern: str = source.config.get("pattern", "")
         base_dir_str: str | None = source.config.get("base_dir")
 
-        base = Path(base_dir_str) if base_dir_str else self._workspace_root
+        if base_dir_str is not None:
+            base = sandbox_path(self._workspace_root, base_dir_str)
+        else:
+            base = self._workspace_root
+
         paths = sorted(base.glob(pattern))
 
-        items = [str(p) for p in paths]
-        return await self._ingest_items(source.id, items)
+        # Validate each glob result against the workspace sandbox
+        items: list[str] = []
+        errors: list[str] = []
+        for p in paths:
+            try:
+                sandboxed = sandbox_path(self._workspace_root, p)
+                items.append(str(sandboxed))
+            except PermissionError as exc:
+                errors.append(f"{p}: {exc}")
+                logger.warning("Skipping path outside workspace: %s", p)
+
+        result = await self._ingest_items(source.id, items)
+        # Merge sandbox errors into the ingest result
+        if errors:
+            return RefreshResult(
+                source_id=result.source_id,
+                refreshed=result.refreshed,
+                skipped=result.skipped,
+                failed=result.failed + len(errors),
+                errors=[*result.errors, *errors],
+            )
+        return result
 
     # -- helpers -------------------------------------------------------------
 
@@ -189,12 +224,6 @@ class RefreshOrchestrator:
             failed=failed,
             errors=errors,
         )
-
-    @staticmethod
-    def _build_crawl_config(config: dict[str, object]) -> CrawlConfig:
-        """Build a :class:`CrawlConfig` from a source config dict."""
-        fields = {k: v for k, v in config.items() if k in CrawlConfig.model_fields}
-        return CrawlConfig(**fields)
 
     def _update_source_record(self, source: KnowledgeSource, result: RefreshResult) -> None:
         """Persist refresh outcome on the source record."""

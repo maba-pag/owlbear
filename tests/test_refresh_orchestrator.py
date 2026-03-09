@@ -14,7 +14,6 @@ from pydantic import ValidationError
 from owlbear.memory.knowledge.ingest import IngestResult
 from owlbear.memory.knowledge.models import KnowledgeSource, SourceType
 from owlbear.memory.knowledge.refresh import RefreshOrchestrator, RefreshResult
-from owlbear.tools.browser.crawl_config import CrawlConfig
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -70,14 +69,14 @@ def _make_orchestrator(
     *,
     store: MagicMock | None = None,
     pipeline: MagicMock | None = None,
-    crawler: MagicMock | None = None,
+    crawl_handler: AsyncMock | None = None,
     workspace_root: Path | None = None,
 ) -> RefreshOrchestrator:
     """Build a RefreshOrchestrator with mocked dependencies."""
     return RefreshOrchestrator(
         store=store or MagicMock(),
         pipeline=pipeline or MagicMock(),
-        crawler=crawler,
+        crawl_handler=crawl_handler,
         workspace_root=workspace_root or Path("/workspace"),
     )
 
@@ -91,9 +90,7 @@ class TestRefreshResult:
     """RefreshResult is a frozen BaseModel with expected fields."""
 
     def test_fields(self) -> None:
-        r = RefreshResult(
-            source_id="s1", refreshed=3, skipped=1, failed=0, errors=[]
-        )
+        r = RefreshResult(source_id="s1", refreshed=3, skipped=1, failed=0, errors=[])
         assert r.source_id == "s1"
         assert r.refreshed == 3
         assert r.skipped == 1
@@ -101,9 +98,7 @@ class TestRefreshResult:
         assert r.errors == []
 
     def test_frozen(self) -> None:
-        r = RefreshResult(
-            source_id="s1", refreshed=0, skipped=0, failed=0, errors=[]
-        )
+        r = RefreshResult(source_id="s1", refreshed=0, skipped=0, failed=0, errors=[])
         with pytest.raises(ValidationError, match="frozen"):
             r.source_id = "other"  # type: ignore[misc]
 
@@ -114,14 +109,14 @@ class TestRefreshResult:
 
 
 class TestConstructor:
-    """RefreshOrchestrator accepts store, pipeline, crawler, workspace_root."""
+    """RefreshOrchestrator accepts store, pipeline, crawl_handler, workspace_root."""
 
     def test_accepts_deps(self) -> None:
         orch = _make_orchestrator()
         assert orch is not None
 
-    def test_crawler_optional(self) -> None:
-        orch = _make_orchestrator(crawler=None)
+    def test_crawl_handler_optional(self) -> None:
+        orch = _make_orchestrator(crawl_handler=None)
         assert orch is not None
 
 
@@ -154,9 +149,7 @@ class TestUrlListHandler:
     @pytest.mark.asyncio
     async def test_counts_skipped(self) -> None:
         pipeline = MagicMock()
-        pipeline.ingest = AsyncMock(
-            side_effect=[_ok_result(), _ok_result(skipped=True)]
-        )
+        pipeline.ingest = AsyncMock(side_effect=[_ok_result(), _ok_result(skipped=True)])
         store = MagicMock()
         store.update = MagicMock()
 
@@ -173,9 +166,7 @@ class TestUrlListHandler:
     @pytest.mark.asyncio
     async def test_individual_failure_collected(self) -> None:
         pipeline = MagicMock()
-        pipeline.ingest = AsyncMock(
-            side_effect=[RuntimeError("boom"), _ok_result("doc-2")]
-        )
+        pipeline.ingest = AsyncMock(side_effect=[RuntimeError("boom"), _ok_result("doc-2")])
         store = MagicMock()
         store.update = MagicMock()
 
@@ -211,16 +202,15 @@ class TestUrlListHandler:
 
 
 class TestCrawlHandler:
-    """refresh() dispatches crawl: builds CrawlConfig, calls crawl_and_ingest."""
+    """refresh() dispatches crawl: passes config dict to crawl_handler callback."""
 
     @pytest.mark.asyncio
-    async def test_builds_crawl_config_and_calls(self) -> None:
-        crawler = MagicMock()
-        pipeline = MagicMock()
+    async def test_passes_config_dict_to_handler(self) -> None:
         store = MagicMock()
         store.update = MagicMock()
 
         ingest_results = [_ok_result("d1"), _ok_result("d2")]
+        crawl_handler = AsyncMock(return_value=ingest_results)
 
         source = _make_source(
             source_type=SourceType.CRAWL,
@@ -231,30 +221,14 @@ class TestCrawlHandler:
             },
         )
 
-        with patch(
-            "owlbear.memory.knowledge.refresh.crawl_and_ingest",
-            new_callable=AsyncMock,
-            return_value=ingest_results,
-        ) as mock_cai:
-            orch = _make_orchestrator(
-                pipeline=pipeline, crawler=crawler, store=store
-            )
-            result = await orch.refresh(source)
+        orch = _make_orchestrator(crawl_handler=crawl_handler, store=store)
+        result = await orch.refresh(source)
 
-            mock_cai.assert_awaited_once()
-            call_args = mock_cai.call_args
-            assert call_args[0][0] is crawler
-            assert call_args[0][1] is pipeline
-            config_arg = call_args[0][2]
-            assert isinstance(config_arg, CrawlConfig)
-            assert config_arg.seed_urls == ["https://example.com"]
-            assert config_arg.max_depth == 2
-            assert config_arg.max_pages == 10
-
+        crawl_handler.assert_awaited_once_with(source.config)
         assert result.refreshed == 2
 
     @pytest.mark.asyncio
-    async def test_raises_if_crawler_is_none(self) -> None:
+    async def test_raises_if_crawl_handler_is_none(self) -> None:
         store = MagicMock()
         store.update = MagicMock()
 
@@ -262,34 +236,26 @@ class TestCrawlHandler:
             source_type=SourceType.CRAWL,
             config={"seed_urls": ["https://example.com"]},
         )
-        orch = _make_orchestrator(crawler=None, store=store)
+        orch = _make_orchestrator(crawl_handler=None, store=store)
 
-        with pytest.raises(ValueError, match="crawler"):
+        with pytest.raises(ValueError, match="crawl"):
             await orch.refresh(source)
 
     @pytest.mark.asyncio
     async def test_counts_skipped_crawl_results(self) -> None:
-        crawler = MagicMock()
-        pipeline = MagicMock()
         store = MagicMock()
         store.update = MagicMock()
 
         ingest_results = [_ok_result("d1"), _ok_result("d2", skipped=True)]
+        crawl_handler = AsyncMock(return_value=ingest_results)
 
         source = _make_source(
             source_type=SourceType.CRAWL,
             config={"seed_urls": ["https://example.com"]},
         )
 
-        with patch(
-            "owlbear.memory.knowledge.refresh.crawl_and_ingest",
-            new_callable=AsyncMock,
-            return_value=ingest_results,
-        ):
-            orch = _make_orchestrator(
-                pipeline=pipeline, crawler=crawler, store=store
-            )
-            result = await orch.refresh(source)
+        orch = _make_orchestrator(crawl_handler=crawl_handler, store=store)
+        result = await orch.refresh(source)
 
         assert result.refreshed == 1
         assert result.skipped == 1
@@ -304,9 +270,7 @@ class TestFileGlobHandler:
     """refresh() dispatches file_glob: resolves pattern, calls pipeline.ingest per file."""
 
     @pytest.mark.asyncio
-    async def test_resolves_pattern_relative_to_workspace(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_resolves_pattern_relative_to_workspace(self, tmp_path: Path) -> None:
         (tmp_path / "docs").mkdir()
         (tmp_path / "docs" / "a.md").write_text("a")
         (tmp_path / "docs" / "b.md").write_text("b")
@@ -320,18 +284,14 @@ class TestFileGlobHandler:
             source_type=SourceType.FILE_GLOB,
             config={"pattern": "docs/*.md"},
         )
-        orch = _make_orchestrator(
-            pipeline=pipeline, store=store, workspace_root=tmp_path
-        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=tmp_path)
         result = await orch.refresh(source)
 
         assert pipeline.ingest.await_count == 2
         assert result.refreshed == 2
 
     @pytest.mark.asyncio
-    async def test_resolves_pattern_relative_to_base_dir(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_resolves_pattern_relative_to_base_dir(self, tmp_path: Path) -> None:
         sub = tmp_path / "sub"
         sub.mkdir()
         (sub / "x.txt").write_text("x")
@@ -345,9 +305,7 @@ class TestFileGlobHandler:
             source_type=SourceType.FILE_GLOB,
             config={"pattern": "*.txt", "base_dir": str(sub)},
         )
-        orch = _make_orchestrator(
-            pipeline=pipeline, store=store, workspace_root=tmp_path
-        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=tmp_path)
         result = await orch.refresh(source)
 
         assert pipeline.ingest.await_count == 1
@@ -364,9 +322,7 @@ class TestFileGlobHandler:
             source_type=SourceType.FILE_GLOB,
             config={"pattern": "*.nonexistent"},
         )
-        orch = _make_orchestrator(
-            pipeline=pipeline, store=store, workspace_root=tmp_path
-        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=tmp_path)
         result = await orch.refresh(source)
 
         pipeline.ingest.assert_not_awaited()
@@ -375,16 +331,12 @@ class TestFileGlobHandler:
         assert result.errors == []
 
     @pytest.mark.asyncio
-    async def test_individual_file_failure_collected(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_individual_file_failure_collected(self, tmp_path: Path) -> None:
         (tmp_path / "a.md").write_text("a")
         (tmp_path / "b.md").write_text("b")
 
         pipeline = MagicMock()
-        pipeline.ingest = AsyncMock(
-            side_effect=[RuntimeError("disk error"), _ok_result("doc-2")]
-        )
+        pipeline.ingest = AsyncMock(side_effect=[RuntimeError("disk error"), _ok_result("doc-2")])
         store = MagicMock()
         store.update = MagicMock()
 
@@ -392,9 +344,7 @@ class TestFileGlobHandler:
             source_type=SourceType.FILE_GLOB,
             config={"pattern": "*.md"},
         )
-        orch = _make_orchestrator(
-            pipeline=pipeline, store=store, workspace_root=tmp_path
-        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=tmp_path)
         result = await orch.refresh(source)
 
         assert result.failed == 1
@@ -554,3 +504,146 @@ class TestRefreshAll:
         assert len(results) == 2
         assert results[0].failed == 1  # s1 failed
         assert results[1].refreshed == 1  # s2 succeeded
+
+
+# ===========================================================================
+# file_glob path sandboxing (#654)
+# ===========================================================================
+
+
+class TestFileGlobSandboxing:
+    """_handle_file_glob validates paths with sandbox_path."""
+
+    @pytest.mark.asyncio
+    async def test_base_dir_outside_workspace_raises(self, tmp_path: Path) -> None:
+        """base_dir resolving outside workspace_root must raise PermissionError."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.txt", "base_dir": str(outside)},
+        )
+        orch = _make_orchestrator(pipeline=MagicMock(), store=MagicMock(), workspace_root=workspace)
+
+        with pytest.raises(PermissionError, match="outside workspace"):
+            await orch.refresh(source)
+
+    @pytest.mark.asyncio
+    async def test_base_dir_traversal_raises(self, tmp_path: Path) -> None:
+        """base_dir with .. traversal outside workspace must raise PermissionError."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.txt", "base_dir": str(workspace / ".." / "..")},
+        )
+        orch = _make_orchestrator(pipeline=MagicMock(), store=MagicMock(), workspace_root=workspace)
+
+        with pytest.raises(PermissionError, match="outside workspace"):
+            await orch.refresh(source)
+
+    @pytest.mark.asyncio
+    async def test_glob_result_outside_workspace_skipped(self, tmp_path: Path) -> None:
+        """Glob result resolving outside workspace is skipped (e.g. symlink escape)."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        outside_path = tmp_path / "outside" / "secret.md"
+
+        pipeline = MagicMock()
+        pipeline.ingest = AsyncMock(return_value=_ok_result())
+        store = MagicMock()
+        store.update = MagicMock()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.md"},
+        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=workspace)
+        # Mock glob to return a path outside workspace
+        with patch.object(Path, "glob", return_value=[outside_path]):
+            result = await orch.refresh(source)
+
+        # outside path should NOT be passed to ingest
+        pipeline.ingest.assert_not_awaited()
+        assert result.refreshed == 0
+        assert result.failed == 1
+        assert any("outside workspace" in e for e in result.errors)
+
+    @pytest.mark.asyncio
+    async def test_valid_base_dir_inside_workspace_works(self, tmp_path: Path) -> None:
+        """base_dir inside workspace should work normally."""
+        workspace = tmp_path / "workspace"
+        sub = workspace / "sub"
+        sub.mkdir(parents=True)
+        (sub / "a.txt").write_text("a")
+
+        pipeline = MagicMock()
+        pipeline.ingest = AsyncMock(return_value=_ok_result())
+        store = MagicMock()
+        store.update = MagicMock()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.txt", "base_dir": str(sub)},
+        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=workspace)
+        result = await orch.refresh(source)
+
+        assert pipeline.ingest.await_count == 1
+        assert result.refreshed == 1
+
+    @pytest.mark.asyncio
+    async def test_none_base_dir_defaults_to_workspace(self, tmp_path: Path) -> None:
+        """base_dir=None defaults to workspace_root (no sandbox check needed)."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "readme.md").write_text("hello")
+
+        pipeline = MagicMock()
+        pipeline.ingest = AsyncMock(return_value=_ok_result())
+        store = MagicMock()
+        store.update = MagicMock()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.md"},
+        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=workspace)
+        result = await orch.refresh(source)
+
+        assert pipeline.ingest.await_count == 1
+        assert result.refreshed == 1
+
+    @pytest.mark.asyncio
+    async def test_only_sandboxed_paths_reach_ingest(self, tmp_path: Path) -> None:
+        """Mix of valid and escape paths: only valid ones get ingested."""
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        good_path = workspace / "good.md"
+        good_path.write_text("good")
+        bad_path = tmp_path / "outside" / "bad.md"  # outside workspace
+
+        pipeline = MagicMock()
+        pipeline.ingest = AsyncMock(return_value=_ok_result())
+        store = MagicMock()
+        store.update = MagicMock()
+
+        source = _make_source(
+            source_type=SourceType.FILE_GLOB,
+            config={"pattern": "*.md"},
+        )
+        orch = _make_orchestrator(pipeline=pipeline, store=store, workspace_root=workspace)
+        # Mock glob to return one valid and one outside path
+        with patch.object(Path, "glob", return_value=[bad_path, good_path]):
+            result = await orch.refresh(source)
+
+        # Only good.md should be ingested
+        assert pipeline.ingest.await_count == 1
+        call_arg = pipeline.ingest.call_args_list[0][0][0]
+        assert "good" in call_arg
+        assert result.refreshed == 1
+        assert result.failed == 1  # bad.md outside workspace
