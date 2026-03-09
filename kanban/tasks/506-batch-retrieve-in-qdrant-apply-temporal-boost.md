@@ -1,11 +1,12 @@
 ---
 id: 506
 title: Batch-retrieve in qdrant _apply_temporal_boost
-status: backlog
+status: done
 priority: important
 created: 2026-03-04T07:38:18.4426963+01:00
-updated: 2026-03-06T23:42:22.7330797+01:00
+updated: 2026-03-07T23:00:10.4356026+01:00
 started: 2026-03-06T23:40:08.395678+01:00
+completed: 2026-03-07T23:00:10.4356026+01:00
 tags:
     - audit
     - performance
@@ -13,39 +14,26 @@ tags:
 class: standard
 ---
 
-F-07: _apply_temporal_boost does N+1 retrieves -- one client.retrieve() per result. For top_k=20, that's 20 round-trips. Batch all point IDs in single retrieve(ids=[...]). AC: single batch retrieve, N+1 eliminated. See docs/code-quality-audit.md.
+F-07: _apply_temporal_boost does N+1 retrieves. Batch into single call.
+See docs/code-quality-audit.md.
 
-## Research Findings (2026-03-06)
+## Acceptance Criteria
 
-### 1. Theoretical validity
+1. `_apply_temporal_boost` makes exactly ONE call to `self._client.retrieve()` regardless of `len(results)` (currently N calls for N results).
+2. All point IDs are collected upfront: `ids=[_point_id(rid) for rid, _ in results]`.
+3. A `dict[str, dict]` lookup is built from the batch response, keyed by `str(point.id)`.
+4. The per-result loop reads from the local dict instead of calling retrieve.
+5. Return type `list[tuple[str, float]]` and sort behavior are unchanged.
+6. When `results` is empty, `retrieve` is NOT called (guard clause).
+7. Points missing from the batch response (deleted between search and retrieve) get no boost -- same as current behavior.
+8. Existing test `TestRecencyWeight.test_recency_boost_applied` still passes.
+9. New unit test: mock `QdrantClient.retrieve`, pass 3+ results, assert `retrieve` called exactly once with all 3+ IDs.
+10. `uv run ruff check src/owlbear/memory/knowledge/qdrant.py` clean.
 
-Sound optimization. The current loop makes one `client.retrieve(ids=[single_id])` per result (qdrant.py:443-467). For top_k=20, that's 20 sequential HTTP/gRPC calls. `retrieve()` already accepts `ids: Sequence[...]` -- collapsing into a single call is the canonical batch pattern.
+## Architecture Notes
 
-### 2. Prior art
-
-- **Qdrant official docs** (https://qdrant.tech/documentation/concepts/points/#retrieve-points): REST API `POST /collections/{name}/points` with `ids: [0, 3, 100]` -- batch retrieve by design.
-- **qdrant-client Python API** (https://python-client.qdrant.tech/qdrant_client.qdrant_client): `retrieve(collection_name, ids=Sequence[int|str|UUID], with_payload=True)` -- accepts list of IDs natively.
-
-### 3. Technical feasibility
-
-Fully feasible, zero risk. Our qdrant-client>=1.13 (pyproject.toml) has had batch retrieve since 1.0. The existing code already passes `ids=[_point_id(rid)]` (a one-element list). Changing to `ids=[_point_id(r) for r, _ in results]` is a mechanical refactor.
-
-### 4. Architecture fit
-
-Contained within `QdrantVectorStore._apply_temporal_boost()`. No interface changes. Return type `list[tuple[str, float]]` stays the same. No callers affected.
-
-### 5. Implementation approach
-
-1. Collect all point IDs: `all_ids = [_point_id(rid) for rid, _ in results]`
-2. Single batch call: `points = self._client.retrieve(collection_name=..., ids=all_ids, with_payload=True)`
-3. Build lookup dict: `payload_map = {str(p.id): p.payload for p in points if p.payload}`
-4. Iterate results locally, applying recency boost from `payload_map`
-5. ~10 lines changed, net diff near zero
-
-### 6. Testing strategy
-
-No existing test covers `_apply_temporal_boost` directly. Builder should add a unit test with a mock `QdrantClient` that asserts `retrieve` is called exactly once with all IDs (not N times).
-
-### 7. Risk
-
-None. The method is internal, return type unchanged, single call is strictly faster.
+- Change is contained within `QdrantVectorStore._apply_temporal_boost()` in qdrant.py (lines 442-467).
+- No interface changes. No callers affected.
+- `_point_id()` helper (line 52) already produces deterministic UUID5 strings -- reuse as-is.
+- `qdrant_client.retrieve()` already accepts `ids: Sequence[...]` -- this is the canonical batch pattern.
+- Follow existing test patterns in `tests/test_qdrant_vector_store.py` (`TestRecencyWeight` class at line 266).

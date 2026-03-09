@@ -1,10 +1,10 @@
 ---
 id: 578
 title: 'Recurring: Dependency update audit (every 3 days)'
-status: backlog
+status: todo
 priority: important
 created: 2026-03-04T08:03:38.3917383+01:00
-updated: 2026-03-04T08:03:38.3917383+01:00
+updated: 2026-03-09T17:46:12.4467386+01:00
 tags:
     - recurring
     - sop
@@ -125,3 +125,34 @@ Append a summary to the subtask body:
 - New feature analysis must reference our **actual codebase usage**, not just summarize the feature generically
 - Do not create duplicate tasks — check existing board first with `kanban-md list --tag dependency-update`
 - Transitive dependencies are out of scope unless they have security implications
+
+[[2026-03-09]] Mon 17:45
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| Phase/Gate | Assessment | Status |
+|------------|------------|--------|
+| Phase 1: Inventory | Clear  reads pyproject.toml, groups by extras. One inaccuracy: voice lists 3 deps, actual has 4 (missing sounddevice). Fixed. | PASS (fixed) |
+| Phase 2: Check for Updates | Clear protocol  PyPI/GitHub check per dep, 3-tier classification (major/minor/patch) | PASS |
+| Phase 3: Analyze Changes | 5-step analysis (changelog, breaking, deprecations, new features, security, perf) with 5-level rating | PASS |
+| Phase 4: Create Tasks | Dupe check via --tag, ideation status, priority mapping, CVE references, migration steps for breaking changes | PASS |
+| Phase 5: Version Spec Review | Verifiable  too-loose and too-tight checks against actual pyproject.toml specs | PASS |
+| Phase 6: Lock File Health | Verifiable  uv lock --check + conflict detection | PASS |
+| Phase 7: Report | Clear summary template with 6 metrics | PASS |
+| Quality Gates | 6 verifiable rules  every dep checked, codebase-specific analysis, no dupes, CVE refs, transitive scope boundary | PASS |
+| Execution Protocol | Subtask creation pattern matches sibling SOP #577 | PASS |
+
+### Architecture Notes
+- Recurring SOP template  no code implementation, no TDD needed
+- Follows sibling SOP pattern (#577 source audit, #579 project audit)
+- Fixed voice extras inventory: was 3 deps, actually 4 (sounddevice missing)
+- Hardcoded inventory in Phase 1 is acceptable  acts as cross-reference for the executing agent, actual execution re-reads pyproject.toml
+- Security surface well covered: Phase 3b requires CVE analysis, quality gates require CVE numbers
+
+### Changes Made
+- Fixed voice extras count and added sounddevice to inventory
+- Moved to todo
+
+### Dependencies
+- None required  standalone recurring SOP

@@ -1,11 +1,12 @@
 ---
 id: 502
 title: Break memory to tools upward dependency
-status: backlog
+status: done
 priority: important
 created: 2026-03-04T07:38:15.2330855+01:00
-updated: 2026-03-06T23:37:52.8508377+01:00
+updated: 2026-03-08T15:41:31.3998922+01:00
 started: 2026-03-06T23:31:40.1597395+01:00
+completed: 2026-03-08T15:41:31.3998922+01:00
 tags:
     - audit
     - architecture
@@ -13,18 +14,44 @@ tags:
 class: standard
 ---
 
-INT-07: memory/knowledge/refresh.py imports tools.browser.crawl_config and tools.browser.integration. Violates layering (memory depends on tools). Inject crawl function as callback parameter instead. AC: memory package has no tools imports. See docs/integration-audit.md.
+INT-07: memory/knowledge/refresh.py imports tools.browser.crawl_config and tools.browser.integration. Violates layering (memory depends on tools). Option A from research: inject crawl function as callback parameter. See docs/memory-tools-dependency-inversion-research.md.
 
-## Research Complete
+## Acceptance Criteria
 
-See docs/memory-tools-dependency-inversion-research.md for full analysis.
+1. **CrawlHandler type alias defined in refresh.py**
+   - `CrawlHandler = Callable[[dict[str, object]], Awaitable[list[IngestResult]]]`
+   - Uses only `typing` stdlib + memory-local `IngestResult` (no `owlbear.tools` imports)
+   - Docstring on the alias explains the contract: receives raw source config dict, returns ingest results
 
-### Research Checklist
-1. **Theoretical validity** - Dependency inversion via callback injection is sound. Lower layer defines the contract (type alias), upper layer provides the implementation.
-2. **Prior art** - Cosmic Python Ch.3 (Functional Core / Imperative Shell + DI), Python typing.Protocol (PEP 544). Both validate the callback approach for single-function injection.
-3. **Technical feasibility** - Confirmed: all 3 tools imports are isolated to refresh.py. CrawlHandler type alias uses only stdlib typing + memory-local IngestResult. No blockers.
-4. **Architecture fit** - Codebase already uses Protocol DI (EmbeddingProvider, VectorStoreProtocol). Callback is simpler than Protocol for single-function case. Bootstrap already assembles the orchestrator.
-5. **Implementation approach** - Option A (Callback injection, .85 confidence): Define CrawlHandler Callable type alias in refresh.py, replace crawler param, create closure factory in bootstrap.py.
+2. **RefreshOrchestrator constructor updated**
+   - `crawler: WebCrawler | None` param replaced with `crawl_handler: CrawlHandler | None = None`
+   - `self._crawler` attr replaced with `self._crawl_handler`
 
-### Recommendation
-Option A: Callback injection. Simplest, removes all 3 imports, KISS/YAGNI-aligned. See research doc for trade-off matrix.
+3. **_handle_crawl simplified**
+   - Calls `await self._crawl_handler(source.config)` (raw dict in, results out)
+   - `_build_crawl_config` static method removed (responsibility moves to bootstrap closure)
+   - Raises `ValueError` when `self._crawl_handler is None` (same guard as today)
+
+4. **Bootstrap closure wires the callback**
+   - `bootstrap.py` defines a factory/closure that locally imports `CrawlConfig`, `crawl_and_ingest`, `WebCrawler`
+   - Closure binds crawler + pipeline + CrawlConfig construction
+   - Passes bound callback as `crawl_handler=` to `RefreshOrchestrator`
+   - Note: bootstrap currently does NOT pass a crawler (line ~633), so the immediate wiring is `crawl_handler=None` unless a crawler is available from browser toolset setup
+
+5. **Tests updated (not a separate task -- refactoring, existing suite is the safety net)**
+   - `test_refresh_orchestrator.py` crawl tests pass `AsyncMock` as `crawl_handler` (no `mock.patch` on `crawl_and_ingest`)
+   - `test_refresh_orchestrator.py` removes all imports from `owlbear.tools.browser`
+   - All existing test behaviors and assertions preserved (url_list, file_glob, crawl, refresh_all)
+
+6. **Verification (all must pass)**
+   - `grep -r 'from owlbear.tools' src/owlbear/memory/` returns 0 hits
+   - `grep -r 'import owlbear.tools' src/owlbear/memory/` returns 0 hits
+   - `uv run pytest tests/test_refresh_orchestrator.py -q --tb=short` all pass
+   - `uv run ruff check src/owlbear/memory/knowledge/refresh.py src/owlbear/bootstrap.py tests/test_refresh_orchestrator.py` clean
+
+## Architecture Notes
+
+- **Pattern:** Callback injection (Callable type alias), not Protocol -- single-function, single-implementation, KISS/YAGNI
+- **Precedent:** Codebase uses Protocols for multi-method interfaces (EmbeddingProvider, VectorStoreProtocol); callback is appropriate for this simpler case
+- **Module layering:** After change, refresh.py depends only on memory-local types + owlbear.paths (leaf). bootstrap.py remains the sole cross-layer wiring point
+- **Files touched:** src/owlbear/memory/knowledge/refresh.py, src/owlbear/bootstrap.py, tests/test_refresh_orchestrator.py

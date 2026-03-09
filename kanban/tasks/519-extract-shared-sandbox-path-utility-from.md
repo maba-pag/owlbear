@@ -1,17 +1,20 @@
 ---
 id: 519
 title: Extract shared sandbox_path utility from duplicated _safe_path
-status: backlog
+status: done
 priority: nice-to-have
 created: 2026-03-04T07:38:28.7733322+01:00
-updated: 2026-03-07T00:01:57.7880537+01:00
+updated: 2026-03-08T01:36:11.9839734+01:00
 started: 2026-03-06T23:58:23.339179+01:00
+completed: 2026-03-08T01:36:11.9839734+01:00
 tags:
     - audit
     - dry
     - refactor
     - tools
     - duplicate
+blocked: true
+block_reason: 'Duplicate of #651 (done). sandbox_path already extracted to owlbear.paths and all 3 toolsets migrated.'
 class: standard
 ---
 

@@ -1,11 +1,12 @@
 ---
 id: 491
 title: Fix dual error handling on ON_ERROR events
-status: backlog
+status: done
 priority: important
 created: 2026-03-04T07:38:06.9326328+01:00
-updated: 2026-03-07T04:06:51.2658301+01:00
+updated: 2026-03-07T19:34:32.4308041+01:00
 started: 2026-03-06T17:49:55.7317939+01:00
+completed: 2026-03-07T19:34:22.7012737+01:00
 tags:
     - audit
     - resilience
@@ -15,38 +16,13 @@ block_reason: 'REVIEW FAIL: AC fundamentally invalid. #484 (done) deleted escala
 class: standard
 ---
 
-## Research Findings (2026-03-06)
+## Closed as moot (2026-03-07)
 
-See task body history for full research. Key insight: the dual error handling is
-**latent** (not active) because EscalationHook is never wired in production.
-The fix establishes the design rule before #484 wires it.
+Task #484 (archived) deleted escalation.py and 	est_escalation.py entirely. All 9 AC lines targeted code that no longer exists. Zero references to EscalationHook remain in src/ or 	ests/.
 
-## Design Decision
+The dual error handling problem this task aimed to fix was resolved by #484's decision to delete EscalationHook (YAGNI). No further action needed.
 
-**Single authority: daemon `_recover_from_error` owns all error recovery.**
-EscalationHook must NOT auto-register on ON_ERROR. The `escalate()` method
-remains available for explicit programmatic use.
-
-## Scope
-
-This task covers ONLY the auto-registration removal and the single-prompt
-invariant test. Wiring `escalate()` into `_recover_from_error()` as an
-interactive replacement for bare `channel.send(error)` is a separate
-enhancement (out of scope).
-
-## Files to Change
-
-- `src/owlbear/core/escalation.py` -- remove `hooks.register()` from`__init__`, add explicit `register_on_error()` opt-in method
-- `tests/test_escalation.py` -- verify no auto-registration, test opt-in path
-
-## Acceptance Criteria
-
-- [ ] `EscalationHook.__init__` does NOT call `hooks.register(ON_ERROR, ...)`  
-- [ ] New `register_on_error()` method exists for explicit opt-in registration
-- [ ] `escalate()` public API unchanged (signature, behavior, return type)
-- [ ] `unregister()` still works when `register_on_error()` was called
-- [ ] Unit test: instantiate EscalationHook, verify ON_ERROR has no handlers auto-registered
-- [ ] Unit test: call `register_on_error()`, verify handler IS registered on ON_ERROR
-- [ ] All existing escalation tests pass (updated for new constructor)
-- [ ] No ruff violations
-- [ ] Resolves #484 (wire-or-remove) -- resolved as 'keep explicit API, no auto-wire'
+Verification:
+- Test-Path src/owlbear/core/escalation.py = False
+- Test-Path tests/test_escalation.py = False
+- grep -r EscalationHook src/ tests/ = 0 matches

@@ -1,11 +1,12 @@
 ---
 id: 495
 title: Isolate browser context in CDP mode
-status: backlog
+status: done
 priority: important
 created: 2026-03-04T07:38:10.0052022+01:00
-updated: 2026-03-06T23:29:02.1758303+01:00
+updated: 2026-03-08T02:27:57.0798182+01:00
 started: 2026-03-06T23:23:22.8991517+01:00
+completed: 2026-03-08T02:27:57.0798182+01:00
 tags:
     - audit
     - security
@@ -13,16 +14,24 @@ tags:
 class: standard
 ---
 
-SEC-07: CDP mode attaches to users existing browser using contexts[0], gaining access to all authenticated sessions and cookies. Create new isolated context via browser.new_context() instead.
+SEC-07 from docs/security-audit.md: CDP mode attaches to user's existing browser using contexts[0], gaining access to all authenticated sessions, cookies, and localStorage. Must create isolated context instead.
 
-Research complete - see docs/cdp-context-isolation-research.md
+See docs/cdp-context-isolation-research.md for full analysis.
 
-Findings:
-- browser.new_context() works on CDP connections (delegates to Target.createBrowserContext)
-- Provides full cookie/cache/localStorage isolation
-- Minimal diff: ~10 lines in manager.py, ~30 lines in tests
-- Bonus: current CDP path does not set viewport (fix included)
+## Architecture Decision
 
-AC: CDP mode uses isolated context, no cookie sharing.
+Option A (always isolate, .90 confidence): Replace contexts[0] with browser.new_context(viewport=...) unconditionally. No config flag (YAGNI -- no use case for deliberately sharing sessions).
 
-Implementation: Replace contexts[0] with browser.new_context(viewport=...) in _enter_cdp(). Close owned context in _exit_cdp(). Update tests.
+Playwright's browser.new_context() on CDP connections delegates to Target.createBrowserContext, providing full cookie/cache/localStorage isolation. This is a stable, non-experimental CDP API.
+
+## Acceptance Criteria
+
+- [ ] BrowserManager._enter_cdp() creates isolated context via self._browser.new_context(viewport={'width': w, 'height': h}) instead of self._browser.contexts[0]
+- [ ] Viewport dimensions sourced from self._config.viewport (same as launch mode)
+- [ ] BrowserManager._exit_cdp() closes the owned context via self._context.close() before self._browser.disconnect()
+- [ ] Context close is in a try/finally to ensure disconnect() always runs even if close() fails
+- [ ] Cleanup follows the same nested try/finally pattern as _exit_launch() (page -> context -> browser -> playwright)
+- [ ] All existing browser tests updated: CDP mock chain asserts new_context() called (not contexts[0])
+- [ ] New test assertion: contexts[0] is NOT accessed in CDP mode
+- [ ] New test assertion: context.close() called during CDP cleanup
+- [ ] ruff clean, all tests pass

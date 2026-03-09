@@ -1,15 +1,18 @@
 ---
 id: 539
 title: Establish OwlBearError base exception hierarchy
-status: backlog
+status: done
 priority: nice-to-have
 created: 2026-03-04T07:38:44.0984756+01:00
-updated: 2026-03-07T04:14:01.3610894+01:00
+updated: 2026-03-08T01:36:26.043382+01:00
 started: 2026-03-07T00:36:39.5359602+01:00
+completed: 2026-03-08T01:36:26.043382+01:00
 tags:
     - audit
     - resilience
     - scope:core
+blocked: true
+block_reason: 'Duplicate of #576 (identical title, AC, and research). Closing this one, keeping #576.'
 class: standard
 ---
 
