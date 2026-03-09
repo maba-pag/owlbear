@@ -22,15 +22,16 @@ import os
 import random
 import signal
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Self
 
+import httpx
 import logfire
 from pydantic_ai import Agent
 
 from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
 from owlbear.core.hooks import HookEvent
-from owlbear.providers.copilot import create_copilot_model
+from owlbear.providers.copilot import create_copilot_client
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,7 +62,7 @@ CONTINUE_FORWARD_PREFIX = (
 
 _WIP_MAX_CHARS = 500
 
-# Transient retry constants
+# Transient retry constants — apply only to model-level transients (#512)
 _TRANSIENT_MAX_RETRIES = 3
 _TRANSIENT_BACKOFF_BASE = 1.0  # seconds
 _TRANSIENT_BACKOFF_MAX = 30.0  # seconds
@@ -102,11 +103,22 @@ class RunningTask:
 
 
 @dataclasses.dataclass
+class RetryEntry:
+    """Tracks a pending task-level retry with exponential backoff."""
+
+    task_id: str
+    next_due: datetime
+    attempt: int = 1
+    last_error: str = ""
+
+
+@dataclasses.dataclass
 class OrchestratorState:
     """Mutable state for the poll-dispatch-reconcile loop."""
 
     running: dict[str, RunningTask] = dataclasses.field(default_factory=dict)
     claimed: set[str] = dataclasses.field(default_factory=set)
+    retries: dict[str, RetryEntry] = dataclasses.field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +278,7 @@ def _log_to_journal(  # noqa: PLR0913
         logger.warning("Failed to write error journal entry", exc_info=True)
 
 
-async def _recover_from_error(  # noqa: PLR0913
+async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
     exc: Exception,
     message: str,
     *,
@@ -278,12 +290,38 @@ async def _recover_from_error(  # noqa: PLR0913
     """Apply classified recovery strategy for a failed ``agent.turn()`` call.
 
     - **TRANSIENT**: exponential backoff with jitter, up to 3 retries.
-    - **AUTH**: token refresh via :func:`create_copilot_model`, retry once.
+    - **AUTH**: token refresh via :func:`create_copilot_client`, retry once.
     - **PERMANENT / TOOL_SEMANTIC / AUTH without settings**: log and send error.
     """
     category = classify_error(exc)
 
     if category is ErrorCategory.TRANSIENT:
+        # Tool-level transients are already retried by HookedToolset (#512).
+        # Only model-level transients (HTTPStatusError 429/502/503/504) get
+        # daemon retry.  Attribute check covers explicit marking; isinstance
+        # check catches tool-originated network errors (ConnectError, etc.).
+        if getattr(exc, "_tool_retries_exhausted", False) or not isinstance(
+            exc, httpx.HTTPStatusError
+        ):
+            _log_to_journal(
+                error_journal,
+                error_type=category.value,
+                exc=exc,
+                action_taken="tool_retries_exhausted",
+                attempt=1,
+                resolved=False,
+                agent=agent,
+            )
+            logger.error(
+                "Tool-level transient retries exhausted — not retrying at daemon level: %s",
+                exc,
+            )
+            try:
+                await channel.send(f"Error: {error_to_user_message(exc)}")
+            except Exception:
+                logger.exception("Failed to send error to channel (original: %s)", exc)
+            return
+
         last_exc: Exception = exc
         for attempt in range(1, _TRANSIENT_MAX_RETRIES + 1):
             delay = min(
@@ -330,9 +368,19 @@ async def _recover_from_error(  # noqa: PLR0913
             logger.exception("Failed to send error to channel (original: %s)", last_exc)
 
     elif category is ErrorCategory.AUTH and settings is not None:
+        # Close old OpenAI client before replacement (#514)
+        old_client = getattr(agent, "_openai_client", None)
+        if old_client is not None:
+            await old_client.close()
         try:
-            new_model = await create_copilot_model(settings)
+            from pydantic_ai.models.openai import OpenAIChatModel  # noqa: PLC0415
+            from pydantic_ai.providers.openai import OpenAIProvider  # noqa: PLC0415
+
+            new_client = await create_copilot_client(settings)
+            provider = OpenAIProvider(openai_client=new_client)
+            new_model = OpenAIChatModel(settings.chat_model, provider=provider)
             agent.update_model(new_model)
+            agent._openai_client = new_client  # noqa: SLF001
             response = await agent.turn(message)
             await channel.send(response)
             _log_to_journal(
@@ -422,13 +470,29 @@ async def channel_loop(  # noqa: PLR0913
 # Poll-dispatch-reconcile
 # ---------------------------------------------------------------------------
 
+# Default retry configuration (mirrors config defaults)
+_DEFAULT_MAX_RETRY_ATTEMPTS = 5
+_DEFAULT_BACKOFF_BASE = 10.0
+_DEFAULT_BACKOFF_MAX = 320.0
 
-async def reconcile_tasks(
+
+def _compute_retry_delay(*, attempt: int, base: float, maximum: float) -> float:
+    """Compute exponential backoff delay capped at *maximum*.
+
+    Formula: ``min(base * 2 ** (attempt - 1), maximum)``
+    """
+    return min(base * 2 ** (attempt - 1), maximum)
+
+
+async def reconcile_tasks(  # noqa: PLR0913
     *,
     state: OrchestratorState,
     kanban: KanbanToolset,
     wip_store: WipStore | None = None,
     hooks: HookRegistry | None = None,
+    max_retry_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
+    backoff_base: float = _DEFAULT_BACKOFF_BASE,
+    backoff_max: float = _DEFAULT_BACKOFF_MAX,
 ) -> None:
     """Check completed/failed asyncio Tasks and update state + kanban.
 
@@ -457,7 +521,34 @@ async def reconcile_tasks(
                     HookEvent.TASK_COMPLETE,
                     {"task_id": tid, "outcome": "failure"},
                 )
-            state.claimed.discard(tid)
+
+            # --- Task-level retry (#625) ---
+            prev = state.retries.get(tid)
+            next_attempt = (prev.attempt + 1) if prev else 1
+
+            if next_attempt > max_retry_attempts:
+                # Retries exhausted — block on kanban and release
+                reason = (
+                    f"Retry exhausted after {max_retry_attempts} attempts. "
+                    f"Last error: {exc}"
+                )
+                try:
+                    await kanban.kanban_edit(tid, block=reason)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Failed to block exhausted task %s", tid, exc_info=True)
+                state.retries.pop(tid, None)
+                state.claimed.discard(tid)
+            else:
+                # Schedule retry — keep in claimed
+                delay = _compute_retry_delay(
+                    attempt=next_attempt, base=backoff_base, maximum=backoff_max,
+                )
+                state.retries[tid] = RetryEntry(
+                    task_id=tid,
+                    attempt=next_attempt,
+                    next_due=datetime.now(UTC) + timedelta(seconds=delay),
+                    last_error=str(exc),
+                )
         else:
             if wip_store is not None:
                 wip_store.clear(agent="builder", task_id=tid)
@@ -470,7 +561,45 @@ async def reconcile_tasks(
             state.claimed.discard(tid)
 
 
-async def poll_tick(  # noqa: PLR0913
+async def detect_stale_tasks(
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    channel: ChannelPlugin,
+    stale_timeout: float,
+) -> None:
+    """Cancel tasks running longer than *stale_timeout* seconds.
+
+    For each stale task: (1) cancel the asyncio task, (2) remove from
+    ``state.running`` and ``state.claimed``, (3) block on kanban with a
+    reason string, (4) alert via channel.  Steps 3/4 are best-effort —
+    failures are logged but do not prevent processing remaining stale tasks.
+    """
+    now = datetime.now(UTC)
+    stale_ids = [
+        tid
+        for tid, rt in state.running.items()
+        if (now - rt.started_at).total_seconds() >= stale_timeout
+    ]
+    for tid in stale_ids:
+        rt = state.running.pop(tid)
+        rt.asyncio_task.cancel()
+        state.claimed.discard(tid)
+        try:
+            await kanban.kanban_edit(
+                tid, block=f"Stale: no progress for {stale_timeout}s, auto-cancelled"
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to block stale task %s on kanban", tid, exc_info=True)
+        try:
+            await channel.send(
+                f"Task {tid} cancelled — stale after {stale_timeout}s with no progress."
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to send stale alert for task %s", tid, exc_info=True)
+
+
+async def poll_tick(  # noqa: PLR0913, C901
     *,
     state: OrchestratorState,
     kanban: KanbanToolset,
@@ -479,34 +608,86 @@ async def poll_tick(  # noqa: PLR0913
     shutdown_event: asyncio.Event,
     wip_store: WipStore | None = None,
     hooks: HookRegistry | None = None,
+    channel: ChannelPlugin | None = None,
+    stale_timeout: float = 300.0,
+    max_retry_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
+    backoff_base: float = _DEFAULT_BACKOFF_BASE,
+    backoff_max: float = _DEFAULT_BACKOFF_MAX,
 ) -> None:
-    """Single poll tick: reconcile → fetch todo → sort → dispatch.
+    """Single poll tick: reconcile → detect stale → retry dispatch → fetch todo → sort → dispatch.
 
     When *wip_store* is provided, loads any existing WIP summary for each
     dispatched task and prepends :data:`CONTINUE_FORWARD_PREFIX` to the
     prompt so the builder agent can resume with prior context.
     """
     # 1. Reconcile completed/failed tasks
-    await reconcile_tasks(state=state, kanban=kanban, wip_store=wip_store, hooks=hooks)
+    await reconcile_tasks(
+        state=state,
+        kanban=kanban,
+        wip_store=wip_store,
+        hooks=hooks,
+        max_retry_attempts=max_retry_attempts,
+        backoff_base=backoff_base,
+        backoff_max=backoff_max,
+    )
 
-    # 2. Available slots
+    # 2. Detect and cancel stale tasks
+    if channel is not None:
+        await detect_stale_tasks(
+            state=state,
+            kanban=kanban,
+            channel=channel,
+            stale_timeout=stale_timeout,
+        )
+
+    # 3. Re-dispatch due retries
+    now = datetime.now(UTC)
+    due_ids = [
+        tid for tid, entry in state.retries.items() if entry.next_due <= now
+    ]
+    for tid in due_ids:
+        if len(state.running) >= max_concurrent:
+            break
+        if shutdown_event.is_set():
+            return
+        state.retries.pop(tid)
+
+        # Get task details for prompt
+        details_raw = await kanban.kanban_show(tid)
+        details = json.loads(details_raw)
+        prompt = f"Build task #{tid}: {details['title']}\n\n{details.get('body', '')}"
+
+        # Load WIP context and prepend if available
+        if wip_store is not None:
+            wip_summary = wip_store.load(agent="builder", task_id=tid)
+            if wip_summary is not None:
+                prompt = CONTINUE_FORWARD_PREFIX + wip_summary + "\n\n" + prompt
+
+        builder = agent_registry.get("builder")
+        async_task = asyncio.create_task(
+            builder.run(prompt),
+            name=f"poll-retry-{tid}",
+        )
+        state.running[tid] = RunningTask(task_id=tid, asyncio_task=async_task)
+
+    # 4. Available slots
     available = max_concurrent - len(state.running)
     if available <= 0:
         return
 
-    # 3. Fetch todo tasks
+    # 4. Fetch todo tasks
     raw = await kanban.kanban_list(status="todo", format="json")
     if shutdown_event.is_set():
         return
     tasks: list[dict[str, str]] = json.loads(raw)
 
-    # 4. Filter already-claimed
+    # 5. Filter already-claimed
     tasks = [t for t in tasks if t["id"] not in state.claimed]
 
-    # 5. Sort by priority
+    # 6. Sort by priority
     tasks.sort(key=lambda t: _PRIORITY_ORDER.get(t.get("priority", "important"), 2))
 
-    # 6. Dispatch up to available slots
+    # 7. Dispatch up to available slots
     for task_info in tasks[:available]:
         if shutdown_event.is_set():
             return
@@ -545,6 +726,7 @@ async def poll_loop(  # noqa: PLR0913
     shutdown_event: asyncio.Event,
     wip_store: WipStore | None = None,
     hooks: HookRegistry | None = None,
+    channel: ChannelPlugin | None = None,
 ) -> None:
     """Periodic poll-dispatch-reconcile loop."""
     while not shutdown_event.is_set():
@@ -557,6 +739,11 @@ async def poll_loop(  # noqa: PLR0913
                 shutdown_event=shutdown_event,
                 wip_store=wip_store,
                 hooks=hooks,
+                channel=channel,
+                stale_timeout=settings.stale_task_timeout,
+                max_retry_attempts=settings.task_retry_max_attempts,
+                backoff_base=settings.task_retry_backoff_base,
+                backoff_max=settings.task_retry_backoff_max,
             )
         except Exception:
             logger.exception("poll_tick failed")
@@ -690,6 +877,7 @@ async def run_daemon(  # noqa: PLR0913
                             shutdown_event=shutdown_event,
                             wip_store=wip_store,
                             hooks=agent.hooks,
+                            channel=channel,
                         )
                     )
             finally:

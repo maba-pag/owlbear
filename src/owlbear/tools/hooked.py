@@ -80,6 +80,18 @@ def _log_retry(retry_state: RetryCallState) -> None:
     )
 
 
+def _mark_tool_exhausted(retry_state: RetryCallState) -> None:
+    """Mark the exception as tool-retries-exhausted and re-raise.
+
+    Used as ``retry_error_callback`` so the daemon can detect that
+    HookedToolset already exhausted its retry budget (#512).
+    """
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if exc is not None:
+        exc._tool_retries_exhausted = True  # noqa: SLF001
+        raise exc
+
+
 @dataclass
 class HookedToolset(WrapperToolset):  # type: ignore[type-arg]
     """WrapperToolset that emits PRE/POST_TOOL_USE hooks around tool calls.
@@ -128,7 +140,7 @@ class HookedToolset(WrapperToolset):  # type: ignore[type-arg]
         retry=retry_if_exception(_is_transient),
         stop=stop_after_attempt(_MAX_ATTEMPTS),
         wait=wait_exponential(multiplier=_BACKOFF_BASE, max=_BACKOFF_MAX),
-        reraise=True,
+        retry_error_callback=_mark_tool_exhausted,
         before_sleep=_log_retry,
     )
     async def _call_with_retry(
