@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import sys
 import time
@@ -523,3 +524,71 @@ class TestLoadOrRefreshToken:
         assert token_path.exists()
         saved = json.loads(token_path.read_text())
         assert saved["token"] == "new_copilot_token"
+
+
+# ---------------------------------------------------------------------------
+# poll_for_access_token — unexpected error path (lines 133-134)
+# ---------------------------------------------------------------------------
+
+
+class TestPollForAccessTokenUnexpectedError:
+    """Unexpected OAuth error should raise RuntimeError immediately."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_unexpected_error_raises_runtime_error(self) -> None:
+        """An unrecognized error field should raise RuntimeError."""
+        unexpected = MagicMock()
+        unexpected.json.return_value = {"error": "access_denied", "error_description": "denied"}
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = unexpected
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("owlbear.auth.copilot.httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.auth.copilot.asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="Unexpected OAuth error"),
+        ):
+            await poll_for_access_token("device123", interval=1, expires_in=60)
+
+
+# ---------------------------------------------------------------------------
+# save_token — Unix branch (lines 205-208)
+# ---------------------------------------------------------------------------
+
+
+class TestSaveTokenUnixBranch:
+    """Unix branch of save_token when sys.platform != 'win32'."""
+
+    def test_unix_branch_uses_os_open_with_0600(self, tmp_path: Path) -> None:
+        """On non-Windows, save_token should use os.open with 0o600 permissions."""
+        token_path = tmp_path / "copilot_token.json"
+        token_data = {"token": "unix_secret", "expires_at": 9999999999}
+
+        mock_fd = 42
+        mock_file = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_file)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("owlbear.auth.copilot.sys") as mock_sys,
+            patch("owlbear.auth.copilot.os") as mock_os,
+        ):
+            mock_sys.platform = "linux"
+            mock_os.O_WRONLY = os.O_WRONLY
+            mock_os.O_CREAT = os.O_CREAT
+            mock_os.O_TRUNC = os.O_TRUNC
+            mock_os.open.return_value = mock_fd
+            mock_os.fdopen.return_value = mock_ctx
+
+            save_token(token_data, token_path)
+
+        mock_os.open.assert_called_once_with(
+            token_path,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        mock_os.fdopen.assert_called_once_with(mock_fd, "w")
+        mock_file.write.assert_called_once()

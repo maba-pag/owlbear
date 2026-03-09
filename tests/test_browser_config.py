@@ -243,3 +243,35 @@ class TestBrowserConfigCDPFrozen:
         cfg = BrowserConfig()
         with pytest.raises(ValidationError):
             cfg.auto_launch = False  # type: ignore[misc]
+
+
+# --- CDP endpoint None passthrough (line 73) ---
+
+
+class TestCDPEndpointNonePassthrough:
+    """Validator should return None when cdp_endpoint is explicitly None."""
+
+    def test_explicit_none_returns_none(self) -> None:
+        """Passing cdp_endpoint=None explicitly should pass validation."""
+        cfg = BrowserConfig(cdp_endpoint=None)
+        assert cfg.cdp_endpoint is None
+
+
+# --- CDP endpoint urlparse failure (lines 76-78) ---
+
+
+class TestCDPEndpointUrlparseFailure:
+    """The except-Exception branch in _cdp_endpoint_localhost_only."""
+
+    def test_urlparse_exception_raises_validation_error(self) -> None:
+        """When urlparse raises, validator should raise 'not a valid URL'."""
+        from unittest.mock import patch
+
+        with (
+            patch(
+                "owlbear.tools.browser.config.urlparse",
+                side_effect=ValueError("boom"),
+            ),
+            pytest.raises(ValidationError, match="cdp_endpoint is not a valid URL"),
+        ):
+            BrowserConfig(cdp_endpoint="http://localhost:9222")
