@@ -1,5 +1,5 @@
 ---
-applyTo: "docs/*.md"
+applyTo: "docs/research/*.md"
 description: "Guardrails for research/analysis documents — ensures findings become kanban tasks"
 ---
 
@@ -23,9 +23,9 @@ For the complete research procedure and task lifecycle, see the `research-workfl
 
 The task is NOT done until:
 
-1. Every recommended action from the doc exists as a kanban task (`kanban-md create ...`).
-2. Each kanban task body links back to the research doc (e.g., `See docs/p7-research.md §4`).
-3. You have verified the tasks exist on the board (`kanban-md list --compact`).
+1. Every recommended action from the doc is presented as a concrete `kanban-md create` command in the Follow-up Tasks section (present for user review — do NOT execute).
+2. Each proposed task body links back to the research doc (e.g., `See docs/research/p7-research.md §4`).
+3. The Follow-up Tasks section is complete and actionable — the user can copy-paste and run the commands.
 
 If the research doc recommends zero follow-up tasks, that's a red flag — explicitly state why no action is needed.
 

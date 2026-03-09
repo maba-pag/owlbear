@@ -159,11 +159,12 @@ The auditor intentionally runs unscoped tests because that's its PURPOSE — cat
 
 ## Confidence thresholds
 
-| Agent/Mode | Threshold | Meaning                             |
-| ---------- | --------- | ----------------------------------- |
-| Reviewer   | ≥ .90     | PASS — code quality meets bar       |
-| Auditor    | ≥ .95     | Archive — all AC verified           |
-| Auditor    | < .85     | Reject — incomplete or unverifiable |
+| Agent/Mode | Threshold | Meaning                               |
+| ---------- | --------- | ------------------------------------- |
+| Reviewer   | ≥ .90     | PASS — code quality meets bar         |
+| Auditor    | ≥ .95     | Archive — all AC verified             |
+| Auditor    | .85–.94   | Reject to review — fixable gaps       |
+| Auditor    | < .85     | Reject to backlog — fundamental issue |
 
 Individual agents reference these thresholds in context. This table is the single source of truth.
 
@@ -197,8 +198,9 @@ Downstream agents read this via `kanban\kanban-md.exe show {ID}`. The orchestrat
 
 | Agent          | Verdict tokens                            | Signal example                                       | Body section             |
 | -------------- | ----------------------------------------- | ---------------------------------------------------- | ------------------------ |
+| planner        | (JSON plan)                               | `{"dispatch":[...],"blocked":[...]}`                 | (none — no task body)    |
 | test-writer    | `DONE` / `BLOCKED`                        | `DONE #480 -> in-progress \| tests written, 12 fail` | `## Test-Writer Notes`   |
-| builder        | `DONE` / `BLOCKED`                        | `DONE #480 -> review \| 12 passed, ruff clean`       | `## Builder Notes`       |
+| builder        | `DONE` / `BLOCKED` / `BLOCK`              | `DONE #480 -> review \| 12 passed, ruff clean`       | `## Builder Notes`       |
 | reviewer       | `PASS` / `FAIL`                           | `PASS #480 -> docs \| confidence .95`                | `## Review Evidence`     |
 | writer         | `DONE` / `REJECTED`                       | `DONE #480 -> done \| docs gate passed`              | `## Docs Gate`           |
 | auditor        | `ARCHIVED` / `REJECTED`                   | `ARCHIVED #480 -> archived \| confidence .97`        | `## Audit`               |
