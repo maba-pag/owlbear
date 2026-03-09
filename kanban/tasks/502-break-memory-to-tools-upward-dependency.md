@@ -1,12 +1,12 @@
 ---
 id: 502
 title: Break memory to tools upward dependency
-status: done
+status: archived
 priority: important
 created: 2026-03-04T07:38:15.2330855+01:00
-updated: 2026-03-08T15:41:31.3998922+01:00
+updated: 2026-03-09T21:11:59.9987012+01:00
 started: 2026-03-06T23:31:40.1597395+01:00
-completed: 2026-03-08T15:41:31.3998922+01:00
+completed: 2026-03-09T21:11:59.9987012+01:00
 tags:
     - audit
     - architecture
@@ -55,3 +55,43 @@ INT-07: memory/knowledge/refresh.py imports tools.browser.crawl_config and tools
 - **Precedent:** Codebase uses Protocols for multi-method interfaces (EmbeddingProvider, VectorStoreProtocol); callback is appropriate for this simpler case
 - **Module layering:** After change, refresh.py depends only on memory-local types + owlbear.paths (leaf). bootstrap.py remains the sole cross-layer wiring point
 - **Files touched:** src/owlbear/memory/knowledge/refresh.py, src/owlbear/bootstrap.py, tests/test_refresh_orchestrator.py
+
+[[2026-03-09]] Mon 21:11
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. CrawlHandler type alias in refresh.py | Line 30: `Callable[[dict[str, object]], Awaitable[list[IngestResult]]]`  uses only stdlib typing + memory-local IngestResult, docstring present | PASS |
+| 2. Constructor updated | Line 78: `crawl_handler: CrawlHandler | None = None`; Line 83: `self._crawl_handler = crawl_handler` | PASS |
+| 3. _handle_crawl simplified | Line 146: `await self._crawl_handler(source.config)`; _build_crawl_config removed (grep 0 hits); ValueError guard at L142 | PASS |
+| 4. Bootstrap wires callback | bootstrap/knowledge.py L286: `RefreshOrchestrator(store=..., pipeline=..., workspace_root=...)`  defaults to crawl_handler=None per AC note | PASS |
+| 5. Tests updated | AsyncMock as crawl_handler (no mock.patch on crawl_and_ingest); 0 owlbear.tools.browser imports in test file; 29 tests pass | PASS |
+| 6. Verification greps | `from owlbear.tools` in src/owlbear/memory/ = 0 hits; `import owlbear.tools` = 0 hits; ruff clean; tests pass | PASS |
+
+### Test Results
+- pytest (scoped): 29 passed in 1.20s
+- pytest (full suite): blocked by pre-existing qdrant_client/pydantic version incompatibility in env (unrelated to #502)
+- ruff: All checks passed on refresh.py, test_refresh_orchestrator.py, bootstrap/knowledge.py
+
+### Confidence: .97
+### Action: archive
+
+[[2026-03-09]] Mon 21:11
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. CrawlHandler type alias in refresh.py | Line 30: `Callable[[dict[str, object]], Awaitable[list[IngestResult]]]`  uses only stdlib typing + memory-local IngestResult, docstring present | PASS |
+| 2. Constructor updated | Line 78: `crawl_handler: CrawlHandler | None = None`; Line 83: `self._crawl_handler = crawl_handler` | PASS |
+| 3. _handle_crawl simplified | Line 146: `await self._crawl_handler(source.config)`; _build_crawl_config removed (grep 0 hits); ValueError guard at L142 | PASS |
+| 4. Bootstrap wires callback | bootstrap/knowledge.py L286: `RefreshOrchestrator(store=..., pipeline=..., workspace_root=...)`  defaults to crawl_handler=None per AC note | PASS |
+| 5. Tests updated | AsyncMock as crawl_handler (no mock.patch on crawl_and_ingest); 0 owlbear.tools.browser imports in test file; 29 tests pass | PASS |
+| 6. Verification greps | `from owlbear.tools` in src/owlbear/memory/ = 0 hits; `import owlbear.tools` = 0 hits; ruff clean; tests pass | PASS |
+
+### Test Results
+- pytest (scoped): 29 passed in 1.20s
+- pytest (full suite): blocked by pre-existing qdrant_client/pydantic version incompatibility in env (unrelated to #502)
+- ruff: All checks passed on refresh.py, test_refresh_orchestrator.py, bootstrap/knowledge.py
+
+### Confidence: .97
+### Action: archive
