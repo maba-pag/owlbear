@@ -1,4 +1,4 @@
-"""Tests for owlbear.bootstrap â€” component wiring."""
+"""Tests for owlbear.bootstrap  -- component wiring."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import pytest
 
 from owlbear.bootstrap import (
     BootstrapResult,
+    ComponentStatus,
+    StartupSummary,
     _resolve_active_project,
     build_hooks,
     build_toolsets,
@@ -107,7 +109,7 @@ class TestBuildHooks:
     def test_observability_hook_with_workspace(self, tmp_path: Path) -> None:
         settings = OwlBearSettings()
         hooks, _ = build_hooks(settings, workspace_root=tmp_path)
-        # ObservabilityHook registers on ALL events â€” check a few
+        # ObservabilityHook registers on ALL events  -- check a few
         for event in HookEvent:
             assert len(hooks.handlers.get(event, [])) >= 1
 
@@ -255,7 +257,7 @@ class TestCreateChannel:
     def test_voice_channel_import_resolves(self) -> None:
         """Voice channel import must resolve without ImportError."""
         settings = OwlBearSettings()
-        with patch("owlbear.voice.channel.VoiceChannel", autospec=True) as mock_cls:
+        with patch("owlbear.voice.VoiceChannel", autospec=True) as mock_cls:
             mock_cls.return_value = MagicMock(spec=ChannelPlugin)
             channel = create_channel(settings, "voice")
             assert isinstance(channel, ChannelPlugin)
@@ -310,7 +312,7 @@ class TestBuildAgentRegistry:
         agents_dir.mkdir()
         settings = OwlBearSettings(agents_dir=agents_dir)
         registry = build_agent_registry(settings, toolsets=[], mcp_registry=None)
-        # scan() should have been called â€” definitions dict is populated (empty is ok)
+        # scan() should have been called  -- definitions dict is populated (empty is ok)
         assert hasattr(registry, "_definitions")
 
     def test_passes_model_to_registry(self, tmp_path: Path) -> None:
@@ -363,9 +365,13 @@ class TestBootstrap:
         settings = OwlBearSettings()
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -387,9 +393,13 @@ class TestBootstrap:
         settings = OwlBearSettings()
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -409,15 +419,21 @@ class TestBootstrap:
         settings = OwlBearSettings()
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 side_effect=RuntimeError("No token"),
+
             ),
             pytest.raises(RuntimeError, match="No token"),
         ):
             await bootstrap(settings, workspace_root=tmp_path)
 
 
+# ---------------------------------------------------------------------------
+# Additional coverage
 # ---------------------------------------------------------------------------
 # Additional coverage tests
 # ---------------------------------------------------------------------------
@@ -521,9 +537,13 @@ class TestBootstrapWithSkillsDir:
         settings = OwlBearSettings()
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -535,7 +555,7 @@ class TestBootstrapWithSkillsDir:
 
 
 # ---------------------------------------------------------------------------
-# build_hooks â€” ProgressReporter wiring
+# build_hooks  -- ProgressReporter wiring
 # ---------------------------------------------------------------------------
 
 
@@ -549,7 +569,7 @@ class TestBuildHooksProgress:
         assert len(result) == 2
         hooks, reporter = result
         assert isinstance(hooks, HookRegistry)
-        assert reporter is None  # no channel â†’ no reporter
+        assert reporter is None  # no channel -> no reporter
 
     def test_progress_enabled_with_channel_creates_reporter(self) -> None:
         from owlbear.core.progress import ProgressReporter
@@ -587,7 +607,7 @@ class TestBuildHooksProgress:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap â€” ProgressReporter integration
+# bootstrap  -- ProgressReporter integration
 # ---------------------------------------------------------------------------
 
 
@@ -604,9 +624,13 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=True)
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -626,9 +650,13 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=False)
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -646,9 +674,13 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=True)
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -669,20 +701,25 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=False)
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
 
         assert result.progress_reporter is None
-        assert len(result.cleanup) == 0
+        # cleanup should only contain openai_client.close, no progress stop
+        assert not any(getattr(cb, "__name__", "") == "stop" for cb in result.cleanup)
 
 
 # ---------------------------------------------------------------------------
-# Approval gate wrapping â€” AC for task #342
+# Approval gate wrapping  -- AC for task #342
 # ---------------------------------------------------------------------------
 
 
@@ -814,7 +851,7 @@ class TestConfigApprovalFields:
 
 
 class TestBootstrapApprovalIntegration:
-    """AC#7: Integration test â€” bootstrap with approval-wrapped toolsets."""
+    """AC#7: Integration test  -- bootstrap with approval-wrapped toolsets."""
 
     @pytest.mark.asyncio
     async def test_bootstrap_with_default_policy(self, tmp_path: Path) -> None:
@@ -826,9 +863,13 @@ class TestBootstrapApprovalIntegration:
         settings = OwlBearSettings()
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -847,9 +888,13 @@ class TestBootstrapApprovalIntegration:
         settings = OwlBearSettings(approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -860,7 +905,7 @@ class TestBootstrapApprovalIntegration:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_active_project â€” AC#1, AC#2, AC#6
+# _resolve_active_project  -- AC#1, AC#2, AC#6
 # ---------------------------------------------------------------------------
 
 
@@ -939,7 +984,7 @@ class TestResolveActiveProject:
 
 
 # ---------------------------------------------------------------------------
-# bootstrap with active project â€” AC#2, AC#3, AC#4, AC#5, AC#7
+# bootstrap with active project  -- AC#2, AC#3, AC#4, AC#5, AC#7
 # ---------------------------------------------------------------------------
 
 
@@ -979,9 +1024,13 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1006,9 +1055,13 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1032,15 +1085,19 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
             result = await bootstrap(settings)
 
-        # The FileToolset received `workspace` â€” verify via session path
+        # The FileToolset received `workspace`  -- verify via session path
         expected_session = config_dir / "projects" / project.id / "sessions" / "session.jsonl"
         assert result.agent.session.path == expected_session
 
@@ -1059,15 +1116,19 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent") as mock_agent_cls,
         ):
             await bootstrap(settings)
 
-        # The Agent constructor receives toolsets= kwarg â€” inspect it
+        # The Agent constructor receives toolsets= kwarg  -- inspect it
         call_kwargs = mock_agent_cls.call_args
         toolsets_arg = call_kwargs.kwargs.get("toolsets", call_kwargs[1].get("toolsets", []))
         type_names = [type(unwrap(ts)).__name__ for ts in toolsets_arg]
@@ -1089,9 +1150,13 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1120,9 +1185,13 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1149,15 +1218,19 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent") as mock_agent_cls,
         ):
             await bootstrap(settings, workspace_root=tmp_path)
 
-        # The Agent constructor receives toolsets= kwarg â€” inspect it
+        # The Agent constructor receives toolsets= kwarg  -- inspect it
         call_kwargs = mock_agent_cls.call_args
         toolsets_arg = call_kwargs.kwargs.get("toolsets", call_kwargs[1].get("toolsets", []))
         type_names = [type(unwrap(ts)).__name__ for ts in toolsets_arg]
@@ -1261,6 +1334,10 @@ class TestBuildToolsetsProjectScope:
             patch(
                 "owlbear.bootstrap._build_knowledge_toolset",
             ) as mock_build_kt,
+            patch(
+                "owlbear.bootstrap._build_bookmark_toolset",
+                return_value=None,
+            ),
         ):
             mock_build_kt.return_value = None
             build_toolsets(
@@ -1278,11 +1355,12 @@ class TestBuildToolsetsProjectScope:
                 max_tokens=2000,
                 knowledge_graph_expansion=True,
                 inter_doc_graph_building=False,
+                bg_concurrency=5,
             )
 
 
 # ---------------------------------------------------------------------------
-# KnowledgeQueryService bootstrap wiring â€” AC for tasks #426/#409
+# KnowledgeQueryService bootstrap wiring  -- AC for tasks #426/#409
 # ---------------------------------------------------------------------------
 
 
@@ -1389,12 +1467,12 @@ class TestBuildKnowledgeToolsetReturnsService:
         from owlbear.bootstrap import _build_knowledge_infra
 
         result = _build_knowledge_infra(tmp_path)
-        # Without proper mocks, infra creation fails â†’ None
+        # Without proper mocks, infra creation fails -> None
         assert result is None
 
 
 # ---------------------------------------------------------------------------
-# Screenshot wiring â€” AC for task #396
+# Screenshot wiring  -- AC for task #396
 # ---------------------------------------------------------------------------
 
 
@@ -1467,9 +1545,13 @@ class TestBootstrapScreenshotIntegration:
         settings = OwlBearSettings(approval_policy=[])
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1543,6 +1625,10 @@ class TestBuildToolsetsKnowledgeService:
                 "owlbear.bootstrap._build_knowledge_toolset",
                 return_value=None,
             ) as mock_build,
+            patch(
+                "owlbear.bootstrap._build_bookmark_toolset",
+                return_value=None,
+            ),
         ):
             build_toolsets(settings, tmp_path, hooks, channel)
 
@@ -1554,6 +1640,7 @@ class TestBuildToolsetsKnowledgeService:
             max_tokens=5000,
             knowledge_graph_expansion=True,
             inter_doc_graph_building=False,
+            bg_concurrency=5,
         )
 
 
@@ -1572,9 +1659,13 @@ class TestBootstrapKnowledgeServiceWiring:
 
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -1597,9 +1688,13 @@ class TestBootstrapKnowledgeServiceWiring:
 
         with (
             patch(
+
                 "owlbear.bootstrap.create_copilot_model",
+
                 new_callable=AsyncMock,
+
                 return_value=mock_model,
+
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -1613,7 +1708,7 @@ class TestBootstrapKnowledgeServiceWiring:
 
 
 # ---------------------------------------------------------------------------
-# Shared knowledge infrastructure â€” AC for task #455
+# Shared knowledge infrastructure  -- AC for task #455
 # ---------------------------------------------------------------------------
 
 
@@ -1825,7 +1920,7 @@ class TestSharedKnowledgeInfra:
         ):
             infra = _build_knowledge_infra(tmp_path)
             assert infra is not None
-            result = _build_bookmark_toolset(infra)
+            result = _build_bookmark_toolset(infra, tmp_path)
 
         assert result is not None
         assert type(result).__name__ == "BookmarkToolset"
@@ -1848,14 +1943,14 @@ class TestSharedKnowledgeInfra:
             infra = _build_knowledge_infra(tmp_path)
 
         assert infra is not None
-        # All fields are the same object â€” identity, not equality
+        # All fields are the same object  -- identity, not equality
         assert infra.vector_store is infra.vector_store  # sanity
         assert infra.embedding_provider is infra.embedding_provider
         assert infra.conn is infra.conn
 
 
 # ---------------------------------------------------------------------------
-# _build_knowledge_source_toolset â€” AC#6, AC#7, AC#8
+# _build_knowledge_source_toolset  -- AC#6, AC#7, AC#8
 # ---------------------------------------------------------------------------
 
 
@@ -1916,7 +2011,7 @@ class TestBuildKnowledgeSourceToolset:
                 "owlbear.memory.knowledge.source_store.KnowledgeSourceStore",
                 side_effect=RuntimeError("boom"),
             ),
-            patch("owlbear.bootstrap.logger") as mock_logger,
+            patch("owlbear.bootstrap.knowledge.logger") as mock_logger,
         ):
             result = _build_knowledge_source_toolset(mock_infra, tmp_path)
 
@@ -1926,7 +2021,7 @@ class TestBuildKnowledgeSourceToolset:
 
 
 # ---------------------------------------------------------------------------
-# Tool alias auto-registration â€” AC for task #488
+# Tool alias auto-registration  -- AC for task #488
 # ---------------------------------------------------------------------------
 
 # Expected alias mapping from the task AC
@@ -2056,5 +2151,512 @@ class TestAliasResolution:
                     ):
                         pytest.fail(
                             "Found hardcoded _aliases dict literal with "
-                            f"{len(node.value.keys)} entries â€” should be built dynamically"
+                            f"{len(node.value.keys)} entries  -- should be built dynamically"
                         )
+
+
+# ---------------------------------------------------------------------------
+# ComponentStatus / StartupSummary dataclasses (#668)
+# ---------------------------------------------------------------------------
+
+
+class TestComponentStatusDataclass:
+    """AC#1: ComponentStatus is a frozen dataclass in bootstrap.py."""
+
+    def test_is_frozen(self) -> None:
+        status = ComponentStatus(name="TestToolset", loaded=True)
+        with pytest.raises(AttributeError):
+            status.name = "changed"  # type: ignore[misc]
+
+    def test_fields_present(self) -> None:
+        status = ComponentStatus(name="TestToolset", loaded=False, error="boom", level="ERROR")
+        assert status.name == "TestToolset"
+        assert status.loaded is False
+        assert status.error == "boom"
+        assert status.level == "ERROR"
+
+    def test_defaults(self) -> None:
+        status = ComponentStatus(name="OK", loaded=True)
+        assert status.error is None
+        assert status.level == "INFO"
+
+
+class TestStartupSummaryDataclass:
+    """AC#1: StartupSummary is a frozen dataclass in bootstrap.py."""
+
+    def test_is_frozen(self) -> None:
+        summary = StartupSummary(
+            components=[], workspace=Path("test-workspace"), project=None, channel_name="cli"
+        )
+        with pytest.raises(AttributeError):
+            summary.project = "changed"  # type: ignore[misc]
+
+    def test_fields_present(self) -> None:
+        cs = ComponentStatus(name="A", loaded=True)
+        summary = StartupSummary(
+            components=[cs],
+            workspace=Path("test-workspace"),
+            project="myproject",
+            channel_name="cli",
+        )
+        assert len(summary.components) == 1
+        assert summary.workspace == Path("test-workspace")
+        assert summary.project == "myproject"
+        assert summary.channel_name == "cli"
+
+    def test_format_all_ok(self) -> None:
+        """format() shows OK for loaded components."""
+        components = [
+            ComponentStatus(name="FileToolset", loaded=True),
+            ComponentStatus(name="TerminalToolset", loaded=True),
+        ]
+        summary = StartupSummary(
+            components=components,
+            workspace=Path("test-workspace"),
+            project=None,
+            channel_name="cli",
+        )
+        text = summary.format()
+        assert "OK" in text
+        assert "FileToolset" in text
+        assert "TerminalToolset" in text
+
+    def test_format_shows_failures(self) -> None:
+        """format() shows FAIL with error message for failed components."""
+        components = [
+            ComponentStatus(name="GitHubToolset", loaded=False, error="bad token", level="ERROR"),
+        ]
+        summary = StartupSummary(
+            components=components,
+            workspace=Path("test-workspace"),
+            project=None,
+            channel_name="cli",
+        )
+        text = summary.format()
+        assert "FAIL" in text
+        assert "GitHubToolset" in text
+        assert "bad token" in text
+
+    def test_format_shows_warnings(self) -> None:
+        """format() shows SKIP for WARNING-level missing optional deps."""
+        components = [
+            ComponentStatus(
+                name="WebSearchToolset",
+                loaded=False,
+                error="ddgs not installed",
+                level="WARNING",
+            ),
+        ]
+        summary = StartupSummary(
+            components=components,
+            workspace=Path("test-workspace"),
+            project=None,
+            channel_name="cli",
+        )
+        text = summary.format()
+        assert "SKIP" in text
+        assert "WebSearchToolset" in text
+
+    def test_format_includes_counts(self) -> None:
+        """format() includes loaded/failed/skipped counts."""
+        components = [
+            ComponentStatus(name="A", loaded=True),
+            ComponentStatus(name="B", loaded=True),
+            ComponentStatus(name="C", loaded=False, error="err", level="ERROR"),
+            ComponentStatus(name="D", loaded=False, error="missing", level="WARNING"),
+        ]
+        summary = StartupSummary(
+            components=components,
+            workspace=Path("test-workspace"),
+            project=None,
+            channel_name="cli",
+        )
+        text = summary.format()
+        assert "2 loaded" in text
+        assert "1 failed" in text
+        assert "1 skipped" in text
+
+
+class TestBootstrapResultHasSummary:
+    """AC#3: BootstrapResult has startup_summary field."""
+
+    def test_startup_summary_on_result(self) -> None:
+        summary = StartupSummary(
+            components=[], workspace=Path("test-workspace"), project=None, channel_name="cli"
+        )
+        result = BootstrapResult(
+            agent=MagicMock(),
+            channel=MagicMock(),
+            mcp_registry=None,
+            hooks=HookRegistry(),
+            error_journal=MagicMock(),
+            startup_summary=summary,
+        )
+        assert result.startup_summary is summary
+
+
+class TestBootstrapCollectsSummary:
+    """AC#2-#6: bootstrap() collects ComponentStatus from all 9 exception sites."""
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_returns_startup_summary(self, tmp_path: Path) -> None:
+        """AC#3: bootstrap() returns StartupSummary on BootstrapResult."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings()
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        assert result.startup_summary is not None
+        assert isinstance(result.startup_summary, StartupSummary)
+        # Must contain at least 2 entries (KnowledgeInfra, WebSearchToolset)
+        assert len(result.startup_summary.components) >= 2
+        names = [c.name for c in result.startup_summary.components]
+        assert "KnowledgeInfra" in names
+        assert "WebSearchToolset" in names
+
+    @pytest.mark.asyncio
+    async def test_knowledge_infra_failure_recorded(self, tmp_path: Path) -> None:
+        """AC#2: knowledge infra failure appears in summary."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings()
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch(
+                "owlbear.bootstrap._build_knowledge_infra",
+                side_effect=RuntimeError("db fail"),
+            ),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        names = [c.name for c in result.startup_summary.components if not c.loaded]
+        assert "KnowledgeInfra" in names
+
+    @pytest.mark.asyncio
+    async def test_web_search_failure_is_warning(self, tmp_path: Path) -> None:
+        """AC#6: optional dep missing gets WARNING level."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings()
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch(
+                "owlbear.bootstrap._build_web_search_toolset",
+                side_effect=ImportError("no ddgs"),
+            ),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        web = [c for c in result.startup_summary.components if c.name == "WebSearchToolset"]
+        assert len(web) == 1
+        assert web[0].level == "WARNING"
+        assert web[0].loaded is False
+
+    @pytest.mark.asyncio
+    async def test_github_failure_is_error(self, tmp_path: Path) -> None:
+        """AC#6: user-configured-but-failed component gets ERROR level."""
+        from pydantic import SecretStr
+
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings(
+            github_token=SecretStr("ghp_test123"),
+            approval_policy=[],
+        )
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch(
+                "owlbear.tools.github_api.GitHubToolset.__init__",
+                side_effect=RuntimeError("bad token"),
+            ),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        github = [c for c in result.startup_summary.components if c.name == "GitHubToolset"]
+        assert len(github) == 1
+        assert github[0].level == "ERROR"
+        assert github[0].loaded is False
+
+    @pytest.mark.asyncio
+    async def test_summary_logged(self, tmp_path: Path) -> None:
+        """AC#4: single logger.info call with 'Bootstrap complete:' prefix."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings()
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch("owlbear.bootstrap.logger") as mock_logger,
+        ):
+            await bootstrap(settings, workspace_root=tmp_path)
+
+        info_calls = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("Bootstrap complete:" in call for call in info_calls)
+
+    @pytest.mark.asyncio
+    async def test_channel_send_called_with_summary(self, tmp_path: Path) -> None:
+        """AC#5: channel.send called with formatted summary when log_startup_summary=True."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings(log_startup_summary=True)
+        mock_channel = AsyncMock(spec=ChannelPlugin)
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch("owlbear.bootstrap.create_channel", return_value=mock_channel),
+        ):
+            await bootstrap(settings, workspace_root=tmp_path)
+
+        mock_channel.send.assert_called_once()
+        sent_text = mock_channel.send.call_args[0][0]
+        assert "loaded" in sent_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_channel_send_suppressed_when_disabled(self, tmp_path: Path) -> None:
+        """AC#5: channel.send NOT called when log_startup_summary=False."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings = OwlBearSettings(log_startup_summary=False)
+        mock_channel = AsyncMock(spec=ChannelPlugin)
+        with (
+            patch(
+
+                "owlbear.bootstrap.create_copilot_model",
+
+                new_callable=AsyncMock,
+
+                return_value=mock_model,
+
+            ),
+            patch("owlbear.core.agent.Agent"),
+            patch("owlbear.bootstrap.create_channel", return_value=mock_channel),
+        ):
+            await bootstrap(settings, workspace_root=tmp_path)
+
+        mock_channel.send.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# ComponentStatus collection for 6 error sites (#668 retry)
+# ---------------------------------------------------------------------------
+
+
+class TestComponentStatusErrorSites:
+    """Verify each of the 6 previously-untested error sites records a ComponentStatus."""
+
+    def test_skill_registry_failure_component_status(self, tmp_path: Path) -> None:
+        """SkillRegistry failure records WARNING ComponentStatus."""
+        skills_dir = tmp_path / ".github" / "skills"
+        skills_dir.mkdir(parents=True)
+        (skills_dir / "test.md").write_text(
+            "---\nname: test\ndescription: test\n---\n",
+            encoding="utf-8",
+        )
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        summary: list[ComponentStatus] = []
+
+        with patch(
+            "owlbear.skills.registry.SkillRegistry",
+            side_effect=RuntimeError("skill boom"),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel, summary=summary)
+
+        skill_statuses = [c for c in summary if c.name == "SkillRegistry"]
+        assert len(skill_statuses) == 1
+        assert skill_statuses[0].loaded is False
+        assert skill_statuses[0].level == "WARNING"
+        assert "skill boom" in skill_statuses[0].error
+
+    def test_knowledge_toolset_failure_component_status(self, tmp_path: Path) -> None:
+        """KnowledgeToolset failure records ERROR ComponentStatus."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        summary: list[ComponentStatus] = []
+
+        mock_infra = MagicMock()
+        with (
+            patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=None,
+            ),
+            patch("owlbear.bootstrap._build_bookmark_toolset", return_value=None),
+            patch("owlbear.bootstrap._build_knowledge_source_toolset", return_value=None),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel, summary=summary)
+
+        kt_statuses = [c for c in summary if c.name == "KnowledgeToolset"]
+        assert len(kt_statuses) == 1
+        assert kt_statuses[0].loaded is False
+        assert kt_statuses[0].level == "ERROR"
+
+    def test_bookmark_toolset_failure_component_status(self, tmp_path: Path) -> None:
+        """BookmarkToolset failure records WARNING ComponentStatus."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        summary: list[ComponentStatus] = []
+
+        mock_infra = MagicMock()
+        mock_knowledge_ts = MagicMock()
+        mock_service = MagicMock()
+        mock_pipeline = MagicMock()
+        with (
+            patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=(mock_knowledge_ts, mock_service, mock_pipeline),
+            ),
+            patch("owlbear.bootstrap._build_bookmark_toolset", return_value=None),
+            patch("owlbear.bootstrap._build_knowledge_source_toolset", return_value=None),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel, summary=summary)
+
+        bm_statuses = [c for c in summary if c.name == "BookmarkToolset"]
+        assert len(bm_statuses) == 1
+        assert bm_statuses[0].loaded is False
+        assert bm_statuses[0].level == "WARNING"
+
+    def test_knowledge_source_toolset_failure_component_status(self, tmp_path: Path) -> None:
+        """KnowledgeSourceToolset failure records WARNING ComponentStatus."""
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        summary: list[ComponentStatus] = []
+
+        mock_infra = MagicMock()
+        mock_knowledge_ts = MagicMock()
+        mock_service = MagicMock()
+        mock_pipeline = MagicMock()
+        with (
+            patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                return_value=(mock_knowledge_ts, mock_service, mock_pipeline),
+            ),
+            patch("owlbear.bootstrap._build_bookmark_toolset", return_value=MagicMock()),
+            patch("owlbear.bootstrap._build_knowledge_source_toolset", return_value=None),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel, summary=summary)
+
+        ks_statuses = [c for c in summary if c.name == "KnowledgeSourceToolset"]
+        assert len(ks_statuses) == 1
+        assert ks_statuses[0].loaded is False
+        assert ks_statuses[0].level == "WARNING"
+
+    def test_mcp_registry_failure_component_status(self) -> None:
+        """MCPRegistry failure records ERROR ComponentStatus."""
+        from owlbear.bootstrap import build_mcp_registry
+
+        settings = OwlBearSettings(mcp_servers={"github": {"type": "stdio"}})
+        summary: list[ComponentStatus] = []
+
+        with patch(
+            "owlbear.bootstrap.register_default_servers",
+            side_effect=RuntimeError("mcp boom"),
+        ):
+            build_mcp_registry(settings, summary=summary)
+
+        mcp_statuses = [c for c in summary if c.name == "MCPRegistry"]
+        assert len(mcp_statuses) == 1
+        assert mcp_statuses[0].loaded is False
+        assert mcp_statuses[0].level == "ERROR"
+        assert "mcp boom" in mcp_statuses[0].error
+
+    def test_project_toolset_failure_component_status(self, tmp_path: Path) -> None:
+        """ProjectToolset failure records ERROR ComponentStatus."""
+        from owlbear.bootstrap import _add_project_toolset
+
+        toolsets: list = []
+        hooks = HookRegistry()
+        summary: list[ComponentStatus] = []
+
+        with patch(
+            "owlbear.projects.toolset.ProjectToolset",
+            side_effect=RuntimeError("project boom"),
+        ):
+            _add_project_toolset(
+                toolsets,
+                project_store=MagicMock(),
+                config_dir=tmp_path,
+                hooks=hooks,
+                summary=summary,
+            )
+
+        pt_statuses = [c for c in summary if c.name == "ProjectToolset"]
+        assert len(pt_statuses) == 1
+        assert pt_statuses[0].loaded is False
+        assert pt_statuses[0].level == "ERROR"
+        assert "project boom" in pt_statuses[0].error
