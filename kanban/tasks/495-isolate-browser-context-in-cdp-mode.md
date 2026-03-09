@@ -1,12 +1,12 @@
 ---
 id: 495
 title: Isolate browser context in CDP mode
-status: done
+status: archived
 priority: important
 created: 2026-03-04T07:38:10.0052022+01:00
-updated: 2026-03-08T02:27:57.0798182+01:00
+updated: 2026-03-09T21:02:46.8098623+01:00
 started: 2026-03-06T23:23:22.8991517+01:00
-completed: 2026-03-08T02:27:57.0798182+01:00
+completed: 2026-03-09T21:02:46.8098623+01:00
 tags:
     - audit
     - security
@@ -35,3 +35,27 @@ Playwright's browser.new_context() on CDP connections delegates to Target.create
 - [ ] New test assertion: contexts[0] is NOT accessed in CDP mode
 - [ ] New test assertion: context.close() called during CDP cleanup
 - [ ] ruff clean, all tests pass
+
+[[2026-03-09]] Mon 20:41
+## Audit
+
+### AC Verification
+| # | AC Item | Evidence | Status |
+|---|---------|----------|--------|
+| 1 | _enter_cdp uses new_context | manager.py L107 | PASS |
+| 2 | Viewport from config.viewport | manager.py L106 | PASS |
+| 3 | _exit_cdp closes context before disconnect | manager.py L139-148 | PASS |
+| 4 | try/finally ensures disconnect | test confirms | PASS |
+| 5 | Same nested pattern as _exit_launch | Verified | PASS |
+| 6 | CDP mock chain updated | pw_mocks fixture | PASS |
+| 7 | contexts[0] not accessed | test assertion | PASS |
+| 8 | context.close called in cleanup | test assertion | PASS |
+| 9 | ruff clean, tests pass | 33/33 browser; 1334 full suite | PASS |
+
+### Test Results
+- pytest scoped: 33 passed
+- pytest full: 1334 passed, 1 unrelated fail
+- ruff scoped: clean
+
+### Confidence: .97
+### Action: archive
