@@ -87,6 +87,14 @@ Add rows to `docs/sources.md` for any external sources used.
 
 Delete any cloned repos from `docs/research/`.
 
+## Step 8 — Advance
+
+Move the task to `backlog` to signal the architect:
+
+```powershell
+kanban\kanban-md.exe move {id} backlog
+```
+
 ## Self-critique checklist
 
 Before submitting:
@@ -99,4 +107,5 @@ Before submitting:
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in sources.md
 - [ ] Cloned repos deleted
+- [ ] Task moved to `backlog` via `kanban\kanban-md.exe move`
 - [ ] Recommendations align with KISS/YAGNI

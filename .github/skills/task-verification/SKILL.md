@@ -21,7 +21,8 @@ For every AC item on every task, collect concrete evidence:
 
 - **File exists:** `read_file` — verify the file, don't assume
 - **Code matches AC:** grep or read for specific classes, functions, signatures
-- **Tests pass:** Run the full suite plain (see the `pytest-and-linting` skill
+- **Tests pass:** Run the full suite plain (see the `pytest-and-linting` skill,
+  read it with `read_file` if not already loaded,
   for piping rules and the Python fallback):
 
   ```powershell

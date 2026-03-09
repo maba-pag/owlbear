@@ -24,6 +24,12 @@ The planner assigns agents based on task status:
 Tasks in `ideation` are never dispatched directly. `ideation` tasks need
 research first (orchestrator routes to `researcher`).
 
+**Non-implementation task exception:** Tasks tagged `research`, `docs`, `type:config`,
+or `type:docs` in `todo` skip the test-writer and transition directly to `in-progress`
+(the orchestrator dispatches the appropriate agent — researcher, writer, or builder —
+based on the task's tags and nature). The architect is responsible for tagging tasks
+correctly during backlog → todo approval.
+
 ---
 
 ## PLAN mode
@@ -105,7 +111,8 @@ This gate catches tasks that reached `in-progress` without proper test-writer pr
 — which is by design (belt-and-suspenders).
 
 **Gate 5 — Clarity gate:**
-Task body contains non-empty acceptance criteria with at least one `- [ ]` checkbox.
+Task body contains non-empty acceptance criteria with at least one bullet point
+(`- ` or `- [ ]`) describing a verifiable criterion.
 Tasks with empty or missing AC fail this gate.
 
 ### Step 5 — Wave grouping
@@ -171,7 +178,7 @@ Extract pipeline stage, per-task Channel A signals, and retry counts.
 
 ### Step 2 — Read AC for each task
 
-Run `kanban-md show {id}` to read the full acceptance criteria. Do not rely on the
+Run `kanban\kanban-md.exe show {id}` to read the full acceptance criteria. Do not rely on the
 orchestrator's summary.
 
 ### Step 3 — Assess each AC line
@@ -197,7 +204,7 @@ Apply verdict semantics:
 ### Step 5 — Append notes to task body
 
 ```
-kanban-md edit {id} -a "## Planner Evaluation\n{notes}" -t
+kanban\kanban-md.exe edit {id} -a "## Planner Evaluation\n{notes}" -t
 ```
 
 Add context for the downstream agent.
@@ -305,7 +312,7 @@ The builder has no guidance on what to fix. `retry_hint` must be specific.
 Before outputting:
 
 - [ ] Scope filter was applied — not reading the entire board unfiltered (unless scope is "all")
-- [ ] Every candidate task was read with `kanban-md show {id}` (not just list output)
+- [ ] Every candidate task was read with `kanban\kanban-md.exe show {id}` (not just list output)
 - [ ] DAG was built — tasks classified as ready, blocked, or external
 - [ ] All 5 gate checks were run on every ready task
 - [ ] No task in a WAVE failed any gate check

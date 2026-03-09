@@ -98,6 +98,7 @@ uv run ruff check src/ tests/
 ```
 
 Run plain — never pipe through PS cmdlets. See the `pytest-and-linting` skill
+(read it with `read_file` if not already loaded)
 for the full rules. If coverage measurement fails,
 re-read that section before retrying — do NOT iterate through flag variations.
 

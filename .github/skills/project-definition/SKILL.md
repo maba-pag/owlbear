@@ -1,7 +1,7 @@
 ---
 name: project-definition
 description: LLM-guided project scoping and definition workflow. Turns a vague idea into a structured ProjectDefinition through clarification, research, and iterative refinement with the user.
-user-invocable: false
+user-invocable: true
 ---
 
 # Project Definition Workflow
@@ -12,20 +12,20 @@ producing a `ProjectDefinition` that can be decomposed into kanban tasks.
 
 ## Workflow Template
 
-Follow these six steps in order. Do not skip steps. Use `ask_user` liberally
+Follow these six steps in order. Do not skip steps. Use `askQuestions` liberally
 to keep the user in the loop and avoid building on assumptions.
 
 1. **Receive idea** — Accept the user's initial description. Restate it in
    your own words to confirm understanding. Identify the core problem or
    opportunity the project addresses.
 
-2. **Clarify via ask_user** — Ask targeted clarifying questions to remove
+2. **Clarify via askQuestions** — Ask targeted clarifying questions to remove
    ambiguity. Focus on scope boundaries, target users, constraints, and
    non-goals. Present options when multiple valid interpretations exist
    (see the example interaction below). Continue until no open questions
    remain or the user explicitly says "that's enough."
 
-3. **Research via web search** — Use `web_search` to find libraries,
+3. **Research via web search** — Use `fetch_webpage` or `semantic_search` to find libraries,
    frameworks, or similar projects. Check existing codebase for relevant
    prior art, patterns, and existing components. Summarize findings and
    surface any risks or blockers discovered during research.
@@ -41,7 +41,7 @@ to keep the user in the loop and avoid building on assumptions.
    approves. Use `ask_user` for each feedback round.
 
 6. **Finalize** — Lock the approved definition. Write it as a markdown
-   document to the workspace (via `filesystem` tools). The definition is
+   document to the workspace (via `create_file`). The definition is
    now ready for task decomposition by the planner's kanban workflow.
 
 ## ProjectDefinition Field Reference
@@ -75,7 +75,7 @@ When multiple valid approaches exist, present them as numbered options with
 confidence scores so the user can make an informed choice:
 
 ```
-ask_user(
+askQuestions(
     question=(
         "The project could store data in two ways. Which do you prefer?\n\n"
         "Option 1 (.75) — SQLite local database\n"

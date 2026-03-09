@@ -34,6 +34,7 @@ See kanban board for KG research task. -->
 ## Step 3 — Evaluate architecture
 
 Assess the task against the codified standards in the `architecture-standards` skill
+(read it with `read_file` if not already loaded)
 and general architectural principles:
 
 1. **Single responsibility** — one thing only? If "and" joins unrelated concerns, split.
