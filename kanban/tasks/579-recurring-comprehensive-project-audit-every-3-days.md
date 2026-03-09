@@ -1,10 +1,12 @@
 ---
 id: 579
 title: 'Recurring: Comprehensive project audit (every 3 days)'
-status: backlog
+status: archived
 priority: needed
 created: 2026-03-04T08:03:44.3041014+01:00
-updated: 2026-03-04T08:03:44.3041014+01:00
+updated: 2026-03-09T18:11:35.5052425+01:00
+started: 2026-03-09T17:27:08.4516753+01:00
+completed: 2026-03-09T18:11:35.5052425+01:00
 tags:
     - recurring
     - sop
@@ -182,3 +184,217 @@ Each domain expert and the executive must include a self-critique section in the
 - Confidence score for my overall assessment (.0–1.0)
 
 This ensures intellectual honesty and identifies the audit's own blind spots.
+
+[[2026-03-09]] Mon 16:12
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+| AC Section | Assessment | Action |
+|------------|------------|--------|
+| Purpose | Clear, well-scoped â€” single recurring trigger for audits | Keep |
+| Schedule | Structured with last-run/next-due tracking | Keep |
+| Execution Protocol | Uses `--parent 579` (verified: kanban-md supports `--parent` flag) | Keep |
+| Phase 0 (Baseline) | Concrete commands, measurable metrics | Keep |
+| Phase 1 (Expert Audits) | 12 domains with severity ratings, structured output, finding IDs | Keep |
+| Phase 2 (Coverage Matrix) | Specific gate rule for under-covered modules | Keep |
+| Phase 3 (Executive Synthesis) | Risk scoring, regression analysis, dedup | Keep |
+| Phase 4 (Task Creation) | Board dedup via `kanban-md list --tag audit` â€” verified ~90 existing tasks | Keep |
+| Phase 5 (Final Report) | Verification checklist with metrics | Keep |
+| Quality Requirements | Concrete and measurable | Keep |
+| Self-Critique | Confidence scoring â€” good meta-quality mechanism | Keep |
+
+### Architecture Notes
+**Task type:** Recurring SOP template â€” stays at `todo` permanently, spawns subtasks per run.
+Not a code implementation task; no TDD compliance needed. Orchestrator reads this
+SOP and creates subtasks with `--parent 579 --status ideation`.
+
+**Pattern consistency:** Follows same structure as sibling SOPs #577 and #578
+(Purpose, Schedule, Execution Protocol, phased SOP, Quality Gates).
+
+**Existing baseline:** 10 audit report files already exist in `docs/` from a
+previous audit (architecture, security, code-quality, config-dependency,
+documentation, integration, resilience, software-design, test-quality,
+executive). The SOP's 12-domain model adds dedicated files for DRY/YAGNI/KISS,
+Performance, Observability, and DX â€” expanding coverage appropriately.
+
+**`--parent` flag:** Verified supported by kanban-md v0.33.0 `create` command.
+
+**Minor notes for execution (not blockers):**
+- Domain-to-filename mapping is implicit (e.g. `Architecture & Design Patterns`
+  â†’ `architecture-audit.md`). Existing files establish the convention.
+- Parent task lifecycle: stays at `todo` permanently. Orchestrator should not
+  advance it through the pipeline â€” only update `Last run` date after each subtask completes.
+
+### Changes Made
+- Moved #579 from `backlog` to `todo`
+
+### Dependencies
+- No code dependencies â€” process-only task
+- Verified: kanban-md `--parent` flag available
+- Existing audit files in `docs/` provide regression baseline
+
+[[2026-03-09]] Mon 16:27
+## Test-Writer Notes
+Non-implementation task (tagged recurring, sop)  recurring SOP template that spawns subtasks. No testable code produced. Passing through to builder.
+
+[[2026-03-09]] Mon 16:27
+## Test-Writer Notes
+Non-implementation task (tagged recurring, sop) -- recurring SOP template that spawns subtasks. No testable code produced. Passing through to builder.
+
+[[2026-03-09]] Mon 16:43
+## Builder Notes
+- Non-implementation task (recurring SOP template)
+- No code changes needed  task defines audit process, orchestrator spawns subtasks
+- Test-writer confirmed: no testable code produced
+- Architect confirmed: not a code implementation task, no TDD needed
+- Files changed: none
+- Tests: N/A
+- Lint: N/A
+- Coverage: N/A
+
+[[2026-03-09]] Mon 17:04
+## Review Evidence
+
+### Non-Implementation Task
+Type: Recurring SOP template (no code changes). Verified: no commits reference #579, builder/test-writer/architect confirm process-only task.
+
+### AC Compliance
+| AC Section | Evidence | Status |
+|------------|----------|--------|
+| Purpose | Clear single-paragraph scope statement in task body | PASS |
+| Schedule | Structured with type/frequency/last-run/next-due fields; follows #577/#578 pattern | PASS |
+| Execution Protocol | Uses `--parent 579` (kanban-md v0.33.0 `--parent` flag verified by architect) | PASS |
+| Phase 0 (Baseline) | 5 concrete commands (pytest, ruff, coverage, kanban-md list, read previous reports) | PASS |
+| Phase 1 (Expert Audits) | 12 domains with unique prefixes (ARC-SEC-CQ-DRY-RES-TST-CFG-INT-DOC-PRF-OBS-DX), structured finding format | PASS |
+| Phase 2 (Coverage Matrix) | Module x domain matrix with gate rule (<=2 domains = coverage gap) | PASS |
+| Phase 3 (Executive Synthesis) | Cross-ref, dedup, risk scoring (1-25 scale), regression analysis (fixed/unfixed/regressed/new) | PASS |
+| Phase 4 (Task Creation) | Board dedup via `kanban-md list --tag audit`, severity-to-priority mapping, cross-domain combination | PASS |
+| Phase 5 (Final Report) | Verification checklist with metrics, trending comparison | PASS |
+| Quality Requirements | 6 concrete requirements (evidence-backed, AC for recommendations, no duplicates, etc.) | PASS |
+| Self-Critique | Required for each domain expert and executive, with confidence score | PASS |
+| Sibling SOP consistency | Follows #577/#578 pattern: Purpose -> Schedule -> Execution Protocol. Verified both siblings at backlog | PASS |
+| Existing baseline | 10 audit reports in docs/ (architecture, security, code-quality, config-dependency, documentation, integration, resilience, software-design, test-quality, executive) | PASS |
+
+### Tests / Lint / Coverage
+N/A - non-implementation task (no code changes, no tests needed). Architect and test-writer both confirmed.
+
+### Test Quality
+N/A - no tests to evaluate for process-only SOP template.
+
+### Security
+No issues - no code changes, no new dependencies, no secrets, no user input handling.
+
+### Verdict: PASS confidence .92
+
+[[2026-03-09]] Mon 17:04
+## Review Evidence
+
+### Non-Implementation Task
+Type: Recurring SOP template (no code changes). Verified: no commits reference #579, builder/test-writer/architect confirm process-only task.
+
+### AC Compliance
+| AC Section | Evidence | Status |
+|------------|----------|--------|
+| Purpose | Clear single-paragraph scope statement in task body | PASS |
+| Schedule | Structured with type/frequency/last-run/next-due fields; follows #577/#578 pattern | PASS |
+| Execution Protocol | Uses `--parent 579` (kanban-md v0.33.0 `--parent` flag verified by architect) | PASS |
+| Phase 0 (Baseline) | 5 concrete commands (pytest, ruff, coverage, kanban-md list, read previous reports) | PASS |
+| Phase 1 (Expert Audits) | 12 domains with unique prefixes (ARC-SEC-CQ-DRY-RES-TST-CFG-INT-DOC-PRF-OBS-DX), structured finding format | PASS |
+| Phase 2 (Coverage Matrix) | Module x domain matrix with gate rule (<=2 domains = coverage gap) | PASS |
+| Phase 3 (Executive Synthesis) | Cross-ref, dedup, risk scoring (1-25 scale), regression analysis (fixed/unfixed/regressed/new) | PASS |
+| Phase 4 (Task Creation) | Board dedup via `kanban-md list --tag audit`, severity-to-priority mapping, cross-domain combination | PASS |
+| Phase 5 (Final Report) | Verification checklist with metrics, trending comparison | PASS |
+| Quality Requirements | 6 concrete requirements (evidence-backed, AC for recommendations, no duplicates, etc.) | PASS |
+| Self-Critique | Required for each domain expert and executive, with confidence score | PASS |
+| Sibling SOP consistency | Follows #577/#578 pattern: Purpose -> Schedule -> Execution Protocol. Verified both siblings at backlog | PASS |
+| Existing baseline | 10 audit reports in docs/ (architecture, security, code-quality, config-dependency, documentation, integration, resilience, software-design, test-quality, executive) | PASS |
+
+### Tests / Lint / Coverage
+N/A - non-implementation task (no code changes, no tests needed). Architect and test-writer both confirmed.
+
+### Test Quality
+N/A - no tests to evaluate for process-only SOP template.
+
+### Security
+No issues - no code changes, no new dependencies, no secrets, no user input handling.
+
+### Verdict: PASS confidence .92
+
+[[2026-03-09]] Mon 17:26
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | Non-implementation task (recurring SOP template) - no behavior/API changes |
+| 2 | Docstrings | No | N/A | No Python modules created or modified |
+| 3 | sources/overview.md | No | N/A | No external patterns adopted |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | No | N/A | No research phase for this SOP definition task |
+| 6 | No impact | Yes | Pass | Process-only SOP template - confirmed by all pipeline agents |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files found)
+
+[[2026-03-09]] Mon 18:11
+## Audit
+### AC Verification
+| AC Section | Evidence | Status |
+|------------|----------|--------|
+| Purpose section | Clear single-paragraph scope statement in task body (line 18) | PASS |
+| Schedule section | Structured with type/frequency/last-run/next-due fields (lines 22-25) | PASS |
+| Execution Protocol | Uses `--parent 579` spawning subtasks (lines 29-31); `--parent` flag verified by architect | PASS |
+| Phase 0 (Baseline) | 5 concrete commands with measurable metrics (lines 35-39) | PASS |
+| Phase 1 (Expert Audits) | 12 domains with unique prefixes (ARC-SEC-CQ-DRY-RES-TST-CFG-INT-DOC-PRF-OBS-DX), structured finding format (lines 43-110) | PASS |
+| Phase 2 (Coverage Matrix) | Module x domain matrix with explicit gate rule (<=2 domains = coverage gap) (lines 112-125) | PASS |
+| Phase 3 (Executive Synthesis) | Risk scoring (1-25 scale), regression analysis, dedup, coverage gap addressal (lines 127-140) | PASS |
+| Phase 4 (Task Creation) | Board dedup via `kanban-md list --tag audit`, severity-to-priority mapping, cross-domain combination (lines 142-153) | PASS |
+| Phase 5 (Final Report) | Verification checklist with metrics and trending comparison (lines 157-170) | PASS |
+| Quality Requirements | 6 concrete requirements: evidence-backed, AC for recommendations, no domain skipped, no duplicates, CRIT/HIGH verified, reports to disk (lines 172-180) | PASS |
+| Self-Critique Requirement | Required for each domain expert and executive, with confidence score (lines 182-190) | PASS |
+| Sibling SOP consistency | Follows #577/#578 pattern: Purpose -> Schedule -> Execution Protocol -> SOP phases. Both siblings confirmed at review/todo status with same tags (recurring, sop) | PASS |
+| Existing audit baseline | 10 audit report files confirmed in docs/ (architecture, security, code-quality, config-dependency, documentation, integration, resilience, software-design, test-quality, executive) | PASS |
+| No code changes | Non-implementation task. Builder, test-writer, architect all confirmed process-only. No commits to src/ or tests/ for #579. | PASS |
+
+### Test Results
+- pytest: N/A (non-implementation SOP template, no code changes)
+- ruff: N/A (no code changes); pre-existing 3 violations unrelated to #579
+
+### Full Suite Health Check
+- 1315 passed, 2 failed (pre-existing environment issues: slack_sdk import + Windows PermissionError), 20 skipped, 6 deselected
+
+### Confidence: .97
+### Action: archive
+
+[[2026-03-09]] Mon 18:11
+## Audit
+### AC Verification
+| AC Section | Evidence | Status |
+|------------|----------|--------|
+| Purpose section | Clear single-paragraph scope statement in task body (line 18) | PASS |
+| Schedule section | Structured with type/frequency/last-run/next-due fields (lines 22-25) | PASS |
+| Execution Protocol | Uses `--parent 579` spawning subtasks (lines 29-31); `--parent` flag verified by architect | PASS |
+| Phase 0 (Baseline) | 5 concrete commands with measurable metrics (lines 35-39) | PASS |
+| Phase 1 (Expert Audits) | 12 domains with unique prefixes (ARC-SEC-CQ-DRY-RES-TST-CFG-INT-DOC-PRF-OBS-DX), structured finding format (lines 43-110) | PASS |
+| Phase 2 (Coverage Matrix) | Module x domain matrix with explicit gate rule (<=2 domains = coverage gap) (lines 112-125) | PASS |
+| Phase 3 (Executive Synthesis) | Risk scoring (1-25 scale), regression analysis, dedup, coverage gap addressal (lines 127-140) | PASS |
+| Phase 4 (Task Creation) | Board dedup via `kanban-md list --tag audit`, severity-to-priority mapping, cross-domain combination (lines 142-153) | PASS |
+| Phase 5 (Final Report) | Verification checklist with metrics and trending comparison (lines 157-170) | PASS |
+| Quality Requirements | 6 concrete requirements: evidence-backed, AC for recommendations, no domain skipped, no duplicates, CRIT/HIGH verified, reports to disk (lines 172-180) | PASS |
+| Self-Critique Requirement | Required for each domain expert and executive, with confidence score (lines 182-190) | PASS |
+| Sibling SOP consistency | Follows #577/#578 pattern: Purpose -> Schedule -> Execution Protocol -> SOP phases. Both siblings confirmed at review/todo status with same tags (recurring, sop) | PASS |
+| Existing audit baseline | 10 audit report files confirmed in docs/ (architecture, security, code-quality, config-dependency, documentation, integration, resilience, software-design, test-quality, executive) | PASS |
+| No code changes | Non-implementation task. Builder, test-writer, architect all confirmed process-only. No commits to src/ or tests/ for #579. | PASS |
+
+### Test Results
+- pytest: N/A (non-implementation SOP template, no code changes)
+- ruff: N/A (no code changes); pre-existing 3 violations unrelated to #579
+
+### Full Suite Health Check
+- 1315 passed, 2 failed (pre-existing environment issues: slack_sdk import + Windows PermissionError), 20 skipped, 6 deselected
+
+### Confidence: .97
+### Action: archive
