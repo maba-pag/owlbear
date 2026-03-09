@@ -319,3 +319,39 @@ class TestSearchFiles:
         result = toolset._search_files("*.py")
         paths = result.strip().split("\n")
         assert paths == ["match.py"]
+
+    # -- ReDoS protection tests (#653, pending #496 implementation) --------
+
+    def test_search_files_invalid_regex(self, toolset: FileToolset) -> None:
+        with pytest.raises(ValueError, match="Invalid content_regex"):
+            toolset._search_files("*", content_regex="[invalid")
+
+    def test_search_files_nested_quantifier_rejected(self, toolset: FileToolset) -> None:
+        with pytest.raises(ValueError, match="nested quantifiers"):
+            toolset._search_files("*", content_regex="(a+)+b")
+
+    def test_search_files_regex_too_long(self, toolset: FileToolset) -> None:
+        with pytest.raises(ValueError, match="too long"):
+            toolset._search_files("*", content_regex="a" * 1001)
+
+    def test_search_files_valid_regex_still_works(
+        self, toolset: FileToolset, tmp_path: object
+    ) -> None:
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
+        (root / "greet.py").write_text("def hello():\n    pass\n", encoding="utf-8")
+        (root / "other.py").write_text("x = 1\n", encoding="utf-8")
+        result = toolset._search_files("*.py", content_regex="def hello")
+        paths = result.strip().split("\n")
+        assert paths == ["greet.py"]
+
+    def test_search_files_none_regex_still_works(
+        self, toolset: FileToolset, tmp_path: object
+    ) -> None:
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
+        (root / "a.py").write_text("code", encoding="utf-8")
+        result = toolset._search_files("*.py")
+        assert result.strip() == "a.py"

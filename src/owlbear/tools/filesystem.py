@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
+from owlbear.paths import sandbox_path
+
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import ClassVar
@@ -28,6 +30,8 @@ __all__ = ["FileToolset"]
 logger = logging.getLogger(__name__)
 
 _MAX_SEARCH_RESULTS = 100
+_MAX_CONTENT_REGEX_LEN = 1000
+_NESTED_QUANTIFIER_RE = re.compile(r"\([^)]*[+*?][^)]*\)[+*?{]")
 
 
 class FileToolset(FunctionToolset):
@@ -64,16 +68,7 @@ class FileToolset(FunctionToolset):
         Raises:
             PermissionError: If the resolved path escapes the workspace.
         """
-        # Reject null bytes early (some OSes silently truncate).
-        if "\x00" in user_path:
-            msg = f"Path outside workspace: {user_path!r}"
-            raise PermissionError(msg)
-
-        resolved = (self._root / user_path).resolve()
-        if not resolved.is_relative_to(self._root):
-            msg = f"Path outside workspace: {user_path}"
-            raise PermissionError(msg)
-        return resolved
+        return sandbox_path(self._root, user_path)
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -198,6 +193,26 @@ class FileToolset(FunctionToolset):
             entries.append(name)
         return "\n".join(entries)
 
+    @staticmethod
+    def _compile_content_regex(content_regex: str) -> re.Pattern[str]:
+        """Validate and compile *content_regex* with ReDoS safeguards.
+
+        Raises:
+            ValueError: On patterns that are too long, contain nested
+                quantifiers, or are syntactically invalid.
+        """
+        if len(content_regex) > _MAX_CONTENT_REGEX_LEN:
+            msg = f"content_regex too long (max {_MAX_CONTENT_REGEX_LEN} chars)"
+            raise ValueError(msg)
+        if _NESTED_QUANTIFIER_RE.search(content_regex):
+            msg = "content_regex rejected: nested quantifiers risk catastrophic backtracking"
+            raise ValueError(msg)
+        try:
+            return re.compile(content_regex)
+        except re.error as exc:
+            msg = f"Invalid content_regex: {exc}"
+            raise ValueError(msg) from exc
+
     def _search_files(
         self,
         glob_pattern: str,
@@ -211,8 +226,8 @@ class FileToolset(FunctionToolset):
             glob_pattern: Glob pattern relative to workspace root.
             content_regex: Optional regex to match against file content.
         """
+        compiled = self._compile_content_regex(content_regex) if content_regex is not None else None
         matches: list[str] = []
-        compiled = re.compile(content_regex) if content_regex else None
 
         for hit in sorted(self._root.glob(glob_pattern)):
             if not hit.is_file():
