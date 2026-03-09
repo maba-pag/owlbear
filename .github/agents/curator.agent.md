@@ -93,7 +93,7 @@ If the section exceeds 1500 tokens, write to `docs/scratch/{id}-curator.md` and 
 See docs/scratch/{id}-curator.md for full report.
 ```
 
-**When invoked without a task ID (periodic or ad-hoc):** Channel B does not apply. Curation actions (KG mutations) are the deliverable; the signal suffices.
+**When invoked without a task ID (periodic or ad-hoc):** Channel B does not apply. Curation actions (project memory mutations and proposed instruction/skill changes) are the deliverable; the signal suffices.
 
 ### Channel A — Routing signal (return last)
 
