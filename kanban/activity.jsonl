@@ -4843,3 +4843,1004 @@
 {"timestamp":"2026-03-07T18:08:32.1587543+01:00","action":"move","task_id":644,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-07T18:08:32.6899845+01:00","action":"move","task_id":645,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-07T18:08:33.236037+01:00","action":"move","task_id":646,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-07T19:21:22.4004444+01:00","action":"create","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-07T19:34:22.7066403+01:00","action":"move","task_id":491,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T19:34:32.4348119+01:00","action":"edit","task_id":491,"detail":"Fix dual error handling on ON_ERROR events"}
+{"timestamp":"2026-03-07T19:35:32.1504971+01:00","action":"edit","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-07T19:35:37.9486692+01:00","action":"move","task_id":506,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T19:36:39.1510307+01:00","action":"edit","task_id":638,"detail":"Tests for HeartbeatRunner"}
+{"timestamp":"2026-03-07T19:36:39.1541353+01:00","action":"block","task_id":638,"detail":"Duplicate of #640  close or archive"}
+{"timestamp":"2026-03-07T19:36:41.9547294+01:00","action":"edit","task_id":507,"detail":"Reuse httpx.AsyncClient in GitHubToolset"}
+{"timestamp":"2026-03-07T19:36:45.3335355+01:00","action":"move","task_id":638,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-07T19:36:54.7440748+01:00","action":"create","task_id":648,"detail":"Update GitHubToolset tests for shared httpx client"}
+{"timestamp":"2026-03-07T19:37:34.3760901+01:00","action":"move","task_id":648,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T19:37:40.9499629+01:00","action":"move","task_id":507,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T19:38:41.7512633+01:00","action":"move","task_id":506,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T19:38:42.2784892+01:00","action":"move","task_id":648,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T19:44:40.9666571+01:00","action":"move","task_id":648,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T21:08:17.5239359+01:00","action":"move","task_id":506,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T21:10:32.0648352+01:00","action":"move","task_id":648,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T22:53:07.3125034+01:00","action":"move","task_id":506,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T22:53:07.8654129+01:00","action":"edit","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-07T22:53:07.868114+01:00","action":"block","task_id":506,"detail":"Implementation missing: qdrant.py has zero diff. _apply_temporal_boost still calls retrieve() N times. 2 tests fail. Builder must implement the batch-retrieve change."}
+{"timestamp":"2026-03-07T22:54:02.830681+01:00","action":"move","task_id":506,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T22:55:33.8417186+01:00","action":"move","task_id":648,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T22:56:15.3261683+01:00","action":"move","task_id":506,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T22:56:43.4882992+01:00","action":"edit","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-07T22:56:43.4921083+01:00","action":"unblock","task_id":506,"detail":"Batch-retrieve in qdrant _apply_temporal_boost"}
+{"timestamp":"2026-03-07T22:56:49.4410694+01:00","action":"move","task_id":507,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T22:59:06.1499504+01:00","action":"move","task_id":506,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T22:59:09.9241187+01:00","action":"move","task_id":507,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:00:10.4371704+01:00","action":"move","task_id":506,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T23:02:52.5021983+01:00","action":"move","task_id":507,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T23:04:58.3853616+01:00","action":"move","task_id":507,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T23:10:11.7737181+01:00","action":"edit","task_id":516,"detail":"Add concurrency limit to ingest background tasks"}
+{"timestamp":"2026-03-07T23:10:24.7742324+01:00","action":"create","task_id":649,"detail":"Tests for ingest background task concurrency limit"}
+{"timestamp":"2026-03-07T23:10:37.8061951+01:00","action":"create","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-07T23:10:50.1148461+01:00","action":"move","task_id":516,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T23:11:04.0994806+01:00","action":"create","task_id":651,"detail":"Extract shared sandbox_path utility to owlbear.paths"}
+{"timestamp":"2026-03-07T23:11:16.3708769+01:00","action":"edit","task_id":496,"detail":"Add ReDoS protection to filesystem search content regex"}
+{"timestamp":"2026-03-07T23:11:16.9600084+01:00","action":"create","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-07T23:11:28.146903+01:00","action":"create","task_id":653,"detail":"Test ReDoS protection for filesystem search content regex"}
+{"timestamp":"2026-03-07T23:11:33.1207444+01:00","action":"create","task_id":654,"detail":"Add path sandboxing to RefreshOrchestrator._handle_file_glob"}
+{"timestamp":"2026-03-07T23:11:35.8210797+01:00","action":"move","task_id":496,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T23:11:42.0954139+01:00","action":"edit","task_id":497,"detail":"Add path sandboxing to knowledge intake"}
+{"timestamp":"2026-03-07T23:11:47.3363389+01:00","action":"move","task_id":650,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T23:11:47.8295291+01:00","action":"move","task_id":514,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-07T23:14:31.7313917+01:00","action":"move","task_id":649,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:14:32.2148571+01:00","action":"move","task_id":650,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:14:32.7126588+01:00","action":"move","task_id":651,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:14:33.2210757+01:00","action":"move","task_id":653,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:16:23.0884885+01:00","action":"move","task_id":653,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:35:36.39503+01:00","action":"move","task_id":651,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:37:06.3956316+01:00","action":"move","task_id":650,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:37:29.5724325+01:00","action":"move","task_id":649,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:42:46.4918945+01:00","action":"move","task_id":653,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T23:42:58.9907225+01:00","action":"move","task_id":650,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-07T23:43:10.621956+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-07T23:43:10.6267163+01:00","action":"block","task_id":650,"detail":"Review FAIL: 4 ruff errors in test_cli.py + coroutine leak in test_cleanup_callable_is_async"}
+{"timestamp":"2026-03-07T23:44:40.2362326+01:00","action":"move","task_id":649,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T23:46:22.3787042+01:00","action":"move","task_id":651,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-07T23:46:36.8275774+01:00","action":"move","task_id":650,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:47:30.7794934+01:00","action":"move","task_id":649,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T23:47:43.9682593+01:00","action":"move","task_id":653,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T23:49:00.2969783+01:00","action":"move","task_id":651,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-07T23:49:23.0600105+01:00","action":"move","task_id":650,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-07T23:49:23.5677463+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-07T23:49:23.5708412+01:00","action":"unblock","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-07T23:49:56.4726501+01:00","action":"move","task_id":516,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:49:56.9958495+01:00","action":"move","task_id":496,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:49:57.5342597+01:00","action":"move","task_id":652,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-07T23:54:59.5203698+01:00","action":"move","task_id":650,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T00:04:03.392471+01:00","action":"move","task_id":652,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T00:04:39.8584777+01:00","action":"move","task_id":516,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T00:04:40.3716597+01:00","action":"move","task_id":496,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T00:04:40.9230989+01:00","action":"move","task_id":654,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T00:06:40.1079734+01:00","action":"move","task_id":650,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T00:25:21.6850766+01:00","action":"move","task_id":496,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T00:25:39.966229+01:00","action":"move","task_id":496,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T00:27:50.1413336+01:00","action":"move","task_id":654,"detail":"in-progress -\u003e docs"}
+{"timestamp":"2026-03-08T00:31:05.3362328+01:00","action":"move","task_id":652,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T00:31:30.2388497+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T00:31:30.2425313+01:00","action":"block","task_id":652,"detail":"workspace_root is Path|None=None (optional) but spec says Path (required). Fix: make required in both intake.read_file and IngestPipeline.__init__"}
+{"timestamp":"2026-03-08T00:32:30.4526846+01:00","action":"move","task_id":652,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T00:33:46.1518477+01:00","action":"move","task_id":654,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T00:48:30.2494186+01:00","action":"move","task_id":652,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T00:48:39.5559796+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T00:48:39.5596749+01:00","action":"unblock","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T00:49:02.2449539+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T00:49:23.8563575+01:00","action":"move","task_id":516,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T00:49:24.3651733+01:00","action":"move","task_id":516,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T00:49:50.3550234+01:00","action":"move","task_id":514,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T00:54:11.8744447+01:00","action":"move","task_id":652,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:06:18.388126+01:00","action":"move","task_id":514,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:12:33.7044151+01:00","action":"move","task_id":652,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T01:19:36.3470338+01:00","action":"move","task_id":514,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T01:19:42.2072221+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-08T01:19:42.2114048+01:00","action":"block","task_id":514,"detail":"daemon auth refresh does not update agent._openai_client after creating new model  leaks new client on every subsequent refresh, closes stale reference on repeat refresh"}
+{"timestamp":"2026-03-08T01:22:06.2775897+01:00","action":"move","task_id":514,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T01:22:17.1047865+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-08T01:22:17.1085794+01:00","action":"unblock","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-08T01:28:12.7879786+01:00","action":"move","task_id":514,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:35:29.6719446+01:00","action":"move","task_id":514,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:36:07.332469+01:00","action":"edit","task_id":519,"detail":"Extract shared sandbox_path utility from duplicated _safe_path"}
+{"timestamp":"2026-03-08T01:36:07.3374312+01:00","action":"block","task_id":519,"detail":"Duplicate of #651 (done). sandbox_path already extracted to owlbear.paths and all 3 toolsets migrated."}
+{"timestamp":"2026-03-08T01:36:11.9856007+01:00","action":"move","task_id":519,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-08T01:36:20.8813913+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-08T01:36:20.8850992+01:00","action":"block","task_id":539,"detail":"Duplicate of #576 (identical title, AC, and research). Closing this one, keeping #576."}
+{"timestamp":"2026-03-08T01:36:26.0451172+01:00","action":"move","task_id":539,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-08T01:37:04.1845024+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-08T01:37:11.2992415+01:00","action":"move","task_id":493,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T01:37:24.4795161+01:00","action":"edit","task_id":494,"detail":"Expand command guard blocklist and document limitations"}
+{"timestamp":"2026-03-08T01:37:32.230455+01:00","action":"move","task_id":494,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T01:37:55.7967593+01:00","action":"create","task_id":655,"detail":"Implement GrantRecord and scoped ApprovalSession"}
+{"timestamp":"2026-03-08T01:38:05.1051814+01:00","action":"create","task_id":656,"detail":"Update ApprovalGateToolset to create scoped grants"}
+{"timestamp":"2026-03-08T01:38:12.3913721+01:00","action":"edit","task_id":498,"detail":"Add scope limits to approve-all session grants"}
+{"timestamp":"2026-03-08T01:38:16.8497291+01:00","action":"move","task_id":498,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-08T01:38:30.5599682+01:00","action":"edit","task_id":505,"detail":"Sync copilot-instructions.md agent inventory with actual files"}
+{"timestamp":"2026-03-08T01:38:46.8394565+01:00","action":"move","task_id":505,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T01:39:50.4967729+01:00","action":"move","task_id":493,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T01:39:51.1078418+01:00","action":"move","task_id":494,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T01:39:51.7006692+01:00","action":"move","task_id":505,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T01:39:52.33525+01:00","action":"move","task_id":655,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T01:42:51.5556659+01:00","action":"move","task_id":514,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T01:43:42.5173304+01:00","action":"move","task_id":493,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:49:01.1787482+01:00","action":"move","task_id":494,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:51:13.4594497+01:00","action":"move","task_id":505,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:52:13.7065049+01:00","action":"move","task_id":655,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T01:56:53.2489774+01:00","action":"move","task_id":493,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:57:01.1367455+01:00","action":"move","task_id":494,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:58:54.8286692+01:00","action":"create","task_id":657,"detail":"Improve test coverage: safety/policy.py (75%)"}
+{"timestamp":"2026-03-08T01:59:02.9771109+01:00","action":"create","task_id":658,"detail":"Improve test coverage: bookmark_pipeline.py (85%)"}
+{"timestamp":"2026-03-08T01:59:11.2662453+01:00","action":"create","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-08T01:59:12.2789546+01:00","action":"move","task_id":655,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:59:20.1659614+01:00","action":"create","task_id":660,"detail":"Improve test coverage: retrospective_hook.py (90%)"}
+{"timestamp":"2026-03-08T01:59:29.956247+01:00","action":"create","task_id":661,"detail":"Improve test coverage: agent_def.py (91%) + context.py (91%)"}
+{"timestamp":"2026-03-08T01:59:36.7696486+01:00","action":"move","task_id":505,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T01:59:38.2741854+01:00","action":"create","task_id":662,"detail":"Improve test coverage: auth/copilot.py (94%) + browser/config.py (94%)"}
+{"timestamp":"2026-03-08T01:59:46.1391756+01:00","action":"create","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-08T01:59:59.3314018+01:00","action":"create","task_id":664,"detail":"Fix 26 failing tests across test suite"}
+{"timestamp":"2026-03-08T02:00:21.7880502+01:00","action":"move","task_id":664,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:01:31.817699+01:00","action":"move","task_id":505,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:01:39.6109575+01:00","action":"move","task_id":494,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:02:06.5395488+01:00","action":"move","task_id":655,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:02:44.5060377+01:00","action":"move","task_id":493,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:03:36.1635671+01:00","action":"move","task_id":656,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:08:09.8643478+01:00","action":"move","task_id":656,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:09:55.2913153+01:00","action":"edit","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-08T02:10:01.2504036+01:00","action":"move","task_id":512,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T02:10:10.4231686+01:00","action":"create","task_id":665,"detail":"Tests for daemon retry reconciliation (#512)"}
+{"timestamp":"2026-03-08T02:10:37.426113+01:00","action":"edit","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-08T02:10:59.8043237+01:00","action":"move","task_id":515,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T02:11:08.2603732+01:00","action":"create","task_id":666,"detail":"Tests for CircuitBreaker and CircuitBreakerTransport (#515)"}
+{"timestamp":"2026-03-08T02:11:22.1792535+01:00","action":"edit","task_id":513,"detail":"Review Slack receive timeout behavior for daemon idle"}
+{"timestamp":"2026-03-08T02:11:26.9315153+01:00","action":"move","task_id":513,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T02:11:34.2428867+01:00","action":"create","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
+{"timestamp":"2026-03-08T02:11:48.9686479+01:00","action":"edit","task_id":495,"detail":"Isolate browser context in CDP mode"}
+{"timestamp":"2026-03-08T02:11:54.1150059+01:00","action":"move","task_id":495,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T02:13:09.3048688+01:00","action":"move","task_id":665,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:13:09.8860115+01:00","action":"move","task_id":667,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:13:10.4667785+01:00","action":"move","task_id":495,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:16:51.8010622+01:00","action":"move","task_id":495,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:17:06.3786802+01:00","action":"move","task_id":667,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:18:32.8844694+01:00","action":"move","task_id":656,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:19:11.6177509+01:00","action":"move","task_id":665,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:23:44.8189847+01:00","action":"move","task_id":664,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:23:52.1251584+01:00","action":"move","task_id":656,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:24:09.2208815+01:00","action":"move","task_id":495,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:24:11.3266296+01:00","action":"move","task_id":667,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T02:24:18.615453+01:00","action":"edit","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
+{"timestamp":"2026-03-08T02:24:18.6201547+01:00","action":"block","task_id":667,"detail":"xfail markers missing strict=True. AC requires strict xfail but both markers use default strict=False. Add strict=True to both @pytest.mark.xfail decorators."}
+{"timestamp":"2026-03-08T02:25:37.6857569+01:00","action":"move","task_id":665,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:26:15.0381366+01:00","action":"move","task_id":667,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:26:15.6153323+01:00","action":"edit","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
+{"timestamp":"2026-03-08T02:26:15.6184483+01:00","action":"unblock","task_id":667,"detail":"Tests for SlackChannel.receive() idle timeout fix (#513)"}
+{"timestamp":"2026-03-08T02:27:26.2186833+01:00","action":"move","task_id":665,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:27:42.8396009+01:00","action":"move","task_id":667,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:27:57.0815165+01:00","action":"move","task_id":495,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:28:26.5979468+01:00","action":"move","task_id":512,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:30:16.9540472+01:00","action":"move","task_id":667,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:33:56.5537376+01:00","action":"move","task_id":664,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:35:09.6465915+01:00","action":"move","task_id":512,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:35:30.1115211+01:00","action":"move","task_id":664,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:36:02.9132778+01:00","action":"move","task_id":667,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:36:05.6903759+01:00","action":"move","task_id":657,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:39:22.4457924+01:00","action":"move","task_id":657,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:41:36.1557409+01:00","action":"move","task_id":657,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:41:41.9542423+01:00","action":"move","task_id":512,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T02:41:48.7281197+01:00","action":"edit","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-08T02:41:48.7312641+01:00","action":"block","task_id":512,"detail":"REVIEW FAIL: _tool_retries_exhausted attribute not tested at source (test_hooked_toolset.py). See review details."}
+{"timestamp":"2026-03-08T02:42:33.6651123+01:00","action":"move","task_id":512,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:42:34.3181919+01:00","action":"edit","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-08T02:42:34.3213673+01:00","action":"unblock","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-08T02:42:34.949418+01:00","action":"move","task_id":513,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:43:00.0586562+01:00","action":"move","task_id":657,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:43:29.4749876+01:00","action":"move","task_id":658,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:44:26.9607243+01:00","action":"move","task_id":512,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:45:18.0815764+01:00","action":"move","task_id":513,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:49:50.8347594+01:00","action":"move","task_id":513,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:50:42.2780644+01:00","action":"move","task_id":512,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T02:52:13.4124979+01:00","action":"move","task_id":513,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:52:39.3661068+01:00","action":"move","task_id":512,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T02:53:24.8035576+01:00","action":"move","task_id":666,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T02:58:17.9091077+01:00","action":"move","task_id":666,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T02:59:32.1804317+01:00","action":"create","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-08T02:59:39.5813513+01:00","action":"create","task_id":669,"detail":"Tests for bootstrap startup summary"}
+{"timestamp":"2026-03-08T02:59:47.4503955+01:00","action":"create","task_id":670,"detail":"Add log_startup_summary config setting"}
+{"timestamp":"2026-03-08T02:59:54.3032188+01:00","action":"edit","task_id":492,"detail":"Improve bootstrap error reporting with structured startup summary"}
+{"timestamp":"2026-03-08T03:00:05.9311452+01:00","action":"create","task_id":671,"detail":"Extract DocumentStore from IngestPipeline to document_store.py"}
+{"timestamp":"2026-03-08T03:00:14.147376+01:00","action":"create","task_id":672,"detail":"Extract GraphEnricher from IngestPipeline to enrichment.py"}
+{"timestamp":"2026-03-08T03:00:21.14126+01:00","action":"create","task_id":673,"detail":"Update knowledge __init__.py re-exports after ingest split"}
+{"timestamp":"2026-03-08T03:00:29.8345503+01:00","action":"create","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-08T03:00:36.4150137+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-08T03:00:47.4881339+01:00","action":"create","task_id":675,"detail":"Widen ChannelPlugin with send_file/send_blocks/send_image defaults"}
+{"timestamp":"2026-03-08T03:00:56.0981869+01:00","action":"create","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-08T03:01:04.3713477+01:00","action":"create","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-08T03:01:11.4257863+01:00","action":"edit","task_id":482,"detail":"Extend ChannelPlugin protocol for rich capabilities"}
+{"timestamp":"2026-03-08T03:01:17.4626138+01:00","action":"move","task_id":483,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-08T03:01:28.3468883+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-08T03:01:28.351027+01:00","action":"block","task_id":483,"detail":"Research checklist incomplete. No dedicated research doc exists. Missing: (1) Prior art -- how do PydanticAI, FastAPI, or Django event systems handle typed payloads? TypedDict vs dataclass vs Pydantic model? (2) Technical feasibility -- Handler=Callable[[object],object] is used by 8+ hook classes with 3 different __call__ signatures; need migration plan. (3) Implementation approach -- should payloads be TypedDict (zero overhead, good for dict-based emit) or dataclass (better IDE support, breaking change to all emit sites)? (4) Surface audit -- catalog every emit() call and every handler's data access pattern (data.get vs data[key]) to size the change. Current analysis: 5 emit sites + 6 handler classes = ~11 touch points. The scope of this change is significant but not yet quantified. Research first."}
+{"timestamp":"2026-03-08T03:01:35.7398576+01:00","action":"move","task_id":675,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T03:01:40.6359689+01:00","action":"move","task_id":671,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T03:01:45.5312+01:00","action":"move","task_id":668,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T03:02:41.3469573+01:00","action":"move","task_id":668,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:02:41.9722227+01:00","action":"move","task_id":671,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:02:42.5855274+01:00","action":"move","task_id":675,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:06:04.584936+01:00","action":"move","task_id":666,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T03:06:39.9753032+01:00","action":"move","task_id":658,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:07:42.1044767+01:00","action":"move","task_id":675,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:08:48.8371731+01:00","action":"move","task_id":658,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T03:09:33.7952306+01:00","action":"move","task_id":658,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T03:09:53.1596248+01:00","action":"move","task_id":659,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:19:53.2734792+01:00","action":"move","task_id":668,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:21:53.2564479+01:00","action":"move","task_id":659,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:24:23.4949746+01:00","action":"move","task_id":659,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T03:25:38.6708008+01:00","action":"move","task_id":659,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T03:26:02.1865233+01:00","action":"move","task_id":660,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:30:48.0601691+01:00","action":"move","task_id":671,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:32:09.2700251+01:00","action":"move","task_id":666,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T03:36:02.0237859+01:00","action":"move","task_id":675,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T03:39:37.6776625+01:00","action":"move","task_id":671,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T03:41:04.6569681+01:00","action":"move","task_id":668,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T03:41:13.7732643+01:00","action":"edit","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-08T03:41:13.7750792+01:00","action":"block","task_id":668,"detail":"6 of 9 error sites lack ComponentStatus-recording tests. See review details."}
+{"timestamp":"2026-03-08T03:42:07.2251605+01:00","action":"move","task_id":668,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T03:42:07.8691931+01:00","action":"edit","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-08T03:42:07.8724189+01:00","action":"unblock","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-08T03:43:54.1536627+01:00","action":"move","task_id":671,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T03:44:12.9417495+01:00","action":"move","task_id":675,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T03:52:02.9122352+01:00","action":"move","task_id":668,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:57:06.3509051+01:00","action":"move","task_id":660,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T03:59:51.849833+01:00","action":"move","task_id":660,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:00:29.788491+01:00","action":"move","task_id":515,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T04:00:38.229276+01:00","action":"edit","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-08T04:00:38.2335383+01:00","action":"block","task_id":515,"detail":"Transport failure paths untested: (1) inner transport raising exception -\u003e on_failure not tested (lines 151-153), (2) transient status code detection -\u003e on_failure not tested (lines 155-161). AC7 requires evidence of on_failure calls based on response. Removing on_failure from transport except/status blocks would pass all 14 tests. Add 2+ transport-level tests: test_transport_records_failure_on_inner_exception, test_transport_detects_transient_status_code."}
+{"timestamp":"2026-03-08T04:01:07.8300947+01:00","action":"move","task_id":668,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:01:20.0094004+01:00","action":"move","task_id":660,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:01:44.7772228+01:00","action":"move","task_id":661,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:01:52.540814+01:00","action":"move","task_id":515,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:01:53.3510164+01:00","action":"edit","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-08T04:01:53.3557607+01:00","action":"unblock","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-08T04:03:44.8847946+01:00","action":"move","task_id":668,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:04:07.8397237+01:00","action":"move","task_id":515,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T04:08:41.5365276+01:00","action":"move","task_id":515,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:08:53.2294674+01:00","action":"move","task_id":661,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T04:11:12.1363268+01:00","action":"move","task_id":661,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:11:32.24581+01:00","action":"move","task_id":515,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:12:38.93888+01:00","action":"move","task_id":661,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:13:05.9773642+01:00","action":"move","task_id":662,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:17:40.7534017+01:00","action":"move","task_id":669,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-03-08T04:17:42.4698155+01:00","action":"move","task_id":670,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-03-08T04:17:44.3149831+01:00","action":"move","task_id":677,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-03-08T04:18:30.5173796+01:00","action":"move","task_id":662,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T04:21:57.5162526+01:00","action":"move","task_id":669,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:23:32.4201869+01:00","action":"move","task_id":662,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:24:19.5650648+01:00","action":"move","task_id":670,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T04:24:35.3032386+01:00","action":"move","task_id":662,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:24:59.9895392+01:00","action":"move","task_id":663,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:28:25.2731722+01:00","action":"move","task_id":677,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T04:28:31.9974112+01:00","action":"edit","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-08T04:28:32.0010745+01:00","action":"block","task_id":677,"detail":"AC #1 + #6 untested: default send_file (base.py L46) has 0% coverage. CLIChannel overrides it, so no test exercises the default. Create a minimal _BareChannel stub to test all 3 defaults."}
+{"timestamp":"2026-03-08T04:29:49.3140324+01:00","action":"move","task_id":669,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:30:34.4113408+01:00","action":"move","task_id":670,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T04:36:55.7875879+01:00","action":"edit","task_id":672,"detail":"Extract GraphEnricher from IngestPipeline to enrichment.py"}
+{"timestamp":"2026-03-08T04:37:09.7343019+01:00","action":"edit","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-08T04:37:15.4547352+01:00","action":"move","task_id":672,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T04:37:20.3292532+01:00","action":"move","task_id":676,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T04:38:43.3389851+01:00","action":"move","task_id":672,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:38:44.9872211+01:00","action":"move","task_id":676,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:38:46.5609004+01:00","action":"move","task_id":677,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T04:51:24.2772304+01:00","action":"move","task_id":672,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:09:04.3624762+01:00","action":"move","task_id":676,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:14:28.5419972+01:00","action":"move","task_id":677,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:14:30.0398475+01:00","action":"move","task_id":662,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-08T05:16:36.677842+01:00","action":"move","task_id":663,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:18:26.7940676+01:00","action":"move","task_id":672,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:22:12.7495702+01:00","action":"move","task_id":676,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T05:22:20.7354063+01:00","action":"move","task_id":663,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:22:21.0469805+01:00","action":"edit","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-08T05:22:21.0507745+01:00","action":"block","task_id":676,"detail":"17 test_approval_gate.py failures: gate.py awaits channel.send_blocks() but _make_channel() only creates MagicMock (not AsyncMock) for send_blocks. Fix: add channel.send_blocks = AsyncMock() to _make_channel()."}
+{"timestamp":"2026-03-08T05:24:18.1737071+01:00","action":"move","task_id":663,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:25:25.3534978+01:00","action":"move","task_id":677,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T05:25:32.472774+01:00","action":"edit","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-08T05:28:23.411888+01:00","action":"move","task_id":662,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:29:57.4965619+01:00","action":"move","task_id":672,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:30:41.1446118+01:00","action":"move","task_id":662,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:30:57.8727175+01:00","action":"move","task_id":676,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T05:30:59.3676703+01:00","action":"move","task_id":677,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T05:36:37.4483795+01:00","action":"move","task_id":676,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:36:39.04561+01:00","action":"move","task_id":677,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T05:39:02.8044448+01:00","action":"move","task_id":676,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:41:07.7116677+01:00","action":"move","task_id":677,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:43:32.1897482+01:00","action":"move","task_id":676,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:44:39.2115965+01:00","action":"move","task_id":677,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:45:35.6256734+01:00","action":"move","task_id":673,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-03-08T05:45:37.4337223+01:00","action":"move","task_id":674,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-03-08T05:47:07.0448374+01:00","action":"move","task_id":673,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T05:51:31.9269397+01:00","action":"move","task_id":674,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T05:52:54.954115+01:00","action":"move","task_id":673,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T05:54:14.3359464+01:00","action":"move","task_id":674,"detail":"todo -\u003e review"}
+{"timestamp":"2026-03-08T05:57:04.9319868+01:00","action":"move","task_id":674,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T05:57:20.5633995+01:00","action":"edit","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-08T05:57:20.5664953+01:00","action":"block","task_id":674,"detail":"cascade delete test missing entity/edge coverage  see review"}
+{"timestamp":"2026-03-08T06:00:51.9898581+01:00","action":"move","task_id":674,"detail":"todo -\u003e review"}
+{"timestamp":"2026-03-08T06:01:01.4826895+01:00","action":"move","task_id":663,"detail":"done -\u003e in-progress"}
+{"timestamp":"2026-03-08T06:06:25.8350541+01:00","action":"move","task_id":674,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T13:14:32.7589925+01:00","action":"move","task_id":663,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T13:22:45.2999728+01:00","action":"move","task_id":663,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T13:23:51.2919629+01:00","action":"move","task_id":674,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T13:26:50.5813934+01:00","action":"move","task_id":663,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T13:32:17.6505077+01:00","action":"edit","task_id":480,"detail":"Split bootstrap.py into focused submodules"}
+{"timestamp":"2026-03-08T13:32:31.2308312+01:00","action":"move","task_id":480,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T13:36:11.0998728+01:00","action":"edit","task_id":502,"detail":"Break memory to tools upward dependency"}
+{"timestamp":"2026-03-08T13:36:17.5031927+01:00","action":"move","task_id":502,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T13:42:17.3502528+01:00","action":"edit","task_id":623,"detail":"Stale execution detector for daemon loop"}
+{"timestamp":"2026-03-08T13:42:25.6664637+01:00","action":"move","task_id":623,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T13:50:08.6543451+01:00","action":"create","task_id":678,"detail":"Tests for task-level retry with exponential backoff (#625)"}
+{"timestamp":"2026-03-08T13:50:14.6007424+01:00","action":"create","task_id":679,"detail":"Tests for task-level retry (#625)"}
+{"timestamp":"2026-03-08T13:50:49.1450528+01:00","action":"move","task_id":679,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T13:50:50.6465573+01:00","action":"move","task_id":625,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T13:51:48.4907257+01:00","action":"move","task_id":480,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T13:51:49.9974143+01:00","action":"move","task_id":502,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T13:51:51.4948169+01:00","action":"move","task_id":623,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T14:51:26.6119719+01:00","action":"move","task_id":480,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T15:37:26.0404349+01:00","action":"move","task_id":502,"detail":"in-progress -\u003e docs"}
+{"timestamp":"2026-03-08T15:37:26.5902265+01:00","action":"move","task_id":623,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T15:37:27.1477376+01:00","action":"move","task_id":480,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T15:38:26.8422242+01:00","action":"move","task_id":480,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T15:40:14.7274328+01:00","action":"move","task_id":623,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T15:41:31.4022458+01:00","action":"move","task_id":502,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T15:44:14.7050108+01:00","action":"create","task_id":680,"detail":"Planner agent: board reading + wave planning"}
+{"timestamp":"2026-03-08T15:44:32.466337+01:00","action":"create","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-08T15:44:48.0623635+01:00","action":"create","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T15:44:54.6288648+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T15:45:12.4386343+01:00","action":"create","task_id":683,"detail":"Test-writer agent: adversarial test creation from AC"}
+{"timestamp":"2026-03-08T15:45:29.5658186+01:00","action":"create","task_id":684,"detail":"Inter-agent communication protocol: task body as shared memory"}
+{"timestamp":"2026-03-08T15:45:45.4872805+01:00","action":"create","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T15:45:59.6435349+01:00","action":"create","task_id":686,"detail":"Instruction file audit: measure and reduce token bloat"}
+{"timestamp":"2026-03-08T15:51:52.7648075+01:00","action":"move","task_id":480,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T15:52:33.1774871+01:00","action":"move","task_id":679,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T15:58:56.3765992+01:00","action":"move","task_id":679,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:03:02.2271039+01:00","action":"move","task_id":480,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T16:06:16.174943+01:00","action":"move","task_id":480,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T16:06:38.7669789+01:00","action":"move","task_id":679,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T16:07:09.3155095+01:00","action":"move","task_id":684,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:07:09.9150215+01:00","action":"move","task_id":680,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:07:10.4600295+01:00","action":"move","task_id":681,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:07:11.0009936+01:00","action":"move","task_id":683,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:07:18.4605661+01:00","action":"move","task_id":625,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:08:41.941672+01:00","action":"move","task_id":679,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T16:24:19.8349609+01:00","action":"move","task_id":625,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:25:14.6071915+01:00","action":"move","task_id":684,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-08T16:26:17.4714634+01:00","action":"move","task_id":680,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-08T16:26:18.034146+01:00","action":"move","task_id":681,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-08T16:26:18.602271+01:00","action":"move","task_id":683,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-08T16:26:27.887597+01:00","action":"move","task_id":685,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:26:28.5501356+01:00","action":"move","task_id":686,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:34:39.919506+01:00","action":"move","task_id":681,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T16:34:47.2250477+01:00","action":"edit","task_id":684,"detail":"Codify two-channel communication protocol in agent-common.instructions.md"}
+{"timestamp":"2026-03-08T16:35:08.7823448+01:00","action":"move","task_id":684,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T16:35:29.6358721+01:00","action":"create","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-08T16:36:46.3977679+01:00","action":"create","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-08T16:37:09.6761824+01:00","action":"move","task_id":625,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T16:37:24.5444935+01:00","action":"create","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T16:37:35.0717407+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-08T16:37:35.6561387+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-08T16:37:36.2350961+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T16:38:03.2350293+01:00","action":"move","task_id":680,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T16:39:29.7874005+01:00","action":"create","task_id":690,"detail":"Create test-writer.agent.md with adversarial RED phase persona"}
+{"timestamp":"2026-03-08T16:39:38.9877122+01:00","action":"create","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-08T16:39:47.2384404+01:00","action":"create","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T16:39:52.6711368+01:00","action":"create","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T16:40:58.2678141+01:00","action":"move","task_id":625,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T16:41:32.4630979+01:00","action":"move","task_id":686,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:42:20.7157452+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-08T16:42:29.7686752+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-08T16:42:38.1210197+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T16:42:38.7028504+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T16:42:46.7411734+01:00","action":"move","task_id":683,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-08T16:42:55.9986876+01:00","action":"move","task_id":678,"detail":"todo -\u003e done"}
+{"timestamp":"2026-03-08T16:42:59.4083462+01:00","action":"move","task_id":690,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T16:44:00.6050969+01:00","action":"move","task_id":685,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:48:32.6920722+01:00","action":"move","task_id":684,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:48:33.3166199+01:00","action":"move","task_id":680,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:48:33.9434917+01:00","action":"move","task_id":681,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:48:34.5638755+01:00","action":"move","task_id":690,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T16:50:14.4630659+01:00","action":"move","task_id":684,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:51:44.1057589+01:00","action":"move","task_id":690,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:53:02.6883742+01:00","action":"move","task_id":681,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T16:59:06.0914101+01:00","action":"move","task_id":681,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T16:59:40.7240774+01:00","action":"move","task_id":690,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T16:59:59.1253355+01:00","action":"move","task_id":680,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:00:33.0617169+01:00","action":"move","task_id":684,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:02:43.4191955+01:00","action":"move","task_id":690,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:02:46.1302045+01:00","action":"move","task_id":681,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:03:24.7452716+01:00","action":"move","task_id":684,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:04:48.8211167+01:00","action":"move","task_id":680,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:07:04.4913911+01:00","action":"move","task_id":680,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:08:09.906784+01:00","action":"move","task_id":686,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T17:08:22.0941334+01:00","action":"edit","task_id":686,"detail":"Instruction file audit: measure and reduce token bloat"}
+{"timestamp":"2026-03-08T17:08:22.095729+01:00","action":"block","task_id":686,"detail":"3 failures: (1) Follow-up tasks not created - Section 6 has commands as code blocks but never executed. (2) AC4 Apply reductions not addressed. (3) agent-common measurement stale (5104 vs 7997 chars)."}
+{"timestamp":"2026-03-08T17:08:57.6015509+01:00","action":"move","task_id":685,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T17:09:10.7540784+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T17:09:10.7577277+01:00","action":"block","task_id":685,"detail":"FAIL: 3 follow-up kanban tasks proposed in research doc Section 5 were never created on the board"}
+{"timestamp":"2026-03-08T17:11:34.2001873+01:00","action":"create","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-08T17:11:39.9721252+01:00","action":"create","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T17:11:42.7341585+01:00","action":"create","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T17:11:47.7488145+01:00","action":"create","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-08T17:11:48.947898+01:00","action":"create","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T17:11:56.4607619+01:00","action":"create","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T17:11:58.1742661+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T17:11:58.1784896+01:00","action":"unblock","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T17:12:03.157481+01:00","action":"move","task_id":685,"detail":"todo -\u003e review"}
+{"timestamp":"2026-03-08T17:13:11.3205676+01:00","action":"move","task_id":687,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T17:13:22.5429774+01:00","action":"edit","task_id":686,"detail":"Instruction file audit: measure and reduce token bloat"}
+{"timestamp":"2026-03-08T17:13:22.5465994+01:00","action":"unblock","task_id":686,"detail":"Instruction file audit: measure and reduce token bloat"}
+{"timestamp":"2026-03-08T17:13:28.5617235+01:00","action":"move","task_id":686,"detail":"todo -\u003e review"}
+{"timestamp":"2026-03-08T17:15:46.1527064+01:00","action":"move","task_id":688,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T17:21:26.6090318+01:00","action":"move","task_id":686,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:21:42.4673105+01:00","action":"move","task_id":691,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T17:21:51.5840121+01:00","action":"move","task_id":685,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:22:02.9018306+01:00","action":"move","task_id":692,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T17:23:11.8156119+01:00","action":"move","task_id":687,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:23:12.3893589+01:00","action":"move","task_id":688,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:26:17.6866666+01:00","action":"move","task_id":686,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:26:54.7224061+01:00","action":"move","task_id":688,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:26:58.8042825+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T17:27:08.4196402+01:00","action":"move","task_id":687,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:27:09.0000272+01:00","action":"move","task_id":685,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:27:41.5447729+01:00","action":"move","task_id":691,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:27:42.1246147+01:00","action":"move","task_id":692,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:47:37.6292029+01:00","action":"move","task_id":691,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:47:38.2224983+01:00","action":"move","task_id":692,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:48:10.5394649+01:00","action":"move","task_id":687,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:48:11.1379453+01:00","action":"move","task_id":688,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:48:17.961163+01:00","action":"move","task_id":687,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:48:18.561008+01:00","action":"move","task_id":688,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:49:29.3779682+01:00","action":"edit","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-08T17:49:33.793731+01:00","action":"move","task_id":691,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:50:06.6614003+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-08T17:50:11.1061238+01:00","action":"move","task_id":687,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:50:51.2983795+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:51:07.8594902+01:00","action":"move","task_id":692,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T17:51:08.3644187+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:51:08.3687481+01:00","action":"block","task_id":692,"detail":"tdd-workflow SKILL.md not updated for GREEN-only: Step 3 still RED, no new Step 5, no renumbering, checklist unchanged"}
+{"timestamp":"2026-03-08T17:51:12.5883791+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-08T17:51:16.3485375+01:00","action":"move","task_id":688,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:52:35.5693339+01:00","action":"move","task_id":692,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T17:52:40.2921904+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:52:40.2960541+01:00","action":"unblock","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:52:42.2608019+01:00","action":"edit","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-08T17:52:46.7806811+01:00","action":"move","task_id":691,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:52:58.356078+01:00","action":"move","task_id":687,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:52:59.5023041+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-08T17:53:03.9908645+01:00","action":"move","task_id":688,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T17:53:08.510752+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-08T17:53:21.2759893+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:53:25.2926946+01:00","action":"move","task_id":692,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T17:55:34.9168586+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T17:55:39.8621578+01:00","action":"move","task_id":692,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T17:58:37.1217002+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T17:58:41.4913608+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T17:58:45.4005834+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T17:58:58.3153702+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T17:59:03.8475081+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T17:59:22.9175815+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T17:59:32.9916988+01:00","action":"move","task_id":689,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:00:42.6154621+01:00","action":"move","task_id":694,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:01:49.2143249+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T18:02:00.1095984+01:00","action":"move","task_id":682,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-08T18:03:49.635458+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-08T18:03:54.2828456+01:00","action":"move","task_id":692,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:04:29.4805861+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:04:39.8029644+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:05:04.3418327+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:05:08.1308013+01:00","action":"move","task_id":695,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:05:59.4455376+01:00","action":"move","task_id":696,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:06:19.7411065+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-08T18:06:23.6433952+01:00","action":"move","task_id":697,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:10:54.6278655+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:10:59.2265895+01:00","action":"move","task_id":698,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:13:33.7291679+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T18:13:48.778444+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T18:14:52.5386421+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T18:14:58.0516801+01:00","action":"move","task_id":682,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:15:44.0484945+01:00","action":"move","task_id":694,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:15:44.6199296+01:00","action":"move","task_id":696,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:15:45.199741+01:00","action":"move","task_id":697,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:15:45.7935915+01:00","action":"move","task_id":698,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:19:29.4775681+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-08T18:19:34.0764884+01:00","action":"move","task_id":697,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:20:05.8291409+01:00","action":"edit","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-08T18:20:11.5615426+01:00","action":"move","task_id":694,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:21:23.29254+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T18:21:40.1883741+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T18:21:44.4794476+01:00","action":"move","task_id":693,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T18:21:50.496631+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:21:55.0055616+01:00","action":"move","task_id":698,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:24:36.0556126+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:24:41.0913801+01:00","action":"move","task_id":696,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:27:02.0952133+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-08T18:27:07.5664393+01:00","action":"move","task_id":697,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:28:18.3563885+01:00","action":"edit","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-08T18:28:22.9604654+01:00","action":"move","task_id":694,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:28:49.1455365+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:28:53.8072435+01:00","action":"move","task_id":698,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:30:50.6547929+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:31:00.6164084+01:00","action":"move","task_id":696,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-08T18:31:01.1276875+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:31:01.1320883+01:00","action":"block","task_id":696,"detail":"AC6 violation: 8 sections deleted outside tech stack table (Agent roles, Research checklist, inventories). Only Notes cells should change."}
+{"timestamp":"2026-03-08T18:32:21.6571067+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-08T18:32:25.900077+01:00","action":"move","task_id":697,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:32:36.8086674+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:32:42.4114465+01:00","action":"edit","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-08T18:32:47.9908837+01:00","action":"move","task_id":694,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:33:10.9871183+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:33:15.3354271+01:00","action":"move","task_id":698,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:37:25.2108318+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:37:29.8509224+01:00","action":"move","task_id":696,"detail":"todo -\u003e review"}
+{"timestamp":"2026-03-08T18:37:38.7774274+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:37:38.7806567+01:00","action":"unblock","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:40:03.8347916+01:00","action":"create","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-08T18:40:17.6244584+01:00","action":"create","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-08T18:40:33.5961492+01:00","action":"create","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-08T18:42:22.7882103+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:42:27.4623866+01:00","action":"move","task_id":696,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:43:58.5019871+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-08T18:44:02.9198296+01:00","action":"move","task_id":696,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:46:01.1763467+01:00","action":"move","task_id":693,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:46:01.7566561+01:00","action":"move","task_id":695,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:47:32.6751643+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:47:36.7089782+01:00","action":"move","task_id":695,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:48:03.1210553+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T18:48:07.5054472+01:00","action":"move","task_id":693,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T18:50:51.1049784+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T18:50:57.2196885+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T18:50:57.2229198+01:00","action":"block","task_id":699,"detail":"#698 changes to copilot-instructions.md were reverted by #696 retry. Inventory/lifecycle sections still present (5 headings at L206-L260). Re-apply #698 Step B removals first, then AC needs refinement per architecture review."}
+{"timestamp":"2026-03-08T18:51:01.3695478+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T18:52:56.1655977+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T18:53:00.4448901+01:00","action":"move","task_id":693,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:53:24.3420962+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:53:29.1391105+01:00","action":"move","task_id":695,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T18:54:51.0805496+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:54:55.1004062+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-08T18:55:04.5759536+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-08T18:55:09.0648597+01:00","action":"move","task_id":695,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:55:12.3186689+01:00","action":"move","task_id":693,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T18:55:22.12408+01:00","action":"move","task_id":698,"detail":"done -\u003e todo"}
+{"timestamp":"2026-03-08T18:55:27.239554+01:00","action":"move","task_id":698,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T18:59:05.5486699+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T18:59:09.7251768+01:00","action":"move","task_id":698,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T19:02:37.9711006+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T19:02:42.8199623+01:00","action":"move","task_id":698,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T19:04:00.8445303+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-08T19:04:05.3519766+01:00","action":"move","task_id":698,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T19:04:15.3552083+01:00","action":"move","task_id":682,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T19:11:17.2319136+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T19:11:21.7010465+01:00","action":"move","task_id":682,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T19:15:05.4943388+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T19:15:09.9469165+01:00","action":"move","task_id":682,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T19:17:53.1539718+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T19:17:57.429619+01:00","action":"move","task_id":682,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T19:18:07.7410728+01:00","action":"move","task_id":689,"detail":"todo -\u003e done"}
+{"timestamp":"2026-03-08T19:18:08.243712+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-08T19:25:15.0211011+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T19:25:19.3486928+01:00","action":"move","task_id":699,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-08T19:25:29.5743759+01:00","action":"move","task_id":699,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-08T19:28:17.6233672+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T19:28:22.2435549+01:00","action":"move","task_id":699,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-08T19:31:46.4707001+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T19:31:51.0668837+01:00","action":"move","task_id":699,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-08T19:32:29.74373+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-08T19:32:34.1266175+01:00","action":"move","task_id":699,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-08T23:50:57.1976236+01:00","action":"edit","task_id":664,"detail":"Fix 26 failing tests across test suite"}
+{"timestamp":"2026-03-08T23:50:57.7163965+01:00","action":"edit","task_id":651,"detail":"Extract shared sandbox_path utility to owlbear.paths"}
+{"timestamp":"2026-03-08T23:50:58.2143448+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T23:50:58.7313571+01:00","action":"edit","task_id":654,"detail":"Add path sandboxing to RefreshOrchestrator._handle_file_glob"}
+{"timestamp":"2026-03-08T23:51:04.492706+01:00","action":"edit","task_id":655,"detail":"Implement GrantRecord and scoped ApprovalSession"}
+{"timestamp":"2026-03-08T23:51:04.9685647+01:00","action":"edit","task_id":656,"detail":"Update ApprovalGateToolset to create scoped grants"}
+{"timestamp":"2026-03-08T23:51:05.4736004+01:00","action":"edit","task_id":657,"detail":"Improve test coverage: safety/policy.py (75%)"}
+{"timestamp":"2026-03-08T23:51:05.9718643+01:00","action":"edit","task_id":658,"detail":"Improve test coverage: bookmark_pipeline.py (85%)"}
+{"timestamp":"2026-03-08T23:51:11.719307+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-08T23:51:12.2232593+01:00","action":"edit","task_id":680,"detail":"Planner agent: board reading + wave planning"}
+{"timestamp":"2026-03-08T23:51:12.7400099+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-08T23:51:13.2420523+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-08T23:51:18.444112+01:00","action":"edit","task_id":683,"detail":"Test-writer agent: adversarial test creation from AC"}
+{"timestamp":"2026-03-08T23:51:18.9251327+01:00","action":"edit","task_id":684,"detail":"Codify two-channel communication protocol in agent-common.instructions.md"}
+{"timestamp":"2026-03-08T23:51:19.4196515+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-08T23:57:03.5048413+01:00","action":"edit","task_id":664,"detail":"Fix 26 failing tests across test suite"}
+{"timestamp":"2026-03-08T23:57:04.0212758+01:00","action":"edit","task_id":638,"detail":"Tests for HeartbeatRunner"}
+{"timestamp":"2026-03-08T23:57:04.5832207+01:00","action":"edit","task_id":651,"detail":"Extract shared sandbox_path utility to owlbear.paths"}
+{"timestamp":"2026-03-08T23:57:05.1314465+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-08T23:57:10.6591025+01:00","action":"edit","task_id":654,"detail":"Add path sandboxing to RefreshOrchestrator._handle_file_glob"}
+{"timestamp":"2026-03-08T23:57:11.197053+01:00","action":"edit","task_id":655,"detail":"Implement GrantRecord and scoped ApprovalSession"}
+{"timestamp":"2026-03-08T23:57:11.7278748+01:00","action":"edit","task_id":656,"detail":"Update ApprovalGateToolset to create scoped grants"}
+{"timestamp":"2026-03-08T23:57:12.2715194+01:00","action":"edit","task_id":657,"detail":"Improve test coverage: safety/policy.py (75%)"}
+{"timestamp":"2026-03-08T23:57:17.8510618+01:00","action":"edit","task_id":658,"detail":"Improve test coverage: bookmark_pipeline.py (85%)"}
+{"timestamp":"2026-03-08T23:57:18.4119777+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-08T23:57:18.9295999+01:00","action":"edit","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-08T23:57:19.4500929+01:00","action":"edit","task_id":669,"detail":"Tests for bootstrap startup summary"}
+{"timestamp":"2026-03-08T23:57:24.91303+01:00","action":"edit","task_id":671,"detail":"Extract DocumentStore from IngestPipeline to document_store.py"}
+{"timestamp":"2026-03-08T23:57:25.4181209+01:00","action":"edit","task_id":672,"detail":"Extract GraphEnricher from IngestPipeline to enrichment.py"}
+{"timestamp":"2026-03-08T23:57:25.9352596+01:00","action":"edit","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-08T23:57:26.4784188+01:00","action":"edit","task_id":675,"detail":"Widen ChannelPlugin with send_file/send_blocks/send_image defaults"}
+{"timestamp":"2026-03-08T23:57:32.1612794+01:00","action":"edit","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-08T23:57:32.7168233+01:00","action":"edit","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-08T23:57:33.2131088+01:00","action":"edit","task_id":680,"detail":"Planner agent: board reading + wave planning"}
+{"timestamp":"2026-03-08T23:57:33.7617187+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-08T23:58:47.2108551+01:00","action":"move","task_id":647,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-09T00:01:31.2592708+01:00","action":"edit","task_id":638,"detail":"Tests for HeartbeatRunner"}
+{"timestamp":"2026-03-09T00:01:44.7635215+01:00","action":"edit","task_id":652,"detail":"Add workspace_root sandboxing to intake.read_file"}
+{"timestamp":"2026-03-09T00:01:49.6584663+01:00","action":"move","task_id":638,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:01:53.4327559+01:00","action":"move","task_id":652,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:02:06.5044347+01:00","action":"edit","task_id":651,"detail":"Extract shared sandbox_path utility to owlbear.paths"}
+{"timestamp":"2026-03-09T00:02:10.6337352+01:00","action":"move","task_id":651,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:05:32.8998395+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T00:05:43.6844441+01:00","action":"move","task_id":483,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-09T00:05:55.4061311+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T00:05:55.4113383+01:00","action":"unblock","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T00:07:41.935811+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T00:07:46.7590372+01:00","action":"move","task_id":647,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T00:10:39.4140599+01:00","action":"edit","task_id":664,"detail":"Fix 26 failing tests across test suite"}
+{"timestamp":"2026-03-09T00:10:44.2225519+01:00","action":"move","task_id":664,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:13:43.7525459+01:00","action":"edit","task_id":654,"detail":"Add path sandboxing to RefreshOrchestrator._handle_file_glob"}
+{"timestamp":"2026-03-09T00:13:49.5519766+01:00","action":"move","task_id":654,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:13:59.3838935+01:00","action":"edit","task_id":655,"detail":"Implement GrantRecord and scoped ApprovalSession"}
+{"timestamp":"2026-03-09T00:14:03.7075885+01:00","action":"move","task_id":655,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:14:18.2323813+01:00","action":"edit","task_id":656,"detail":"Update ApprovalGateToolset to create scoped grants"}
+{"timestamp":"2026-03-09T00:14:22.6119409+01:00","action":"move","task_id":656,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:18:41.7712669+01:00","action":"edit","task_id":657,"detail":"Improve test coverage: safety/policy.py (75%)"}
+{"timestamp":"2026-03-09T00:18:47.8488959+01:00","action":"move","task_id":657,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:21:48.089417+01:00","action":"edit","task_id":658,"detail":"Improve test coverage: bookmark_pipeline.py (85%)"}
+{"timestamp":"2026-03-09T00:21:53.5356097+01:00","action":"move","task_id":658,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:22:21.0721154+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:22:35.5671307+01:00","action":"edit","task_id":669,"detail":"Tests for bootstrap startup summary"}
+{"timestamp":"2026-03-09T00:22:40.1582734+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:22:52.4134104+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:22:52.4169599+01:00","action":"block","task_id":659,"detail":"2 tests fail: TestBootstrapCondenserWiring patches create_copilot_client but actual is create_copilot_model. Fix L329 and L357."}
+{"timestamp":"2026-03-09T00:23:08.7167029+01:00","action":"move","task_id":669,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:24:14.9934661+01:00","action":"edit","task_id":668,"detail":"Add ComponentStatus/StartupSummary dataclasses and collection to bootstrap"}
+{"timestamp":"2026-03-09T00:24:21.5924257+01:00","action":"move","task_id":668,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:30:33.3431632+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:34:04.8036538+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:34:09.3983485+01:00","action":"move","task_id":659,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T00:34:33.9226203+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:34:33.9252486+01:00","action":"unblock","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:36:06.4660208+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T00:36:11.1307225+01:00","action":"move","task_id":659,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T00:40:57.6252577+01:00","action":"edit","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-09T00:40:57.6300422+01:00","action":"unblock","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-09T00:40:58.827771+01:00","action":"edit","task_id":672,"detail":"Extract GraphEnricher from IngestPipeline to enrichment.py"}
+{"timestamp":"2026-03-09T00:41:09.6658096+01:00","action":"edit","task_id":671,"detail":"Extract DocumentStore from IngestPipeline to document_store.py"}
+{"timestamp":"2026-03-09T00:41:11.2887763+01:00","action":"edit","task_id":674,"detail":"Tests for DocumentStore and GraphEnricher extraction"}
+{"timestamp":"2026-03-09T00:41:16.0590457+01:00","action":"move","task_id":674,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:41:17.0198177+01:00","action":"move","task_id":672,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:41:27.0088602+01:00","action":"move","task_id":671,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:41:30.2747361+01:00","action":"edit","task_id":675,"detail":"Widen ChannelPlugin with send_file/send_blocks/send_image defaults"}
+{"timestamp":"2026-03-09T00:41:34.8419121+01:00","action":"move","task_id":675,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:44:10.3696711+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T00:44:22.0345941+01:00","action":"move","task_id":681,"detail":"done -\u003e backlog"}
+{"timestamp":"2026-03-09T00:45:44.6418085+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T00:45:44.6460772+01:00","action":"block","task_id":681,"detail":"1/11 AC met. DEPRECATED stub. Needs re-scoping."}
+{"timestamp":"2026-03-09T00:45:52.6171296+01:00","action":"edit","task_id":680,"detail":"Planner agent: board reading + wave planning"}
+{"timestamp":"2026-03-09T00:45:58.5336625+01:00","action":"move","task_id":680,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:46:51.1202811+01:00","action":"edit","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-09T00:46:51.1240082+01:00","action":"unblock","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-09T00:47:01.5288759+01:00","action":"edit","task_id":677,"detail":"Tests for widened ChannelPlugin protocol"}
+{"timestamp":"2026-03-09T00:47:10.3421768+01:00","action":"move","task_id":677,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T00:48:23.5763552+01:00","action":"edit","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-09T00:48:29.7765695+01:00","action":"edit","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-09T00:48:29.780236+01:00","action":"unblock","task_id":676,"detail":"Remove hasattr channel duck-typing from production code"}
+{"timestamp":"2026-03-09T00:48:35.038582+01:00","action":"move","task_id":676,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T04:57:31.8807549+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T04:57:32.3830237+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T04:57:32.876803+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T04:57:33.3689083+01:00","action":"edit","task_id":683,"detail":"Test-writer agent: adversarial test creation from AC"}
+{"timestamp":"2026-03-09T04:57:33.867453+01:00","action":"edit","task_id":684,"detail":"Codify two-channel communication protocol in agent-common.instructions.md"}
+{"timestamp":"2026-03-09T04:57:34.3336098+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-09T04:57:34.8111965+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-09T04:57:35.2925742+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T04:57:44.1510373+01:00","action":"edit","task_id":690,"detail":"Create test-writer.agent.md with adversarial RED phase persona"}
+{"timestamp":"2026-03-09T04:57:44.673165+01:00","action":"edit","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-09T04:57:45.1487424+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-09T04:57:45.6677946+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-09T04:57:46.1662334+01:00","action":"edit","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-09T04:57:46.6549495+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T04:57:47.1305876+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-09T04:57:47.618004+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-09T04:57:48.1053765+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T04:57:48.6061112+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T05:03:05.0340623+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:03:24.5868441+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:03:26.3594827+01:00","action":"move","task_id":681,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-09T05:03:26.890815+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T05:03:52.0559258+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:04:04.2977937+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T05:04:22.040043+01:00","action":"move","task_id":647,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T05:04:35.6940777+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:04:35.6973357+01:00","action":"block","task_id":647,"detail":"Follow-up kanban tasks never created - execute the 3 kanban-md create commands from doc S6"}
+{"timestamp":"2026-03-09T05:08:34.6586649+01:00","action":"edit","task_id":683,"detail":"Test-writer agent: adversarial test creation from AC"}
+{"timestamp":"2026-03-09T05:08:39.3959642+01:00","action":"move","task_id":683,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T05:09:08.1808008+01:00","action":"edit","task_id":659,"detail":"Improve test coverage: condenser.py (88%)"}
+{"timestamp":"2026-03-09T05:09:12.7059969+01:00","action":"move","task_id":659,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T05:10:16.1193659+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:10:21.4399534+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T05:12:05.1720289+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:12:05.176349+01:00","action":"claim","task_id":647,"detail":"builder"}
+{"timestamp":"2026-03-09T05:12:10.1198091+01:00","action":"move","task_id":647,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T05:12:16.9128588+01:00","action":"create","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T05:12:23.1727096+01:00","action":"create","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T05:12:29.1432616+01:00","action":"create","task_id":705,"detail":"Audit global vs scoped instruction file ratio"}
+{"timestamp":"2026-03-09T05:12:49.1407602+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:12:49.1439705+01:00","action":"unblock","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:12:56.6157562+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T05:13:01.440462+01:00","action":"move","task_id":647,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T10:32:40.9424889+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:37:23.4083725+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:37:28.5614384+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:37:32.8828454+01:00","action":"move","task_id":647,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T10:42:29.8540825+01:00","action":"edit","task_id":684,"detail":"Codify two-channel communication protocol in agent-common.instructions.md"}
+{"timestamp":"2026-03-09T10:42:35.3210852+01:00","action":"move","task_id":688,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T10:42:35.9779222+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:42:35.982828+01:00","action":"block","task_id":688,"detail":"MERGE note missing from architect.agent.md: AC requires explicit note that MERGE is an action not a routing signal, and after merging return APPROVED or REFINE for surviving task. Not in architect.agent.md or arch-review SKILL.md. Reviewer cited Line 133 but that line is boundaries tag."}
+{"timestamp":"2026-03-09T10:42:45.8760483+01:00","action":"edit","task_id":684,"detail":"Codify two-channel communication protocol in agent-common.instructions.md"}
+{"timestamp":"2026-03-09T10:42:55.0268195+01:00","action":"move","task_id":684,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T10:43:12.3168262+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:44:34.0461198+01:00","action":"edit","task_id":685,"detail":"Task decomposition rules: enforce single-domain tasks at planning level"}
+{"timestamp":"2026-03-09T10:44:37.9346554+01:00","action":"move","task_id":685,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T10:46:54.2721507+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-09T10:47:03.603103+01:00","action":"edit","task_id":687,"detail":"Rewrite pipeline agent output_formats to two-channel model (builder, reviewer, writer, auditor)"}
+{"timestamp":"2026-03-09T10:47:12.2789997+01:00","action":"move","task_id":687,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T10:50:04.1948988+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:50:14.8749504+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:53:40.5387693+01:00","action":"move","task_id":688,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-03-09T10:53:41.1201464+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:53:41.1252144+01:00","action":"claim","task_id":688,"detail":"builder"}
+{"timestamp":"2026-03-09T10:55:17.9267133+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:55:23.2528223+01:00","action":"move","task_id":688,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T10:55:34.879623+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:55:34.8829127+01:00","action":"unblock","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T10:56:24.8139618+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:56:38.3450645+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T10:56:45.4712003+01:00","action":"move","task_id":647,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T10:58:04.3944038+01:00","action":"edit","task_id":693,"detail":"Update reviewer.agent.md and code-review skill for two-agent TDD test comparison"}
+{"timestamp":"2026-03-09T10:58:21.2604994+01:00","action":"move","task_id":693,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:04:48.8476875+01:00","action":"edit","task_id":690,"detail":"Create test-writer.agent.md with adversarial RED phase persona"}
+{"timestamp":"2026-03-09T11:04:57.4913711+01:00","action":"move","task_id":690,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:13:30.868378+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-09T11:14:09.9717917+01:00","action":"edit","task_id":697,"detail":"Add follow-up task quality rules to agent-common.instructions.md"}
+{"timestamp":"2026-03-09T11:14:23.5166238+01:00","action":"move","task_id":697,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:16:13.4088033+01:00","action":"edit","task_id":647,"detail":"Research: Stripe Minions agentic toolchain (blog series)"}
+{"timestamp":"2026-03-09T11:17:28.9775032+01:00","action":"move","task_id":688,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T11:17:51.023072+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T11:18:17.4140364+01:00","action":"move","task_id":695,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T11:18:18.0221157+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T11:18:18.0257849+01:00","action":"block","task_id":695,"detail":"Zero AC items implemented. All 6 items missing from architect.agent.md -- changes were never actually written to the file."}
+{"timestamp":"2026-03-09T11:22:01.6607191+01:00","action":"edit","task_id":692,"detail":"Update builder.agent.md and tdd-workflow skill for GREEN-only phase"}
+{"timestamp":"2026-03-09T11:22:15.6649143+01:00","action":"edit","task_id":696,"detail":"Compress copilot-instructions.md tech stack table Notes to one-liners"}
+{"timestamp":"2026-03-09T11:22:18.7958178+01:00","action":"move","task_id":692,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:22:22.7546709+01:00","action":"move","task_id":696,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:22:34.493351+01:00","action":"edit","task_id":694,"detail":"Update kanban-planner with single-domain decomposition gate"}
+{"timestamp":"2026-03-09T11:22:39.4941579+01:00","action":"move","task_id":694,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T11:23:21.7166384+01:00","action":"edit","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-09T11:23:29.0109492+01:00","action":"edit","task_id":691,"detail":"Create tdd-red skill for test-writer RED phase workflow"}
+{"timestamp":"2026-03-09T11:23:39.8875011+01:00","action":"move","task_id":691,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T15:20:42.0713819+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T15:20:46.047697+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T15:21:04.2061723+01:00","action":"edit","task_id":688,"detail":"Rewrite support agent output_formats to two-channel model (architect, researcher, planner, curator)"}
+{"timestamp":"2026-03-09T15:22:47.6906155+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T15:22:53.4487932+01:00","action":"move","task_id":593,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T15:24:42.344227+01:00","action":"create","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-09T15:25:00.6084045+01:00","action":"create","task_id":707,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-09T15:25:10.3978289+01:00","action":"create","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-09T15:25:19.358667+01:00","action":"create","task_id":709,"detail":"Add project-recap visual command"}
+{"timestamp":"2026-03-09T15:26:08.8414395+01:00","action":"delete","task_id":707,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-09T15:26:38.7771581+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-09T15:26:39.4741706+01:00","action":"edit","task_id":709,"detail":"Add project-recap visual command"}
+{"timestamp":"2026-03-09T15:26:48.1241581+01:00","action":"move","task_id":695,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T15:26:48.7233996+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T15:26:50.7628633+01:00","action":"move","task_id":688,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T15:26:58.90803+01:00","action":"create","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T15:27:02.3034075+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T15:27:07.1439874+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T15:27:12.5341925+01:00","action":"move","task_id":592,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T15:27:22.9165543+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T15:27:27.7406348+01:00","action":"edit","task_id":622,"detail":"Implement session-memory hook for context persistence across sessions"}
+{"timestamp":"2026-03-09T15:27:48.3876264+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T15:27:50.2286748+01:00","action":"edit","task_id":622,"detail":"Implement session-memory hook for context persistence across sessions"}
+{"timestamp":"2026-03-09T15:27:59.4977049+01:00","action":"create","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T15:28:06.2708967+01:00","action":"edit","task_id":622,"detail":"Implement session-memory hook for context persistence across sessions"}
+{"timestamp":"2026-03-09T15:28:06.2739849+01:00","action":"block","task_id":622,"detail":"Blocked on #711 (SESSION_START/END emission) + AC refinement needed + test task creation"}
+{"timestamp":"2026-03-09T15:30:48.2316935+01:00","action":"create","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T15:31:24.8271104+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T15:31:57.4335441+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T15:33:02.0308098+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T15:35:05.7866265+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T15:35:37.0328376+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T15:36:12.1704587+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T15:46:55.9036815+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T15:47:04.5799329+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T15:47:14.2255212+01:00","action":"move","task_id":593,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T15:47:53.253382+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T15:47:58.9114054+01:00","action":"move","task_id":695,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T15:48:05.074407+01:00","action":"move","task_id":592,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T15:51:23.6455456+01:00","action":"edit","task_id":686,"detail":"Instruction file audit: measure and reduce token bloat"}
+{"timestamp":"2026-03-09T15:52:48.2233376+01:00","action":"move","task_id":686,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T15:52:52.1725697+01:00","action":"move","task_id":688,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T15:55:05.0031152+01:00","action":"move","task_id":647,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T15:55:22.6224262+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T15:55:35.511395+01:00","action":"move","task_id":699,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T15:55:36.0983179+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T15:55:36.1021195+01:00","action":"block","task_id":699,"detail":"AC4 fails literally: researcher.agent.md never contained research_checklist element. Checklist is in research-workflow SKILL.md. Builder evidence fabricated lines 67-80. Fix: amend AC4 wording to match actual location then re-verify."}
+{"timestamp":"2026-03-09T15:56:31.1000235+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T15:56:36.1964328+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T15:56:48.3926523+01:00","action":"move","task_id":698,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T15:56:48.9785349+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T15:56:48.9838002+01:00","action":"block","task_id":698,"detail":"AC 8A: research_checklist XML section missing from researcher.agent.md. Pointer says see researcher agent but checklist not there."}
+{"timestamp":"2026-03-09T16:10:38.1458643+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:10:38.7427793+01:00","action":"move","task_id":592,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T16:11:56.1348612+01:00","action":"edit","task_id":670,"detail":"Add log_startup_summary config setting"}
+{"timestamp":"2026-03-09T16:12:07.8819951+01:00","action":"edit","task_id":670,"detail":"Add log_startup_summary config setting"}
+{"timestamp":"2026-03-09T16:12:15.1974862+01:00","action":"move","task_id":670,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T16:12:46.2645327+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T16:12:52.2861655+01:00","action":"move","task_id":579,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T16:14:47.8633081+01:00","action":"edit","task_id":625,"detail":"Task-level retry with exponential backoff"}
+{"timestamp":"2026-03-09T16:14:54.1070716+01:00","action":"move","task_id":625,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T16:15:31.5768129+01:00","action":"edit","task_id":623,"detail":"Stale execution detector for daemon loop"}
+{"timestamp":"2026-03-09T16:15:34.5890582+01:00","action":"move","task_id":678,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T16:15:43.2510765+01:00","action":"move","task_id":623,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T16:17:13.86466+01:00","action":"edit","task_id":673,"detail":"Update knowledge __init__.py re-exports after ingest split"}
+{"timestamp":"2026-03-09T16:17:18.9172278+01:00","action":"move","task_id":673,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T16:20:41.6160095+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T16:21:00.6043521+01:00","action":"move","task_id":682,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T16:21:01.2210525+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T16:21:01.2246864+01:00","action":"block","task_id":682,"detail":"Deliverable overwritten: commits 75afed4 and 7002e1f simplified the 8-step sequencer to 3-step loop, removing evaluate mode, WAVE_PLAN, retry_count, and pipeline chaining. Either restore 8-step version or update AC to match simplified design."}
+{"timestamp":"2026-03-09T16:27:40.3404183+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T16:27:47.9865694+01:00","action":"move","task_id":593,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T16:27:50.1968473+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T16:27:58.1194367+01:00","action":"move","task_id":579,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T16:30:50.0939533+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T16:30:51.1207645+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T16:31:09.7010647+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T16:31:16.0427503+01:00","action":"move","task_id":710,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T16:31:19.2117635+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T16:31:29.9454333+01:00","action":"move","task_id":698,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T16:31:30.5808374+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T16:31:47.88861+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:31:52.8340318+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:32:07.6410413+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:32:12.3364089+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:32:19.8293863+01:00","action":"move","task_id":592,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T16:32:20.4575509+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T16:32:20.4617796+01:00","action":"block","task_id":592,"detail":"Research doc + attribution never committed to git; task body path wrong"}
+{"timestamp":"2026-03-09T16:32:27.7545109+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T16:32:54.4408844+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T16:33:08.949619+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T16:33:13.6456887+01:00","action":"move","task_id":618,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T16:33:22.2286743+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T16:33:43.5431476+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T16:33:49.5143195+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-09T16:33:54.7893083+01:00","action":"move","task_id":703,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T16:34:21.8425063+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T16:35:27.1987999+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T16:35:32.1726659+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T16:35:38.5414911+01:00","action":"move","task_id":704,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T16:43:30.3489602+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T16:43:31.0171993+01:00","action":"move","task_id":579,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T16:43:34.4739401+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T16:43:41.988499+01:00","action":"move","task_id":698,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T16:45:11.1778774+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T16:45:18.2312906+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T16:45:22.7043655+01:00","action":"move","task_id":593,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T16:45:33.672912+01:00","action":"move","task_id":699,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T16:45:40.7678998+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T16:47:15.7638015+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T16:47:29.793347+01:00","action":"move","task_id":695,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T16:48:15.7321295+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T16:48:15.7369212+01:00","action":"unblock","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T16:50:22.9293366+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T16:50:29.9354492+01:00","action":"move","task_id":710,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T16:51:25.6617413+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T16:51:31.6008386+01:00","action":"move","task_id":618,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T16:53:58.8689602+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-09T16:54:04.8771476+01:00","action":"move","task_id":704,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T17:01:48.2220572+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T17:01:48.8136472+01:00","action":"move","task_id":592,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T17:02:03.9004679+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T17:03:20.3403469+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T17:03:28.9765196+01:00","action":"move","task_id":593,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T17:03:59.1253452+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T17:03:59.1284845+01:00","action":"unblock","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T17:04:07.2734536+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T17:04:16.9939922+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:04:17.8059684+01:00","action":"move","task_id":698,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T17:04:21.7947589+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:04:33.389254+01:00","action":"move","task_id":579,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:04:35.8369949+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T17:04:40.6691476+01:00","action":"move","task_id":695,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:04:47.3180226+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:04:52.553436+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:04:58.1035857+01:00","action":"move","task_id":577,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T17:05:16.5150876+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T17:05:27.2157875+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T17:05:46.6464742+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T17:05:51.4713629+01:00","action":"move","task_id":712,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T17:10:32.738633+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T17:10:33.3104039+01:00","action":"move","task_id":618,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T17:26:58.7057733+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:27:07.0570097+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:27:08.4540917+01:00","action":"move","task_id":579,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T17:27:12.8591163+01:00","action":"move","task_id":577,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T17:27:52.7946259+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T17:27:52.7997669+01:00","action":"unblock","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T17:27:58.2136398+01:00","action":"move","task_id":592,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T17:28:37.5422776+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T17:28:42.6309387+01:00","action":"move","task_id":695,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T17:31:24.4851661+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T17:31:30.2926671+01:00","action":"move","task_id":698,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:31:41.6632015+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T17:32:49.3472652+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T17:33:03.6228743+01:00","action":"move","task_id":710,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T17:33:09.679341+01:00","action":"move","task_id":712,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T17:36:31.8840869+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T17:36:37.472812+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T17:36:43.3347119+01:00","action":"move","task_id":618,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:43:29.3494513+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T17:43:38.4451922+01:00","action":"move","task_id":699,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T17:44:27.9380261+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T17:44:36.8322452+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T17:44:48.0899249+01:00","action":"move","task_id":618,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T17:44:49.089205+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T17:44:51.6784495+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:44:54.4229623+01:00","action":"move","task_id":698,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T17:44:56.4458929+01:00","action":"move","task_id":577,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T17:45:46.7854248+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-09T17:46:12.4485156+01:00","action":"move","task_id":578,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T17:46:32.1145904+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T17:46:38.0314405+01:00","action":"move","task_id":592,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:49:05.4949242+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T17:49:13.609621+01:00","action":"move","task_id":710,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T17:58:09.4752025+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T17:58:16.632747+01:00","action":"move","task_id":712,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T18:04:48.661006+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T18:04:58.7977198+01:00","action":"move","task_id":592,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T18:05:56.7625764+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T18:06:42.2245143+01:00","action":"move","task_id":710,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T18:09:27.4645802+01:00","action":"edit","task_id":695,"detail":"Add single-domain validation to architect gate"}
+{"timestamp":"2026-03-09T18:09:33.5763278+01:00","action":"move","task_id":695,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T18:09:52.6781198+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T18:10:01.7921167+01:00","action":"move","task_id":577,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T18:10:44.3196148+01:00","action":"edit","task_id":689,"detail":"Update orchestrator to consume routing signals only"}
+{"timestamp":"2026-03-09T18:10:50.7701748+01:00","action":"move","task_id":689,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T18:11:23.5518005+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T18:11:28.7689241+01:00","action":"edit","task_id":579,"detail":"Recurring: Comprehensive project audit (every 3 days)"}
+{"timestamp":"2026-03-09T18:11:35.5068084+01:00","action":"move","task_id":579,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T18:11:40.5120061+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T18:11:40.5159385+01:00","action":"claim","task_id":711,"detail":"researcher"}
+{"timestamp":"2026-03-09T18:11:48.8706031+01:00","action":"move","task_id":711,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-09T18:12:56.8341176+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T18:13:03.7040339+01:00","action":"move","task_id":711,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-09T18:17:21.1255503+01:00","action":"edit","task_id":698,"detail":"Remove inventory tables and duplicated lifecycle sections from copilot-instructions.md"}
+{"timestamp":"2026-03-09T18:17:28.1337137+01:00","action":"move","task_id":698,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T19:12:32.0634036+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T19:12:32.0677071+01:00","action":"claim","task_id":681,"detail":"researcher"}
+{"timestamp":"2026-03-09T19:16:05.8846564+01:00","action":"create","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T19:16:25.0985314+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T19:16:30.1688373+01:00","action":"edit","task_id":622,"detail":"Implement session-memory hook for context persistence across sessions"}
+{"timestamp":"2026-03-09T19:17:12.9099002+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T19:17:39.522997+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-09T19:17:46.8322881+01:00","action":"move","task_id":713,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T19:25:32.4878344+01:00","action":"edit","task_id":710,"detail":"Tests: RigorProfile config model and resolution"}
+{"timestamp":"2026-03-09T19:25:34.9535948+01:00","action":"edit","task_id":618,"detail":"Rigor profiles: configurable quality-vs-speed per task type"}
+{"timestamp":"2026-03-09T19:25:37.6457993+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T19:25:39.8393795+01:00","action":"move","task_id":618,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T19:25:42.6111189+01:00","action":"move","task_id":710,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T19:25:55.9152413+01:00","action":"move","task_id":681,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-09T19:26:03.1878727+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T19:26:03.1907096+01:00","action":"unblock","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T19:30:37.2227058+01:00","action":"edit","task_id":679,"detail":"Tests for task-level retry (#625)"}
+{"timestamp":"2026-03-09T19:30:48.1815692+01:00","action":"edit","task_id":679,"detail":"Tests for task-level retry (#625)"}
+{"timestamp":"2026-03-09T19:31:17.8601127+01:00","action":"move","task_id":679,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T19:31:44.8054199+01:00","action":"edit","task_id":661,"detail":"Improve test coverage: agent_def.py (91%) + context.py (91%)"}
+{"timestamp":"2026-03-09T19:32:13.2931674+01:00","action":"edit","task_id":661,"detail":"Improve test coverage: agent_def.py (91%) + context.py (91%)"}
+{"timestamp":"2026-03-09T19:32:24.1253309+01:00","action":"move","task_id":661,"detail":"done -\u003e archived"}
