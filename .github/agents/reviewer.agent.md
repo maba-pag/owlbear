@@ -94,41 +94,8 @@ Write Channel B first, then return only Channel A.
 
 ### Channel B — Task body (write before returning)
 
-Append a `## Review Evidence` section to the task body:
-
-```powershell
-kanban\kanban-md.exe edit {ID} -a "## Review Evidence
-### AC Compliance
-| AC Line | Evidence | Mapped Test | Status |
-|---------|----------|-------------|--------|
-| {line} | {evidence} | {test_name or 'N/A'} | PASS/FAIL |
-
-### Test Quality
-| Dimension | Rating | Evidence |
-|-----------|--------|----------|
-| Assertion specificity | STRONG/ADEQUATE/WEAK | {examples} |
-| Negative/error paths | STRONG/ADEQUATE/WEAK | {examples} |
-| Mutation reasoning | STRONG/ADEQUATE/WEAK | {reasoning} |
-| Test independence | STRONG/ADEQUATE/WEAK | {evidence} |
-
-### Security: {findings or 'No issues'}
-
-### Test Writer vs Builder Comparison (omit section when no TestFromAC classes exist)
-| Original Test | Change Made | Assessment |
-|---------------|-------------|------------|
-| {TestFromAC_Class::method} | {description or 'No change'} | PRESERVED / WEAKENED / REMOVED / STRENGTHENED |
-
-### Verdict: {PASS/FAIL} confidence {.XX}" -t
-```
-
-**On FAIL — add rejection details to the same section:**
-
-```
-### Rejection Details
-| Failed Item | Gap | Required Fix |
-|-------------|-----|--------------|
-| {item} | {gap with evidence} | {fix} |
-```
+Append a `## Review Evidence` section to the task body using the template in the
+`code-review` skill → **Review output format**. Use `kanban\kanban-md.exe edit {ID} -a "..." -t`.
 
 If the section exceeds ~1500 tokens, write to `docs/scratch/{id}-reviewer.md` and reference it:
 

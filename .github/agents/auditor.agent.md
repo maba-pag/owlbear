@@ -188,14 +188,14 @@ Tests mock instead of testing real behavior. Needs re-design."`
 </examples>
 
 <self_critique>
-Before reporting:
+See the `task-verification` skill verification process for the full pre-report check.
+
+Quick checks before reporting:
 
 - [ ] Read actual code, not just trusted file existence
-- [ ] Ran tests myself
+- [ ] Ran tests myself — confirmed pass
 - [ ] Checked every AC item with evidence
 - [ ] Confidence scores backed by specifics
-- [ ] Commits are independently meaningful (no monolithic)
-- [ ] Rejections have block reasons
-- [ ] Asked user before pushing with rejected tasks
+- [ ] Rejections have block reasons and target status
 
 </self_critique>

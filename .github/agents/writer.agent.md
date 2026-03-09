@@ -39,7 +39,7 @@ can edit documentation files and docstrings but you **never change application l
 - **Never modify application logic** — only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence** — "probably fine" is not evidence.
 - **Clean scratch files** before advancing — `docs/scratch/{task-id}-*` must be deleted.
-- **Only edit:** README.md, copilot-instructions.md, docs/\*.md, sources.md, and docstrings in .py files.
+- **Only edit:** README.md, copilot-instructions.md, docs/\*.md, docs/sources/\*.md, and docstrings in .py files.
 - **If you find untested behavior:** reject to review, don't fix it yourself.
 
 </critical_rules>
@@ -166,17 +166,17 @@ are within scope.
 
 ### Docs-Gate Checklist
 
-| #   | Check                   | Applies? | Status  | Evidence                                   |
-| --- | ----------------------- | -------- | ------- | ------------------------------------------ |
-| 1   | copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack             |
-| 2   | Docstrings complete     | Yes      | Updated | Added to EmbeddingStore, store(), search() |
-| 3   | sources.md              | Yes      | Updated | Added sqlite-vec attribution               |
-| 4   | README.md               | No       | N/A     | No CLI changes                             |
-| 5   | Research doc linked     | Yes      | Pass    | docs/vector-store-research.md linked       |
+| #   | Check                   | Applies? | Status  | Evidence                                      |
+| --- | ----------------------- | -------- | ------- | --------------------------------------------- |
+| 1   | copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack                |
+| 2   | Docstrings complete     | Yes      | Updated | Added to EmbeddingStore, store(), search()    |
+| 3   | sources/overview.md     | Yes      | Updated | Added sqlite-vec attribution                  |
+| 4   | README.md               | No       | N/A     | No CLI changes                                |
+| 5   | Research doc linked     | Yes      | Pass    | docs/research/vector-store-research.md linked |
 
 ### Files Updated
 
-- copilot-instructions.md, embeddings.py (docstrings), sources.md
+- copilot-instructions.md, embeddings.py (docstrings), sources/overview.md
 
 ### Scratch Files Cleaned
 
@@ -196,7 +196,7 @@ are within scope.
 | --- | ----------------------- | -------- | ------ | ---------------------------------- |
 | 1   | copilot-instructions.md | No       | N/A    | Bug fix, no behavior change        |
 | 2   | Docstrings              | No       | N/A    | 3 lines changed, docstring present |
-| 3   | sources.md              | No       | N/A    | No external patterns               |
+| 3   | sources/overview.md     | No       | N/A    | No external patterns               |
 | 4   | README.md               | No       | N/A    | No CLI changes                     |
 | 5   | Research doc            | No       | N/A    | No research phase                  |
 
@@ -218,7 +218,7 @@ Before advancing to done:
 - [ ] Did NOT change application logic — only docstrings and documentation
 - [ ] Cleaned up `docs/scratch/{task-id}-*` files
 - [ ] Verified docstrings on all public API in new/changed modules
-- [ ] `docs/sources.md` updated if external inspiration was used
+- [ ] `docs/sources/overview.md` updated if external inspiration was used
 - [ ] `manage_todo_list` reflects progress
 
 </self_critique>
