@@ -717,3 +717,246 @@ class TestErrorIsolation:
         mock_logger.exception.assert_called_once()
         # ingest_text should NOT have been called since agent.run failed
         mock_ingest.ingest_text.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Lazy agent creation — _get_agent when _agent is None
+# ---------------------------------------------------------------------------
+
+
+class TestLazyAgentCreation:
+    """_get_agent lazily creates a PydanticAI Agent on first use."""
+
+    def test_creates_agent_on_first_use(self, tmp_path: Path) -> None:
+        model = MagicMock()
+        hook = RetrospectiveHook(
+            model=model,
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._agent is None
+        with patch("owlbear.core.retrospective_hook.Agent") as mock_agent_cls:
+            agent = hook._get_agent()
+            mock_agent_cls.assert_called_once_with(
+                model,
+                system_prompt=(
+                    "You are a retrospective analyst for a software development team. "
+                    "Given a completed task description and its activity history, produce "
+                    "structured findings: what worked, what failed, error patterns observed, "
+                    "and reusable patterns discovered."
+                ),
+                output_type=RetroFindings,
+            )
+            assert agent is mock_agent_cls.return_value
+
+    def test_reuses_agent_on_subsequent_calls(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        with patch("owlbear.core.retrospective_hook.Agent") as mock_agent_cls:
+            first = hook._get_agent()
+            second = hook._get_agent()
+            mock_agent_cls.assert_called_once()
+            assert first is second
+
+
+# ---------------------------------------------------------------------------
+# Empty / missing task_id skips
+# ---------------------------------------------------------------------------
+
+
+class TestEmptyTaskIdSkips:
+    """Payload with missing or empty task_id silently skips."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_missing_task_id_skips(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = AsyncMock()
+
+        await hook({"outcome": "success"})
+
+        hook._agent.run.assert_not_called()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_empty_string_task_id_skips(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = AsyncMock()
+
+        await hook({"outcome": "success", "task_id": ""})
+
+        hook._agent.run.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _count_rejections edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestCountRejectionsEdgeCases:
+    """Edge cases in _count_rejections: no file, malformed JSON, filtering."""
+
+    def test_no_activity_file_returns_zero(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 0
+
+    def test_malformed_json_line_skipped(self, tmp_path: Path) -> None:
+        log_path = tmp_path / "activity.jsonl"
+        log_path.write_text("not valid json\n", encoding="utf-8")
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 0
+
+    def test_non_move_entries_ignored(self, tmp_path: Path) -> None:
+        _write_activity_log(
+            tmp_path,
+            [
+                {"action": "create", "task_id": 42, "detail": "created task"},
+                {"action": "edit", "task_id": 42, "detail": "edited"},
+            ],
+        )
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 0
+
+    def test_different_task_id_ignored(self, tmp_path: Path) -> None:
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("99", "review", "todo")],
+        )
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 0
+
+    def test_empty_lines_skipped(self, tmp_path: Path) -> None:
+        log_path = tmp_path / "activity.jsonl"
+        content = "\n\n" + json.dumps(_move_entry("42", "review", "todo")) + "\n\n"
+        log_path.write_text(content, encoding="utf-8")
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 1
+
+    def test_move_without_arrow_not_counted(self, tmp_path: Path) -> None:
+        _write_activity_log(
+            tmp_path,
+            [{"action": "move", "task_id": 42, "detail": "moved somewhere"}],
+        )
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        assert hook._count_rejections("42") == 0
+
+
+# ---------------------------------------------------------------------------
+# _get_priority edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestGetPriorityEdgeCases:
+    """Edge cases in _get_priority: subprocess errors, unknown priorities."""
+
+    def test_subprocess_raises_returns_important(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            side_effect=OSError("command not found"),
+        ):
+            assert hook._get_priority("42") == "important"
+
+    def test_nonzero_returncode_returns_important(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(returncode=1, stdout=""),
+        ):
+            assert hook._get_priority("42") == "important"
+
+    def test_unknown_priority_returns_important(self, tmp_path: Path) -> None:
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                returncode=0,
+                stdout=json.dumps({"priority": "ultra-mega-critical"}),
+            ),
+        ):
+            assert hook._get_priority("42") == "important"
+
+
+# ---------------------------------------------------------------------------
+# _run_retrospective: ingest_text error path
+# ---------------------------------------------------------------------------
+
+
+class TestIngestTextError:
+    """ingest_text failure in _run_retrospective is logged and swallowed."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ingest_text_raises_logged_and_swallowed(self, tmp_path: Path) -> None:
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("42", "review", "todo")],
+        )
+
+        findings = _sample_findings()
+        mock_ingest = AsyncMock()
+        mock_ingest.ingest_text = AsyncMock(side_effect=RuntimeError("DB down"))
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(findings)
+
+        mock_ct, tasks = _capturing_create_task()
+        with (
+            patch("owlbear.core.retrospective_hook.asyncio.create_task", mock_ct),
+            patch("owlbear.core.retrospective_hook.logger") as mock_logger,
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+            await tasks[0]
+
+        mock_logger.exception.assert_called_once()
+        hook._agent.run.assert_called_once()
