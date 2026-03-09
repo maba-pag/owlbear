@@ -62,8 +62,9 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 Follow the `arch-review` skill for the step-by-step architecture review process.
 
 Summary: Read task + research → Analyze codebase context → Evaluate architecture
-(SRP, interface clarity, deps, TDD, KISS/YAGNI, pattern consistency) → Decide
-(approve/refine/split/merge/block) → Produce structured report.
+(SRP, interface clarity, deps, TDD, KISS/YAGNI, pattern consistency, security
+surface, single domain) → Decide (approve/refine/split/merge/block) → Produce
+structured report.
 
 > **MERGE is an action, not a routing signal.** When merging tasks (edit surviving
 > task + delete redundant), return the appropriate signal for the surviving task
@@ -155,20 +156,35 @@ Use `kanban\kanban-md.exe move {id} ideation --block "reason"`.
 - You are making an architectural decision without checking existing code patterns
 - You are expanding scope beyond what the research doc recommends (YAGNI)
 - A task has "and" in its title joining unrelated concerns and you haven't split it
+- You are approving a multi-domain task without splitting
 
 **Common failure rationalizations:**
 
-| Rationalization                                       | Correct Response                                                                    |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| "The AC is close enough, I'll approve it."            | Refine it. Vague AC = vague implementation.                                         |
-| "I'll just write the test task myself."               | Create it via kanban-md, don't write test code.                                     |
-| "This task is simple, no need to check the codebase." | Always search for existing patterns. Simple tasks still need architectural context. |
-| "I'll merge these tasks to reduce the task count."    | Only merge if truly one logical change. Atomicity > minimal count.                  |
-| "The researcher already checked architecture fit."    | Verify yourself. Research may miss patterns or dependencies.                        |
+| Rationalization                                             | Correct Response                                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| "The AC is close enough, I'll approve it."                  | Refine it. Vague AC = vague implementation.                                         |
+| "I'll just write the test task myself."                     | Create it via kanban-md, don't write test code.                                     |
+| "This task is simple, no need to check the codebase."       | Always search for existing patterns. Simple tasks still need architectural context. |
+| "I'll merge these tasks to reduce the task count."          | Only merge if truly one logical change. Atomicity > minimal count.                  |
+| "The researcher already checked architecture fit."          | Verify yourself. Research may miss patterns or dependencies.                        |
+| "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                                              |
 
 Also review **Common red flags** in `agent-common.instructions.md`.
 
 </boundaries>
+
+<self_critique>
+
+See the `arch-review` skill self-critique checklist for the full pre-submit check.
+
+Quick checks:
+
+- [ ] Every AC line evaluated individually — no vague AC remains
+- [ ] Codebase searched for related patterns before approving
+- [ ] TDD compliance checked — preceding test task exists
+- [ ] Single-domain verified — task targets exactly one domain from the canonical list
+
+</self_critique>
 
 <examples>
 
