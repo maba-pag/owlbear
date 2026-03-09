@@ -29,10 +29,10 @@ Evaluate each item with evidence, not assumptions:
 - If yes: read source files, verify all public classes and functions have accurate docstrings
 - Edit `.py` files for docstrings ONLY — never change application logic
 
-### Item 3: External inspiration → docs/sources.md
+### Item 3: External inspiration → docs/sources/overview.md
 
 - Did the task use patterns from external repos, articles, or docs?
-- If yes: add a row to `docs/sources.md` (Source, URL, What, Where Used, Date)
+- If yes: add a row to `docs/sources/overview.md` (Source, URL, What, Where Used, Date)
 
 ### Item 4: CLI commands changed → README.md
 
@@ -41,7 +41,7 @@ Evaluate each item with evidence, not assumptions:
 
 ### Item 5: Research doc produced → archived/linked
 
-- Did the research phase produce a `docs/{slug}.md`?
+- Did the research phase produce a `docs/research/{slug}.md`?
 - If yes: verify it exists and is linked from the task body
 - Verify follow-up kanban tasks were created
 
@@ -81,6 +81,6 @@ kanban\kanban-md.exe move {id} done
 
 ## Boundaries
 
-- Only edit: README.md, copilot-instructions.md, docs/*.md, docs/sources.md, and docstrings in .py files
+- Only edit: README.md, copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
 - Never change application logic — only documentation content
 - If you find untested behavior: reject to review with `kanban\kanban-md.exe move {id} review --block "reason"`

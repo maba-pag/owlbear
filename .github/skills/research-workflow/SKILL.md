@@ -18,7 +18,7 @@ items 6–7 are **recommended**.
 4. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
 5. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
 6. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?
-7. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/{slug}.md` for complex research.
+7. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/research/{slug}.md` for complex research.
 
 For trivial tasks (rename, typo, config tweak): items 1–3 get a one-liner
 `N/A — trivial change, rationale: X` and the task moves through quickly. **The gate
@@ -38,7 +38,7 @@ Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code
 - **Web:** `fetch_webpage` for docs, articles, GitHub repos
-- **Clone for deep analysis:** `docs/research/{repo-name}/` → analyze → delete when done
+- **Clone for deep analysis:** `docs/scratch/research/{repo-name}/` → analyze → delete when done
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
 
@@ -53,7 +53,7 @@ Structure analysis as trade-off matrices, not prose:
 
 ## Step 4 — Write research document
 
-Create `docs/{slug}.md`:
+Create `docs/research/{slug}.md`:
 
 ```markdown
 # {Title}
@@ -81,11 +81,11 @@ Present for user review — do NOT execute.
 
 ## Step 6 — Update attribution
 
-Add rows to `docs/sources.md` for any external sources used.
+Add rows to `docs/sources/overview.md` for any external sources used.
 
 ## Step 7 — Clean up
 
-Delete any cloned repos from `docs/research/`.
+Delete any cloned repos from `docs/scratch/research/`.
 
 ## Step 8 — Advance
 
@@ -105,7 +105,7 @@ Before submitting:
 - [ ] Research doc ≤ 200 lines
 - [ ] Follow-up kanban tasks are concrete and actionable
 - [ ] Did NOT create/edit source code
-- [ ] External sources logged in sources.md
+- [ ] External sources logged in sources/overview.md
 - [ ] Cloned repos deleted
 - [ ] Task moved to `backlog` via `kanban\kanban-md.exe move`
 - [ ] Recommendations align with KISS/YAGNI

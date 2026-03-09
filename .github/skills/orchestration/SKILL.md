@@ -20,24 +20,17 @@ The orchestrator maintains constant-size context:
 
 ## Signal contracts
 
-### Planner → Orchestrator: DISPATCH_LIST
+### Planner → Orchestrator: JSON dispatch plan
 
-```
-DISPATCH_LIST
-  #{id} {agent_name} "{one-line AC summary}"
-  #{id} {agent_name} "{one-line AC summary}"
-BLOCKED:
-  #{id} "{reason}"
-SKIPPED:
-  #{id} gate:{gate_name} "{reason}"
-END_PLAN
+```json
+{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
 ```
 
 Parse rules:
 
-- Extract task lines as `(task_id, agent_name, summary)` tuples
-- BLOCKED and SKIPPED sections are informational — report to user but do not act on them
-- If DISPATCH_LIST contains zero task lines, report "nothing dispatchable" and stop
+- `dispatch` array: extract `(id, agent)` tuples. Priority-sorted by the planner.
+- `blocked` array: informational — report to user but do not act on them.
+- If `dispatch` is empty, report blocked tasks and stop.
 
 ### Subagent → Orchestrator: Channel A signal (diagnostic)
 
@@ -67,41 +60,46 @@ If there were failures from the previous cycle (agents that crashed twice):
 runSubagent("planner", "Plan: {scope_filter}\n\nPrevious cycle failures:\n#{id}: agent crashed twice\n#{id}: agent crashed twice", "Plan dispatch")
 ```
 
-Receive the DISPATCH_LIST. If the list has zero tasks (only BLOCKED/SKIPPED), report the
-blocked/skipped tasks to the user and stop.
+Receive the JSON plan. If `dispatch` is empty (only blocked tasks), report the blocked
+tasks to the user and stop.
 
-If the BLOCKED section mentions stale tasks (dispatched last cycle but unchanged), report
+If `blocked` mentions stale tasks (dispatched last cycle but unchanged), report
 those to the user as potential issues.
-
-**Ideation handling:** If the SKIPPED section contains tasks with `gate:status "ideation"`,
-these are pre-pipeline tasks that need research. Dispatch the researcher for up to 2
-ideation tasks per session:
-
-```
-runSubagent("researcher", "Research: #{id}", "Researcher #{id}")
-```
-
-After researchers return, re-plan (repeat Step 1) to pick up newly backlog'd tasks.
 
 ## Step 2 — Dispatch
 
-Issue ALL `runSubagent` calls from the dispatch list in a **single parallel tool-call
-block** — one task per call, never sequential.
+Dispatch the `dispatch` array in **waves of 4**. Take tasks in the order the planner
+provided (priority order). For each wave:
+
+1. Issue up to 4 `runSubagent` calls in a **single parallel tool-call block** —
+   one task per call.
+2. Wait for all calls in the wave to complete.
+3. Handle errors (see below).
+4. Move to the next wave of 4 (or fewer if remaining tasks < 4).
+
+After all waves from this plan complete, proceed to Step 3.
 
 **Dispatch prompt contains ONLY the task ID.** Subagents read their own AC via
 `kanban\kanban-md.exe show {id}` in their skill Step 1. Never include AC text, file paths,
 shell commands, pytest flags, or step-by-step procedures in the dispatch prompt.
 
-Example — 4 tasks in parallel:
+Example — 6 tasks across 2 waves:
 
+Wave 1:
 ```
-runSubagent("test-writer", "Write tests: #45", "Test-writer #45")
-runSubagent("builder", "Build: #46", "Builder #46")
-runSubagent("reviewer", "Review: #47", "Reviewer #47")
-runSubagent("auditor", "Audit: #48", "Auditor #48")
+runSubagent("architect", "Architect Review: #101", "Architect #101")
+runSubagent("builder", "Build: #103", "Builder #103")
+runSubagent("reviewer", "Review: #105", "Reviewer #105")
+runSubagent("auditor", "Audit: #108", "Auditor #108")
 ```
+[parallel — all return at once]
 
-All calls run concurrently. You receive all results at once.
+Wave 2:
+```
+runSubagent("test-writer", "Write tests: #110", "Test-writer #110")
+runSubagent("researcher", "Research: #112", "Researcher #112")
+```
+[parallel — both return]
 
 **Error handling:** If a subagent errors (crash, timeout, no response):
 
@@ -123,7 +121,7 @@ After all dispatches from Step 2 complete:
 2. **Re-plan:** Go to Step 1. The planner reads fresh board state. Tasks that
    advanced are in their new status. Tasks that failed are unchanged (planner flags
    them as stale). Dependencies resolved by this cycle's successes unlock new tasks.
-3. **Empty plan?** → If the planner returns an empty DISPATCH_LIST:
+3. **Empty plan?** — If the planner returns an empty `dispatch` array:
    - If any tasks reached `done` during this session, dispatch the curator:
      ```
      runSubagent("curator", "Curate: session complete", "Curation")
@@ -137,8 +135,9 @@ The loop continues until the planner has nothing to dispatch.
 Before reporting session complete:
 
 - [ ] Planner was dispatched with the user's scope filter (not a hardcoded filter)
-- [ ] Every task in the DISPATCH_LIST was dispatched (none silently dropped)
-- [ ] ONE task per subagent call — no batching
+- [ ] Every task in `dispatch` was dispatched (none silently dropped)
+- [ ] Waves of at most 4 parallel calls each
+- [ ] ONE task per subagent call — no batching multiple tasks into one call
 - [ ] Dispatch prompts contained ONLY task IDs — no AC text, commands, or procedures
 - [ ] Errors retried exactly once — no infinite retry loops
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
