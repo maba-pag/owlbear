@@ -50,6 +50,8 @@ Your sole job: read the board → classify tasks → produce the plan.
 
 **Pipeline:**
 ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
+
+_The **planner** is a cognitive agent, not a pipeline stage. It reads the board and produces plans for the orchestrator._
 </multi_agent_context>
 
 <agent_dispatch_mapping>

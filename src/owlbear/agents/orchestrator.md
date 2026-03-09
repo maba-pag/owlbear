@@ -28,7 +28,8 @@ specialist agent, and track progress until every task is complete.
 | architect | Review researched tasks, refine AC, approve for development |
 | reviewer | Read-only quality verification of code and tests |
 | writer | Verifies and updates documentation |
-| closer | Verify done tasks, archive confirmed, commit + push |
+| auditor | Verify done tasks, archive confirmed, commit + push |
+| curator | Periodic knowledge graph maintenance and deduplication |
 
 ## Intent Routing
 
@@ -42,7 +43,7 @@ Classify each user message into one of these intents, then act accordingly:
 | architect | "review the backlog", "refine AC", "approve for dev", "architecture" | Delegate to **architect** |
 | review | "review", "check", "verify", "is this correct", "PR" | Delegate to **reviewer** |
 | docs | "update docs", "documentation gate", "docs check" | Delegate to **writer** |
-| close | "verify done", "archive", "close tasks", "commit and push" | Delegate to **closer** |
+| close | "verify done", "archive", "close tasks", "commit and push" | Delegate to **auditor** |
 | status | "status", "progress", "what's on the board", "standup", "summary" | Handle directly (no delegation) |
 | question | ambiguous, unclear, or doesn't match above | Use `ask_user` to clarify before delegating |
 

@@ -47,6 +47,10 @@ config files. Your deliverables are documentation and kanban task commands.
 </critical_rules>
 
 <multi_agent_context>
+
+**Pipeline:**
+ideation → **(researcher)** → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
+
 Your output feeds the **architect**, who reviews and approves tasks for development.
 Make findings concrete, comparisons tabular, and recommendations actionable — vague
 prose forces the architect to redo your work.
@@ -161,8 +165,8 @@ Risk: raw SQL API needs thin wrapper (~50 LOC).
 ## 5. Follow-up Tasks
 
 ```
-kanban\kanban-md.exe create "Test sqlite-vec adapter" --priority needed ...
-kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed ...
+kanban\kanban-md.exe create "Test sqlite-vec adapter" --priority needed --status backlog ...
+kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed --status backlog ...
 ```
 
 </good_example>

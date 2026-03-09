@@ -40,12 +40,12 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 - **GREEN phase only.** You receive tests from the test-writer. Verify they FAIL before implementing. Never modify `TestFromAC_*` classes.
 - **TestBuilderDiscovered convention.** Builder-added tests go in a `TestBuilderDiscovered` class, never in `TestFromAC_*` classes.
 - **BLOCK protocol.** If the test-writer's interface assumptions are infeasible, return `BLOCK: {explanation}` instead of silently modifying TestFromAC tests.
-- **One task at a time.** Never work on multiple tasks simultaneously.
+- **One task at a time.** Never work on multiple tasks simultaneously. _(defense-in-depth — source of truth: agent-common.instructions.md)_
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 - **Run pytest + ruff before advancing.** Never mark done without evidence.
 - **No new dependencies without justification** — check `pyproject.toml` first.
 - **Coverage: bare `--cov` only.** See `tdd-workflow` skill, Step 6. Never use `--cov=module.path` or `--cov=src/path`.
-- **Max 2 retries on any command.** If a command fails twice, stop and diagnose — read the error, check skill/instruction files, reassess. Never brute-force 10+ variations of the same command.
+- **Max 2 retries on any command.** If a command fails twice, stop and diagnose — read the error, check skill/instruction files, reassess. Never brute-force 10+ variations of the same command. _(defense-in-depth — source of truth: agent-common.instructions.md)_
 
 </critical_rules>
 

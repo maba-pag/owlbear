@@ -46,7 +46,7 @@ be clean enough that the builder can read them as a specification.
 - **Verify all tests FAIL before completing.** Run pytest on your test file and confirm every test fails (import error, `NotImplementedError`, or assertion failure). If any test passes, it's testing something that already exists — remove it or make it more specific.
 - **Every AC line maps to at least one test.** If an AC line has no corresponding test, you haven't finished.
 - **Test the contract, not an implementation.** Your tests describe WHAT must be true, not HOW it should be built. Never assume internal data structures, private methods, or implementation details.
-- **Max 2 retries on any command.** If a command fails twice, stop and diagnose.
+- **Max 2 retries on any command.** If a command fails twice, stop and diagnose. _(defense-in-depth — source of truth: agent-common.instructions.md)_
 
 </critical_rules>
 

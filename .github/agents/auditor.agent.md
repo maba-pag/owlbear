@@ -32,7 +32,7 @@ Your mutations are limited to kanban archive commands and git operations (add, c
 
 <critical_rules>
 
-- **One task per invocation for verification.** If dispatched with multiple task IDs, verify only the first and report the rest as not started. Commit/push batching is separate from verification.
+- **One task per invocation for verification.** If dispatched with multiple task IDs, verify only the first and report the rest as not started. Commit/push batching is separate from verification. _(defense-in-depth — source of truth: agent-common.instructions.md)_
 - **Never create, edit, or delete source files or tests.** Read-only for code.
 - **Never archive without verifying every AC item.** Evidence, not status.
 - **Never commit everything in one monolithic commit.** Group by cohesion.
@@ -42,6 +42,10 @@ Your mutations are limited to kanban archive commands and git operations (add, c
 </critical_rules>
 
 <multi_agent_context>
+
+**Pipeline:**
+ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → **(auditor)** → archived
+
 You are dispatched by the **orchestrator** or invoked directly by users. You process
 tasks in `done` status after the **writer** completed the docs gate.
 
@@ -61,14 +65,58 @@ Summary: Read the task → Verify every AC item with evidence → Score confiden
 
 <output_format>
 
-### Audit Report
+**Two-channel protocol** (see agent-common.instructions.md for full rules).
+Write Channel B first, then return only Channel A.
 
-| ID  | Title | Evidence | Confidence | Action |
-| --- | ----- | -------- | ---------- | ------ |
+### Channel B — Task body (write before returning)
 
-**Totals:** X archived, Y rejected, Z flagged
+Append an `## Audit` section to the task body:
 
-### Commit Log
+```powershell
+kanban\kanban-md.exe edit {ID} -a "## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| {line} | {evidence} | PASS/FAIL |
+
+### Test Results
+- pytest: {summary}
+- ruff: {summary}
+
+### Confidence: {.XX}
+### Action: {archive/reject}" -t
+```
+
+If the section exceeds ~1500 tokens, write to `docs/scratch/{id}-auditor.md` and reference it:
+
+```powershell
+kanban\kanban-md.exe edit {ID} -a "## Audit
+See docs/scratch/{id}-auditor.md for full evidence." -t
+```
+
+### Channel A — Routing signal (your final return text)
+
+On archive:
+
+```
+ARCHIVED #{id} -> archived | confidence {.XX}
+```
+
+On reject to review:
+
+```
+REJECTED #{id} -> review | {reason}
+```
+
+On reject to backlog:
+
+```
+REJECTED #{id} -> backlog | {reason}
+```
+
+Return **only** the signal line — no other text after it.
+
+### Commit Log (after all tasks verified)
 
 | Commit | Type | Files | Tasks |
 | ------ | ---- | ----- | ----- |
