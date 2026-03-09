@@ -26,8 +26,9 @@ description: "Python coding conventions for this workspace."
 
 - **pytest** with `pytest-asyncio` for async tests.
 - TDD by default — write the test first.
-- Target ≥ 90 % coverage per phase gate. Run: `uv run pytest --cov=src/owlbear --cov-report=term-missing`.
+- Target >= 90 % coverage per phase gate.
 - Use `unittest.mock.patch` / `MagicMock` for external dependencies (LLM calls, DB).
+- For pytest/ruff/coverage **commands**, see the `pytest-and-linting` skill.
 
 ## Patterns
 
