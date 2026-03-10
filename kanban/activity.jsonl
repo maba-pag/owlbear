@@ -5915,3 +5915,386 @@
 {"timestamp":"2026-03-09T21:13:27.1913933+01:00","action":"move","task_id":506,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-09T21:17:33.0221237+01:00","action":"edit","task_id":505,"detail":"Sync copilot-instructions.md agent inventory with actual files"}
 {"timestamp":"2026-03-09T21:17:37.3110969+01:00","action":"move","task_id":505,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T21:25:13.646007+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T21:25:13.6523553+01:00","action":"unblock","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T21:27:03.5935298+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T21:27:08.4822027+01:00","action":"move","task_id":699,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T21:28:23.4539508+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:28:28.6339616+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:28:30.8971416+01:00","action":"move","task_id":713,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-09T21:28:34.0916713+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:28:45.5199197+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:28:47.4397457+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T21:28:49.5854816+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:28:54.1815801+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T21:29:04.1239494+01:00","action":"move","task_id":681,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-09T21:29:04.8175442+01:00","action":"move","task_id":682,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T21:29:17.1164468+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T21:46:19.7981984+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T21:46:21.1795931+01:00","action":"edit","task_id":491,"detail":"Fix dual error handling on ON_ERROR events"}
+{"timestamp":"2026-03-09T21:46:24.285748+01:00","action":"move","task_id":699,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T21:46:25.7757716+01:00","action":"move","task_id":491,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T21:46:52.3131436+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T21:47:03.0161135+01:00","action":"move","task_id":681,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-09T21:47:09.2422854+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-09T21:50:02.7040544+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T21:50:08.297593+01:00","action":"move","task_id":713,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-09T21:53:02.5986045+01:00","action":"edit","task_id":515,"detail":"Implement circuit breaker for Copilot API"}
+{"timestamp":"2026-03-09T21:53:20.3281907+01:00","action":"move","task_id":515,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T21:58:02.6798104+01:00","action":"edit","task_id":513,"detail":"Review Slack receive timeout behavior for daemon idle"}
+{"timestamp":"2026-03-09T21:58:10.9432481+01:00","action":"edit","task_id":512,"detail":"Reconcile daemon retry with tool-level HookedToolset retry"}
+{"timestamp":"2026-03-09T21:58:13.2759821+01:00","action":"move","task_id":513,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T21:58:17.4814269+01:00","action":"move","task_id":512,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T21:59:39.7429475+01:00","action":"move","task_id":514,"detail":"done -\u003e backlog"}
+{"timestamp":"2026-03-09T21:59:47.2106505+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T21:59:47.214347+01:00","action":"block","task_id":514,"detail":"Sub-problem 1 not implemented: bootstrap() still calls create_copilot_model() (L85). openai_client never registered for cleanup. Primary leak persists."}
+{"timestamp":"2026-03-09T22:00:04.70545+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T22:00:12.2426343+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T22:06:42.4992918+01:00","action":"edit","task_id":592,"detail":"Research: nicobailon/visual-explainer"}
+{"timestamp":"2026-03-09T22:06:47.2194091+01:00","action":"move","task_id":592,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:07:11.7559814+01:00","action":"edit","task_id":577,"detail":"Recurring: Source inspiration audit (every 3 days)"}
+{"timestamp":"2026-03-09T22:07:16.0161919+01:00","action":"move","task_id":577,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:09:02.4781247+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T22:09:07.9640542+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T22:09:14.9136269+01:00","action":"edit","task_id":593,"detail":"Research: coleam00/excalidraw-diagram-skill"}
+{"timestamp":"2026-03-09T22:09:21.2642916+01:00","action":"move","task_id":593,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:27:17.8859432+01:00","action":"edit","task_id":516,"detail":"Add concurrency limit to ingest background tasks"}
+{"timestamp":"2026-03-09T22:27:23.6615278+01:00","action":"move","task_id":516,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:37:32.323914+01:00","action":"edit","task_id":682,"detail":"Orchestrator rewrite: pure sequencer, zero cognitive work"}
+{"timestamp":"2026-03-09T22:37:38.0280397+01:00","action":"move","task_id":682,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T22:38:05.6032414+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-09T22:38:10.3920435+01:00","action":"move","task_id":713,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T22:39:28.5665656+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-09T22:39:29.3347407+01:00","action":"move","task_id":699,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-09T22:43:52.0006733+01:00","action":"edit","task_id":648,"detail":"Update GitHubToolset tests for shared httpx client"}
+{"timestamp":"2026-03-09T22:43:56.9479014+01:00","action":"move","task_id":648,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:48:51.4746763+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-09T22:49:02.2298039+01:00","action":"move","task_id":493,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T22:49:02.8654526+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-09T22:49:25.2872512+01:00","action":"edit","task_id":649,"detail":"Tests for ingest background task concurrency limit"}
+{"timestamp":"2026-03-09T22:49:31.0469287+01:00","action":"move","task_id":649,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:53:24.6913858+01:00","action":"edit","task_id":653,"detail":"Test ReDoS protection for filesystem search content regex"}
+{"timestamp":"2026-03-09T22:53:29.7472498+01:00","action":"move","task_id":653,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-09T22:53:54.9444312+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-09T22:54:06.4152687+01:00","action":"move","task_id":650,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-09T22:54:06.9346544+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-09T22:54:06.9404762+01:00","action":"block","task_id":650,"detail":"AC#1 missing: no test verifies bootstrap registers openai_client.close in cleanup list. Comment at test_bootstrap.py:717 but no assertion."}
+{"timestamp":"2026-03-09T22:56:05.4022609+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-09T22:56:16.2478879+01:00","action":"move","task_id":578,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-09T22:56:16.8433804+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-09T22:56:16.8470972+01:00","action":"block","task_id":578,"detail":"Voice extras inventory lists 3 deps, actual pyproject.toml has 4 (sounddevice missing). Architect claimed fix but not applied."}
+{"timestamp":"2026-03-09T22:57:01.3902256+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T22:57:01.3940062+01:00","action":"unblock","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T22:57:01.3976957+01:00","action":"claim","task_id":712,"detail":"test-writer"}
+{"timestamp":"2026-03-09T22:57:10.9170353+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T22:57:18.0502208+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T22:59:24.4744924+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-09T22:59:29.1058787+01:00","action":"move","task_id":712,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-09T22:59:38.3818092+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T22:59:44.0794037+01:00","action":"move","task_id":514,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T22:59:48.6163153+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T22:59:48.620899+01:00","action":"unblock","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-09T22:59:58.3442676+01:00","action":"create","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-09T23:00:28.0407328+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:00:42.9486584+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:00:48.4300489+01:00","action":"move","task_id":483,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T23:01:10.1827655+01:00","action":"create","task_id":715,"detail":"Tests: hook consumer typed payload annotations"}
+{"timestamp":"2026-03-09T23:01:16.1147457+01:00","action":"edit","task_id":715,"detail":"Tests: hook consumer typed payload annotations"}
+{"timestamp":"2026-03-09T23:01:27.5844278+01:00","action":"create","task_id":716,"detail":"Annotate hook consumers with typed payloads"}
+{"timestamp":"2026-03-09T23:01:33.3529414+01:00","action":"edit","task_id":716,"detail":"Annotate hook consumers with typed payloads"}
+{"timestamp":"2026-03-09T23:01:33.8485091+01:00","action":"edit","task_id":716,"detail":"Annotate hook consumers with typed payloads"}
+{"timestamp":"2026-03-09T23:01:43.5981731+01:00","action":"create","task_id":717,"detail":"Add @overload to HookRegistry.emit for type-safe dispatch"}
+{"timestamp":"2026-03-09T23:01:48.3671247+01:00","action":"edit","task_id":717,"detail":"Add @overload to HookRegistry.emit for type-safe dispatch"}
+{"timestamp":"2026-03-09T23:02:10.0957019+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:02:51.1860467+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:02:56.9782339+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:03:06.7707811+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:03:11.5591644+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-09T23:03:56.5897207+01:00","action":"claim","task_id":700,"detail":"researcher"}
+{"timestamp":"2026-03-09T23:03:56.592887+01:00","action":"move","task_id":700,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-09T23:03:59.1173359+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:04:03.2661592+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:04:03.2714838+01:00","action":"release","task_id":700,"detail":"researcher"}
+{"timestamp":"2026-03-09T23:04:03.8646362+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:04:03.8683044+01:00","action":"claim","task_id":700,"detail":"researcher"}
+{"timestamp":"2026-03-09T23:04:21.6730329+01:00","action":"move","task_id":701,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-09T23:04:28.1472276+01:00","action":"move","task_id":702,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-09T23:06:33.8922852+01:00","action":"create","task_id":718,"detail":"Evaluate cheat-sheet tool pattern for complex toolsets"}
+{"timestamp":"2026-03-09T23:08:14.0230189+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:08:14.0272337+01:00","action":"release","task_id":700,"detail":"researcher"}
+{"timestamp":"2026-03-09T23:08:18.1529865+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:08:22.5735931+01:00","action":"move","task_id":700,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-09T23:09:31.2208259+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-09T23:09:31.2257007+01:00","action":"claim","task_id":700,"detail":"researcher"}
+{"timestamp":"2026-03-09T23:09:35.9732192+01:00","action":"move","task_id":700,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-09T23:10:27.9986196+01:00","action":"move","task_id":594,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-09T23:12:27.7091128+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-09T23:12:31.8366626+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-09T23:12:37.2700807+01:00","action":"move","task_id":701,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-09T23:17:49.2288201+01:00","action":"move","task_id":702,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T00:41:39.1740569+01:00","action":"edit","task_id":713,"detail":"Tests: SESSION_START and SESSION_END hook emission"}
+{"timestamp":"2026-03-10T00:41:49.6768336+01:00","action":"move","task_id":713,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T00:43:45.9220979+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T00:43:50.6763812+01:00","action":"move","task_id":714,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T00:46:34.983045+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T00:46:42.2929656+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T00:46:46.1967402+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T00:46:52.2255802+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T00:46:57.0235622+01:00","action":"move","task_id":711,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T00:47:13.6800275+01:00","action":"move","task_id":699,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-10T00:47:20.3554375+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T00:47:20.3601663+01:00","action":"block","task_id":699,"detail":"AC4 FAIL round 2: researcher.agent.md has no research_checklist element. Builder fabricated evidence twice. Fix: add element or amend AC4."}
+{"timestamp":"2026-03-10T00:52:03.3880001+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T00:52:04.7248681+01:00","action":"claim","task_id":706,"detail":"researcher"}
+{"timestamp":"2026-03-10T00:52:04.7308095+01:00","action":"move","task_id":706,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T00:52:16.8482821+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:52:16.8514348+01:00","action":"release","task_id":706,"detail":"researcher"}
+{"timestamp":"2026-03-10T00:52:19.7366036+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:52:24.3897409+01:00","action":"move","task_id":706,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-10T00:52:33.8192558+01:00","action":"edit","task_id":705,"detail":"Audit global vs scoped instruction file ratio"}
+{"timestamp":"2026-03-10T00:52:33.8227485+01:00","action":"claim","task_id":705,"detail":"researcher"}
+{"timestamp":"2026-03-10T00:53:14.5075712+01:00","action":"move","task_id":705,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T00:54:54.7071871+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:54:54.7111029+01:00","action":"claim","task_id":706,"detail":"researcher"}
+{"timestamp":"2026-03-10T00:54:59.6091437+01:00","action":"move","task_id":706,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T00:56:26.0572992+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:56:32.2694066+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:56:43.8021632+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:56:44.7389825+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T00:56:50.3118413+01:00","action":"move","task_id":706,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T00:58:42.3530184+01:00","action":"edit","task_id":705,"detail":"Audit global vs scoped instruction file ratio"}
+{"timestamp":"2026-03-10T00:59:01.2116014+01:00","action":"move","task_id":705,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T01:11:20.4889894+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T01:11:32.8254775+01:00","action":"move","task_id":663,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-10T01:11:38.2393169+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T01:11:38.2446236+01:00","action":"block","task_id":663,"detail":"Daemon.py AC unmet: no new daemon tests from #663. Coverage gaps covered by other tasks (#621, #665). Need builder notes or new tests."}
+{"timestamp":"2026-03-10T01:21:26.2711876+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T01:21:31.0811593+01:00","action":"move","task_id":711,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T01:23:23.0114554+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T01:24:05.6285607+01:00","action":"move","task_id":699,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T01:24:06.3371084+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T01:24:47.4861032+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T01:27:22.0530883+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T01:27:42.3844282+01:00","action":"move","task_id":650,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T01:27:42.9400203+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T01:28:27.6572428+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T01:28:28.9820652+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:28:28.9865664+01:00","action":"unblock","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:28:28.9917083+01:00","action":"claim","task_id":493,"detail":"test-writer"}
+{"timestamp":"2026-03-10T01:28:32.0365117+01:00","action":"move","task_id":578,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T01:28:39.2707366+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:28:43.9600629+01:00","action":"move","task_id":493,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T01:29:00.4107922+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-10T01:29:00.4149265+01:00","action":"claim","task_id":712,"detail":"builder"}
+{"timestamp":"2026-03-10T01:33:05.99804+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-10T01:33:10.5441656+01:00","action":"move","task_id":712,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T01:43:29.4661165+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T01:43:33.8530044+01:00","action":"move","task_id":699,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T01:45:35.2831143+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T01:45:39.5273111+01:00","action":"move","task_id":711,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T01:49:33.5026361+01:00","action":"move","task_id":712,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T01:52:12.2591049+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T01:52:16.9290498+01:00","action":"move","task_id":714,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T01:53:16.092979+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:53:20.5306173+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:53:25.0734364+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:53:30.2176076+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T01:53:35.8152538+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T01:53:41.4770858+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T01:53:43.3478632+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T01:53:43.3515211+01:00","action":"release","task_id":578,"detail":"test-writer"}
+{"timestamp":"2026-03-10T01:53:45.7593665+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T01:53:48.0042889+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T01:53:48.0084347+01:00","action":"unblock","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T01:53:48.012054+01:00","action":"claim","task_id":578,"detail":"builder"}
+{"timestamp":"2026-03-10T01:54:03.8176405+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T01:54:06.8543939+01:00","action":"move","task_id":493,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T01:54:11.3488475+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T01:54:12.9685905+01:00","action":"move","task_id":578,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T01:54:37.2300716+01:00","action":"move","task_id":594,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T02:00:43.4831943+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T02:00:43.4873929+01:00","action":"unblock","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T02:00:53.9072256+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T02:00:58.5520458+01:00","action":"move","task_id":650,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T02:01:56.3152645+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:01:56.3188874+01:00","action":"claim","task_id":708,"detail":"researcher"}
+{"timestamp":"2026-03-10T02:04:02.1833822+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:04:02.1871544+01:00","action":"claim","task_id":704,"detail":"test-writer"}
+{"timestamp":"2026-03-10T02:04:13.6250922+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-10T02:04:18.220708+01:00","action":"move","task_id":539,"detail":"done -\u003e backlog"}
+{"timestamp":"2026-03-10T02:04:42.7877989+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-10T02:06:10.2781441+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:06:15.4383055+01:00","action":"move","task_id":708,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T02:10:00.7257078+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:10:05.834417+01:00","action":"move","task_id":704,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T02:12:02.9525579+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T02:12:14.5537063+01:00","action":"move","task_id":663,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T02:12:15.0664351+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T02:18:04.8244081+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T02:18:04.8275158+01:00","action":"claim","task_id":681,"detail":"researcher"}
+{"timestamp":"2026-03-10T02:19:51.1251711+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T02:19:54.910595+01:00","action":"move","task_id":699,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T02:24:02.2644524+01:00","action":"move","task_id":681,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T02:24:11.3871367+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T02:24:11.3907858+01:00","action":"unblock","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T02:24:41.3348197+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T02:24:41.3384878+01:00","action":"release","task_id":681,"detail":"researcher"}
+{"timestamp":"2026-03-10T02:25:03.2042069+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T02:25:08.997684+01:00","action":"move","task_id":711,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:26:39.0945551+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T02:26:56.7692629+01:00","action":"move","task_id":714,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:28:45.7954487+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:28:45.7990873+01:00","action":"release","task_id":578,"detail":"builder"}
+{"timestamp":"2026-03-10T02:28:53.0580027+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:28:53.0609879+01:00","action":"claim","task_id":578,"detail":"reviewer"}
+{"timestamp":"2026-03-10T02:28:56.988117+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-10T02:28:56.9922974+01:00","action":"release","task_id":712,"detail":"builder"}
+{"timestamp":"2026-03-10T02:28:57.6266072+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:29:01.3127061+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-10T02:29:02.0689956+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:29:05.8880469+01:00","action":"edit","task_id":712,"detail":"Tests for context pre-hydration module"}
+{"timestamp":"2026-03-10T02:29:05.8930495+01:00","action":"claim","task_id":712,"detail":"writer"}
+{"timestamp":"2026-03-10T02:29:11.370888+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:29:15.0237816+01:00","action":"move","task_id":712,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T02:29:23.0419116+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:29:23.0455688+01:00","action":"release","task_id":493,"detail":"test-writer"}
+{"timestamp":"2026-03-10T02:29:26.2009653+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T02:29:28.6229341+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:29:28.6272322+01:00","action":"claim","task_id":493,"detail":"reviewer"}
+{"timestamp":"2026-03-10T02:29:30.9598477+01:00","action":"move","task_id":578,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:29:37.5540565+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:29:41.8015611+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:29:49.538327+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T02:29:50.4348523+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:29:54.0243866+01:00","action":"move","task_id":594,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:29:55.0398394+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:30:04.7615262+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T02:30:09.9596181+01:00","action":"move","task_id":493,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:32:41.251067+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T02:32:56.0557752+01:00","action":"move","task_id":704,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T02:32:56.059449+01:00","action":"handoff","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:32:56.0631739+01:00","action":"block","task_id":704,"detail":"LintGateError dead code + duplicate retry logic. Architect refine AC3+AC4. Builder extract _schedule_retry helper."}
+{"timestamp":"2026-03-10T02:32:56.0670114+01:00","action":"release","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:32:59.9053932+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T02:33:01.1197481+01:00","action":"move","task_id":704,"detail":"review -\u003e in-progress"}
+{"timestamp":"2026-03-10T02:33:01.6664924+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:33:01.6711137+01:00","action":"unblock","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:33:01.6748019+01:00","action":"claim","task_id":704,"detail":"builder"}
+{"timestamp":"2026-03-10T02:33:03.9650436+01:00","action":"move","task_id":706,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T02:35:15.1133059+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T02:35:28.5881704+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T02:36:22.0865105+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T02:36:24.495292+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T02:36:24.4992602+01:00","action":"claim","task_id":650,"detail":"builder"}
+{"timestamp":"2026-03-10T02:36:27.1151035+01:00","action":"move","task_id":704,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T02:39:56.651579+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T02:40:01.7460771+01:00","action":"move","task_id":650,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T02:43:00.4148801+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T02:43:00.4545699+01:00","action":"claim","task_id":701,"detail":"architect"}
+{"timestamp":"2026-03-10T02:43:26.2016647+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:43:26.205547+01:00","action":"release","task_id":708,"detail":"researcher"}
+{"timestamp":"2026-03-10T02:43:30.5812683+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:43:37.0695758+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:43:37.0732566+01:00","action":"claim","task_id":708,"detail":"architect"}
+{"timestamp":"2026-03-10T02:43:54.6388729+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T02:43:59.182897+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:44:00.0771536+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T02:44:00.0809695+01:00","action":"release","task_id":701,"detail":"architect"}
+{"timestamp":"2026-03-10T02:44:03.6246909+01:00","action":"move","task_id":708,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T02:44:08.6367233+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T02:44:08.6403043+01:00","action":"release","task_id":708,"detail":"architect"}
+{"timestamp":"2026-03-10T02:44:18.4077456+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-10T02:48:56.7259565+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T02:48:56.7600614+01:00","action":"claim","task_id":663,"detail":"test-writer"}
+{"timestamp":"2026-03-10T02:49:15.7860096+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T02:49:20.8772528+01:00","action":"move","task_id":663,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T02:54:58.5631391+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T02:55:03.0973986+01:00","action":"move","task_id":714,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T02:55:22.5184307+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T02:55:27.7118491+01:00","action":"move","task_id":711,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T02:56:47.8381841+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T02:56:51.3783421+01:00","action":"move","task_id":699,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T02:57:01.5052935+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T02:57:01.5094683+01:00","action":"unblock","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T03:03:02.2868496+01:00","action":"move","task_id":712,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T03:04:45.4261151+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T03:04:45.9256332+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T03:04:45.9308983+01:00","action":"release","task_id":578,"detail":"reviewer"}
+{"timestamp":"2026-03-10T03:04:46.4506633+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T03:04:46.4544355+01:00","action":"claim","task_id":578,"detail":"writer"}
+{"timestamp":"2026-03-10T03:05:01.5955718+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T03:05:06.2837428+01:00","action":"move","task_id":578,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T03:05:12.472408+01:00","action":"move","task_id":493,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T03:06:59.4146101+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T03:07:02.6103927+01:00","action":"move","task_id":594,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T03:13:09.5563593+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T03:13:09.5804075+01:00","action":"release","task_id":650,"detail":"builder"}
+{"timestamp":"2026-03-10T03:13:22.9251798+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T03:13:22.9283467+01:00","action":"claim","task_id":650,"detail":"reviewer"}
+{"timestamp":"2026-03-10T03:13:33.3835142+01:00","action":"move","task_id":650,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T03:14:30.7003586+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T03:14:40.4270767+01:00","action":"move","task_id":706,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T03:15:03.175504+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T03:15:03.1791861+01:00","action":"release","task_id":663,"detail":"test-writer"}
+{"timestamp":"2026-03-10T03:15:03.7080883+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T03:15:03.7117924+01:00","action":"claim","task_id":663,"detail":"builder"}
+{"timestamp":"2026-03-10T03:17:25.1858976+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T03:17:25.2162371+01:00","action":"claim","task_id":703,"detail":"test-writer"}
+{"timestamp":"2026-03-10T03:17:30.7397402+01:00","action":"move","task_id":703,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T03:20:44.065253+01:00","action":"move","task_id":704,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T03:20:44.6476876+01:00","action":"edit","task_id":704,"detail":"Add deterministic post-implementation lint gate"}
+{"timestamp":"2026-03-10T03:20:44.6518909+01:00","action":"block","task_id":704,"detail":"AC7: builder.agent.md missing daemon lint gate doc note"}
+{"timestamp":"2026-03-10T03:23:30.7053549+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T03:29:38.0323831+01:00","action":"move","task_id":663,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T03:30:25.9424275+01:00","action":"move","task_id":709,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T03:39:51.9950701+01:00","action":"edit","task_id":709,"detail":"Add project-recap visual command"}
+{"timestamp":"2026-03-10T03:39:57.8386464+01:00","action":"edit","task_id":709,"detail":"Add project-recap visual command"}
+{"timestamp":"2026-03-10T03:40:07.7736781+01:00","action":"move","task_id":709,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T03:40:12.8407133+01:00","action":"edit","task_id":709,"detail":"Add project-recap visual command"}
+{"timestamp":"2026-03-10T03:40:12.8446837+01:00","action":"release","task_id":709,"detail":"researcher"}
+{"timestamp":"2026-03-10T03:50:25.174737+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T03:50:41.0300421+01:00","action":"move","task_id":699,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T03:52:11.8742889+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T03:52:11.8779667+01:00","action":"release","task_id":650,"detail":"reviewer"}
+{"timestamp":"2026-03-10T03:52:12.4837845+01:00","action":"move","task_id":650,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T03:53:31.5667588+01:00","action":"edit","task_id":714,"detail":"Tests: TypedDict hook payloads and Handler type"}
+{"timestamp":"2026-03-10T03:54:12.2349475+01:00","action":"move","task_id":714,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T03:56:39.0813255+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T03:56:43.2380404+01:00","action":"edit","task_id":711,"detail":"Emit SESSION_START and SESSION_END hook events at session boundaries"}
+{"timestamp":"2026-03-10T03:56:48.2500838+01:00","action":"move","task_id":711,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T03:57:43.1627301+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T03:57:43.1663105+01:00","action":"release","task_id":706,"detail":"architect"}
+{"timestamp":"2026-03-10T03:57:43.725994+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T03:57:43.7315692+01:00","action":"claim","task_id":706,"detail":"builder"}
+{"timestamp":"2026-03-10T03:59:22.6636575+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T03:59:34.7944984+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T03:59:35.3881494+01:00","action":"move","task_id":706,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T03:59:36.5364282+01:00","action":"move","task_id":483,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T04:00:19.5188262+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T04:11:26.5641132+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T04:11:26.5683004+01:00","action":"release","task_id":703,"detail":"test-writer"}
+{"timestamp":"2026-03-10T04:11:33.8340371+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T04:11:33.8393142+01:00","action":"claim","task_id":703,"detail":"builder"}
+{"timestamp":"2026-03-10T04:11:39.2670183+01:00","action":"move","task_id":703,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T04:16:23.143102+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T04:16:23.1467473+01:00","action":"release","task_id":663,"detail":"builder"}
+{"timestamp":"2026-03-10T04:16:23.7208651+01:00","action":"move","task_id":663,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T04:16:24.3534515+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T04:21:34.1829266+01:00","action":"edit","task_id":594,"detail":"Research: excalidraw/excalidraw-mcp"}
+{"timestamp":"2026-03-10T04:21:39.3301056+01:00","action":"move","task_id":594,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T04:23:36.9982691+01:00","action":"edit","task_id":493,"detail":"Document shell injection risk and add mitigations"}
+{"timestamp":"2026-03-10T04:23:41.314526+01:00","action":"move","task_id":493,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T04:23:49.8983282+01:00","action":"edit","task_id":578,"detail":"Recurring: Dependency update audit (every 3 days)"}
+{"timestamp":"2026-03-10T04:23:54.863599+01:00","action":"move","task_id":578,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T04:29:25.210527+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-10T04:30:04.0742406+01:00","action":"move","task_id":517,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-10T04:30:04.6580648+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-10T04:30:04.6611965+01:00","action":"block","task_id":517,"detail":"Code never committed + 9 test failures from old API. See Audit section."}
+{"timestamp":"2026-03-10T04:38:22.2516909+01:00","action":"edit","task_id":519,"detail":"Extract shared sandbox_path utility from duplicated _safe_path"}
+{"timestamp":"2026-03-10T04:38:28.3808601+01:00","action":"move","task_id":519,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T04:41:00.3676871+01:00","action":"move","task_id":718,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T16:27:24.2608686+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T16:27:29.4783519+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T16:27:37.6696792+01:00","action":"move","task_id":706,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T16:29:50.4888993+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
+{"timestamp":"2026-03-10T16:29:55.6570369+01:00","action":"move","task_id":699,"detail":"done -\u003e archived"}

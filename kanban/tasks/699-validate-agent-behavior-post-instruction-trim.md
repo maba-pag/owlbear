@@ -1,12 +1,12 @@
 ---
 id: 699
 title: Validate agent behavior post-instruction-trim
-status: done
+status: archived
 priority: needed
 created: 2026-03-08T17:11:56.4524353+01:00
-updated: 2026-03-10T04:00:19.5188262+01:00
+updated: 2026-03-10T16:29:55.6559147+01:00
 started: 2026-03-08T19:32:34.1250066+01:00
-completed: 2026-03-10T03:50:41.0279181+01:00
+completed: 2026-03-10T16:29:55.6559147+01:00
 tags:
     - scope:copilot
     - agent
@@ -437,3 +437,25 @@ Builder's round 3 change to researcher.agent.md is in the working tree but not y
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/699-* files found)
+
+[[2026-03-10]] Tue 16:29
+## Audit (round 3)
+### AC Verification
+
+| AC | Evidence | Status |
+|-----|----------|--------|
+| 1. Removals confirmed | Select-String 6 patterns: zero matches | PASS |
+| 2. File size | 163 lines (lte 170) | PASS |
+| 3. Lifecycle compressed | Lines 82-91 (10 lines, lte 12) | PASS |
+| 4. Research checklist | researcher.agent.md L70-L83: research_checklist XML with items 1-7 (confirmed via grep + read_file + git diff) | PASS |
+| 5. Skill references | 12 skill names in .agent.md files, all resolve to SKILL.md | PASS |
+| 6. No dangling refs (agents) | 6 patterns, zero matches | PASS |
+| 7. No dangling refs (instructions/skills) | 6 patterns, zero matches | PASS |
+
+### Test Results
+- pytest: 1333 passed, 4 failed, 9 errors, 2 skipped, 6 deselected
+- Failures/errors: all bootstrap integration (Copilot auth) -- pre-existing, unrelated
+- ruff: N/A (no Python code changes)
+
+### Confidence: .96
+### Action: archive
