@@ -6298,3 +6298,211 @@
 {"timestamp":"2026-03-10T16:27:37.6696792+01:00","action":"move","task_id":706,"detail":"review -\u003e docs"}
 {"timestamp":"2026-03-10T16:29:50.4888993+01:00","action":"edit","task_id":699,"detail":"Validate agent behavior post-instruction-trim"}
 {"timestamp":"2026-03-10T16:29:55.6570369+01:00","action":"move","task_id":699,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T16:32:49.6781075+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T16:33:07.0879665+01:00","action":"move","task_id":703,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T16:33:12.4470282+01:00","action":"edit","task_id":703,"detail":"Design context pre-hydration for agent dispatch"}
+{"timestamp":"2026-03-10T16:33:12.4506902+01:00","action":"block","task_id":703,"detail":"Review FAIL: (1) bootstrap construction logic missing (2) 1 test failure run_daemon mock setup"}
+{"timestamp":"2026-03-10T16:35:00.541303+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T16:35:27.4410702+01:00","action":"move","task_id":650,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-10T16:35:34.1016743+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T16:35:34.1059102+01:00","action":"block","task_id":650,"detail":"Regressions: create_copilot_client not mocked in test_bootstrap_integration.py and test_condenser.py  13 existing tests broken. Fix: add create_copilot_client mock to those files."}
+{"timestamp":"2026-03-10T16:49:10.7495359+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T16:49:15.2367062+01:00","action":"move","task_id":514,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T16:53:05.2824564+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T16:53:10.5353357+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T16:53:15.9006361+01:00","action":"move","task_id":663,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:02:33.3187217+01:00","action":"move","task_id":706,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T17:05:28.705095+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T17:05:40.4058447+01:00","action":"move","task_id":681,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-10T17:05:40.9799479+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T17:05:40.9830803+01:00","action":"block","task_id":681,"detail":"Design superseded: 3 research rounds + 3 arch reviews converge. Standalone evaluator unnecessary. Close as superseded."}
+{"timestamp":"2026-03-10T17:06:21.5058988+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T17:06:26.5008143+01:00","action":"move","task_id":514,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T17:09:04.8025213+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T17:09:11.2272865+01:00","action":"move","task_id":483,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T17:09:48.5173488+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:09:48.5221685+01:00","action":"claim","task_id":708,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:10:01.062282+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:10:17.9668975+01:00","action":"move","task_id":708,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:10:55.7804556+01:00","action":"create","task_id":719,"detail":"Design agent tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-10T17:11:01.9694642+01:00","action":"create","task_id":720,"detail":"Create eval dataset: orchestrator routing test cases"}
+{"timestamp":"2026-03-10T17:11:22.05722+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-10T17:11:44.1548832+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-10T17:11:49.4353451+01:00","action":"move","task_id":702,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:12:14.5702167+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T17:12:19.602517+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T17:13:04.8244997+01:00","action":"create","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-10T17:13:10.0639383+01:00","action":"create","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-10T17:13:15.2914924+01:00","action":"create","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-10T17:13:37.9646112+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:13:42.5678806+01:00","action":"move","task_id":700,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:26:26.7984424+01:00","action":"edit","task_id":706,"detail":"Create visual-output agent skill"}
+{"timestamp":"2026-03-10T17:26:32.0726112+01:00","action":"move","task_id":706,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T17:26:48.6103302+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:26:48.614472+01:00","action":"release","task_id":708,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:26:53.3164971+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:26:53.3195962+01:00","action":"claim","task_id":708,"detail":"builder"}
+{"timestamp":"2026-03-10T17:28:36.7981363+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:28:42.7060321+01:00","action":"move","task_id":708,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T17:29:21.4017333+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T17:29:23.9747308+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T17:29:29.1495168+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T17:29:35.0538919+01:00","action":"move","task_id":514,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T17:29:42.260935+01:00","action":"move","task_id":483,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T17:30:20.1889417+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-10T17:30:20.1933406+01:00","action":"claim","task_id":702,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:30:29.1649968+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:30:29.1695527+01:00","action":"claim","task_id":700,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:30:37.2867754+01:00","action":"move","task_id":702,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:30:41.017235+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:30:46.1663485+01:00","action":"move","task_id":700,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:32:58.7451136+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:33:20.4558102+01:00","action":"edit","task_id":520,"detail":"Extract _print_table helper in cli.py"}
+{"timestamp":"2026-03-10T17:33:21.0048619+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-10T17:33:21.5568366+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-10T17:33:40.9112386+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:33:45.7935412+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:33:51.4833912+01:00","action":"move","task_id":481,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:36:10.5013143+01:00","action":"move","task_id":595,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:37:46.2473145+01:00","action":"edit","task_id":597,"detail":"Research: raphaelmansuy/edgequake"}
+{"timestamp":"2026-03-10T17:37:56.0132151+01:00","action":"edit","task_id":597,"detail":"Research: raphaelmansuy/edgequake"}
+{"timestamp":"2026-03-10T17:38:16.2453007+01:00","action":"edit","task_id":598,"detail":"Research: MeisnerDan/mission-control"}
+{"timestamp":"2026-03-10T17:38:17.8465978+01:00","action":"edit","task_id":597,"detail":"Research: raphaelmansuy/edgequake"}
+{"timestamp":"2026-03-10T17:38:20.5586932+01:00","action":"move","task_id":598,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:38:22.5779547+01:00","action":"move","task_id":597,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T17:39:09.656787+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T17:49:16.5070055+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:49:21.4036916+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:49:29.5881145+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T17:49:31.1649866+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:49:31.1687573+01:00","action":"release","task_id":700,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:49:31.7185075+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:49:31.7237942+01:00","action":"claim","task_id":700,"detail":"builder"}
+{"timestamp":"2026-03-10T17:49:33.9870669+01:00","action":"move","task_id":481,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:49:45.5292789+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:49:51.5112114+01:00","action":"edit","task_id":700,"detail":"Research: GCP always-on-memory-agent architecture"}
+{"timestamp":"2026-03-10T17:49:56.2659634+01:00","action":"move","task_id":700,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T17:50:07.506258+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T17:50:11.9474821+01:00","action":"move","task_id":483,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T17:53:43.5144373+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:53:43.5196312+01:00","action":"release","task_id":708,"detail":"builder"}
+{"timestamp":"2026-03-10T17:53:44.094693+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T17:53:44.0985726+01:00","action":"claim","task_id":708,"detail":"reviewer"}
+{"timestamp":"2026-03-10T17:53:49.767264+01:00","action":"move","task_id":708,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T17:54:28.9800825+01:00","action":"edit","task_id":597,"detail":"Research: raphaelmansuy/edgequake"}
+{"timestamp":"2026-03-10T17:54:28.9835589+01:00","action":"claim","task_id":597,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:54:30.5145099+01:00","action":"edit","task_id":598,"detail":"Research: MeisnerDan/mission-control"}
+{"timestamp":"2026-03-10T17:54:30.5175855+01:00","action":"claim","task_id":598,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:54:38.2316677+01:00","action":"claim","task_id":595,"detail":"test-writer"}
+{"timestamp":"2026-03-10T17:54:38.2374866+01:00","action":"move","task_id":595,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:54:40.0397133+01:00","action":"edit","task_id":597,"detail":"Research: raphaelmansuy/edgequake"}
+{"timestamp":"2026-03-10T17:54:41.9939956+01:00","action":"edit","task_id":598,"detail":"Research: MeisnerDan/mission-control"}
+{"timestamp":"2026-03-10T17:54:45.5776527+01:00","action":"move","task_id":597,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:54:46.8500918+01:00","action":"move","task_id":598,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T17:54:57.9413698+01:00","action":"edit","task_id":595,"detail":"Research: pinchtab/pinchtab"}
+{"timestamp":"2026-03-10T17:56:34.2505584+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T17:56:58.5656388+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T17:57:02.7959089+01:00","action":"move","task_id":596,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T18:06:04.7860414+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T18:06:09.4041638+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T18:06:15.3778967+01:00","action":"move","task_id":514,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T18:06:48.8929961+01:00","action":"edit","task_id":681,"detail":"Evaluator agent: subagent result assessment + routing decisions"}
+{"timestamp":"2026-03-10T18:06:48.8967347+01:00","action":"claim","task_id":681,"detail":"researcher"}
+{"timestamp":"2026-03-10T18:08:51.9599481+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T18:08:57.3100054+01:00","action":"edit","task_id":483,"detail":"Define typed payloads for hook events"}
+{"timestamp":"2026-03-10T18:09:02.9624659+01:00","action":"move","task_id":483,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T18:09:41.3865322+01:00","action":"move","task_id":681,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-10T18:10:56.3284497+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T18:10:56.3326506+01:00","action":"claim","task_id":596,"detail":"test-writer"}
+{"timestamp":"2026-03-10T18:11:01.8037997+01:00","action":"move","task_id":596,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T18:11:08.1176891+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T18:11:19.0790766+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T18:11:30.5743257+01:00","action":"edit","task_id":595,"detail":"Research: pinchtab/pinchtab"}
+{"timestamp":"2026-03-10T18:11:30.5768873+01:00","action":"release","task_id":595,"detail":"test-writer"}
+{"timestamp":"2026-03-10T18:11:34.8260024+01:00","action":"edit","task_id":595,"detail":"Research: pinchtab/pinchtab"}
+{"timestamp":"2026-03-10T18:11:34.8292511+01:00","action":"claim","task_id":595,"detail":"builder"}
+{"timestamp":"2026-03-10T18:12:52.4468872+01:00","action":"move","task_id":700,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T18:19:01.4769944+01:00","action":"create","task_id":724,"detail":"Add IDPI content scanning to browser content extraction"}
+{"timestamp":"2026-03-10T18:19:09.4877266+01:00","action":"create","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T18:19:15.98157+01:00","action":"create","task_id":726,"detail":"Add accessibility-tree snapshot to BrowserManager"}
+{"timestamp":"2026-03-10T18:19:22.6980783+01:00","action":"create","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-10T18:20:11.5633936+01:00","action":"move","task_id":595,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T18:30:11.6053418+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T18:30:16.6140043+01:00","action":"move","task_id":481,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T18:31:38.81353+01:00","action":"move","task_id":701,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T18:31:51.6529411+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T18:31:57.7533886+01:00","action":"edit","task_id":701,"detail":"Research: Integrate always-on memory into OwlBear knowledge layer"}
+{"timestamp":"2026-03-10T18:36:11.0852691+01:00","action":"edit","task_id":715,"detail":"Tests: hook consumer typed payload annotations"}
+{"timestamp":"2026-03-10T18:36:21.6112753+01:00","action":"move","task_id":715,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-10T18:41:12.8503064+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T18:41:19.2744648+01:00","action":"move","task_id":663,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T18:50:31.733904+01:00","action":"claim","task_id":724,"detail":"researcher"}
+{"timestamp":"2026-03-10T18:50:31.7389435+01:00","action":"move","task_id":724,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T18:50:37.1089015+01:00","action":"edit","task_id":724,"detail":"Add IDPI content scanning to browser content extraction"}
+{"timestamp":"2026-03-10T18:50:37.1132832+01:00","action":"release","task_id":724,"detail":"researcher"}
+{"timestamp":"2026-03-10T18:50:37.6635166+01:00","action":"move","task_id":724,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-10T18:50:43.4952563+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T18:50:43.4984347+01:00","action":"claim","task_id":725,"detail":"researcher"}
+{"timestamp":"2026-03-10T18:50:48.5822288+01:00","action":"move","task_id":725,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T18:51:01.140709+01:00","action":"move","task_id":700,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T18:55:50.8538234+01:00","action":"edit","task_id":724,"detail":"Add IDPI content scanning to browser content extraction"}
+{"timestamp":"2026-03-10T18:55:50.8579982+01:00","action":"claim","task_id":724,"detail":"researcher"}
+{"timestamp":"2026-03-10T18:58:03.5743987+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T18:58:08.9791917+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T18:58:18.3031576+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T18:58:21.8842788+01:00","action":"move","task_id":514,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-10T18:58:22.4448526+01:00","action":"edit","task_id":514,"detail":"Close httpx.AsyncClient in Copilot provider"}
+{"timestamp":"2026-03-10T18:58:22.4484995+01:00","action":"block","task_id":514,"detail":"40 existing tests fail: test fixtures still patch owlbear.bootstrap.create_copilot_model which no longer exists. Update all patches to create_copilot_client."}
+{"timestamp":"2026-03-10T18:58:23.3124186+01:00","action":"move","task_id":725,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T19:00:37.2109771+01:00","action":"move","task_id":724,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-10T19:02:08.3427024+01:00","action":"edit","task_id":481,"detail":"Split bearclaw/cli.py into subcommand modules"}
+{"timestamp":"2026-03-10T19:02:08.3476122+01:00","action":"claim","task_id":481,"detail":"reviewer"}
+{"timestamp":"2026-03-10T19:02:12.7352733+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T19:02:16.9880611+01:00","action":"move","task_id":708,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-10T19:04:22.1088046+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-10T19:04:32.8454822+01:00","action":"move","task_id":517,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T19:04:33.4455006+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-10T19:05:34.1424406+01:00","action":"move","task_id":595,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T19:06:31.051263+01:00","action":"move","task_id":481,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T19:07:09.677752+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T19:07:09.6825347+01:00","action":"release","task_id":596,"detail":"test-writer"}
+{"timestamp":"2026-03-10T19:07:10.5370943+01:00","action":"edit","task_id":726,"detail":"Add accessibility-tree snapshot to BrowserManager"}
+{"timestamp":"2026-03-10T19:07:10.5402551+01:00","action":"claim","task_id":726,"detail":"researcher"}
+{"timestamp":"2026-03-10T19:07:14.6417695+01:00","action":"edit","task_id":596,"detail":"Research: ykdojo/claude-code-tips"}
+{"timestamp":"2026-03-10T19:07:14.6465826+01:00","action":"claim","task_id":596,"detail":"builder"}
+{"timestamp":"2026-03-10T19:07:15.6799573+01:00","action":"move","task_id":726,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-10T19:09:53.419421+01:00","action":"create","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-10T19:09:59.1198185+01:00","action":"create","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-10T19:10:23.1167941+01:00","action":"move","task_id":596,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-10T19:11:17.3784211+01:00","action":"edit","task_id":715,"detail":"Tests: hook consumer typed payload annotations"}
+{"timestamp":"2026-03-10T19:11:22.3033312+01:00","action":"move","task_id":715,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-10T19:12:24.1379832+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T19:12:30.5787709+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T19:12:43.1792607+01:00","action":"move","task_id":650,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-10T19:12:43.741608+01:00","action":"edit","task_id":650,"detail":"Tests for httpx.AsyncClient cleanup in Copilot provider"}
+{"timestamp":"2026-03-10T19:14:16.3447095+01:00","action":"move","task_id":726,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-10T19:14:32.4674898+01:00","action":"edit","task_id":726,"detail":"Add accessibility-tree snapshot to BrowserManager"}
+{"timestamp":"2026-03-10T19:14:32.4723047+01:00","action":"release","task_id":726,"detail":"researcher"}
+{"timestamp":"2026-03-10T19:15:18.3678395+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-10T19:15:18.3716535+01:00","action":"claim","task_id":727,"detail":"researcher"}
+{"timestamp":"2026-03-10T19:20:48.8146026+01:00","action":"edit","task_id":663,"detail":"Improve test coverage: daemon.py (95%) + graph.py (95%)"}
+{"timestamp":"2026-03-10T19:20:53.9584306+01:00","action":"move","task_id":663,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-10T19:23:33.868809+01:00","action":"move","task_id":727,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-10T19:23:43.3537284+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-10T19:23:43.3573843+01:00","action":"release","task_id":727,"detail":"researcher"}
+{"timestamp":"2026-03-10T19:36:26.3785059+01:00","action":"create","task_id":730,"detail":"Tests: untrusted content wrapping utility"}
+{"timestamp":"2026-03-10T19:36:36.929373+01:00","action":"edit","task_id":708,"detail":"Add HTML diagram templates to visual-output skill"}
+{"timestamp":"2026-03-10T19:36:41.5480377+01:00","action":"move","task_id":708,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-10T19:36:54.0990953+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T19:36:54.1040384+01:00","action":"release","task_id":725,"detail":"researcher"}
+{"timestamp":"2026-03-10T19:37:03.6528986+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T19:37:03.6565963+01:00","action":"claim","task_id":725,"detail":"architect"}
+{"timestamp":"2026-03-10T19:37:24.1226622+01:00","action":"create","task_id":731,"detail":"Tests: ContentInjectionGuard (RED phase for #724)"}
+{"timestamp":"2026-03-10T19:37:31.2673065+01:00","action":"edit","task_id":731,"detail":"Tests: ContentInjectionGuard (RED phase for #724)"}
+{"timestamp":"2026-03-10T19:37:32.5295504+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T19:37:56.6809864+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T19:38:02.07898+01:00","action":"edit","task_id":724,"detail":"Add IDPI content scanning to browser content extraction"}
+{"timestamp":"2026-03-10T19:38:19.1706699+01:00","action":"edit","task_id":725,"detail":"Add untrusted content wrapping for web-extracted text"}
+{"timestamp":"2026-03-10T19:38:19.1749015+01:00","action":"release","task_id":725,"detail":"architect"}
+{"timestamp":"2026-03-10T19:38:25.864611+01:00","action":"edit","task_id":724,"detail":"Add IDPI content scanning to browser content extraction"}
+{"timestamp":"2026-03-10T19:38:45.2251963+01:00","action":"move","task_id":700,"detail":"done -\u003e archived"}
