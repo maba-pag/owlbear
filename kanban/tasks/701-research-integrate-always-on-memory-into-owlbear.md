@@ -1,11 +1,12 @@
 ---
 id: 701
 title: 'Research: Integrate always-on memory into OwlBear knowledge layer'
-status: todo
+status: archived
 priority: important
 created: 2026-03-08T18:40:17.618175+01:00
-updated: 2026-03-10T18:31:57.7519895+01:00
+updated: 2026-03-10T22:36:05.1710136+01:00
 started: 2026-03-09T23:04:21.6699698+01:00
+completed: 2026-03-10T22:36:05.1710136+01:00
 tags:
     - research
     - phase-research
@@ -15,6 +16,8 @@ tags:
     - rag
 depends_on:
     - 700
+claimed_by: auditor
+claimed_at: 2026-03-10T22:35:51.2843986+01:00
 class: standard
 ---
 
@@ -198,3 +201,37 @@ All 7 ACs now satisfied. Research quality confirmed solid in prior reviews (8 so
 ### Dependencies
 - #700 (GCP always-on-memory-agent research): docs status, not blocking
 - Follow-up tasks #721, #722, #723 in backlog awaiting their own arch review
+
+[[2026-03-10]] Tue 19:55
+## Test-Writer Notes
+Non-implementation task (tagged research) -- no tests applicable. Passing through to builder.
+
+[[2026-03-10]] Tue 20:42
+## Builder Notes
+- Non-implementation research task, no code changes
+- Verified: research doc exists, follow-up tasks #721 #722 #723 on board
+- All 7 ACs PASS per 3rd architecture review
+
+[[2026-03-10]] Tue 22:35
+## Audit
+
+[[2026-03-10]] Tue 22:35
+### AC Verification
+| AC | Evidence | Status |
+|---|---|---|
+| 1. Component mapping | doc sec.3: 11-row table, GCP->OwlBear | PASS |
+| 2. Gap analysis | doc sec.4: 5 covered + 4 gaps (G1-G4) | PASS |
+| 3. Design sketch | doc sec.5a-5c: module layout, ConsolidationService, schema v8 | PASS |
+| 4. RAG impact | doc sec.5d: 4-row impact table with risk levels | PASS |
+| 5. Decision | doc sec.6: hybrid at .80, 3-option comparison | PASS |
+| 6. Research doc | docs/research/always-on-memory-integration-research.md exists | PASS |
+| 7. Follow-up tasks | #721 #722 #723 in backlog (committed 95ee70e) | PASS |
+
+### Test Results
+- pytest: 820 passed, 63 pre-existing failures (bootstrap/browser modules)
+- ruff: 2 pre-existing I001 in test_bootstrap_structure.py
+
+### Confidence: .97
+### Action: archive
+
+-t
