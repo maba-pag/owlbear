@@ -21,6 +21,35 @@ External repos and resources studied during OwlBear development.
 | excalidraw/excalidraw-mcp | <https://github.com/excalidraw/excalidraw-mcp> | MIT | MCP Apps extension, cheat-sheet tool pattern | `docs/research/excalidraw-mcp-research.md` | 2026-03-07 |
 | yctimlin/mcp_excalidraw | <https://github.com/yctimlin/mcp_excalidraw> | MIT | 26-tool programmatic canvas, element CRUD, WebSocket sync | `docs/research/visuals-diagrams-mcp-research.md` | 2026-03-07 |
 
+## Visual Output Skill (Task #706)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| nicobailon/visual-explainer v0.6.3 | <https://github.com/nicobailon/visual-explainer> | MIT | Workflow phases (think/structure/style/deliver), Mermaid routing table, aesthetic constraints, anti-slop guards | `.github/skills/visual-output/SKILL.md` | 2026-03-10 |
+| Anthropic Agent Skills spec | <https://agentskills.io> | Apache-2.0 | SKILL.md format standard (YAML frontmatter + markdown instructions) | `.github/skills/visual-output/SKILL.md` | 2026-03-10 |
+
+## HTML Diagram Templates (Task #708)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| nicobailon/visual-explainer templates/ | <https://github.com/nicobailon/visual-explainer/tree/main/plugins/visual-explainer/templates> | MIT | 3 reference HTML templates: architecture (CSS Grid cards, depth tiers), data-table (HTML table, KPI cards, status badges), mermaid-flowchart (Mermaid CDN, zoom/pan JS) | `.github/skills/visual-output/templates/` | 2026-03-10 |
+| nicobailon/visual-explainer css-patterns.md | <https://github.com/nicobailon/visual-explainer/blob/main/plugins/visual-explainer/references/css-patterns.md> | MIT | CSS reference patterns: theme setup, card components, depth tiers, grid layouts, Mermaid containers, animations, overflow protection | `docs/research/html-diagram-templates-research.md` | 2026-03-10 |
+
+## Project-Recap Visual Command (Task #709)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| nicobailon/visual-explainer — project-recap.md | <https://github.com/nicobailon/visual-explainer/blob/main/plugins/visual-explainer/commands/project-recap.md> | MIT | 8-section project recap HTML structure, data gathering pattern | `.github/prompts/project-recap.prompt.md` | 2026-03-10 |
+| Aider-AI/aider — RepoMap | <https://github.com/Aider-AI/aider/blob/main/aider/repomap.py> | Apache-2.0 | Repo overview concept validation (tree-sitter + PageRank codebase map) | `docs/research/project-recap-command-research.md` | 2026-03-10 |
+| VS Code prompt files docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | .prompt.md format specification (frontmatter, variables, tool lists) | `.github/prompts/project-recap.prompt.md` | 2026-03-10 |
+
+## Session Hook Emission (Task #711)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| OpenAI Agents SDK — Lifecycle | <https://openai.github.io/openai-agents-python/ref/lifecycle/> | MIT | `on_agent_start`/`on_agent_end` hooks pattern, payload design | `docs/research/session-hook-emission-research.md` | 2026-03-09 |
+| PydanticAI — Agents docs | <https://ai.pydantic.dev/agents/> | MIT | Agent run lifecycle, event streaming (no built-in session hooks) | `docs/research/session-hook-emission-research.md` | 2026-03-09 |
+
 ## Consolidate trafilatura Extras (Task #569)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -928,6 +957,19 @@ External repos and resources studied during OwlBear development.
 | Python NotRequired (PEP 655) | <https://docs.python.org/3/library/typing.html#typing.NotRequired> | PSF | NotRequired qualifier for optional TypedDict fields, stdlib since 3.11 | `docs/research/typed-hook-payloads-research.md` | 2026-03-08 |
 | CrewAI Flows | <https://docs.crewai.com/concepts/flows> | N/A (docs) | Event-driven @startâ†’@listen pipeline; Flow class is a code state machine, not an LLM | `docs/research/orchestrator-rewrite-sequencer-research.md`, `.github/agents/orchestrator.agent.md` (step-based state machine) | 2026-03-08 |
 | AutoGen SelectorGroupChat | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/selector-group-chat.html> | MIT | PlanningAgent produces agent:task assignments; team infrastructure dispatches mechanically | `docs/research/orchestrator-rewrite-sequencer-research.md`, `.github/agents/orchestrator.agent.md` (planner dispatch pattern) | 2026-03-08 |
+
+## Evaluator Agent Final Disposition (Task #681)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| OpenAI Agents SDK v0.11.1 — Orchestration | <https://openai.github.io/openai-agents-python/multi_agent/> | MIT | Eval pattern is code-level while-loop, not separate agent; agents-as-tools + handoffs | `docs/research/evaluator-agent-final-disposition.md` | 2026-03-09 |
+| Reflexion (Shinn et al., 2023) | <https://arxiv.org/abs/2303.11366> | CC-BY-4.0 | Guided retry via verbal self-reflection — evaluator's unique value prop | `docs/research/evaluator-agent-final-disposition.md` | 2026-03-09 |
+
+## Evaluator Agent Revisited Research (Task #681)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| OpenAI Agents SDK | <https://github.com/openai/openai-agents-python> | MIT | No evaluator agent; uses Guardrails + Handoffs; evaluation implicit in framework Runner | `docs/research/evaluator-agent-revisited.md` | 2026-03-09 |
 | Anthropic Bash Tool â€” Security section | <https://platform.claude.com/docs/en/docs/agents-and-tools/tool-use/bash-tool> | N/A (docs) | Recommended Docker/VM isolation, command filtering/allowlists, resource limits (ulimit), logging all commands; example blocklist pattern in docs | `docs/research/shell-injection-mitigation-research.md` | 2026-03-06 |
 | Anthropic Computer Use â€” Security considerations | <https://platform.claude.com/docs/en/docs/agents-and-tools/computer-use> | N/A (docs) | VM/container with minimal privileges, domain allowlisting, human confirmation for real-world consequences, prompt injection classifier defense layer | `docs/research/shell-injection-mitigation-research.md` | 2026-03-06 |
 | Typer docs: One File Per Command | <https://typer.tiangolo.com/tutorial/one-file-per-command/> | MIT | Multi-file CLI structure with package layout; callback behavior with sub-apps | `docs/research/cli-split-research.md` | 2026-03-06 |
@@ -945,6 +987,13 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | ykdojo/claude-code-tips | <https://github.com/ykdojo/claude-code-tips> | All Rights Reserved | 45 workflow tips, 6 skills (handoff, clone, half-clone, review-claudemd, gha, reddit-fetch), GLOBAL-CLAUDE.md patterns, command decomposition for approval gates, context token management strategies, structured handoff documents, instruction review from session history, agentic coding spectrum (4 levels) | `docs/research/claude-code-tips-research.md` | 2026-03-06 |
+
+## Global vs Scoped Instructions Audit (Task #705)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Stripe Minions Part 2 — Rule files | <https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents-part-2> | N/A (blog) | Directory-scoped rule strategy, avoid global rules for context window savings | `docs/research/global-vs-scoped-instructions-audit.md` | 2026-03-10 |
+| VS Code — Custom instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | `applyTo` glob behavior, always-on vs file-based instruction loading, scoping best practices | `docs/research/global-vs-scoped-instructions-audit.md` | 2026-03-10 |
 
 ## Screenshot Visual Feedback Research (Task #302)
 
@@ -1236,3 +1285,35 @@ External repos and resources studied during OwlBear development.
 | Stripe Minions Part 1 | <https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents> | N/A (blog) | Unattended one-shot agent UX, Slack/CLI entry points, shift-left feedback, max 2 CI rounds | `docs/research/stripe-minions-research.md` | 2026-03-08 |
 | Stripe Minions Part 2 | <https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents-part-2> | N/A (blog) | Blueprints (hybrid workflow+agent), devboxes, Toolshed MCP registry, scoped rule files, context pre-hydration | `docs/research/stripe-minions-research.md` | 2026-03-08 |
 | Anthropic â€” Building Effective Agents | <https://www.anthropic.com/engineering/building-effective-agents> | N/A (blog) | Workflows vs agents taxonomy, orchestrator-workers pattern, tool prompt engineering | `docs/research/stripe-minions-research.md` | 2026-03-08 |
+
+## GCP Always-On Memory Agent (Task #700)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GCP always-on-memory-agent | <https://github.com/GoogleCloudPlatform/generative-ai/tree/main/gemini/agents/always-on-memory-agent> | MIT | Always-on memory pattern, consolidation loop, importance scoring, ADK agent orchestration | `docs/research/gcp-always-on-memory-agent.md` | 2026-03-09 |
+| Mem0 (mem0ai/mem0) | <https://github.com/mem0ai/mem0> | Apache-2.0 | Persistent agent memory layer, LLM-extracted facts, multi-level memory (user/session/agent) | `docs/research/gcp-always-on-memory-agent.md` | 2026-03-09 |
+
+## Always-On Memory Integration (Task #701)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GCP always-on-memory-agent research (#700) | `docs/research/gcp-always-on-memory-agent.md` | N/A (internal) | Consolidation pattern, importance scoring, component mapping | `docs/research/always-on-memory-integration-research.md` | 2026-03-09 |
+| Mem0 architecture | <https://github.com/mem0ai/mem0> | Apache-2.0 | Multi-level memory, LLM-extracted structured facts, hybrid search | `docs/research/always-on-memory-integration-research.md` | 2026-03-09 |
+| OwlBear context-aware injection research | `docs/research/context-aware-knowledge-injection-research.md` | N/A (internal) | Hybrid auto-inject + tool-based RAG pattern | `docs/research/always-on-memory-integration-research.md` | 2026-03-09 |
+| OwlBear MemoryConsolidator research (#485) | `docs/research/memory-consolidator-research.md` | N/A (internal) | Session consolidation YAGNI precedent | `docs/research/always-on-memory-integration-research.md` | 2026-03-09 |
+| Generative Agents (Park et al.) | <https://arxiv.org/abs/2304.03442> | N/A (paper) | Recency × relevance × importance retrieval scoring | `docs/research/always-on-memory-integration-research.md` | 2026-03-09 |
+
+## GCP generative-ai Repo Audit (Task #702)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GCP agents/genai-experience-concierge | <https://github.com/GoogleCloudPlatform/generative-ai/tree/main/gemini/agents/genai-experience-concierge> | Apache-2.0 | Guardrail classifier, semantic router, task planner design patterns (LangGraph) | `docs/research/gcp-generative-ai-audit-research.md` | 2026-03-09 |
+| GCP evaluation/evaluating_adk_agent | <https://github.com/GoogleCloudPlatform/generative-ai/tree/main/gemini/evaluation> | Apache-2.0 | ADK agent evaluation, trajectory_single_tool_use metric, behavioral eval dataset design | `docs/research/gcp-generative-ai-audit-research.md` | 2026-03-09 |
+| GCP use-cases/graphrag | <https://github.com/GoogleCloudPlatform/generative-ai/tree/main/gemini/use-cases/graphrag> | Apache-2.0 | Agentic GraphRAG with Neo4j + ADK, multi-hop graph traversal | `docs/research/gcp-generative-ai-audit-research.md` | 2026-03-09 |
+
+## Cheat-Sheet Tool Pattern Research (Task #718)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| yctimlin/mcp_excalidraw | <https://github.com/yctimlin/mcp_excalidraw> | MIT | Evolved `read_diagram_guide` tool pattern (26 tools), skill with cheatsheet.md, design quality guidance for AI-generated diagrams | `docs/research/cheat-sheet-tool-pattern-research.md` | 2026-07-27 |
+| PMCP (ViperJuice/pmcp) | <https://github.com/ViperJuice/pmcp> | MIT | L0-L3 progressive disclosure layers, 80% token reduction, 14 meta-tools instead of 50+, meta-gateway pattern | `docs/research/cheat-sheet-tool-pattern-research.md` | 2026-07-27 |
