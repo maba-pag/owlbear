@@ -1124,7 +1124,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| raphaelmansuy/edgequake | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Rust LightRAG implementation: tuple-based entity extraction, cooperative pipeline cancellation (CancellationToken), resilient partial-failure processing, per-operation LLM cost tracking (ModelPricing/OperationCost), entity normalization (UPPERCASE_UNDERSCORE, 36-40% dedup), gleaning multi-pass extraction (+18-25% recall), document lineage, 6 query modes, MCP agent integration server | `docs/research/edgequake-research.md` | 2026-03-06 |
+| raphaelmansuy/edgequake | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Rust LightRAG implementation: tuple-based entity extraction, cooperative pipeline cancellation (CancellationToken), resilient partial-failure processing, per-operation LLM cost tracking (ModelPricing/OperationCost), entity normalization (UPPERCASE_UNDERSCORE, 36-40% dedup), gleaning multi-pass extraction (+18-25% recall), document lineage, 6 query modes, MCP agent integration server, MCP tool-registration pattern, MCP prompt templates, models.toml config, auto-discovery client bootstrap, orphaned task recovery on startup, smart mock provider convention, doc-traceability validator | `docs/research/edgequake-research.md` | 2026-03-06 |
 | LightRAG paper (Guo et al. 2024) | <https://arxiv.org/abs/2410.05779> | N/A | Original LightRAG algorithm: entity extraction â†’ knowledge graph â†’ dual-level retrieval (local entity + global community). EdgeQuake implements this in Rust. | `docs/research/edgequake-research.md` (algorithm reference) | 2026-03-06 |
 
 ## PinchTab Browser Control Research (Task #595)
@@ -1353,9 +1353,3 @@ External repos and resources studied during OwlBear development.
 | Playwright ARIA Snapshots docs | <https://playwright.dev/python/docs/aria-snapshots> | Apache-2.0 | Modern `locator.aria_snapshot()` API (YAML output), replacement for deprecated `page.accessibility.snapshot()` | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
 | CDP Accessibility domain spec | <https://chromedevtools.github.io/devtools-protocol/tot/Accessibility/> | BSD-3 | `getFullAXTree` method, `AXNode` type (backendDOMNodeId, role, name, properties), filter properties | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
 | browser-use `DomService` | <https://github.com/browser-use/browser-use> (`browser_use/dom/service.py`) | MIT | CDP-based AX tree extraction pattern, `_get_ax_tree_for_all_frames()`, `EnhancedAXNode` model, backendDOMNodeId lookup | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
-
-## EdgeQuake Graph-RAG Framework (Task #597)
-
-| Source | URL | License | What we studied | Where Used | Date |
-|--------|-----|---------|-----------------|------------|------|
-| raphaelmansuy/edgequake | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Graph-RAG architecture (LightRAG), MCP server tool-registration pattern, MCP prompt templates, models.toml config, auto-discovery client bootstrap, orphaned task recovery on startup, smart mock provider convention, doc-traceability validator | `docs/research/edgequake-research.md` | 2026-03-10 |
