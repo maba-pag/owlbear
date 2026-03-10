@@ -92,17 +92,17 @@ Analyze [ykdojo/claude-code-tips](https://github.com/ykdojo/claude-code-tips) (4
 
 ## 4. Recommendation
 
-**Primary (.75 confidence):** Add a structured handoff template to the kanban-based-development skill. When agents transition a task between statuses, require a structured note: `## Handoff: {what-worked} | {what-failed} | {next-steps}`. This costs ~5 lines of skill instruction and improves inter-agent continuity.
+**Primary (.75 confidence):** Add a structured handoff template to `agent-common.instructions.md` section "Task coordination > Handoff / blocked". When agents transition a task between statuses, require a structured note: `## Handoff: {what-worked} | {what-failed} | {next-steps}`. This costs ~5 lines of instruction and improves inter-agent continuity.
 
-**Secondary (.70 confidence):** Add a command decomposition guideline to terminal.instructions.md: "Break complex chained commands into separate simple commands for independent approval and auditability." This aligns with OwlBear's approval gate architecture.
+**Secondary (.70 confidence):** Add a command decomposition guideline to `agent-common.instructions.md` section "Terminal discipline": "Break complex chained commands into separate simple commands for independent approval and auditability." This aligns with OwlBear's approval gate architecture.
 
 **Deferred:** The review-claudemd pattern (session history analysis → instruction improvement) validates #146's design. Reference this repo's approach when that task reaches development.
 
 ## 5. Follow-up Tasks
 
 ```
-kanban\kanban-md.exe create "Add structured handoff template to kanban-based-development skill" --priority important --tags "scope:copilot,agent,phase-research" --body "Add a handoff section template to the kanban-based-development skill that agents must fill when transitioning tasks between statuses. Template: what-worked / what-failed / next-steps. See docs/claude-code-tips-research.md §3a for context. AC: (1) kanban-based-development SKILL.md has a handoff template section; (2) template is referenced in the 'Advance through pipeline' step."
+kanban\kanban-md.exe create "Add structured handoff template to agent-common.instructions.md" --priority nice-to-have --tags "scope:copilot,agent,phase-research" --body "Add a what-failed tracking field to the handoff template in agent-common.instructions.md section 'Task coordination > Handoff / blocked'. Current template has 'Current state / Open questions / Next step'; add 'what-failed' tracking. See docs/research/claude-code-tips-research.md §3a for context. AC: (1) agent-common.instructions.md handoff template includes a what-failed field; (2) field is documented in the Handoff / blocked section."
 
-kanban\kanban-md.exe create "Add command decomposition guideline to terminal instructions" --priority nice-to-have --tags "scope:copilot,docs,phase-research" --body "Add a guideline to terminal.instructions.md: break complex chained commands into separate simple steps for independent approval and auditability. See docs/claude-code-tips-research.md §3f. AC: (1) terminal.instructions.md has a 'Command decomposition' section; (2) guideline explains the approval-gate rationale."
+kanban\kanban-md.exe create "Add command decomposition guideline to Terminal discipline" --priority nice-to-have --tags "scope:copilot,docs,phase-research" --body "Add a command decomposition guideline to agent-common.instructions.md section 'Terminal discipline': break complex chained commands into separate simple steps for independent approval and auditability. See docs/research/claude-code-tips-research.md §3f. AC: (1) agent-common.instructions.md Terminal discipline section has a command decomposition bullet; (2) guideline explains the approval-gate rationale."
 ```
 
