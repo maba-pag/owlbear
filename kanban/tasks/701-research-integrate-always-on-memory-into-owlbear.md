@@ -1,10 +1,10 @@
 ---
 id: 701
 title: 'Research: Integrate always-on memory into OwlBear knowledge layer'
-status: backlog
+status: todo
 priority: important
 created: 2026-03-08T18:40:17.618175+01:00
-updated: 2026-03-10T02:44:00.0755788+01:00
+updated: 2026-03-10T18:31:57.7519895+01:00
 started: 2026-03-09T23:04:21.6699698+01:00
 tags:
     - research
@@ -84,3 +84,117 @@ AC 7: FAIL -- follow-up tasks NOT created (commands listed in body but never exe
 Research architecture is sound: Entity model lacks importance (G3 confirmed), schema v7 has no consolidated flag (G4 confirmed), GraphEnricher is correct pattern for ConsolidationService, YAGNI guard with feature flag is appropriate.
 
 Action needed: execute the 3 kanban-md create commands from research doc section 8.
+
+[[2026-03-10]] Tue 17:12
+## Architecture Review (2nd cycle)
+**Verdict:** REFINE
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Component mapping: GCP -> OwlBear | PASS -- 11-row table in Â§3, codebase-verified (Entity lacks importance, schema v7 lacks consolidated) | None |
+| 2. Gap analysis | PASS -- 4 gaps in Â§4 with value/effort estimates, all codebase-confirmed | None |
+| 3. Integration design sketch | PASS -- Â§5 module layout, ConsolidationService follows GraphEnricher pattern (enrichment.py:26) | None |
+| 4. Impact assessment on RAG pipeline | PASS -- Â§5d, 4-row impact table with risk levels | None |
+| 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- Â§6, hybrid recommended at .80 confidence with sound YAGNI guard | None |
+| 6. Research doc at docs/always-on-memory-integration-research.md | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 7. Follow-up kanban tasks for implementation | **FAIL (2nd cycle)** -- 3 kanban-md create commands in Â§8 still not executed. Zero tasks with tags schema/consolidation on the board. | Researcher MUST execute the 3 commands from Â§8 |
+
+### Architecture Notes
+Research quality is strong and architecturally sound. All codebase claims verified:
+- Entity model (models.py:77) correctly identified as lacking importance
+- Schema at v7 (schema.py:21) correctly identified as lacking consolidated flag
+- GraphEnricher (enrichment.py:26) is the right pattern model for ConsolidationService
+- Hybrid approach (.80) is the correct call -- preserves existing RAG, adds consolidation as enrichment
+- YAGNI guard (feature-flag ConsolidationService, nice-to-have priority) is appropriate given #485 history
+
+The only remaining blocker is executing the follow-up task creation commands. This is the second cycle with the same finding.
+
+### Changes Made
+- No kanban edits -- same refinement as prior review cycle.
+
+### Dependencies
+- #700 (GCP always-on-memory-agent research): backlog, no blocking dependency
+- Follow-up tasks (once created): Schema v8 is a prereq for importance scoring and ConsolidationService
+
+[[2026-03-10]] Tue 17:12
+## Architecture Review (2nd cycle)
+**Verdict:** REFINE
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Component mapping: GCP -> OwlBear | PASS -- 11-row table in Â§3, codebase-verified (Entity lacks importance, schema v7 lacks consolidated) | None |
+| 2. Gap analysis | PASS -- 4 gaps in Â§4 with value/effort estimates, all codebase-confirmed | None |
+| 3. Integration design sketch | PASS -- Â§5 module layout, ConsolidationService follows GraphEnricher pattern (enrichment.py:26) | None |
+| 4. Impact assessment on RAG pipeline | PASS -- Â§5d, 4-row impact table with risk levels | None |
+| 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- Â§6, hybrid recommended at .80 confidence with sound YAGNI guard | None |
+| 6. Research doc at docs/always-on-memory-integration-research.md | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 7. Follow-up kanban tasks for implementation | **FAIL (2nd cycle)** -- 3 kanban-md create commands in Â§8 still not executed. Zero tasks with tags schema/consolidation on the board. | Researcher MUST execute the 3 commands from Â§8 |
+
+### Architecture Notes
+Research quality is strong and architecturally sound. All codebase claims verified:
+- Entity model (models.py:77) correctly identified as lacking importance
+- Schema at v7 (schema.py:21) correctly identified as lacking consolidated flag
+- GraphEnricher (enrichment.py:26) is the right pattern model for ConsolidationService
+- Hybrid approach (.80) is the correct call -- preserves existing RAG, adds consolidation as enrichment
+- YAGNI guard (feature-flag ConsolidationService, nice-to-have priority) is appropriate given #485 history
+
+The only remaining blocker is executing the follow-up task creation commands. This is the second cycle with the same finding.
+
+### Changes Made
+- No kanban edits -- same refinement as prior review cycle.
+
+### Dependencies
+- #700 (GCP always-on-memory-agent research): backlog, no blocking dependency
+- Follow-up tasks (once created): Schema v8 is a prereq for importance scoring and ConsolidationService
+
+[[2026-03-10]] Tue 18:31
+## Architecture Review (3rd cycle)
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Component mapping: GCP -> OwlBear | PASS -- 11-row table in sec.3, codebase-verified | None |
+| 2. Gap analysis | PASS -- 4 gaps in sec.4 with value/effort estimates | None |
+| 3. Integration design sketch | PASS -- sec.5 module layout, follows GraphEnricher pattern | None |
+| 4. Impact assessment on RAG pipeline | PASS -- sec.5d, 4-row impact table | None |
+| 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- sec.6, hybrid at .80 confidence | None |
+| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 7. Follow-up kanban tasks | PASS -- #721 (Schema v8), #722 (importance scoring), #723 (ConsolidationService) now exist on board | None |
+
+### Architecture Notes
+All 7 ACs now satisfied. Research quality confirmed solid in prior reviews (8 sources, codebase claims verified). Follow-up tasks created since 2nd cycle resolved the only remaining blocker.
+
+### Changes Made
+- Moved #701 backlog -> todo
+
+### Dependencies
+- #700 (GCP always-on-memory-agent research): docs status, not blocking
+- Follow-up tasks #721, #722, #723 in backlog awaiting their own arch review
+
+[[2026-03-10]] Tue 18:31
+## Architecture Review (3rd cycle)
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Component mapping: GCP -> OwlBear | PASS -- 11-row table in sec.3, codebase-verified | None |
+| 2. Gap analysis | PASS -- 4 gaps in sec.4 with value/effort estimates | None |
+| 3. Integration design sketch | PASS -- sec.5 module layout, follows GraphEnricher pattern | None |
+| 4. Impact assessment on RAG pipeline | PASS -- sec.5d, 4-row impact table | None |
+| 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- sec.6, hybrid at .80 confidence | None |
+| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 7. Follow-up kanban tasks | PASS -- #721 (Schema v8), #722 (importance scoring), #723 (ConsolidationService) now exist on board | None |
+
+### Architecture Notes
+All 7 ACs now satisfied. Research quality confirmed solid in prior reviews (8 sources, codebase claims verified). Follow-up tasks created since 2nd cycle resolved the only remaining blocker.
+
+### Changes Made
+- Moved #701 backlog -> todo
+
+### Dependencies
+- #700 (GCP always-on-memory-agent research): docs status, not blocking
+- Follow-up tasks #721, #722, #723 in backlog awaiting their own arch review
