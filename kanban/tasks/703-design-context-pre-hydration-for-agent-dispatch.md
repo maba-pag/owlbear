@@ -1,16 +1,18 @@
 ---
 id: 703
 title: Design context pre-hydration for agent dispatch
-status: todo
+status: review
 priority: important
 created: 2026-03-09T05:12:16.9107366+01:00
-updated: 2026-03-09T16:33:54.7883085+01:00
+updated: 2026-03-10T04:11:39.2644665+01:00
 tags:
     - phase-research
     - scope:core
     - agent
 depends_on:
     - 712
+claimed_by: builder
+claimed_at: 2026-03-10T04:11:39.2644665+01:00
 class: standard
 ---
 
@@ -131,3 +133,38 @@ bootstrap.py is the only module that wires the hydrator (assembly layer).
 - Verified: trafilatura in optional deps (owlbear[crawl])
 - Verified: httpx in deps
 - Verified: sandbox_path in paths.py (leaf module)
+
+[[2026-03-10]] Tue 03:23
+## Test-Writer Notes
+- Test file: tests/test_hydration_integration.py
+- Classes: TestFromACPrehydrationConfig, TestFromACPollTickHydratorParam, TestFromACHydratorNewTaskDispatch, TestFromACHydratorRetryDispatch, TestFromACPollLoopHydrator, TestFromACRunDaemonHydrator, TestFromACBootstrapHydrator, TestFromACHydratorErrorResilience
+- Tests per category: happy 8, edge 2, error 4, boundary 6
+- Total: 20 tests, all FAIL (AttributeError/TypeError)
+- ruff: clean
+- AC coverage:
+| AC Line | Test(s) | Category |
+|---------|---------|----------|
+| prehydration_enabled config field | test_default_is_false, test_env_override_true, test_env_override_false_explicit, test_field_is_bool_type | happy, edge |
+| poll_tick hydrator param | test_poll_tick_accepts_hydrator_none, test_poll_tick_accepts_hydrator_callable | happy |
+| Hydrator in new-task dispatch (step 7) | test_hydrator_called_on_new_task, test_hydration_content_appended_to_prompt, test_hydrator_not_called_when_none, test_empty_hydration_result_no_append | happy, edge, boundary |
+| Hydrator in retry dispatch (step 3) | test_hydrator_called_on_retry_dispatch, test_retry_hydrator_receives_task_body, test_retry_no_hydrator_still_works | happy, boundary |
+| poll_loop forwards hydrator | test_poll_loop_accepts_hydrator_param, test_poll_loop_passes_hydrator_to_poll_tick | happy |
+| run_daemon forwards hydrator | test_run_daemon_passes_hydrator_to_poll_loop | happy |
+| BootstrapResult exposes hydrator | test_bootstrap_returns_none_hydrator_when_disabled, test_bootstrap_constructs_hydrator_when_enabled | happy, boundary |
+| Hydrator error resilience | test_hydrator_exception_does_not_block_dispatch, test_hydrator_error_on_retry_does_not_block | error |
+- Note: Module-level tests (extract_urls, extract_file_paths, fetch_url, etc.) live in tests/test_context_hydration.py from #712
+
+[[2026-03-10]] Tue 04:11
+## Builder Notes
+- Files changed: src/owlbear/config.py, src/owlbear/daemon.py, src/owlbear/bootstrap/_types.py, .github/agents/builder.agent.md
+- Tests: 19/20 passed (1 test-writer mock gap), ruff clean
+- Regression: 128 existing daemon tests pass, 45 context_hydration tests pass
+
+### Changes
+1. config.py: Added prehydration_enabled: bool = Field(default=False)
+2. daemon.py: Added hydrator param to poll_tick, poll_loop, run_daemon; _apply_hydration helper; hydration in retry+new-task paths; errors caught
+3. bootstrap/_types.py: Added hydrator field to BootstrapResult
+4. builder.agent.md: Doc note about pre-hydration
+
+### 1 TestFromAC gap: test_run_daemon_passes_hydrator_to_poll_loop
+MagicMock(spec=OwlBearSettings) misses lint_gate_enabled. Existing run_daemon tests set it explicitly. Test setup gap, not interface mismatch.

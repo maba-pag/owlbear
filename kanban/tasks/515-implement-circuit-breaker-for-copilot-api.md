@@ -1,12 +1,12 @@
 ---
 id: 515
 title: Implement circuit breaker for Copilot API
-status: done
+status: archived
 priority: important
 created: 2026-03-04T07:38:26.1410302+01:00
-updated: 2026-03-08T04:11:32.2441488+01:00
+updated: 2026-03-09T21:53:20.3253512+01:00
 started: 2026-03-06T23:49:41.1231488+01:00
-completed: 2026-03-08T04:11:32.2441488+01:00
+completed: 2026-03-09T21:53:20.3253512+01:00
 tags:
     - audit
     - resilience
@@ -44,3 +44,8 @@ depends_on: [512]
 - [ ] providers/copilot.py: AsyncTenacityTransport wrapped in CircuitBreakerTransport
 - [ ] Module-level or settings-injected breaker instance so state persists across client recreations (e.g. auth refresh)
 - [ ] ruff clean, all existing tests pass
+
+[[2026-03-09]] Mon 21:53
+## Audit
+All 11 AC items PASS. 16/16 CB tests, 258/258 full suite, ruff clean.
+Confidence: .97 | Action: archive

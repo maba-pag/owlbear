@@ -51,7 +51,7 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 | Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via trafilatura; optional `search` extra               |
 | Browser         | Playwright                                 | CDP `localhost` only; isolated browser context (SEC-07); `screenshot_mode` config setting            |
 | Messaging       | Slack (slack_sdk)                          | `ChannelPlugin` protocol; CLI + Slack implementations; Socket Mode WebSocket                         |
-| Safety          | Approval gates                             | Three layers: `ApprovalPolicy` gates + `sandbox_path()` confinement + `CommandSafetyGuard` blocklist |
+| Safety          | Approval gates                             | Three layers: `ApprovalPolicy` gates + `sandbox_path()` confinement + `CommandSafetyGuard` blocklist. See `SECURITY.md` |
 | Projects        | JSON file store                            | Multi-project `ProjectStore` CRUD; 4 templates (bare, python-uv, python-pip, node)                   |
 | Diagrams        | Kroki HTTP API                             | Kroki API; supports mermaid, plantuml, graphviz, d2, c4plantuml; output svg/png                      |
 | Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                |

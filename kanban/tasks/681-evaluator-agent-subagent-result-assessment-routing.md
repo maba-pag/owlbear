@@ -4,14 +4,12 @@ title: 'Evaluator agent: subagent result assessment + routing decisions'
 status: backlog
 priority: needed
 created: 2026-03-08T15:44:32.4626305+01:00
-updated: 2026-03-09T19:26:03.1843693+01:00
+updated: 2026-03-10T02:24:41.3330418+01:00
 started: 2026-03-08T16:07:10.4585205+01:00
 tags:
     - scope:copilot
     - agent
     - phase-agent-arch
-claimed_by: researcher
-claimed_at: 2026-03-09T19:26:03.1843693+01:00
 class: standard
 ---
 
@@ -128,3 +126,57 @@ Design divergence: research recommended standalone evaluator (different cognitiv
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-09]] Mon 21:28
+## Research (Final Disposition, 2026-03-09)
+Doc: docs/research/evaluator-agent-final-disposition.md
+
+Conclusion (.90 confidence): Close #681 as superseded. Evaluator's original problem (orchestrator context degradation) solved by plan->dispatch->re-plan loop. Quality evaluation covered by reviewer + auditor. Guided retry (unique value) is minor planner enhancement, not a new agent. Industry confirms: no major framework ships standalone evaluator agents.
+
+### Follow-up tasks (DO NOT EXECUTE - user review)
+1. Update #682 AC: remove evaluator dep, align with 3-step orchestrator (needed, backlog)
+2. Add guided retry hints to planner stale-task detection (nice-to-have, backlog)
+
+[[2026-03-09]] Mon 21:46
+## Architecture Review (cycle 2, 2026-03-09)
+**Verdict:** BLOCK -> ideation (close as superseded)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AC1: evaluator.agent.md YAML frontmatter | Research (.90) concludes agent unnecessary | SUPERSEDED |
+| AC2: Tool list excludes edit tools | N/A - no agent to build | SUPERSEDED |
+| AC3: persona section | N/A | SUPERSEDED |
+| AC4: critical_rules | N/A | SUPERSEDED |
+| AC5: workflow (5 steps) | N/A | SUPERSEDED |
+| AC6: output_format with 7 fields | N/A | SUPERSEDED |
+| AC7: verdict semantics | N/A | SUPERSEDED |
+| AC8: retry_count as input | N/A | SUPERSEDED |
+| AC9: boundaries + self-defense | N/A | SUPERSEDED |
+| AC10: multi_agent_context | N/A | SUPERSEDED |
+| AC11: copilot-instructions.md row | N/A | SUPERSEDED |
+
+### Architecture Notes
+Three research rounds converge (.85, .85, .90): standalone evaluator is unnecessary.
+
+**Problem solved differently:** The orchestrator's plan->dispatch->re-plan loop already prevents context degradation. The planner re-reads board state each cycle; the orchestrator discards results between cycles.
+
+**Quality gates covered:** Reviewer (per-task code quality) + auditor (per-task AC verification) = two independent defense lines. A third evaluator violates DRY.
+
+**Industry alignment:** No major framework (OpenAI SDK, CrewAI, LangGraph, AutoGen) ships standalone evaluator agents. Evaluation is a code-level loop, not a separate agent.
+
+**Remaining gap:** Guided retry hints (Reflexion pattern) is the evaluator's only unique value. Addressable via minor planner enhancement (read task body on stale detection), not a new agent.
+
+### Codebase Verification
+- evaluator.agent.md: does not exist (confirmed)
+- orchestrator.agent.md: 3-step loop, no evaluator in agents list
+- planner.agent.md: JSON dispatch plan output, no EVALUATE mode
+- wave-planning SKILL.md: no evaluator references
+- orchestration SKILL.md: constant-size context, no evaluator calls
+
+### Downstream Impact
+- #682 (orchestrator rewrite, todo, blocked) depends_on #681. Its AC assumes 8-step sequencer with evaluator. Must be updated to match current 3-step design.
+- Follow-up tasks from research NOT yet created: (1) Update #682 AC to remove evaluator dep, (2) Guided retry hints as backlog item.
+
+### Recommendation
+Close #681 as superseded. Create follow-up tasks per research doc evaluator-agent-final-disposition.md section 5.

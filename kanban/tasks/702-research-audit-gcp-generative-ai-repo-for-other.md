@@ -1,10 +1,11 @@
 ---
 id: 702
 title: 'Research: Audit GCP generative-ai repo for other reusable patterns (2025+)'
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-08T18:40:33.5940382+01:00
-updated: 2026-03-08T18:40:33.5940382+01:00
+updated: 2026-03-10T02:44:18.4067137+01:00
+started: 2026-03-09T23:04:28.1434718+01:00
 tags:
     - research
     - phase-research
@@ -35,3 +36,29 @@ Scan the broader GoogleCloudPlatform/generative-ai repo for other patterns, tool
 - [ ] For each shortlisted pattern: feasibility note and adaptation cost
 - [ ] Research doc at docs/gcp-generative-ai-audit-research.md
 - [ ] Follow-up kanban tasks for any patterns worth pursuing
+
+[[2026-03-10]] Tue 02:44
+## Architecture Review
+**Verdict:** REFINE
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Repo cloned to docs/research/generative-ai/ | Path violates project convention (`docs/scratch/research/` per copilot-instructions.md). Moot now  research is complete, clone is ephemeral. | Fix path in AC to `docs/scratch/research/generative-ai/` |
+| 2. Directory-level inventory with last-commit dates | Present in research doc §3  clear table with freshness flags. | None  verifiable |
+| 3. Shortlist of 2025+ patterns (comparison table) | Present in §4.1  7-row comparison table with verdicts and confidence scores. | None  verifiable |
+| 4. Feasibility note and adaptation cost per shortlisted pattern | Present in §4.3-4.4  adaptation path table with GCP-to-OwlBear mapping, cost estimate (~200 LOC). | None  verifiable |
+| 5. Research doc at docs/gcp-generative-ai-audit-research.md | File exists, well-structured, status marked Complete. | None  verifiable |
+| 6. Follow-up kanban tasks for any patterns worth pursuing | **NOT MET.** kanban-md create commands are documented in §6 of the research doc but were never executed. Zero `evaluation` tagged tasks on the board. | Researcher must execute the two `kanban-md create` commands from §6 |
+
+### Architecture Notes
+Research quality is strong. The freshness filter (2025+ only), systematic directory inventory, and SKIP rationale for Gemini-locked patterns are well-reasoned. The recommendation to adapt the agent behavioral eval pattern (not the Gemini SDK) is architecturally sound  it fills a real gap (no agent tool-selection testing) without adding vendor lock-in.
+
+Note: #700 (always-on-memory-agent research) is still in `backlog`, but the research doc explicitly scopes #702 to exclude that subdirectory. No true dependency conflict.
+
+### Changes Made
+- No kanban edits yet  refinement needed from researcher.
+
+### Dependencies
+- #700 (GCP always-on-memory-agent): in backlog, no blocking dependency  #702 explicitly defers that subdirectory to #700.
+- Follow-up tasks (not yet created): will depend on nothing in the current pipeline.

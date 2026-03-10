@@ -1,10 +1,12 @@
 ---
 id: 577
 title: 'Recurring: Source inspiration audit (every 3 days)'
-status: docs
+status: archived
 priority: important
 created: 2026-03-04T08:03:33.1356117+01:00
-updated: 2026-03-09T18:10:01.7889179+01:00
+updated: 2026-03-09T22:07:16.0161919+01:00
+started: 2026-03-09T19:45:14.6101283+01:00
+completed: 2026-03-09T22:07:16.0161919+01:00
 tags:
     - recurring
     - sop
@@ -176,3 +178,42 @@ Append a summary to the subtask body:
 ## Review Evidence (Reviewer)
 Verdict: PASS confidence .93
 See docs/scratch/577-reviewer.md for full evidence.
+
+[[2026-03-09]] Mon 19:45
+[[2026-03-09]] Mon 18:20
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | Recurring SOP definition -- no behavior or API change |
+| 2 | Docstrings | No | N/A | No Python modules created or modified |
+| 3 | sources/overview.md | No | N/A | No external patterns adopted (task audits existing sources) |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | No | N/A | No research phase for this SOP template |
+
+**No docs impact.** Pure process-definition task (recurring SOP template). Builder confirmed no files changed.
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (docs/scratch/577-reviewer.md referenced in review but not present)
+
+[[2026-03-09]] Mon 22:07
+## Audit
+### AC Verification
+| AC Item | Evidence | Status |
+|---------|----------|--------|
+| 5-phase SOP defined (Inventory, Check, Analyze, Create, Report) | All 5 phases present in task body with detailed steps | PASS |
+| 6 quality gates specified | All 6 gates verifiable: no-skip, actual-usage, specific-refs, no-irrelevant, dead-URL handling, new-source eval | PASS |
+| Execution protocol for recurring runs | Orchestrator subtask pattern defined (parent, status, tags, pipeline flow, last-run update) | PASS |
+| docs/sources/overview.md referenced and exists | File confirmed present with ~35+ entries across 10+ sections | PASS |
+| Format consistent with sibling SOPs #578, #579 | Same structure: Purpose, Schedule, Execution Protocol, SOP phases, Quality Gates | PASS |
+| No code changes (non-implementation task) | All pipeline agents confirmed; no commits reference #577; git log clean | PASS |
+
+### Test Results
+- pytest: 1334 passed, 1 failed (pre-existing test_context_hydration -- unrelated), 2 skipped
+- ruff: 3 pre-existing issues (screenshot.py E501, test_bootstrap_structure.py I001 x2) -- unrelated
+
+### Confidence: .97
+### Action: archive

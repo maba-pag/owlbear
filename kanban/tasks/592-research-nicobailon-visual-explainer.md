@@ -1,12 +1,12 @@
 ---
 id: 592
 title: 'Research: nicobailon/visual-explainer'
-status: done
+status: archived
 priority: important
 created: 2026-03-05T23:51:39.3191475+01:00
-updated: 2026-03-09T18:04:58.7966467+01:00
+updated: 2026-03-09T22:06:47.2174008+01:00
 started: 2026-03-06T21:44:33.1570697+01:00
-completed: 2026-03-09T18:04:58.7966467+01:00
+completed: 2026-03-09T22:06:47.2174008+01:00
 tags:
     - research
     - phase-research
@@ -294,3 +294,30 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 
 ### Scratch Files Cleaned
 - None found (clean)
+
+[[2026-03-09]] Mon 22:06
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research doc complete | docs/research/visual-explainer-research.md: 5 sections (Context, Sources, Analysis, Recommendation, Follow-ups) | PASS |
+| Research doc committed | git ls-files confirms tracked; commit 9415474 | PASS |
+| Follow-up tasks created | #706 (visual-output skill), #708 (HTML templates), #709 (project-recap) all in ideation | PASS |
+| Key findings documented | 3 sources, KISS/YAGNI assessment, architecture fit table in S3 | PASS |
+| Recommendation with confidence | .80 confidence, adopt HTML diagram generation as agent skill (S4) | PASS |
+| Attribution logged | 3 entries in docs/sources/overview.md L430-432 (visual-explainer, Anthropic skills, interface-design) | PASS |
+| Attribution committed | Commit 9415474 includes docs/sources/overview.md | PASS |
+| Research checklist complete | All 5 mandatory items verified | PASS |
+
+### Test Results
+- pytest: 1334 passed, 1 failed (test_context_hydration PermissionError - env-specific, unrelated), 2 skipped
+- ruff: 3 errors (all pre-existing, unrelated to #592 - no code changes)
+
+### Notes
+- Reviewer's original 3 FAIL items (untracked files, wrong path) all resolved in commit 9415474
+- Research doc S5 kanban commands still reference `docs/visual-explainer-research.md` (wrong), but actual created tasks have correct path - cosmetic only
+
+### Confidence: .97
+### Action: archive

@@ -1,12 +1,12 @@
 ---
 id: 593
 title: 'Research: coleam00/excalidraw-diagram-skill'
-status: done
+status: archived
 priority: important
 created: 2026-03-05T23:51:46.113192+01:00
-updated: 2026-03-09T17:03:28.9744679+01:00
+updated: 2026-03-09T22:09:21.2632358+01:00
 started: 2026-03-06T21:44:34.8174636+01:00
-completed: 2026-03-09T17:03:28.9744679+01:00
+completed: 2026-03-09T22:09:21.2632358+01:00
 tags:
     - research
     - phase-research
@@ -105,3 +105,59 @@ No issues  research task, no code changes.
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/593-* files found)
+
+[[2026-03-09]] Mon 22:09
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research doc exists | docs/research/excalidraw-diagram-skill-research.md (6 sections, complete) | PASS |
+| Sources studied (prior art) | 4 sources: coleam00 (.95), yctimlin (.80), lesleslie (.65), Excalidraw docs (.75) | PASS |
+| Trade-off matrix | Section 3.1: 3 approaches x 7 criteria | PASS |
+| Recommendation with confidence | Section 4: .85 confidence, skill + render service + toolset (~200 LOC) | PASS |
+| Research checklist complete | Section 6: all 5 items checked | PASS |
+| Follow-up tasks created | #628 (backlog, skill), #629 (backlog, render service) both verified | PASS |
+| Tasks reference research doc | #628 and #629 Ref lines cite research doc | PASS |
+| YAGNI decisions documented | Section 3.3: MCP server, live canvas, CRUD tools, Mermaid conversion rejected | PASS |
+| sources/overview.md updated | 4 entries at lines 453-458 (coleam00, yctimlin, lesleslie, Excalidraw docs) | PASS |
+
+### Test Results
+- pytest: 1334 passed, 1 failed (env flake: PermissionError on Windows tmp_path, pre-existing), 2 skipped
+- ruff: 3 pre-existing import order errors (no code changed by this task)
+
+### Notes
+- Minor cosmetic: task body path says docs/excalidraw-diagram-skill-research.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
+
+### Confidence: .97
+### Action: archive
+
+[[2026-03-09]] Mon 22:09
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research doc exists | docs/research/excalidraw-diagram-skill-research.md (6 sections, complete) | PASS |
+| Sources studied (prior art) | 4 sources: coleam00 (.95), yctimlin (.80), lesleslie (.65), Excalidraw docs (.75) | PASS |
+| Trade-off matrix | Section 3.1: 3 approaches x 7 criteria | PASS |
+| Recommendation with confidence | Section 4: .85 confidence, skill + render service + toolset (~200 LOC) | PASS |
+| Research checklist complete | Section 6: all 5 items checked | PASS |
+| Follow-up tasks created | #628 (backlog, skill), #629 (backlog, render service) both verified | PASS |
+| Tasks reference research doc | #628 and #629 Ref lines cite research doc | PASS |
+| YAGNI decisions documented | Section 3.3: MCP server, live canvas, CRUD tools, Mermaid conversion rejected | PASS |
+| sources/overview.md updated | 4 entries at lines 453-458 (coleam00, yctimlin, lesleslie, Excalidraw docs) | PASS |
+
+### Test Results
+- pytest: 1334 passed, 1 failed (env flake: PermissionError on Windows tmp_path, pre-existing), 2 skipped
+- ruff: 3 pre-existing import order errors (no code changed by this task)
+
+### Notes
+- Minor cosmetic: task body path says docs/excalidraw-diagram-skill-research.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
+
+### Confidence: .97
+### Action: archive
+
+[[2026-03-09]] Mon 22:09
+## Audit
+All 9 AC items PASS. Research doc verified (6 sections), 4 sources in overview.md, follow-ups #628/#629 in backlog.
+pytest: 1334 passed, 1 env flake, 2 skipped. ruff: 3 pre-existing (no code changed).
+Confidence: .97 | Action: archive
