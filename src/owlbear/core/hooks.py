@@ -10,12 +10,91 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
 from enum import StrEnum
+from typing import Any, Callable, NotRequired, TypedDict, get_args  # noqa: UP035
 
 logger = logging.getLogger(__name__)
 
-Handler = Callable[[object], object]
+Handler = Callable[[dict[str, Any]], None]
+# Python 3.12 flattens Callable.__args__; restore the canonical get_args()
+# form (list-wrapped params) so runtime introspection is consistent.
+Handler.__args__ = get_args(Handler)  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# TypedDict payloads for each HookEvent
+# ---------------------------------------------------------------------------
+
+
+class PreToolUseData(TypedDict):
+    """Payload for :attr:`HookEvent.PRE_TOOL_USE`."""
+
+    tool_name: str
+    args: dict[str, Any]
+
+
+class PostToolUseData(TypedDict):
+    """Payload for :attr:`HookEvent.POST_TOOL_USE`.
+
+    Accepts both *HookedToolset* shape (``tool_name`` + ``result``) and
+    *ApprovalGateToolset* shape (``tool_name`` + ``event_type`` +
+    ``approval_required`` + ``approval_decision``).
+    """
+
+    tool_name: str
+    result: NotRequired[object]
+    event_type: NotRequired[str]
+    approval_required: NotRequired[bool]
+    approval_decision: NotRequired[str]
+
+
+class OnMessageData(TypedDict):
+    """Payload for :attr:`HookEvent.ON_MESSAGE`."""
+
+    prompt: str
+
+
+class OnErrorData(TypedDict):
+    """Payload for :attr:`HookEvent.ON_ERROR`."""
+
+    error: Exception
+    prompt: str
+
+
+class SessionStartData(TypedDict):
+    """Payload for :attr:`HookEvent.SESSION_START`."""
+
+    session_id: str
+
+
+class SessionEndData(TypedDict):
+    """Payload for :attr:`HookEvent.SESSION_END`."""
+
+    session_id: str
+
+
+class SubagentCompleteData(TypedDict):
+    """Payload for :attr:`HookEvent.SUBAGENT_COMPLETE`."""
+
+    task_id: NotRequired[str]
+    created_files: NotRequired[list[str]]
+    test_files: NotRequired[list[str]]
+    result: NotRequired[str]
+    verification: NotRequired[str]
+
+
+class TaskCompleteData(TypedDict):
+    """Payload for :attr:`HookEvent.TASK_COMPLETE`."""
+
+    task_id: str
+    outcome: str
+
+
+class DaemonStartupData(TypedDict):
+    """Payload for :attr:`HookEvent.DAEMON_STARTUP`."""
+
+    channel: str
+    config_dir: str
 
 
 class HookEvent(StrEnum):
