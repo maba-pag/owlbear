@@ -194,6 +194,14 @@ External repos and resources studied during OwlBear development.
 | PEP 8 â€” Public and Internal Interfaces | <https://peps.python.org/pep-0008/#public-and-internal-interfaces> | PSF | `__all__` guidance, public vs internal naming, re-export conventions | `docs/research/knowledge-init-trim-research.md` | 2026-03-07 |
 | Google Python Style Guide â€” Imports | <https://google.github.io/styleguide/pyguide.html#22-imports> | CC-BY-3.0 | Import conventions, module-level imports, package API patterns | `docs/research/knowledge-init-trim-research.md` | 2026-03-07 |
 
+## Browser Snapshot Tool Design (Task #727)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| browser-use Agent + BrowserStateSummary | <https://github.com/browser-use/browser-use> | MIT | DOM state exposure pattern, selector_map for interactive elements, automatic state injection | `docs/research/browser-snapshot-tool-research.md` | 2026-03-10 |
+| Stagehand observe() API | <https://github.com/browserbase/stagehand> | MIT | High-level browser observation primitives, alternative to raw snapshot | `docs/research/browser-snapshot-tool-research.md` | 2026-03-10 |
+| Playwright CDPSession docs | <https://playwright.dev/python/docs/api/class-cdpsession> | Apache-2.0 | CDPSession.send() API, detach lifecycle, usage pattern for Accessibility domain | `docs/research/browser-snapshot-tool-research.md` | 2026-03-10 |
+
 ## Rich Traceback and RichHandler Research (Task #632)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -964,6 +972,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | OpenAI Agents SDK v0.11.1 — Orchestration | <https://openai.github.io/openai-agents-python/multi_agent/> | MIT | Eval pattern is code-level while-loop, not separate agent; agents-as-tools + handoffs | `docs/research/evaluator-agent-final-disposition.md` | 2026-03-09 |
 | Reflexion (Shinn et al., 2023) | <https://arxiv.org/abs/2303.11366> | CC-BY-4.0 | Guided retry via verbal self-reflection — evaluator's unique value prop | `docs/research/evaluator-agent-final-disposition.md` | 2026-03-09 |
+| CrewAI Collaboration docs | <https://docs.crewai.com/concepts/collaboration> | Apache-2.0 | No evaluator agent type; uses delegation tools + hierarchical processes; evaluation not a separate concern | `docs/research/evaluator-agent-final-disposition.md` | 2026-03-10 |
 
 ## Evaluator Agent Revisited Research (Task #681)
 
@@ -1317,3 +1326,36 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | yctimlin/mcp_excalidraw | <https://github.com/yctimlin/mcp_excalidraw> | MIT | Evolved `read_diagram_guide` tool pattern (26 tools), skill with cheatsheet.md, design quality guidance for AI-generated diagrams | `docs/research/cheat-sheet-tool-pattern-research.md` | 2026-07-27 |
 | PMCP (ViperJuice/pmcp) | <https://github.com/ViperJuice/pmcp> | MIT | L0-L3 progressive disclosure layers, 80% token reduction, 14 meta-tools instead of 50+, meta-gateway pattern | `docs/research/cheat-sheet-tool-pattern-research.md` | 2026-07-27 |
+
+## Untrusted Content Wrapping Research (Task #725)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Content wrapping implementation: `<untrusted_web_content>` delimiters + advisory text | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+| Simon Willison, "Delimiters won't save you" | <https://simonwillison.net/2023/May/11/delimiters-wont-save-you/> | CC-BY | Limits of delimiter-based prompt injection defense | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+| Simon Willison, "Limit the blast radius" | <https://simonwillison.net/2023/Dec/20/mitigate-prompt-injection/> | CC-BY | Defense-in-depth framing for IDPI mitigation | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+| Greshake et al., "Indirect Prompt Injection" | <https://arxiv.org/abs/2302.12173> | arXiv | IDPI threat taxonomy: data theft, worming, ecosystem contamination | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+
+## IDPI Content Scanning Research (Task #724)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | 26 builtin injection patterns, ScanContent function, CheckResult struct, strict/warn modes | `docs/research/idpi-content-scanning-research.md` | 2026-03-10 |
+| PinchTab `internal/idpi/idpi_test.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/idpi_test.go> | MIT | Test patterns for content scanning, edge cases, case-insensitivity | `docs/research/idpi-content-scanning-research.md` | 2026-03-10 |
+| ProtectAI/llm-guard | <https://github.com/protectai/llm-guard> | MIT | BanSubstrings scanner (pattern-based), PromptInjection scanner (ML-based DeBERTa) | `docs/research/idpi-content-scanning-research.md` | 2026-03-10 |
+| ProtectAI/rebuff (archived) | <https://github.com/protectai/rebuff> | Apache-2.0 | Multi-layer PI defense: heuristics + LLM + VectorDB + canary tokens | `docs/research/idpi-content-scanning-research.md` | 2026-03-10 |
+| OWASP LLM01:2025 Prompt Injection | <https://genai.owasp.org/llmrisk/llm01-prompt-injection/> | CC-BY-SA-4.0 | Prevention strategies #3 (string-checking content scanning) and #6 (segregate external content) | `docs/research/idpi-content-scanning-research.md` | 2026-03-10 |
+
+## Accessibility-Tree Snapshot Research (Task #726)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Playwright ARIA Snapshots docs | <https://playwright.dev/python/docs/aria-snapshots> | Apache-2.0 | Modern `locator.aria_snapshot()` API (YAML output), replacement for deprecated `page.accessibility.snapshot()` | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
+| CDP Accessibility domain spec | <https://chromedevtools.github.io/devtools-protocol/tot/Accessibility/> | BSD-3 | `getFullAXTree` method, `AXNode` type (backendDOMNodeId, role, name, properties), filter properties | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
+| browser-use `DomService` | <https://github.com/browser-use/browser-use> (`browser_use/dom/service.py`) | MIT | CDP-based AX tree extraction pattern, `_get_ax_tree_for_all_frames()`, `EnhancedAXNode` model, backendDOMNodeId lookup | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
+
+## EdgeQuake Graph-RAG Framework (Task #597)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| raphaelmansuy/edgequake | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Graph-RAG architecture (LightRAG), MCP server tool-registration pattern, MCP prompt templates, models.toml config, auto-discovery client bootstrap, orphaned task recovery on startup, smart mock provider convention, doc-traceability validator | `docs/research/edgequake-research.md` | 2026-03-10 |
