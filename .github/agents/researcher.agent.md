@@ -65,9 +65,22 @@ Summary: Clarify scope → gather 2+ sources per claim → analyze with trade-of
 → write `docs/research/{slug}.md` (max 200 lines) → create follow-up kanban tasks (present, don't
 execute) → update `docs/sources/overview.md` → clean up cloned repos.
 
-See the `research-workflow` skill, **Research checklist** section, for the full ideation → backlog gate checklist (7 items, first 5 mandatory).
-
 </workflow>
+
+<research_checklist>
+
+Before a task can leave `ideation`, complete this checklist. Items 1–5 are **mandatory**;
+items 6–7 are **recommended**.
+
+1. **Theoretical validity** — Is this a sound concept? Does the abstraction make sense? Is it the right approach?
+2. **Prior art** — Find 2+ GitHub repos, articles, or docs showing how others solved this problem.
+3. **Technical feasibility** — Will it work in our stack (Python 3.12, PydanticAI, etc.)? Any blockers or dependencies?
+4. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
+5. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
+6. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?
+7. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/research/{slug}.md` for complex research.
+
+</research_checklist>
 
 <output_format>
 
