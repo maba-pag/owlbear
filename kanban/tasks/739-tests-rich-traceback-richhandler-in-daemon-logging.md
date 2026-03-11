@@ -1,12 +1,12 @@
 ---
 id: 739
 title: 'Tests: rich.traceback + RichHandler in daemon logging (RED)'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-03-11T10:42:19.6328521+01:00
-updated: 2026-03-11T18:27:36.3594719+01:00
+updated: 2026-03-11T20:13:22.2324269+01:00
 started: 2026-03-11T17:32:10.722558+01:00
-completed: 2026-03-11T17:32:10.722558+01:00
+completed: 2026-03-11T20:13:22.2324269+01:00
 tags:
     - phase-cli
     - scope:core
@@ -98,3 +98,23 @@ All 4 TestFromAC_RichLogging tests PRESERVED (no builder modifications)
 ### Scratch Files Cleaned
 - docs/scratch/739-full.txt
 - docs/scratch/739-cov.txt
+
+[[2026-03-11]] Wed 20:13
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| stderr handler is RichHandler | test_stderr_handler_is_rich_handler PASS; daemon.py L213-219 creates RichHandler(console=Console(stderr=True)) | PASS |
+| file handler remains RotatingFileHandler plain | test_file_handler_plain_formatter_with_rich_stderr PASS; daemon.py L206-211 RotatingFileHandler + logging.Formatter | PASS |
+| log file no ANSI escapes | test_log_file_no_ansi_escapes PASS; plain Formatter on file handler, regex verified | PASS |
+| rich.traceback.install() sets excepthook | test_setup_logging_installs_rich_traceback PASS; daemon.py L226 install_rich_traceback(show_locals=False) | PASS |
+| All tests FAIL before impl (RED) | Test-Writer Notes: 4 tests, all FAIL | PASS |
+| ruff clean | ruff check src/owlbear/daemon.py tests/test_daemon.py: All checks passed | PASS |
+
+### Test Results
+- pytest (scoped): 8 passed (4 TestSetupLogging + 4 TestFromAC_RichLogging)
+- pytest (full suite): 1443 passed, 27 failed (all pre-existing: 1 slack_sdk env, 8 browser_actions_extract #725 wrapping, 14 browser_toolset snapshot integration, 3 content_extractor #725 wrapping), 20 skipped
+- ruff: clean
+
+### Confidence: .95
+### Action: archive
