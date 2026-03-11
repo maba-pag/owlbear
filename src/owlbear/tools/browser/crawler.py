@@ -24,6 +24,7 @@ from owlbear.tools.browser.url_utils import (
 )
 
 if TYPE_CHECKING:
+    from owlbear.tools.browser.content_guard import ContentInjectionGuard
     from owlbear.tools.browser.crawl_config import CrawlConfig
     from owlbear.tools.browser.manager import BrowserManager
 
@@ -68,10 +69,17 @@ class WebCrawler:
 
     Args:
         browser_manager: The BrowserManager instance for page navigation.
+        content_guard: Optional content injection guard for scanning
+            extracted text.
     """
 
-    def __init__(self, browser_manager: BrowserManager) -> None:
+    def __init__(
+        self,
+        browser_manager: BrowserManager,
+        content_guard: ContentInjectionGuard | None = None,
+    ) -> None:
         self._browser_manager = browser_manager
+        self._content_guard = content_guard
 
     async def crawl(self, config: CrawlConfig) -> CrawlResult:
         """Perform a breadth-first crawl starting from seed URLs.
@@ -105,11 +113,19 @@ class WebCrawler:
 
             try:
                 crawl_page, html = await self._fetch_and_extract(url)
-                pages.append(crawl_page)
             except Exception as exc:  # noqa: BLE001 — per-page errors are captured
                 errors.append(f"{url}: {exc}")
                 logger.debug("Page failed for %s: %s", url, exc)
                 continue
+
+            if self._content_guard is not None:
+                check = self._content_guard.scan(crawl_page.content)
+                if check.blocked:
+                    errors.append(f"{url}: content injection detected")
+                    logger.debug("Content injection blocked for %s", url)
+                    continue
+
+            pages.append(crawl_page)
 
             if depth < config.max_depth:
                 for link in discover_links(html, url, config):

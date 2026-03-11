@@ -8,6 +8,7 @@ launch options, viewport size, timeout, and URL allow/block lists
 from __future__ import annotations
 
 import re
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
@@ -29,6 +30,8 @@ class BrowserConfig(BaseModel, frozen=True):
         cdp_port: Default CDP debugging port (1-65535).
         browser_executable: Override path for the browser binary.
         auto_launch: Whether to auto-launch browser if CDP unavailable.
+        content_scan_mode: Content injection scan mode (``'strict'``,
+            ``'warn'``, or ``'off'``).  Default ``'warn'``.
     """
 
     allowed_urls: list[str] = []
@@ -40,6 +43,7 @@ class BrowserConfig(BaseModel, frozen=True):
     cdp_port: int = 9222
     browser_executable: str | None = None
     auto_launch: bool = True
+    content_scan_mode: Literal["strict", "warn", "off"] = "warn"
 
     # --- validators ---
 

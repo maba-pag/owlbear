@@ -32,6 +32,7 @@ from owlbear.tools.browser.actions import (
     browser_type,
 )
 from owlbear.tools.browser.config import BrowserConfig
+from owlbear.tools.browser.content_guard import ContentInjectionGuard
 from owlbear.tools.browser.manager import BrowserManager
 
 if TYPE_CHECKING:
@@ -78,6 +79,7 @@ class BrowserToolset(FunctionToolset):
         super().__init__()
         self._config: BrowserConfig = config or BrowserConfig()
         self._manager: BrowserManager | None = None
+        self._content_guard = ContentInjectionGuard(mode=self._config.content_scan_mode)
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -199,11 +201,15 @@ class BrowserToolset(FunctionToolset):
         max_length: int = 5000,
     ) -> str:
         """Extract text from the page or a specific element."""
-        return await browser_read_text(
+        text = await browser_read_text(
             page=self.page,
             selector=selector,
             max_length=max_length,
         )
+        result = self._content_guard.scan(text)
+        if result.blocked:
+            return f"BLOCKED: {result.reason}"
+        return text
 
     async def _screenshot(
         self,
