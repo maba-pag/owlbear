@@ -40,15 +40,19 @@ class AgentRole(enum.StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RolePolicy:
-    """Declares which tools are denied for a given role.
+    """Declares which tools a given role may or may not use.
 
-    *denied_tools* lists tool names that must be excluded when
-    :func:`apply_role_policy` creates a filtered toolset.  An empty
-    set means "allow everything".
+    *allowed_tools* — when non-empty, only these tools pass the filter
+    (fail-safe allow-list).  An empty frozenset means "no allow-list
+    restriction" (backwards-compatible full access).
+
+    *denied_tools* — tools explicitly excluded regardless of the
+    allow-list.  Denial always wins over allowance.
     """
 
     role: AgentRole
     denied_tools: frozenset[str] = frozenset()
+    allowed_tools: frozenset[str] = frozenset()
 
 
 # ── Built-in policies ────────────────────────────────────────────
@@ -61,14 +65,47 @@ BUILDER_POLICY = RolePolicy(
 
 VALIDATOR_POLICY = RolePolicy(
     role=AgentRole.VALIDATOR,
-    denied_tools=frozenset(
+    allowed_tools=frozenset(
         {
-            "write_file",
-            "create_file",
+            # File read
+            "read_file",
+            "list_directory",
+            "search_files",
+            # Git read-only
+            "git_status",
+            "git_diff",
+            "git_log",
+            # Browser read
+            "browser_read_text",
+            "browser_screenshot",
+            # Knowledge
+            "query_knowledge",
+            "list_knowledge_sources",
+            "list_bookmarks",
+            # Web read
+            "web_search",
+            "web_read",
+            # Kanban read
+            "kanban_list",
+            "kanban_show",
+            "kanban_context",
+            # Kanban write — validators must append notes and advance status (#741)
+            "kanban_create",
+            "kanban_edit",
+            "kanban_move",
+            # GitHub read
+            "list_prs",
+            "list_issues",
+            "get_issue",
+            # Project read
+            "list_projects",
+            "list_sources",
+            # Terminal — validators need pytest/ruff, protected by CommandSafetyGuard (#741)
+            "run_command",
         }
     ),
 )
-"""Validator: read-only — cannot write or create files."""
+"""Validator: allow-list model — only explicitly listed tools are available."""
 
 
 # ── Policy application ───────────────────────────────────────────
@@ -80,18 +117,23 @@ def apply_role_policy(
 ) -> AbstractToolset:
     """Return a filtered view of *toolset* respecting *policy*.
 
-    Tools whose names appear in ``policy.denied_tools`` are excluded.
-    If *denied_tools* is empty the original toolset is returned as-is.
+    When *allowed_tools* is non-empty, only tools named in that set
+    pass.  Tools in *denied_tools* are always excluded.  If both sets
+    are empty the original toolset is returned as-is.
     """
-    if not policy.denied_tools:
-        return toolset
-
+    allowed = policy.allowed_tools
     denied = policy.denied_tools
+
+    if not allowed and not denied:
+        return toolset
 
     def _filter(
         _ctx: object,
         tool_def: object,
     ) -> bool:
-        return getattr(tool_def, "name", "") not in denied
+        name = getattr(tool_def, "name", "")
+        if denied and name in denied:
+            return False
+        return not (allowed and name not in allowed)
 
     return toolset.filtered(_filter)

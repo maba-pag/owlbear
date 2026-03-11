@@ -194,7 +194,7 @@ class AgentRegistry:
         role_str = defn.role.lower()
         if role_str != AgentRole.BUILDER:
             policy = _ROLE_POLICIES.get(AgentRole(role_str), BUILDER_POLICY)
-            if policy.denied_tools:
+            if policy.denied_tools or policy.allowed_tools:
                 # Filter each toolset through the role policy.
                 filtered: list[AbstractToolset] = [apply_role_policy(ts, policy) for ts in toolsets]
                 agent = Agent(
