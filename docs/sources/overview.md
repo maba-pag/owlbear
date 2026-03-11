@@ -50,6 +50,18 @@ External repos and resources studied during OwlBear development.
 | OpenAI Agents SDK — Lifecycle | <https://openai.github.io/openai-agents-python/ref/lifecycle/> | MIT | `on_agent_start`/`on_agent_end` hooks pattern, payload design | `docs/research/session-hook-emission-research.md` | 2026-03-09 |
 | PydanticAI — Agents docs | <https://ai.pydantic.dev/agents/> | MIT | Agent run lifecycle, event streaming (no built-in session hooks) | `docs/research/session-hook-emission-research.md` | 2026-03-09 |
 
+## Accessibility-Tree Snapshot (Task #726)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| browser-use `DomService` | <https://github.com/browser-use/browser-use> | MIT | CDP `Accessibility.getFullAXTree` approach, AX node flattening, session lifecycle (create/detach per call) | `src/owlbear/tools/browser/manager.py` | 2026-03-11 |
+
+## Excalidraw Diagram Skill (Task #628)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| coleam00/excalidraw-diagram-skill | <https://github.com/coleam00/excalidraw-diagram-skill> | MIT | Excalidraw JSON generation methodology, element library, color palette, layout patterns — compressed from ~450 to ~150 lines | `.github/skills/excalidraw-diagram/` | 2026-03-11 |
+
 ## Consolidate trafilatura Extras (Task #569)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -482,7 +494,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| coleam00/excalidraw-diagram-skill | <https://github.com/coleam00/excalidraw-diagram-skill> | MIT | Prompt-driven Excalidraw JSON generation, render-view-fix loop via Playwright, modular reference files (color palette, element templates, JSON schema), section-by-section large diagram strategy | `docs/research/excalidraw-diagram-skill-research.md` | 2026-03-06 |
+| coleam00/excalidraw-diagram-skill | <https://github.com/coleam00/excalidraw-diagram-skill> | MIT | Prompt-driven Excalidraw JSON generation, render-view-fix loop via Playwright, modular reference files (color palette, element templates, JSON schema), section-by-section large diagram strategy | `docs/research/excalidraw-diagram-skill-research.md`, `.github/skills/excalidraw-diagram/` | 2026-03-06 |
 | yctimlin/mcp_excalidraw | <https://github.com/yctimlin/mcp_excalidraw> | MIT | 26-tool MCP server architecture, element-level CRUD, describe_scene + get_canvas_screenshot closed feedback loop, read_diagram_guide design prompt pattern | `docs/research/excalidraw-diagram-skill-research.md` | 2026-03-06 |
 | lesleslie/excalidraw-mcp | <https://github.com/lesleslie/excalidraw-mcp> | BSD-3 | Python FastMCP hybrid architecture, element_factory pattern, process_manager for canvas server lifecycle | `docs/research/excalidraw-diagram-skill-research.md` | 2026-03-06 |
 | Excalidraw export utilities | <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/utils/export> | MIT | Official `exportToSvg`, `exportToCanvas`, `exportToBlob` APIs for programmatic rendering | `docs/research/excalidraw-diagram-skill-research.md` | 2026-03-06 |
@@ -1353,3 +1365,17 @@ External repos and resources studied during OwlBear development.
 | Playwright ARIA Snapshots docs | <https://playwright.dev/python/docs/aria-snapshots> | Apache-2.0 | Modern `locator.aria_snapshot()` API (YAML output), replacement for deprecated `page.accessibility.snapshot()` | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
 | CDP Accessibility domain spec | <https://chromedevtools.github.io/devtools-protocol/tot/Accessibility/> | BSD-3 | `getFullAXTree` method, `AXNode` type (backendDOMNodeId, role, name, properties), filter properties | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
 | browser-use `DomService` | <https://github.com/browser-use/browser-use> (`browser_use/dom/service.py`) | MIT | CDP-based AX tree extraction pattern, `_get_ax_tree_for_all_frames()`, `EnhancedAXNode` model, backendDOMNodeId lookup | `docs/research/a11y-snapshot-research.md` | 2026-07-08 |
+
+## IDPI Content Scanning Implementation (Task #724)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Injection pattern list and `ScanContent` function ported to Python (`ContentInjectionGuard`, `CheckResult`, strict/warn/off modes) | `src/owlbear/tools/browser/content_guard.py` | 2026-03-11 |
+
+## Untrusted Content Wrapping (Tasks #725/#730)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Content wrapping pattern with sentinel tags and advisory preamble | `src/owlbear/core/content_safety.py` | 2026-03-10 |
+| Willison, "Delimiters won't save you" (2023) | <https://simonwillison.net/2023/May/11/delimiters-wont-save-you/> | Blog | Established limits of delimiter approach — informed defense-in-depth framing | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+| Greshake et al., "Indirect Prompt Injection" (2023) | <https://arxiv.org/abs/2302.12173> | CC-BY-4.0 | Threat model taxonomy for LLM-integrated apps, IDPI attack vectors | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
