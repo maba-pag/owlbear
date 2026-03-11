@@ -84,7 +84,7 @@ class TestUsageOutput:
         ]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -98,7 +98,7 @@ class TestUsageOutput:
         lines = [_usage_jsonl_line(model="gpt-4o")]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -120,7 +120,7 @@ class TestUsageTimeWindows:
         old = _usage_jsonl_line(minutes_ago=120, input_tokens=9999)
         _write_mock_jsonl(usage_file, [old, recent])
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage", "--last-hour"])
 
         assert result.exit_code == 0
@@ -133,7 +133,7 @@ class TestUsageTimeWindows:
         lines = [_usage_jsonl_line(minutes_ago=5)]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage", "--last-24h"])
 
         assert result.exit_code == 0
@@ -144,7 +144,7 @@ class TestUsageTimeWindows:
         lines = [_usage_jsonl_line(minutes_ago=5)]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage", "--last-7d"])
 
         assert result.exit_code == 0
@@ -155,7 +155,7 @@ class TestUsageTimeWindows:
         old = _usage_jsonl_line(minutes_ago=60 * 24 * 30)  # 30 days old
         _write_mock_jsonl(usage_file, [old])
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage", "--all"])
 
         assert result.exit_code == 0
@@ -173,7 +173,7 @@ class TestUsageEmptyLog:
         """When the usage file doesn't exist, show a friendly message."""
         usage_file = tmp_path / "nonexistent.jsonl"
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -186,7 +186,7 @@ class TestUsageEmptyLog:
         usage_file = tmp_path / "usage.jsonl"
         usage_file.write_text("")
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -197,7 +197,7 @@ class TestUsageEmptyLog:
         """Empty log must not produce a Python traceback."""
         usage_file = tmp_path / "nonexistent.jsonl"
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert "Traceback" not in result.output
@@ -229,7 +229,7 @@ class TestUsagePremiumCost:
         ]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -248,7 +248,7 @@ class TestUsagePremiumCost:
         ]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -267,7 +267,7 @@ class TestUsagePremiumCost:
         ]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0
@@ -282,7 +282,7 @@ class TestUsagePremiumCost:
         ]
         _write_mock_jsonl(usage_file, lines)
 
-        with patch("bearclaw.cli._get_usage_path", return_value=usage_file):
+        with patch("bearclaw.commands.usage._get_usage_path", return_value=usage_file):
             result = runner.invoke(app, ["usage"])
 
         assert result.exit_code == 0

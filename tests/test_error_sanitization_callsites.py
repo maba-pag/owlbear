@@ -95,7 +95,7 @@ class TestDaemonSanitisesErrors:
         agent.update_model = MagicMock()
 
         with patch(
-            "owlbear.daemon.create_copilot_model",
+            "owlbear.daemon.create_copilot_client",
             new_callable=AsyncMock,
             side_effect=RuntimeError("token refresh failed with secret_key=x"),
         ):
@@ -170,9 +170,9 @@ class TestCliReplSanitisesErrors:
         bootstrap_fn = AsyncMock(side_effect=_fake_bootstrap)
 
         with (
-            patch("bearclaw.cli.OwlBearSettings", settings_cls),
-            patch("bearclaw.cli.SessionStore", session_cls),
-            patch("owlbear.bootstrap.bootstrap", bootstrap_fn),
+            patch("bearclaw.commands.chat.OwlBearSettings", settings_cls),
+            patch("bearclaw.commands.chat.SessionStore", session_cls),
+            patch("bearclaw.commands.chat.bootstrap", bootstrap_fn),
         ):
             result = runner.invoke(app, ["chat"], input="hello\nexit\n")
 
@@ -200,9 +200,9 @@ class TestCliSlackAuthSanitisesErrors:
             response=httpx.Response(401),
         )
         with (
-            patch("bearclaw.cli._require_slack_settings") as mock_settings,
-            patch("bearclaw.cli._slack_ssl_context"),
-            patch("bearclaw.cli.httpx.post", side_effect=exc),
+            patch("bearclaw.commands.slack._require_slack_settings") as mock_settings,
+            patch("bearclaw.commands.slack._slack_ssl_context"),
+            patch("bearclaw.commands.slack.httpx.post", side_effect=exc),
         ):
             mock_settings.return_value = MagicMock(
                 slack_bot_token=MagicMock(get_secret_value=MagicMock(return_value="xoxb-fake")),
@@ -225,9 +225,9 @@ class TestCliSlackAuthSanitisesErrors:
             response=httpx.Response(500),
         )
         with (
-            patch("bearclaw.cli._require_slack_settings") as mock_settings,
-            patch("bearclaw.cli._slack_ssl_context"),
-            patch("bearclaw.cli.httpx.post", side_effect=exc),
+            patch("bearclaw.commands.slack._require_slack_settings") as mock_settings,
+            patch("bearclaw.commands.slack._slack_ssl_context"),
+            patch("bearclaw.commands.slack.httpx.post", side_effect=exc),
         ):
             mock_settings.return_value = MagicMock(
                 slack_bot_token=MagicMock(get_secret_value=MagicMock(return_value="xoxb-secret")),
@@ -252,7 +252,7 @@ class TestCliLoginSanitisesErrors:
         from bearclaw.cli import app
 
         exc = RuntimeError("OAuth token=ghp_XXXX123 exchange failed")
-        with patch("bearclaw.cli._login_async", side_effect=exc):
+        with patch("bearclaw.commands.auth._login_async", side_effect=exc):
             result = runner.invoke(app, ["auth", "login"])
 
         assert result.exit_code != 0

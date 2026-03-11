@@ -190,6 +190,8 @@ class TestSetupLogging:
             h.close()
 
     def test_creates_stderr_stream_handler(self, tmp_path: Path) -> None:
+        from rich.logging import RichHandler
+
         log_file = tmp_path / "owlbear.log"
         handlers_before = list(logging.getLogger().handlers)
         root = setup_logging(log_file)
@@ -198,7 +200,8 @@ class TestSetupLogging:
         stream_handlers = [
             h
             for h in new_handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+            if isinstance(h, (logging.StreamHandler, RichHandler))
+            and not isinstance(h, logging.FileHandler)
         ]
         assert len(stream_handlers) == 1
 
@@ -213,7 +216,12 @@ class TestSetupLogging:
         root = setup_logging(log_file)
 
         new_handlers = [h for h in root.handlers if h not in handlers_before]
-        for h in new_handlers:
+        # Only file handlers use a plain Formatter; RichHandler uses Console rendering
+        file_handlers = [
+            h for h in new_handlers if isinstance(h, logging.handlers.RotatingFileHandler)
+        ]
+        assert len(file_handlers) >= 1
+        for h in file_handlers:
             fmt = h.formatter
             assert fmt is not None
             assert "%(asctime)s" in fmt._fmt  # type: ignore[union-attr]
@@ -237,6 +245,100 @@ class TestSetupLogging:
         for h in new_handlers:
             root.removeHandler(h)
             h.close()
+
+
+# ---------------------------------------------------------------------------
+# Rich logging integration (TDD RED — #739)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RichLogging:  # noqa: N801
+    """AC contract: setup_logging uses RichHandler for stderr, plain for file."""
+
+    @staticmethod
+    def _setup_and_collect(log_file: Path) -> tuple[logging.Logger, list[logging.Handler]]:
+        """Call setup_logging and return (root, new_handlers)."""
+        before = list(logging.getLogger().handlers)
+        root = setup_logging(log_file)
+        return root, [h for h in root.handlers if h not in before]
+
+    @staticmethod
+    def _cleanup(root: logging.Logger, handlers: list[logging.Handler]) -> None:
+        for h in handlers:
+            root.removeHandler(h)
+            h.close()
+
+    def test_stderr_handler_is_rich_handler(self, tmp_path: Path) -> None:
+        """AC: stderr handler is instance of RichHandler after setup_logging()."""
+        from rich.logging import RichHandler
+
+        root, new = self._setup_and_collect(tmp_path / "owlbear.log")
+        try:
+            rich_handlers = [h for h in new if isinstance(h, RichHandler)]
+            assert len(rich_handlers) == 1, (
+                f"expected exactly 1 RichHandler, got {len(rich_handlers)}"
+            )
+        finally:
+            self._cleanup(root, new)
+
+    def test_file_handler_plain_formatter_with_rich_stderr(self, tmp_path: Path) -> None:
+        """AC: file handler remains RotatingFileHandler with plain Formatter."""
+        from rich.logging import RichHandler
+
+        root, new = self._setup_and_collect(tmp_path / "owlbear.log")
+        try:
+            # Precondition: RichHandler is installed for stderr
+            rich_handlers = [h for h in new if isinstance(h, RichHandler)]
+            assert len(rich_handlers) == 1, "precondition: RichHandler must be on stderr"
+
+            # File handler is RotatingFileHandler with plain logging.Formatter
+            file_handlers = [h for h in new if isinstance(h, logging.handlers.RotatingFileHandler)]
+            assert len(file_handlers) == 1
+            assert type(file_handlers[0].formatter) is logging.Formatter
+        finally:
+            self._cleanup(root, new)
+
+    def test_log_file_no_ansi_escapes(self, tmp_path: Path) -> None:
+        """AC: log file output contains no ANSI escape sequences."""
+        import re
+
+        from rich.logging import RichHandler
+
+        log_file = tmp_path / "owlbear.log"
+        root, new = self._setup_and_collect(log_file)
+        try:
+            # Precondition: RichHandler is present (proves Rich is active)
+            rich_handlers = [h for h in new if isinstance(h, RichHandler)]
+            assert len(rich_handlers) == 1, "precondition: RichHandler must be on stderr"
+
+            # Write through root logger and flush all handlers
+            root.info("test-ansi-check")
+            for h in new:
+                h.flush()
+
+            content = log_file.read_text()
+            assert not re.search(r"\x1b\[", content), (
+                f"ANSI escape sequences found in log file: {content!r}"
+            )
+        finally:
+            self._cleanup(root, new)
+
+    def test_setup_logging_installs_rich_traceback(self, tmp_path: Path) -> None:
+        """AC: rich.traceback.install() sets sys.excepthook in CLI callback."""
+        import sys
+
+        log_file = tmp_path / "owlbear.log"
+        root, new = self._setup_and_collect(log_file)
+        try:
+            # After setup_logging, sys.excepthook should have been replaced
+            # by rich.traceback.install() — it should NOT be the default hook.
+            assert sys.excepthook is not sys.__excepthook__, (
+                "expected rich.traceback.install() to replace sys.excepthook"
+            )
+        finally:
+            # Restore default excepthook if modified
+            sys.excepthook = sys.__excepthook__
+            self._cleanup(root, new)
 
 
 # ---------------------------------------------------------------------------
@@ -640,14 +742,14 @@ class TestBearclawStop:
     """bearclaw stop creates sentinel, polls PID removal, cleans up."""
 
     def test_creates_sentinel_file(self, tmp_path: Path) -> None:
-        from bearclaw.cli import _daemon_stop
+        from bearclaw.commands.daemon import _daemon_stop
 
         pid_path = tmp_path / "owlbear.pid"
         pid_path.write_text(str(os.getpid()))
 
         with (
-            patch("bearclaw.cli._poll_pid_removal", return_value=True),
-            patch("bearclaw.cli._get_config_dir", return_value=tmp_path),
+            patch("bearclaw.commands.daemon._poll_pid_removal", return_value=True),
+            patch("bearclaw.commands.daemon._get_config_dir", return_value=tmp_path),
         ):
             _daemon_stop()
 
@@ -655,21 +757,21 @@ class TestBearclawStop:
         # We check the flow worked by verifying _poll_pid_removal was called
 
     def test_reports_not_running_when_no_pid(self, tmp_path: Path) -> None:
-        from bearclaw.cli import _daemon_stop
+        from bearclaw.commands.daemon import _daemon_stop
 
-        with patch("bearclaw.cli._get_config_dir", return_value=tmp_path):
+        with patch("bearclaw.commands.daemon._get_config_dir", return_value=tmp_path):
             # Should not raise, just report not running
             _daemon_stop()
 
     def test_force_kills_on_timeout(self, tmp_path: Path) -> None:
-        from bearclaw.cli import _daemon_stop
+        from bearclaw.commands.daemon import _daemon_stop
 
         pid_path = tmp_path / "owlbear.pid"
         pid_path.write_text("99999")
 
         with (
-            patch("bearclaw.cli._poll_pid_removal", return_value=False),
-            patch("bearclaw.cli._get_config_dir", return_value=tmp_path),
+            patch("bearclaw.commands.daemon._poll_pid_removal", return_value=False),
+            patch("bearclaw.commands.daemon._get_config_dir", return_value=tmp_path),
             patch("os.kill") as mock_kill,
         ):
             _daemon_stop()
@@ -697,23 +799,32 @@ class TestBearclawStatus:
         return s
 
     def test_not_running(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        from bearclaw.cli import _daemon_status
+        from bearclaw.commands.daemon import _daemon_status
 
-        with patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)):
+        with patch(
+            "bearclaw.commands.daemon.OwlBearSettings",
+            return_value=self._mock_settings(tmp_path),
+        ):
             _daemon_status()
 
         captured = capsys.readouterr()
         assert "Stopped" in captured.out
 
     def test_running(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        from bearclaw.cli import _daemon_status
+        from bearclaw.commands.daemon import _daemon_status
 
         pid_path = tmp_path / "owlbear.pid"
         pid_path.write_text(str(os.getpid()))
 
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch(
+                "bearclaw.commands.daemon.OwlBearSettings",
+                return_value=self._mock_settings(tmp_path),
+            ),
+            patch(
+                "bearclaw.commands.daemon._is_process_alive",
+                return_value=True,
+            ),
         ):
             _daemon_status()
 
@@ -722,14 +833,20 @@ class TestBearclawStatus:
         assert str(os.getpid()) in captured.out
 
     def test_stale_pid(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        from bearclaw.cli import _daemon_status
+        from bearclaw.commands.daemon import _daemon_status
 
         pid_path = tmp_path / "owlbear.pid"
         pid_path.write_text("99999999")
 
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=self._mock_settings(tmp_path)),
-            patch("bearclaw.cli._is_process_alive", return_value=False),
+            patch(
+                "bearclaw.commands.daemon.OwlBearSettings",
+                return_value=self._mock_settings(tmp_path),
+            ),
+            patch(
+                "bearclaw.commands.daemon._is_process_alive",
+                return_value=False,
+            ),
         ):
             _daemon_status()
 

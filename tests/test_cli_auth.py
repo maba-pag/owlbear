@@ -25,22 +25,22 @@ class TestAuthLogin:
         }
         with (
             patch(
-                "bearclaw.cli.request_device_code",
+                "bearclaw.commands.auth.request_device_code",
                 new_callable=AsyncMock,
                 return_value=device_resp,
             ),
             patch(
-                "bearclaw.cli.poll_for_access_token",
+                "bearclaw.commands.auth.poll_for_access_token",
                 new_callable=AsyncMock,
                 return_value="ghu_fake_token",
             ),
             patch(
-                "bearclaw.cli.exchange_for_copilot_token",
+                "bearclaw.commands.auth.exchange_for_copilot_token",
                 new_callable=AsyncMock,
                 return_value={"token": "copilot_tok", "expires_at": 9999999999},
             ),
-            patch("bearclaw.cli.save_token") as _mock_save,
-            patch("bearclaw.cli.webbrowser") as _mock_wb,
+            patch("bearclaw.commands.auth.save_token") as _mock_save,
+            patch("bearclaw.commands.auth.webbrowser") as _mock_wb,
         ):
             result = runner.invoke(app, ["auth", "login"])
 
@@ -58,22 +58,22 @@ class TestAuthLogin:
         }
         with (
             patch(
-                "bearclaw.cli.request_device_code",
+                "bearclaw.commands.auth.request_device_code",
                 new_callable=AsyncMock,
                 return_value=device_resp,
             ),
             patch(
-                "bearclaw.cli.poll_for_access_token",
+                "bearclaw.commands.auth.poll_for_access_token",
                 new_callable=AsyncMock,
                 return_value="ghu_fake_token",
             ),
             patch(
-                "bearclaw.cli.exchange_for_copilot_token",
+                "bearclaw.commands.auth.exchange_for_copilot_token",
                 new_callable=AsyncMock,
                 return_value={"token": "copilot_tok", "expires_at": 9999999999},
             ),
-            patch("bearclaw.cli.save_token"),
-            patch("bearclaw.cli.webbrowser"),
+            patch("bearclaw.commands.auth.save_token"),
+            patch("bearclaw.commands.auth.webbrowser"),
         ):
             result = runner.invoke(app, ["auth", "login"])
 
@@ -91,22 +91,22 @@ class TestAuthLogin:
         }
         with (
             patch(
-                "bearclaw.cli.request_device_code",
+                "bearclaw.commands.auth.request_device_code",
                 new_callable=AsyncMock,
                 return_value=device_resp,
             ),
             patch(
-                "bearclaw.cli.poll_for_access_token",
+                "bearclaw.commands.auth.poll_for_access_token",
                 new_callable=AsyncMock,
                 return_value="ghu_fake_token",
             ),
             patch(
-                "bearclaw.cli.exchange_for_copilot_token",
+                "bearclaw.commands.auth.exchange_for_copilot_token",
                 new_callable=AsyncMock,
                 return_value={"token": "copilot_tok", "expires_at": 9999999999},
             ),
-            patch("bearclaw.cli.save_token"),
-            patch("bearclaw.cli.webbrowser") as mock_wb,
+            patch("bearclaw.commands.auth.save_token"),
+            patch("bearclaw.commands.auth.webbrowser") as mock_wb,
         ):
             result = runner.invoke(app, ["auth", "login"])
 
@@ -125,22 +125,22 @@ class TestAuthLogin:
         copilot_data = {"token": "copilot_tok", "expires_at": 9999999999}
         with (
             patch(
-                "bearclaw.cli.request_device_code",
+                "bearclaw.commands.auth.request_device_code",
                 new_callable=AsyncMock,
                 return_value=device_resp,
             ) as mock_device,
             patch(
-                "bearclaw.cli.poll_for_access_token",
+                "bearclaw.commands.auth.poll_for_access_token",
                 new_callable=AsyncMock,
                 return_value="ghu_fake_token",
             ) as mock_poll,
             patch(
-                "bearclaw.cli.exchange_for_copilot_token",
+                "bearclaw.commands.auth.exchange_for_copilot_token",
                 new_callable=AsyncMock,
                 return_value=copilot_data,
             ) as mock_exchange,
-            patch("bearclaw.cli.save_token") as mock_save,
-            patch("bearclaw.cli.webbrowser"),
+            patch("bearclaw.commands.auth.save_token") as mock_save,
+            patch("bearclaw.commands.auth.webbrowser"),
         ):
             result = runner.invoke(app, ["auth", "login"])
 
@@ -161,22 +161,22 @@ class TestAuthLogin:
         }
         with (
             patch(
-                "bearclaw.cli.request_device_code",
+                "bearclaw.commands.auth.request_device_code",
                 new_callable=AsyncMock,
                 return_value=device_resp,
             ),
             patch(
-                "bearclaw.cli.poll_for_access_token",
+                "bearclaw.commands.auth.poll_for_access_token",
                 new_callable=AsyncMock,
                 return_value="ghu_fake_token",
             ),
             patch(
-                "bearclaw.cli.exchange_for_copilot_token",
+                "bearclaw.commands.auth.exchange_for_copilot_token",
                 new_callable=AsyncMock,
                 return_value={"token": "copilot_tok", "expires_at": 9999999999},
             ),
-            patch("bearclaw.cli.save_token"),
-            patch("bearclaw.cli.webbrowser"),
+            patch("bearclaw.commands.auth.save_token"),
+            patch("bearclaw.commands.auth.webbrowser"),
         ):
             result = runner.invoke(app, ["auth", "login"])
 
@@ -187,7 +187,7 @@ class TestAuthLogin:
     def test_login_handles_error_gracefully(self) -> None:
         """Login should catch exceptions and print an error message."""
         with patch(
-            "bearclaw.cli.request_device_code",
+            "bearclaw.commands.auth.request_device_code",
             new_callable=AsyncMock,
             side_effect=RuntimeError("Network error"),
         ):
@@ -206,7 +206,7 @@ class TestAuthStatus:
             "token": "tid=x;exp=9999999999;proxy-ep=proxy.individual.githubcopilot.com",
             "expires_at": 9999999999,
         }
-        with patch("bearclaw.cli.load_token", return_value=token_data):
+        with patch("bearclaw.commands.auth.load_token", return_value=token_data):
             result = runner.invoke(app, ["auth", "status"])
 
         assert result.exit_code == 0
@@ -214,7 +214,7 @@ class TestAuthStatus:
 
     def test_status_not_authenticated_when_no_token(self) -> None:
         """No cached token → prints 'Not authenticated'."""
-        with patch("bearclaw.cli.load_token", return_value=None):
+        with patch("bearclaw.commands.auth.load_token", return_value=None):
             result = runner.invoke(app, ["auth", "status"])
 
         assert result.exit_code == 0
@@ -226,7 +226,7 @@ class TestAuthStatus:
             "token": "tid=x;exp=9999999999;proxy-ep=proxy.individual.githubcopilot.com",
             "expires_at": 9999999999,
         }
-        with patch("bearclaw.cli.load_token", return_value=token_data):
+        with patch("bearclaw.commands.auth.load_token", return_value=token_data):
             result = runner.invoke(app, ["auth", "status"])
 
         assert result.exit_code == 0
@@ -238,7 +238,7 @@ class TestAuthStatus:
             "token": "tid=x;exp=9999999999;proxy-ep=proxy.individual.githubcopilot.com",
             "expires_at": 9999999999,
         }
-        with patch("bearclaw.cli.load_token", return_value=token_data):
+        with patch("bearclaw.commands.auth.load_token", return_value=token_data):
             result = runner.invoke(app, ["auth", "status"])
 
         assert result.exit_code == 0

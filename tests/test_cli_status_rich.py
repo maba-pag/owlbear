@@ -15,7 +15,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from bearclaw.cli import _daemon_status, app
+from bearclaw.cli import app
+from bearclaw.commands.daemon import _daemon_status
 
 runner = CliRunner()
 
@@ -49,7 +50,7 @@ class TestStatusStopped:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         with patch(
-            "bearclaw.cli.OwlBearSettings",
+            "bearclaw.commands.daemon.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             _daemon_status()
@@ -75,10 +76,10 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -89,10 +90,10 @@ class TestStatusRunning:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -108,10 +109,10 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -127,10 +128,10 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -152,10 +153,10 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -166,10 +167,10 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -180,10 +181,10 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -204,10 +205,10 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, chat_model="claude-sonnet-4"),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -219,10 +220,10 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, autonomous_mode=True),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -233,10 +234,10 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, heartbeat_enabled=True),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -247,10 +248,10 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id="C12345"),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -262,10 +263,10 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id=None),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -287,10 +288,10 @@ class TestStatusProject:
         active_path.write_text("my-cool-project", encoding="utf-8")
         with (
             patch(
-                "bearclaw.cli.OwlBearSettings",
+                "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -301,7 +302,7 @@ class TestStatusProject:
     ) -> None:
         # No active_project file → should display "None"
         with patch(
-            "bearclaw.cli.OwlBearSettings",
+            "bearclaw.commands.daemon.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             _daemon_status()
@@ -319,7 +320,7 @@ class TestStatusCliRunner:
 
     def test_cli_status_exits_zero(self, tmp_path: Path) -> None:
         with patch(
-            "bearclaw.cli.OwlBearSettings",
+            "bearclaw.commands.daemon.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             result = runner.invoke(app, ["status"])

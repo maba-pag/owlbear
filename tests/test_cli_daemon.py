@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from bearclaw.cli import (
+from bearclaw.cli import app
+from bearclaw.commands.daemon import (
     _daemon_status,
     _daemon_stop,
     _get_config_dir,
     _is_process_alive,
     _poll_pid_removal,
-    app,
 )
 
 runner = CliRunner()
@@ -30,26 +30,26 @@ class TestIsProcessAlive:
 
     def test_alive_pid_returns_true(self) -> None:
         """os.kill succeeds (no exception) → True."""
-        with patch("bearclaw.cli.os.kill"):
+        with patch("bearclaw.commands.daemon.os.kill"):
             assert _is_process_alive(12345) is True
 
     def test_dead_pid_returns_false(self) -> None:
         """os.kill raises ProcessLookupError → False."""
         with patch(
-            "bearclaw.cli.os.kill",
+            "bearclaw.commands.daemon.os.kill",
             side_effect=ProcessLookupError("No such process"),
         ):
             assert _is_process_alive(99999) is False
 
     def test_os_error_returns_false(self) -> None:
         """OSError from os.kill → False."""
-        with patch("bearclaw.cli.os.kill", side_effect=OSError("mocked")):
+        with patch("bearclaw.commands.daemon.os.kill", side_effect=OSError("mocked")):
             assert _is_process_alive(99999) is False
 
     def test_process_lookup_error_returns_false(self) -> None:
         """ProcessLookupError from os.kill → False."""
         with patch(
-            "bearclaw.cli.os.kill",
+            "bearclaw.commands.daemon.os.kill",
             side_effect=ProcessLookupError("no such process"),
         ):
             assert _is_process_alive(99999) is False
@@ -101,7 +101,7 @@ class TestGetConfigDir:
     def test_returns_settings_config_dir(self) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = "/fake/.owlbear"
-        with patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings):
+        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
             result = _get_config_dir()
         assert result == Path("/fake/.owlbear")
 
@@ -117,7 +117,7 @@ class TestDaemonStop:
     def test_no_pid_file_prints_not_running(self, tmp_path: Path) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
-        with patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings):
+        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
             _daemon_stop()
         # No PID file → should not crash (prints "not running")
 
@@ -127,8 +127,8 @@ class TestDaemonStop:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.cli._poll_pid_removal", return_value=True),
+            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("bearclaw.commands.daemon._poll_pid_removal", return_value=True),
         ):
             _daemon_stop()
         # Sentinel should be created then cleaned up
@@ -140,9 +140,9 @@ class TestDaemonStop:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.cli._poll_pid_removal", return_value=False),
-            patch("bearclaw.cli.os.kill") as mock_kill,
+            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("bearclaw.commands.daemon._poll_pid_removal", return_value=False),
+            patch("bearclaw.commands.daemon.os.kill") as mock_kill,
         ):
             _daemon_stop()
         mock_kill.assert_called_once_with(12345, 9)
@@ -161,7 +161,7 @@ class TestDaemonStatus:
     ) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
-        with patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings):
+        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
             _daemon_status()
         captured = capsys.readouterr()
         assert "Stopped" in captured.out
@@ -174,8 +174,8 @@ class TestDaemonStatus:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.cli._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
         ):
             _daemon_status()
         captured = capsys.readouterr()
@@ -190,8 +190,8 @@ class TestDaemonStatus:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.cli.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.cli._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
         ):
             _daemon_status()
         captured = capsys.readouterr()
@@ -207,7 +207,7 @@ class TestStopCmd:
     """Test ``bearclaw stop`` invocation via CliRunner."""
 
     def test_stop_cmd_calls_daemon_stop(self) -> None:
-        with patch("bearclaw.cli._daemon_stop") as mock_stop:
+        with patch("bearclaw.commands.daemon._daemon_stop") as mock_stop:
             result = runner.invoke(app, ["stop"])
         assert result.exit_code == 0
         mock_stop.assert_called_once()
@@ -217,7 +217,7 @@ class TestStatusCmd:
     """Test ``bearclaw status`` invocation via CliRunner."""
 
     def test_status_cmd_calls_daemon_status(self) -> None:
-        with patch("bearclaw.cli._daemon_status") as mock_status:
+        with patch("bearclaw.commands.daemon._daemon_status") as mock_status:
             result = runner.invoke(app, ["status"])
         assert result.exit_code == 0
         mock_status.assert_called_once()

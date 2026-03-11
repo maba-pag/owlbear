@@ -115,7 +115,7 @@ class TestSlackAuth:
         }
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp) as mock_post:
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp) as mock_post:
             result = runner.invoke(app, ["slack", "auth"])
 
         assert result.exit_code == 0
@@ -132,7 +132,7 @@ class TestSlackAuth:
         mock_resp.json.return_value = {"ok": False, "error": "invalid_auth"}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp):
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp):
             result = runner.invoke(app, ["slack", "auth"])
 
         assert result.exit_code == 1
@@ -159,7 +159,7 @@ class TestSlackTest:
         mock_resp.json.return_value = {"ok": True}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp) as mock_post:
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp) as mock_post:
             result = runner.invoke(app, ["slack", "test"])
 
         assert result.exit_code == 0
@@ -175,7 +175,7 @@ class TestSlackTest:
         mock_resp.json.return_value = {"ok": False, "error": "channel_not_found"}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp):
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp):
             result = runner.invoke(app, ["slack", "test"])
 
         assert result.exit_code == 1
@@ -202,7 +202,7 @@ class TestSlackStatus:
         mock_resp.json.return_value = {"ok": True, "user": "owlbear-bot", "team": "ws"}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp):
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp):
             result = runner.invoke(app, ["slack", "status"])
 
         assert result.exit_code == 0
@@ -218,7 +218,7 @@ class TestSlackStatus:
         mock_resp.json.return_value = {"ok": False, "error": "invalid_auth"}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("bearclaw.cli.httpx.post", return_value=mock_resp):
+        with patch("bearclaw.commands.slack.httpx.post", return_value=mock_resp):
             result = runner.invoke(app, ["slack", "status"])
 
         assert result.exit_code == 0
@@ -229,7 +229,7 @@ class TestSlackStatus:
         for key, val in _SLACK_ENV.items():
             monkeypatch.setenv(key, val)
 
-        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("timeout")):
+        with patch("bearclaw.commands.slack.httpx.post", side_effect=httpx.HTTPError("timeout")):
             result = runner.invoke(app, ["slack", "status"])
 
         assert result.exit_code == 0
@@ -244,7 +244,10 @@ class TestSlackAuthHttpError:
         for key, val in _SLACK_ENV.items():
             monkeypatch.setenv(key, val)
 
-        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("connection failed")):
+        with patch(
+            "bearclaw.commands.slack.httpx.post",
+            side_effect=httpx.HTTPError("connection failed"),
+        ):
             result = runner.invoke(app, ["slack", "auth"])
 
         assert result.exit_code == 1
@@ -259,7 +262,10 @@ class TestSlackTestHttpError:
         for key, val in _SLACK_ENV.items():
             monkeypatch.setenv(key, val)
 
-        with patch("bearclaw.cli.httpx.post", side_effect=httpx.HTTPError("connection failed")):
+        with patch(
+            "bearclaw.commands.slack.httpx.post",
+            side_effect=httpx.HTTPError("connection failed"),
+        ):
             result = runner.invoke(app, ["slack", "test"])
 
         assert result.exit_code == 1
@@ -305,7 +311,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -328,7 +334,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -354,7 +360,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -380,7 +386,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -406,7 +412,7 @@ class TestRunCmd:
             raise RuntimeError(msg)
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -431,7 +437,7 @@ class TestRunCmd:
         pid_cm = _pid_context_manager()
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -457,7 +463,7 @@ class TestRunCmd:
             captured_kwargs.update(kwargs)
 
         with (
-            patch("bearclaw.cli.OwlBearSettings") as mock_settings_cls,
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -467,3 +473,92 @@ class TestRunCmd:
             runner.invoke(app, ["run"])
 
         assert "settings" in captured_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Cleanup loop awaits async callables (#650 — red phase for #514)
+# ---------------------------------------------------------------------------
+
+
+class TestCleanupLoopAwaitsAsync:
+    """The cleanup loop in _run() must await async callables.
+
+    After #514, the loop uses ``inspect.isawaitable()`` on the return
+    value of each callback so that ``AsyncOpenAI.close()`` (a coroutine)
+    is properly awaited instead of silently discarded.
+    """
+
+    def test_async_cleanup_callable_is_awaited(self, tmp_path: Path) -> None:
+        """An async cleanup callable should be awaited, not just called."""
+        mock_result = _make_bootstrap_result()
+        async_cb = AsyncMock()
+        mock_result.cleanup = [async_cb]
+
+        async def fake_bootstrap(settings, *, channel_name="cli", workspace_root=None):  # noqa: ARG001
+            return mock_result
+
+        async def fake_run_daemon(**kwargs):
+            pass
+
+        with (
+            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
+            patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
+            patch("owlbear.daemon.setup_logging"),
+            patch("owlbear.daemon.PidFile", return_value=_pid_context_manager()),
+        ):
+            mock_settings_cls.return_value.config_dir = str(tmp_path)
+            runner.invoke(app, ["run"])
+
+        # AsyncMock tracks await calls separately from regular calls.
+        # If the loop awaits the result, await_count will be >= 1.
+        assert async_cb.await_count >= 1, (
+            f"Async cleanup callable was called but not awaited "
+            f"(call_count={async_cb.call_count}, await_count={async_cb.await_count})"
+        )
+
+
+class TestChatAsyncRunsCleanup:
+    """_chat_async must run result.cleanup on exit.
+
+    After #514, _chat_async wraps its body in try/finally and invokes
+    all cleanup callables (including async ones) when the chat loop ends.
+    Currently _chat_async has no cleanup handling at all — second leak vector.
+    """
+
+    def test_chat_cleanup_invoked_on_exit(self, tmp_path: Path) -> None:
+        """Cleanup callbacks are called when _chat_async finishes."""
+        cleanup_cb = MagicMock()
+        mock_result = _make_bootstrap_result()
+        mock_result.cleanup = [cleanup_cb]
+        # Make channel.receive return None to exit immediately
+        mock_result.channel.receive = AsyncMock(return_value=None)
+        mock_result.channel.send = AsyncMock()
+        mock_result.agent.session = MagicMock()
+        mock_result.agent.session.load = MagicMock()
+
+        with (
+            patch("bearclaw.commands.chat.OwlBearSettings") as mock_settings_cls,
+            patch(
+                "bearclaw.commands.chat.bootstrap",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+        ):
+            mock_settings_cls.return_value = MagicMock(
+                config_dir=str(tmp_path),
+                chat_model="test-model",
+            )
+            import asyncio
+
+            from bearclaw.commands.chat import _chat_async
+
+            asyncio.run(
+                _chat_async(
+                    model=None,
+                    session=None,
+                    workspace_root=tmp_path,
+                )
+            )
+
+        cleanup_cb.assert_called_once()

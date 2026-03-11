@@ -87,7 +87,7 @@ class TestKnowledgeSourceHelp:
 class TestKnowledgeSourceAdd:
     """bearclaw knowledge-source add — creates a new source."""
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_add_url_list(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
@@ -118,7 +118,7 @@ class TestKnowledgeSourceAdd:
             "https://other.com",
         ]
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_add_crawl(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
@@ -149,7 +149,7 @@ class TestKnowledgeSourceAdd:
         assert created.config["max_depth"] == 2
         assert created.config["max_pages"] == 100
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_add_file_glob(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
@@ -174,7 +174,7 @@ class TestKnowledgeSourceAdd:
         assert str(created.source_type) == "file_glob"
         assert created.config["pattern"] == "src/**/*.py"
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_add_with_scope(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
@@ -200,7 +200,7 @@ class TestKnowledgeSourceAdd:
 
     def test_add_url_list_requires_urls(self) -> None:
         """url_list type without --urls should fail."""
-        with patch("bearclaw.cli._get_source_store") as mock_get_store:
+        with patch("bearclaw.commands.knowledge_source._get_source_store") as mock_get_store:
             mock_get_store.return_value = _mock_store()
             result = runner.invoke(
                 app,
@@ -218,7 +218,7 @@ class TestKnowledgeSourceAdd:
 
     def test_add_crawl_requires_seeds(self) -> None:
         """crawl type without --seeds should fail."""
-        with patch("bearclaw.cli._get_source_store") as mock_get_store:
+        with patch("bearclaw.commands.knowledge_source._get_source_store") as mock_get_store:
             mock_get_store.return_value = _mock_store()
             result = runner.invoke(
                 app,
@@ -236,7 +236,7 @@ class TestKnowledgeSourceAdd:
 
     def test_add_file_glob_requires_pattern(self) -> None:
         """file_glob type without --pattern should fail."""
-        with patch("bearclaw.cli._get_source_store") as mock_get_store:
+        with patch("bearclaw.commands.knowledge_source._get_source_store") as mock_get_store:
             mock_get_store.return_value = _mock_store()
             result = runner.invoke(
                 app,
@@ -279,7 +279,7 @@ class TestKnowledgeSourceAdd:
 class TestKnowledgeSourceList:
     """bearclaw knowledge-source list — table output."""
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_list_empty(self, mock_get_store: MagicMock) -> None:
         store = _mock_store(sources=[])
         mock_get_store.return_value = store
@@ -288,7 +288,7 @@ class TestKnowledgeSourceList:
         assert result.exit_code == 0
         assert "No knowledge sources" in result.output
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_list_shows_sources(self, mock_get_store: MagicMock) -> None:
         src = _make_source(name="docs", source_type="url_list")
         store = _mock_store(sources=[src])
@@ -299,7 +299,7 @@ class TestKnowledgeSourceList:
         assert "docs" in result.output
         assert "url_list" in result.output
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_list_renders_rich_table(self, mock_get_store: MagicMock) -> None:
         """knowledge-source list renders a Rich table with box-drawing characters."""
         src = _make_source(name="docs", source_type="url_list")
@@ -310,7 +310,7 @@ class TestKnowledgeSourceList:
         assert result.exit_code == 0
         assert "\u2502" in result.output  # │ box-drawing vertical from Rich Table
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_list_with_scope_filter(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         mock_get_store.return_value = store
@@ -318,7 +318,7 @@ class TestKnowledgeSourceList:
         runner.invoke(app, ["knowledge-source", "list", "--scope", "my-project"])
         store.list_all.assert_called_once_with(scope="my-project")
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_list_table_has_headers(self, mock_get_store: MagicMock) -> None:
         src = _make_source()
         store = _mock_store(sources=[src])
@@ -340,7 +340,7 @@ class TestKnowledgeSourceList:
 class TestKnowledgeSourceShow:
     """bearclaw knowledge-source show NAME — full source details."""
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_show_existing_source(self, mock_get_store: MagicMock) -> None:
         src = _make_source(
             name="docs",
@@ -357,7 +357,7 @@ class TestKnowledgeSourceShow:
         assert "url_list" in result.output
         assert "example.com" in result.output
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_show_nonexistent_source(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         store.get_by_name.return_value = None
@@ -367,7 +367,7 @@ class TestKnowledgeSourceShow:
         assert result.exit_code == 1
         assert "ghost" in result.output.lower()
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_show_displays_config_json(self, mock_get_store: MagicMock) -> None:
         src = _make_source(
             config={"urls": ["https://a.com", "https://b.com"]},
@@ -390,7 +390,7 @@ class TestKnowledgeSourceShow:
 class TestKnowledgeSourceRemove:
     """bearclaw knowledge-source remove NAME — delete source."""
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_remove_existing(self, mock_get_store: MagicMock) -> None:
         src = _make_source(name="old-source")
         store = _mock_store()
@@ -402,7 +402,7 @@ class TestKnowledgeSourceRemove:
         assert "old-source" in result.output
         store.delete.assert_called_once_with(src.id)
 
-    @patch("bearclaw.cli._get_source_store")
+    @patch("bearclaw.commands.knowledge_source._get_source_store")
     def test_remove_nonexistent(self, mock_get_store: MagicMock) -> None:
         store = _mock_store()
         store.get_by_name.return_value = None

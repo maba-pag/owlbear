@@ -84,9 +84,9 @@ def _patch_and_run(  # noqa: PLR0913
         history=history,
     )
     with (
-        patch("bearclaw.cli.OwlBearSettings", s_cls),
-        patch("bearclaw.cli.SessionStore", ss_cls),
-        patch("owlbear.bootstrap.bootstrap", boot_fn),
+        patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+        patch("bearclaw.commands.chat.SessionStore", ss_cls),
+        patch("bearclaw.commands.chat.bootstrap", boot_fn),
     ):
         result = _invoke_chat(input_text, extra_args=extra_args)
     return result, s_cls.return_value, ss_cls.return_value, agent
@@ -221,9 +221,9 @@ class TestChatModelFlag:
     def test_model_flag_calls_update_model(self) -> None:
         s_cls, ss_cls, boot_fn, agent = _make_mocks()
         with (
-            patch("bearclaw.cli.OwlBearSettings", s_cls),
-            patch("bearclaw.cli.SessionStore", ss_cls),
-            patch("owlbear.bootstrap.bootstrap", boot_fn),
+            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("bearclaw.commands.chat.SessionStore", ss_cls),
+            patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):
             result = _invoke_chat("exit\n", extra_args=["--model", "claude-sonnet"])
         assert result.exit_code == 0
@@ -266,9 +266,9 @@ class TestBootstrapIntegration:
     def test_bootstrap_called_with_settings_and_cli_channel(self) -> None:
         s_cls, ss_cls, boot_fn, _agent = _make_mocks()
         with (
-            patch("bearclaw.cli.OwlBearSettings", s_cls),
-            patch("bearclaw.cli.SessionStore", ss_cls),
-            patch("owlbear.bootstrap.bootstrap", boot_fn),
+            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("bearclaw.commands.chat.SessionStore", ss_cls),
+            patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):
             result = _invoke_chat("exit\n")
 
@@ -282,9 +282,9 @@ class TestBootstrapIntegration:
         """After bootstrap, agent.session must be the user-specified store."""
         s_cls, ss_cls, boot_fn, agent = _make_mocks(session_name="my-sess")
         with (
-            patch("bearclaw.cli.OwlBearSettings", s_cls),
-            patch("bearclaw.cli.SessionStore", ss_cls),
-            patch("owlbear.bootstrap.bootstrap", boot_fn),
+            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("bearclaw.commands.chat.SessionStore", ss_cls),
+            patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):
             result = _invoke_chat("exit\n", extra_args=["--session", "my-sess"])
 
@@ -303,52 +303,52 @@ class TestDetectGitHubRemote:
 
     def test_ssh_remote_parsed(self, tmp_path: Path) -> None:
         """SSH-style remote → (owner, repo) tuple."""
-        from bearclaw.cli import _detect_github_remote
+        from bearclaw.commands.chat import _detect_github_remote
 
         mock_result = MagicMock(spec=subprocess.CompletedProcess)
         mock_result.returncode = 0
         mock_result.stdout = "git@github.com:owner/repo.git\n"
 
-        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+        with patch("bearclaw.commands.chat.subprocess.run", return_value=mock_result):
             result = _detect_github_remote(tmp_path)
 
         assert result == ("owner", "repo")
 
     def test_https_remote_parsed(self, tmp_path: Path) -> None:
         """HTTPS-style remote → (owner, repo) tuple."""
-        from bearclaw.cli import _detect_github_remote
+        from bearclaw.commands.chat import _detect_github_remote
 
         mock_result = MagicMock(spec=subprocess.CompletedProcess)
         mock_result.returncode = 0
         mock_result.stdout = "https://github.com/owner/repo.git\n"
 
-        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+        with patch("bearclaw.commands.chat.subprocess.run", return_value=mock_result):
             result = _detect_github_remote(tmp_path)
 
         assert result == ("owner", "repo")
 
     def test_git_failure_returns_none(self, tmp_path: Path) -> None:
         """Non-zero git exit code → None."""
-        from bearclaw.cli import _detect_github_remote
+        from bearclaw.commands.chat import _detect_github_remote
 
         mock_result = MagicMock(spec=subprocess.CompletedProcess)
         mock_result.returncode = 128
         mock_result.stdout = ""
 
-        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+        with patch("bearclaw.commands.chat.subprocess.run", return_value=mock_result):
             result = _detect_github_remote(tmp_path)
 
         assert result is None
 
     def test_invalid_remote_returns_none(self, tmp_path: Path) -> None:
         """Unparseable remote URL → None (ValueError caught)."""
-        from bearclaw.cli import _detect_github_remote
+        from bearclaw.commands.chat import _detect_github_remote
 
         mock_result = MagicMock(spec=subprocess.CompletedProcess)
         mock_result.returncode = 0
         mock_result.stdout = "not-a-valid-url\n"
 
-        with patch("bearclaw.cli.subprocess.run", return_value=mock_result):
+        with patch("bearclaw.commands.chat.subprocess.run", return_value=mock_result):
             result = _detect_github_remote(tmp_path)
 
         assert result is None

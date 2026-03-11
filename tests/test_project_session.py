@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-from bearclaw.cli import _build_chat_session, chat
+from bearclaw.commands.chat import _build_chat_session, chat
 
 # ---------------------------------------------------------------------------
 # Session creation in project directory
@@ -52,7 +52,9 @@ class TestSessionInProjectDir:
         settings.config_dir = tmp_path
 
         _name, store = _build_chat_session(
-            settings, "compat-session", project_id=None,
+            settings,
+            "compat-session",
+            project_id=None,
         )
 
         expected = tmp_path / "sessions" / "compat-session.jsonl"
@@ -84,10 +86,14 @@ class TestSessionIsolation:
         settings.config_dir = tmp_path
 
         _, store_a = _build_chat_session(
-            settings, "shared-name", project_id="project-a",
+            settings,
+            "shared-name",
+            project_id="project-a",
         )
         _, store_b = _build_chat_session(
-            settings, "shared-name", project_id="project-b",
+            settings,
+            "shared-name",
+            project_id="project-b",
         )
 
         assert store_a.path != store_b.path
@@ -95,14 +101,17 @@ class TestSessionIsolation:
         assert "project-b" in str(store_b.path)
 
     def test_project_session_does_not_clash_with_global(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """A project session and a global session with the same name differ."""
         settings = MagicMock()
         settings.config_dir = tmp_path
 
         _, store_proj = _build_chat_session(
-            settings, "same-name", project_id="proj",
+            settings,
+            "same-name",
+            project_id="proj",
         )
         _, store_global = _build_chat_session(settings, "same-name")
 
@@ -114,10 +123,14 @@ class TestSessionIsolation:
         settings.config_dir = tmp_path
 
         _, store_a = _build_chat_session(
-            settings, "iso-test", project_id="proj-a",
+            settings,
+            "iso-test",
+            project_id="proj-a",
         )
         _, store_b = _build_chat_session(
-            settings, "iso-test", project_id="proj-b",
+            settings,
+            "iso-test",
+            project_id="proj-b",
         )
 
         msg = ModelRequest(parts=[UserPromptPart(content="hello from A")])
@@ -144,7 +157,9 @@ class TestBootstrapSessionProjectPath:
         settings.config_dir = tmp_path
 
         _, store = _build_chat_session(
-            settings, "boot-session", project_id="my-proj",
+            settings,
+            "boot-session",
+            project_id="my-proj",
         )
 
         assert store.path.parent.parent.name == "my-proj"
@@ -165,16 +180,17 @@ class TestChatProjectFlag:
         assert "project" in sig.parameters
 
     def test_build_chat_session_with_project_resolves_path(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """_build_chat_session with project_id routes to project sessions dir."""
         settings = MagicMock()
         settings.config_dir = tmp_path
 
         _name, store = _build_chat_session(
-            settings, "proj-chat", project_id="web-app",
+            settings,
+            "proj-chat",
+            project_id="web-app",
         )
 
-        assert store.path == (
-            tmp_path / "projects" / "web-app" / "sessions" / "proj-chat.jsonl"
-        )
+        assert store.path == (tmp_path / "projects" / "web-app" / "sessions" / "proj-chat.jsonl")
