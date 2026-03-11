@@ -37,25 +37,25 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 
 ## Tech stack
 
-| Component       | Technology                                 | Notes                                                                                                |
-| --------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Language        | Python 3.12+                               | `uv` package manager, never bare `pip`                                                               |
-| Runtime         | Standalone daemon                          | BearClaw CLI daemon; dual-coroutine (`channel_loop` + `poll_loop`) in `asyncio.TaskGroup`            |
-| Agents          | PydanticAI                                 | Structured output, dependency injection; opt-in `SummarizingCondenser` for long conversations        |
-| LLM provider    | GitHub Copilot OAuth                       | Device-flow auth, `api.individual.githubcopilot.com`                                                 |
-| Retry           | tenacity                                   | Two-layer retry (tool + daemon); `CircuitBreaker` on Copilot HTTP transport                          |
-| CLI             | Typer (BearClaw)                           | Entry point for daemon, auth, and user commands                                                      |
-| HTTP            | httpx + truststore                         | Always `timeout=httpx.Timeout(T, connect=5)` on every `httpx.AsyncClient`                            |
-| Config          | pydantic-settings                          | Env vars + TOML config file, validated at startup                                                    |
-| Knowledge       | SQLite (graph) + Qdrant (vectors) + BGE-M3 | Hybrid search (graph + vector); queries scoped to active project when set                            |
-| Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via trafilatura; optional `search` extra               |
-| Browser         | Playwright                                 | CDP `localhost` only; isolated browser context (SEC-07); `screenshot_mode` config setting            |
-| Messaging       | Slack (slack_sdk)                          | `ChannelPlugin` protocol; CLI + Slack implementations; Socket Mode WebSocket                         |
-| Safety          | Approval gates                             | Three layers: `ApprovalPolicy` gates + `sandbox_path()` confinement + `CommandSafetyGuard` blocklist. See `SECURITY.md` |
-| Projects        | JSON file store                            | Multi-project `ProjectStore` CRUD; 4 templates (bare, python-uv, python-pip, node)                   |
-| Diagrams        | Kroki HTTP API                             | Kroki API; supports mermaid, plantuml, graphviz, d2, c4plantuml; output svg/png                      |
-| Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                |
-| Task board      | kanban-md                                  | Go CLI binary in `kanban/`; `KanbanToolset` exposes board ops to agents                              |
+| Component       | Technology                                 | Notes                                                                                                                                                                                                              |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Language        | Python 3.12+                               | `uv` package manager, never bare `pip`                                                                                                                                                                             |
+| Runtime         | Standalone daemon                          | BearClaw CLI daemon; dual-coroutine (`channel_loop` + `poll_loop`) in `asyncio.TaskGroup`                                                                                                                          |
+| Agents          | PydanticAI                                 | Structured output, dependency injection; opt-in `SummarizingCondenser` for long conversations                                                                                                                      |
+| LLM provider    | GitHub Copilot OAuth                       | Device-flow auth, `api.individual.githubcopilot.com`                                                                                                                                                               |
+| Retry           | tenacity                                   | Two-layer retry (tool + daemon); `CircuitBreaker` on Copilot HTTP transport                                                                                                                                        |
+| CLI             | Typer (BearClaw)                           | Entry point for daemon, auth, and user commands                                                                                                                                                                    |
+| HTTP            | httpx + truststore                         | Always `timeout=httpx.Timeout(T, connect=5)` on every `httpx.AsyncClient`                                                                                                                                          |
+| Config          | pydantic-settings                          | Env vars + TOML config file, validated at startup                                                                                                                                                                  |
+| Knowledge       | SQLite (graph) + Qdrant (vectors) + BGE-M3 | Hybrid search (graph + vector); queries scoped to active project when set                                                                                                                                          |
+| Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via trafilatura; optional `search` extra                                                                                                                             |
+| Browser         | Playwright                                 | CDP `localhost` only; isolated browser context (SEC-07); `screenshot_mode` config setting; a11y snapshot via CDP `getFullAXTree`                                                                                   |
+| Messaging       | Slack (slack_sdk)                          | `ChannelPlugin` protocol; CLI + Slack implementations; Socket Mode WebSocket                                                                                                                                       |
+| Safety          | Approval gates                             | Six layers: `RolePolicy` tool allow-list + `ApprovalPolicy` gates + `sandbox_path()` confinement + `CommandSafetyGuard` blocklist + `ContentInjectionGuard` content scanning + `wrap_untrusted_content()` web-content tagging. See `SECURITY.md` |
+| Projects        | JSON file store                            | Multi-project `ProjectStore` CRUD; 4 templates (bare, python-uv, python-pip, node)                                                                                                                                 |
+| Diagrams        | Kroki HTTP API                             | Kroki API; supports mermaid, plantuml, graphviz, d2, c4plantuml; output svg/png                                                                                                                                    |
+| Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                                                                                                                              |
+| Task board      | kanban-md                                  | Go CLI binary in `kanban/`; `KanbanToolset` exposes board ops to agents                                                                                                                                            |
 
 ## kanban-md usage
 
