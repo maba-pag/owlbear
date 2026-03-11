@@ -14,8 +14,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import Counter
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from pydantic import BaseModel
 
@@ -23,7 +23,6 @@ from owlbear.core.jsonl_store import JsonlStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from datetime import timedelta
     from pathlib import Path
 
     from owlbear.core.hooks import HookEvent, HookRegistry
@@ -53,6 +52,14 @@ class ObservabilityEvent(BaseModel, frozen=True):
     error: str | None = None
     duration_ms: float | None = None
     metadata: dict = {}
+
+
+class ToolStats(TypedDict):
+    """Per-tool statistics returned by :meth:`EventStore.tool_stats`."""
+
+    call_count: int
+    error_count: int
+    avg_duration_ms: float
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +123,7 @@ class EventStore(JsonlStore[ObservabilityEvent]):
             "agents_by_usage": dict(agent_counts),
         }
 
-    def tool_stats(self, window: timedelta | None = None) -> dict[str, dict]:
+    def tool_stats(self, window: timedelta | None = None) -> dict[str, ToolStats]:
         """Per-tool statistics within *window* (``None`` = all events).
 
         Returns a dict mapping ``tool_name`` to
