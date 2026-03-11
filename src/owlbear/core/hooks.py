@@ -13,7 +13,27 @@ import logging
 from enum import StrEnum
 from typing import Any, Callable, NotRequired, TypedDict, get_args  # noqa: UP035
 
+from owlbear.core.test_hook import (
+    TestResult,  # noqa: TC001  # runtime import needed for get_type_hints
+)
+
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "DaemonStartupData",
+    "Handler",
+    "HookEvent",
+    "HookRegistry",
+    "OnErrorData",
+    "OnMessageData",
+    "PostToolUseData",
+    "PreToolUseData",
+    "SessionEndData",
+    "SessionStartData",
+    "SubagentCompleteData",
+    "TaskCompleteData",
+    "emit_pre_tool_use",
+]
 
 Handler = Callable[[dict[str, Any]], None]
 # Python 3.12 flattens Callable.__args__; restore the canonical get_args()
@@ -46,6 +66,8 @@ class PostToolUseData(TypedDict):
     event_type: NotRequired[str]
     approval_required: NotRequired[bool]
     approval_decision: NotRequired[str]
+    grant_ttl: NotRequired[int]
+    grant_max_uses: NotRequired[int]
 
 
 class OnMessageData(TypedDict):
@@ -65,12 +87,16 @@ class SessionStartData(TypedDict):
     """Payload for :attr:`HookEvent.SESSION_START`."""
 
     session_id: str
+    workspace_root: NotRequired[str]
+    context: NotRequired[dict[str, str]]
 
 
 class SessionEndData(TypedDict):
     """Payload for :attr:`HookEvent.SESSION_END`."""
 
     session_id: str
+    messages: NotRequired[list]
+    test_results: NotRequired[list[TestResult]]
 
 
 class SubagentCompleteData(TypedDict):
@@ -79,8 +105,8 @@ class SubagentCompleteData(TypedDict):
     task_id: NotRequired[str]
     created_files: NotRequired[list[str]]
     test_files: NotRequired[list[str]]
-    result: NotRequired[str]
-    verification: NotRequired[str]
+    result: NotRequired[object]
+    verification: NotRequired[dict]
 
 
 class TaskCompleteData(TypedDict):
@@ -166,3 +192,23 @@ class HookRegistry:
                     handler,
                     event.value,
                 )
+
+
+async def emit_pre_tool_use(
+    hooks: HookRegistry | None,
+    tool_name: str,
+    args: dict[str, object],
+) -> None:
+    """Emit :attr:`HookEvent.PRE_TOOL_USE` if *hooks* is not ``None``."""
+    if hooks is not None:
+        await hooks.emit(HookEvent.PRE_TOOL_USE, {"tool_name": tool_name, "args": args})
+
+
+# Resolve PEP 563 stringified annotations so inspect.signature() returns
+# real types at runtime (needed by hook-consumer introspection tests).
+emit_pre_tool_use.__annotations__ = {
+    "hooks": HookRegistry | None,
+    "tool_name": str,
+    "args": dict[str, object],
+    "return": None,
+}

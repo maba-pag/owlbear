@@ -24,7 +24,8 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
-from owlbear.core.hooks import HookEvent
+from owlbear.core.hooks import emit_pre_tool_use
+from owlbear.paths import sandbox_path
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -162,26 +163,13 @@ class TerminalToolset(FunctionToolset):
                 is killed.
         """
         # -- Hook emission ------------------------------------------------
-        if self._hooks is not None:
-            await self._hooks.emit(
-                HookEvent.PRE_TOOL_USE,
-                {"tool_name": "run_command", "args": {"command": command}},
-            )
+        await emit_pre_tool_use(self._hooks, "run_command", {"command": command})
 
         # -- Resolve working directory ------------------------------------
         if working_dir is None:
             cwd = self._workspace_root
         else:
-            if "\x00" in working_dir:
-                msg = f"Path outside workspace: {working_dir!r}"
-                raise PermissionError(msg)
-            cwd_path = Path(working_dir)
-            cwd = (
-                cwd_path if cwd_path.is_absolute() else self._workspace_root / cwd_path
-            ).resolve()
-            if not cwd.is_relative_to(self._workspace_root):
-                msg = f"Path outside workspace: {working_dir}"
-                raise PermissionError(msg)
+            cwd = sandbox_path(self._workspace_root, working_dir)
 
         # -- Launch subprocess --------------------------------------------
         logger.debug("run_command: %r  cwd=%s", command, cwd)

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
-from owlbear.core.hooks import HookEvent
+from owlbear.core.hooks import emit_pre_tool_use
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -84,14 +84,6 @@ class KanbanToolset(FunctionToolset):
         stdout = stdout_bytes.decode("utf-8", errors="replace")
         stderr = stderr_bytes.decode("utf-8", errors="replace")
         return stdout, stderr, proc.returncode or 0
-
-    async def _emit_hook(self, tool_name: str, args: dict[str, object]) -> None:
-        """Emit :attr:`HookEvent.PRE_TOOL_USE` if hooks are configured."""
-        if self._hooks is not None:
-            await self._hooks.emit(
-                HookEvent.PRE_TOOL_USE,
-                {"tool_name": tool_name, "args": args},
-            )
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -206,7 +198,7 @@ class KanbanToolset(FunctionToolset):
             body: Task body / acceptance criteria.
             depends_on: Comma-separated dependency task IDs.
         """
-        await self._emit_hook("kanban_create", {"title": title})
+        await emit_pre_tool_use(self._hooks, "kanban_create", {"title": title})
         args: list[str] = ["create", title]
         if priority is not None:
             args.extend(["--priority", priority])
@@ -228,7 +220,7 @@ class KanbanToolset(FunctionToolset):
             task_id: The task ID to move.
             status: Target status column.
         """
-        await self._emit_hook("kanban_move", {"task_id": task_id, "status": status})
+        await emit_pre_tool_use(self._hooks, "kanban_move", {"task_id": task_id, "status": status})
         stdout, stderr, rc = await self._run_kanban("move", task_id, status)
         if rc != 0:
             return f"error: {stderr.strip()}"
@@ -256,7 +248,7 @@ class KanbanToolset(FunctionToolset):
             priority: Change priority level.
             append_body: Append text to task body.
         """
-        await self._emit_hook("kanban_edit", {"task_id": task_id})
+        await emit_pre_tool_use(self._hooks, "kanban_edit", {"task_id": task_id})
         args: list[str] = ["edit", task_id]
         if body is not None:
             args.extend(["--body", body])
@@ -289,7 +281,7 @@ class KanbanToolset(FunctionToolset):
             claim: Claim the task for an agent/user.
             move: Move the picked task to this status.
         """
-        await self._emit_hook("kanban_pick", {})
+        await emit_pre_tool_use(self._hooks, "kanban_pick", {})
         args: list[str] = ["pick"]
         if status is not None:
             args.extend(["--status", status])

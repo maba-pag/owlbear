@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 import httpx
 from pydantic_ai.toolsets import FunctionToolset
 
-from owlbear.core.hooks import HookEvent
+from owlbear.core.hooks import emit_pre_tool_use
 from owlbear.core.retry import TRANSIENT_RETRY
 
 if TYPE_CHECKING:
@@ -81,6 +81,8 @@ class GitHubToolset(FunctionToolset):
             from git remote (not yet implemented).
         hooks: Optional :class:`HookRegistry` for hook emission on
             destructive operations.
+        _client: Optional pre-configured :class:`httpx.AsyncClient`.
+            Created automatically if not provided.
     """
 
     tool_alias: ClassVar[str] = "github"
@@ -91,6 +93,7 @@ class GitHubToolset(FunctionToolset):
         owner: str | None = None,
         repo: str | None = None,
         hooks: HookRegistry | None = None,
+        _client: httpx.AsyncClient | None = None,
     ) -> None:
         raw = token.get_secret_value()
         if not raw or not raw.strip():
@@ -102,6 +105,7 @@ class GitHubToolset(FunctionToolset):
         self._owner = owner or ""
         self._repo = repo or ""
         self._hooks = hooks
+        self._client = _client or httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5))
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -116,14 +120,6 @@ class GitHubToolset(FunctionToolset):
             "X-GitHub-Api-Version": "2022-11-28",
         }
 
-    async def _emit_hook(self, tool_name: str, args: dict[str, object]) -> None:
-        """Emit :attr:`HookEvent.PRE_TOOL_USE` if hooks are configured."""
-        if self._hooks is not None:
-            await self._hooks.emit(
-                HookEvent.PRE_TOOL_USE,
-                {"tool_name": tool_name, "args": args},
-            )
-
     @TRANSIENT_RETRY
     async def _api_request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
         """Send an HTTP request to the GitHub API with retry on transient errors.
@@ -136,8 +132,11 @@ class GitHubToolset(FunctionToolset):
         Returns:
             The :class:`httpx.Response` on success or non-transient status.
         """
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=5)) as client:
-            return await client.request(method, url, headers=self._headers(), **kwargs)
+        return await self._client.request(method, url, headers=self._headers(), **kwargs)
+
+    async def aclose(self) -> None:
+        """Close the shared httpx client."""
+        await self._client.aclose()
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -188,7 +187,7 @@ class GitHubToolset(FunctionToolset):
             body: Optional PR description.
         """
         hook_args: dict[str, object] = {"title": title, "head": head, "base": base, "body": body}
-        await self._emit_hook("create_pr", hook_args)
+        await emit_pre_tool_use(self._hooks, "create_pr", hook_args)
 
         url = f"{_BASE_URL}/repos/{self._owner}/{self._repo}/pulls"
         payload = {"title": title, "head": head, "base": base, "body": body}

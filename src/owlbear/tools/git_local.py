@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
-from owlbear.core.hooks import HookEvent
+from owlbear.core.hooks import emit_pre_tool_use
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -83,14 +83,6 @@ class GitLocalToolset(FunctionToolset):
         stdout = stdout_bytes.decode("utf-8", errors="replace")
         stderr = stderr_bytes.decode("utf-8", errors="replace")
         return stdout, stderr, proc.returncode or 0
-
-    async def _emit_hook(self, tool_name: str, args: dict[str, object]) -> None:
-        """Emit :attr:`HookEvent.PRE_TOOL_USE` if hooks are configured."""
-        if self._hooks is not None:
-            await self._hooks.emit(
-                HookEvent.PRE_TOOL_USE,
-                {"tool_name": tool_name, "args": args},
-            )
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -179,7 +171,7 @@ class GitLocalToolset(FunctionToolset):
         """
         if _CO_AUTHORED_BY not in message:
             message = f"{message}\n\n{_CO_AUTHORED_BY}"
-        await self._emit_hook("git_commit", {"message": message})
+        await emit_pre_tool_use(self._hooks, "git_commit", {"message": message})
         stdout, stderr, rc = await self._run_git("commit", "-m", message)
         if rc != 0:
             return f"error: {stderr.strip()}"
@@ -204,7 +196,7 @@ class GitLocalToolset(FunctionToolset):
 
         Emits :attr:`HookEvent.PRE_TOOL_USE` before executing.
         """
-        await self._emit_hook("git_push", {"remote": remote, "branch": branch})
+        await emit_pre_tool_use(self._hooks, "git_push", {"remote": remote, "branch": branch})
         stdout, stderr, rc = await self._run_git("push", remote, branch)
         if rc != 0:
             return f"error: {stderr.strip()}"
