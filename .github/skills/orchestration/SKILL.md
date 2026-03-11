@@ -15,8 +15,9 @@ The orchestrator maintains constant-size context:
 
 - **No board state.** The planner reads the board each cycle. You never call `kanban-md list` or `kanban-md show`.
 - **No signal interpretation.** Subagents return a short Channel A diagnostic line. You check only: did the agent return normally, or did it error/crash? You do not parse verdicts or route based on signals.
-- **No retry tracking state.** If an agent crashes, you retry once immediately. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
-- **Prior cycle results discarded.** After each plan→dispatch cycle, all results are gone. The next cycle starts fresh with only the scope filter and any failure context from the current cycle.
+- **No retry tracking state — except stale_retried.** If an agent crashes, you retry once immediately. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
+- **Stale-retried tracking.** When the planner's dispatch includes a `retry_hint` for a task, add that task ID to a `stale_retried` set. Pass these IDs in the failure context so the planner can block them if they remain stale. Clear an ID when the task moves to a new status.
+- **Prior cycle results discarded.** After each plan→dispatch cycle, all results are gone. The next cycle starts fresh with only the scope filter, crash failure IDs, and `stale_retried` IDs from the current cycle.
 
 ## Signal contracts
 
@@ -54,11 +55,22 @@ the previous cycle:
 runSubagent("planner", "Plan: {scope_filter}", "Plan dispatch")
 ```
 
-If there were failures from the previous cycle (agents that crashed twice):
+If there were failures from the previous cycle (crashes or stale retries):
 
 ```
-runSubagent("planner", "Plan: {scope_filter}\n\nPrevious cycle failures:\n#{id}: agent crashed twice\n#{id}: agent crashed twice", "Plan dispatch")
+runSubagent("planner", "Plan: {scope_filter}\n\nPrevious cycle: #{id} crashed twice; #{id2} stale, retried with hint", "Plan dispatch")
 ```
+
+The failure context includes two categories:
+
+- **Crash failures:** `#{id} crashed twice` — agent errored on both attempts.
+- **Stale-retried IDs:** `#{id} stale, retried with hint` — task was dispatched with
+  a `retry_hint` this cycle but hasn't moved. Pass these IDs so the planner can block
+  them if they remain stale next cycle.
+
+Track `stale_retried` IDs across cycles: when the planner's dispatch includes a
+`retry_hint`, add that task ID to the stale_retried set. Clear an ID from the set
+when the task moves to a new status (it's no longer stale).
 
 Receive the JSON plan. If `dispatch` is empty (only blocked tasks), report the blocked
 tasks to the user and stop.
@@ -82,6 +94,17 @@ After all waves from this plan complete, proceed to Step 3.
 **Dispatch prompt contains ONLY the task ID.** Subagents read their own AC via
 `kanban\kanban-md.exe show {id}` in their skill Step 1. Never include AC text, file paths,
 shell commands, pytest flags, or step-by-step procedures in the dispatch prompt.
+
+**Exception — retry_hint:** When a dispatch entry includes a `retry_hint` field (set by
+the planner for first-stale tasks), append it to the dispatch prompt:
+
+```
+runSubagent("builder", "Build: #103\nRetry context: Review FAIL: missing coverage on parser module", "Builder #103")
+```
+
+This is the sole exception to the ID-only dispatch rule. The hint is a single line
+(≤120 chars) summarizing the prior failure — it gives the agent targeted context
+without restating AC or procedures.
 
 Example — 6 tasks across 2 waves:
 
@@ -138,7 +161,7 @@ Before reporting session complete:
 - [ ] Every task in `dispatch` was dispatched (none silently dropped)
 - [ ] Waves of at most 4 parallel calls each
 - [ ] ONE task per subagent call — no batching multiple tasks into one call
-- [ ] Dispatch prompts contained ONLY task IDs — no AC text, commands, or procedures
+- [ ] Dispatch prompts contained ONLY task IDs — except `retry_hint` lines for stale retries
 - [ ] Errors retried exactly once — no infinite retry loops
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
 - [ ] `manage_todo_list` updated at every step transition

@@ -100,7 +100,7 @@ Cycle 2 (Plan): Re-planning with failure context for #{id6}...
 
 - Do not read the kanban board — the planner reads it for you
 - Do not interpret subagent results — you only check success vs. crash
-- Do not include AC text, file paths, or procedures in dispatch prompts — only task IDs
+- Do not include AC text, file paths, or procedures in dispatch prompts — only task IDs (exception: `retry_hint` lines for stale retries, per orchestration skill Step 2)
 - Do not run `kanban-md move`, `kanban-md edit`, or any terminal command — you have no terminal tools
 - Do not create tasks — dispatch `kanban-planner` if new tasks are needed
 - Do not modify task content — agents move/block their own tasks
@@ -185,6 +185,25 @@ Cycle 2 (Plan): Re-planning with failure context: "#47 crashed twice"
 Planner returned 2 tasks. #47 in blocked array (stale).
 
 Reporting to user: "#47 failed twice — planner flagged as blocked. May need investigation."
+</good_example>
+
+<good_example why="Stale task retried with hint, then blocked on second stale">
+Cycle 1 (Wave 1/1): #52 (builder) dispatched normally. Returns OK.
+
+Cycle 2 (Plan): Re-planning. Planner sees #52 hasn't moved (still in-progress).
+Planner returns #52 with retry_hint: "Review FAIL: missing coverage on parser module"
+
+Cycle 2 (Wave 1/1):
+runSubagent("builder", "Build: #52\nRetry context: Review FAIL: missing coverage on parser module", "Builder #52")
+
+#52 returns OK. Added to stale_retried set.
+
+Cycle 3 (Plan): Re-planning with failure context: "#52 stale, retried with hint"
+Planner sees #52 still hasn't moved AND it's in stale_retried → blocks it.
+
+Planner: {"dispatch":[...],"blocked":[{"id":52,"reason":"STALE — retried with hint, still unchanged"}]}
+
+Reporting to user: "#52 stale after guided retry — blocked. Needs investigation."
 </good_example>
 
 <bad_example why="Interpreting results instead of re-planning">

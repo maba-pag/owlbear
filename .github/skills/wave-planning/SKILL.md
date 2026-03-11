@@ -46,9 +46,29 @@ Apply the filter to `kanban\kanban-md.exe list --compact`. Examples:
 If the scope returns 0 tasks, output an empty JSON plan (`{"dispatch":[],"blocked":[]}`) and stop.
 
 **Failure context:** If the orchestrator reports tasks that failed in the previous cycle,
-note them. If a task appears at the same status it was dispatched from last cycle (it
-hasn't moved), flag it as STALE in the BLOCKED section — the agent ran but nothing
-changed, which indicates a structural problem that a retry won't fix.
+note them. Failures come in two flavors:
+
+- **Crash failures:** Agent crashed twice. Note the ID — these tasks are dispatched
+  normally (the planner does not special-case them beyond awareness).
+- **Stale-retried IDs:** Tasks that were dispatched with a `retry_hint` last cycle but
+  still haven't moved. If a task appears in `stale_retried` AND is still at the same
+  status, it has failed twice — **block it** with reason `STALE — retried with hint, still unchanged`.
+
+**First-stale detection (guided retry):** If a task appears at the same status it was
+dispatched from last cycle (it hasn't moved) and is NOT in the `stale_retried` list from
+the prior cycle, it is first-stale. Instead of blocking it immediately:
+
+1. Read the task body via `kanban\kanban-md.exe show {id}`.
+2. Find the **last** agent note section — look for the final occurrence of any of these
+   headings: `## Builder Notes`, `## Review Evidence`, `## Test-Writer Notes`,
+   `## Audit`, or `## Handoff`.
+3. Extract a single-line summary (≤120 chars) of the prior failure from that section.
+   Focus on what went wrong or what blocked progress.
+4. Include the task in `dispatch` with a `retry_hint` field containing that summary.
+
+The orchestrator tracks which tasks were retried with hints (`stale_retried` IDs) and
+passes them back next cycle. If the task is still stale after the retry, the planner
+blocks it on the second cycle.
 
 ## Step 2 — Read board
 
@@ -153,13 +173,16 @@ they do not appear in the output.
 Format:
 
 ```json
-{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
+{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
 ```
 
 **Fields:**
 
 - `dispatch` — Array of `{id, agent}` objects. Priority-sorted (highest first).
   Agent name from the dispatch mapping. No AC summary — subagents read their own AC.
+  - `retry_hint` (optional string, ≤120 chars) — present only on first-stale tasks
+    retried with guided context. Summarizes the prior failure extracted from the task
+    body's last agent note section. Omit for normal dispatches.
 - `blocked` — Array of `{id, reason}` objects. Tasks with unmet dependencies, explicit
   blocks, or stale flags. Short reason string (< 60 chars).
 
@@ -186,7 +209,8 @@ Before outputting:
 - [ ] Batch does not exceed 16 tasks
 - [ ] Agent names match the dispatch mapping
 - [ ] `blocked` array includes all tasks with unmet dependencies, blocks, and stale flags
-- [ ] Failure context from orchestrator was checked for stale tasks
+- [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
+- [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks are blocked
 - [ ] Output is a single-line JSON object with `dispatch` and `blocked` fields only
 - [ ] No prose preamble or narrative in the output
 - [ ] No `kanban-md move` commands were run

@@ -80,8 +80,10 @@ Follow the `wave-planning` skill for the step-by-step process.
 Read board → build DAG → gate checks (5 gates) → filter, deconflict, prioritize
 → output JSON plan.
 
-**Staleness detection:** If the orchestrator passes failure context ("tasks dispatched
-last cycle that haven't moved"), flag those tasks as BLOCKED with a stale marker.
+**Staleness detection:** If the orchestrator passes failure context identifying stale
+tasks, apply the guided retry protocol from `wave-planning` skill Step 1: first-stale
+tasks get re-dispatched with a `retry_hint`; second-stale tasks (in `stale_retried`
+from prior cycle) are blocked.
 </workflow>
 
 <output_format>
@@ -134,6 +136,10 @@ Step 6 for the full spec.
 
 <good_example why="Stale task flagged from failure context">
 {"dispatch":[{"id":73,"agent":"reviewer"},{"id":74,"agent":"writer"}],"blocked":[{"id":72,"reason":"STALE — crashed twice, unchanged"}]}
+</good_example>
+
+<good_example why="First-stale task retried with guided retry_hint">
+{"dispatch":[{"id":73,"agent":"reviewer"},{"id":52,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"blocked":[]}
 </good_example>
 
 <good_example why="Ideation tasks dispatched as researcher">
