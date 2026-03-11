@@ -1,4 +1,4 @@
-"""Tests for core agent definition files — all 8 agents in the OwlBear inventory."""
+"""Tests for core agent definition files — all 9 agents in the OwlBear inventory."""
 
 from __future__ import annotations
 
@@ -78,18 +78,25 @@ EXPECTED_AGENTS: dict[str, dict] = {
         "skills": ["kanban-md", "docs-gate"],
         "max_delegation_depth": 0,
     },
-    "closer": {
+    "auditor": {
         "description": "Verify done tasks, archive confirmed, commit + push",
         "role": "validator",
         "tools": ["filesystem", "terminal", "kanban", "ask_user"],
         "skills": ["kanban-md", "task-verification"],
         "max_delegation_depth": 0,
     },
+    "curator": {
+        "description": "Periodic knowledge graph maintenance and deduplication",
+        "role": "builder",
+        "tools": ["filesystem", "terminal", "knowledge"],
+        "skills": [],
+        "max_delegation_depth": 0,
+    },
 }
 
 
 class TestAgentDefinitionFiles:
-    """All 5 .md files parse via parse_agent_definition() without error."""
+    """All 9 .md files parse via parse_agent_definition() without error."""
 
     @pytest.mark.parametrize("agent_name", list(EXPECTED_AGENTS))
     def test_parse_without_error(self, agent_name: str) -> None:
@@ -130,9 +137,9 @@ class TestAgentDefinitionFiles:
 
 
 class TestRegistryScanAgentsDir:
-    """AgentRegistry.scan() on agents dir loads all 8 definitions."""
+    """AgentRegistry.scan() on agents dir loads all 9 definitions."""
 
-    def test_scan_loads_all_eight(self) -> None:
+    def test_scan_loads_all_nine(self) -> None:
         from pydantic_ai.toolsets import FunctionToolset
 
         registry = AgentRegistry(
@@ -141,7 +148,7 @@ class TestRegistryScanAgentsDir:
             default_model="test",
         )
         registry.scan()
-        assert len(registry.definitions) == 8
+        assert len(registry.definitions) == 9
         assert set(registry.definitions) == set(EXPECTED_AGENTS)
 
     def test_get_kanban_planner_returns_agent_with_resolved_tools(self) -> None:
@@ -187,13 +194,17 @@ class TestRoleValues:
         defn = parse_agent_definition(AGENTS_DIR / "architect.md")
         assert AgentRole(defn.role) is AgentRole.VALIDATOR
 
-    def test_closer_is_validator(self) -> None:
-        defn = parse_agent_definition(AGENTS_DIR / "closer.md")
+    def test_auditor_is_validator(self) -> None:
+        defn = parse_agent_definition(AGENTS_DIR / "auditor.md")
+        assert AgentRole(defn.role) is AgentRole.VALIDATOR
+
+    def test_writer_is_validator(self) -> None:
+        defn = parse_agent_definition(AGENTS_DIR / "writer.md")
         assert AgentRole(defn.role) is AgentRole.VALIDATOR
 
     @pytest.mark.parametrize(
         "agent_name",
-        ["orchestrator", "kanban-planner", "builder", "researcher", "writer"],
+        ["orchestrator", "kanban-planner", "builder", "researcher"],
     )
     def test_builders(self, agent_name: str) -> None:
         defn = parse_agent_definition(AGENTS_DIR / f"{agent_name}.md")

@@ -1,7 +1,7 @@
 ---
 name: writer
 description: Verifies and updates documentation
-role: builder
+role: validator
 tools:
   - filesystem
   - terminal
