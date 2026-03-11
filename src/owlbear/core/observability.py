@@ -15,7 +15,7 @@ import logging
 import time
 from collections import Counter
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -176,8 +176,8 @@ class ObservabilityHook:
     def _make_handler(self, event: HookEvent) -> Callable:
         """Create a single-arg handler closure for the hook registry."""
 
-        async def _handler(data: object) -> None:
-            self._handle_event(event, data if isinstance(data, dict) else {})
+        async def _handler(data: dict[str, Any]) -> None:
+            self._handle_event(event, data)
 
         return _handler
 

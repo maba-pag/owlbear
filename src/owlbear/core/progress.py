@@ -13,6 +13,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Literal
 
+from owlbear.core.hooks import PostToolUseData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.channels.base import ChannelPlugin
     from owlbear.core.hooks import HookRegistry
@@ -80,15 +82,14 @@ class ProgressReporter:
 
     # -- hook callback -------------------------------------------------------
 
-    def on_tool_complete(self, data: object) -> None:
+    def on_tool_complete(self, data: PostToolUseData) -> None:
         """Record a tool completion event.
 
         Expected *data* shape: ``{"tool_name": str, "args": dict}``.
         """
         self._tool_count += 1
-        if isinstance(data, dict):
-            self._last_tool = data.get("tool_name")
-            self._last_tool_args = data.get("args", {})
+        self._last_tool = data.get("tool_name")
+        self._last_tool_args = data.get("args", {})
 
     # -- message formatting --------------------------------------------------
 

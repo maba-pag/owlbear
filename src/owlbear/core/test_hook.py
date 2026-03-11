@@ -12,6 +12,12 @@ import re
 import subprocess
 from typing import TYPE_CHECKING, TypedDict
 
+# Module-level import of hooks to make SessionEndData resolvable by
+# get_type_hints() without triggering a circular import.  ``import … as``
+# succeeds even when hooks.py is partially loaded; by the time get_type_hints()
+# evaluates the annotation string, the module is fully initialised.
+import owlbear.core.hooks as _hooks_mod  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
 
@@ -71,16 +77,12 @@ class TestVerificationHook:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: _hooks_mod.SessionEndData) -> None:
         """Run the test suite and store results on *data*.
 
         Args:
-            data: Event payload — expected ``{"session_id": str, ...}``.
-                Non-dict payloads are silently ignored.
+            data: Event payload with ``session_id`` key.
         """
-        if not isinstance(data, dict):
-            return
-
         results = self._run_tests()
         data["test_results"] = results
 

@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
+from owlbear.core.hooks import TaskCompleteData  # noqa: TC001
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -100,15 +102,12 @@ class RetrospectiveHook:
 
     # -- Hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: TaskCompleteData) -> None:
         """Handle a ``TASK_COMPLETE`` event.
 
         Spawns the retrospective analysis as a fire-and-forget background
-        task.  Non-dict payloads and failed outcomes are silently skipped.
+        task.  Non-success outcomes are silently skipped.
         """
-        if not isinstance(data, dict):
-            return
-
         outcome = data.get("outcome")
         if outcome != "success":
             return

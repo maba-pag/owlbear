@@ -15,6 +15,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import PreToolUseData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
 
@@ -43,6 +45,10 @@ DEFAULT_BLOCKED_COMMANDS: list[str] = [
     r"del\s+/[sS]\s+/[qQ]",
     r"(?i)Remove-Item\s+.*-Recurse.*-Force",
     r"(?i)Remove-Item\s+.*-Force.*-Recurse",
+    # git: destructive index/worktree mutations
+    r"git\s+sparse-checkout",
+    r"git\s+reset\s+--hard",
+    r"git\s+clean\s+-[a-z]*f",
     # System: chmod 777, mkfs, dd if=, shutdown, reboot
     r"chmod\s+777\b",
     r"mkfs",
@@ -129,20 +135,16 @@ class CommandSafetyGuard:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: PreToolUseData) -> None:
         """Inspect a ``PRE_TOOL_USE`` payload and block dangerous actions.
 
         Args:
-            data: Event payload — expected ``{"tool_name": str, "args": dict}``.
-                Non-dict payloads are silently ignored.
+            data: Event payload with ``tool_name`` and ``args`` keys.
 
         Raises:
             BlockedCommandError: If the command or file path is denied.
         """
-        if not isinstance(data, dict):
-            return
-
-        tool_name: str = data.get("tool_name", "")  # type: ignore[assignment]
+        tool_name: str = data.get("tool_name", "")
         args = data.get("args")
         if not isinstance(args, dict):
             if tool_name:

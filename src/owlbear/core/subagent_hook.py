@@ -13,6 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import SubagentCompleteData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
 
@@ -45,17 +47,13 @@ class SubagentVerificationHook:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: SubagentCompleteData) -> None:
         """Inspect a ``SUBAGENT_COMPLETE`` payload and verify deliverables.
 
         Args:
-            data: Event payload — expected to be a dict with ``task_id``,
-                ``created_files``, ``test_files``, and ``result`` keys.
-                Non-dict payloads are silently ignored.
+            data: Event payload with ``task_id``, ``created_files``,
+                ``test_files``, and ``result`` keys.
         """
-        if not isinstance(data, dict):
-            return
-
         created_files: list[str] = data.get("created_files", [])
         test_files: list[str] = data.get("test_files", [])
 

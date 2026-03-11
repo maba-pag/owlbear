@@ -11,6 +11,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import PreToolUseData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
     from owlbear.tools.browser.config import BrowserConfig
@@ -54,19 +56,15 @@ class URLSafetyGuard:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: PreToolUseData) -> None:
         """Inspect a ``PRE_TOOL_USE`` payload and block denied URLs.
 
         Args:
-            data: Event payload — expected to be a dict with ``tool_name``
-                and ``args`` keys.  Non-dict payloads are silently ignored.
+            data: Event payload with ``tool_name`` and ``args`` keys.
 
         Raises:
             BlockedURLError: If the target URL is denied.
         """
-        if not isinstance(data, dict):
-            return
-
         if data.get("tool_name") != "browser_navigate":
             return
 

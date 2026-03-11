@@ -1,10 +1,10 @@
 """RED-phase tests for hook consumer typed payload annotations.
 
-Task: #715 (RED tests for #716)
+Tasks: #715 (original RED), #716 (gap coverage)
 Tests the contract: each hook consumer's callback method must declare a
 specific TypedDict (or dict[str, Any]) parameter type instead of ``object``,
 and ``isinstance(data, dict)`` early-return guards must be removed from
-``__call__`` methods.
+``__call__`` methods and ``_make_handler`` closures.
 """
 
 from __future__ import annotations
@@ -285,4 +285,102 @@ class TestFromAC_NoIsinstanceGuards:  # noqa: N801
 
         assert not self._has_isinstance_dict_guard(RetrospectiveHook.__call__), (
             "RetrospectiveHook.__call__ still has isinstance(data, dict) guard"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC2 gap — NotificationHook._make_handler closure typing & guard (#716)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MakeHandlerClosureTyping:  # noqa: N801
+    """NotificationHook._make_handler closure must declare ``data: dict[str, Any]``
+    and remove the ``isinstance(data, dict)`` inline guard.
+
+    The architecture review for #716 flagged this as a test gap: the closure
+    still uses ``data: object`` with an inline isinstance fallback.  Once the
+    parameter is annotated ``dict[str, Any]`` the isinstance is dead code.
+    """
+
+    def test_notification_hook_make_handler_closure_typed_dict(self) -> None:
+        """_make_handler closure ``_handler`` param should be dict[str, Any], not object."""
+        from owlbear.core.hooks import HookEvent
+        from owlbear.core.notification_hook import NotificationHook
+
+        hook = NotificationHook.__new__(NotificationHook)
+        hook._backends = []
+        hook._notification_events = ["task_complete"]
+        handler = hook._make_handler(HookEvent.TASK_COMPLETE)
+
+        hints = get_type_hints(handler)
+        data_type = hints.get("data")
+        origin = getattr(data_type, "__origin__", data_type)
+        assert origin is dict, (
+            f"NotificationHook._make_handler closure data param should be "
+            f"dict[str, Any], got {data_type}"
+        )
+
+    def test_notification_hook_make_handler_closure_no_isinstance(self) -> None:
+        """_make_handler closure must not contain ``isinstance(data, dict)``."""
+        from owlbear.core.notification_hook import NotificationHook
+
+        source = textwrap.dedent(inspect.getsource(NotificationHook._make_handler))
+        tree = ast.parse(source)
+
+        # Walk inner function def (_handler) and look for isinstance(data, dict)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "isinstance"
+                and len(node.args) == 2
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id == "data"
+                and isinstance(node.args[1], ast.Name)
+                and node.args[1].id == "dict"
+            ):
+                msg = (
+                    "NotificationHook._make_handler still contains "
+                    "isinstance(data, dict) — remove after typing data param"
+                )
+                raise AssertionError(msg)
+
+
+# ---------------------------------------------------------------------------
+# AC3 — registry.py isinstance guard must be preserved
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RegistryGuardPreserved:  # noqa: N801
+    """The isinstance(data, dict) check in skills/registry.py serves a
+    different purpose (YAML parsing validation) and must NOT be removed.
+
+    AC3: "Do NOT touch skills/registry.py isinstance guard (different concern)"
+    """
+
+    def test_registry_parse_frontmatter_retains_isinstance_guard(self) -> None:
+        """skills/registry.py _parse_frontmatter must still check isinstance(data, dict)."""
+        from owlbear.skills import registry
+
+        source = inspect.getsource(registry)
+        tree = ast.parse(source)
+
+        found = False
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "isinstance"
+                and len(node.args) == 2
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id == "data"
+                and isinstance(node.args[1], ast.Name)
+                and node.args[1].id == "dict"
+            ):
+                found = True
+                break
+
+        assert found, (
+            "skills/registry.py must retain isinstance(data, dict) guard — "
+            "it validates YAML parse output, not hook payloads"
         )

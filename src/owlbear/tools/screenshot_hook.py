@@ -22,6 +22,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import OnErrorData  # noqa: TC001
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -77,7 +79,7 @@ class ScreenshotOnErrorHook:
     # Handler
     # ------------------------------------------------------------------
 
-    async def handle(self, data: object) -> None:  # noqa: ARG002
+    async def handle(self, data: OnErrorData) -> None:  # noqa: ARG002
         """Capture browser screenshot on error, if conditions are met."""
         if self._mode == "manual":
             return

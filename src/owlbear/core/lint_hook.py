@@ -11,6 +11,8 @@ import logging
 import subprocess
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import PostToolUseData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
 
@@ -30,16 +32,12 @@ class AutoLintHook:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: PostToolUseData) -> None:
         """Inspect a ``POST_TOOL_USE`` payload and lint any ``.py`` file.
 
         Args:
-            data: Event payload — expected ``{"tool_name": str, "args": dict, ...}``.
-                Non-dict payloads are silently ignored.
+            data: Event payload with ``tool_name`` and ``args`` keys.
         """
-        if not isinstance(data, dict):
-            return
-
         args = data.get("args")
         if not isinstance(args, dict):
             return

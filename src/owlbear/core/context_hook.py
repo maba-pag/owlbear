@@ -12,6 +12,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear.core.hooks import SessionStartData  # noqa: TC001
+
 if TYPE_CHECKING:
     from owlbear.core.hooks import HookRegistry
 
@@ -55,16 +57,12 @@ class ContextInjectionHook:
 
     # -- hook callback -------------------------------------------------------
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: SessionStartData) -> None:
         """Read instructions + kanban summary and inject into *data*.
 
         Args:
-            data: Event payload — expected to be a dict.
-                Non-dict payloads are silently ignored.
+            data: Event payload with ``session_id`` key.
         """
-        if not isinstance(data, dict):
-            return
-
         instructions = await self._read_instructions()
         kanban_summary = await self._run_kanban()
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -92,22 +92,15 @@ class NotificationHook:
         self._backends = backends
         self._notification_events = notification_events
 
-    async def __call__(self, data: object) -> None:
+    async def __call__(self, data: dict[str, Any]) -> None:
         """Dispatch a notification through the backend chain."""
-        if isinstance(data, dict):
-            event: HookEvent | None = data.get("_hook_event")
-        else:
-            event = None
+        event: HookEvent | None = data.get("_hook_event")
 
         if event is not None and event.value not in self._notification_events:
             return
 
         event_label = event.value if event is not None else "notification"
-        message = (
-            data.get("message", f"OwlBear: {event_label}")
-            if isinstance(data, dict)
-            else f"OwlBear: {event_label}"
-        )
+        message = data.get("message", f"OwlBear: {event_label}")
 
         for backend in self._backends:
             try:
@@ -137,8 +130,8 @@ class NotificationHook:
     def _make_handler(self, event: HookEvent) -> Callable:
         """Create a single-arg handler closure that injects event into data."""
 
-        async def _handler(data: object) -> None:
-            merged = {"_hook_event": event, **(data if isinstance(data, dict) else {})}
+        async def _handler(data: dict[str, Any]) -> None:
+            merged = {"_hook_event": event, **data}
             await self(merged)
 
         return _handler
