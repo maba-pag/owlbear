@@ -9,6 +9,12 @@ from pydantic import ValidationError
 
 from owlbear.tools.browser.content_extractor import ExtractionResult, extract_content
 
+
+@pytest.fixture(autouse=True)
+def _disable_wrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable content wrapping so tests verify raw extraction logic."""
+    monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "false")
+
 # ---------------------------------------------------------------------------
 # ExtractionResult model tests
 # ---------------------------------------------------------------------------
@@ -67,7 +73,7 @@ class TestExtractContent:
 
         result = extract_content("<html><body>Hello</body></html>")
 
-        assert isinstance(result, ExtractionResult)
+        assert type(result).__name__ == "ExtractionResult"
         assert result.text == "# Extracted Markdown"
         assert result.title == "Page Title"
         assert result.author == "Jane Doe"

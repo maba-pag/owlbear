@@ -7,11 +7,29 @@ Uses pydantic-settings to load configuration from environment variables
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
+@dataclasses.dataclass(frozen=True)
+class RigorProfile:
+    """Quality-vs-speed preset for agent task execution."""
+
+    review_enabled: bool
+    tdd_depth: Literal["full", "smoke", "none"]
+    turn_budget: int
+
+
+RIGOR_LEAN = RigorProfile(review_enabled=False, tdd_depth="smoke", turn_budget=15)
+RIGOR_STANDARD = RigorProfile(review_enabled=True, tdd_depth="full", turn_budget=30)
+RIGOR_THOROUGH = RigorProfile(review_enabled=True, tdd_depth="full", turn_budget=50)
 
 
 class OwlBearSettings(BaseSettings):
@@ -144,6 +162,10 @@ class OwlBearSettings(BaseSettings):
         default=False,
         description="Enable cross-document edge inference via embedding similarity and LLM.",
     )
+    ingest_bg_concurrency: int = Field(
+        default=5,
+        description="Maximum concurrent background graph-enrichment tasks per ingest pipeline.",
+    )
 
     # --- Temporal memory ---
     temporal_decay_rate: float = Field(
@@ -198,6 +220,15 @@ class OwlBearSettings(BaseSettings):
         description="When to capture browser screenshots: 'auto', 'manual', or 'on_error'.",
     )
 
+    # --- Content safety ---
+    wrap_web_content: bool = Field(
+        default=True,
+        description=(
+            "Wrap web-fetched content in <untrusted_web_content> sentinel tags. "
+            "Security-on by default; disable only for trusted sources."
+        ),
+    )
+
     # --- Diagrams (Kroki) ---
     kroki_server_url: str = Field(
         default="https://kroki.io",
@@ -217,6 +248,39 @@ class OwlBearSettings(BaseSettings):
         default=3,
         description="Maximum concurrent autonomous tasks. Must be > 0.",
     )
+    stale_task_timeout: float = Field(
+        default=300.0,
+        description=(
+            "Seconds before an in-progress task is considered stale"
+            " and auto-cancelled. Must be > 0."
+        ),
+    )
+    task_retry_max_attempts: int = Field(
+        default=5,
+        description="Maximum retry attempts per task before blocking. Must be > 0.",
+    )
+    task_retry_backoff_base: float = Field(
+        default=10.0,
+        description="Base delay (seconds) for exponential backoff. Must be > 0.",
+    )
+    task_retry_backoff_max: float = Field(
+        default=320.0,
+        description="Maximum backoff delay (seconds). Must be > 0.",
+    )
+    lint_gate_enabled: bool = Field(
+        default=True,
+        description=(
+            "Quality gate: run ruff after builder completion. "
+            "Defaults to True (quality gate, not feature flag — "
+            "see architecture-standards config section)."
+        ),
+    )
+
+    # --- Startup summary ---
+    log_startup_summary: bool = Field(
+        default=True,
+        description="Send startup summary to channel after bootstrap completes.",
+    )
 
     # --- Context condenser ---
     condenser_enabled: bool = Field(
@@ -226,6 +290,23 @@ class OwlBearSettings(BaseSettings):
     condenser_max_events: int = Field(
         default=120,
         description="Message count threshold that triggers context condensation.",
+    )
+
+    # --- Session memory ---
+    session_memory_enabled: bool = Field(
+        default=False,
+        description=(
+            "Persist an LLM-generated session summary to .owlbear/session-memory.md on session end."
+        ),
+    )
+
+    # --- Pre-hydration ---
+    prehydration_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable context pre-hydration for agent dispatch "
+            "(fetch URLs and read files from task body)."
+        ),
     )
 
     # --- Heartbeat ---
@@ -242,11 +323,35 @@ class OwlBearSettings(BaseSettings):
         description="UTC hour window (start, end) for heartbeat ticks.",
     )
 
+    # --- Rigor profiles ---
+    rigor_profiles: dict[str, RigorProfile] = Field(
+        default={
+            "lean": RIGOR_LEAN,
+            "standard": RIGOR_STANDARD,
+            "thorough": RIGOR_THOROUGH,
+        },
+        description="Named quality-vs-speed presets for agent task execution.",
+    )
+    default_rigor: str = Field(
+        default="standard",
+        description="Default rigor profile key. Must exist in rigor_profiles.",
+    )
+
     # --- Runtime ---
     debug: bool = Field(
         default=False,
         description="Enable debug mode with verbose logging.",
     )
+
+    @field_validator("default_rigor")
+    @classmethod
+    def _validate_default_rigor(cls, v: str, info: ValidationInfo) -> str:
+        """default_rigor must be a key in rigor_profiles."""
+        profiles = info.data.get("rigor_profiles")
+        if profiles is not None and v not in profiles:
+            msg = f"default_rigor {v!r} not found in rigor_profiles keys: {sorted(profiles)}"
+            raise ValueError(msg)
+        return v
 
     @field_validator("heartbeat_interval")
     @classmethod
@@ -275,6 +380,42 @@ class OwlBearSettings(BaseSettings):
             raise ValueError(msg)
         return v
 
+    @field_validator("stale_task_timeout")
+    @classmethod
+    def _validate_stale_task_timeout(cls, v: float) -> float:
+        """stale_task_timeout must be strictly positive."""
+        if v <= 0:
+            msg = "stale_task_timeout must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("task_retry_max_attempts")
+    @classmethod
+    def _validate_task_retry_max_attempts(cls, v: int) -> int:
+        """task_retry_max_attempts must be strictly positive."""
+        if v <= 0:
+            msg = "task_retry_max_attempts must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("task_retry_backoff_base")
+    @classmethod
+    def _validate_task_retry_backoff_base(cls, v: float) -> float:
+        """task_retry_backoff_base must be strictly positive."""
+        if v <= 0:
+            msg = "task_retry_backoff_base must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("task_retry_backoff_max")
+    @classmethod
+    def _validate_task_retry_backoff_max(cls, v: float) -> float:
+        """task_retry_backoff_max must be strictly positive."""
+        if v <= 0:
+            msg = "task_retry_backoff_max must be greater than 0"
+            raise ValueError(msg)
+        return v
+
     @field_validator("progress_interval")
     @classmethod
     def _validate_progress_interval(cls, v: float) -> float:
@@ -290,6 +431,15 @@ class OwlBearSettings(BaseSettings):
         """knowledge_context_tokens must be strictly positive."""
         if v <= 0:
             msg = "knowledge_context_tokens must be greater than 0"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("ingest_bg_concurrency")
+    @classmethod
+    def _validate_ingest_bg_concurrency(cls, v: int) -> int:
+        """ingest_bg_concurrency must be strictly positive."""
+        if v < 1:
+            msg = "ingest_bg_concurrency must be >= 1"
             raise ValueError(msg)
         return v
 
@@ -310,3 +460,20 @@ class OwlBearSettings(BaseSettings):
             )
             raise ValueError(msg)
         return self
+
+
+def resolve_rigor_profile(
+    settings: OwlBearSettings,
+    task_tags: Sequence[str],
+) -> RigorProfile:
+    """Resolve a rigor profile from task tags.
+
+    Extracts the first ``rigor:*`` tag and returns the matching profile
+    from ``settings.rigor_profiles``. Falls back to the default profile.
+    """
+    for tag in task_tags:
+        if tag.startswith("rigor:"):
+            key = tag[len("rigor:") :]
+            if key in settings.rigor_profiles:
+                return settings.rigor_profiles[key]
+    return settings.rigor_profiles[settings.default_rigor]

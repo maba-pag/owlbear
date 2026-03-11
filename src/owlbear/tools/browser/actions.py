@@ -154,6 +154,13 @@ async def browser_read_text(
     if len(text) > max_length:
         text = text[:max_length] + "... [truncated]"
 
+    from owlbear.config import OwlBearSettings  # noqa: PLC0415
+
+    if OwlBearSettings().wrap_web_content:
+        from owlbear.core.content_safety import wrap_untrusted_content  # noqa: PLC0415
+
+        text = wrap_untrusted_content(text)
+
     return text
 
 

@@ -119,7 +119,16 @@ async def fetch_url(
         include_links=True,
         url=url,
     )
-    return content or ""
+    result = content or ""
+
+    from owlbear.config import OwlBearSettings  # noqa: PLC0415
+
+    if result and OwlBearSettings().wrap_web_content:
+        from owlbear.core.content_safety import wrap_untrusted_content  # noqa: PLC0415
+
+        result = wrap_untrusted_content(result, source_url=url)
+
+    return result
 
 
 def read_file_safe(path: Path, workspace_root: Path) -> str:

@@ -220,4 +220,13 @@ class WebSearchToolset(FunctionToolset):
             # Fallback: raw HTML text truncated to max_length
             content = response.text[:max_length]
 
-        return content[:max_length]
+        result = content[:max_length]
+
+        from owlbear.config import OwlBearSettings  # noqa: PLC0415
+
+        if OwlBearSettings().wrap_web_content:
+            from owlbear.core.content_safety import wrap_untrusted_content  # noqa: PLC0415
+
+            result = wrap_untrusted_content(result, source_url=url)
+
+        return result

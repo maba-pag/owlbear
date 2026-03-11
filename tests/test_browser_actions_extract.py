@@ -11,6 +11,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _disable_wrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable content wrapping so tests verify raw extraction logic."""
+    monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "false")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -100,8 +100,17 @@ def extract_content(html: str, url: str | None = None) -> ExtractionResult:
     except Exception:  # noqa: BLE001 — trafilatura can raise anything
         logger.debug("trafilatura.extract_metadata failed", exc_info=True)
 
+    extracted = text or ""
+
+    from owlbear.config import OwlBearSettings  # noqa: PLC0415
+
+    if extracted and OwlBearSettings().wrap_web_content:
+        from owlbear.core.content_safety import wrap_untrusted_content  # noqa: PLC0415
+
+        extracted = wrap_untrusted_content(extracted, source_url=url)
+
     return ExtractionResult(
-        text=text or "",
+        text=extracted,
         title=title,
         author=author,
         date=date,
