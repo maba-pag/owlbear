@@ -48,6 +48,11 @@ def build_hooks(
     TestVerificationHook().register(hooks)
     ContextInjectionHook().register(hooks)
 
+    if settings.lessons_injection_enabled:
+        from owlbear.core.lessons_hook import LessonsInjectionHook  # noqa: PLC0415
+
+        LessonsInjectionHook().register(hooks)
+
     NotificationHook(
         backends=[ConsoleBellBackend(), WinSoundBackend()],
         notification_events=settings.notification_events,

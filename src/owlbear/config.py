@@ -300,6 +300,15 @@ class OwlBearSettings(BaseSettings):
         ),
     )
 
+    # --- Lessons injection ---
+    lessons_injection_enabled: bool = Field(
+        default=False,
+        description=(
+            "Inject curated lessons from .owlbear/lessons/ "
+            "into agent context on session start."
+        ),
+    )
+
     # --- Pre-hydration ---
     prehydration_enabled: bool = Field(
         default=False,

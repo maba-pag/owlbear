@@ -64,17 +64,23 @@ class LessonsInjectionHook:
 
     # -- internal ------------------------------------------------------------
 
+    def _sorted_md_files(self) -> list[Path]:
+        """Return .md files from lessons_dir sorted by mtime descending."""
+        if not self.lessons_dir.is_dir():
+            return []
+        try:
+            return sorted(
+                self.lessons_dir.glob("*.md"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError as exc:
+            logger.warning("Failed to list/sort lessons in %s: %s", self.lessons_dir, exc)
+            return []
+
     def _collect_lessons(self) -> str:
         """Read and concatenate lesson files within the token budget."""
-        if not self.lessons_dir.is_dir():
-            return ""
-
-        md_files = sorted(
-            self.lessons_dir.glob("*.md"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-
+        md_files = self._sorted_md_files()
         if not md_files:
             return ""
 
@@ -83,7 +89,11 @@ class LessonsInjectionHook:
         used = 0
 
         for path in md_files:
-            content = path.read_text(encoding="utf-8")
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                logger.warning("Could not read lesson file %s: %s", path, exc)
+                continue
             remaining = budget_chars - used
 
             if remaining <= 0:
