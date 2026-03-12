@@ -2,6 +2,24 @@
 
 External repos and resources studied during OwlBear development.
 
+## Botasaurus Feature Evaluation (Task #748)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| omkarcloud/botasaurus v4.0.97 | <https://github.com/omkarcloud/botasaurus> | MIT | Anti-detection patterns, human cursor (Bezier curves), decorator-based config, two-layer caching, tiny cookie profiles, proxy rotation, parallel execution | `docs/research/botasaurus-research.md` | 2026-03-12 |
+
+## Paperclip AI Orchestration (Task #746)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| paperclipai/paperclip | <https://github.com/paperclipai/paperclip> | MIT | Heartbeat protocol, budget enforcement model, blocked-task dedup, adapter architecture, PARA memory, org chart hierarchy, cost API, approval workflow | `docs/research/paperclip-research.md` | 2026-03-12 |
+
+## Olanetsoft Workflow Patterns (Task #747)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Olanetsoft AI agent workflow gist | <https://gist.githubusercontent.com/Olanetsoft/5931f1861d2ee9bcefb16774ff21e41e/raw/e4231969f53af71ffaeb4bb61fa7cfa13317f1a6/workflow.md> | Unknown | 6 workflow orchestration patterns (plan node, subagent strategy, self-improvement loop, verification, elegance, autonomous bug fixing) + task management + core principles | `docs/research/olanetsoft-workflow-research.md` | 2026-03-12 |
+
 ## Orchestration & Agent Frameworks Epic (Task #580)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -61,6 +79,14 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | coleam00/excalidraw-diagram-skill | <https://github.com/coleam00/excalidraw-diagram-skill> | MIT | Excalidraw JSON generation methodology, element library, color palette, layout patterns — compressed from ~450 to ~150 lines | `.github/skills/excalidraw-diagram/` | 2026-03-11 |
+
+## ExcalidrawRenderService Research Update (Task #629)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| coleam00/excalidraw-diagram-skill render pipeline | <https://github.com/coleam00/excalidraw-diagram-skill> | MIT | render_excalidraw.py + render_template.html: Playwright + esm.sh exportToSvg → screenshot pattern | `docs/research/excalidraw-render-update-research.md` | 2026-03-12 |
+| Kroki #1742 font bug | <https://github.com/yuzutech/kroki/issues/1742> | MIT | Excalidraw font rendering broken on kroki.io free tier (upstream VITE_PKG_VERSION mismatch) | `docs/research/excalidraw-render-update-research.md` | 2026-03-12 |
+| @excalidraw/utils (npm) | <https://www.npmjs.com/package/@excalidraw/utils> | MIT | Standalone exportToSvg/exportToBlob without React dependency | `docs/research/excalidraw-render-update-research.md` | 2026-03-12 |
 
 ## Consolidate trafilatura Extras (Task #569)
 
@@ -1379,3 +1405,9 @@ External repos and resources studied during OwlBear development.
 | PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Content wrapping pattern with sentinel tags and advisory preamble | `src/owlbear/core/content_safety.py` | 2026-03-10 |
 | Willison, "Delimiters won't save you" (2023) | <https://simonwillison.net/2023/May/11/delimiters-wont-save-you/> | Blog | Established limits of delimiter approach — informed defense-in-depth framing | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
 | Greshake et al., "Indirect Prompt Injection" (2023) | <https://arxiv.org/abs/2302.12173> | CC-BY-4.0 | Threat model taxonomy for LLM-integrated apps, IDPI attack vectors | `docs/research/untrusted-content-wrapping-research.md` | 2026-03-10 |
+
+## claude-context-mode Evaluation (Task #745)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| mksglu/claude-context-mode v1.0.18 | <https://github.com/mksglu/claude-context-mode> | Elastic-2.0 | Sandbox execution, FTS5 knowledge base, smart truncation (line-boundary snapping), session event capture/snapshot, exit classification, progressive throttling | `docs/research/claude-context-mode-research.md` | 2026-03-12 |
