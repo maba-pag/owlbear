@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import logging
 from enum import StrEnum
-from typing import Any, Callable, NotRequired, TypedDict, get_args  # noqa: UP035
+from typing import Any, Callable, Literal, NotRequired, TypedDict, get_args, overload  # noqa: UP035
 
 from owlbear.core.test_hook import (
     TestResult,  # noqa: TC001  # runtime import needed for get_type_hints
@@ -20,6 +20,7 @@ from owlbear.core.test_hook import (
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "BudgetWarningData",
     "DaemonStartupData",
     "Handler",
     "HookEvent",
@@ -99,6 +100,14 @@ class SessionEndData(TypedDict):
     test_results: NotRequired[list[TestResult]]
 
 
+class BudgetWarningData(TypedDict):
+    """Payload for :attr:`HookEvent.BUDGET_WARNING`."""
+
+    cost_usd: float
+    limit_usd: float
+    pct: float
+
+
 class SubagentCompleteData(TypedDict):
     """Payload for :attr:`HookEvent.SUBAGENT_COMPLETE`."""
 
@@ -135,6 +144,7 @@ class HookEvent(StrEnum):
     SUBAGENT_COMPLETE = "subagent_complete"
     TASK_COMPLETE = "task_complete"
     QUESTION_PENDING = "question_pending"
+    BUDGET_WARNING = "budget_warning"
     DAEMON_STARTUP = "daemon_startup"
 
 
@@ -173,6 +183,67 @@ class HookRegistry:
     def clear(self) -> None:
         """Remove all handlers for every event."""
         self._handlers.clear()
+
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.PRE_TOOL_USE],
+        data: PreToolUseData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.POST_TOOL_USE],
+        data: PostToolUseData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.ON_MESSAGE],
+        data: OnMessageData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.ON_ERROR],
+        data: OnErrorData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.SESSION_START],
+        data: SessionStartData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.SESSION_END],
+        data: SessionEndData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.SUBAGENT_COMPLETE],
+        data: SubagentCompleteData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.TASK_COMPLETE],
+        data: TaskCompleteData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.DAEMON_STARTUP],
+        data: DaemonStartupData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: HookEvent,
+        data: dict[str, Any],
+    ) -> None: ...
 
     async def emit(self, event: HookEvent, data: object) -> None:
         """Invoke every handler registered for *event*, in order.
