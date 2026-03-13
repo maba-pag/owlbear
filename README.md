@@ -104,7 +104,7 @@ bearclaw slack status    # show token configuration and connection state
 ```
 
 For architecture details and implementation rationale, see
-[docs/slack-integration-research.md](docs/slack-integration-research.md).
+[docs/research/slack-integration.md](docs/research/slack-integration.md).
 
 ## Architecture
 
