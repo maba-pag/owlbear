@@ -46,6 +46,8 @@ class TerminalResult:
         stderr: Decoded standard error (UTF-8, ``errors="replace"``).
         exit_code: Process return code (``-1`` when unknown after timeout).
         timed_out: ``True`` when the process was killed due to timeout.
+        soft_fail: ``True`` when exit code 1 with meaningful stdout (see
+            :func:`classify_exit`).
     """
 
     stdout: str
