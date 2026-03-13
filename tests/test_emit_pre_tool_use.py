@@ -150,9 +150,7 @@ class TestFromAC_NoEmitHookMethodsRemain:  # noqa: N801
         )
 
     def test_kanban_no_emit_hook(self) -> None:
-        assert not self._has_method(_KANBAN_PY, "_emit_hook"), (
-            "kanban.py still defines _emit_hook"
-        )
+        assert not self._has_method(_KANBAN_PY, "_emit_hook"), "kanban.py still defines _emit_hook"
 
     def test_github_api_no_emit_hook(self) -> None:
         assert not self._has_method(_GITHUB_API_PY, "_emit_hook"), (

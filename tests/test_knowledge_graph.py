@@ -632,6 +632,10 @@ class TestMetadataRoundTrip:
         assert result.metadata == meta
         assert isinstance(result.metadata, dict)
 
+    @pytest.mark.parametrize("raw", [None, ""])
+    def test_load_meta_returns_empty_dict_for_falsy(self, raw: str | None) -> None:
+        assert GraphStore._load_meta(raw) == {}
+
 
 # ---------------------------------------------------------------------------
 # source_pipeline filter (#411)
@@ -755,3 +759,211 @@ class TestListEdgesSourcePipelineFilter:
 
         result = graph_store.list_edges(source_pipeline=None)
         assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# merge_entities (#663 — coverage for lines 320-335)
+# ---------------------------------------------------------------------------
+
+
+class TestMergeEntities:
+    """merge_entities redirects edges and deletes duplicates."""
+
+    def test_merge_updates_canonical_metadata(self, graph_store: GraphStore) -> None:
+        canonical = Entity(id="canon", name="A", entity_type=EntityType.CONCEPT)
+        dup = Entity(id="dup-1", name="A (dup)", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(canonical)
+        graph_store.insert_entity(dup)
+
+        merged = graph_store.merge_entities("canon", ["dup-1"], {"merged": True})
+        assert merged == 1
+
+        result = graph_store.get_entity("canon")
+        assert result is not None
+        assert result.metadata == {"merged": True}
+
+    def test_merge_deletes_duplicates(self, graph_store: GraphStore) -> None:
+        canonical = Entity(id="canon2", name="A", entity_type=EntityType.CONCEPT)
+        dup1 = Entity(id="dup-a", name="A1", entity_type=EntityType.CONCEPT)
+        dup2 = Entity(id="dup-b", name="A2", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(canonical)
+        graph_store.insert_entity(dup1)
+        graph_store.insert_entity(dup2)
+
+        merged = graph_store.merge_entities("canon2", ["dup-a", "dup-b"], {})
+        assert merged == 2
+        assert graph_store.get_entity("dup-a") is None
+        assert graph_store.get_entity("dup-b") is None
+        assert graph_store.get_entity("canon2") is not None
+
+    def test_merge_redirects_edges(self, graph_store: GraphStore) -> None:
+        """Edges pointing to/from duplicates are redirected to canonical."""
+        canon = Entity(id="mc", name="canon", entity_type=EntityType.CONCEPT)
+        dup = Entity(id="md", name="dup", entity_type=EntityType.CONCEPT)
+        other = Entity(id="mo", name="other", entity_type=EntityType.FILE)
+        graph_store.insert_entity(canon)
+        graph_store.insert_entity(dup)
+        graph_store.insert_entity(other)
+
+        # Edge from dup → other (source_id = dup)
+        edge1 = Edge(id="me1", source_id="md", target_id="mo", relation=RelationType.DEFINES)
+        # Edge from other → dup (target_id = dup)
+        edge2 = Edge(id="me2", source_id="mo", target_id="md", relation=RelationType.RELATED_TO)
+        graph_store.insert_edge(edge1)
+        graph_store.insert_edge(edge2)
+
+        graph_store.merge_entities("mc", ["md"], {"merged": True})
+
+        # Edges should now point to/from canonical
+        e1 = graph_store.get_edge("me1")
+        assert e1 is not None
+        assert e1.source_id == "mc"
+
+        e2 = graph_store.get_edge("me2")
+        assert e2 is not None
+        assert e2.target_id == "mc"
+
+
+# ---------------------------------------------------------------------------
+# get_neighbors — BFS traversal (#663)
+# ---------------------------------------------------------------------------
+
+
+class TestGetNeighbors:
+    """get_neighbors returns BFS-traversal results with edges."""
+
+    def test_direct_neighbors(self, graph_store: GraphStore) -> None:
+        """max_depth=1 returns only direct neighbors."""
+        a = Entity(id="na", name="A", entity_type=EntityType.CONCEPT)
+        b = Entity(id="nb", name="B", entity_type=EntityType.CONCEPT)
+        c = Entity(id="nc", name="C", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(a)
+        graph_store.insert_entity(b)
+        graph_store.insert_entity(c)
+
+        graph_store.insert_edge(
+            Edge(id="ne1", source_id="na", target_id="nb", relation=RelationType.RELATED_TO)
+        )
+        graph_store.insert_edge(
+            Edge(id="ne2", source_id="na", target_id="nc", relation=RelationType.DEFINES)
+        )
+
+        result = graph_store.get_neighbors("na", max_depth=1)
+        neighbor_ids = {ent.id for ent, _ in result}
+        assert neighbor_ids == {"nb", "nc"}
+
+    def test_nonexistent_entity_returns_empty(self, graph_store: GraphStore) -> None:
+        result = graph_store.get_neighbors("does-not-exist")
+        assert result == []
+
+    def test_max_nodes_limits_results(self, graph_store: GraphStore) -> None:
+        """max_nodes caps traveral at the given number."""
+        center = Entity(id="center", name="center", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(center)
+
+        for i in range(5):
+            n = Entity(id=f"n{i}", name=f"N{i}", entity_type=EntityType.CONCEPT)
+            graph_store.insert_entity(n)
+            graph_store.insert_edge(
+                Edge(
+                    id=f"ne{i}",
+                    source_id="center",
+                    target_id=f"n{i}",
+                    relation=RelationType.RELATED_TO,
+                )
+            )
+
+        result = graph_store.get_neighbors("center", max_depth=1, max_nodes=3)
+        assert len(result) == 3
+
+    def test_bidirectional_traversal(self, graph_store: GraphStore) -> None:
+        """get_neighbors finds neighbors via incoming edges too."""
+        a = Entity(id="ba", name="A", entity_type=EntityType.CONCEPT)
+        b = Entity(id="bb", name="B", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(a)
+        graph_store.insert_entity(b)
+
+        # Edge from B → A (incoming to A)
+        graph_store.insert_edge(
+            Edge(id="be1", source_id="bb", target_id="ba", relation=RelationType.RELATED_TO)
+        )
+
+        result = graph_store.get_neighbors("ba", max_depth=1)
+        assert len(result) == 1
+        assert result[0][0].id == "bb"
+
+    def test_multi_hop_traversal(self, graph_store: GraphStore) -> None:
+        """max_depth=2 finds 2-hop neighbors."""
+        a = Entity(id="ha", name="A", entity_type=EntityType.CONCEPT)
+        b = Entity(id="hb", name="B", entity_type=EntityType.CONCEPT)
+        c = Entity(id="hc", name="C", entity_type=EntityType.CONCEPT)
+        graph_store.insert_entity(a)
+        graph_store.insert_entity(b)
+        graph_store.insert_entity(c)
+
+        graph_store.insert_edge(
+            Edge(id="he1", source_id="ha", target_id="hb", relation=RelationType.RELATED_TO)
+        )
+        graph_store.insert_edge(
+            Edge(id="he2", source_id="hb", target_id="hc", relation=RelationType.RELATED_TO)
+        )
+
+        # depth=1 should only find B
+        result1 = graph_store.get_neighbors("ha", max_depth=1)
+        assert {e.id for e, _ in result1} == {"hb"}
+
+        # depth=2 should find B and C
+        result2 = graph_store.get_neighbors("ha", max_depth=2)
+        assert {e.id for e, _ in result2} == {"hb", "hc"}
+
+
+# ---------------------------------------------------------------------------
+# list_entities_for_document (#663)
+# ---------------------------------------------------------------------------
+
+
+class TestListEntitiesForDocument:
+    """list_entities_for_document filters entities by document_id."""
+
+    def test_returns_entities_for_document(self, graph_store: GraphStore) -> None:
+        e1 = Entity(id="de1", name="A", entity_type=EntityType.CONCEPT, document_id="doc-1")
+        e2 = Entity(id="de2", name="B", entity_type=EntityType.CONCEPT, document_id="doc-2")
+        graph_store.insert_entity(e1)
+        graph_store.insert_entity(e2)
+
+        result = graph_store.list_entities_for_document("doc-1")
+        assert len(result) == 1
+        assert result[0].id == "de1"
+
+    def test_empty_for_unknown_document(self, graph_store: GraphStore) -> None:
+        result = graph_store.list_entities_for_document("nonexistent-doc")
+        assert result == []
+
+    def test_scopes_filter_applies(self, graph_store: GraphStore) -> None:
+        e1 = Entity(
+            id="dse1",
+            name="A",
+            entity_type=EntityType.CONCEPT,
+            document_id="doc-s",
+            scope="project:alpha",
+        )
+        e2 = Entity(
+            id="dse2",
+            name="B",
+            entity_type=EntityType.CONCEPT,
+            document_id="doc-s",
+            scope="project:beta",
+        )
+        graph_store.insert_entity(e1)
+        graph_store.insert_entity(e2)
+
+        result = graph_store.list_entities_for_document("doc-s", scopes=["project:alpha"])
+        assert len(result) == 1
+        assert result[0].id == "dse1"
+
+    def test_empty_scopes_returns_empty(self, graph_store: GraphStore) -> None:
+        e = Entity(id="dse3", name="A", entity_type=EntityType.CONCEPT, document_id="doc-empty")
+        graph_store.insert_entity(e)
+
+        result = graph_store.list_entities_for_document("doc-empty", scopes=[])
+        assert result == []

@@ -1,13 +1,14 @@
-"""Tests for BrowserToolset — FunctionToolset wrapping all 6 browser actions.
+"""Tests for BrowserToolset — FunctionToolset wrapping all 7 browser actions.
 
-Covers: tool registration (6 tools with correct names), delegation to action
+Covers: tool registration (7 tools with correct names), delegation to action
 functions with injected page/config, BrowserManager lifecycle (setup/teardown),
 page property guard, default config fallback, composition with SkillRegistry,
-and FunctionToolset inheritance.
+FunctionToolset inheritance, and browser_snapshot delegation/output.
 """
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
@@ -27,6 +28,7 @@ EXPECTED_TOOL_NAMES = frozenset(
         "browser_select",
         "browser_read_text",
         "browser_screenshot",
+        "browser_snapshot",
     }
 )
 
@@ -69,11 +71,11 @@ def _setup_toolset_with_mock_manager(page: AsyncMock) -> BrowserToolset:
 
 
 class TestBrowserToolsetRegistration:
-    """BrowserToolset registers all 6 browser tools on FunctionToolset."""
+    """BrowserToolset registers all 7 browser tools on FunctionToolset."""
 
-    def test_registers_six_tools(self) -> None:
+    def test_registers_seven_tools(self) -> None:
         toolset = BrowserToolset()
-        assert len(toolset.tools) == 6
+        assert len(toolset.tools) == 7
 
     def test_tool_names_match(self) -> None:
         toolset = BrowserToolset()
@@ -611,6 +613,155 @@ class TestBrowserToolsetBackwardCompat:
         toolset = BrowserToolset()
         assert toolset.config.cdp_endpoint is None
 
-    def test_default_toolset_registers_six_tools(self) -> None:
+    def test_default_toolset_registers_seven_tools(self) -> None:
         toolset = BrowserToolset()
         assert set(toolset.tools) == EXPECTED_TOOL_NAMES
+
+
+# ---------------------------------------------------------------------------
+# browser_snapshot — delegation (TestFromAC for #736)
+# ---------------------------------------------------------------------------
+
+# Canned AXNodeInfo-like stubs (SimpleNamespace with id, role, name attrs).
+# Used for mock return values; actual AXNodeInfo dataclass lives in manager.
+
+_AX_BUTTON = SimpleNamespace(
+    id=2,
+    role="button",
+    name="Submit",
+    description="Submit form",
+    properties={"focusable": True},
+)
+_AX_LINK = SimpleNamespace(
+    id=3,
+    role="link",
+    name="Home",
+    description="",
+    properties={},
+)
+_AX_TEXTBOX = SimpleNamespace(
+    id=7,
+    role="textbox",
+    name="Email",
+    description="Enter email",
+    properties={"focusable": True},
+)
+
+
+class TestFromAC_BrowserSnapshotDelegation:  # noqa: N801
+    """_snapshot wrapper delegates to self._manager.snapshot(filter=...)."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_delegates_with_explicit_filter(self) -> None:
+        """Call _snapshot(filter='full'), assert manager.snapshot called with filter='full'."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[_AX_BUTTON])
+
+        await toolset._snapshot(filter="full")
+
+        toolset._manager.snapshot.assert_awaited_once_with(filter="full")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_default_filter_interactive(self) -> None:
+        """No args → manager.snapshot called with filter='interactive'."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[_AX_BUTTON])
+
+        await toolset._snapshot()
+
+        toolset._manager.snapshot.assert_awaited_once_with(filter="interactive")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_delegates_with_text_filter(self) -> None:
+        """Call _snapshot(filter='text'), assert manager.snapshot called with filter='text'."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[])
+
+        await toolset._snapshot(filter="text")
+
+        toolset._manager.snapshot.assert_awaited_once_with(filter="text")
+
+
+# ---------------------------------------------------------------------------
+# browser_snapshot — output formatting (TestFromAC for #736)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BrowserSnapshotOutput:  # noqa: N801
+    """_snapshot formats list[AXNodeInfo] as '[{id}] {role}: {name}' per line."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_output_formatting_multiple_nodes(self) -> None:
+        """Three nodes → three lines in '[id] role: name' format, joined by newlines."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[_AX_BUTTON, _AX_LINK, _AX_TEXTBOX])
+
+        result = await toolset._snapshot(filter="full")
+
+        expected = "[2] button: Submit\n[3] link: Home\n[7] textbox: Email"
+        assert result == expected
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_output_single_node(self) -> None:
+        """Single node → single line, no trailing newline."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[_AX_BUTTON])
+
+        result = await toolset._snapshot(filter="interactive")
+
+        assert result == "[2] button: Submit"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_snapshot_output_empty_list(self) -> None:
+        """Empty node list → empty string."""
+        page = _make_mock_page()
+        toolset = _setup_toolset_with_mock_manager(page)
+        toolset._manager.snapshot = AsyncMock(return_value=[])
+
+        result = await toolset._snapshot(filter="full")
+
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# browser_snapshot — tool description (TestFromAC for #736)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BrowserSnapshotDescription:  # noqa: N801
+    """browser_snapshot tool description includes token-cost guidance."""
+
+    def test_description_contains_interactive(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "interactive" in desc.lower()
+
+    def test_description_contains_full(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "full" in desc.lower()
+
+    def test_description_contains_interactive_token_count(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "~3600" in desc or "3600" in desc
+
+    def test_description_contains_text_token_count(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "~800" in desc or "800" in desc
+
+    def test_description_contains_full_token_count(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "~10500" in desc or "10500" in desc
+
+    def test_description_mentions_text_filter(self) -> None:
+        toolset = BrowserToolset()
+        desc = toolset.tools["browser_snapshot"].description
+        assert "text" in desc.lower()

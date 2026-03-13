@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -65,8 +65,8 @@ class TestDeliver:
     """ScreenshotService.deliver dispatches to the appropriate channel method."""
 
     @pytest.mark.asyncio
-    async def test_deliver_uses_send_image_when_available(self) -> None:
-        """Channels with send_image() (e.g. Slack) should use it."""
+    async def test_deliver_calls_send_image(self) -> None:
+        """deliver() should delegate to channel.send_image()."""
         svc = ScreenshotService()
         channel = AsyncMock()
         channel.send_image = AsyncMock()
@@ -74,48 +74,6 @@ class TestDeliver:
         await svc.deliver(_FAKE_SHOT, channel, "caption text")
 
         channel.send_image.assert_awaited_once_with(_FAKE_SHOT, caption="caption text")
-
-    @pytest.mark.asyncio
-    async def test_deliver_uses_send_file_when_no_send_image(self) -> None:
-        """Channels with send_file() but no send_image() (e.g. CLI) should use send_file."""
-        svc = ScreenshotService()
-        channel = MagicMock()
-        # Remove send_image so hasattr returns False
-        del channel.send_image
-        channel.send_file = AsyncMock()
-
-        await svc.deliver(_FAKE_SHOT, channel, "my caption")
-
-        channel.send_file.assert_awaited_once_with(_FAKE_SHOT, caption="my caption")
-
-    @pytest.mark.asyncio
-    async def test_deliver_falls_back_to_send(self) -> None:
-        """Channels with neither send_image nor send_file fall back to send()."""
-        svc = ScreenshotService()
-        channel = MagicMock()
-        del channel.send_image
-        del channel.send_file
-        channel.send = AsyncMock()
-
-        await svc.deliver(_FAKE_SHOT, channel, "fallback caption")
-
-        channel.send.assert_awaited_once()
-        call_arg = channel.send.call_args[0][0]
-        assert str(_FAKE_SHOT) in call_arg
-
-    @pytest.mark.asyncio
-    async def test_deliver_fallback_includes_caption(self) -> None:
-        """The fallback send() message should include the caption."""
-        svc = ScreenshotService()
-        channel = MagicMock()
-        del channel.send_image
-        del channel.send_file
-        channel.send = AsyncMock()
-
-        await svc.deliver(_FAKE_SHOT, channel, "error screenshot")
-
-        call_arg = channel.send.call_args[0][0]
-        assert "error screenshot" in call_arg
 
 
 # ---------------------------------------------------------------------------

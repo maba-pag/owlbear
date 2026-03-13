@@ -1,8 +1,8 @@
 """Approval-gate policy models — tool-level approval rules.
 
-Provides :class:`ApprovalRule`, :class:`ApprovalPolicy`, and
-:class:`ApprovalSession` for gating destructive tool calls behind
-explicit user confirmation.
+Provides :class:`ApprovalRule`, :class:`ApprovalPolicy`,
+:class:`GrantRecord`, and :class:`ApprovalSession` for gating
+destructive tool calls behind explicit user confirmation.
 
 ``ApprovalPolicy`` is a Pydantic model loaded from configuration.
 ``ApprovalSession`` tracks per-session pre-grants so users can approve
@@ -12,6 +12,8 @@ a tool once and skip future prompts during the same turn.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -42,6 +44,8 @@ class ApprovalPolicy(BaseModel):
 
     rules: list[ApprovalRule] = Field(default_factory=list)
     default_timeout: float = 120.0
+    default_grant_ttl: float = 300.0
+    default_max_uses: int | None = 10
 
     def requires_approval(self, tool_name: str, args: dict[str, Any]) -> bool:
         """Return ``True`` if *tool_name* + *args* match any rule.
@@ -79,10 +83,18 @@ class ApprovalPolicy(BaseModel):
     def _args_match(pattern: str, args: dict[str, Any]) -> bool:
         """Return ``True`` if any string arg value matches *pattern*."""
         compiled = re.compile(pattern)
-        return any(
-            isinstance(v, str) and compiled.search(v) is not None
-            for v in args.values()
-        )
+        return any(isinstance(v, str) and compiled.search(v) is not None for v in args.values())
+
+
+@dataclass
+class GrantRecord:
+    """A single scoped grant with optional expiry, usage limit, and arg filter."""
+
+    tool_name: str
+    granted_at: float
+    remaining_uses: int | None = None
+    ttl: float | None = None
+    arg_pattern: str | None = None
 
 
 class ApprovalSession:
@@ -90,19 +102,84 @@ class ApprovalSession:
 
     Allows users to approve a tool once (e.g. "approve all git_push this
     session") and skip future prompts for the remainder of the turn.
+
+    Grants may be scoped with TTL, max-uses, and arg-pattern constraints.
     """
 
-    def __init__(self) -> None:
-        self._pre_grants: set[str] = set()
+    def __init__(self, policy: ApprovalPolicy | None = None) -> None:
+        self._grants: dict[str, GrantRecord] = {}
+        self._policy = policy
 
-    def is_pre_granted(self, tool_name: str) -> bool:
-        """Return ``True`` if *tool_name* has been pre-granted."""
-        return tool_name in self._pre_grants
+    def is_pre_granted(
+        self,
+        tool_name: str,
+        *,
+        args: dict[str, Any] | None = None,
+    ) -> bool:
+        """Return ``True`` if *tool_name* has a valid grant.
 
-    def grant(self, tool_name: str) -> None:
-        """Pre-grant *tool_name* for the remainder of this session."""
-        self._pre_grants.add(tool_name)
+        Checks TTL expiry, remaining uses, and arg-pattern match.
+        Expired or exhausted grants are removed automatically.
+        """
+        grant = self._grants.get(tool_name)
+        if grant is None:
+            return False
+
+        # TTL check
+        if grant.ttl is not None and (monotonic() - grant.granted_at) > grant.ttl:
+            del self._grants[tool_name]
+            return False
+
+        # Remaining-uses check
+        if grant.remaining_uses is not None and grant.remaining_uses <= 0:
+            del self._grants[tool_name]
+            return False
+
+        # Arg-pattern check
+        if grant.arg_pattern is not None and args is not None:
+            compiled = re.compile(grant.arg_pattern)
+            if not any(
+                isinstance(v, str) and compiled.search(v) is not None for v in args.values()
+            ):
+                return False
+
+        # Decrement remaining uses
+        if grant.remaining_uses is not None:
+            grant.remaining_uses -= 1
+            if grant.remaining_uses <= 0:
+                del self._grants[tool_name]
+
+        return True
+
+    def grant(
+        self,
+        tool_name: str,
+        *,
+        max_uses: int | None = None,
+        ttl: float | None = None,
+        arg_pattern: str | None = None,
+    ) -> None:
+        """Pre-grant *tool_name* with optional scope constraints.
+
+        When called with no keyword arguments and a policy is set, the
+        policy's ``default_grant_ttl`` and ``default_max_uses`` are applied.
+        """
+        effective_ttl = ttl
+        effective_uses = max_uses
+
+        # Apply policy defaults only when caller provided no explicit kwargs
+        if self._policy is not None and ttl is None and max_uses is None and arg_pattern is None:
+            effective_ttl = self._policy.default_grant_ttl
+            effective_uses = self._policy.default_max_uses
+
+        self._grants[tool_name] = GrantRecord(
+            tool_name=tool_name,
+            granted_at=monotonic(),
+            remaining_uses=effective_uses,
+            ttl=effective_ttl,
+            arg_pattern=arg_pattern,
+        )
 
     def clear(self) -> None:
-        """Remove all pre-grants."""
-        self._pre_grants.clear()
+        """Remove all grants."""
+        self._grants.clear()

@@ -49,10 +49,11 @@ class TestReadFile:
     async def test_returns_intake_result_with_content(self, tmp_path: object) -> None:
         from pathlib import Path
 
-        p = Path(str(tmp_path)) / "sample.txt"
+        root = Path(str(tmp_path))
+        p = root / "sample.txt"
         p.write_text("hello world", encoding="utf-8")
 
-        result = await read_file(p)
+        result = await read_file(p, workspace_root=root)
 
         assert isinstance(result, IntakeResult)
         assert result.content == "hello world"
@@ -61,10 +62,11 @@ class TestReadFile:
     async def test_source_is_file_path(self, tmp_path: object) -> None:
         from pathlib import Path
 
-        p = Path(str(tmp_path)) / "data.md"
+        root = Path(str(tmp_path))
+        p = root / "data.md"
         p.write_text("# Title", encoding="utf-8")
 
-        result = await read_file(p)
+        result = await read_file(p, workspace_root=root)
 
         assert result.source == str(p)
 
@@ -72,10 +74,11 @@ class TestReadFile:
     async def test_metadata_source_type_is_file(self, tmp_path: object) -> None:
         from pathlib import Path
 
-        p = Path(str(tmp_path)) / "info.txt"
+        root = Path(str(tmp_path))
+        p = root / "info.txt"
         p.write_text("content", encoding="utf-8")
 
-        result = await read_file(p)
+        result = await read_file(p, workspace_root=root)
 
         assert result.metadata["source_type"] == "file"
 
@@ -83,32 +86,97 @@ class TestReadFile:
     async def test_metadata_has_fetched_at(self, tmp_path: object) -> None:
         from pathlib import Path
 
-        p = Path(str(tmp_path)) / "ts.txt"
+        root = Path(str(tmp_path))
+        p = root / "ts.txt"
         p.write_text("time", encoding="utf-8")
 
-        result = await read_file(p)
+        result = await read_file(p, workspace_root=root)
 
         assert "fetched_at" in result.metadata
         # Verify it's a valid ISO timestamp
         datetime.datetime.fromisoformat(result.metadata["fetched_at"])
 
     @pytest.mark.anyio
-    async def test_file_not_found_raises(self) -> None:
+    async def test_workspace_root_is_required(self, tmp_path: object) -> None:
+        """workspace_root is a mandatory keyword arg — omitting it raises TypeError."""
         from pathlib import Path
 
+        root = Path(str(tmp_path))
+        p = root / "sample.txt"
+        p.write_text("data", encoding="utf-8")
+
+        with pytest.raises(TypeError):
+            await read_file(p)  # type: ignore[call-arg]
+
+    @pytest.mark.anyio
+    async def test_file_not_found_raises(self, tmp_path: object) -> None:
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
         with pytest.raises(FileNotFoundError):
-            await read_file(Path("/nonexistent/path/file.txt"))
+            await read_file(root / "nonexistent.txt", workspace_root=root)
 
     @pytest.mark.anyio
     async def test_accepts_str_path(self, tmp_path: object) -> None:
         from pathlib import Path
 
-        p = Path(str(tmp_path)) / "str_path.txt"
+        root = Path(str(tmp_path))
+        p = root / "str_path.txt"
         p.write_text("via string", encoding="utf-8")
 
-        result = await read_file(str(p))
+        result = await read_file(str(p), workspace_root=root)
 
         assert result.content == "via string"
+
+    # -- Sandbox tests ---------------------------------------------------------
+
+    @pytest.mark.anyio
+    async def test_traversal_rejected(self, tmp_path: object) -> None:
+        """Path traversal (../) outside workspace_root raises PermissionError."""
+        from pathlib import Path
+
+        root = Path(str(tmp_path)) / "workspace"
+        root.mkdir()
+
+        with pytest.raises(PermissionError, match="outside workspace"):
+            await read_file("../secret.txt", workspace_root=root)
+
+    @pytest.mark.anyio
+    async def test_absolute_outside_rejected(self, tmp_path: object) -> None:
+        """Absolute path outside workspace_root raises PermissionError."""
+        from pathlib import Path
+
+        root = Path(str(tmp_path)) / "workspace"
+        root.mkdir()
+
+        with pytest.raises(PermissionError, match="outside workspace"):
+            await read_file("/etc/passwd", workspace_root=root)
+
+    @pytest.mark.anyio
+    async def test_null_byte_rejected(self, tmp_path: object) -> None:
+        """Path containing null byte raises PermissionError."""
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
+
+        with pytest.raises(PermissionError, match="outside workspace"):
+            await read_file("file\x00.txt", workspace_root=root)
+
+    @pytest.mark.anyio
+    async def test_valid_path_accepted(self, tmp_path: object) -> None:
+        """Valid path inside workspace_root returns IntakeResult normally."""
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
+        sub = root / "docs"
+        sub.mkdir()
+        f = sub / "readme.md"
+        f.write_text("# Hello", encoding="utf-8")
+
+        result = await read_file("docs/readme.md", workspace_root=root)
+
+        assert isinstance(result, IntakeResult)
+        assert result.content == "# Hello"
 
 
 # -- read_url ------------------------------------------------------------------

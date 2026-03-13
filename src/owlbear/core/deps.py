@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from owlbear.config import RigorProfile
     from owlbear.core.agent_registry import AgentRegistry
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.usage import UsageTracker
@@ -28,3 +29,4 @@ class OwlBearDeps:
     tracker: UsageTracker | None = field(default=None)
     agent_registry: AgentRegistry | None = field(default=None)
     delegation_depth: int = field(default=0)
+    rigor_profile: RigorProfile | None = field(default=None)

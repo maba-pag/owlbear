@@ -109,7 +109,7 @@ class TestPidFileStaleDetection:
         pid_path.write_text("99999999")  # unlikely to be a real PID
 
         with (
-            patch("owlbear.daemon._is_process_alive", return_value=False),
+            patch("owlbear.daemon.is_process_alive", return_value=False),
             PidFile(pid_path),
         ):
             # Should succeed — stale file was cleaned up
@@ -120,7 +120,7 @@ class TestPidFileStaleDetection:
         pid_path = tmp_path / "owlbear.pid"
         pid_path.write_text("88888888")
 
-        with patch("owlbear.daemon._is_process_alive", return_value=False):
+        with patch("owlbear.daemon.is_process_alive", return_value=False):
             pf = PidFile(pid_path)
             pf.__enter__()
             try:
@@ -144,7 +144,7 @@ class TestPidFileConflict:
         pid_path.write_text("12345")
 
         with (
-            patch("owlbear.daemon._is_process_alive", return_value=True),
+            patch("owlbear.daemon.is_process_alive", return_value=True),
             pytest.raises(RuntimeError, match="already running"),
         ):
             PidFile(pid_path).__enter__()
@@ -155,7 +155,7 @@ class TestPidFileConflict:
         pid_path.write_text("12345")
 
         with (
-            patch("owlbear.daemon._is_process_alive", return_value=True),
+            patch("owlbear.daemon.is_process_alive", return_value=True),
             pytest.raises(RuntimeError),
         ):
             PidFile(pid_path).__enter__()
@@ -321,23 +321,6 @@ class TestFromAC_RichLogging:  # noqa: N801
                 f"ANSI escape sequences found in log file: {content!r}"
             )
         finally:
-            self._cleanup(root, new)
-
-    def test_setup_logging_installs_rich_traceback(self, tmp_path: Path) -> None:
-        """AC: rich.traceback.install() sets sys.excepthook in CLI callback."""
-        import sys
-
-        log_file = tmp_path / "owlbear.log"
-        root, new = self._setup_and_collect(log_file)
-        try:
-            # After setup_logging, sys.excepthook should have been replaced
-            # by rich.traceback.install() — it should NOT be the default hook.
-            assert sys.excepthook is not sys.__excepthook__, (
-                "expected rich.traceback.install() to replace sys.excepthook"
-            )
-        finally:
-            # Restore default excepthook if modified
-            sys.excepthook = sys.__excepthook__
             self._cleanup(root, new)
 
 
@@ -822,7 +805,7 @@ class TestBearclawStatus:
                 return_value=self._mock_settings(tmp_path),
             ),
             patch(
-                "bearclaw.commands.daemon._is_process_alive",
+                "bearclaw.commands.daemon.is_process_alive",
                 return_value=True,
             ),
         ):
@@ -844,7 +827,7 @@ class TestBearclawStatus:
                 return_value=self._mock_settings(tmp_path),
             ),
             patch(
-                "bearclaw.commands.daemon._is_process_alive",
+                "bearclaw.commands.daemon.is_process_alive",
                 return_value=False,
             ),
         ):
@@ -1888,28 +1871,6 @@ class TestDaemonRetryReconciliation:
 
         mock_agent.turn.assert_called_once()
         assert any("File not found" in msg for msg in channel.sent)
-
-
-# ---------------------------------------------------------------------------
-# _is_process_alive direct test (coverage for lines 83-88)
-# ---------------------------------------------------------------------------
-
-
-class TestIsProcessAlive:
-    """Direct tests for _is_process_alive (not patched via PidFile)."""
-
-    def test_alive_returns_true(self) -> None:
-        from owlbear.daemon import _is_process_alive
-
-        # Current process is definitely alive
-        assert _is_process_alive(os.getpid()) is True
-
-    def test_dead_pid_returns_false(self) -> None:
-        from owlbear.daemon import _is_process_alive
-
-        # Mock os.kill to raise OSError (dead process path)
-        with patch("os.kill", side_effect=OSError("No such process")):
-            assert _is_process_alive(12345) is False
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ from typing import Annotated
 import typer
 
 from owlbear.config import OwlBearSettings
+from owlbear.process import is_process_alive
 
 app = typer.Typer()
 
@@ -21,16 +22,6 @@ def _get_config_dir() -> Path:
     from pathlib import Path as _Path  # noqa: PLC0415
 
     return _Path(OwlBearSettings().config_dir)
-
-
-def _is_process_alive(pid: int) -> bool:
-    """Check whether *pid* refers to a running process."""
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
-        return False
-    else:
-        return True
 
 
 def _poll_pid_removal(pid_path: Path, *, timeout: float = 5.0) -> bool:
@@ -81,6 +72,7 @@ def run_cmd(
                 config_dir=config_dir,
                 settings=settings,
                 error_journal=result.error_journal,
+                hydrator=result.hydrator,
             )
         finally:
             if result.mcp_registry:
@@ -151,7 +143,7 @@ def _daemon_status(*, detail: bool = False) -> None:
     pid: int | None = None
     if pid_path.exists():
         pid = int(pid_path.read_text().strip())
-        alive = _is_process_alive(pid)
+        alive = is_process_alive(pid)
         state, border = ("Running", "green") if alive else ("Stale", "red")
     else:
         alive = False

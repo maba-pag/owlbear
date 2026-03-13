@@ -201,11 +201,7 @@ class TestCommandSafetyGuardConfigurable:
 
 
 class TestCommandSafetyGuardEdgeCases:
-    """Edge cases: non-dict, missing fields, non-shell tools."""
-
-    def test_non_dict_data_ignored(self) -> None:
-        guard = CommandSafetyGuard()
-        _run(guard("not a dict"))  # type: ignore[arg-type]
+    """Edge cases: missing fields, non-shell tools."""
 
     def test_non_shell_tool_without_file_path_ignored(self) -> None:
         guard = CommandSafetyGuard()
@@ -436,3 +432,30 @@ class TestAdditionalDangerousCommands:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
             _run(guard(_shell_data(cmd)))
+
+
+class TestGitDestructivePatterns:
+    """git sparse-checkout, reset --hard, clean -f."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git sparse-checkout set gemini/agents",
+            "git sparse-checkout init --cone",
+            "git sparse-checkout disable",
+            "git reset --hard",
+            "git reset --hard HEAD~1",
+            "git clean -fd",
+            "git clean -fxd",
+        ],
+    )
+    def test_blocks_destructive_git_commands(self, cmd: str) -> None:
+        guard = CommandSafetyGuard()
+        with pytest.raises(BlockedCommandError):
+            _run(guard(_shell_data(cmd)))
+
+    def test_allows_normal_git_operations(self) -> None:
+        guard = CommandSafetyGuard()
+        _run(guard(_shell_data("git status")))
+        _run(guard(_shell_data("git checkout main")))
+        _run(guard(_shell_data("git reset HEAD file.txt")))

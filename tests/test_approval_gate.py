@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.safety.gate import ApprovalGateToolset
@@ -46,6 +46,7 @@ def _make_channel(
     channel = MagicMock()
     channel.name = "test"
     channel.send = AsyncMock()
+    channel.send_blocks = AsyncMock()
     responses = list(receive_responses)  # copy so pop is safe
     channel.receive = AsyncMock(side_effect=responses)
     return channel
@@ -98,16 +99,16 @@ class TestApprovalPromptSent:
     """When a gated tool is called, the channel receives an approval prompt."""
 
     def test_sends_approval_prompt_via_channel(self) -> None:
-        """call_tool for a gated tool must call channel.send() with a prompt."""
+        """call_tool for a gated tool must call channel.send_blocks() with a prompt."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
         _run(fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
-        fix.channel.send.assert_called_once()
-        prompt_text: str = fix.channel.send.call_args[0][0]
-        assert "git_push" in prompt_text
+        fix.channel.send_blocks.assert_called_once()
+        text_fallback: str = fix.channel.send_blocks.call_args[0][1]
+        assert "git_push" in text_fallback
 
     def test_prompt_includes_tool_name(self) -> None:
         """Approval prompt must mention the tool name being gated."""
@@ -117,8 +118,21 @@ class TestApprovalPromptSent:
 
         _run(fix.gate.call_tool("delete_file", {"path": "/important"}, ctx, tool))
 
-        prompt_text: str = fix.channel.send.call_args[0][0]
-        assert "delete_file" in prompt_text
+        text_fallback: str = fix.channel.send_blocks.call_args[0][1]
+        assert "delete_file" in text_fallback
+
+    def test_send_blocks_text_fallback_includes_cli_prompt(self) -> None:
+        """send_blocks text_fallback must include tool name and yes/no prompt."""
+        fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        _run(fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+
+        fix.channel.send_blocks.assert_called_once()
+        text_fallback: str = fix.channel.send_blocks.call_args[0][1]
+        assert "git_push" in text_fallback
+        assert "approve" in text_fallback.lower() or "yes/no" in text_fallback.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -413,24 +427,155 @@ class TestObservabilityHooks:
 class TestChannelInteraction:
     """Verify the channel send/receive protocol during approval."""
 
-    def test_receive_called_after_send(self) -> None:
-        """channel.receive() is called after channel.send() for gated tools."""
+    def test_receive_called_after_send_blocks(self) -> None:
+        """channel.receive() is called after channel.send_blocks() for gated tools."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
         _run(fix.gate.call_tool("git_push", {}, ctx, tool))
 
-        fix.channel.send.assert_called_once()
+        fix.channel.send_blocks.assert_called_once()
         fix.channel.receive.assert_called_once()
 
     def test_args_included_in_prompt(self) -> None:
-        """The approval prompt should include tool arguments for context."""
+        """The approval prompt text_fallback should include tool name for context."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="run_command")])
         ctx = MagicMock()
         tool = MagicMock()
 
         _run(fix.gate.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
-        prompt_text: str = fix.channel.send.call_args[0][0]
-        assert "run_command" in prompt_text
+        text_fallback: str = fix.channel.send_blocks.call_args[0][1]
+        assert "run_command" in text_fallback
+
+
+# ---------------------------------------------------------------------------
+# AC #656: 'approve all' creates GrantRecord with policy defaults
+# ---------------------------------------------------------------------------
+
+
+class TestApproveAllScopedGrants:
+    """'approve all {tool}' creates a GrantRecord with policy defaults."""
+
+    def test_approve_all_creates_grant_with_policy_defaults(self) -> None:
+        """Grant created by 'approve all' uses policy.default_grant_ttl/max_uses."""
+        policy = ApprovalPolicy(
+            rules=[ApprovalRule(tool_name="git_push")],
+            default_grant_ttl=300.0,
+            default_max_uses=10,
+        )
+        session = ApprovalSession(policy=policy)
+        fix = _make_gate(
+            rules=policy.rules,
+            session=session,
+            channel=_make_channel(["approve all git_push"]),
+        )
+        # Patch policy on the gate to match our custom policy
+        fix.gate.policy = policy
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+
+        # Session should have a grant with the policy defaults
+        grant = session._grants.get("git_push")
+        assert grant is not None
+        assert grant.ttl == 300.0
+        assert grant.remaining_uses == 10
+
+    def test_grant_expires_after_ttl(self) -> None:
+        """After TTL elapses, is_pre_granted returns False."""
+        policy = ApprovalPolicy(
+            rules=[ApprovalRule(tool_name="git_push")],
+            default_grant_ttl=60.0,
+            default_max_uses=None,
+        )
+        session = ApprovalSession(policy=policy)
+        fix = _make_gate(
+            rules=policy.rules,
+            session=session,
+            channel=_make_channel(["approve all git_push"]),
+        )
+        fix.gate.policy = policy
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+
+        # Grant is valid initially
+        assert session.is_pre_granted("git_push") is True
+
+        # Simulate time passing beyond TTL
+        with patch("owlbear.safety.policy.monotonic") as mock_mono:
+            mock_mono.return_value = session._grants["git_push"].granted_at + 61.0
+            # Oops — grant was consumed by the assert above; re-grant
+        # Re-grant and test expiry cleanly
+        session.grant("git_push", ttl=60.0)
+        grant = session._grants["git_push"]
+        with patch("owlbear.safety.policy.monotonic", return_value=grant.granted_at + 61.0):
+            assert session.is_pre_granted("git_push") is False
+
+    def test_grant_exhausts_after_max_uses(self) -> None:
+        """After max_uses calls, is_pre_granted returns False."""
+        policy = ApprovalPolicy(
+            rules=[ApprovalRule(tool_name="git_push")],
+            default_grant_ttl=99999.0,
+            default_max_uses=1,
+        )
+        session = ApprovalSession(policy=policy)
+        fix = _make_gate(
+            rules=policy.rules,
+            session=session,
+            channel=_make_channel(["approve all git_push"]),
+        )
+        fix.gate.policy = policy
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+
+        # Grant should have been created with max_uses=1
+        # Use 1: first pre-grant check — consumes the single use
+        assert session.is_pre_granted("git_push") is True
+        # Use 2: grant exhausted
+        assert session.is_pre_granted("git_push") is False
+
+
+# ---------------------------------------------------------------------------
+# AC #656: Hook event for approved_all includes grant metadata
+# ---------------------------------------------------------------------------
+
+
+class TestApproveAllHookMetadata:
+    """POST_TOOL_USE hook for 'approved_all' includes ttl and max_uses."""
+
+    def test_hook_includes_grant_metadata(self) -> None:
+        """Hook payload for approved_all must include grant_ttl and grant_max_uses."""
+        hooks = HookRegistry()
+        captured: list[dict[str, Any]] = []
+        hooks.register(HookEvent.POST_TOOL_USE, captured.append)
+
+        policy = ApprovalPolicy(
+            rules=[ApprovalRule(tool_name="git_push")],
+            default_grant_ttl=300.0,
+            default_max_uses=10,
+        )
+        session = ApprovalSession(policy=policy)
+        fix = _make_gate(
+            rules=policy.rules,
+            session=session,
+            channel=_make_channel(["approve all git_push"]),
+            hooks=hooks,
+        )
+        fix.gate.policy = policy
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+
+        approved_all = [p for p in captured if p.get("approval_decision") == "approved_all"]
+        assert len(approved_all) == 1
+        payload = approved_all[0]
+        assert payload["grant_ttl"] == 300.0
+        assert payload["grant_max_uses"] == 10

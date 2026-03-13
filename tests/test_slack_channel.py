@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -104,16 +105,17 @@ class TestSlackChannelReceive:
         assert result == "hi from user"
 
     @pytest.mark.asyncio
-    async def test_receive_returns_none_on_timeout(self) -> None:
+    async def test_receive_loops_on_idle_timeout(self) -> None:
         channel = SlackChannel(
             app_token="xapp-test",
             bot_token="xoxb-test",
             channel_id="C12345",
             receive_timeout=0.05,
         )
-        # Queue is empty — should timeout and return None
-        result = await channel.receive(prompt="say something")
-        assert result is None
+        # Queue is empty — receive() loops internally; outer wait_for proves it
+        # doesn't return None immediately.
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(channel.receive(prompt="say something"), timeout=0.15)
 
     @pytest.mark.asyncio
     async def test_receive_returns_none_on_disconnect_sentinel(self) -> None:
@@ -1260,3 +1262,73 @@ class TestSlackImportGuard:
             assert "uv sync --extra slack" in str(exc_info.value)
         finally:
             slack_mod.AsyncWebClient = original
+
+
+# ---------------------------------------------------------------------------
+# receive() idle-timeout behaviour (#667, companion to #513)
+# ---------------------------------------------------------------------------
+
+
+class TestSlackReceiveIdleTimeout:
+    """SlackChannel.receive() must loop on idle timeout, not return None.
+
+    Fixed by #513 (wrap queue.get in a ``while True`` loop that continues
+    on TimeoutError).
+    """
+
+    @pytest.mark.asyncio
+    async def test_receive_does_not_return_none_on_idle_timeout(self) -> None:
+        """receive() must keep waiting after an idle timeout, not return None."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            receive_timeout=0.05,
+        )
+
+        async def _deliver_after_delay() -> None:
+            # Wait long enough for one timeout cycle to fire
+            await asyncio.sleep(0.12)
+            await channel._message_queue.put("delayed msg")
+
+        task = asyncio.create_task(_deliver_after_delay())
+        result = await asyncio.wait_for(channel.receive(), timeout=1.0)
+        await task
+
+        # After the fix, receive() should have retried and returned the message
+        assert result == "delayed msg"
+
+    @pytest.mark.asyncio
+    async def test_receive_returns_none_on_disconnect_sentinel(self) -> None:
+        """receive() must still return None when the disconnect sentinel is queued."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            receive_timeout=0.05,
+        )
+        await channel._message_queue.put(None)
+
+        result = await channel.receive()
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_receive_returns_message_after_multiple_idle_timeouts(self) -> None:
+        """A message arriving after 2+ idle-timeout cycles must be returned."""
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            receive_timeout=0.05,
+        )
+
+        async def _deliver_after_multiple_cycles() -> None:
+            # Wait enough for ~3 timeout cycles (3 x 0.05 s = 0.15 s)
+            await asyncio.sleep(0.20)
+            await channel._message_queue.put("late arrival")
+
+        task = asyncio.create_task(_deliver_after_multiple_cycles())
+        result = await asyncio.wait_for(channel.receive(), timeout=2.0)
+        await task
+
+        assert result == "late arrival"

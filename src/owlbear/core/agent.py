@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
     from owlbear.channels.base import ChannelPlugin
+    from owlbear.config import RigorProfile
     from owlbear.core.agent_registry import AgentRegistry
     from owlbear.memory.context import ContextManager
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
@@ -59,20 +60,25 @@ class OwlBearAgent:
         hooks: HookRegistry | None = None,
         channel: ChannelPlugin | None = None,
         tracker: UsageTracker | None = None,
+        budget_limit_usd: float | None = None,
         provider: str = "copilot",
         toolsets: Sequence[AbstractToolset] | None = None,
         history_processors: Sequence[HistoryProcessor[OwlBearDeps]] | None = None,
         knowledge_service: KnowledgeQueryService | None = None,
+        rigor_profile: RigorProfile | None = None,
     ) -> None:
         self.session = session
         self.context = context
         self.hooks = hooks or HookRegistry()
         self.channel = channel
         self.tracker = tracker
+        self._budget_limit_usd = budget_limit_usd
         self.provider = provider
         self.toolsets: list[AbstractToolset] = list(toolsets or [])
         self._model_name = self._extract_model_name(model)
-        self._deps = OwlBearDeps(hooks=self.hooks, tracker=self.tracker)
+        self._deps = OwlBearDeps(
+            hooks=self.hooks, tracker=self.tracker, rigor_profile=rigor_profile
+        )
         self._knowledge_service = knowledge_service
 
         instructions = context.instructions if context else ""
@@ -152,6 +158,8 @@ class OwlBearAgent:
         if self.tracker is not None:
             self._record_usage(result)
 
+        await self._check_budget()
+
         return result.output
 
     def _record_usage(self, result: object) -> None:
@@ -204,3 +212,31 @@ class OwlBearAgent:
             self.tracker.append(record)  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
             logger.debug("Failed to record usage", exc_info=True)
+
+    async def _check_budget(self) -> None:
+        """Check cumulative spend against the budget limit.
+
+        Emits :attr:`HookEvent.BUDGET_WARNING` at >= 80% and raises
+        :class:`BudgetExceededError` at >= 100%.  Skips entirely when
+        ``_budget_limit_usd`` is ``None`` or ``tracker`` is ``None``.
+        """
+        if self._budget_limit_usd is None or self.tracker is None:
+            return
+
+        _BUDGET_WARNING_PCT = 0.8  # noqa: N806
+
+        summary = self.tracker.summary()
+        cost = summary.total_cost_usd or 0.0
+        pct = cost / self._budget_limit_usd
+
+        if pct >= 1.0:
+            from owlbear.core.errors import BudgetExceededError  # noqa: PLC0415
+
+            msg = f"${self._budget_limit_usd:.2f} budget limit exceeded at ${cost:.2f}"
+            raise BudgetExceededError(msg)
+
+        if pct >= _BUDGET_WARNING_PCT:
+            await self.hooks.emit(
+                HookEvent.BUDGET_WARNING,
+                {"cost_usd": cost, "limit_usd": self._budget_limit_usd, "pct": pct},
+            )

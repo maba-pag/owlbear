@@ -13,46 +13,10 @@ from bearclaw.commands.daemon import (
     _daemon_status,
     _daemon_stop,
     _get_config_dir,
-    _is_process_alive,
     _poll_pid_removal,
 )
 
 runner = CliRunner()
-
-
-# ---------------------------------------------------------------------------
-# _is_process_alive
-# ---------------------------------------------------------------------------
-
-
-class TestIsProcessAlive:
-    """Unit tests for _is_process_alive."""
-
-    def test_alive_pid_returns_true(self) -> None:
-        """os.kill succeeds (no exception) → True."""
-        with patch("bearclaw.commands.daemon.os.kill"):
-            assert _is_process_alive(12345) is True
-
-    def test_dead_pid_returns_false(self) -> None:
-        """os.kill raises ProcessLookupError → False."""
-        with patch(
-            "bearclaw.commands.daemon.os.kill",
-            side_effect=ProcessLookupError("No such process"),
-        ):
-            assert _is_process_alive(99999) is False
-
-    def test_os_error_returns_false(self) -> None:
-        """OSError from os.kill → False."""
-        with patch("bearclaw.commands.daemon.os.kill", side_effect=OSError("mocked")):
-            assert _is_process_alive(99999) is False
-
-    def test_process_lookup_error_returns_false(self) -> None:
-        """ProcessLookupError from os.kill → False."""
-        with patch(
-            "bearclaw.commands.daemon.os.kill",
-            side_effect=ProcessLookupError("no such process"),
-        ):
-            assert _is_process_alive(99999) is False
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +139,7 @@ class TestDaemonStatus:
         mock_settings.config_dir = str(tmp_path)
         with (
             patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         captured = capsys.readouterr()
@@ -191,7 +155,7 @@ class TestDaemonStatus:
         mock_settings.config_dir = str(tmp_path)
         with (
             patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
         ):
             _daemon_status()
         captured = capsys.readouterr()

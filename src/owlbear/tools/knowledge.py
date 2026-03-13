@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
+from owlbear.paths import sandbox_path
+
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import ClassVar
@@ -93,15 +95,7 @@ class KnowledgeToolset(FunctionToolset):
         Raises:
             PermissionError: If the resolved path escapes the workspace.
         """
-        if "\x00" in user_path:
-            msg = f"Path outside workspace: {user_path!r}"
-            raise PermissionError(msg)
-
-        resolved = (self._root / user_path).resolve()
-        if not resolved.is_relative_to(self._root):
-            msg = f"Path outside workspace: {user_path}"
-            raise PermissionError(msg)
-        return resolved
+        return sandbox_path(self._root, user_path)
 
     # ------------------------------------------------------------------
     # Tool registration

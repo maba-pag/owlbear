@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
     SocketModeResponse = None  # type: ignore[assignment]
     AsyncWebClient = None  # type: ignore[assignment]
 
+from owlbear.channels.base import ChannelPlugin
 from owlbear.channels.slack_mrkdwn import markdown_to_mrkdwn
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SlackChannel:
+class SlackChannel(ChannelPlugin):
     """Slack channel adapter implementing the :class:`ChannelPlugin` protocol.
 
     Uses ``AsyncWebClient`` for sending messages and ``SocketModeClient``
@@ -223,17 +224,19 @@ class SlackChannel:
     async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
         """Wait for the next incoming message from Slack.
 
-        Returns ``None`` on timeout or disconnect.  The *prompt* parameter
-        is accepted for protocol compliance but ignored (Slack has no
-        prompt concept).
+        Loops internally on idle timeouts so the daemon stays alive.
+        Returns ``None`` only when the disconnect sentinel is dequeued.
+        The *prompt* parameter is accepted for protocol compliance but
+        ignored (Slack has no prompt concept).
         """
-        try:
-            return await asyncio.wait_for(
-                self._message_queue.get(),
-                timeout=self._receive_timeout,
-            )
-        except TimeoutError:
-            return None
+        while True:
+            try:
+                return await asyncio.wait_for(
+                    self._message_queue.get(),
+                    timeout=self._receive_timeout,
+                )
+            except TimeoutError:
+                continue
 
     def get_or_create_thread(self, context_key: str) -> str | None:
         """Return the thread timestamp for *context_key*, or ``None``.

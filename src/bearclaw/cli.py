@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import click
 import typer
+from rich.traceback import install as install_rich_traceback
+from typer.core import TyperGroup
 
 import owlbear
 from bearclaw.commands.auth import app as auth_app
@@ -21,8 +24,18 @@ from bearclaw.commands.slack import app as slack_app
 from bearclaw.commands.usage import app as usage_app
 from bearclaw.commands.voice import app as voice_app
 
+
+class _RichGroup(TyperGroup):
+    """Click Group that installs rich tracebacks before any argument processing."""
+
+    def main(self, *args: object, **kwargs: object) -> object:  # type: ignore[override]
+        install_rich_traceback(show_locals=False, suppress=[typer, click])
+        return super().main(*args, **kwargs)
+
+
 app = typer.Typer(
     name="bearclaw",
+    cls=_RichGroup,
     help="BearClaw CLI — the command-line interface for OwlBear.",
     no_args_is_help=True,
 )

@@ -2,9 +2,11 @@
 
 Creates an :class:`openai.AsyncOpenAI` client configured for the GitHub
 Copilot API, using device-flow OAuth tokens and the required
-Copilot-Integration-Id header.  HTTP requests are automatically retried
-on transient errors (429, 502, 503, 504) via
-:class:`pydantic_ai.retries.AsyncTenacityTransport`.
+Copilot-Integration-Id header.  HTTP requests are guarded by a
+:class:`~owlbear.core.circuit_breaker.CircuitBreakerTransport` (fast-fail
+when the API is down) wrapping
+:class:`pydantic_ai.retries.AsyncTenacityTransport` (retry transient
+errors 429/502/503/504).
 """
 
 from __future__ import annotations
@@ -18,10 +20,14 @@ from tenacity import retry_if_exception_type, stop_after_attempt, wait_exponenti
 
 from owlbear.auth.copilot import derive_base_url, load_token
 from owlbear.config import OwlBearSettings
+from owlbear.core.circuit_breaker import CircuitBreaker, CircuitBreakerTransport
 
 _COPILOT_INTEGRATION_HEADER = {"Copilot-Integration-Id": "vscode-chat"}
 
 _TRANSIENT_STATUS_CODES: frozenset[int] = frozenset({429, 502, 503, 504})
+
+# Module-level breaker so state persists across client recreations (e.g. auth refresh).
+_copilot_breaker = CircuitBreaker()
 
 
 def _validate_transient_response(response: httpx.Response) -> None:
@@ -98,7 +104,10 @@ async def create_copilot_client(settings: OwlBearSettings | None = None) -> Asyn
     token = token_data["token"]
     base_url = derive_base_url(token)
 
-    transport = _build_retry_transport()
+    transport = CircuitBreakerTransport(
+        _build_retry_transport(),
+        breaker=_copilot_breaker,
+    )
     http_client = httpx.AsyncClient(
         transport=transport,
         timeout=httpx.Timeout(600, connect=5),
@@ -112,7 +121,11 @@ async def create_copilot_client(settings: OwlBearSettings | None = None) -> Asyn
     )
 
 
-async def create_copilot_model(settings: OwlBearSettings | None = None) -> OpenAIChatModel:
+async def create_copilot_model(
+    settings: OwlBearSettings | None = None,
+    *,
+    openai_client: AsyncOpenAI | None = None,
+) -> OpenAIChatModel:
     """Create a PydanticAI-compatible model backed by the Copilot API.
 
     Calls :func:`create_copilot_client` to obtain an ``AsyncOpenAI`` client,
@@ -122,6 +135,8 @@ async def create_copilot_model(settings: OwlBearSettings | None = None) -> OpenA
 
     Args:
         settings: Optional settings override. Uses defaults when ``None``.
+        openai_client: Pre-created client to reuse. When ``None``,
+            a new client is created via :func:`create_copilot_client`.
 
     Returns:
         Configured OpenAIChatModel instance.
@@ -130,7 +145,7 @@ async def create_copilot_model(settings: OwlBearSettings | None = None) -> OpenA
         RuntimeError: If no valid Copilot token is cached.
     """
     settings = settings or OwlBearSettings()
-    client = await create_copilot_client(settings)
+    client = openai_client or await create_copilot_client(settings)
     provider = OpenAIProvider(openai_client=client)
     return OpenAIChatModel(settings.chat_model, provider=provider)
 

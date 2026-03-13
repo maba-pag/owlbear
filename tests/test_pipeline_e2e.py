@@ -32,7 +32,7 @@ pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
 # Real agents directory.
 AGENTS_DIR = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "agents"
 
-# All 8 agent names that must be present.
+# All 9 agent names that must be present.
 ALL_AGENTS = [
     "orchestrator",
     "kanban-planner",
@@ -41,7 +41,8 @@ ALL_AGENTS = [
     "architect",
     "reviewer",
     "writer",
-    "closer",
+    "auditor",
+    "curator",
 ]
 
 
@@ -72,11 +73,15 @@ async def bootstrapped(tmp_path: Path) -> BootstrapResult:
     """Full bootstrap result with real agents dir and FunctionModel."""
     fn_model = FunctionModel(_noop_model_fn)
     settings = _make_settings(tmp_path)
-    with patch(
-        "owlbear.bootstrap.create_copilot_model",
-        new_callable=AsyncMock,
-    ) as mock_model:
-        mock_model.return_value = fn_model
+    mock_client = AsyncMock()
+    with (
+        patch(
+            "owlbear.bootstrap.create_copilot_client",
+            new_callable=AsyncMock,
+            return_value=mock_client,
+        ),
+        patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+    ):
         return await bootstrap(
             settings,
             channel_name="cli",
@@ -97,15 +102,15 @@ def _get_registry(result: BootstrapResult) -> AgentRegistry:
 
 
 # ---------------------------------------------------------------------------
-# AC-1: All 8 agents instantiate from real definitions
+# AC-1: All 9 agents instantiate from real definitions
 # ---------------------------------------------------------------------------
 
 
 class TestAllAgentsInstantiate:
-    """AC-1: build_agent_registry loads all 8 real agent definitions."""
+    """AC-1: build_agent_registry loads all 9 real agent definitions."""
 
     @pytest.mark.asyncio
-    async def test_registry_has_all_eight_definitions(
+    async def test_registry_has_all_nine_definitions(
         self,
         bootstrapped: BootstrapResult,
     ) -> None:
@@ -156,7 +161,7 @@ class TestToolResolution:
 
 
 class TestFourStepDelegation:
-    """AC-3: Orchestrator → builder → reviewer → writer → closer chain."""
+    """AC-3: Orchestrator → builder → reviewer → writer → auditor chain."""
 
     @pytest.mark.asyncio
     async def test_four_step_pipeline(
@@ -170,7 +175,7 @@ class TestFourStepDelegation:
             "builder": "BUILDER_DONE",
             "reviewer": "REVIEWER_DONE",
             "writer": "WRITER_DONE",
-            "closer": "CLOSER_DONE",
+            "auditor": "AUDITOR_DONE",
         }
 
         def _inner_model(name: str) -> FunctionModel:
@@ -180,7 +185,7 @@ class TestFourStepDelegation:
                 ),
             )
 
-        pipeline = ["builder", "reviewer", "writer", "closer"]
+        pipeline = ["builder", "reviewer", "writer", "auditor"]
         call_count = 0
 
         def orchestrator_fn(
@@ -258,11 +263,15 @@ class TestSkillsIntegration:
             usage_path=tmp_path / "usage.jsonl",
         )
 
-        with patch(
-            "owlbear.bootstrap.create_copilot_model",
-            new_callable=AsyncMock,
-        ) as mock_model:
-            mock_model.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(
                 settings,
                 channel_name="cli",
@@ -286,13 +295,14 @@ class TestSkillsIntegration:
 class TestRolePolicies:
     """AC-5: Validator-role agents get filtered toolsets; builders retain full access."""
 
-    VALIDATOR_AGENTS: ClassVar[list[str]] = ["reviewer", "architect", "closer"]
+    VALIDATOR_AGENTS: ClassVar[list[str]] = ["reviewer", "architect", "auditor"]
     BUILDER_AGENTS: ClassVar[list[str]] = [
         "orchestrator",
         "kanban-planner",
         "builder",
         "researcher",
         "writer",
+        "curator",
     ]
 
     @pytest.mark.parametrize("agent_name", VALIDATOR_AGENTS)

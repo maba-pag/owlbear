@@ -30,13 +30,21 @@ def _now_iso() -> str:
     return datetime.datetime.now(datetime.UTC).isoformat()
 
 
-async def read_file(path: str | Path) -> IntakeResult:
+async def read_file(path: str | Path, *, workspace_root: Path) -> IntakeResult:
     """Read a text file from disk and return an IntakeResult.
 
+    The path is sandboxed via :func:`~owlbear.paths.sandbox_path` to
+    prevent directory traversal.
+
     Raises:
+        PermissionError: If *path* resolves outside *workspace_root*
+            (traversal, absolute escape, or null byte).
         FileNotFoundError: If the file does not exist.
     """
-    p = anyio.Path(path)
+    from owlbear.paths import sandbox_path  # noqa: PLC0415
+
+    resolved = sandbox_path(workspace_root, path)
+    p = anyio.Path(resolved)
     content = await p.read_text(encoding="utf-8")
     return IntakeResult(
         content=content,

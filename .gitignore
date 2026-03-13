@@ -56,9 +56,6 @@ megalinter-reports/
 docs/scratch/
 !docs/scratch/.gitkeep
 
-# Research repos — cloned for analysis (under docs/)
-docs/research/
-
 # Temp test/debug output
 *_output.txt
 *_result.txt

@@ -101,11 +101,14 @@ class TestFromAC_AllValidatorsAllowList:  # noqa: N801
 class TestFromAC_AuditorKanbanAccess:  # noqa: N801
     """AC6: Auditor's role policy must allow kanban_create/edit/move."""
 
-    @pytest.mark.parametrize("tool_name", [
-        "kanban_create",
-        "kanban_edit",
-        "kanban_move",
-    ])
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "kanban_create",
+            "kanban_edit",
+            "kanban_move",
+        ],
+    )
     def test_auditor_kanban_tool_in_policy(self, tool_name: str) -> None:
         """The policy applied to auditor must include kanban tools in allowed_tools."""
         registry = AgentRegistry(AGENTS_DIR, _dummy_resolver, default_model="test")

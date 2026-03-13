@@ -6,16 +6,20 @@ from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
 from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
 from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset
 from owlbear.memory.knowledge.chunker import Chunk, TextChunker
+from owlbear.memory.knowledge.document_store import (
+    DocumentStatus,
+    DocumentStore,
+    compute_content_hash,
+)
 from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
+from owlbear.memory.knowledge.enrichment import GraphEnricher
 from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.graph_builder import GraphBuildResult, IntraDocGraphBuilder
 from owlbear.memory.knowledge.ingest import (
-    DocumentStatus,
     IngestPipeline,
     IngestResult,
-    compute_content_hash,
 )
 from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear.memory.knowledge.models import (
@@ -46,6 +50,7 @@ __all__ = [
     "Chunk",
     "Document",
     "DocumentStatus",
+    "DocumentStore",
     "Edge",
     "Embedding",
     "EmbeddingProvider",
@@ -56,6 +61,7 @@ __all__ = [
     "ExtractionResult",
     "GraphAugmentedRetriever",
     "GraphBuildResult",
+    "GraphEnricher",
     "GraphStore",
     "HybridEmbedding",
     "IngestPipeline",

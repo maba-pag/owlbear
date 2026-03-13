@@ -289,13 +289,7 @@ class TestTestVerificationHookConfigurable:
 
 
 class TestTestVerificationHookEdgeCases:
-    """Edge cases: non-dict data, unparseable output."""
-
-    @patch("owlbear.core.test_hook.subprocess.run")
-    def test_non_dict_data_ignored(self, mock_run: MagicMock) -> None:
-        hook = TestVerificationHook()
-        _run(hook("not a dict"))  # type: ignore[arg-type]
-        mock_run.assert_not_called()
+    """Edge cases: unparseable output."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
     def test_unparseable_output_defaults_to_zero(self, mock_run: MagicMock) -> None:

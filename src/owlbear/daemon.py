@@ -21,21 +21,24 @@ import logging.handlers
 import os
 import random
 import signal
-import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 import httpx
 import logfire
 from pydantic_ai import Agent
+from rich.console import Console
+from rich.logging import RichHandler
 
 from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
 from owlbear.core.hooks import HookEvent
+from owlbear.core.lint_gate import LintGateError, run_lint_gate
+from owlbear.process import is_process_alive
 from owlbear.providers.copilot import create_copilot_client
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
     from types import FrameType
 
     from owlbear.channels.base import ChannelPlugin
@@ -78,16 +81,6 @@ _PRIORITY_ORDER: dict[str, int] = {
 }
 
 
-def _is_process_alive(pid: int) -> bool:
-    """Check whether *pid* refers to a running process (cross-platform)."""
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
-        return False
-    else:
-        return True
-
-
 # ---------------------------------------------------------------------------
 # Orchestrator state
 # ---------------------------------------------------------------------------
@@ -119,6 +112,7 @@ class OrchestratorState:
     running: dict[str, RunningTask] = dataclasses.field(default_factory=dict)
     claimed: set[str] = dataclasses.field(default_factory=set)
     retries: dict[str, RetryEntry] = dataclasses.field(default_factory=dict)
+    last_attempted_at: dict[str, datetime] = dataclasses.field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +142,7 @@ class PidFile:
 
         if self._path.exists():
             existing_pid = int(self._path.read_text().strip())
-            if _is_process_alive(existing_pid):
+            if is_process_alive(existing_pid):
                 msg = (
                     f"OwlBear daemon already running (PID {existing_pid}). "
                     "Stop it first with `bearclaw stop`."
@@ -176,7 +170,13 @@ class PidFile:
 
 
 def setup_logging(log_file: Path) -> logging.Logger:
-    """Configure the root logger with a rotating file handler and stderr output.
+    """Configure the root logger with a rotating file handler and rich stderr output.
+
+    The stderr handler uses :class:`rich.logging.RichHandler` for coloured,
+    human-friendly console output.  The file handler remains a plain
+    :class:`~logging.handlers.RotatingFileHandler` (no ANSI escapes).
+    :func:`rich.traceback.install` is called so unhandled exceptions render
+    rich tracebacks on stderr.
 
     Parameters
     ----------
@@ -199,8 +199,13 @@ def setup_logging(log_file: Path) -> logging.Logger:
     )
     file_handler.setFormatter(formatter)
 
-    stream_handler = logging.StreamHandler(sys.stderr)
-    stream_handler.setFormatter(formatter)
+    console = Console(stderr=True)
+    stream_handler = RichHandler(
+        console=console,
+        rich_tracebacks=True,
+        markup=False,
+        show_path=False,
+    )
 
     root = logging.getLogger()
     root.setLevel(logging.INFO)
@@ -484,7 +489,7 @@ def _compute_retry_delay(*, attempt: int, base: float, maximum: float) -> float:
     return min(base * 2 ** (attempt - 1), maximum)
 
 
-async def reconcile_tasks(  # noqa: PLR0913
+async def reconcile_tasks(  # noqa: PLR0913, C901, PLR0912
     *,
     state: OrchestratorState,
     kanban: KanbanToolset,
@@ -493,12 +498,17 @@ async def reconcile_tasks(  # noqa: PLR0913
     max_retry_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
     backoff_base: float = _DEFAULT_BACKOFF_BASE,
     backoff_max: float = _DEFAULT_BACKOFF_MAX,
+    lint_gate_enabled: bool = False,
+    workspace: Path | None = None,
 ) -> None:
     """Check completed/failed asyncio Tasks and update state + kanban.
 
     When *wip_store* is provided, clears WIP on success and saves a
     truncated failure summary (up to :data:`_WIP_MAX_CHARS` chars) on
     failure so the next poll cycle can resume with context.
+
+    :class:`~owlbear.core.errors.BudgetExceededError` is treated as
+    permanent: the task is blocked immediately and retry logic is skipped.
 
     Emits :attr:`HookEvent.TASK_COMPLETE` with ``{task_id, outcome}``
     for each finished task when *hooks* is provided.
@@ -507,6 +517,14 @@ async def reconcile_tasks(  # noqa: PLR0913
     for tid in done_ids:
         rt = state.running.pop(tid)
         exc = rt.asyncio_task.exception()
+
+        # --- Lint gate (#704) ---
+        if exc is None and lint_gate_enabled and workspace is not None:
+            lint_result = await run_lint_gate(workspace)
+            if not lint_result.passed:
+                logger.warning("Lint gate failed for task %s: %s", tid, lint_result.errors)
+                exc = LintGateError(lint_result.errors)
+
         if exc is not None:
             logger.error("Task %s failed: %s", tid, exc)
             if wip_store is not None:
@@ -523,15 +541,24 @@ async def reconcile_tasks(  # noqa: PLR0913
                 )
 
             # --- Task-level retry (#625) ---
+            # Budget exceeded — skip retry entirely (#750)
+            from owlbear.core.errors import BudgetExceededError  # noqa: PLC0415
+
+            if isinstance(exc, BudgetExceededError):
+                reason = f"Budget exceeded: {exc}"
+                try:
+                    await kanban.kanban_edit(tid, block=reason)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Failed to block budget-exceeded task %s", tid, exc_info=True)
+                state.claimed.discard(tid)
+                continue
+
             prev = state.retries.get(tid)
             next_attempt = (prev.attempt + 1) if prev else 1
 
             if next_attempt > max_retry_attempts:
                 # Retries exhausted — block on kanban and release
-                reason = (
-                    f"Retry exhausted after {max_retry_attempts} attempts. "
-                    f"Last error: {exc}"
-                )
+                reason = f"Retry exhausted after {max_retry_attempts} attempts. Last error: {exc}"
                 try:
                     await kanban.kanban_edit(tid, block=reason)
                 except Exception:  # noqa: BLE001
@@ -541,7 +568,9 @@ async def reconcile_tasks(  # noqa: PLR0913
             else:
                 # Schedule retry — keep in claimed
                 delay = _compute_retry_delay(
-                    attempt=next_attempt, base=backoff_base, maximum=backoff_max,
+                    attempt=next_attempt,
+                    base=backoff_base,
+                    maximum=backoff_max,
                 )
                 state.retries[tid] = RetryEntry(
                     task_id=tid,
@@ -599,7 +628,34 @@ async def detect_stale_tasks(
             logger.warning("Failed to send stale alert for task %s", tid, exc_info=True)
 
 
-async def poll_tick(  # noqa: PLR0913, C901
+async def _apply_hydration(
+    hydrator: Callable | None,
+    prompt: str,
+    body: str,
+) -> str:
+    """Call *hydrator* and append results to *prompt*. Never raises."""
+    if hydrator is None or not body:
+        return prompt
+    try:
+        result = await hydrator(body)
+    except Exception:  # noqa: BLE001
+        logger.warning("Hydrator failed, proceeding without hydrated context", exc_info=True)
+        return prompt
+
+    sections: list[str] = []
+    if hasattr(result, "urls") and result.urls:
+        for url, content in result.urls.items():
+            sections.append(f"### {url}\n{content}")
+    if hasattr(result, "files") and result.files:
+        for path, content in result.files.items():
+            sections.append(f"### {path}\n{content}")
+
+    if sections:
+        prompt += "\n\n## Pre-hydrated Context\n\n" + "\n\n".join(sections)
+    return prompt
+
+
+async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
     *,
     state: OrchestratorState,
     kanban: KanbanToolset,
@@ -613,8 +669,12 @@ async def poll_tick(  # noqa: PLR0913, C901
     max_retry_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
     backoff_base: float = _DEFAULT_BACKOFF_BASE,
     backoff_max: float = _DEFAULT_BACKOFF_MAX,
+    lint_gate_enabled: bool = False,
+    workspace: Path | None = None,
+    hydrator: Callable | None = None,
 ) -> None:
-    """Single poll tick: reconcile → detect stale → retry dispatch → fetch todo → sort → dispatch.
+    """Single poll tick: reconcile → detect stale → retry dispatch
+    → fetch todo → dedup → sort → dispatch.
 
     When *wip_store* is provided, loads any existing WIP summary for each
     dispatched task and prepends :data:`CONTINUE_FORWARD_PREFIX` to the
@@ -629,6 +689,8 @@ async def poll_tick(  # noqa: PLR0913, C901
         max_retry_attempts=max_retry_attempts,
         backoff_base=backoff_base,
         backoff_max=backoff_max,
+        lint_gate_enabled=lint_gate_enabled,
+        workspace=workspace,
     )
 
     # 2. Detect and cancel stale tasks
@@ -642,9 +704,7 @@ async def poll_tick(  # noqa: PLR0913, C901
 
     # 3. Re-dispatch due retries
     now = datetime.now(UTC)
-    due_ids = [
-        tid for tid, entry in state.retries.items() if entry.next_due <= now
-    ]
+    due_ids = [tid for tid, entry in state.retries.items() if entry.next_due <= now]
     for tid in due_ids:
         if len(state.running) >= max_concurrent:
             break
@@ -656,6 +716,9 @@ async def poll_tick(  # noqa: PLR0913, C901
         details_raw = await kanban.kanban_show(tid)
         details = json.loads(details_raw)
         prompt = f"Build task #{tid}: {details['title']}\n\n{details.get('body', '')}"
+
+        # Hydrate context from task body
+        prompt = await _apply_hydration(hydrator, prompt, details.get("body", ""))
 
         # Load WIP context and prepend if available
         if wip_store is not None:
@@ -669,6 +732,7 @@ async def poll_tick(  # noqa: PLR0913, C901
             name=f"poll-retry-{tid}",
         )
         state.running[tid] = RunningTask(task_id=tid, asyncio_task=async_task)
+        state.last_attempted_at[tid] = now
 
     # 4. Available slots
     available = max_concurrent - len(state.running)
@@ -683,6 +747,22 @@ async def poll_tick(  # noqa: PLR0913, C901
 
     # 5. Filter already-claimed
     tasks = [t for t in tasks if t["id"] not in state.claimed]
+
+    # 5b. Skip tasks with no new activity since last attempt
+    now = datetime.now(UTC)
+    filtered: list[dict[str, str]] = []
+    for t in tasks:
+        tid = t["id"]
+        prev = state.last_attempted_at.get(tid)
+        if prev is not None:
+            updated_str = t.get("updated", "")
+            if updated_str:
+                task_updated = datetime.fromisoformat(updated_str)
+                if task_updated < prev:
+                    logger.debug("Skipping task %s — no new activity since last attempt", tid)
+                    continue
+        filtered.append(t)
+    tasks = filtered
 
     # 6. Sort by priority
     tasks.sort(key=lambda t: _PRIORITY_ORDER.get(t.get("priority", "important"), 2))
@@ -702,6 +782,9 @@ async def poll_tick(  # noqa: PLR0913, C901
         details = json.loads(details_raw)
         prompt = f"Build task #{task_id}: {details['title']}\n\n{details.get('body', '')}"
 
+        # Hydrate context from task body
+        prompt = await _apply_hydration(hydrator, prompt, details.get("body", ""))
+
         # Load WIP context and prepend if available
         if wip_store is not None:
             wip_summary = wip_store.load(agent="builder", task_id=task_id)
@@ -715,6 +798,7 @@ async def poll_tick(  # noqa: PLR0913, C901
             name=f"poll-task-{task_id}",
         )
         state.running[task_id] = RunningTask(task_id=task_id, asyncio_task=async_task)
+        state.last_attempted_at[task_id] = now
 
 
 async def poll_loop(  # noqa: PLR0913
@@ -727,6 +811,9 @@ async def poll_loop(  # noqa: PLR0913
     wip_store: WipStore | None = None,
     hooks: HookRegistry | None = None,
     channel: ChannelPlugin | None = None,
+    lint_gate_enabled: bool = False,
+    workspace: Path | None = None,
+    hydrator: Callable | None = None,
 ) -> None:
     """Periodic poll-dispatch-reconcile loop."""
     while not shutdown_event.is_set():
@@ -744,6 +831,9 @@ async def poll_loop(  # noqa: PLR0913
                 max_retry_attempts=settings.task_retry_max_attempts,
                 backoff_base=settings.task_retry_backoff_base,
                 backoff_max=settings.task_retry_backoff_max,
+                lint_gate_enabled=lint_gate_enabled,
+                workspace=workspace,
+                hydrator=hydrator,
             )
         except Exception:
             logger.exception("poll_tick failed")
@@ -756,7 +846,7 @@ async def poll_loop(  # noqa: PLR0913
             )
 
 
-async def run_daemon(  # noqa: PLR0913
+async def run_daemon(  # noqa: PLR0913, PLR0915
     *,
     channel: ChannelPlugin,
     agent: OwlBearAgent,
@@ -766,6 +856,8 @@ async def run_daemon(  # noqa: PLR0913
     error_journal: ErrorJournal | None = None,
     kanban_toolset: KanbanToolset | None = None,
     agent_registry: AgentRegistry | None = None,
+    workspace_root: Path | None = None,
+    hydrator: Callable | None = None,
 ) -> None:
     """Run the daemon loop.
 
@@ -804,6 +896,9 @@ async def run_daemon(  # noqa: PLR0913
     agent_registry:
         Required for autonomous mode.  Supplies the ``'builder'`` agent
         used to execute dispatched tasks.
+    workspace_root:
+        Optional workspace root path included in the ``SESSION_START``
+        hook payload.  Defaults to ``Path.cwd()`` when *None*.
     """
     shutdown_event = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -824,6 +919,15 @@ async def run_daemon(  # noqa: PLR0913
         await agent.hooks.emit(
             HookEvent.DAEMON_STARTUP,
             {"channel": channel.name, "config_dir": str(config_dir)},
+        )
+
+        _ws_root = workspace_root if workspace_root is not None else Path.cwd()
+        await agent.hooks.emit(
+            HookEvent.SESSION_START,
+            {
+                "session_id": str(agent.session.path),
+                "workspace_root": str(_ws_root),
+            },
         )
         logger.info("Daemon started on channel '%s'", channel.name)
 
@@ -878,6 +982,9 @@ async def run_daemon(  # noqa: PLR0913
                             wip_store=wip_store,
                             hooks=agent.hooks,
                             channel=channel,
+                            lint_gate_enabled=settings.lint_gate_enabled,
+                            workspace=Path.cwd(),
+                            hydrator=hydrator,
                         )
                     )
             finally:
@@ -906,6 +1013,21 @@ async def run_daemon(  # noqa: PLR0913
             heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
+
+        # Emit SESSION_END before restoring signal handlers
+        try:
+            messages = agent.session.load()
+            if asyncio.iscoroutine(messages):
+                messages = await messages
+        except Exception:  # noqa: BLE001 — AC requires fallback on *any* error
+            messages = []
+        await agent.hooks.emit(
+            HookEvent.SESSION_END,
+            {
+                "session_id": str(agent.session.path),
+                "messages": messages,
+            },
+        )
 
         # Restore previous signal handlers
         signal.signal(signal.SIGINT, prev_sigint)

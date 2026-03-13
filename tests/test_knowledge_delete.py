@@ -3,14 +3,42 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from owlbear.memory.knowledge.document_store import DocumentStore
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.ingest import IngestPipeline
 from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear.memory.knowledge.schema import init_db
+
+
+def _make_pipeline(  # noqa: PLR0913
+    conn: sqlite3.Connection,
+    graph_store: object,
+    vector_store: object,
+    embedding_provider: object,
+    entity_extractor: object,
+    text_chunker: object,
+    workspace_root: Path,
+    **kwargs: object,
+) -> IngestPipeline:
+    store = DocumentStore(
+        conn=conn,
+        graph_store=graph_store,
+        vector_store=vector_store,
+        embedding_provider=embedding_provider,
+    )
+    return IngestPipeline(
+        store=store,
+        entity_extractor=entity_extractor,
+        text_chunker=text_chunker,
+        workspace_root=workspace_root,
+        **kwargs,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -44,23 +72,24 @@ def pipeline(
     conn: sqlite3.Connection,
     graph_store: GraphStore,
     mock_vector_store: MagicMock,
+    tmp_path: Path,
 ) -> IngestPipeline:
     """IngestPipeline with real DB and mock embedder/extractor/chunker."""
-    return IngestPipeline(
+    return _make_pipeline(
         conn=conn,
         graph_store=graph_store,
         vector_store=mock_vector_store,
         embedding_provider=MagicMock(spec=["embed"]),
         entity_extractor=MagicMock(),
         text_chunker=MagicMock(),
+        workspace_root=tmp_path,
     )
 
 
 def _seed_document(conn: sqlite3.Connection, doc_id: str, graph: GraphStore) -> None:
     """Insert a document with chunks, entities, edges, and document_status."""
     conn.execute(
-        "INSERT INTO documents (id, title, content, scope, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO documents (id, title, content, scope, created_at) VALUES (?, ?, ?, ?, ?)",
         (doc_id, "Test Doc", "content", "global", "2026-01-01T00:00:00"),
     )
     conn.execute(
@@ -256,16 +285,18 @@ class TestDeleteDocumentData:
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
+        tmp_path: Path,
     ) -> None:
         """Pipeline works with a vector store lacking delete_by_document_id."""
         plain_vs = MagicMock(spec=["store_embedding", "get_embedding", "search_similar"])
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=plain_vs,
             embedding_provider=MagicMock(spec=["embed"]),
             entity_extractor=MagicMock(),
             text_chunker=MagicMock(),
+            workspace_root=tmp_path,
         )
         _seed_document(conn, "doc-1", graph_store)
 

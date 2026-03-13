@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear.channels.base import ChannelPlugin
+
 __all__ = ["ScreenshotService"]
 
 
@@ -17,7 +19,7 @@ class ScreenshotService:
     Provides four operations:
 
     * :meth:`save` — persist raw image bytes to disk.
-    * :meth:`deliver` — dispatch a saved file to a channel via duck typing.
+    * :meth:`deliver` — send a saved file to a channel via :meth:`~owlbear.channels.base.ChannelPlugin.send_image`.
     * :meth:`capture_browser` — thin async wrapper around Playwright's
       ``page.screenshot()``.
     * :meth:`capture_terminal` — encode terminal text output as UTF-8 bytes.
@@ -48,21 +50,9 @@ class ScreenshotService:
     # deliver
     # ------------------------------------------------------------------
 
-    async def deliver(self, path: Path, channel: object, caption: str) -> None:
-        """Deliver *path* to *channel* using the best available method.
-
-        Resolution order (duck-typed via :func:`hasattr`):
-
-        1. ``channel.send_image(path, caption=caption)`` — e.g. Slack
-        2. ``channel.send_file(path, caption=caption)`` — e.g. CLI
-        3. ``channel.send(f"[{caption}] {path}")`` — universal fallback
-        """
-        if hasattr(channel, "send_image"):
-            await channel.send_image(path, caption=caption)  # type: ignore[attr-defined]
-        elif hasattr(channel, "send_file"):
-            await channel.send_file(path, caption=caption)  # type: ignore[attr-defined]
-        else:
-            await channel.send(f"[{caption}] {path}")  # type: ignore[attr-defined]
+    async def deliver(self, path: Path, channel: ChannelPlugin, caption: str) -> None:
+        """Deliver *path* to *channel* via :meth:`~ChannelPlugin.send_image`."""
+        await channel.send_image(path, caption=caption)
 
     # ------------------------------------------------------------------
     # capture helpers

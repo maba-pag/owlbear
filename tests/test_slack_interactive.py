@@ -58,16 +58,17 @@ def _make_slack_channel(
 def _make_cli_channel(
     receive_responses: list[str | None] | None = None,
 ) -> MagicMock:
-    """Create a mock CLIChannel WITHOUT send_blocks.
+    """Create a mock CLIChannel with send, send_blocks, and receive.
 
-    Only has ``send`` and ``receive`` — no ``send_blocks`` attribute.
+    Mirrors CLIChannel which inherits ``send_blocks`` from ChannelPlugin.
     """
     if receive_responses is None:
         receive_responses = ["yes"]
 
-    channel = MagicMock(spec=["name", "send", "receive"])
+    channel = MagicMock(spec=["name", "send", "send_blocks", "receive"])
     channel.name = "cli"
     channel.send = AsyncMock()
+    channel.send_blocks = AsyncMock()
     responses = list(receive_responses)
     channel.receive = AsyncMock(side_effect=responses)
     return channel
@@ -188,28 +189,29 @@ class TestApprovalGateSlackEnrichment:
 class TestApprovalGateCLIFallback:
     """ApprovalGateToolset falls back to send() when channel lacks send_blocks."""
 
-    def test_cli_channel_gets_plain_text(self) -> None:
-        """When channel has no send_blocks, use send() with plain text."""
+    def test_cli_channel_gets_prompt_via_send_blocks(self) -> None:
+        """CLIChannel receives approval prompt in send_blocks text_fallback."""
         cli_channel = _make_cli_channel(["yes"])
         gate, _inner, _channel = _make_gate(channel=cli_channel)
         ctx, tool = MagicMock(), MagicMock()
 
         _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
-        cli_channel.send.assert_called_once()
-        prompt_text: str = cli_channel.send.call_args[0][0]
-        assert "git_push" in prompt_text
+        cli_channel.send_blocks.assert_called_once()
+        text_fallback: str = cli_channel.send_blocks.call_args[0][1]
+        assert "git_push" in text_fallback
+        assert "Approve?" in text_fallback
 
-    def test_cli_channel_no_send_blocks_called(self) -> None:
-        """CLIChannel mock without send_blocks attribute — no crash."""
+    def test_cli_channel_has_send_blocks(self) -> None:
+        """CLIChannel inherits send_blocks from ChannelPlugin — gate uses it."""
         cli_channel = _make_cli_channel(["yes"])
         gate, _, _ = _make_gate(channel=cli_channel)
         ctx, tool = MagicMock(), MagicMock()
 
-        # Should not raise AttributeError
         _run(gate.call_tool("git_push", {}, ctx, tool))
 
-        assert not hasattr(cli_channel, "send_blocks")
+        assert hasattr(cli_channel, "send_blocks")
+        cli_channel.send_blocks.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -468,16 +470,16 @@ class TestFallbackPathsIntegration:
         assert result == "tool_result"
 
     def test_cli_channel_full_flow(self) -> None:
-        """CLIChannel mock: send() called with text, user approves, tool runs."""
+        """CLIChannel mock: send_blocks() called, user approves, tool runs."""
         cli = _make_cli_channel(["yes"])
         gate, inner, _ = _make_gate(channel=cli)
         ctx, tool = MagicMock(), MagicMock()
 
         result = _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
-        cli.send.assert_called_once()
-        prompt = cli.send.call_args[0][0]
-        assert "git_push" in prompt
+        cli.send_blocks.assert_called_once()
+        text_fallback = cli.send_blocks.call_args[0][1]
+        assert "git_push" in text_fallback
         inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
@@ -501,6 +503,6 @@ class TestFallbackPathsIntegration:
 
         result = _run(gate.call_tool("git_push", {}, ctx, tool))
 
-        cli.send.assert_called_once()
+        cli.send_blocks.assert_called_once()
         inner.call_tool.assert_not_called()
         assert "denied" in str(result).lower()

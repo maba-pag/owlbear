@@ -145,12 +145,6 @@ class TestContextInjectionHookCall:
             stderr=asyncio.subprocess.PIPE,
         )
 
-    @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
-    def test_non_dict_data_ignored(self, mock_exec: AsyncMock) -> None:
-        """Non-dict payload is silently ignored (no crash)."""
-        hook = ContextInjectionHook()
-        _run(hook("not a dict"))  # type: ignore[arg-type]
-        mock_exec.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

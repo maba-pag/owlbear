@@ -5,13 +5,16 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.condenser import SummarizingCondenser
 from owlbear.memory.context import ContextManager
 from owlbear.memory.error_journal import ErrorJournal
 from owlbear.memory.session import SessionStore
 from owlbear.memory.usage import UsageTracker
-from owlbear.providers.copilot import create_copilot_model
+from owlbear.providers.copilot import create_copilot_client, create_copilot_model  # noqa: F401
 from owlbear.tools.mcp_servers import register_default_servers  # noqa: F401
 from owlbear.tools.protocols import find_toolset
 
@@ -39,11 +42,74 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from pydantic_ai.models import Model
+
     from owlbear.config import OwlBearSettings
+    from owlbear.core.hooks import HookRegistry
     from owlbear.projects.models import Project
     from owlbear.projects.store import ProjectStore
 
 logger = logging.getLogger(__name__)
+
+_SESSION_SUMMARY_PROMPT = (
+    "Summarise this conversation into structured markdown with "
+    "headings ## Key Decisions, ## Active Tasks, ## Workspace State. "
+    "Be concise (~500 tokens)."
+)
+
+
+def _wire_session_memory_hook(
+    model: Model,
+    workspace: Path,
+    hooks: HookRegistry,
+) -> None:
+    """Register :class:`SessionMemoryHook` with an LLM-backed summarizer."""
+    from pydantic_ai import Agent  # noqa: PLC0415
+
+    from owlbear.core.session_memory_hook import SessionMemoryHook  # noqa: PLC0415
+
+    async def _summarize(text: str) -> str:
+        result = await Agent(model, system_prompt=_SESSION_SUMMARY_PROMPT).run(text)
+        return result.output
+
+    SessionMemoryHook(workspace_root=workspace, summarizer=_summarize).register(hooks)
+
+
+def _build_hydrator(
+    workspace: Path,
+) -> Callable:
+    """Build an async hydrator closure for context pre-hydration."""
+    from owlbear.core.context_hydration import hydrate as _hydrate_impl  # noqa: PLC0415
+    from owlbear.tools.browser.config import BrowserConfig  # noqa: PLC0415
+    from owlbear.tools.browser.safety import URLSafetyGuard  # noqa: PLC0415
+
+    guard = URLSafetyGuard(config=BrowserConfig())
+
+    async def _hydrate(body: str) -> object:
+        return await _hydrate_impl(body, workspace, url_checker=guard.check_url)
+
+    return _hydrate
+
+
+def _wire_post_model_hooks(
+    settings: OwlBearSettings,
+    model: Model,
+    workspace: Path,
+    hooks: HookRegistry,
+    ingest_pipeline: object | None,
+) -> None:
+    """Register hooks that depend on the model being available."""
+    if ingest_pipeline is not None:
+        from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
+
+        RetrospectiveHook(
+            model=model,
+            ingest_pipeline=ingest_pipeline,
+            kanban_root=workspace / "kanban",
+        ).register(hooks)
+
+    if settings.session_memory_enabled:
+        _wire_session_memory_hook(model, workspace, hooks)
 
 
 async def bootstrap(
@@ -82,7 +148,10 @@ async def bootstrap(
         cleanup.append(progress_reporter.stop)
 
     # 3. Model (created early so knowledge agents can reuse it)
-    model = await create_copilot_model(settings)
+    openai_client = await create_copilot_client(settings)
+    cleanup.append(openai_client.close)
+    provider = OpenAIProvider(openai_client=openai_client)
+    model = OpenAIChatModel(settings.chat_model, provider=provider)
 
     component_statuses: list[ComponentStatus] = []
     toolsets, knowledge_service, ingest_pipeline = build_toolsets(
@@ -96,14 +165,7 @@ async def bootstrap(
         summary=component_statuses,
     )
 
-    if ingest_pipeline is not None:
-        from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
-
-        RetrospectiveHook(
-            model=model,
-            ingest_pipeline=ingest_pipeline,
-            kanban_root=workspace / "kanban",
-        ).register(hooks)
+    _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline)
 
     if active_project is not None and project_store is not None:
         _add_project_toolset(
@@ -160,6 +222,7 @@ async def bootstrap(
         rigor_profile=settings.rigor_profiles[settings.default_rigor],
     )
     agent.set_agent_registry(agent_registry)
+    agent._openai_client = openai_client  # noqa: SLF001  # daemon auth refresh needs this
 
     if active_project is not None:
         _patch_project_toolset_agent(toolsets, agent)
@@ -176,6 +239,8 @@ async def bootstrap(
     if settings.log_startup_summary:
         await channel.send(summary_text)
 
+    hydrator = _build_hydrator(workspace) if settings.prehydration_enabled else None
+
     return BootstrapResult(
         agent=agent,
         channel=channel,
@@ -184,5 +249,6 @@ async def bootstrap(
         error_journal=error_journal,
         startup_summary=startup_summary,
         progress_reporter=progress_reporter,
+        hydrator=hydrator,
         cleanup=cleanup,
     )

@@ -3,13 +3,22 @@
 TDD red-phase tests for task #338. The module ``owlbear.safety.policy``
 does not exist yet — all tests are expected to fail on import until the
 implementation task is completed.
+
+Extended for task #655 — GrantRecord and scoped ApprovalSession.
 """
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from pydantic import BaseModel
 
-from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
+from owlbear.safety.policy import (
+    ApprovalPolicy,
+    ApprovalRule,
+    ApprovalSession,
+    GrantRecord,
+)
 
 
 class TestApprovalRuleModel:
@@ -116,9 +125,7 @@ class TestRequiresApprovalArgPattern:
 
     def test_arg_pattern_matches_any_arg_value(self) -> None:
         """Arg pattern should be checked against all string arg values."""
-        policy = ApprovalPolicy(
-            rules=[ApprovalRule(tool_name="run_command", arg_pattern="rm -rf")]
-        )
+        policy = ApprovalPolicy(rules=[ApprovalRule(tool_name="run_command", arg_pattern="rm -rf")])
         assert (
             policy.requires_approval("run_command", {"command": "rm -rf /tmp", "cwd": "/home"})
             is True
@@ -149,9 +156,7 @@ class TestRequiresApprovalWildcard:
 
     def test_wildcard_with_arg_pattern(self) -> None:
         """Wildcard + arg_pattern: matches any tool when args match the pattern."""
-        policy = ApprovalPolicy(
-            rules=[ApprovalRule(tool_name="*", arg_pattern="dangerous")]
-        )
+        policy = ApprovalPolicy(rules=[ApprovalRule(tool_name="*", arg_pattern="dangerous")])
         assert policy.requires_approval("any_tool", {"x": "dangerous operation"}) is True
         assert policy.requires_approval("any_tool", {"x": "safe operation"}) is False
 
@@ -203,3 +208,295 @@ class TestApprovalSession:
         session.clear()
         assert session.is_pre_granted("git_push") is False
         assert session.is_pre_granted("delete_file") is False
+
+
+# ==========================================================================
+# Task #655 — GrantRecord and scoped ApprovalSession
+# ==========================================================================
+
+
+class TestGrantRecordDataclass:
+    """GrantRecord has the required fields."""
+
+    def test_grant_record_fields(self) -> None:
+        """GrantRecord has tool_name, granted_at, remaining_uses, ttl, arg_pattern."""
+        record = GrantRecord(
+            tool_name="git_push",
+            granted_at=100.0,
+            remaining_uses=5,
+            ttl=60.0,
+            arg_pattern=r"origin main",
+        )
+        assert record.tool_name == "git_push"
+        assert record.granted_at == 100.0
+        assert record.remaining_uses == 5
+        assert record.ttl == 60.0
+        assert record.arg_pattern == r"origin main"
+
+    def test_grant_record_optional_fields(self) -> None:
+        """remaining_uses, ttl, arg_pattern can be None."""
+        record = GrantRecord(
+            tool_name="deploy",
+            granted_at=50.0,
+            remaining_uses=None,
+            ttl=None,
+            arg_pattern=None,
+        )
+        assert record.remaining_uses is None
+        assert record.ttl is None
+        assert record.arg_pattern is None
+
+
+# ---------------------------------------------------------------------------
+# AC: Grant with max_uses=3 allows 3 calls then denies
+# ---------------------------------------------------------------------------
+
+
+class TestMaxUses:
+    """GrantRecord with remaining_uses limits how many times a grant can fire."""
+
+    def test_max_uses_allows_exactly_n_calls(self) -> None:
+        """Grant with max_uses=3 returns True 3 times then False."""
+        session = ApprovalSession()
+        session.grant("git_push", max_uses=3)
+
+        assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is False
+
+    def test_max_uses_one_is_single_shot(self) -> None:
+        """max_uses=1 allows exactly one call."""
+        session = ApprovalSession()
+        session.grant("deploy", max_uses=1)
+
+        assert session.is_pre_granted("deploy") is True
+        assert session.is_pre_granted("deploy") is False
+
+    def test_exhausted_grant_cleaned_up(self) -> None:
+        """After max_uses exhausted, the grant entry is removed."""
+        session = ApprovalSession()
+        session.grant("deploy", max_uses=1)
+
+        session.is_pre_granted("deploy")  # use the single grant
+        # Grant should be cleaned up
+        assert session.is_pre_granted("deploy") is False
+
+    def test_max_uses_zero_denied_immediately(self) -> None:
+        """max_uses=0 denies on the very first check and cleans up."""
+        session = ApprovalSession()
+        session.grant("deploy", max_uses=0)
+
+        assert session.is_pre_granted("deploy") is False
+        assert "deploy" not in session._grants
+
+
+# ---------------------------------------------------------------------------
+# AC: Grant with ttl=1.0 expires after time passes (mock monotonic)
+# ---------------------------------------------------------------------------
+
+
+class TestTTLExpiry:
+    """GrantRecord with ttl expires after the specified duration."""
+
+    def test_ttl_grant_valid_within_window(self) -> None:
+        """Grant with ttl=10.0 is valid immediately after creation."""
+        session = ApprovalSession()
+        session.grant("git_push", ttl=10.0)
+
+        assert session.is_pre_granted("git_push") is True
+
+    def test_ttl_grant_expires_after_duration(self) -> None:
+        """Grant with ttl=1.0 expires when monotonic clock advances past it."""
+        with patch("owlbear.safety.policy.monotonic", return_value=100.0):
+            session = ApprovalSession()
+            session.grant("git_push", ttl=1.0)
+
+        with patch("owlbear.safety.policy.monotonic", return_value=101.5):
+            assert session.is_pre_granted("git_push") is False
+
+    def test_ttl_grant_valid_just_before_expiry(self) -> None:
+        """Grant is still valid at exactly ttl boundary."""
+        with patch("owlbear.safety.policy.monotonic", return_value=100.0):
+            session = ApprovalSession()
+            session.grant("git_push", ttl=5.0)
+
+        with patch("owlbear.safety.policy.monotonic", return_value=105.0):
+            assert session.is_pre_granted("git_push") is True
+
+    def test_expired_grant_cleaned_up(self) -> None:
+        """Expired grants are removed from internal storage on check."""
+        with patch("owlbear.safety.policy.monotonic", return_value=100.0):
+            session = ApprovalSession()
+            session.grant("git_push", ttl=1.0)
+
+        with patch("owlbear.safety.policy.monotonic", return_value=200.0):
+            session.is_pre_granted("git_push")  # triggers cleanup
+            assert "git_push" not in session._grants
+
+
+# ---------------------------------------------------------------------------
+# AC: Grant with arg_pattern allows matching args, denies non-matching
+# ---------------------------------------------------------------------------
+
+
+class TestArgPattern:
+    """GrantRecord with arg_pattern filters by argument values."""
+
+    def test_matching_args_allowed(self) -> None:
+        """Args matching the pattern pass the check."""
+        session = ApprovalSession()
+        session.grant("git_push", arg_pattern=r"origin main")
+
+        assert session.is_pre_granted("git_push", args={"ref": "origin main"}) is True
+
+    def test_non_matching_args_denied(self) -> None:
+        """Args not matching the pattern are denied."""
+        session = ApprovalSession()
+        session.grant("git_push", arg_pattern=r"^origin main$")
+
+        assert session.is_pre_granted("git_push", args={"ref": "origin --force main"}) is False
+
+    def test_regex_pattern_matching(self) -> None:
+        """Arg pattern is treated as a regex."""
+        session = ApprovalSession()
+        session.grant("git_push", arg_pattern=r"^origin (main|develop)$")
+
+        assert session.is_pre_granted("git_push", args={"ref": "origin main"}) is True
+        assert session.is_pre_granted("git_push", args={"ref": "origin develop"}) is True
+        assert session.is_pre_granted("git_push", args={"ref": "origin feature/x"}) is False
+
+    def test_no_pattern_matches_any_args(self) -> None:
+        """Grant without arg_pattern matches regardless of args."""
+        session = ApprovalSession()
+        session.grant("git_push")
+
+        assert session.is_pre_granted("git_push", args={"ref": "anything"}) is True
+
+    def test_pattern_checked_against_all_string_args(self) -> None:
+        """Pattern is searched across all string-valued args."""
+        session = ApprovalSession()
+        session.grant("run_command", arg_pattern=r"safe_script")
+
+        assert (
+            session.is_pre_granted(
+                "run_command",
+                args={"cmd": "safe_script.sh", "cwd": "/work"},
+            )
+            is True
+        )
+        assert (
+            session.is_pre_granted(
+                "run_command",
+                args={"cmd": "dangerous.sh", "cwd": "/work"},
+            )
+            is False
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC: Grant with no constraints behaves like current blanket grant
+# ---------------------------------------------------------------------------
+
+
+class TestBlanketGrant:
+    """Grant with no max_uses/ttl/arg_pattern behaves like old set[str] grant."""
+
+    def test_unlimited_grant_always_valid(self) -> None:
+        """Grant with no constraints allows unlimited uses."""
+        session = ApprovalSession()
+        session.grant("git_push")
+
+        for _ in range(100):
+            assert session.is_pre_granted("git_push") is True
+
+    def test_grant_with_policy_defaults(self) -> None:
+        """grant() with no kwargs uses policy defaults when provided."""
+        policy = ApprovalPolicy(default_grant_ttl=300.0, default_max_uses=10)
+        session = ApprovalSession(policy=policy)
+        session.grant("git_push")
+
+        # Should use the policy defaults (max_uses=10)
+        for _ in range(10):
+            assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is False
+
+    def test_grant_explicit_overrides_policy_defaults(self) -> None:
+        """Explicit kwargs override policy defaults."""
+        policy = ApprovalPolicy(default_grant_ttl=300.0, default_max_uses=10)
+        session = ApprovalSession(policy=policy)
+        session.grant("git_push", max_uses=2)
+
+        assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is True
+        assert session.is_pre_granted("git_push") is False
+
+
+# ---------------------------------------------------------------------------
+# AC: Backward compat — is_pre_granted(tool_name) still works when args omitted
+# ---------------------------------------------------------------------------
+
+
+class TestBackwardCompat:
+    """Existing code calling is_pre_granted(name) without args still works."""
+
+    def test_is_pre_granted_no_args_param(self) -> None:
+        """is_pre_granted(tool_name) with no args still returns True for grants."""
+        session = ApprovalSession()
+        session.grant("git_push")
+
+        assert session.is_pre_granted("git_push") is True
+
+    def test_grant_no_kwargs(self) -> None:
+        """grant(tool_name) with no kwargs creates a working grant."""
+        session = ApprovalSession()
+        session.grant("git_push")
+
+        assert session.is_pre_granted("git_push") is True
+
+    def test_non_granted_tool_returns_false(self) -> None:
+        """is_pre_granted for a non-granted tool still returns False."""
+        session = ApprovalSession()
+
+        assert session.is_pre_granted("run_command") is False
+
+    def test_clear_removes_all_scoped_grants(self) -> None:
+        """clear() removes all grants just like the old set-based clear()."""
+        session = ApprovalSession()
+        session.grant("git_push")
+        session.grant("deploy")
+
+        session.clear()
+
+        assert session.is_pre_granted("git_push") is False
+        assert session.is_pre_granted("deploy") is False
+
+
+# ---------------------------------------------------------------------------
+# AC: ApprovalPolicy gains default_grant_ttl and default_max_uses
+# ---------------------------------------------------------------------------
+
+
+class TestPolicyGrantDefaults:
+    """ApprovalPolicy has configurable default grant limits."""
+
+    def test_default_grant_ttl_field(self) -> None:
+        """ApprovalPolicy has default_grant_ttl with default=300.0."""
+        policy = ApprovalPolicy()
+        assert policy.default_grant_ttl == 300.0
+
+    def test_default_max_uses_field(self) -> None:
+        """ApprovalPolicy has default_max_uses with default=10."""
+        policy = ApprovalPolicy()
+        assert policy.default_max_uses == 10
+
+    def test_custom_policy_defaults(self) -> None:
+        """Policy defaults can be overridden."""
+        policy = ApprovalPolicy(default_grant_ttl=60.0, default_max_uses=5)
+        assert policy.default_grant_ttl == 60.0
+        assert policy.default_max_uses == 5
+
+    def test_none_max_uses_means_unlimited(self) -> None:
+        """default_max_uses=None means grants are unlimited by default."""
+        policy = ApprovalPolicy(default_max_uses=None)
+        assert policy.default_max_uses is None

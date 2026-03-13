@@ -304,8 +304,7 @@ class OwlBearSettings(BaseSettings):
     lessons_injection_enabled: bool = Field(
         default=False,
         description=(
-            "Inject curated lessons from .owlbear/lessons/ "
-            "into agent context on session start."
+            "Inject curated lessons from .owlbear/lessons/ into agent context on session start."
         ),
     )
 
@@ -346,11 +345,26 @@ class OwlBearSettings(BaseSettings):
         description="Default rigor profile key. Must exist in rigor_profiles.",
     )
 
+    # --- Budget ---
+    budget_limit_usd: float | None = Field(
+        default=None,
+        description="Maximum USD spend before raising BudgetExceededError. None = unlimited.",
+    )
+
     # --- Runtime ---
     debug: bool = Field(
         default=False,
         description="Enable debug mode with verbose logging.",
     )
+
+    @field_validator("budget_limit_usd")
+    @classmethod
+    def _validate_budget_limit_usd(cls, v: float | None) -> float | None:
+        """budget_limit_usd must be strictly positive when set."""
+        if v is not None and v <= 0:
+            msg = "budget_limit_usd must be greater than 0"
+            raise ValueError(msg)
+        return v
 
     @field_validator("default_rigor")
     @classmethod

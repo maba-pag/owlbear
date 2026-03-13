@@ -101,8 +101,8 @@ class BootstrapResult:
     progress_reporter:
         Optional :class:`~owlbear.core.progress.ProgressReporter`.
     cleanup:
-        Callables to invoke during shutdown (e.g. ``progress_reporter.stop``,
-        ``conn.close``).
+        Sync or async callables to invoke during shutdown (e.g.
+        ``progress_reporter.stop``, ``openai_client.close``).
     """
 
     agent: OwlBearAgent
@@ -112,4 +112,5 @@ class BootstrapResult:
     error_journal: ErrorJournal
     startup_summary: StartupSummary | None = None
     progress_reporter: ProgressReporter | None = None
+    hydrator: Callable | None = None
     cleanup: list[Callable] = field(default_factory=list)

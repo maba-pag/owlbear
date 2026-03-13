@@ -1,4 +1,4 @@
-﻿"""Tests for owlbear.core.circuit_breaker -- CircuitBreaker + CircuitBreakerTransport.
+"""Tests for owlbear.core.circuit_breaker -- CircuitBreaker + CircuitBreakerTransport.
 
 Test companion for #515.
 """

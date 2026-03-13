@@ -153,13 +153,7 @@ class TestAutoLintHookSkipsNonPy:
 
 
 class TestAutoLintHookEdgeCases:
-    """Edge cases: non-dict data, missing args, no file path."""
-
-    @patch("owlbear.core.lint_hook.subprocess.run")
-    def test_non_dict_data_ignored(self, mock_run: MagicMock) -> None:
-        hook = AutoLintHook()
-        _run(hook("not a dict"))  # type: ignore[arg-type]
-        mock_run.assert_not_called()
+    """Edge cases: missing args, no file path."""
 
     @patch("owlbear.core.lint_hook.subprocess.run")
     def test_missing_args_key_ignored(self, mock_run: MagicMock) -> None:

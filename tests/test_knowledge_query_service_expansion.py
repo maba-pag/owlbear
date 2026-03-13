@@ -590,7 +590,7 @@ class TestBootstrapRetrieverWiring:
             )
 
         assert result is not None
-        _, service = result
+        _, service, _ = result
         assert service._retriever is not None
         assert type(service._retriever).__name__ == "GraphAugmentedRetriever"
 
@@ -621,7 +621,7 @@ class TestBootstrapRetrieverWiring:
             )
 
         assert result is not None
-        _, service = result
+        _, service, _ = result
         assert service._retriever is None
 
     def test_build_toolsets_passes_expansion_setting(self, tmp_path: Path) -> None:

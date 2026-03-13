@@ -29,7 +29,13 @@ try:
 except ImportError:  # openai is an optional dependency
     openai = None  # type: ignore[assignment]
 
+from owlbear.core.circuit_breaker import CircuitOpenError
 from owlbear.core.command_guard import BlockedCommandError
+
+
+class BudgetExceededError(Exception):
+    """Raised when cumulative spend reaches or exceeds the budget limit."""
+
 
 # ---------------------------------------------------------------------------
 # Optional-dependency error tuples
@@ -99,9 +105,17 @@ def classify_error(exc: Exception) -> ErrorCategory:
     # --- Permanent (non-retryable) -----------------------------------------
     # pydantic.ValidationError is a ValueError subclass — check before
     # TOOL_SEMANTIC to avoid misclassification.
+    # CircuitOpenError: fast-fail when Copilot API circuit breaker is open.
     if isinstance(
         exc,
-        (pydantic.ValidationError, FileNotFoundError, PermissionError, BlockedCommandError),
+        (
+            pydantic.ValidationError,
+            FileNotFoundError,
+            PermissionError,
+            BlockedCommandError,
+            CircuitOpenError,
+            BudgetExceededError,
+        ),
     ):
         return ErrorCategory.PERMANENT
 

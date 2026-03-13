@@ -24,6 +24,18 @@ from owlbear.safety.gate import ApprovalGateToolset
 from owlbear.tools.hooked import HookedToolset
 from owlbear.tools.protocols import unwrap
 
+
+@pytest.fixture(autouse=True)
+def _mock_copilot_client():
+    """Prevent real Copilot client creation in all bootstrap tests."""
+    with patch(
+        "owlbear.bootstrap.create_copilot_client",
+        new_callable=AsyncMock,
+        return_value=AsyncMock(),
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # BootstrapResult dataclass shape
 # ---------------------------------------------------------------------------
@@ -365,13 +377,9 @@ class TestBootstrap:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -393,13 +401,9 @@ class TestBootstrap:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -413,19 +417,15 @@ class TestBootstrap:
 
     @pytest.mark.asyncio
     async def test_bootstrap_model_failure_logged(self, tmp_path: Path) -> None:
-        """If create_copilot_model fails, bootstrap should still complete."""
+        """If create_copilot_client fails, bootstrap should propagate the error."""
         from owlbear.bootstrap import bootstrap
 
         settings = OwlBearSettings()
         with (
             patch(
-
-                "owlbear.bootstrap.create_copilot_model",
-
+                "owlbear.bootstrap.create_copilot_client",
                 new_callable=AsyncMock,
-
                 side_effect=RuntimeError("No token"),
-
             ),
             pytest.raises(RuntimeError, match="No token"),
         ):
@@ -537,13 +537,9 @@ class TestBootstrapWithSkillsDir:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch(
                 "owlbear.core.agent.Agent",
@@ -624,13 +620,9 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=True)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -650,13 +642,9 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=False)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -674,13 +662,9 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=True)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -701,13 +685,9 @@ class TestBootstrapProgress:
         settings = OwlBearSettings(progress_enabled=False)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -863,13 +843,9 @@ class TestBootstrapApprovalIntegration:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -888,13 +864,9 @@ class TestBootstrapApprovalIntegration:
         settings = OwlBearSettings(approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1024,13 +996,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1055,13 +1023,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1085,13 +1049,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1116,13 +1076,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent") as mock_agent_cls,
         ):
@@ -1150,13 +1106,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1185,13 +1137,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1218,13 +1166,9 @@ class TestBootstrapProjectAwareness:
         settings = OwlBearSettings(config_dir=config_dir, approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent") as mock_agent_cls,
         ):
@@ -1545,13 +1489,9 @@ class TestBootstrapScreenshotIntegration:
         settings = OwlBearSettings(approval_policy=[])
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -1659,13 +1599,9 @@ class TestBootstrapKnowledgeServiceWiring:
 
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -1688,13 +1624,9 @@ class TestBootstrapKnowledgeServiceWiring:
 
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -2308,13 +2240,9 @@ class TestBootstrapCollectsSummary:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
         ):
@@ -2338,13 +2266,9 @@ class TestBootstrapCollectsSummary:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -2367,13 +2291,9 @@ class TestBootstrapCollectsSummary:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -2403,13 +2323,9 @@ class TestBootstrapCollectsSummary:
         )
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch(
@@ -2434,13 +2350,9 @@ class TestBootstrapCollectsSummary:
         settings = OwlBearSettings()
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch("owlbear.bootstrap.logger") as mock_logger,
@@ -2461,13 +2373,9 @@ class TestBootstrapCollectsSummary:
         mock_channel = AsyncMock(spec=ChannelPlugin)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch("owlbear.bootstrap.create_channel", return_value=mock_channel),
@@ -2489,13 +2397,9 @@ class TestBootstrapCollectsSummary:
         mock_channel = AsyncMock(spec=ChannelPlugin)
         with (
             patch(
-
                 "owlbear.bootstrap.create_copilot_model",
-
                 new_callable=AsyncMock,
-
                 return_value=mock_model,
-
             ),
             patch("owlbear.core.agent.Agent"),
             patch("owlbear.bootstrap.create_channel", return_value=mock_channel),
@@ -2660,3 +2564,95 @@ class TestComponentStatusErrorSites:
         assert pt_statuses[0].loaded is False
         assert pt_statuses[0].level == "ERROR"
         assert "project boom" in pt_statuses[0].error
+
+
+# ---------------------------------------------------------------------------
+# OpenAI client cleanup registration  -- AC#1 for task #650
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_OpenAIClientCleanup:  # noqa: N801
+    """AC#1 (#650): bootstrap must register the OpenAI client's close in cleanup.
+
+    The AsyncOpenAI client created during bootstrap owns an
+    httpx.AsyncClient transport.  If bootstrap does not append the
+    client's ``close`` to the cleanup list, the transport leaks on
+    shutdown.
+
+    Bootstrap now calls ``create_copilot_client`` directly and builds
+    the model inline (no ``create_copilot_model`` indirection).  The
+    autouse ``_mock_copilot_client`` fixture patches
+    ``create_copilot_client``; these tests override it with their own
+    mock so they can assert on ``mock_client.close``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_registers_openai_client_close(self, tmp_path: Path) -> None:
+        """Happy path: openai_client.close is in the cleanup list after bootstrap."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_client = AsyncMock()
+        settings = OwlBearSettings()
+
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        assert mock_client.close in result.cleanup, (
+            f"openai_client.close not found in cleanup: {result.cleanup}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_cleanup_loop_closes_openai_client(self, tmp_path: Path) -> None:
+        """Running all cleanup callables must actually close the OpenAI client."""
+        import inspect
+
+        from owlbear.bootstrap import bootstrap
+
+        mock_client = AsyncMock()
+        settings = OwlBearSettings()
+
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        for cb in result.cleanup:
+            rv = cb()
+            if inspect.isawaitable(rv):
+                await rv
+
+        mock_client.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_client_close_alongside_progress_stop(self, tmp_path: Path) -> None:
+        """Edge: both progress_reporter.stop and openai_client.close are in cleanup."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_client = AsyncMock()
+        settings = OwlBearSettings(progress_enabled=True)
+
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        assert mock_client.close in result.cleanup
+        assert result.progress_reporter is not None
+        assert result.progress_reporter.stop in result.cleanup

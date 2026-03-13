@@ -562,3 +562,35 @@ class TestChatAsyncRunsCleanup:
             )
 
         cleanup_cb.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Rich traceback in CLI callback (TDD RED — #632)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RichTracebackCli:  # noqa: N801
+    """AC#1: rich.traceback.install(show_locals=False, suppress=[typer, click]) in cli.py main().
+
+    The rich traceback handler must be installed at the CLI app callback level
+    so ALL commands (auth, chat, daemon, project, etc.) get rich tracebacks,
+    not just the daemon.
+    """
+
+    def test_main_callback_calls_rich_traceback_install(self) -> None:
+        """CLI app callback calls install_rich_traceback with correct params."""
+        import click as click_mod
+        import typer as typer_mod
+
+        with patch("bearclaw.cli.install_rich_traceback") as mock_install:
+            runner.invoke(app, ["--help"])
+            mock_install.assert_called_once_with(
+                show_locals=False,
+                suppress=[typer_mod, click_mod],
+            )
+
+    def test_rich_traceback_covers_non_daemon_commands(self) -> None:
+        """Rich traceback fires for non-daemon commands (e.g. auth --help)."""
+        with patch("bearclaw.cli.install_rich_traceback") as mock_install:
+            runner.invoke(app, ["auth", "--help"])
+            assert mock_install.called, "rich.traceback.install() must fire for non-daemon commands"

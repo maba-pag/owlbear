@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -18,6 +18,18 @@ from owlbear.config import (
     resolve_rigor_profile,
 )
 from owlbear.core.deps import OwlBearDeps
+
+
+@pytest.fixture(autouse=True)
+def _mock_copilot_client():
+    """Prevent real Copilot client creation in bootstrap tests."""
+    with patch(
+        "owlbear.bootstrap.create_copilot_client",
+        new_callable=AsyncMock,
+        return_value=AsyncMock(),
+    ):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # AC: Test RigorProfile dataclass creation with all fields

@@ -79,7 +79,7 @@ class TestStatusRunning:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -93,7 +93,7 @@ class TestStatusRunning:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -112,7 +112,7 @@ class TestStatusRunning:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -131,7 +131,7 @@ class TestStatusRunning:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -156,7 +156,7 @@ class TestStatusStale:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -170,7 +170,7 @@ class TestStatusStale:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -184,7 +184,7 @@ class TestStatusStale:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=False),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
         ):
             _daemon_status()
         out = capsys.readouterr().out
@@ -208,7 +208,7 @@ class TestStatusDetail:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, chat_model="claude-sonnet-4"),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -223,7 +223,7 @@ class TestStatusDetail:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, autonomous_mode=True),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -237,7 +237,7 @@ class TestStatusDetail:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, heartbeat_enabled=True),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -251,7 +251,7 @@ class TestStatusDetail:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id="C12345"),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -266,7 +266,7 @@ class TestStatusDetail:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id=None),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             result = runner.invoke(app, ["status", "--detail"])
         assert result.exit_code == 0
@@ -291,7 +291,7 @@ class TestStatusProject:
                 "bearclaw.commands.daemon.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
-            patch("bearclaw.commands.daemon._is_process_alive", return_value=True),
+            patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
         out = capsys.readouterr().out

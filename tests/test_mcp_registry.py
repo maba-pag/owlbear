@@ -475,8 +475,8 @@ class TestToolResolverMCPPrefix:
         agent = registry.get("fs_agent")
         assert isinstance(agent, Agent)
 
-    def test_mcp_prefix_unknown_server_raises(self, tmp_path: Path) -> None:
-        """mcp:unknown should raise KeyError during agent build."""
+    def test_mcp_prefix_unknown_server_skipped_with_warning(self, tmp_path: Path) -> None:
+        """mcp:unknown is gracefully skipped with a warning log during agent build."""
         from owlbear.core.agent_registry import AgentRegistry
 
         mcp_reg = MCPServerRegistry()
@@ -497,5 +497,6 @@ class TestToolResolverMCPPrefix:
             encoding="utf-8",
         )
         registry.scan()
-        with pytest.raises(KeyError, match="unknown"):
-            registry.get("bad_agent")
+        # Unknown MCP tool is skipped (not raised), agent is still created
+        agent = registry.get("bad_agent")
+        assert isinstance(agent, Agent)

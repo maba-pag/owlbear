@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
+
+from owlbear.channels.base import ChannelPlugin
 
 if TYPE_CHECKING:
     from io import TextIOBase
-    from pathlib import Path
 
 
-class CLIChannel:
+class CLIChannel(ChannelPlugin):
     """Synchronous stdin/stdout channel for local CLI sessions.
 
     Accepts optional *input* / *output* streams for testing.  Defaults to
@@ -64,3 +66,20 @@ class CLIChannel:
 
         if sys.platform == "win32" and hasattr(os, "startfile"):
             os.startfile(path)  # noqa: S606
+
+    async def send_image(
+        self,
+        file_or_bytes: Path | bytes,
+        *,
+        caption: str | None = None,
+    ) -> None:
+        """Deliver an image to the user.
+
+        When *file_or_bytes* is a :class:`~pathlib.Path`, delegates to
+        :meth:`send_file` so the CLI prints the path and opens it on Windows.
+        For raw bytes, falls back to sending the caption text.
+        """
+        if isinstance(file_or_bytes, Path):
+            await self.send_file(file_or_bytes, caption=caption)
+        else:
+            await self.send(caption or "[image]")

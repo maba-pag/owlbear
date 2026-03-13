@@ -67,11 +67,10 @@ def _make_response(
 
 
 def _make_client(response: httpx.Response) -> AsyncMock:
-    """Build a mock httpx.AsyncClient that returns *response* for any method."""
-    client = AsyncMock()
+    """Build a mock httpx.AsyncClient that returns *response* for any .request call."""
+    client = AsyncMock(spec=httpx.AsyncClient)
     client.request = AsyncMock(return_value=response)
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
+    client.aclose = AsyncMock()
     return client
 
 
@@ -81,9 +80,10 @@ def _toolset(
     owner: str | None = OWNER,
     repo: str | None = REPO,
     hooks: HookRegistry | None = None,
+    _client: httpx.AsyncClient | None = None,
 ) -> GitHubToolset:
     """Shorthand for constructing a GitHubToolset with defaults."""
-    return GitHubToolset(token=token, owner=owner, repo=repo, hooks=hooks)
+    return GitHubToolset(token=token, owner=owner, repo=repo, hooks=hooks, _client=_client)
 
 
 # ---------------------------------------------------------------------------
@@ -200,10 +200,8 @@ class TestCreatePr:
             json_data={"number": 42, "html_url": "https://github.com/test-owner/test-repo/pull/42"}
         )
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.create_pr(title="Fix bug", head="fix-branch", base="main")
+        ts = _toolset(_client=client)
+        await ts.create_pr(title="Fix bug", head="fix-branch", base="main")
 
         client.request.assert_called_once()
         call_args = client.request.call_args
@@ -214,15 +212,13 @@ class TestCreatePr:
     async def test_sends_correct_request_body(self) -> None:
         resp = _make_response(json_data={"number": 1, "html_url": "https://github.com/o/r/pull/1"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.create_pr(
-                title="Add feature",
-                head="feature-branch",
-                base="main",
-                body="Description here",
-            )
+        ts = _toolset(_client=client)
+        await ts.create_pr(
+            title="Add feature",
+            head="feature-branch",
+            base="main",
+            body="Description here",
+        )
 
         call_kwargs = client.request.call_args[1]
         json_body = call_kwargs.get("json", {})
@@ -235,10 +231,8 @@ class TestCreatePr:
     async def test_sends_auth_header(self) -> None:
         resp = _make_response(json_data={"number": 1, "html_url": "url"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.create_pr(title="T", head="h", base="b")
+        ts = _toolset(_client=client)
+        await ts.create_pr(title="T", head="h", base="b")
 
         call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
@@ -255,10 +249,8 @@ class TestCreatePr:
             }
         )
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.create_pr(title="T", head="h", base="b")
+        ts = _toolset(_client=client)
+        result = await ts.create_pr(title="T", head="h", base="b")
 
         assert "42" in result
         assert isinstance(result, str)
@@ -270,10 +262,8 @@ class TestCreatePr:
             status_code=422,
         )
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.create_pr(title="T", head="h", base="b")
+        ts = _toolset(_client=client)
+        result = await ts.create_pr(title="T", head="h", base="b")
 
         assert "error" in result.lower()
 
@@ -294,10 +284,8 @@ class TestCreatePrHookEmission:
 
         resp = _make_response(json_data={"number": 1, "html_url": "url"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset(hooks=hooks)
-            await ts.create_pr(title="Hook test", head="h", base="b")
+        ts = _toolset(hooks=hooks, _client=client)
+        await ts.create_pr(title="Hook test", head="h", base="b")
 
         assert len(captured) == 1
         payload = captured[0]
@@ -319,10 +307,8 @@ class TestCreatePrHookEmission:
 
         client = _make_client(resp)
         client.request = AsyncMock(side_effect=tracking_request)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset(hooks=hooks)
-            await ts.create_pr(title="Order test", head="h", base="b")
+        ts = _toolset(hooks=hooks, _client=client)
+        await ts.create_pr(title="Order test", head="h", base="b")
 
         assert call_order == ["hook", "api_call"]
 
@@ -331,10 +317,8 @@ class TestCreatePrHookEmission:
         """When hooks is None, no emission happens (no error)."""
         resp = _make_response(json_data={"number": 1, "html_url": "url"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset(hooks=None)
-            result = await ts.create_pr(title="No hooks", head="h", base="b")
+        ts = _toolset(hooks=None, _client=client)
+        result = await ts.create_pr(title="No hooks", head="h", base="b")
 
         assert isinstance(result, str)
 
@@ -346,10 +330,8 @@ class TestCreatePrHookEmission:
 
         resp = _make_response(json_data={"number": 1, "html_url": "url"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset(hooks=hooks)
-            await ts.create_pr(title="My PR", head="feature", base="main")
+        ts = _toolset(hooks=hooks, _client=client)
+        await ts.create_pr(title="My PR", head="feature", base="main")
 
         payload = captured[0]
         assert payload["args"]["title"] == "My PR"  # type: ignore[index]
@@ -369,10 +351,8 @@ class TestListPrs:
     async def test_sends_get_to_correct_url(self) -> None:
         resp = _make_response(json_data=[{"number": 1, "title": "PR 1"}])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_prs()
+        ts = _toolset(_client=client)
+        await ts.list_prs()
 
         client.request.assert_called_once()
         call_args = client.request.call_args
@@ -383,10 +363,8 @@ class TestListPrs:
     async def test_default_state_open(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_prs()
+        ts = _toolset(_client=client)
+        await ts.list_prs()
 
         call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
@@ -396,10 +374,8 @@ class TestListPrs:
     async def test_custom_state_and_per_page(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_prs(state="closed", per_page=50)
+        ts = _toolset(_client=client)
+        await ts.list_prs(state="closed", per_page=50)
 
         call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
@@ -410,10 +386,8 @@ class TestListPrs:
     async def test_sends_auth_headers(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_prs()
+        ts = _toolset(_client=client)
+        await ts.list_prs()
 
         call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
@@ -423,10 +397,8 @@ class TestListPrs:
     async def test_returns_string(self) -> None:
         resp = _make_response(json_data=[{"number": 1, "title": "PR"}])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.list_prs()
+        ts = _toolset(_client=client)
+        result = await ts.list_prs()
 
         assert isinstance(result, str)
 
@@ -443,10 +415,8 @@ class TestListIssues:
     async def test_sends_get_to_issues_url(self) -> None:
         resp = _make_response(json_data=[{"number": 10, "title": "Bug"}])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_issues()
+        ts = _toolset(_client=client)
+        await ts.list_issues()
 
         client.request.assert_called_once()
         call_args = client.request.call_args
@@ -457,10 +427,8 @@ class TestListIssues:
     async def test_default_state_open(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_issues()
+        ts = _toolset(_client=client)
+        await ts.list_issues()
 
         call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
@@ -470,10 +438,8 @@ class TestListIssues:
     async def test_custom_state_filter(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_issues(state="closed")
+        ts = _toolset(_client=client)
+        await ts.list_issues(state="closed")
 
         call_kwargs = client.request.call_args[1]
         params = call_kwargs.get("params", {})
@@ -483,10 +449,8 @@ class TestListIssues:
     async def test_sends_auth_headers(self) -> None:
         resp = _make_response(json_data=[])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.list_issues()
+        ts = _toolset(_client=client)
+        await ts.list_issues()
 
         call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
@@ -497,10 +461,8 @@ class TestListIssues:
     async def test_returns_string(self) -> None:
         resp = _make_response(json_data=[{"number": 1, "title": "Issue"}])
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.list_issues()
+        ts = _toolset(_client=client)
+        result = await ts.list_issues()
 
         assert isinstance(result, str)
 
@@ -524,10 +486,8 @@ class TestGetIssue:
             }
         )
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.get_issue(number=42)
+        ts = _toolset(_client=client)
+        await ts.get_issue(number=42)
 
         client.request.assert_called_once()
         call_args = client.request.call_args
@@ -538,10 +498,8 @@ class TestGetIssue:
     async def test_path_param_with_different_number(self) -> None:
         resp = _make_response(json_data={"number": 99, "title": "Feature"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.get_issue(number=99)
+        ts = _toolset(_client=client)
+        await ts.get_issue(number=99)
 
         url = client.request.call_args[0][1]
         assert "/issues/99" in url
@@ -550,10 +508,8 @@ class TestGetIssue:
     async def test_sends_auth_headers(self) -> None:
         resp = _make_response(json_data={"number": 1, "title": "T"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            await ts.get_issue(number=1)
+        ts = _toolset(_client=client)
+        await ts.get_issue(number=1)
 
         call_kwargs = client.request.call_args[1]
         headers = call_kwargs.get("headers", {})
@@ -564,10 +520,8 @@ class TestGetIssue:
     async def test_returns_string(self) -> None:
         resp = _make_response(json_data={"number": 1, "title": "Issue"})
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.get_issue(number=1)
+        ts = _toolset(_client=client)
+        result = await ts.get_issue(number=1)
 
         assert isinstance(result, str)
 
@@ -578,10 +532,8 @@ class TestGetIssue:
             status_code=404,
         )
         client = _make_client(resp)
-
-        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
-            ts = _toolset()
-            result = await ts.get_issue(number=9999)
+        ts = _toolset(_client=client)
+        result = await ts.get_issue(number=9999)
 
         assert "error" in result.lower()
 
@@ -589,9 +541,6 @@ class TestGetIssue:
 # ---------------------------------------------------------------------------
 # _api_request — retry behaviour via MockTransport
 # ---------------------------------------------------------------------------
-
-
-_RealAsyncClient = httpx.AsyncClient
 
 
 class TestApiRequestRetry:
@@ -615,11 +564,9 @@ class TestApiRequestRetry:
             )
 
         transport = httpx.MockTransport(handler)
-
-        ts = _toolset()
-        with patch(f"{MODULE}.httpx.AsyncClient") as mock_cls:
-            mock_cls.side_effect = lambda **kw: _RealAsyncClient(transport=transport, **kw)
-            result = await ts.list_prs()
+        client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(15, connect=5))
+        ts = _toolset(_client=client)
+        result = await ts.list_prs()
 
         assert call_count == 2
         assert "PR seven" in result
@@ -639,11 +586,9 @@ class TestApiRequestRetry:
             )
 
         transport = httpx.MockTransport(handler)
-
-        ts = _toolset()
-        with patch(f"{MODULE}.httpx.AsyncClient") as mock_cls:
-            mock_cls.side_effect = lambda **kw: _RealAsyncClient(transport=transport, **kw)
-            result = await ts.create_pr(title="T", head="h", base="b")
+        client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(15, connect=5))
+        ts = _toolset(_client=client)
+        result = await ts.create_pr(title="T", head="h", base="b")
 
         assert call_count == 1
         assert "error" in result.lower()
@@ -668,3 +613,37 @@ class TestApiRequestRetry:
             await ts.get_issue(number=1)
 
         assert mock.call_count == 4
+
+
+# ---------------------------------------------------------------------------
+# Shared client lifecycle (AC 4, 5, 6)
+# ---------------------------------------------------------------------------
+
+
+class TestSharedClientLifecycle:
+    """GitHubToolset creates, reuses, and closes a shared httpx.AsyncClient."""
+
+    def test_constructor_creates_httpx_client(self) -> None:
+        """AC 4: constructing GitHubToolset creates self._client as httpx.AsyncClient."""
+        ts = _toolset()
+        assert isinstance(ts._client, httpx.AsyncClient)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aclose_calls_client_aclose(self) -> None:
+        """AC 5: aclose() calls self._client.aclose()."""
+        client = _make_client(_make_response(json_data={}))
+        ts = _toolset(_client=client)
+        await ts.aclose()
+        client.aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_two_api_calls_reuse_same_client(self) -> None:
+        """AC 6: two sequential API calls reuse the same client (no new AsyncClient)."""
+        resp = _make_response(json_data=[{"number": 1, "title": "PR"}])
+        client = _make_client(resp)
+        ts = _toolset(_client=client)
+
+        await ts.list_prs()
+        await ts.list_issues()
+
+        assert client.request.call_count == 2

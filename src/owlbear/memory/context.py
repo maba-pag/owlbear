@@ -63,9 +63,10 @@ class ContextManager:
     def instructions(self) -> str:
         """Context content formatted for ``Agent(instructions=...)``.
 
-        Combines the static context file with MEMORY.md (if present).
-        Returns an empty string when neither file is available, so it is
-        always safe to pass directly to PydanticAI.
+        Combines the static context file with MEMORY.md and
+        ``.owlbear/session-memory.md`` (both optional).  Returns an empty
+        string when no files are available, so it is always safe to pass
+        directly to PydanticAI.
         """
         parts: list[str] = []
         context = self.load()
@@ -76,4 +77,9 @@ class ContextManager:
             memory = memory_path.read_text(encoding="utf-8").strip()
             if memory:
                 parts.append(memory)
+        session_memory_path = self._root / ".owlbear" / "session-memory.md"
+        if session_memory_path.exists():
+            session_memory = session_memory_path.read_text(encoding="utf-8").strip()
+            if session_memory:
+                parts.append(session_memory)
         return "\n\n".join(parts)

@@ -90,8 +90,15 @@ class TestRunDaemonWithRealAgent:
         fn_model = FunctionModel(model_fn)
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         assert isinstance(result.agent, OwlBearAgent)
@@ -119,8 +126,15 @@ class TestRunDaemonWithRealAgent:
         fn_model = FunctionModel(model_fn)
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         # Channel sends 2 messages, then EOF
@@ -156,8 +170,15 @@ class TestRunDaemonWithRealAgent:
         fn_model = FunctionModel(model_fn)
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         channel = MockChannel(["Read test.txt", None])
@@ -302,8 +323,16 @@ class TestDelegation:
         # Inject the coder agent directly into the cache
         registry._cache["coder"] = coder_agent
         registry._definitions["coder"] = type(
-            "FakeDefn", (), {"name": "coder", "tools": [], "skills": [], "role": "builder",
-                             "model": None, "system_prompt": "You are a coder."}
+            "FakeDefn",
+            (),
+            {
+                "name": "coder",
+                "tools": [],
+                "skills": [],
+                "role": "builder",
+                "model": None,
+                "system_prompt": "You are a coder.",
+            },
         )()
 
         # -- Outer "orchestrator" agent (delegates to coder) ---------------
@@ -375,8 +404,15 @@ class TestHookPipeline:
         (tmp_path / "hook_test.txt").write_text("hook content", encoding="utf-8")
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         # Record hook events
@@ -414,8 +450,15 @@ class TestHookPipeline:
         (tmp_path / "data.txt").write_text("some data", encoding="utf-8")
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         captured: list[dict] = []
@@ -465,8 +508,15 @@ class TestHookPipeline:
         (tmp_path / "b.txt").write_text("bbb", encoding="utf-8")
 
         settings = _make_settings(tmp_path)
-        with patch("owlbear.bootstrap.create_copilot_model", new_callable=AsyncMock) as m:
-            m.return_value = fn_model
+        mock_client = AsyncMock()
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=mock_client,
+            ),
+            patch("owlbear.bootstrap.OpenAIChatModel", return_value=fn_model),
+        ):
             result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
         events: list[str] = []

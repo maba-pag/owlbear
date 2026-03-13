@@ -226,3 +226,65 @@ class TestFromAC_CoreInitExports:  # noqa: N801
 
         for name in self.EXPECTED_EXPORTS:
             assert hasattr(core, name), f"{name} not importable from owlbear.core"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: AC fields missing from test-writer's coverage
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Fields specified in AC but not covered by TestFromAC_* tests."""
+
+    def test_post_tool_use_data_has_grant_ttl_and_grant_max_uses(self) -> None:
+        """AC1: PostToolUseData must include grant_ttl and grant_max_uses."""
+        from owlbear.core.hooks import PostToolUseData
+
+        hints = get_type_hints(PostToolUseData, include_extras=True)
+        assert "grant_ttl" in hints, "Missing NotRequired field: grant_ttl"
+        assert "grant_max_uses" in hints, "Missing NotRequired field: grant_max_uses"
+
+    def test_session_start_data_has_workspace_root_and_context(self) -> None:
+        """AC1: SessionStartData must include workspace_root and context."""
+        from owlbear.core.hooks import SessionStartData
+
+        hints = get_type_hints(SessionStartData, include_extras=True)
+        assert "workspace_root" in hints, "Missing NotRequired field: workspace_root"
+        assert "context" in hints, "Missing NotRequired field: context"
+
+    def test_session_end_data_has_messages_and_test_results(self) -> None:
+        """AC1: SessionEndData must include messages and test_results."""
+        from owlbear.core.hooks import SessionEndData
+
+        hints = get_type_hints(SessionEndData, include_extras=True)
+        assert "messages" in hints, "Missing NotRequired field: messages"
+        assert "test_results" in hints, "Missing NotRequired field: test_results"
+
+    def test_subagent_complete_data_result_accepts_object(self) -> None:
+        """AC1: SubagentCompleteData.result should accept any object."""
+        from owlbear.core.hooks import SubagentCompleteData
+
+        payload: SubagentCompleteData = {"result": {"nested": True}}
+        assert payload["result"] == {"nested": True}
+
+    def test_subagent_complete_data_verification_accepts_dict(self) -> None:
+        """AC1: SubagentCompleteData.verification should accept any dict."""
+        from owlbear.core.hooks import SubagentCompleteData
+
+        payload: SubagentCompleteData = {"verification": {"passed": True, "coverage": 95}}
+        assert payload["verification"] == {"passed": True, "coverage": 95}
+
+    def test_post_tool_use_data_approval_with_grants(self) -> None:
+        """PostToolUseData should accept the full ApprovalGateToolset shape."""
+        from owlbear.core.hooks import PostToolUseData
+
+        payload: PostToolUseData = {
+            "tool_name": "rm_file",
+            "event_type": "destructive",
+            "approval_required": True,
+            "approval_decision": "approved",
+            "grant_ttl": 300,
+            "grant_max_uses": 5,
+        }
+        assert payload["grant_ttl"] == 300
+        assert payload["grant_max_uses"] == 5

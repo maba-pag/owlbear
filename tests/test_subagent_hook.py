@@ -205,11 +205,6 @@ class TestTestExecutionCheck:
 class TestGracefulFailure:
     """Hook never raises — logs warnings instead."""
 
-    def test_non_dict_payload_ignored(self) -> None:
-        hook = SubagentVerificationHook()
-        _run(hook("not a dict"))
-        # No exception, no crash
-
     def test_missing_keys_does_not_raise(self) -> None:
         hook = SubagentVerificationHook()
         _run(hook({}))

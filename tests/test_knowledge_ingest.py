@@ -30,6 +30,8 @@ except ImportError:
         edges: list[_Edge] = []
 
 
+from owlbear.memory.knowledge.document_store import DocumentStore
+from owlbear.memory.knowledge.enrichment import GraphEnricher
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.ingest import (
     DocumentStatus,
@@ -73,6 +75,53 @@ SAMPLE_HYBRID_EMBEDDINGS = [
         sparse=SparseVector(indices=[3, 4], values=[0.4, 0.2]),
     ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_pipeline(  # noqa: PLR0913
+    conn: sqlite3.Connection,
+    graph_store: MagicMock,
+    vector_store: MagicMock,
+    embedding_provider: MagicMock,
+    entity_extractor: MagicMock,
+    text_chunker: MagicMock,
+    workspace_root: Path | None = None,
+    *,
+    graph_builder: object | None = None,
+    inter_doc_builder: object | None = None,
+    bg_concurrency: int = 5,
+    pipeline_name: str = "ingest",
+) -> IngestPipeline:
+    """Build an IngestPipeline via DocumentStore (adapts old positional args)."""
+    store = DocumentStore(
+        conn=conn,
+        graph_store=graph_store,
+        vector_store=vector_store,
+        embedding_provider=embedding_provider,
+    )
+    enricher: GraphEnricher | None = None
+    if graph_builder is not None or inter_doc_builder is not None:
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=graph_store,
+            graph_builder=graph_builder,
+            inter_doc_builder=inter_doc_builder,
+            document_store=store,
+            pipeline_name=pipeline_name,
+            bg_concurrency=bg_concurrency,
+        )
+    return IngestPipeline(
+        store=store,
+        entity_extractor=entity_extractor,
+        text_chunker=text_chunker,
+        workspace_root=workspace_root,
+        enricher=enricher,
+        pipeline_name=pipeline_name,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -141,15 +190,20 @@ def pipeline(  # noqa: PLR0913
     mock_embedder: MagicMock,
     mock_extractor: MagicMock,
     mock_chunker: MagicMock,
+    tmp_path: Path,
 ) -> IngestPipeline:
     """Fully-wired IngestPipeline with mocked dependencies."""
-    return IngestPipeline(
+    store = DocumentStore(
         conn=conn,
         graph_store=mock_graph_store,
         vector_store=mock_vector_store,
         embedding_provider=mock_embedder,
+    )
+    return IngestPipeline(
+        store=store,
         entity_extractor=mock_extractor,
         text_chunker=mock_chunker,
+        workspace_root=tmp_path,
     )
 
 
@@ -161,15 +215,20 @@ def hybrid_pipeline(  # noqa: PLR0913
     mock_hybrid_embedder: MagicMock,
     mock_extractor: MagicMock,
     mock_chunker: MagicMock,
+    tmp_path: Path,
 ) -> IngestPipeline:
     """IngestPipeline with hybrid embedding provider."""
-    return IngestPipeline(
+    store = DocumentStore(
         conn=conn,
         graph_store=mock_graph_store,
         vector_store=mock_vector_store,
         embedding_provider=mock_hybrid_embedder,
+    )
+    return IngestPipeline(
+        store=store,
         entity_extractor=mock_extractor,
         text_chunker=mock_chunker,
+        workspace_root=tmp_path,
     )
 
 
@@ -223,16 +282,41 @@ class TestIngestPipelineConstruction:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
-        pipeline = IngestPipeline(
+        pipeline = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
         assert pipeline is not None
+
+    def test_workspace_root_is_required(  # noqa: PLR0913
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+        mock_vector_store: MagicMock,
+        mock_embedder: MagicMock,
+        mock_extractor: MagicMock,
+        mock_chunker: MagicMock,
+    ) -> None:
+        """workspace_root is mandatory — omitting it raises TypeError."""
+        store = DocumentStore(
+            conn=conn,
+            graph_store=mock_graph_store,
+            vector_store=mock_vector_store,
+            embedding_provider=mock_embedder,
+        )
+        with pytest.raises(TypeError):
+            IngestPipeline(
+                store=store,
+                entity_extractor=mock_extractor,
+                text_chunker=mock_chunker,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -414,24 +498,26 @@ class TestExtractFailPartial:
     """Error in extract logs warning but embed+store still completes."""
 
     @pytest.mark.anyio
-    async def test_extract_error_yields_partial_status(
+    async def test_extract_error_yields_partial_status(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         mock_graph_store: MagicMock,
         mock_vector_store: MagicMock,
         mock_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         failing_extractor = MagicMock()
         failing_extractor.extract = AsyncMock(side_effect=RuntimeError("LLM down"))
 
-        pipeline = IngestPipeline(
+        pipeline = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=failing_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
 
         with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
@@ -453,17 +539,19 @@ class TestExtractFailPartial:
         mock_embedder: MagicMock,
         mock_chunker: MagicMock,
         caplog: pytest.LogCaptureFixture,
+        tmp_path: Path,
     ) -> None:
         failing_extractor = MagicMock()
         failing_extractor.extract = AsyncMock(side_effect=RuntimeError("LLM down"))
 
-        pipeline = IngestPipeline(
+        pipeline = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=failing_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
 
         with (
@@ -485,24 +573,26 @@ class TestEmbedFailPartial:
     """Error in embed logs warning but extract+store still completes."""
 
     @pytest.mark.anyio
-    async def test_embed_error_yields_partial_status(
+    async def test_embed_error_yields_partial_status(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         mock_graph_store: MagicMock,
         mock_vector_store: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         failing_embedder = MagicMock(spec=["embed"])
         failing_embedder.embed.side_effect = RuntimeError("GPU OOM")
 
-        pipeline = IngestPipeline(
+        pipeline = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=failing_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
 
         with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
@@ -526,17 +616,19 @@ class TestEmbedFailPartial:
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
         caplog: pytest.LogCaptureFixture,
+        tmp_path: Path,
     ) -> None:
         failing_embedder = MagicMock(spec=["embed"])
         failing_embedder.embed.side_effect = RuntimeError("GPU OOM")
 
-        pipeline = IngestPipeline(
+        pipeline = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=failing_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
 
         with (
@@ -1225,15 +1317,17 @@ class TestGraphBuilderIntegration:
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
         mock_intra_doc_builder: MagicMock,
+        tmp_path: Path,
     ) -> IngestPipeline:
         """IngestPipeline with a mocked IntraDocGraphBuilder wired in."""
-        return IngestPipeline(
+        return _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             graph_builder=mock_intra_doc_builder,
         )
 
@@ -1241,12 +1335,12 @@ class TestGraphBuilderIntegration:
     async def test_constructor_accepts_graph_builder(
         self, pipeline_with_builder: IngestPipeline
     ) -> None:
-        """IngestPipeline accepts optional graph_builder parameter."""
-        assert pipeline_with_builder._graph_builder is not None
+        """IngestPipeline accepts optional enricher parameter."""
+        assert pipeline_with_builder._enricher is not None
 
     def test_constructor_defaults_graph_builder_none(self, pipeline: IngestPipeline) -> None:
-        """graph_builder defaults to None when not provided."""
-        assert pipeline._graph_builder is None
+        """enricher defaults to None when not provided."""
+        assert pipeline._enricher is None
 
     @pytest.mark.anyio
     async def test_build_called_after_successful_ingest(
@@ -1303,7 +1397,7 @@ class TestGraphBuilderIntegration:
         )
         conn.commit()
 
-        await pipeline_with_builder._enrich_graph(doc_id, list(SAMPLE_ENTITIES), "global")
+        await pipeline_with_builder._enricher._enrich_graph(doc_id, list(SAMPLE_ENTITIES), "global")
 
         mock_intra_doc_builder.build.assert_not_awaited()
 
@@ -1379,18 +1473,20 @@ class TestGraphBuilderIntegration:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """If graph builder raises, ingest result is still returned successfully."""
         failing_builder = MagicMock()
         failing_builder.build = AsyncMock(side_effect=RuntimeError("LLM down"))
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             graph_builder=failing_builder,
         )
 
@@ -1417,13 +1513,14 @@ class TestGraphBuilderIntegration:
         mock_intra_doc_builder.build.assert_awaited_once()
 
     @pytest.mark.anyio
-    async def test_no_enrichment_when_extract_fails(
+    async def test_no_enrichment_when_extract_fails(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         mock_graph_store: MagicMock,
         mock_vector_store: MagicMock,
         mock_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """When extraction fails, graph enrichment is not scheduled."""
         failing_extractor = MagicMock()
@@ -1432,13 +1529,14 @@ class TestGraphBuilderIntegration:
         builder = MagicMock()
         builder.build = AsyncMock(return_value=GraphBuildResult())
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=failing_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             graph_builder=builder,
         )
 
@@ -1467,15 +1565,17 @@ class TestProvenanceStamping:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """IngestPipeline accepts optional pipeline_name parameter."""
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             pipeline_name="custom",
         )
         assert pipe._pipeline_name == "custom"
@@ -1527,15 +1627,17 @@ class TestProvenanceStamping:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Custom pipeline_name appears in entity/edge metadata."""
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             pipeline_name="custom_pipe",
         )
         with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
@@ -1555,6 +1657,7 @@ class TestProvenanceStamping:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Edges from _enrich_graph have source_task='graph_enrichment' in metadata."""
         inferred_edge = Edge(
@@ -1568,13 +1671,14 @@ class TestProvenanceStamping:
             return_value=GraphBuildResult(edges_added=1, edges=[inferred_edge])
         )
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             graph_builder=builder,
         )
 
@@ -1659,15 +1763,17 @@ class TestIngestResultProvenance:
         mock_embedder: MagicMock,
         mock_extractor: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Custom pipeline_name propagates to IngestResult.source_pipeline."""
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_embedder,
             entity_extractor=mock_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             pipeline_name="my_pipe",
         )
         result = await pipe.ingest_text("hello world")
@@ -1694,6 +1800,7 @@ class TestIngestResultProvenance:
         mock_graph_store: MagicMock,
         mock_vector_store: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Failed results include provenance fields."""
         failing_embedder = MagicMock(spec=["embed"])
@@ -1701,13 +1808,14 @@ class TestIngestResultProvenance:
         failing_extractor = MagicMock()
         failing_extractor.extract = AsyncMock(side_effect=RuntimeError("Boom"))
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=mock_graph_store,
             vector_store=mock_vector_store,
             embedding_provider=failing_embedder,
             entity_extractor=failing_extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
         with patch("owlbear.memory.knowledge.ingest.read_file", new_callable=AsyncMock) as mock_rf:
             mock_rf.return_value = SAMPLE_INTAKE
@@ -1716,3 +1824,235 @@ class TestIngestResultProvenance:
         assert result.status == "failed"
         assert result.source_pipeline == "ingest"
         assert result.source_task == "full_pipeline"
+
+
+# ---------------------------------------------------------------------------
+# Background task concurrency limit (#649)
+# ---------------------------------------------------------------------------
+
+# These tests target a semaphore that limits concurrent _enrich_graph and
+# _enrich_inter_doc_graph background tasks.
+
+
+class TestBgConcurrencyConfig:
+    """OwlBearSettings.ingest_bg_concurrency field validation."""
+
+    def test_default_value_is_5(self) -> None:
+        """AC-4: Default value of ingest_bg_concurrency is 5."""
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings()
+        assert settings.ingest_bg_concurrency == 5
+
+    def test_rejects_zero(self) -> None:
+        """AC-3: ingest_bg_concurrency=0 raises ValidationError.
+
+        Precondition: the field must exist on the model (not just
+        rejected as an unknown kwarg).
+        """
+        from owlbear.config import OwlBearSettings
+
+        # Guard: field must be declared (xfail triggers here).
+        assert "ingest_bg_concurrency" in OwlBearSettings.model_fields
+        with pytest.raises(ValidationError):
+            OwlBearSettings(ingest_bg_concurrency=0)
+
+    def test_rejects_negative(self) -> None:
+        """AC-3: ingest_bg_concurrency=-1 raises ValidationError.
+
+        Precondition: the field must exist on the model (not just
+        rejected as an unknown kwarg).
+        """
+        from owlbear.config import OwlBearSettings
+
+        # Guard: field must be declared (xfail triggers here).
+        assert "ingest_bg_concurrency" in OwlBearSettings.model_fields
+        with pytest.raises(ValidationError):
+            OwlBearSettings(ingest_bg_concurrency=-1)
+
+
+class TestBgConcurrencySemaphore:
+    """GraphEnricher._bg_semaphore construction and bounds."""
+
+    def test_constructor_default_semaphore_value(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """AC-5: Default _bg_semaphore has value 5."""
+        store = MagicMock(spec=DocumentStore)
+        store.conn = conn
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=mock_graph_store,
+            graph_builder=None,
+            inter_doc_builder=None,
+            document_store=store,
+            pipeline_name="ingest",
+        )
+        assert enricher._bg_semaphore._value == 5
+
+    def test_constructor_override_semaphore_value(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """AC-6: bg_concurrency=3 sets _bg_semaphore._value to 3."""
+        store = MagicMock(spec=DocumentStore)
+        store.conn = conn
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=mock_graph_store,
+            graph_builder=None,
+            inter_doc_builder=None,
+            document_store=store,
+            pipeline_name="ingest",
+            bg_concurrency=3,
+        )
+        assert enricher._bg_semaphore._value == 3
+
+    @pytest.mark.anyio
+    async def test_enrich_graph_bounded_by_semaphore(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """AC-1: With bg_concurrency=2, at most 2 _enrich_graph calls run simultaneously."""
+        max_concurrent = 0
+        current = 0
+        lock = asyncio.Lock()
+
+        async def slow_build(
+            _entities: list,
+            *,
+            scope: str,  # noqa: ARG001
+            document_id: str,  # noqa: ARG001
+        ) -> GraphBuildResult:
+            nonlocal max_concurrent, current
+            async with lock:
+                current += 1
+                max_concurrent = max(max_concurrent, current)
+            # Yield control so other tasks can start.
+            await asyncio.sleep(0.05)
+            async with lock:
+                current -= 1
+            return GraphBuildResult(edges_added=0, edges=[])
+
+        mock_builder = MagicMock()
+        mock_builder.build = slow_build
+
+        store = MagicMock(spec=DocumentStore)
+        store.conn = conn
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=mock_graph_store,
+            graph_builder=mock_builder,
+            inter_doc_builder=None,
+            document_store=store,
+            pipeline_name="ingest",
+            bg_concurrency=2,
+        )
+
+        # Launch 5 concurrent _enrich_graph calls.
+        tasks = [
+            asyncio.create_task(enricher._enrich_graph(f"doc-{i}", SAMPLE_ENTITIES, "global"))
+            for i in range(5)
+        ]
+        await asyncio.gather(*tasks)
+
+        # At most 2 should have run concurrently.
+        assert max_concurrent <= 2
+
+    @pytest.mark.anyio
+    async def test_all_tasks_complete(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """AC-2: All 5 enrichment calls complete (no drops) with semaphore throttling."""
+        completed: list[str] = []
+
+        async def tracking_build(
+            _entities: list,
+            *,
+            scope: str,  # noqa: ARG001
+            document_id: str,
+        ) -> GraphBuildResult:
+            await asyncio.sleep(0.02)
+            completed.append(document_id)
+            return GraphBuildResult(edges_added=0, edges=[])
+
+        mock_builder = MagicMock()
+        mock_builder.build = tracking_build
+
+        store = MagicMock(spec=DocumentStore)
+        store.conn = conn
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=mock_graph_store,
+            graph_builder=mock_builder,
+            inter_doc_builder=None,
+            document_store=store,
+            pipeline_name="ingest",
+            bg_concurrency=2,
+        )
+
+        tasks = [
+            asyncio.create_task(enricher._enrich_graph(f"doc-{i}", SAMPLE_ENTITIES, "global"))
+            for i in range(5)
+        ]
+        await asyncio.gather(*tasks)
+
+        assert len(completed) == 5
+        assert set(completed) == {f"doc-{i}" for i in range(5)}
+
+    @pytest.mark.anyio
+    async def test_enrich_inter_doc_graph_bounded_by_semaphore(
+        self,
+        conn: sqlite3.Connection,
+        mock_graph_store: MagicMock,
+    ) -> None:
+        """AC-7: _enrich_inter_doc_graph also respects the shared semaphore."""
+        max_concurrent = 0
+        current = 0
+        lock = asyncio.Lock()
+
+        async def slow_inter_build(
+            _entities: list,
+            *,
+            scope: str,  # noqa: ARG001
+            document_id: str,  # noqa: ARG001
+        ) -> GraphBuildResult:
+            nonlocal max_concurrent, current
+            async with lock:
+                current += 1
+                max_concurrent = max(max_concurrent, current)
+            await asyncio.sleep(0.05)
+            async with lock:
+                current -= 1
+            return GraphBuildResult(edges_added=0, edges=[])
+
+        mock_inter_builder = MagicMock()
+        mock_inter_builder.build = slow_inter_build
+
+        store = MagicMock(spec=DocumentStore)
+        store.conn = conn
+        enricher = GraphEnricher(
+            conn=conn,
+            graph_store=mock_graph_store,
+            graph_builder=None,
+            inter_doc_builder=mock_inter_builder,
+            document_store=store,
+            pipeline_name="ingest",
+            bg_concurrency=2,
+        )
+
+        tasks = [
+            asyncio.create_task(
+                enricher._enrich_inter_doc_graph(f"doc-{i}", SAMPLE_ENTITIES, "global")
+            )
+            for i in range(5)
+        ]
+        await asyncio.gather(*tasks)
+
+        assert max_concurrent <= 2

@@ -27,6 +27,17 @@ if TYPE_CHECKING:
     from pydantic_ai.messages import ModelMessage
 
 
+@pytest.fixture(autouse=True)
+def _mock_copilot_client():
+    """Prevent real Copilot client creation in bootstrap tests."""
+    with patch(
+        "owlbear.bootstrap.create_copilot_client",
+        new_callable=AsyncMock,
+        return_value=AsyncMock(),
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # Helpers — build realistic conversation message lists
 # ---------------------------------------------------------------------------
@@ -330,6 +341,11 @@ class TestBootstrapCondenserWiring:
                 new_callable=AsyncMock,
                 return_value=mock_model,
             ),
+            patch("owlbear.bootstrap.create_channel", return_value=AsyncMock()),
+            patch("owlbear.bootstrap.build_hooks", return_value=(MagicMock(), None)),
+            patch("owlbear.bootstrap.build_toolsets", return_value=([], None, None)),
+            patch("owlbear.bootstrap.build_agent_registry", return_value=MagicMock()),
+            patch("owlbear.bootstrap.build_mcp_registry", return_value=MagicMock()),
             patch("owlbear.core.agent.Agent"),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
@@ -356,6 +372,11 @@ class TestBootstrapCondenserWiring:
                 new_callable=AsyncMock,
                 return_value=mock_model,
             ),
+            patch("owlbear.bootstrap.create_channel", return_value=AsyncMock()),
+            patch("owlbear.bootstrap.build_hooks", return_value=(MagicMock(), None)),
+            patch("owlbear.bootstrap.build_toolsets", return_value=([], None, None)),
+            patch("owlbear.bootstrap.build_agent_registry", return_value=MagicMock()),
+            patch("owlbear.bootstrap.build_mcp_registry", return_value=MagicMock()),
             patch("owlbear.core.agent.Agent"),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
@@ -365,3 +386,148 @@ class TestBootstrapCondenserWiring:
         # Either empty or no SummarizingCondenser instances
         for p in processors:
             assert type(p).__name__ != "SummarizingCondenser"
+
+
+# ---------------------------------------------------------------------------
+# Coverage gap tests — lines 93, 133, 155-159, 172-173, 177
+# ---------------------------------------------------------------------------
+
+
+class TestInvariantAppendsRequest:
+    """Line 93: appends ModelRequest('(continue)') when tail ends with ModelResponse."""
+
+    @pytest.mark.asyncio
+    async def test_appends_continue_when_tail_ends_with_response(self) -> None:
+        from owlbear.core.condenser import SummarizingCondenser
+
+        condenser = SummarizingCondenser(max_events=4, model="test", keep_first=2)
+        # Tail will be messages[-1] = ModelResponse → triggers invariant
+        messages: list[ModelMessage] = [
+            _make_request("user-0"),
+            _make_response("assistant-1"),
+            _make_request("user-2"),
+            _make_response("assistant-3"),
+            _make_request("user-4"),
+            _make_response("assistant-5"),
+            _make_request("user-6"),
+            _make_response("last-response"),  # tail ends here
+        ]
+        mock_result = MagicMock()
+        mock_result.output = "summary"
+        mock_agent = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=mock_result)
+        with patch("owlbear.core.condenser.Agent", return_value=mock_agent):
+            ctx = MagicMock()
+            result = await condenser(ctx, messages)
+
+        assert isinstance(result[-1], ModelRequest)
+        last_part = result[-1].parts[0]
+        assert isinstance(last_part, UserPromptPart)
+        assert last_part.content == "(continue)"
+
+
+class TestAlignBoundaryEarlyReturn:
+    """Line 133: _align_boundary returns head_end when head_end >= tail_start."""
+
+    @pytest.mark.asyncio
+    async def test_head_overlaps_tail(self) -> None:
+        from owlbear.core.condenser import SummarizingCondenser
+
+        # keep_first=7, max_events=4, 8 msgs → head_end=7, tail_start=7
+        condenser = SummarizingCondenser(max_events=4, model="test", keep_first=7)
+        messages = _make_conversation_ending_request(8)
+        mock_result = MagicMock()
+        mock_result.output = "summary"
+        mock_agent = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=mock_result)
+        with patch("owlbear.core.condenser.Agent", return_value=mock_agent):
+            ctx = MagicMock()
+            result = await condenser(ctx, messages)
+
+        # Should produce valid output despite empty middle
+        assert isinstance(result[-1], ModelRequest)
+
+
+class TestAlignBoundaryCase2:
+    """Lines 155-159: ToolReturnPart at head_end with preceding ToolCallPart pair."""
+
+    @pytest.mark.asyncio
+    async def test_tool_return_at_boundary_pulled_into_head(self) -> None:
+        from owlbear.core.condenser import SummarizingCondenser
+
+        # keep_first=4 → head_end=4 lands on ToolReturnPart → Case 2
+        condenser = SummarizingCondenser(max_events=8, model="test", keep_first=4)
+        messages: list[ModelMessage] = [
+            _make_request("user-0"),  # 0: head
+            _make_response("assistant-1"),  # 1: head
+            _make_request("user-2"),  # 2: head
+            _make_tool_call_response("search", "tc-2"),  # 3: head (ToolCallPart)
+            _make_tool_return_request("search", "tc-2"),  # 4: head_end → Case 2
+            _make_response("assistant-5"),  # 5: middle
+            _make_request("user-6"),  # 6
+            _make_response("assistant-7"),  # 7
+            _make_request("user-8"),  # 8
+            _make_response("assistant-9"),  # 9
+            _make_request("user-10"),  # 10
+            _make_response("assistant-11"),  # 11
+            _make_request("user-12"),  # 12: tail
+        ]
+        mock_result = MagicMock()
+        mock_result.output = "summary"
+        mock_agent = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=mock_result)
+        with patch("owlbear.core.condenser.Agent", return_value=mock_agent):
+            ctx = MagicMock()
+            result = await condenser(ctx, messages)
+
+        # Both the tool call (idx 3) and return (idx 4) must be in the result
+        tc_in = any(
+            isinstance(m, ModelResponse)
+            and any(isinstance(p, ToolCallPart) and p.tool_call_id == "tc-2" for p in m.parts)
+            for m in result
+        )
+        tr_in = any(
+            isinstance(m, ModelRequest)
+            and any(isinstance(p, ToolReturnPart) and p.tool_call_id == "tc-2" for p in m.parts)
+            for m in result
+        )
+        assert tc_in, "ToolCallPart should be in head"
+        assert tr_in, "ToolReturnPart should be in head"
+
+
+class TestSummarizeMixedTypes:
+    """Lines 172-173, 177: _summarize builds text for ToolReturnPart and TextPart."""
+
+    @pytest.mark.asyncio
+    async def test_text_block_includes_tool_return_and_text_parts(self) -> None:
+        from owlbear.core.condenser import SummarizingCondenser
+
+        condenser = SummarizingCondenser(max_events=4, model="test", keep_first=2)
+        messages: list[ModelMessage] = [
+            _make_request("user-0"),  # 0: head
+            _make_response("assistant-1"),  # 1: head
+            # Middle (indices 2-7):
+            _make_request("user-2"),  # 2
+            _make_tool_call_response("search", "tc-3"),  # 3 (ToolCallPart)
+            _make_tool_return_request("search", "tc-3"),  # 4 (ToolReturnPart)
+            _make_response("model-text"),  # 5 (TextPart)
+            _make_request("user-6"),  # 6
+            _make_response("more-text"),  # 7 (TextPart)
+            # Tail:
+            _make_request("user-final"),  # 8
+        ]
+        mock_result = MagicMock()
+        mock_result.output = "summary"
+        mock_agent = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=mock_result)
+        with patch("owlbear.core.condenser.Agent", return_value=mock_agent):
+            ctx = MagicMock()
+            await condenser(ctx, messages)
+
+        # Verify the text_block passed to the summarizer agent
+        text_block = mock_agent.run.call_args[0][0]
+        assert "Tool(search): result" in text_block  # ToolReturnPart
+        assert "Assistant: model-text" in text_block  # TextPart
+        assert "Assistant: more-text" in text_block  # TextPart
+        assert "User: user-2" in text_block  # UserPromptPart
+        assert "Assistant\u2192search()" in text_block  # ToolCallPart

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import builtins
 import sqlite3
+import sys
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -608,3 +609,92 @@ class TestDefaultWebReadImportGuard:
             with pytest.raises(ImportError) as exc_info:
                 await _default_web_read("https://example.com")
             assert "uv pip install 'owlbear[search]'" in str(exc_info.value)
+
+
+# ===========================================================================
+# _default_web_read — fetch & extract (happy path, HTTP errors)
+# ===========================================================================
+
+
+class TestDefaultWebReadFetch:
+    """Tests for _default_web_read: successful fetch+extract and HTTP errors."""
+
+    @pytest.mark.asyncio
+    async def test_happy_path_returns_extracted_text(self) -> None:
+        """Successful HTTP GET + trafilatura extract returns text content."""
+        mock_resp = MagicMock()
+        mock_resp.text = "<html><body>Python async patterns</body></html>"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract = MagicMock(return_value="Python async patterns")
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            result = await _default_web_read("https://example.com/article")
+
+        assert result == "Python async patterns"
+        mock_client.get.assert_awaited_once_with("https://example.com/article")
+        mock_resp.raise_for_status.assert_called_once()
+        mock_trafilatura.extract.assert_called_once_with(mock_resp.text)
+
+    @pytest.mark.asyncio
+    async def test_http_error_propagates(self) -> None:
+        """HTTPStatusError from raise_for_status propagates to caller."""
+        import httpx
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "Internal Server Error",
+                request=httpx.Request("GET", "https://example.com/fail"),
+                response=httpx.Response(500),
+            ),
+        )
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+            pytest.raises(httpx.HTTPStatusError),
+        ):
+            await _default_web_read("https://example.com/fail")
+
+    @pytest.mark.asyncio
+    async def test_extract_returns_none(self) -> None:
+        """When trafilatura.extract returns None, function returns None."""
+        mock_resp = MagicMock()
+        mock_resp.text = ""
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract = MagicMock(return_value=None)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            result = await _default_web_read("https://example.com/empty")
+
+        assert result is None

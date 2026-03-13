@@ -57,6 +57,17 @@ Your primary job is to make the test-writer's failing `TestFromAC_*` tests pass.
 you finish, a **reviewer** independently verifies your work — running pytest, ruff, and
 checking every AC line with evidence. The reviewer compares your final test file against
 the test-writer's original, flagging any weakened assertions.
+
+**Daemon lint gate:** After builder task completion, the daemon runs a deterministic
+lint gate (`core/lint_gate.py`) that executes `ruff check` + `ruff format --check`
+on changed `.py` files before advancing to review. Lint failures trigger the
+task-level retry mechanism. Controlled by `settings.lint_gate_enabled` (default `True`).
+
+**Context pre-hydration:** When `settings.prehydration_enabled` is `True`, the daemon
+extracts URLs and file paths from the task body, fetches/reads them via
+`core/context_hydration.py`, and injects the content into the builder dispatch prompt.
+This reduces first-turn hallucination. The hydrator is constructed by `bootstrap.py`
+and passed through `run_daemon` → `poll_loop` → `poll_tick`.
 </multi_agent_context>
 
 <workflow>

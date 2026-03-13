@@ -330,9 +330,7 @@ class TestGuardObservabilityHooksStillSwallow:
         tool = MagicMock()
 
         # Safe command — observability hook raises but gets swallowed by emit()
-        result = _run(
-            hooked.call_tool("run_command", {"command": "echo hello"}, ctx, tool)
-        )
+        result = _run(hooked.call_tool("run_command", {"command": "echo hello"}, ctx, tool))
 
         assert result == "success"
         mock_ts.call_tool.assert_called_once()
@@ -349,9 +347,7 @@ class TestGuardObservabilityHooksStillSwallow:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
-            hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool)
-        )
+        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result or "blocked" in result.lower()
@@ -373,9 +369,7 @@ class TestGuardWithAsyncCallable:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
-            hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool)
-        )
+        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result or "blocked" in result.lower()
@@ -428,9 +422,7 @@ class TestRetryTransientErrors:
         """Tool fails once with transient error, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = _make_mock_toolset()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[_make_transient_error(), "success"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "success"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
         tool = MagicMock()
@@ -444,9 +436,7 @@ class TestRetryTransientErrors:
         """Tool fails with timeout, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = _make_mock_toolset()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[_make_timeout_error(), "ok"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[_make_timeout_error(), "ok"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
         tool = MagicMock()
@@ -460,9 +450,7 @@ class TestRetryTransientErrors:
         """Tool fails with 429 rate limit, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = _make_mock_toolset()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[_make_http_429_error(), "done"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[_make_http_429_error(), "done"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
         tool = MagicMock()
@@ -486,6 +474,20 @@ class TestRetryTransientErrors:
             _run(hooked.call_tool("fetch", {}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 3
+
+    def test_exhausted_retries_marks_tool_retries_exhausted(self) -> None:
+        """After 3 failed attempts, the raised exception has _tool_retries_exhausted = True."""
+        hooks = HookRegistry()
+        mock_ts = _make_mock_toolset()
+        mock_ts.call_tool = AsyncMock(side_effect=_make_transient_error())
+        hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
+        ctx = MagicMock()
+        tool = MagicMock()
+
+        with pytest.raises(httpx.ConnectError) as exc_info:
+            _run(hooked.call_tool("fetch", {}, ctx, tool))
+
+        assert getattr(exc_info.value, "_tool_retries_exhausted", False) is True
 
     def test_exhausted_retries_original_exception_type(self) -> None:
         """After retries exhausted, the raised exception is the original type, not RetryError."""
@@ -558,9 +560,7 @@ class TestBlockedCommandNotRetried:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
-            hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool)
-        )
+        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result
@@ -579,9 +579,7 @@ class TestGuardsRunOnceNotPerRetry:
             guard_calls.append(payload)
 
         mock_ts = _make_mock_toolset()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[_make_transient_error(), "success"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "success"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks, guards=[tracking_guard])
         ctx = MagicMock()
         tool = MagicMock()
@@ -600,9 +598,7 @@ class TestRetryLogging:
         """WARNING log emitted for each retry attempt."""
         hooks = HookRegistry()
         mock_ts = _make_mock_toolset()
-        mock_ts.call_tool = AsyncMock(
-            side_effect=[_make_transient_error(), "ok"]
-        )
+        mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "ok"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
         tool = MagicMock()

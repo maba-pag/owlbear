@@ -1,4 +1,4 @@
-﻿"""Tests for owlbear.core.observability — ObservabilityHook JSONL event logging."""
+"""Tests for owlbear.core.observability — ObservabilityHook JSONL event logging."""
 
 from __future__ import annotations
 

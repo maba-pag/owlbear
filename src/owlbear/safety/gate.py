@@ -23,7 +23,6 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -78,7 +77,8 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
            - ``yes`` / ``y``: proceed with the wrapped tool call.
            - ``no`` / ``n``: return a denial message.
            - ``None``: return a timeout/cancellation message.
-           - ``approve all {tool}``: grant future calls, then proceed.
+           - ``approve all {tool}``: create a scoped grant (TTL and
+             max-uses from policy defaults), then proceed.
         """
         requires = self.policy.requires_approval(name, dict(tool_args))
 
@@ -97,23 +97,14 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
         args_summary = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
         action_description = f"{name}({args_summary})" if args_summary else name
 
-        if hasattr(self.channel, "send_blocks") and asyncio.iscoroutinefunction(
-            self.channel.send_blocks
-        ):
-            # Slack path: Block Kit approval buttons
-            from owlbear.channels.slack_templates import format_approval_blocks  # noqa: PLC0415
+        from owlbear.channels.slack_templates import format_approval_blocks  # noqa: PLC0415
 
-            action_id_prefix = f"approval_{name}"
-            blocks = format_approval_blocks(action_description, action_id_prefix)
-            text_fallback = f"Approval required: {action_description}"
-            await self.channel.send_blocks(blocks, text_fallback)
-        else:
-            # CLI / non-interactive path: plain text prompt
-            prompt = (
-                f"Action requires approval: {action_description}. "
-                f"Approve? (yes/no/approve all {name})"
-            )
-            await self.channel.send(prompt)
+        action_id_prefix = f"approval_{name}"
+        blocks = format_approval_blocks(action_description, action_id_prefix)
+        text_fallback = (
+            f"Action requires approval: {action_description}. Approve? (yes/no/approve all {name})"
+        )
+        await self.channel.send_blocks(blocks, text_fallback)
 
         # Wait for the user's response
         response = await self.channel.receive()
@@ -146,7 +137,11 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
 
         if normalised.startswith("approve all "):
             tool_to_grant = normalised[len("approve all ") :]
-            self.session.grant(tool_to_grant)
+            self.session.grant(
+                tool_to_grant,
+                ttl=self.policy.default_grant_ttl,
+                max_uses=self.policy.default_max_uses,
+            )
             await self.hooks.emit(
                 HookEvent.POST_TOOL_USE,
                 {
@@ -154,6 +149,8 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
                     "event_type": "approval_gate",
                     "approval_required": True,
                     "approval_decision": "approved_all",
+                    "grant_ttl": self.policy.default_grant_ttl,
+                    "grant_max_uses": self.policy.default_max_uses,
                 },
             )
             return await super().call_tool(name, tool_args, ctx, tool)

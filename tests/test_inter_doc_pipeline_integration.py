@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from owlbear.memory.knowledge.chunker import Chunk
+from owlbear.memory.knowledge.document_store import DocumentStore
 from owlbear.memory.knowledge.extractor import ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.graph_builder import GraphBuildResult
@@ -22,6 +24,32 @@ from owlbear.memory.knowledge.intake import IntakeResult
 from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear.memory.knowledge.protocol import HybridEmbedding, SparseVector
 from owlbear.memory.knowledge.schema import init_db
+
+
+def _make_pipeline(  # noqa: PLR0913
+    conn: sqlite3.Connection,
+    graph_store: object,
+    vector_store: object,
+    embedding_provider: object,
+    entity_extractor: object,
+    text_chunker: object,
+    workspace_root: Path,
+    **kwargs: object,
+) -> IngestPipeline:
+    store = DocumentStore(
+        conn=conn,
+        graph_store=graph_store,
+        vector_store=vector_store,
+        embedding_provider=embedding_provider,
+    )
+    return IngestPipeline(
+        store=store,
+        entity_extractor=entity_extractor,
+        text_chunker=text_chunker,
+        workspace_root=workspace_root,
+        **kwargs,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Test data
@@ -103,49 +131,53 @@ def mock_chunker() -> MagicMock:
 class TestInterDocBuilderParam:
     """IngestPipeline accepts optional inter_doc_builder parameter."""
 
-    def test_constructor_accepts_inter_doc_builder(
+    def test_constructor_accepts_inter_doc_builder(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """inter_doc_builder param is stored on the pipeline."""
         mock_inter = MagicMock()
         extractor = MagicMock()
         extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[], edges=[]))
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
         assert pipe._inter_doc_builder is mock_inter
 
-    def test_constructor_defaults_inter_doc_builder_none(
+    def test_constructor_defaults_inter_doc_builder_none(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """inter_doc_builder defaults to None when not provided."""
         extractor = MagicMock()
         extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[], edges=[]))
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
         assert pipe._inter_doc_builder is None
 
@@ -154,13 +186,14 @@ class TestScheduleInterDocEnrichment:
     """_schedule_inter_doc_enrichment mirrors _schedule_graph_enrichment pattern."""
 
     @pytest.mark.anyio
-    async def test_skips_when_builder_is_none(
+    async def test_skips_when_builder_is_none(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """No inter-doc enrichment when inter_doc_builder is None."""
         extractor = MagicMock()
@@ -171,13 +204,14 @@ class TestScheduleInterDocEnrichment:
             ),
         )
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
         )
 
         with patch(
@@ -195,13 +229,14 @@ class TestScheduleInterDocEnrichment:
         assert inter_doc == []
 
     @pytest.mark.anyio
-    async def test_skips_when_fewer_than_2_docs_in_scope(
+    async def test_skips_when_fewer_than_2_docs_in_scope(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Inter-doc enrichment skips when fewer than 2 documents exist in scope."""
         mock_inter = MagicMock()
@@ -215,13 +250,14 @@ class TestScheduleInterDocEnrichment:
             ),
         )
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
 
@@ -238,13 +274,14 @@ class TestScheduleInterDocEnrichment:
         mock_inter.build.assert_not_awaited()
 
     @pytest.mark.anyio
-    async def test_creates_background_task(
+    async def test_creates_background_task(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Inter-doc enrichment creates asyncio.Task added to _background_tasks."""
         mock_inter = MagicMock()
@@ -263,13 +300,14 @@ class TestScheduleInterDocEnrichment:
         extractor = MagicMock()
         extractor.extract = AsyncMock(side_effect=counting_extract)
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
 
@@ -298,13 +336,14 @@ class TestInterDocIntegrationE2E:
     """End-to-end: ingest 2 docs, verify inter-doc edges in GraphStore."""
 
     @pytest.mark.anyio
-    async def test_inter_doc_edges_appear_with_correct_metadata(
+    async def test_inter_doc_edges_appear_with_correct_metadata(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """Ingest 2 docs with related entities; inter-doc edges have source=inter_doc_inference."""
         call_count = 0
@@ -353,13 +392,14 @@ class TestInterDocIntegrationE2E:
 
         mock_inter.build = AsyncMock(side_effect=build_side_effect)
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
 
@@ -398,13 +438,14 @@ class TestInterDocIntegrationE2E:
         assert edge.scope == "global"
 
     @pytest.mark.anyio
-    async def test_inter_doc_failure_does_not_crash_ingest(
+    async def test_inter_doc_failure_does_not_crash_ingest(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """If inter-doc builder raises, ingest result is still returned successfully."""
         mock_inter = MagicMock()
@@ -423,13 +464,14 @@ class TestInterDocIntegrationE2E:
         extractor = MagicMock()
         extractor.extract = AsyncMock(side_effect=make_extraction)
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
 
@@ -455,13 +497,14 @@ class TestInterDocIntegrationE2E:
         assert result2.status in ("indexed", "partial")
 
     @pytest.mark.anyio
-    async def test_ingest_text_triggers_inter_doc_enrichment(
+    async def test_ingest_text_triggers_inter_doc_enrichment(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
         mock_vector_store: MagicMock,
         mock_hybrid_embedder: MagicMock,
         mock_chunker: MagicMock,
+        tmp_path: Path,
     ) -> None:
         """ingest_text() also triggers inter-doc enrichment after 2nd doc."""
         mock_inter = MagicMock()
@@ -480,13 +523,14 @@ class TestInterDocIntegrationE2E:
         extractor = MagicMock()
         extractor.extract = AsyncMock(side_effect=make_extraction)
 
-        pipe = IngestPipeline(
+        pipe = _make_pipeline(
             conn=conn,
             graph_store=graph_store,
             vector_store=mock_vector_store,
             embedding_provider=mock_hybrid_embedder,
             entity_extractor=extractor,
             text_chunker=mock_chunker,
+            workspace_root=tmp_path,
             inter_doc_builder=mock_inter,
         )
 

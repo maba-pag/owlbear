@@ -637,40 +637,8 @@ class TestFireAndForget:
 
 
 # ---------------------------------------------------------------------------
-# Non-dict payload skips silently
+# Non-dict payload — typed contract now guarantees dict (AC3 removed isinstance guards)
 # ---------------------------------------------------------------------------
-
-
-class TestNonDictPayloadSkips:
-    """Non-dict payload is silently ignored."""
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_string_payload_skips(self, tmp_path: Path) -> None:
-        hook = RetrospectiveHook(
-            model=MagicMock(),
-            ingest_pipeline=AsyncMock(),
-            kanban_root=tmp_path,
-        )
-        hook._agent = MagicMock()
-        hook._agent.run = AsyncMock()
-
-        await hook("not a dict")
-
-        hook._agent.run.assert_not_called()
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_none_payload_skips(self, tmp_path: Path) -> None:
-        hook = RetrospectiveHook(
-            model=MagicMock(),
-            ingest_pipeline=AsyncMock(),
-            kanban_root=tmp_path,
-        )
-        hook._agent = MagicMock()
-        hook._agent.run = AsyncMock()
-
-        await hook(None)
-
-        hook._agent.run.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

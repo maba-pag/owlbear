@@ -435,7 +435,9 @@ class TestFromAC_NeverRaises:  # noqa: N801
     """Error resilience: read errors are logged and produce empty/partial output."""
 
     def test_unreadable_file_logs_warning_and_continues(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """One file fails to read; the other's content is still returned."""
         lessons_dir = tmp_path / "lessons"
@@ -466,7 +468,8 @@ class TestFromAC_NeverRaises:  # noqa: N801
         assert any("warning" in r.levelname.lower() for r in caplog.records)
 
     def test_read_error_all_files_returns_empty(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """All files fail to read — result is empty string, no exception."""
         lessons_dir = tmp_path / "lessons"
@@ -488,7 +491,9 @@ class TestFromAC_NeverRaises:  # noqa: N801
         assert data["lessons"] == ""  # type: ignore[index]
 
     def test_unicode_decode_error_logs_and_skips(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture,
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """A file with invalid encoding is skipped; remaining files succeed."""
         lessons_dir = tmp_path / "lessons"
@@ -520,7 +525,8 @@ class TestFromAC_NeverRaises:  # noqa: N801
         assert any("warning" in r.levelname.lower() for r in caplog.records)
 
     def test_stat_error_degrades_gracefully(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """If stat() fails during sorting, the hook degrades instead of raising."""
         lessons_dir = tmp_path / "lessons"
@@ -602,7 +608,8 @@ class TestFromAC_BootstrapRegistration:  # noqa: N801
         return sum(1 for h in handlers if isinstance(h, LessonsInjectionHook))
 
     def test_build_hooks_registers_when_enabled(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from owlbear.bootstrap.hooks import build_hooks
         from owlbear.config import OwlBearSettings
@@ -618,7 +625,8 @@ class TestFromAC_BootstrapRegistration:  # noqa: N801
         )
 
     def test_build_hooks_skips_when_disabled(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from owlbear.bootstrap.hooks import build_hooks
         from owlbear.config import OwlBearSettings

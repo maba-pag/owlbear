@@ -8,10 +8,12 @@ chunk_id, and IngestPipeline threading chunk_ids through extraction.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from owlbear.memory.knowledge.document_store import DocumentStore
 from owlbear.memory.knowledge.extractor import ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.ingest import IngestPipeline
@@ -23,6 +25,32 @@ from owlbear.memory.knowledge.schema import (
     _SCHEMA_VERSION,
     init_db,
 )
+
+
+def _make_pipeline(  # noqa: PLR0913
+    conn: sqlite3.Connection,
+    graph_store: object,
+    vector_store: object,
+    embedding_provider: object,
+    entity_extractor: object,
+    text_chunker: object,
+    workspace_root: Path,
+    **kwargs: object,
+) -> IngestPipeline:
+    store = DocumentStore(
+        conn=conn,
+        graph_store=graph_store,
+        vector_store=vector_store,
+        embedding_provider=embedding_provider,
+    )
+    return IngestPipeline(
+        store=store,
+        entity_extractor=entity_extractor,
+        text_chunker=text_chunker,
+        workspace_root=workspace_root,
+        **kwargs,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -260,24 +288,25 @@ class TestGraphStoreChunkId:
 
 
 # ---------------------------------------------------------------------------
-# IngestPipeline._store_chunks — returns chunk IDs
+# DocumentStore.store_chunks — returns chunk IDs
 # ---------------------------------------------------------------------------
 
 
 class TestStoreChunksReturnsIds:
-    """IngestPipeline._store_chunks() returns list of chunk IDs."""
+    """DocumentStore.store_chunks() returns list of chunk IDs."""
 
     @pytest.fixture
-    def pipeline(self, db: sqlite3.Connection) -> IngestPipeline:
+    def pipeline(self, db: sqlite3.Connection, tmp_path: Path) -> IngestPipeline:
         """Pipeline with real conn + graph_store, mock everything else."""
         graph = GraphStore(db)
-        return IngestPipeline(
+        return _make_pipeline(
             conn=db,
             graph_store=graph,
             vector_store=MagicMock(),
             embedding_provider=MagicMock(),
             entity_extractor=AsyncMock(),
             text_chunker=MagicMock(),
+            workspace_root=tmp_path,
         )
 
     @staticmethod
@@ -299,7 +328,7 @@ class TestStoreChunksReturnsIds:
             Chunk(text="Hello world", index=0, metadata={}),
             Chunk(text="Goodbye world", index=1, metadata={}),
         ]
-        result = pipeline._store_chunks("doc-1", chunks, scope="global")
+        result = pipeline._store.store_chunks("doc-1", chunks, scope="global")
         assert isinstance(result, list)
         assert len(result) == 2
         assert all(isinstance(cid, str) for cid in result)
@@ -314,7 +343,7 @@ class TestStoreChunksReturnsIds:
             Chunk(text="AAA", index=0, metadata={}),
             Chunk(text="BBB", index=1, metadata={}),
         ]
-        chunk_ids = pipeline._store_chunks("doc-2", chunks, scope="global")
+        chunk_ids = pipeline._store.store_chunks("doc-2", chunks, scope="global")
 
         db_ids = [
             row[0]
@@ -327,7 +356,7 @@ class TestStoreChunksReturnsIds:
 
 
 # ---------------------------------------------------------------------------
-# IngestPipeline._store_extractions — populates chunk_id
+# DocumentStore.store_extractions — populates chunk_id
 # ---------------------------------------------------------------------------
 
 
@@ -335,16 +364,17 @@ class TestStoreExtractionsChunkId:
     """_store_extractions stamps chunk_id on entities from corresponding chunk."""
 
     @pytest.fixture
-    def pipeline(self, db: sqlite3.Connection) -> IngestPipeline:
+    def pipeline(self, db: sqlite3.Connection, tmp_path: Path) -> IngestPipeline:
         """Pipeline with mock graph_store to capture insert_entity calls."""
         mock_graph = MagicMock()
-        return IngestPipeline(
+        return _make_pipeline(
             conn=db,
             graph_store=mock_graph,
             vector_store=MagicMock(),
             embedding_provider=MagicMock(),
             entity_extractor=AsyncMock(),
             text_chunker=MagicMock(),
+            workspace_root=tmp_path,
         )
 
     def test_entities_get_chunk_id_from_corresponding_chunk(self, pipeline: IngestPipeline) -> None:
@@ -366,7 +396,7 @@ class TestStoreExtractionsChunkId:
             ),
         ]
 
-        pipeline._store_extractions(
+        pipeline._store.store_extractions(
             extractions, scope="global", document_id="doc-X", chunk_ids=chunk_ids
         )
 
@@ -390,7 +420,7 @@ class TestStoreExtractionsChunkId:
             ),
         ]
 
-        pipeline._store_extractions(extractions, scope="global", document_id="doc-Y")
+        pipeline._store.store_extractions(extractions, scope="global", document_id="doc-Y")
 
         calls = pipeline._graph.insert_entity.call_args_list
         assert len(calls) == 1

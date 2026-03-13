@@ -471,7 +471,8 @@ class TestFromAC_RegistryAllowListPolicy:  # noqa: N801
     """AC7: AgentRegistry applies allow-list policy to agents with role=validator."""
 
     def test_registry_applies_allow_list_to_validator_role(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """When an agent has role=validator, its toolsets must be filtered
         through the allow-list policy — not the old 2-item deny-list."""
@@ -483,8 +484,7 @@ class TestFromAC_RegistryAllowListPolicy:  # noqa: N801
 
         md = tmp_path / "val.md"
         md.write_text(
-            "---\nname: val\ndescription: Validator\nrole: validator\n"
-            "tools:\n  - fs\n---\nBody.\n",
+            "---\nname: val\ndescription: Validator\nrole: validator\ntools:\n  - fs\n---\nBody.\n",
             encoding="utf-8",
         )
 

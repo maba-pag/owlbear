@@ -43,14 +43,14 @@ def pw_mocks():
     mock_pw_instance = AsyncMock(name="PlaywrightContextManager")
     mock_pw_instance.start = AsyncMock(return_value=mock_pw)
 
-    # CDP-mode mocks — connect_over_cdp returns a browser with pre-populated contexts
+    # CDP-mode mocks — connect_over_cdp returns a browser; new_context() creates isolated context
     mock_cdp_page = AsyncMock(name="CDPPage")
     mock_cdp_page.set_default_timeout = MagicMock()
     mock_cdp_context = AsyncMock(name="CDPBrowserContext")
     mock_cdp_context.new_page = AsyncMock(return_value=mock_cdp_page)
     mock_cdp_browser = AsyncMock(name="CDPBrowser")
-    mock_cdp_browser.contexts = [mock_cdp_context]
-    mock_cdp_browser.new_context = AsyncMock()
+    mock_cdp_browser.contexts = [MagicMock(name="DefaultContext_DO_NOT_USE")]
+    mock_cdp_browser.new_context = AsyncMock(return_value=mock_cdp_context)
     mock_pw.chromium.connect_over_cdp = AsyncMock(return_value=mock_cdp_browser)
 
     return {
@@ -274,15 +274,40 @@ class TestBrowserManagerCDPConnect:
                 pw_mocks["pw"].chromium.launch.assert_not_awaited()
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_cdp_reuses_existing_context(self, pw_mocks):
-        """Reuses browser.contexts[0], does not call new_context."""
+    async def test_cdp_creates_isolated_context(self, pw_mocks):
+        """CDP mode creates isolated context via new_context(), not contexts[0]."""
         cfg = BrowserConfig(cdp_endpoint="http://localhost:9222")
         with patch(f"{MODULE}.async_playwright", return_value=pw_mocks["pw_instance"]):
             from owlbear.tools.browser.manager import BrowserManager
 
             async with BrowserManager(config=cfg) as mgr:
                 assert mgr._context is pw_mocks["cdp_context"]
-                pw_mocks["cdp_browser"].new_context.assert_not_awaited()
+                pw_mocks["cdp_browser"].new_context.assert_awaited_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cdp_creates_context_with_viewport(self, pw_mocks):
+        """CDP mode uses viewport from config when creating the isolated context."""
+        cfg = BrowserConfig(cdp_endpoint="http://localhost:9222", viewport=(1920, 1080))
+        with patch(f"{MODULE}.async_playwright", return_value=pw_mocks["pw_instance"]):
+            from owlbear.tools.browser.manager import BrowserManager
+
+            async with BrowserManager(config=cfg):
+                pw_mocks["cdp_browser"].new_context.assert_awaited_once_with(
+                    viewport={"width": 1920, "height": 1080},
+                )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cdp_does_not_access_contexts_zero(self, pw_mocks):
+        """contexts[0] must NOT be accessed in CDP mode (isolation requirement)."""
+        cfg = BrowserConfig(cdp_endpoint="http://localhost:9222")
+        with patch(f"{MODULE}.async_playwright", return_value=pw_mocks["pw_instance"]):
+            from owlbear.tools.browser.manager import BrowserManager
+
+            async with BrowserManager(config=cfg) as mgr:
+                # The context must be the one returned by new_context,
+                # not the default context sitting in contexts[0]
+                default_ctx = pw_mocks["cdp_browser"].contexts[0]
+                assert mgr._context is not default_ctx
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_cdp_opens_new_page_in_reused_context(self, pw_mocks):
@@ -364,8 +389,8 @@ class TestBrowserManagerCDPCleanup:
             pw_mocks["cdp_browser"].close.assert_not_awaited()
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_cdp_does_not_close_context(self, pw_mocks):
-        """CDP mode never closes the reused context (owned by the user)."""
+    async def test_cdp_closes_owned_context(self, pw_mocks):
+        """CDP mode closes the isolated context it created."""
         cfg = BrowserConfig(cdp_endpoint="http://localhost:9222")
         with patch(f"{MODULE}.async_playwright", return_value=pw_mocks["pw_instance"]):
             from owlbear.tools.browser.manager import BrowserManager
@@ -373,7 +398,7 @@ class TestBrowserManagerCDPCleanup:
             async with BrowserManager(config=cfg):
                 pass
 
-            pw_mocks["cdp_context"].close.assert_not_awaited()
+            pw_mocks["cdp_context"].close.assert_awaited_once()
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_cdp_stops_playwright(self, pw_mocks):
@@ -404,13 +429,14 @@ class TestBrowserManagerCDPCleanup:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_cdp_cleanup_order(self, pw_mocks):
-        """CDP resources close in order: owned pages → disconnect → pw.stop."""
+        """CDP resources close in order: pages → context → disconnect → pw.stop."""
         call_order: list[str] = []
 
         def track(name: str):
             call_order.append(name)
 
         pw_mocks["cdp_page"].close = AsyncMock(side_effect=lambda: track("page"))
+        pw_mocks["cdp_context"].close = AsyncMock(side_effect=lambda: track("context"))
         pw_mocks["cdp_browser"].disconnect = AsyncMock(
             side_effect=lambda: track("disconnect"),
         )
@@ -423,7 +449,23 @@ class TestBrowserManagerCDPCleanup:
             async with BrowserManager(config=cfg):
                 pass
 
-        assert call_order == ["page", "disconnect", "pw"]
+        assert call_order == ["page", "context", "disconnect", "pw"]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cdp_disconnect_runs_even_if_context_close_fails(self, pw_mocks):
+        """disconnect() must run even if context.close() raises."""
+        pw_mocks["cdp_context"].close = AsyncMock(side_effect=RuntimeError("close failed"))
+
+        cfg = BrowserConfig(cdp_endpoint="http://localhost:9222")
+        with patch(f"{MODULE}.async_playwright", return_value=pw_mocks["pw_instance"]):
+            from owlbear.tools.browser.manager import BrowserManager
+
+            with pytest.raises(RuntimeError, match="close failed"):
+                async with BrowserManager(config=cfg):
+                    pass
+
+            pw_mocks["cdp_browser"].disconnect.assert_awaited_once()
+            pw_mocks["pw"].stop.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

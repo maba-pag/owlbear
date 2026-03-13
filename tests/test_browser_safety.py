@@ -144,10 +144,6 @@ class TestURLSafetyGuardEdgeCases:
         data: dict[str, object] = {"tool_name": "browser_navigate"}
         _run(guard(data))  # no raise — no args dict
 
-    def test_non_dict_data_ignored(self) -> None:
-        cfg = BrowserConfig(blocked_urls=[r".*"])
-        guard = URLSafetyGuard(cfg)
-        _run(guard("not a dict"))  # type: ignore[arg-type]  # no raise
 
 
 # ---------------------------------------------------------------------------
