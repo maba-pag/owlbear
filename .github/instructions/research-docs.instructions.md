@@ -5,7 +5,7 @@ description: "Guardrails for research/analysis documents — ensures findings be
 
 # Research Document Guardrails
 
-Research and analysis documents (`docs/*.md`) are **supporting artifacts, never deliverables**. The deliverable is always kanban tasks and working code.
+Research and analysis documents (`docs/research/*.md`) are **supporting artifacts, never deliverables**. The deliverable is always kanban tasks and working code.
 
 For the complete research procedure and task lifecycle, see the `research-workflow` skill.
 
@@ -23,12 +23,26 @@ For the complete research procedure and task lifecycle, see the `research-workfl
 
 The task is NOT done until:
 
-1. Every recommended action from the doc is presented as a concrete `kanban-md create` command in the Follow-up Tasks section (present for user review — do NOT execute).
-2. Each proposed task body links back to the research doc (e.g., `See docs/research/p7-research.md §4`).
-3. The Follow-up Tasks section is complete and actionable — the user can copy-paste and run the commands.
+1. Every recommended action from the doc has a concrete `kanban-md create` command in the Follow-up Tasks section **and the researcher executes them**, creating tasks at `ideation` status. This is safe — the architect still gates tasks before they become `todo`.
+2. Each created task body links back to the research doc (e.g., `See docs/research/p7.md §4`).
+3. The Follow-up Tasks section is complete and reflects which tasks were created (include the IDs after creation).
 
 If the research doc recommends zero follow-up tasks, that's a red flag — explicitly state why no action is needed.
+
+### When a finding requires a user decision
+
+If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See `decision-requests.instructions.md` for the format and workflow.
+
+Block the current task with a reference to the decision request:
+
+```powershell
+kanban\kanban-md.exe edit {ID} --block "Decision pending: docs/decisions/pending/{id}-{slug}.md"
+```
+
+If no other unblocked tasks are available on the board, proceed with the recommended option, mark the decision as `auto-resolved`, and create the follow-up tasks. The user can override later.
 
 ## Common failure mode
 
 Writing the doc, closing the kanban task, and moving on — without ever creating the follow-up tasks the doc recommends. This leaves actionable findings stranded in prose that nobody reads. **Don't do this.**
+
+Historically, instructions said "present commands for user review — do NOT execute." When agents run 6–12 hours unsupervised, the user never sees those commands. The policy is now: **execute the commands yourself**.

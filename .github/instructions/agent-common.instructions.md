@@ -21,16 +21,13 @@ All agents inherit project conventions from `copilot-instructions.md` (principle
 The kanban board is shared — multiple agents and humans may work on it simultaneously.
 
 - **Claim before you change anything.** No task edits, no code changes without a claim.
-- **One active task per agent.** Keep at most one task in `in-progress` for your agent session.
-- **Never steal a live claim.** If a task is claimed by another agent, pick something else.
+- **One active task per agent.** Keep at most one task claimed per agent session.
+- **Never steal a live claim.** If a task is claimed by another agent, do not touch it.
 - **Never release someone else's claim.** Only use `edit --release` for your own work.
+- **Never modify tasks you were not dispatched for.** You may `show` (read) any task and `create` new follow-up tasks, but you must not `move`, `edit --status`, `edit --claim`, `edit --release`, or otherwise modify tasks outside your dispatched assignment. This prevents destructive race conditions between parallel agents.
 - **Always leave a handoff.** Before you park a task, write a short update in the body so someone else can continue.
 
-### Pick and claim (atomic)
-
-```powershell
-kanban\kanban-md.exe pick --claim <agent> --status todo --move in-progress
-```
+For the complete claiming protocol (three-phase lifecycle, dispatched vs self-selected rules, cross-task boundaries, crash safety), see the **kanban-md skill** → **Agent Task Lifecycle Protocol**.
 
 ### Handoff / blocked
 
@@ -48,8 +45,11 @@ kanban\kanban-md.exe handoff <ID> --claim <agent> --block "Waiting on user: <wha
 Agents should take tasks all the way through the pipeline. Defer to the user only when:
 
 - An important product/spec decision has multiple valid options and no clear winner
+- A research finding recommends a feature or architectural direction that the user hasn't approved
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
+
+**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. See `decision-requests.instructions.md` for the format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
 
 ## Evidence over claims
 
@@ -79,7 +79,7 @@ When rejecting, be explicit: state what you were asked to do, which rule it viol
 
 1. **AC required.** Every follow-up task must have concrete acceptance criteria — no "improve X" without measurable conditions.
 2. **Single-responsibility.** One concern per task; list the affected files so the architect can assess scope.
-3. **Target backlog.** Non-planner agents always create follow-up tasks at `backlog` status so the architect gate applies. Only the kanban-planner may create tasks at `ideation`.
+3. **Target backlog.** Non-planner agents always create follow-up tasks at `backlog` status so the architect gate applies. **Exception:** the researcher creates follow-up tasks at `ideation` to ensure they pass through the full pipeline (researcher validates → architect reviews). Only the kanban-planner and researcher may create tasks at `ideation`.
 
 ## Post-task reflection (lessons learned)
 
@@ -206,7 +206,7 @@ Downstream agents read this via `kanban\kanban-md.exe show {ID}`. The orchestrat
 | auditor        | `ARCHIVED` / `REJECTED`                   | `ARCHIVED #480 -> archived \| confidence .97`        | `## Audit`               |
 | architect      | `APPROVED` / `REFINE` / `SPLIT` / `BLOCK` | `APPROVED #480 -> todo \| AC refined`                | `## Architecture Review` |
 | researcher     | `DONE`                                    | `DONE #480 -> backlog \| doc: docs/slug.md`          | `## Research`            |
-| kanban-planner | `DONE`                                    | `DONE \| 5 tasks created`                            | `## Planning`            |
+| kanban-planner | `DONE`                                    | `DONE \| 5 tasks planned`                            | `## Planning`            |
 | curator        | `DONE`                                    | `DONE \| 3 promoted, 1 pruned`                       | `## Curation`            |
 
 ### File-reference threshold
