@@ -26,4 +26,4 @@ class: standard
 - [ ] When progress_enabled=False: no ProgressReporter created
 - [ ] Integration test: bootstrap with progress_enabled and verify hook registration
 
-See docs/progress-reporting-research.md S3.7, S4
+See docs/research/progress-reporting.md S3.7, S4

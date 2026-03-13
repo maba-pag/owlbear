@@ -18,7 +18,7 @@ class: standard
 **Source:** <https://github.com/nicobailon/visual-explainer> (v0.5.1, MIT)
 Analyzed for diagram generation, visual explanation patterns, and UI component ideas.
 
-**Research doc:** See docs/research/visual-explainer-research.md
+**Research doc:** See docs/research/visual-explainer.md
 
 **Key findings:**
 
@@ -51,7 +51,7 @@ Analyzed for diagram generation, visual explanation patterns, and UI component i
 | AC Line | Assessment | Action |
 |---------|------------|--------|
 | SessionMemoryHook in session_memory_hook.py | N/A - research task | N/A |
-| Research doc complete | Complete at docs/research/visual-explainer-research.md, all 5 checklist items done | Verified |
+| Research doc complete | Complete at docs/research/visual-explainer.md, all 5 checklist items done | Verified |
 | Follow-up tasks proposed | 4 tasks proposed in doc S5 but never executed | Created 3 (dropped 1 - YAGNI) |
 | Key findings documented | Thorough: 3 sources analyzed, KISS/YAGNI assessment, architecture fit table | Verified |
 | Recommendation with confidence | .80 confidence, two-tier approach | Verified |
@@ -98,7 +98,7 @@ Analyzed for diagram generation, visual explanation patterns, and UI component i
 | AC Line | Assessment | Action |
 |---------|------------|--------|
 | SessionMemoryHook in session_memory_hook.py | N/A - research task | N/A |
-| Research doc complete | Complete at docs/research/visual-explainer-research.md, all 5 checklist items done | Verified |
+| Research doc complete | Complete at docs/research/visual-explainer.md, all 5 checklist items done | Verified |
 | Follow-up tasks proposed | 4 tasks proposed in doc S5 but never executed | Created 3 (dropped 1 - YAGNI) |
 | Key findings documented | Thorough: 3 sources analyzed, KISS/YAGNI assessment, architecture fit table | Verified |
 | Recommendation with confidence | .80 confidence, two-tier approach | Verified |
@@ -145,7 +145,7 @@ Non-implementation task (tagged research)  no tests applicable. Passing through 
 ## Builder Notes
 
 - Research task (no code implementation)
-- Research doc verified: docs/research/visual-explainer-research.md exists
+- Research doc verified: docs/research/visual-explainer.md exists
 - Follow-up tasks verified: #706 (visual-output skill), #708 (HTML templates), #709 (project-recap)
 - Architecture review: APPROVED
 - Tests: N/A (research task, test-writer confirmed no tests applicable)
@@ -160,14 +160,14 @@ Non-implementation task (tagged research)  no tests applicable. Passing through 
 
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| Research doc complete | docs/research/visual-explainer-research.md exists (5 sections, sources table, recommendation) | N/A | PASS |
+| Research doc complete | docs/research/visual-explainer.md exists (5 sections, sources table, recommendation) | N/A | PASS |
 | Research doc committed | `git ls-files docs/research/` returns no match for visual-explainer; `git status` shows `??` (untracked) | N/A | **FAIL** |
 | Follow-up tasks created | #706 (ideation), #708 (ideation, depends_on 706), #709 (ideation, depends_on 706) - all exist | N/A | PASS |
 | Key findings documented | S3 Analysis with architecture fit table, KISS/YAGNI assessment, 3 sources compared | N/A | PASS |
 | Recommendation with confidence | S4: .80 confidence, adopt HTML diagram generation as agent skill | N/A | PASS |
 | Attribution logged | docs/sources/overview.md lines 423-425: 3 entries (visual-explainer, Anthropic skills, interface-design) | N/A | PASS (content) |
 | Attribution committed | `git status` shows `docs/sources/overview.md` as `??` (untracked) | N/A | **FAIL** |
-| Task body path accuracy | Body says `docs/visual-explainer-research.md` but file is at `docs/research/visual-explainer-research.md` | N/A | **FAIL** |
+| Task body path accuracy | Body says `docs/research/visual-explainer.md` but file is at `docs/research/visual-explainer.md` | N/A | **FAIL** |
 | #709 body text | References deleted #707 instead of #706 (depends_on YAML is correct) | N/A | MINOR |
 
 ### Test Quality
@@ -180,9 +180,9 @@ N/A -- research task, no Python code changed. Test-writer confirmed no tests app
 
 | Failed Item | Gap | Required Fix |
 |-------------|-----|--------------|
-| Research doc not committed | `docs/research/visual-explainer-research.md` is untracked (`??`) -- never git-added. File placement rules require research docs to be tracked. | `git add docs/research/visual-explainer-research.md` and commit |
+| Research doc not committed | `docs/research/visual-explainer.md` is untracked (`??`) -- never git-added. File placement rules require research docs to be tracked. | `git add docs/research/visual-explainer.md` and commit |
 | Attribution not committed | `docs/sources/overview.md` is untracked (`??`) -- 3 attribution entries exist but file was never committed | `git add docs/sources/overview.md` and commit |
-| Task body path wrong | Task frontmatter says `docs/visual-explainer-research.md` but file is at `docs/research/visual-explainer-research.md` | Fix path in task body to `docs/research/visual-explainer-research.md` |
+| Task body path wrong | Task frontmatter says `docs/research/visual-explainer.md` but file is at `docs/research/visual-explainer.md` | Fix path in task body to `docs/research/visual-explainer.md` |
 
 ### Verdict: FAIL confidence .92
 
@@ -196,14 +196,14 @@ N/A -- research task, no Python code changed. Test-writer confirmed no tests app
 
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| Research doc complete | docs/research/visual-explainer-research.md exists (5 sections, sources table, recommendation) | N/A | PASS |
+| Research doc complete | docs/research/visual-explainer.md exists (5 sections, sources table, recommendation) | N/A | PASS |
 | Research doc committed | git ls-files returns no match; git status shows ?? (untracked) | N/A | **FAIL** |
 | Follow-up tasks created | #706, #708, #709 - all exist in ideation | N/A | PASS |
 | Key findings documented | S3 Analysis with arch fit table, KISS/YAGNI assessment, 3 sources | N/A | PASS |
 | Recommendation with confidence | S4: .80 confidence | N/A | PASS |
 | Attribution logged | docs/sources/overview.md lines 423-425: 3 entries | N/A | PASS (content) |
 | Attribution committed | git status shows docs/sources/overview.md as ?? (untracked) | N/A | **FAIL** |
-| Task body path | says docs/visual-explainer-research.md, file at docs/research/ | N/A | **FAIL** |
+| Task body path | says docs/research/visual-explainer.md, file at docs/research/ | N/A | **FAIL** |
 
 ### Test Quality
 
@@ -217,7 +217,7 @@ N/A -- research task, no Python code changed.
 |-------------|-----|--------------|
 | Research doc not committed | untracked (??) - never git-added | git add + commit |
 | Attribution not committed | docs/sources/overview.md untracked | git add + commit |
-| Task body path wrong | docs/visual-explainer-research.md vs docs/research/visual-explainer-research.md | Fix path in task body |
+| Task body path wrong | docs/research/visual-explainer.md vs docs/research/visual-explainer.md | Fix path in task body |
 
 ### Verdict: FAIL confidence .92
 
@@ -229,14 +229,14 @@ N/A -- research task, no Python code changed.
 
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| Research doc complete | docs/research/visual-explainer-research.md exists (5 sections, sources table, recommendation) | N/A | PASS |
+| Research doc complete | docs/research/visual-explainer.md exists (5 sections, sources table, recommendation) | N/A | PASS |
 | Research doc committed | git ls-files returns no match; git status shows ?? (untracked) | N/A | **FAIL** |
 | Follow-up tasks created | #706, #708, #709 - all exist in ideation | N/A | PASS |
 | Key findings documented | S3 Analysis with arch fit table, KISS/YAGNI assessment, 3 sources | N/A | PASS |
 | Recommendation with confidence | S4: .80 confidence | N/A | PASS |
 | Attribution logged | docs/sources/overview.md lines 423-425: 3 entries | N/A | PASS (content) |
 | Attribution committed | git status shows docs/sources/overview.md as ?? (untracked) | N/A | **FAIL** |
-| Task body path | says docs/visual-explainer-research.md, file at docs/research/ | N/A | **FAIL** |
+| Task body path | says docs/research/visual-explainer.md, file at docs/research/ | N/A | **FAIL** |
 
 ### Test Quality
 
@@ -250,7 +250,7 @@ N/A -- research task, no Python code changed.
 |-------------|-----|--------------|
 | Research doc not committed | untracked (??) - never git-added | git add + commit |
 | Attribution not committed | docs/sources/overview.md untracked | git add + commit |
-| Task body path wrong | docs/visual-explainer-research.md vs docs/research/visual-explainer-research.md | Fix path in task body |
+| Task body path wrong | docs/research/visual-explainer.md vs docs/research/visual-explainer.md | Fix path in task body |
 
 ### Verdict: FAIL confidence .92
 
@@ -271,7 +271,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 ## Builder Notes (2nd pass)
 
 - Fixed: git add + commit research doc and attribution (commit 9415474)
-- Fixed: task body path corrected from docs/visual-explainer-research.md to docs/research/visual-explainer-research.md
+- Fixed: task body path corrected from docs/research/visual-explainer.md to docs/research/visual-explainer.md
 - Fixed: unblocked task
 - Tests: N/A (research task)
 - Lint: N/A (no Python code)
@@ -287,7 +287,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Already has entries for nicobailon/visual-explainer, Anthropic skills, Dammyjay93/interface-design (line ~423-425) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/visual-explainer-research.md exists and linked in task body; follow-up tasks #706, #708, #709 confirmed |
+| 5 | Research doc linked | Yes | Pass | docs/research/visual-explainer.md exists and linked in task body; follow-up tasks #706, #708, #709 confirmed |
 
 ### Files Updated
 - None
@@ -302,7 +302,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Research doc complete | docs/research/visual-explainer-research.md: 5 sections (Context, Sources, Analysis, Recommendation, Follow-ups) | PASS |
+| Research doc complete | docs/research/visual-explainer.md: 5 sections (Context, Sources, Analysis, Recommendation, Follow-ups) | PASS |
 | Research doc committed | git ls-files confirms tracked; commit 9415474 | PASS |
 | Follow-up tasks created | #706 (visual-output skill), #708 (HTML templates), #709 (project-recap) all in ideation | PASS |
 | Key findings documented | 3 sources, KISS/YAGNI assessment, architecture fit table in S3 | PASS |
@@ -317,7 +317,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 
 ### Notes
 - Reviewer's original 3 FAIL items (untracked files, wrong path) all resolved in commit 9415474
-- Research doc S5 kanban commands still reference `docs/visual-explainer-research.md` (wrong), but actual created tasks have correct path - cosmetic only
+- Research doc S5 kanban commands still reference `docs/research/visual-explainer.md` (wrong), but actual created tasks have correct path - cosmetic only
 
 ### Confidence: .97
 ### Action: archive

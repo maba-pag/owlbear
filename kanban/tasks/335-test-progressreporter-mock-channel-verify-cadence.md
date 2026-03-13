@@ -28,4 +28,4 @@ class: standard
 - [ ] Mock channel with asyncio.Queue to verify message cadence
 - [ ] Test on_tool_complete() hook callback increments counter and records last tool
 
-See docs/progress-reporting-research.md S3.2, S3.3, S3.6
+See docs/research/progress-reporting.md S3.2, S3.3, S3.6

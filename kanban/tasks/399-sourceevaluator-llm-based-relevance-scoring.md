@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. PydanticAI agent with EvaluationResult structured output (relevance_score 0-1, tags, summary, worth_ingesting). Prompt takes content excerpt (first 2000 chars) + project context (name, description, goals). Scores relevance to current project. AC: Evaluator returns structured EvaluationResult; project-aware scoring; graceful fallback when no active project (score=0.5). Depends on #304.
+From #304 source-discovery-bookmarking.md. PydanticAI agent with EvaluationResult structured output (relevance_score 0-1, tags, summary, worth_ingesting). Prompt takes content excerpt (first 2000 chars) + project context (name, description, goals). Scores relevance to current project. AC: Evaluator returns structured EvaluationResult; project-aware scoring; graceful fallback when no active project (score=0.5). Depends on #304.

@@ -18,7 +18,7 @@ class: standard
 **Source:** https://github.com/openai/symphony (Apache-2.0)
 Analyzed for multi-agent delegation, orchestration patterns, and task execution logic.
 
-**Research doc:** See docs/symphony-research.md
+**Research doc:** See docs/research/symphony.md
 
 **Key findings:**
 - Poll-dispatch-reconcile daemon pattern (poll tick -> reconcile running -> validate -> fetch candidates -> sort -> dispatch)
@@ -31,7 +31,7 @@ Analyzed for multi-agent delegation, orchestration patterns, and task execution 
 
 **Recommendation (.85 confidence):** Adopt poll-dispatch-reconcile as OwlBear autonomous mode. Skip workspace isolation (single-repo), Linear adapter, HTTP dashboard.
 
-**Follow-up tasks:** 4 kanban tasks proposed in docs/symphony-research.md S5
+**Follow-up tasks:** 4 kanban tasks proposed in docs/research/symphony.md S5
 
 **Research checklist:**
 - [x] Theoretical validity - Sound, proven at OpenAI scale (1500+ PRs)

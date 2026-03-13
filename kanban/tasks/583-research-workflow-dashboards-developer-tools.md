@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-Epic: Analyze local dashboarding, command-line tips, and workflow efficiencies.\n\nResearch complete: See docs/workflow-dashboards-devtools-research.md\n\nKey finding: Rich (already a Typer transitive dep) covers 90% of CLI UX gaps at zero new dependency cost. Textual TUI deferred to Phase 11+ per YAGNI.\n\nFollow-up tasks generated (not yet created):\n1. Replace hand-rolled CLI tables with rich.table.Table\n2. Enhanced bearclaw status with rich.panel\n3. Add rich.traceback and RichHandler to daemon logging\n4. Evaluate Textual TUI dashboard for Phase 11+
+Epic: Analyze local dashboarding, command-line tips, and workflow efficiencies.\n\nResearch complete: See docs/research/workflow-dashboards-devtools.md\n\nKey finding: Rich (already a Typer transitive dep) covers 90% of CLI UX gaps at zero new dependency cost. Textual TUI deferred to Phase 11+ per YAGNI.\n\nFollow-up tasks generated (not yet created):\n1. Replace hand-rolled CLI tables with rich.table.Table\n2. Enhanced bearclaw status with rich.panel\n3. Add rich.traceback and RichHandler to daemon logging\n4. Evaluate Textual TUI dashboard for Phase 11+

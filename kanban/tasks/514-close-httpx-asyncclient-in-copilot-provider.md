@@ -539,7 +539,7 @@ Note: Test file is untracked (new). All 5 tests and 3 classes match test-writer 
 - N/A (pure research task, no code changes)
 
 ### Process Note
-- docs/research/mission-control-research.md was gitignored and never force-added (unlike 13 sibling research docs). Fixed at commit time via git add -f.
+- docs/research/mission-control.md was gitignored and never force-added (unlike 13 sibling research docs). Fixed at commit time via git add -f.
 
 ### Confidence: .95
 ### Action: archive

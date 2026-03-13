@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/dedup.py | Test: tests/test_knowledge_dedup.py | See docs/knowledge-ingestion-research.md S3.4.
+Module: src/owlbear/memory/knowledge/dedup.py | Test: tests/test_knowledge_dedup.py | See docs/research/knowledge-ingestion.md S3.4.
 
 AC:
 - deduplicate_entities(graph: GraphStore, threshold: float = 0.85) -> DeduplicationResult function

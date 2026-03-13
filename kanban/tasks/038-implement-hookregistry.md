@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.2)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.2)
 
 PydanticAI has HistoryProcessor and OpenTelemetry instrumentation but NO general-purpose hook/event system. This is a genuine gap.
 

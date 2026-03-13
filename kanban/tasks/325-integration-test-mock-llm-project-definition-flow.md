@@ -30,4 +30,4 @@ class: standard
 - [ ] Does NOT test planner agent multi-turn conversation (out of scope — that requires FunctionModel + tool mocking)
 
 Dependencies: #320 (extractor impl), #322 (markdown impl), #324 (planner update)
-See docs/project-definition-workflow-research.md sec3.6
+See docs/research/project-definition-workflow.md sec3.6

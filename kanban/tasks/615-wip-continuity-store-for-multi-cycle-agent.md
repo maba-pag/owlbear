@@ -19,5 +19,5 @@ DECOMPOSED by architect into TDD-paired implementation tasks:
 - #639 Test WIP injection into poll_tick (test, depends on #637)
 - #641 Wire WipStore into poll_tick and reconcile_tasks (impl, depends on #639)
 
-Original research: docs/wip-continuity-store-research.md
+Original research: docs/research/wip-continuity-store.md
 save_wip agent tool deferred to future task (nice-to-have, YAGNI for now).

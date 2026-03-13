@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #306 error-recovery-research.md. Tests for: error classification (all categories), HTTP retry (transient, auth, permanent), tool-level retry in HookedToolset, daemon structured recovery, human escalation flow, error journal (log + query + rotation), structured ToolError feedback. AC: >= 90%% coverage for core/errors.py, tools/hooked.py retry logic, daemon recovery, error_journal.py. Depends on #306, #357-#363.
+From #306 error-recovery.md. Tests for: error classification (all categories), HTTP retry (transient, auth, permanent), tool-level retry in HookedToolset, daemon structured recovery, human escalation flow, error journal (log + query + rotation), structured ToolError feedback. AC: >= 90%% coverage for core/errors.py, tools/hooked.py retry logic, daemon recovery, error_journal.py. Depends on #306, #357-#363.

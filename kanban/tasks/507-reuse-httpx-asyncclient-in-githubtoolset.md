@@ -17,7 +17,7 @@ class: standard
 ---
 
 F-08: Each _api_request call creates a new httpx.AsyncClient. 4 separate TCP+TLS negotiations in sequence.
-See docs/httpx-client-reuse-research.md for research (~18 LOC change).
+See docs/research/httpx-client-reuse.md for research (~18 LOC change).
 
 ## Acceptance Criteria
 

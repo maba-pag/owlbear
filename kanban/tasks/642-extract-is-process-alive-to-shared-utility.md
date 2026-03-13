@@ -17,7 +17,7 @@ class: standard
 ---
 
 DRY violation: _is_process_alive() is duplicated identically in bearclaw/commands/daemon.py (line 26) and owlbear/daemon.py (line 82). Extract to a single canonical location, update both consumers and tests.
-See docs/enhanced-bearclaw-status-research.md section 3.3.
+See docs/research/enhanced-bearclaw-status.md section 3.3.
 
 ## AC
 

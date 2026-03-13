@@ -27,4 +27,4 @@ AC:
 - [ ] Graceful shutdown on daemon stop: servers cleaned up before PID file removal
 
 Depends on: #228 (test task), #168
-See docs/mcp-servers-research.md
+See docs/research/mcp-servers.md

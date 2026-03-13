@@ -16,7 +16,7 @@ class: standard
 ---
 
 Define how an agent's 'soul' is configured. Each agent needs: identity, system prompt, tool access list, skill access list, role policy.
-Research: docs/agent-framework-research.md section 3.1
+Research: docs/research/agent-framework.md section 3.1
 
 ## AC
 - [ ] File: src/owlbear/core/agent_def.py

@@ -17,7 +17,7 @@ class: standard
 
 E-1: Only 3 custom exceptions (BlockedCommandError, BlockedURLError, AskUserTimeoutError), no base class. Makes blanket catching difficult without except Exception. Create OwlBearError base class.
 
-Research complete. See docs/owlbear-error-hierarchy-research.md.
+Research complete. See docs/research/owlbear-error-hierarchy.md.
 
 **Recommendation (.90 confidence):** Single OwlBearError(Exception) base in core/exceptions.py. All 3 exceptions inherit from it. AskUserTimeoutError uses (OwlBearError, TimeoutError) for MRO compat. No subcategories (YAGNI).
 

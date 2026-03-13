@@ -18,7 +18,7 @@ class: standard
 
 Install rich.traceback.install() in bearclaw CLI app callback and replace daemon setup_logging() stderr handler with RichHandler for structured console output. File handler must remain plain text.
 
-See docs/rich-traceback-richhandler-research.md S3.4.
+See docs/research/rich-traceback-richhandler.md S3.4.
 
 AC:
 - [ ] `rich.traceback.install(show_locals=False, suppress=[typer, click])` called in `cli.py` `@app.callback()` (`main()`)
@@ -68,7 +68,7 @@ Depends on: #739 (tests RED phase)
 | (no formal AC) | Task body is research summary, not implementation AC | Split into 3 tasks with precise AC |
 
 ### Architecture Notes
-Research doc (docs/validator-role-policy-research.md) is thorough. Allow-list model is the correct approach per OWASP LLM06:2025. Key observations:
+Research doc (docs/research/validator-role-policy.md) is thorough. Allow-list model is the correct approach per OWASP LLM06:2025. Key observations:
 
 1. **No agent currently declares role: validator**  all 8 agents default to builder. Infrastructure is ready but unused.
 2. **run_command must stay in allow-list**  research recommends excluding it, but reviewer/auditor agents need pytest/ruff execution. CommandSafetyGuard is the defense layer. Deviation documented in #741 AC.
@@ -172,7 +172,7 @@ Note: existing TestFromAC_RichLogging in test_daemon.py covers AC#2-4. Builder s
 | 2 | Docstrings complete | Yes | Pass | _RichGroup has class docstring; setup_logging() has full NumPy-style docstring mentioning RichHandler, file handler, rich tracebacks. |
 | 3 | sources/overview.md | No | N/A | Standard usage of rich library API; no external patterns adopted. |
 | 4 | README.md | No | N/A | No CLI commands added/changed; only internal logging behavior. |
-| 5 | Research doc linked | Yes | Pass | docs/rich-traceback-richhandler-research.md exists and linked in task body (S3.4 ref). |
+| 5 | Research doc linked | Yes | Pass | docs/research/rich-traceback-richhandler.md exists and linked in task body (S3.4 ref). |
 
 ### Files Updated
 - None

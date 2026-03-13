@@ -23,4 +23,4 @@ AC:
 - [ ] Test LLM failure produces empty result (no crash)
 - [ ] Mock PydanticAI agent (no real LLM calls)
 - [ ] Test scope passthrough
-See docs/intra-document-graph-research.md
+See docs/research/intra-document-graph.md

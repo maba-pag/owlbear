@@ -33,4 +33,4 @@ Rewrite STTEngine to use Moonshine batch mode (transcribe_without_streaming).
 - [ ] TDD: write failing tests first
 
 ## Design Reference
-See docs/moonshine-streaming-research.md S3.2 for audio format, S4.1 for two-mode arch, S4.3 for class design.
+See docs/research/moonshine-streaming.md S3.2 for audio format, S4.1 for two-mode arch, S4.3 for class design.

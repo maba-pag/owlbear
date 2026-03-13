@@ -31,4 +31,4 @@ AC:
 
 Pattern: follows existing _migrate_v1_to_v2 in same file.
 Depends on: #220 (test task)
-See docs/knowledge-scoping-research.md
+See docs/research/knowledge-scoping.md

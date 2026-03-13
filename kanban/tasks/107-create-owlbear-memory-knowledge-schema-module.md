@@ -39,4 +39,4 @@ DDL and database initialization for the knowledge graph. Adapted from tool.graph
 - [ ] Works with in-memory SQLite (`:memory:`) for testing
 - [ ] `ruff check` clean
 
-See docs/knowledge-graph-research.md section 3.4, 4
+See docs/research/knowledge-graph.md section 3.4, 4

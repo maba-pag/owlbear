@@ -29,4 +29,4 @@ AC:
 - [ ] MCPServerRegistry.from_config(config: dict) class method to build from settings
 
 Depends on: #226 (test task)
-See docs/mcp-servers-research.md
+See docs/research/mcp-servers.md

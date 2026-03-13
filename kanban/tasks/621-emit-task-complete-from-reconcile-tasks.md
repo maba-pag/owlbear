@@ -15,7 +15,7 @@ class: standard
 
 reconcile_tasks() in daemon.py must emit HookEvent.TASK_COMPLETE with payload {task_id: str, outcome: 'success' | 'failure'} after popping completed tasks from state.running. Currently TASK_COMPLETE is defined in HookEvent but never emitted. hooks is not threaded into reconcile_tasks().
 
-See docs/retrospective-learning-hook-research.md S3.2 for context.
+See docs/research/retrospective-learning-hook.md S3.2 for context.
 
 ## AC
 

@@ -19,7 +19,7 @@ class: standard
 
 Add a non-LLM deterministic lint gate in the daemon poll loop that runs after builder task completion and before advancing to review. Currently ruff is run by the builder agent (LLM-decided), which can be skipped. This gate guarantees lint compliance via subprocess, not agent instruction.
 
-See docs/research/stripe-minions-research.md S3b and S5 for rationale.
+See docs/research/stripe-minions.md S3b and S5 for rationale.
 
 AC:
 
@@ -289,7 +289,7 @@ Confidence: .94
 | 2 | Docstrings complete | Yes | Pass | lint_gate.py: module+classes+functions all have docstrings |
 | 3 | sources/overview.md | No | N/A | stripe-minions already attributed 2026-03-08 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | Task body refs stripe-minions-research.md S3b+S5 |
+| 5 | Research doc linked | Yes | Pass | Task body refs stripe-minions.md S3b+S5 |
 | 6 | No impact | -- | -- | Items 2 and 5 apply and pass |
 
 ### Files Updated

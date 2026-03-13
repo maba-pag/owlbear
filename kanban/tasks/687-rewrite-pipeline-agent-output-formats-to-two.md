@@ -29,7 +29,7 @@ class: standard
 
 - These 4 agents form the core build pipeline (builder -> reviewer -> writer -> auditor). Their outputs are the most context-heavy and benefit most from the split.
 - No TDD required -- these are .agent.md file edits.
-- Reference: docs/inter-agent-communication-protocol-research.md sections 3.3, 3.4, 3.5
+- Reference: docs/research/inter-agent-communication-protocol.md sections 3.3, 3.4, 3.5
 
 [[2026-03-08]] Sun 17:50
 ## Review Evidence
@@ -60,7 +60,7 @@ No issues -- instruction files only, no executable code, no secrets, no injectio
 | 2 | Docstrings | No | N/A | No Python modules changed  .agent.md files only |
 | 3 | sources.md | No | N/A | External sources (LangGraph, Swarm, Blackboard, CrewAI) already attributed under Task #684 section. No new sources introduced. |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/inter-agent-communication-protocol-research.md referenced in task notes |
+| 5 | Research doc linked | Yes | Pass | docs/research/inter-agent-communication-protocol.md referenced in task notes |
 | 6 | No impact catch-all | N/A | N/A | Items 1-5 evaluated individually |
 
 ### Files Updated

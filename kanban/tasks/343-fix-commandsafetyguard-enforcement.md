@@ -23,4 +23,4 @@ class: standard
 - [ ] Existing test_emit_blocked_command_swallowed_by_registry stays green (emit behavior unchanged)
 - [ ] New test: HookedToolset with guard blocks dangerous commands before tool execution
 
-See docs/approval-gates-research.md S3.1
+See docs/research/approval-gates.md S3.1

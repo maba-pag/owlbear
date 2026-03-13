@@ -20,7 +20,7 @@ class: standard
 ## Context
 
 Copilot tokens expire (~30 min). Daemon must catch 401/403, rebuild model, retry.
-See docs/bootstrap-assembly-research.md S3.6.
+See docs/research/bootstrap-assembly.md S3.6.
 
 ## Acceptance Criteria
 

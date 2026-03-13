@@ -11,7 +11,7 @@ tags:
 class: standard
 ---
 
-Pattern: save/restore cookies per named profile (~1KB each vs 100MB Chrome profiles). Inspired by botasaurus tiny_profile (see docs/research/botasaurus-research.md S4.6). AC:
+Pattern: save/restore cookies per named profile (~1KB each vs 100MB Chrome profiles). Inspired by botasaurus tiny_profile (see docs/research/botasaurus.md S4.6). AC:
 - [ ] BrowserConfig gains optional profile_name field
 - [ ] On context close, cookies saved to profiles/{name}.json
 - [ ] On context open, cookies restored if profile exists

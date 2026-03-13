@@ -29,4 +29,4 @@ class: standard
 - [ ] Test list_active() on empty directory returns empty list
 - [ ] Use tmp_path fixture for isolated test directory
 
-See docs/multi-project-session-research.md S3.3
+See docs/research/multi-project-session.md S3.3

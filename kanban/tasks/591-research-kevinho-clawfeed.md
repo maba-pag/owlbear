@@ -18,7 +18,7 @@ class: standard
 **Source:** https://github.com/kevinho/clawfeed
 Analyze for agent autonomy, feed processing, and data ingestion patterns.
 
-**Research:** See docs/clawfeed-research.md
+**Research:** See docs/research/clawfeed.md
 
 **Findings:**
 - ClawFeed is a Node.js + SQLite AI news digest (MIT, 1.6k stars)
@@ -35,4 +35,4 @@ Analyze for agent autonomy, feed processing, and data ingestion patterns.
 
 **Skipped (YAGNI):** Source Packs, Feed output, multi-user subscriptions, multi-frequency scheduling, platform-specific fetchers
 
-**Follow-up tasks:** 2 kanban create commands in docs/clawfeed-research.md section 5
+**Follow-up tasks:** 2 kanban create commands in docs/research/clawfeed.md section 5

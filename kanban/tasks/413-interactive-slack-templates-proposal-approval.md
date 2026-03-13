@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #307 slack-structured-proposals-research.md. Add format_interactive_proposal_blocks() (option buttons with action_ids), format_approval_blocks() (approve/deny with primary/danger styles), format_progress_blocks() (emoji progress bar) to slack_templates.py. AC: Interactive proposal blocks have clickable option buttons; approval blocks have approve (primary) + deny (danger) buttons; progress blocks render emoji bar with step/ETA; all return valid Block Kit JSON. Depends on #307.
+From #307 slack-structured-proposals.md. Add format_interactive_proposal_blocks() (option buttons with action_ids), format_approval_blocks() (approve/deny with primary/danger styles), format_progress_blocks() (emoji progress bar) to slack_templates.py. AC: Interactive proposal blocks have clickable option buttons; approval blocks have approve (primary) + deny (danger) buttons; progress blocks render emoji bar with step/ETA; all return valid Block Kit JSON. Depends on #307.

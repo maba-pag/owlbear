@@ -35,4 +35,4 @@ Add structured intent routing section to src/owlbear/agents/orchestrator.md:
 - [ ] No new Python code — only edit orchestrator.md
 - [ ] ruff check not applicable (markdown only)
 
-See docs/conversation-router-research.md S4 for recommendation details
+See docs/research/conversation-router.md S4 for recommendation details

@@ -29,6 +29,6 @@ N/A - trivial alignment. Rationale: every retry site in the codebase uses 3 atte
 - .github/instructions/python.instructions.md L34
 - .github/copilot-instructions.md L46 (tech stack table)
 
-**Recommendation (.95):** Update both doc files to say 'max 3 attempts'. Code is correct  3 was deliberately chosen (daemon-retry-reconciliation-research.md notes 3x3=9 multiplicative attempts already excessive).
+**Recommendation (.95):** Update both doc files to say 'max 3 attempts'. Code is correct  3 was deliberately chosen (daemon-retry-reconciliation.md notes 3x3=9 multiplicative attempts already excessive).
 
 **Implementation:** Change 'max 5 attempts' to 'max 3 attempts' in python.instructions.md L34 and copilot-instructions.md L46.

@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-See docs/agent-patterns-research.md §2.2. AC: Research doc comparing Bot Framework SDK vs Composio MCP vs direct Graph API for Teams integration. Recommend one path. Create follow-up implementation tasks.
+See docs/research/agent-patterns.md §2.2. AC: Research doc comparing Bot Framework SDK vs Composio MCP vs direct Graph API for Teams integration. Recommend one path. Create follow-up implementation tasks.

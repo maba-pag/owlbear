@@ -16,7 +16,7 @@ class: standard
 
 ARC-20: VALIDATOR_POLICY only denies write_file and create_file. Doesnt restrict run_command, git_commit, git_push, browser_click, browser_type. Validator agent could still execute arbitrary shell commands.
 
-Research complete. See docs/validator-role-policy-research.md for details.
+Research complete. See docs/research/validator-role-policy.md for details.
 
 Key findings:
 - No agent currently uses role: validator (all default to builder)
@@ -43,7 +43,7 @@ Research checklist:
 | (no formal AC) | Task body is research summary, not implementation AC | Split into 3 tasks with precise AC |
 
 ### Architecture Notes
-Research doc (docs/validator-role-policy-research.md) is thorough. Allow-list model is the correct approach per OWASP LLM06:2025. Key observations:
+Research doc (docs/research/validator-role-policy.md) is thorough. Allow-list model is the correct approach per OWASP LLM06:2025. Key observations:
 
 1. **No agent currently declares role: validator**  all 8 agents default to builder. Infrastructure is ready but unused.
 2. **run_command must stay in allow-list**  research recommends excluding it, but reviewer/auditor agents need pytest/ruff execution. CommandSafetyGuard is the defense layer. Deviation documented in #741 AC.

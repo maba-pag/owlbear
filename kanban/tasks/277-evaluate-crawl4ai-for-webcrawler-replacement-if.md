@@ -27,4 +27,4 @@ Research #264 identified crawl4ai's crawler as significantly more mature than ou
 - [ ] Must work with our existing BrowserManager CDP connection
 - [ ] Must integrate with crawl_and_ingest pipeline
 
-See docs/browser-automation-research.md Section 3.3
+See docs/research/browser-automation.md Section 3.3

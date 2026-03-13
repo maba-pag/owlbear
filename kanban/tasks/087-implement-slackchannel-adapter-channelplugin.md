@@ -18,7 +18,7 @@ depends_on:
 class: standard
 ---
 
-Create src/owlbear/channels/slack.py implementing ChannelPlugin protocol. See docs/slack-integration-research.md.
+Create src/owlbear/channels/slack.py implementing ChannelPlugin protocol. See docs/research/slack-integration.md.
 
 AC:
 - SlackChannel class with name='slack' property

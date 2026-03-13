@@ -29,4 +29,4 @@ Decorate `request_device_code` and `exchange_for_copilot_token` in `auth/copilot
 ### Architecture notes
 - Both functions use `async with httpx.AsyncClient()` context managers  decorate the outer function, not the inner HTTP call
 - `poll_for_access_token` excluded per research §3.5 (own retry loop)
-- See `docs/retry-decorators-research.md`
+- See `docs/research/retry-decorators.md`

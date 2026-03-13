@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. TDD with mocked PydanticAI agent. Test prompt construction, score thresholds, graceful failure when no project context. AC: Evaluator prompt includes content excerpt + project context; score thresholds respected; missing project gracefully handled (neutral score). Depends on #304.
+From #304 source-discovery-bookmarking.md. TDD with mocked PydanticAI agent. Test prompt construction, score thresholds, graceful failure when no project context. AC: Evaluator prompt includes content excerpt + project context; score thresholds respected; missing project gracefully handled (neutral score). Depends on #304.

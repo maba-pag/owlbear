@@ -15,4 +15,4 @@ class: standard
 ---
 
 DUPLICATE of #202 — stub with no AC, superseded by detailed version. See #202 for full AC.
-Update GraphStore: insert writes scope, list/query accepts scopes param. See docs/knowledge-scoping-research.md. Depends on #197, #198.
+Update GraphStore: insert writes scope, list/query accepts scopes param. See docs/research/knowledge-scoping.md. Depends on #197, #198.

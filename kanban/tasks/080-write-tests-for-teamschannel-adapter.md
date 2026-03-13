@@ -19,7 +19,7 @@ block_reason: 'Blocked on #77 — Azure AD app registration not possible (IT adm
 class: standard
 ---
 
-Unit tests with mocked Graph client (send, receive, connect, disconnect). Test polling logic, message deduplication, auth token refresh. See docs/teams-integration-research.md.
+Unit tests with mocked Graph client (send, receive, connect, disconnect). Test polling logic, message deduplication, auth token refresh. See docs/research/teams-integration.md.
 
 [[2026-02-27]] Fri 01:38
 CLOSED: Teams path abandoned. Replaced by Slack tasks.

@@ -29,4 +29,4 @@ AC:
 - [ ] Thread-safe: threading.Lock around timer reset and model access in _ensure_model()
 
 Keep in BgeM3EmbeddingProvider (KISS, no separate ModelManager).
-See docs/bge-m3-integration-research.md section 3.8
+See docs/research/bge-m3-integration.md section 3.8

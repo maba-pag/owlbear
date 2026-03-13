@@ -19,7 +19,7 @@ class: standard
 
 ## Context
 The main assembly layer deliverable. Procedural bootstrap() wires all unwired interactions.
-See docs/bootstrap-assembly-research.md S3.3 for full design.
+See docs/research/bootstrap-assembly.md S3.3 for full design.
 Current state: bearclaw chat wires ~40%% (hooks: 1/6, toolsets: 4/7, no MCP, no AgentRegistry).
 bearclaw run wires ~10%% (no hooks, no toolsets, no MCP).
 

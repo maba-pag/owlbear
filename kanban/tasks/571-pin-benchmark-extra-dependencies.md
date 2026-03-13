@@ -13,4 +13,10 @@ tags:
 class: standard
 ---
 
-F-15: benchmark = ['beir', 'ranx'] has no version specifiers. Unpinned deps can break CI. Add minimum versions. AC: beir>=2.0.0, ranx>=0.3 or similar. See docs/config-dependency-audit.md.
+F-15: benchmark = ['beir', 'ranx'] has no version specifiers. Unpinned deps can break CI. See docs/config-dependency-audit.md.
+
+## AC
+
+- [ ] beir has minimum version specifier (e.g. beir>=2.0.0)
+- [ ] ranx has minimum version specifier (e.g. ranx>=0.3)
+- [ ] uv lock resolves successfully

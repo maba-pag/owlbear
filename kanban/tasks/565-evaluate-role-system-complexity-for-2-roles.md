@@ -13,4 +13,8 @@ tags:
 class: standard
 ---
 
-YAGNI-03: Full infrastructure (AgentRole enum, RolePolicy, apply_role_policy, 2 policies) to express: validators cant use write_file and create_file. 277 LOC for a 2-element frozenset. Research complete: recommend SIMPLIFY (.80 confidence). Replace with inline toolset.filtered() per PydanticAI idiom. See docs/role-system-complexity-research.md. AC: decision documented.
+YAGNI-03: Full infrastructure (AgentRole enum, RolePolicy, apply_role_policy, 2 policies) to express: validators cant use write_file and create_file. 277 LOC for a 2-element frozenset. Research complete: recommend SIMPLIFY (.80 confidence). Replace with inline toolset.filtered() per PydanticAI idiom. See docs/research/role-system-complexity.md.
+
+## AC
+
+- [x] Decision documented: SIMPLIFY recommended

@@ -18,7 +18,7 @@ class: standard
 ---
 
 Test-first companion for the RetrospectiveHook implementation (#645). Write failing tests that describe the target interface before any production code exists.
-See docs/retrospective-learning-hook-research.md for full design.
+See docs/research/retrospective-learning-hook.md for full design.
 
 ## AC
 

@@ -18,7 +18,7 @@ class: standard
 **Source:** https://github.com/nWave-ai/nWave (MIT)
 Analyzed for multi-agent delegation, orchestration patterns, and task execution logic.
 
-**Findings:** See docs/nwave-research.md
+**Findings:** See docs/research/nwave.md
 
 **Key patterns identified:**
 - P1: Rigor Profile System (.85) - configurable quality-vs-speed profiles per task

@@ -17,7 +17,7 @@ class: standard
 
 ## Replace raw exception strings with error_to_user_message()
 
-Mechanical replacement at all HIGH/MEDIUM risk call sites identified in docs/error-message-sanitization-research.md section 3.1.
+Mechanical replacement at all HIGH/MEDIUM risk call sites identified in docs/research/error-message-sanitization.md section 3.1.
 
 ### Acceptance Criteria
 

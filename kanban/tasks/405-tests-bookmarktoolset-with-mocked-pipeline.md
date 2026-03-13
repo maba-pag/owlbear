@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. TDD for agent tool wrappers with mocked BookmarkPipeline. Test output formatting for bookmark_source and list_bookmarks. AC: Tool wrappers tested; output formatting verified; error handling tested. Depends on #304.
+From #304 source-discovery-bookmarking.md. TDD for agent tool wrappers with mocked BookmarkPipeline. Test output formatting for bookmark_source and list_bookmarks. AC: Tool wrappers tested; output formatting verified; error handling tested. Depends on #304.

@@ -36,7 +36,7 @@ Replace the 3 existing copy-pasted _safe_path implementations:
 - [ ] Module is a leaf — no imports from owlbear.core, owlbear.tools, owlbear.memory, owlbear.agents
 - [ ] ruff clean
 
-See docs/knowledge-intake-path-sandboxing-research.md section 3.3.
+See docs/research/knowledge-intake-path-sandboxing.md section 3.3.
 
 [[2026-03-08]] Sun 23:50
 Wave 1, agent: auditor

@@ -16,7 +16,7 @@ block_reason: 'Duplicate of #640  close or archive'
 class: standard
 ---
 
-SUPERSEDED by #640 (archived). All 8 unit-test AC items already exist in tests/test_heartbeat.py (14 tests, all passing). AC item 9 (test_heartbeat_disabled_config_skips_launch) is a daemon-integration test  see docs/heartbeat-tests-research.md. Duplicate discovered during architect review.
+SUPERSEDED by #640 (archived). All 8 unit-test AC items already exist in tests/test_heartbeat.py (14 tests, all passing). AC item 9 (test_heartbeat_disabled_config_skips_launch) is a daemon-integration test  see docs/research/heartbeat-tests.md. Duplicate discovered during architect review.
 
 [[2026-03-08]] Sun 23:57
 Wave 1, agent: auditor

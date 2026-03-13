@@ -24,4 +24,4 @@ AC:
 - [ ] Tests: verify all 4 tables cleaned after delete, verify Qdrant points removed, verify no orphan rows
 
 Note: QdrantVectorStore.delete_by_document_id() already exists (see qdrant.py).
-See docs/content-hashing-research.md
+See docs/research/content-hashing.md

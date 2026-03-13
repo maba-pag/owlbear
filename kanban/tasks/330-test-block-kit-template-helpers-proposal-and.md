@@ -23,4 +23,4 @@ class: standard
 - [ ] Test edge cases: empty options list, long descriptions (>3000 chars truncated), special chars escaped
 - [ ] Pure function tests — no Slack API mocking needed
 
-See docs/slack-rich-messaging-research.md S3.3
+See docs/research/slack-rich-messaging.md S3.3

@@ -18,7 +18,7 @@ Implement HeartbeatRunner: an asyncio task that runs alongside the daemon receiv
 
 Integration: starts as a sibling coroutine in run_daemon(), shares the agent and shutdown_event. Does NOT require a new daemon entrypoint. Starts regardless of autonomous_mode — guarded only by heartbeat_enabled config.
 
-See docs/openclaw-ecosystem-research.md S3a, S4. See docs/heartbeat-runner-research.md.
+See docs/research/openclaw-ecosystem.md S3a, S4. See docs/research/heartbeat-runner.md.
 
 depends_on: #640
 

@@ -13,7 +13,7 @@ tags:
 class: standard
 ---
 
-Research complete. See docs/docstring-style-research.md.
+Research complete. See docs/research/docstring-style.md.
 
 Findings:
 - Google-style is 70%% of existing sections (113 Args: vs 46 Parameters)

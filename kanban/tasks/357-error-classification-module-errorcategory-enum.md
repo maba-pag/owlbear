@@ -60,4 +60,4 @@ Pure function (~30 LOC). isinstance-based classification:
 
 - Subsumes daemon.py _is_auth_error() — daemon will use classify_error in #360
 - Imported by #358, #359, #360, #363
-- See docs/error-recovery-research.md section 3.1
+- See docs/research/error-recovery.md section 3.1

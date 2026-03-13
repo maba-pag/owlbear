@@ -27,4 +27,4 @@ Write test files first (TDD) — these define the contracts for all usage tracki
 - [ ] All tests use mock data (MockRunUsage, mock JSONL files via tmp_path), no live API calls
 - [ ] Each test file imports from the target module path (e.g., `from owlbear.memory.usage import UsageRecord`) — these imports will fail until implementation tasks are done (red phase)
 
-See docs/token-usage-tracking-research.md for data model and API contracts.
+See docs/research/token-usage-tracking.md for data model and API contracts.

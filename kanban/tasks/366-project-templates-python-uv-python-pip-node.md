@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #303 project-workspace-research.md. Hardcoded template functions: _scaffold_python_uv() (pyproject.toml uv-style, src/{slug}/, tests/, .python-version), _scaffold_python_pip() (pyproject.toml pip-style, requirements.txt), _scaffold_node() (package.json, src/, tsconfig.json). All share .gitignore + README + kanban from bare. AC: create_project(name, 'python-uv') produces working Python project with uv layout; same for python-pip and node templates. Depends on #303, #365.
+From #303 project-workspace.md. Hardcoded template functions: _scaffold_python_uv() (pyproject.toml uv-style, src/{slug}/, tests/, .python-version), _scaffold_python_pip() (pyproject.toml pip-style, requirements.txt), _scaffold_node() (package.json, src/, tsconfig.json). All share .gitignore + README + kanban from bare. AC: create_project(name, 'python-uv') produces working Python project with uv layout; same for python-pip and node templates. Depends on #303, #365.

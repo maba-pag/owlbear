@@ -27,4 +27,4 @@ AC:
 - [ ] Document overlap with native GitLocalToolset in code comment
 
 Depends on: #227 (test task), #168
-See docs/mcp-servers-research.md, evaluation: .80 Consider
+See docs/research/mcp-servers.md, evaluation: .80 Consider

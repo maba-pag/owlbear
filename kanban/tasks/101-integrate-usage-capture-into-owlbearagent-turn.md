@@ -38,4 +38,4 @@ Capture result.usage() after Agent.run() and pass to UsageTracker. This is the w
 - [ ] No new dependencies beyond what #100, #102, #103 provide
 
 Depends on: #100, #102, #103 (model, cost calc, and multipliers must exist)
-See docs/token-usage-tracking-research.md section 3.5
+See docs/research/token-usage-tracking.md section 3.5

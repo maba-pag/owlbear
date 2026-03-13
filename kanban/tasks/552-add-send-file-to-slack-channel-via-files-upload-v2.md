@@ -12,7 +12,7 @@ tags:
 class: standard
 ---
 
-INT-17: SlackChannel missing send_file. ScreenshotService.deliver already works via send_image (tier 1), but direct send_file callers skip to send fallback. Add send_file as thin delegate to send_image(path, caption=caption or path.name). Requires files:write scope (already granted). ~5 LOC impl + ~15 LOC tests. See docs/slack-send-file-research.md
+INT-17: SlackChannel missing send_file. ScreenshotService.deliver already works via send_image (tier 1), but direct send_file callers skip to send fallback. Add send_file as thin delegate to send_image(path, caption=caption or path.name). Requires files:write scope (already granted). ~5 LOC impl + ~15 LOC tests. See docs/research/slack-send-file.md
 
 AC:
 - [ ] SlackChannel.send_file(path, *, caption) exists with same signature as CLIChannel

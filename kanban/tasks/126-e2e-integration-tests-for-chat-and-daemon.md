@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Prove the full P7 stack works end-to-end: OwlBearAgent + real toolsets + FunctionModel + SessionStore. Phase gate tests for P7. See docs/e2e-integration-tests-research.md.
+Prove the full P7 stack works end-to-end: OwlBearAgent + real toolsets + FunctionModel + SessionStore. Phase gate tests for P7. See docs/research/e2e-integration-tests.md.
 
 ## AC
 - [ ] File: tests/test_e2e_chat.py

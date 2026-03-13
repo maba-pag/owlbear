@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-From #254 source-registry-research.md. Add knowledge_sources table to schema.py as schema v6.
+From #254 source-registry.md. Add knowledge_sources table to schema.py as schema v6.
 
 NOTE: Current schema is v5 (chunk_id on entities, from task #371). This task bumps to v6.
 

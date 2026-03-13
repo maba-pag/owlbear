@@ -27,4 +27,4 @@ Add optional dependency group `[knowledge]` to pyproject.toml. Follows existing 
 - [ ] Existing tests (`uv run pytest tests/ -m 'not api'`) still pass
 - [ ] No changes to any file other than pyproject.toml
 
-See docs/knowledge-graph-research.md section 4
+See docs/research/knowledge-graph.md section 4

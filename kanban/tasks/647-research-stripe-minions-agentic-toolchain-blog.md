@@ -25,12 +25,12 @@ AC:
 - [ ] Read both blog posts and summarize key architectural patterns
 - [ ] Identify patterns we already use and note any gaps
 - [ ] Identify new patterns/techniques worth adopting
-- [ ] Produce a research doc at docs/stripe-minions-research.md
+- [ ] Produce a research doc at docs/research/stripe-minions.md
 - [ ] Create follow-up kanban tasks for any actionable findings
 
 [[2026-03-09]] Mon 00:07
 ## Research
-See docs/stripe-minions-research.md for full findings.
+See docs/research/stripe-minions.md for full findings.
 
 Key takeaways:
 - OwlBear's orchestrator+planner already implements Stripe's 'blueprint' pattern (hybrid workflow+agent)
@@ -58,10 +58,10 @@ See docs/scratch/647-reviewer.md for full evidence.
 ### AC Compliance
 | AC Line | Evidence | Status |
 |------|------|------|
-| Read both blog posts, summarize patterns | docs/stripe-minions-research.md S3: 6 patterns | PASS |
+| Read both blog posts, summarize patterns | docs/research/stripe-minions.md S3: 6 patterns | PASS |
 | Identify patterns we use + gaps | S4 comparison table, 2 gaps identified | PASS |
 | Identify new patterns worth adopting | S5 recommends pre-hydration (.80) + lint gate (.75) | PASS |
-| Produce research doc | docs/stripe-minions-research.md exists, well-structured | PASS |
+| Produce research doc | docs/research/stripe-minions.md exists, well-structured | PASS |
 | Create follow-up kanban tasks | Commands listed in S6 and task body but NEVER EXECUTED. grep kanban/tasks/*.md finds 0 matching tasks. | FAIL |
 
 ### Rejection Details
@@ -93,7 +93,7 @@ All 5 AC lines now MET. AC5 fix verified: #703 (backlog), #704 (backlog), #705 (
 | AC1: Read both posts, summarize patterns | S2 lists both URLs; S3 describes 6 patterns (3a-3f) | N/A (research) | PASS |
 | AC2: Identify patterns we use + gaps | S4 comparison table, 2 gaps marked (lint node, pre-hydration) | N/A (research) | PASS |
 | AC3: New patterns worth adopting | S5 recommends pre-hydration (.80) + lint gate (.75), YAGNI items excluded | N/A (research) | PASS |
-| AC4: Produce research doc | docs/stripe-minions-research.md exists, 200 lines, well-structured per research-docs.instructions.md | N/A (research) | PASS |
+| AC4: Produce research doc | docs/research/stripe-minions.md exists, 200 lines, well-structured per research-docs.instructions.md | N/A (research) | PASS |
 | AC5: Create follow-up kanban tasks | #703 (backlog), #704 (backlog), #705 (ideation) verified on board via kanban show | N/A (research) | PASS |
 
 ### Test Quality
@@ -122,7 +122,7 @@ N/A  research task, no code changes.
 | AC1: Read both posts, summarize patterns | S2 lists both URLs; S3 describes 6 patterns (3a-3f) | N/A (research) | PASS |
 | AC2: Identify patterns we use + gaps | S4 comparison table, 2 gaps marked (lint node, pre-hydration) | N/A (research) | PASS |
 | AC3: New patterns worth adopting | S5 recommends pre-hydration (.80) + lint gate (.75), YAGNI items excluded | N/A (research) | PASS |
-| AC4: Produce research doc | docs/stripe-minions-research.md exists, 200 lines, well-structured per research-docs.instructions.md | N/A (research) | PASS |
+| AC4: Produce research doc | docs/research/stripe-minions.md exists, 200 lines, well-structured per research-docs.instructions.md | N/A (research) | PASS |
 | AC5: Create follow-up kanban tasks | #703 (backlog), #704 (backlog), #705 (ideation) verified on board via kanban show | N/A (research) | PASS |
 
 ### Test Quality
@@ -157,7 +157,7 @@ N/A  research task, no code changes.
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources.md | No | N/A | Already attributed at line 1232 (added by prior agent) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/stripe-minions-research.md exists, linked in task body; follow-up tasks #703, #704, #705 verified on board |
+| 5 | Research doc linked | Yes | Pass | docs/research/stripe-minions.md exists, linked in task body; follow-up tasks #703, #704, #705 verified on board |
 | 6 | No impact | -- | -- | Item 5 applies |
 
 ### Files Updated
@@ -174,7 +174,7 @@ N/A  research task, no code changes.
 | AC1: Read both posts, summarize patterns | S2 lists both URLs; S3 describes 6 patterns (3a-3f) with OwlBear equivalents and gaps | PASS |
 | AC2: Identify patterns we use + gaps | S4 comparison table, 9 rows, 2 gaps marked (lint node, pre-hydration) | PASS |
 | AC3: New patterns worth adopting | S5 recommends pre-hydration (.80) + lint gate (.75); YAGNI items excluded | PASS |
-| AC4: Produce research doc | docs/stripe-minions-research.md exists, 136 lines, well-structured per research-docs.instructions.md | PASS |
+| AC4: Produce research doc | docs/research/stripe-minions.md exists, 136 lines, well-structured per research-docs.instructions.md | PASS |
 | AC5: Create follow-up kanban tasks | #703 (backlog), #704 (backlog), #705 (ideation) verified on board with AC and back-references | PASS |
 
 ### Test Results

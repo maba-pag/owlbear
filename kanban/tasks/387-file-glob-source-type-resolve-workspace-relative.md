@@ -13,4 +13,4 @@ tags:
 class: standard
 ---
 
-From #254 source-registry-research.md. Implement file_glob source type in RefreshOrchestrator: resolve workspace-relative globs via pathlib.Path.glob(), ingest(path) per matched file. AC: file_glob source type resolves patterns like 'docs/**/*.md' and ingests all matching files; respects delta detection. Depends on #254, #384.
+From #254 source-registry.md. Implement file_glob source type in RefreshOrchestrator: resolve workspace-relative globs via pathlib.Path.glob(), ingest(path) per matched file. AC: file_glob source type resolves patterns like 'docs/**/*.md' and ingests all matching files; respects delta detection. Depends on #254, #384.

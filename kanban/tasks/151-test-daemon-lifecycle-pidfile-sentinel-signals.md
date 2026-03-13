@@ -35,4 +35,4 @@ TDD test task for #124 (bearclaw run daemon).
 - Stale detection: os.kill(pid, 0) cross-platform
 - Sentinel file: config_dir/owlbear.stop — daemon checks each loop iteration
 - signal.signal(SIGINT/SIGTERM, handler) — NOT loop.add_signal_handler() (Windows compat)
-- See docs/daemon-entrypoint-research.md for full design
+- See docs/research/daemon-entrypoint.md for full design

@@ -13,4 +13,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. Orchestrates: web_read(url) -> extracted text -> dedup check (URL already bookmarked?) -> SourceEvaluator.evaluate() -> if score >= ingest_threshold (default 0.7): IngestPipeline.ingest() -> INSERT bookmark. AC: Full pipeline from URL to stored bookmark; high-score pages auto-ingested; dedup prevents duplicate bookmarks; returns summary to caller. Depends on #304, #398, #399.
+From #304 source-discovery-bookmarking.md. Orchestrates: web_read(url) -> extracted text -> dedup check (URL already bookmarked?) -> SourceEvaluator.evaluate() -> if score >= ingest_threshold (default 0.7): IngestPipeline.ingest() -> INSERT bookmark. AC: Full pipeline from URL to stored bookmark; high-score pages auto-ingested; dedup prevents duplicate bookmarks; returns summary to caller. Depends on #304, #398, #399.

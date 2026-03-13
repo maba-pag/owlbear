@@ -37,7 +37,7 @@ After:  `async def read_file(path: str | Path, *, workspace_root: Path) -> Intak
 - [ ] New tests: traversal rejected, absolute outside rejected, null byte rejected, valid path accepted
 - [ ] ruff clean
 
-See docs/knowledge-intake-path-sandboxing-research.md section 3.4.
+See docs/research/knowledge-intake-path-sandboxing.md section 3.4.
 
 [[2026-03-08]] Sun 23:50
 Wave 1, agent: auditor

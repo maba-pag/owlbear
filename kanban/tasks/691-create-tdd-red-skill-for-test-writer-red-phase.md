@@ -18,7 +18,7 @@ class: standard
 
 ## Context
 
-Split from #683. Depends on #690 (test-writer agent -- done). See docs/test-writer-agent-research.md.
+Split from #683. Depends on #690 (test-writer agent -- done). See docs/research/test-writer-agent.md.
 
 The tdd-red skill is the test-writer's workflow -- the RED phase of TDD. It mirrors the structure of the existing `tdd-workflow` skill but focuses exclusively on writing failing tests from AC.
 
@@ -74,7 +74,7 @@ N/A  documentation/skill file task, no Python tests to evaluate.
 | 2 | Docstrings complete | No | N/A | No .py files changed -- skill file only |
 | 3 | sources.md | No | N/A | No external patterns adopted -- mirrors existing tdd-workflow skill structure |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | Task context references docs/test-writer-agent-research.md which exists |
+| 5 | Research doc linked | Yes | Pass | Task context references docs/research/test-writer-agent.md which exists |
 | 6 | Scratch files cleaned | Yes | Pass | No docs/scratch/691-* files found |
 
 ### Files Updated

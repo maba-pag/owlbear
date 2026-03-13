@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 Adopt nanobot two-layer memory consolidation: LLM summarizes old turns -> MEMORY.md (always in context) + HISTORY.md (grep-searchable log).
-See docs/bootstrap-assembly-research.md S3.5 and nanobot agent/memory.py.
+See docs/research/bootstrap-assembly.md S3.5 and nanobot agent/memory.py.
 NOT on the bootstrap critical path — this is a follow-up enhancement.
 
 ## Acceptance Criteria

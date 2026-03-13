@@ -13,4 +13,8 @@ tags:
 class: standard
 ---
 
-YAGNI-01 evaluation complete. Decision: DEFER. The _register_tools ceremony is harmless -- no bugs, consistent pattern, PydanticAI native API. Building a custom declarative layer (decorator or ClassVar) would add 30-80 LOC of framework code to save ~3 LOC per toolset, violating KISS/YAGNI. If PydanticAI adds class-level declarative registration, adopt it then. See docs/declarative-tool-registration-research.md.
+YAGNI-01 evaluation complete. Decision: DEFER. The _register_tools ceremony is harmless -- no bugs, consistent pattern, PydanticAI native API. Building a custom declarative layer (decorator or ClassVar) would add 30-80 LOC of framework code to save ~3 LOC per toolset, violating KISS/YAGNI. If PydanticAI adds class-level declarative registration, adopt it then. See docs/research/declarative-tool-registration.md.
+
+## AC
+
+- [x] Decision documented: DEFER

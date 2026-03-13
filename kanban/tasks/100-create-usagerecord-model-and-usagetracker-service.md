@@ -45,4 +45,4 @@ Pydantic model for usage records + JSONL-based tracker service. Foundation for a
 - [ ] Follow SessionStore pattern: TypeAdapter serialization, append-only JSONL, Path-based constructor
 
 Depends on: #105 (test contracts written first — TDD)
-See docs/token-usage-tracking-research.md sections 3.1, 3.3
+See docs/research/token-usage-tracking.md sections 3.1, 3.3

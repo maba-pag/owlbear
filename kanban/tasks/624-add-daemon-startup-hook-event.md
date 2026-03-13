@@ -15,7 +15,7 @@ class: standard
 
 Add `DAEMON_STARTUP` to `HookEvent` enum and emit it in `run_daemon()` via `agent.hooks` after signal handler installation and before the receive/poll loop starts. This enables bootstrap hooks (boot messages, health checks, metric zeroing) to run at startup.
 
-See `docs/daemon-startup-hook-research.md` for full analysis.
+See `docs/research/daemon-startup-hook.md` for full analysis.
 
 ## Acceptance Criteria
 

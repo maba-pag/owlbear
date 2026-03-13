@@ -19,7 +19,7 @@ class: standard
 ## Context
 OwlBearAgent.__init__ currently takes model: str. Must accept str | Model for Copilot integration.
 PydanticAI Agent already has a model.setter property that allows changing the model without rebuilding.
-See docs/bootstrap-assembly-research.md S3.3 and S3.6.
+See docs/research/bootstrap-assembly.md S3.3 and S3.6.
 
 ## Acceptance Criteria
 - [ ] Change OwlBearAgent.__init__ model parameter type from str to str | Model (import from pydantic_ai.models)

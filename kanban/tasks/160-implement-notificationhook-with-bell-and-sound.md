@@ -38,4 +38,4 @@ Implement NotificationHook and initial backends (bell, winsound).
 - Follows existing hook pattern: __call__ + register (see context_hook.py, lint_hook.py)
 - MVP backends: bell (zero deps), sound (stdlib winsound)
 - Future backends: toast (windows-toasts), slack, tts — separate tasks
-- Research: docs/notification-hook-research.md
+- Research: docs/research/notification-hook.md

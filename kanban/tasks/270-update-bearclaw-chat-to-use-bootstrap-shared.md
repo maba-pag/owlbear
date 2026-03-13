@@ -19,7 +19,7 @@ class: standard
 ## Context
 
 Replace manual `_chat_async` wiring with shared `bootstrap()`. Eliminates duplicated assembly code.
-See docs/bootstrap-assembly-research.md S3.3.
+See docs/research/bootstrap-assembly.md S3.3.
 
 ## Acceptance Criteria
 

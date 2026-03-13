@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-From #254 source-registry-research.md. Typer CLI subcommands for managing knowledge sources.
+From #254 source-registry.md. Typer CLI subcommands for managing knowledge sources.
 
 ## Location
 - src/bearclaw/cli.py: knowledge_source_app Typer group, registered via app.add_typer

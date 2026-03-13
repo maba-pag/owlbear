@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Hook (~40 LOC) registers on ON_ERROR event. If browser toolset available and has active page, captures + saves screenshot. Controlled by screenshot_mode config. Wrapped in try/except to handle bad browser state. AC: On tool/turn error with active browser, screenshot auto-captured to .owlbear/screenshots/; no-op when browser unavailable; respects screenshot_mode setting. Depends on #302, #391.
+From #302 screenshot-visual-feedback.md. Hook (~40 LOC) registers on ON_ERROR event. If browser toolset available and has active page, captures + saves screenshot. Controlled by screenshot_mode config. Wrapped in try/except to handle bad browser state. AC: On tool/turn error with active browser, screenshot auto-captured to .owlbear/screenshots/; no-op when browser unavailable; respects screenshot_mode setting. Depends on #302, #391.

@@ -19,7 +19,7 @@ DRY-10/F-05: ingest() reimplements ~55 lines of pipeline steps identical to _ing
 
 ## Research Findings (2026-03-06)
 
-See docs/ingest-dry-refactor-research.md for full analysis.
+See docs/research/ingest-dry-refactor.md for full analysis.
 
 **Confirmed:** Steps 3-9 in ingest() (L308-362) are line-for-line identical to _ingest_from_intake() (L436-493). Only difference: ingest() error handler creates document_id if intake fails before one is assigned.
 

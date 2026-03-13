@@ -19,5 +19,5 @@ EdgeQuake tracks per-operation LLM costs. OwlBear has no cost visibility.
 1. Survey OwlBear LLM call sites.
 2. Evaluate token-counting + cost-accumulator patterns.
 3. Propose minimal cost tracker for httpx transport.
-4. Document in docs/research/llm-cost-tracking-research.md.
+4. Document in docs/research/llm-cost-tracking.md.
 5. Create follow-up implementation tasks if warranted.

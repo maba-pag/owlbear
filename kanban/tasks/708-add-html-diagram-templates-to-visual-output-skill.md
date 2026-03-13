@@ -17,7 +17,7 @@ class: standard
 
 Adapt 3 reference HTML templates from visual-explainer v0.6.3 (MIT): architecture overview, data table, Mermaid flowchart. Place in .github/skills/visual-output/templates/.
 Adaptation strategy: copy from source, update HTML comment headers to reference visual-output skill only -- keep all CSS, JS, and example content intact (research Approach A).
-See docs/research/html-diagram-templates-research.md for full analysis.
+See docs/research/html-diagram-templates.md for full analysis.
 
 AC:
 - [ ] .github/skills/visual-output/templates/ directory exists with exactly 3 files: architecture.html, data-table.html, mermaid-flowchart.html
@@ -129,7 +129,7 @@ Non-implementation task (static HTML templates, tagged docs/scope:copilot). Arch
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified. |
 | 3 | sources/overview.md | Yes | Pass | Entry at line 35 covers template adoption (nicobailon/visual-explainer templates/, MIT, correct target path). Already added by researcher  no duplication needed. |
 | 4 | README.md | No | N/A | No CLI changes. |
-| 5 | Research doc linked | Yes | Pass | docs/research/html-diagram-templates-research.md exists and is linked in task body. |
+| 5 | Research doc linked | Yes | Pass | docs/research/html-diagram-templates.md exists and is linked in task body. |
 | 6 | No impact | -- | -- | Items 3 and 5 apply; items 1, 2, 4 do not. |
 
 ### Files Updated

@@ -26,4 +26,4 @@ AC:
 - [ ] ~5 LOC change
 
 Depends on: #230 (test task)
-See docs/agent-observability-research.md
+See docs/research/agent-observability.md

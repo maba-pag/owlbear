@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Extend run_daemon() with a poll-dispatch-reconcile loop that autonomously picks up kanban tasks. See docs/poll-dispatch-reconcile-research.md for full analysis.
+Extend run_daemon() with a poll-dispatch-reconcile loop that autonomously picks up kanban tasks. See docs/research/poll-dispatch-reconcile.md for full analysis.
 
 AC:
 

@@ -11,7 +11,7 @@ tags:
 class: standard
 ---
 
-Pattern: cache raw HTML by URL hash, separate from extracted content. Enables re-extraction without re-crawling. Inspired by botasaurus two-layer cache (see docs/research/botasaurus-research.md S4.4). AC:
+Pattern: cache raw HTML by URL hash, separate from extracted content. Enables re-extraction without re-crawling. Inspired by botasaurus two-layer cache (see docs/research/botasaurus.md S4.4). AC:
 - [ ] Cache raw HTML to disk keyed by normalized URL hash
 - [ ] WebCrawler checks cache before fetching
 - [ ] Cache TTL configurable via CrawlConfig

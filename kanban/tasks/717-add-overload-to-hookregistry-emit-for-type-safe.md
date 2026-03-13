@@ -27,7 +27,7 @@ class: standard
 ## Architecture Notes
 
 - Depends on #483 (TypedDict definitions)  archived
-- See docs/research/typed-hook-payloads-research.md section 5 (risk mitigation)
+- See docs/research/typed-hook-payloads.md section 5 (risk mitigation)
 - Uses  yping.Literal to discriminate HookEvent values in overload signatures
 - First @overload usage in codebase  establishes the pattern
 - QUESTION_PENDING has no TypedDict; use fallback overload (not a new TypedDict)
@@ -112,7 +112,7 @@ All 5 AC lines PASS. Confidence: .93. Verdict: PASS.
 | 2 | Docstrings complete | Yes | Pass | Module, HookRegistry class, and emit() method docstrings present and accurate |
 | 3 | sources/overview.md | No | N/A | Standard Python @overload pattern; no external inspiration |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/typed-hook-payloads-research.md exists; referenced in Architecture Notes |
+| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads.md exists; referenced in Architecture Notes |
 | 6 | No impact override | No | N/A | Items 2 and 5 apply |
 
 ### Files Updated

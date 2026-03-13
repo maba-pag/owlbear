@@ -21,11 +21,11 @@ AC:
 - [ ] Identify features relevant to OwlBear (context management, prompt engineering, mode switching, etc.)
 - [ ] Write trade-off analysis: effort vs value for each candidate feature
 - [ ] Create follow-up kanban tasks for approved additions
-- [ ] Write research doc to docs/research/claude-context-mode-research.md
+- [ ] Write research doc to docs/research/claude-context-mode.md
 
 [[2026-03-12]] Thu 08:53
 ## Research
-See docs/research/claude-context-mode-research.md for full findings.
+See docs/research/claude-context-mode.md for full findings.
 
 **Key findings:**
 - context-mode solves ephemeral chat bloat; OwlBear daemon already has persistent state  most features redundant
@@ -104,7 +104,7 @@ Non-implementation task (tagged research) - no tests applicable. Passing through
 ## Builder Notes
 - Research task (no code implementation)
 - Deliverables verified:
-  - docs/research/claude-context-mode-research.md: present, 5-section structure
+  - docs/research/claude-context-mode.md: present, 5-section structure
   - docs/sources/overview.md: attribution entry at L1409
   - Follow-up tasks: #762 (line-boundary truncation), #763 (soft-fail exit) at backlog
 - All 5 AC items satisfied per architecture review APPROVED verdict
@@ -122,11 +122,11 @@ Research task - all 5 AC lines verified with evidence. See task body for full co
 ### AC Compliance
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Clone repo + analyze architecture | docs/research/claude-context-mode-research.md S3a: 10-feature inventory | PASS |
+| Clone repo + analyze architecture | docs/research/claude-context-mode.md S3a: 10-feature inventory | PASS |
 | Identify features relevant to OwlBear | S3b: 11-dimension gap analysis table | PASS |
 | Trade-off analysis: effort vs value | S3c: 8-row matrix with confidence scores; S3d deeper eval of top 4 | PASS |
 | Create follow-up kanban tasks | #762 (truncation) and #763 (soft-fail exit) both at backlog with concrete AC | PASS |
-| Write research doc | docs/research/claude-context-mode-research.md present, 5 sections | PASS |
+| Write research doc | docs/research/claude-context-mode.md present, 5 sections | PASS |
 
 ### Additional Checks
 - Cloned repo cleaned up (docs/scratch/research/claude-context-mode absent)
@@ -145,7 +145,7 @@ Research task - all 5 AC lines verified with evidence. See task body for full co
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Attribution present at L1409-1413 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/claude-context-mode-research.md exists, linked in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/claude-context-mode.md exists, linked in task body |
 | 6 | No impact | -- | -- | Items 3,5 apply and are satisfied |
 
 ### Files Updated

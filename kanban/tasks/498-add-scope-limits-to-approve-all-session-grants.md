@@ -18,4 +18,4 @@ SEC-12: SPLIT by architect into 2 atomic tasks:
 - #655 Implement GrantRecord and scoped ApprovalSession
 - #656 Update ApprovalGateToolset to create scoped grants
 
-See docs/approval-scope-limits-research.md for full analysis.
+See docs/research/approval-scope-limits.md for full analysis.

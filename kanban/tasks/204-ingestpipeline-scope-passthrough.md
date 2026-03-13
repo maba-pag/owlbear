@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-ingest() and ingest_text() accept scope param, propagate to all stores. See docs/knowledge-scoping-research.md. Depends on #199, #200.
+ingest() and ingest_text() accept scope param, propagate to all stores. See docs/research/knowledge-scoping.md. Depends on #199, #200.

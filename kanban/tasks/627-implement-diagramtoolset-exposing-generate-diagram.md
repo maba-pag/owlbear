@@ -39,4 +39,4 @@ AC:
 Known issue: ScreenshotService.save() hardcodes .png extension. For SVG output the file content will be SVG but filename ends in .png. Accept this for now  it does not affect delivery or agent usage. A future task can refine save() to accept format hints.
 
 Pattern: follow VisualFeedbackToolset (src/owlbear/tools/visual_feedback.py) and FileToolset (src/owlbear/tools/filesystem.py) patterns.
-Ref: docs/visuals-diagrams-mcp-research.md section 4 Tier 1
+Ref: docs/research/visuals-diagrams-mcp.md section 4 Tier 1

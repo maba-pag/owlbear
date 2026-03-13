@@ -29,7 +29,7 @@ Delete the two dead knowledge modules and their tests. Neither module is importe
 
 ## Architecture Notes
 
-- **reranker.py** (79 LOC): Superseded by ColBERT max_sim in `QdrantVectorStore._prefetch_rescore_hybrid()`. Cross-encoder path was never wired in, costs ~3 GB RAM, 40-150x slower. See docs/colbert-vs-crossencoder-research.md.
+- **reranker.py** (79 LOC): Superseded by ColBERT max_sim in `QdrantVectorStore._prefetch_rescore_hybrid()`. Cross-encoder path was never wired in, costs ~3 GB RAM, 40-150x slower. See docs/research/colbert-vs-crossencoder.md.
 - **dedup.py** (131 LOC): Planned as ingest step 5 but never integrated. O(n^2) SequenceMatcher won't scale. If dedup is needed later, redesign with embedding similarity.
 - **Total removal**: 4 files, ~875 lines (209 src + 666 test). Recoverable from git history.
 - **No production imports**: grep confirms zero imports outside the modules' own test files.
@@ -39,5 +39,5 @@ Delete the two dead knowledge modules and their tests. Neither module is importe
 ## Sources
 
 - docs/integration-audit.md (INT-14)
-- docs/colbert-vs-crossencoder-research.md (#239, .80 confidence)
-- docs/knowledge-ingestion-research.md (step 5 never wired)
+- docs/research/colbert-vs-crossencoder.md (#239, .80 confidence)
+- docs/research/knowledge-ingestion.md (step 5 never wired)

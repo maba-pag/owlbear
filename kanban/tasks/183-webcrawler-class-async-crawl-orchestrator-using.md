@@ -19,7 +19,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/tools/browser/crawler.py | Test: tests/test_web_crawler.py | See docs/web-crawling-research.md S3.1, S3.6.
+Module: src/owlbear/tools/browser/crawler.py | Test: tests/test_web_crawler.py | See docs/research/web-crawling.md S3.1, S3.6.
 
 AC:
 - WebCrawler class accepting a BrowserManager instance

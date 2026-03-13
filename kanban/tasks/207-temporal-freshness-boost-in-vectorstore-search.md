@@ -29,4 +29,4 @@ AC:
 - [ ] Parse created_at ISO-8601 string to datetime for hour calculation
 
 Depends on: #224 (test task)
-See docs/temporal-memory-research.md
+See docs/research/temporal-memory.md

@@ -64,4 +64,4 @@ Patterns to follow:
 - @pytest.mark.asyncio on all async tests (strict mode)
 - patch('owlbear.tools.diagram.service.httpx.AsyncClient', ...) for mock injection
 
-Ref: docs/diagram-service-kroki-research.md (19 test cases, section 4)
+Ref: docs/research/diagram-service-kroki.md (19 test cases, section 4)

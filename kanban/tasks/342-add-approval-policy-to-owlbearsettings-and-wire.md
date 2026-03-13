@@ -27,4 +27,4 @@ class: standard
 - [ ] Integration test: bootstrap creates approval-wrapped toolsets when policy is non-empty
 - [ ] When approval_policy is empty: no ApprovalGateToolset wrapping (transparent)
 
-See docs/approval-gates-research.md S3.5, S4
+See docs/research/approval-gates.md S3.5, S4

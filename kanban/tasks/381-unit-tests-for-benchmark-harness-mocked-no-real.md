@@ -17,7 +17,7 @@ class: standard
 
 TDD test task for benchmark harness utilities (#377-380). Write tests BEFORE implementations.
 
-From docs/hybrid-search-benchmark-research.md §3.5 (design) and §5.6 (follow-up).
+From docs/research/hybrid-search-benchmark.md §3.5 (design) and §5.6 (follow-up).
 
 ## Acceptance Criteria
 

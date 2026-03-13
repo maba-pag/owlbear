@@ -13,4 +13,14 @@ tags:
 class: standard
 ---
 
-When OwlBear reaches concurrent multi-agent orchestration, evaluate building a bearclaw dashboard command using Textual. Track: live task progress, agent states, usage metrics, knowledge source status in split-pane TUI.\n\nDeferred per YAGNI analysis in docs/workflow-dashboards-devtools-research.md S3.5.\n\nAC:\n- [ ] Prototype bearclaw dashboard with Textual\n- [ ] Layout: task panel + status panel + usage panel\n- [ ] Live updates via daemon event stream\n- [ ] Evaluate LOC cost vs value\n- [ ] Decision: adopt or reject with rationale
+When OwlBear reaches concurrent multi-agent orchestration, evaluate building a bearclaw dashboard command using Textual. Track: live task progress, agent states, usage metrics, knowledge source status in split-pane TUI.
+
+Deferred per YAGNI analysis in docs/research/workflow-dashboards-devtools.md S3.5.
+
+## AC
+
+- [ ] Prototype bearclaw dashboard with Textual
+- [ ] Layout: task panel + status panel + usage panel
+- [ ] Live updates via daemon event stream
+- [ ] Evaluate LOC cost vs value
+- [ ] Decision: adopt or reject with rationale

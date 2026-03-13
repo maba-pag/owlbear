@@ -29,4 +29,4 @@ Create `src/owlbear/core/retry.py` exporting:
 ### Architecture notes
 - Reuses `classify_error` from `core/errors.py` to stay DRY with `ErrorCategory`
 - Module is pure infrastructure  no side effects, no I/O beyond logging
-- See `docs/retry-decorators-research.md` §4
+- See `docs/research/retry-decorators.md` §4

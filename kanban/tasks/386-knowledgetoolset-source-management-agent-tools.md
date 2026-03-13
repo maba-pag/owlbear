@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-From #254 source-registry-research.md. FunctionToolset exposing source management to agents.
+From #254 source-registry.md. FunctionToolset exposing source management to agents.
 
 ## Location
 - src/owlbear/tools/knowledge_source.py (new file, follows KnowledgeToolset pattern)

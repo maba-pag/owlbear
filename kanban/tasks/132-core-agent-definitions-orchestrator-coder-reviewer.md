@@ -18,7 +18,7 @@ class: standard
 
 Define the initial set of agent 'souls' as markdown files. These are configuration, not code — the registry instantiates them.
 
-Research: docs/core-agent-definitions-research.md
+Research: docs/research/core-agent-definitions.md
 Depends on: #128 (AgentDefinition — done), #129 (AgentRegistry — done), #162 (VALIDATOR_POLICY fix — todo)
 
 ## AC

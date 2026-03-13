@@ -26,4 +26,4 @@ AC:
 - [ ] Mock BGEM3FlagModel (no real model loading)
 
 Test file: tests/test_embedding_idle_timeout.py
-See docs/bge-m3-integration-research.md section 3.8
+See docs/research/bge-m3-integration.md section 3.8

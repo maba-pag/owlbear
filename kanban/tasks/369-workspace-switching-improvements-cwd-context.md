@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #303 project-workspace-research.md. Fix switch_project so it also updates ContextManager.workspace_root and any toolsets holding workspace_root reference. CWD change for subprocess calls. Separate concern from scaffolding. AC: After switch_project, ContextManager uses new workspace root; subprocess-based tools operate in new workspace; session path updated. Depends on #303.
+From #303 project-workspace.md. Fix switch_project so it also updates ContextManager.workspace_root and any toolsets holding workspace_root reference. CWD change for subprocess calls. Separate concern from scaffolding. AC: After switch_project, ContextManager uses new workspace root; subprocess-based tools operate in new workspace; session path updated. Depends on #303.

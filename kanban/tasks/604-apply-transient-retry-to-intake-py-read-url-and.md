@@ -31,4 +31,4 @@ Decorate `intake.read_url` with `TRANSIENT_RETRY`. In `web_search._web_read`, ex
 ### Architecture notes
 - `_web_read` is tricky because it catches exceptions and returns strings. The retry must wrap the HTTP call only, not the catch block.
 - Pattern: inner decorated function raises on failure  outer function catches and returns error string
-- See `docs/retry-decorators-research.md` §3.6
+- See `docs/research/retry-decorators.md` §3.6

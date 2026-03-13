@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Forward PydanticAI history_processors param to inner Agent for native context management. Research: docs/pydantic-ai-multi-agent-research.md section 3.7.
+Forward PydanticAI history_processors param to inner Agent for native context management. Research: docs/research/pydantic-ai-multi-agent.md section 3.7.
 
 ## AC
 - [ ] Add history_processors parameter to OwlBearAgent.__init__: Sequence[HistoryProcessor] | None = None

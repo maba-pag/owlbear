@@ -38,12 +38,12 @@ Assess integration paths for the always-on-memory-agent pattern into OwlBear's e
 - [ ] Integration design sketch (where it fits in src/owlbear/ module structure)
 - [ ] Impact assessment on existing RAG pipeline and graph queries
 - [ ] Decision: with-RAG vs without-RAG vs hybrid approach
-- [ ] Research doc at docs/always-on-memory-integration-research.md
+- [ ] Research doc at docs/research/always-on-memory-integration.md
 - [ ] Follow-up kanban tasks for implementation if recommended
 
 [[2026-03-09]] Mon 23:12
 ## Research
-doc: docs/research/always-on-memory-integration-research.md
+doc: docs/research/always-on-memory-integration.md
 
 ### Key Findings
 - Component mapping complete: 11 GCP components mapped to OwlBear equivalents
@@ -61,7 +61,7 @@ kanban\kanban-md.exe create "Implement ConsolidationService (feature-flagged)" -
 
 [[2026-03-09]] Mon 23:12
 ## Research
-doc: docs/research/always-on-memory-integration-research.md
+doc: docs/research/always-on-memory-integration.md
 
 ### Key Findings
 - Component mapping complete: 11 GCP components mapped to OwlBear equivalents
@@ -100,7 +100,7 @@ Action needed: execute the 3 kanban-md create commands from research doc section
 | 3. Integration design sketch | PASS -- Â§5 module layout, ConsolidationService follows GraphEnricher pattern (enrichment.py:26) | None |
 | 4. Impact assessment on RAG pipeline | PASS -- Â§5d, 4-row impact table with risk levels | None |
 | 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- Â§6, hybrid recommended at .80 confidence with sound YAGNI guard | None |
-| 6. Research doc at docs/always-on-memory-integration-research.md | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 6. Research doc at docs/research/always-on-memory-integration.md | PASS -- exists at docs/research/always-on-memory-integration.md | None |
 | 7. Follow-up kanban tasks for implementation | **FAIL (2nd cycle)** -- 3 kanban-md create commands in Â§8 still not executed. Zero tasks with tags schema/consolidation on the board. | Researcher MUST execute the 3 commands from Â§8 |
 
 ### Architecture Notes
@@ -132,7 +132,7 @@ The only remaining blocker is executing the follow-up task creation commands. Th
 | 3. Integration design sketch | PASS -- Â§5 module layout, ConsolidationService follows GraphEnricher pattern (enrichment.py:26) | None |
 | 4. Impact assessment on RAG pipeline | PASS -- Â§5d, 4-row impact table with risk levels | None |
 | 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- Â§6, hybrid recommended at .80 confidence with sound YAGNI guard | None |
-| 6. Research doc at docs/always-on-memory-integration-research.md | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 6. Research doc at docs/research/always-on-memory-integration.md | PASS -- exists at docs/research/always-on-memory-integration.md | None |
 | 7. Follow-up kanban tasks for implementation | **FAIL (2nd cycle)** -- 3 kanban-md create commands in Â§8 still not executed. Zero tasks with tags schema/consolidation on the board. | Researcher MUST execute the 3 commands from Â§8 |
 
 ### Architecture Notes
@@ -164,7 +164,7 @@ The only remaining blocker is executing the follow-up task creation commands. Th
 | 3. Integration design sketch | PASS -- sec.5 module layout, follows GraphEnricher pattern | None |
 | 4. Impact assessment on RAG pipeline | PASS -- sec.5d, 4-row impact table | None |
 | 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- sec.6, hybrid at .80 confidence | None |
-| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration.md | None |
 | 7. Follow-up kanban tasks | PASS -- #721 (Schema v8), #722 (importance scoring), #723 (ConsolidationService) now exist on board | None |
 
 ### Architecture Notes
@@ -189,7 +189,7 @@ All 7 ACs now satisfied. Research quality confirmed solid in prior reviews (8 so
 | 3. Integration design sketch | PASS -- sec.5 module layout, follows GraphEnricher pattern | None |
 | 4. Impact assessment on RAG pipeline | PASS -- sec.5d, 4-row impact table | None |
 | 5. Decision: with-RAG vs without-RAG vs hybrid | PASS -- sec.6, hybrid at .80 confidence | None |
-| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration-research.md | None |
+| 6. Research doc | PASS -- exists at docs/research/always-on-memory-integration.md | None |
 | 7. Follow-up kanban tasks | PASS -- #721 (Schema v8), #722 (importance scoring), #723 (ConsolidationService) now exist on board | None |
 
 ### Architecture Notes
@@ -224,7 +224,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 | 3. Design sketch | doc sec.5a-5c: module layout, ConsolidationService, schema v8 | PASS |
 | 4. RAG impact | doc sec.5d: 4-row impact table with risk levels | PASS |
 | 5. Decision | doc sec.6: hybrid at .80, 3-option comparison | PASS |
-| 6. Research doc | docs/research/always-on-memory-integration-research.md exists | PASS |
+| 6. Research doc | docs/research/always-on-memory-integration.md exists | PASS |
 | 7. Follow-up tasks | #721 #722 #723 in backlog (committed 95ee70e) | PASS |
 
 ### Test Results

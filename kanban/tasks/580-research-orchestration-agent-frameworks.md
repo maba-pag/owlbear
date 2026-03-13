@@ -16,7 +16,7 @@ class: standard
 
 Epic: Analyze multi-agent delegation, project-board monitoring, and task execution logic from orchestration frameworks. Children cover individual repos.
 
-**Research doc:** docs/orchestration-agent-frameworks-research.md
+**Research doc:** docs/research/orchestration-agent-frameworks.md
 
 **Child tasks (all complete):**
 - #584 openai/symphony  poll-dispatch-reconcile, task-level retry, continuation turns
@@ -38,4 +38,4 @@ Adopt patterns in 3 tiers: (1) poll-dispatch-reconcile + WIP continuity + task r
 - [x] Architecture fit  extends existing daemon loop, hooks, toolsets, knowledge graph
 - [x] Implementation approach  3-tier priority + trade-off matrices
 - [x] Testing strategy  covered per child task
-- [x] Findings documented in docs/orchestration-agent-frameworks-research.md
+- [x] Findings documented in docs/research/orchestration-agent-frameworks.md

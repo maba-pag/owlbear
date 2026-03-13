@@ -18,4 +18,4 @@ class: standard
 
 Research confirmed: PydanticAI OpenAIProvider(base_url='https://api.individual.githubcopilot.com/v1', api_key=token) works directly. No custom provider needed. The real work is OAuth device-flow (task #30-31).
 
-See docs/pydantic-ai-integration-research.md §3.3
+See docs/research/pydantic-ai-integration.md §3.3

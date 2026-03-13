@@ -13,6 +13,12 @@ tags:
 class: standard
 ---
 
-DRY-09: trafilatura.extract() wrapped in web_search.py, browser/content_extractor.py, bookmark_pipeline.py with slightly different fallback logic. Centralize in extract_text_content(html) utility. AC: single extraction utility, all callers use it. See docs/software-design-audit.md.
+DRY-09: trafilatura.extract() wrapped in web_search.py, browser/content_extractor.py, bookmark_pipeline.py with slightly different fallback logic. See docs/software-design-audit.md.
 
-Research complete  see docs/centralize-trafilatura-research.md. Finding: content_extractor.py already has the correct shared utility (extract_content + ExtractionResult). The other two call sites should import-and-delegate. Two follow-up implementation tasks created.
+Research complete -- see docs/research/centralize-trafilatura.md. Finding: content_extractor.py already has the correct shared utility (extract_content + ExtractionResult). The other two call sites should import-and-delegate. Two follow-up implementation tasks created.
+
+## AC
+
+- [x] Research doc at docs/research/centralize-trafilatura.md
+- [x] Identified shared utility and call sites
+- [x] Follow-up implementation tasks created

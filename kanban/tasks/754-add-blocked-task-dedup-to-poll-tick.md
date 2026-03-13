@@ -36,7 +36,7 @@ class: standard
 ## References
 
 - Paperclip skip-blocked pattern: skills/paperclip/SKILL.md step 4
-- Research: docs/research/paperclip-research.md
+- Research: docs/research/paperclip.md
 - Existing: src/owlbear/daemon.py poll_tick(), OrchestratorState
 - Tests: #758 (RED phase)
 
@@ -152,7 +152,7 @@ Verdict: FAIL (.75) -- AC2 retry path missing last_attempted_at recording. See d
 | 2 | Docstrings complete | Yes | Updated | Added 'dedup' step to poll_tick flow summary docstring |
 | 3 | sources/overview.md | No | N/A | Paperclip blocked-task dedup already attributed (row added by #746 research) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/paperclip-research.md exists and linked in task body References section |
+| 5 | Research doc linked | Yes | Pass | docs/research/paperclip.md exists and linked in task body References section |
 | 6 | No impact | - | - | Items 2 and 5 apply; rest N/A |
 
 ### Files Updated
@@ -379,7 +379,7 @@ Confidence: .93. All 5 AC lines verified with specific evidence. Test quality ST
 | 2 | Docstrings complete | Yes | Fixed | poll_tick docstring wrapped to fix E501; OrchestratorState covered |
 | 3 | sources/overview.md | No | N/A | Paperclip dedup already attributed by #746 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/paperclip-research.md linked in References |
+| 5 | Research doc linked | Yes | Pass | docs/research/paperclip.md linked in References |
 | 6 | No impact | - | - | Items 2 and 5 apply; rest N/A |
 
 ### Files Updated

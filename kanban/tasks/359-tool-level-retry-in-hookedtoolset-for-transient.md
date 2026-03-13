@@ -45,4 +45,4 @@ Retry ONLY when classify_error(exc) returns TRANSIENT. Do NOT retry:
 - Depends on #357 for classify_error() and ErrorCategory
 - Layer 2 — catches infra errors L1 (HTTP transport) did not handle
 - tenacity @retry with retry_if_exception predicate
-- See docs/error-recovery-research.md section 3.2 (L2) and 4.2
+- See docs/research/error-recovery.md section 3.2 (L2) and 4.2

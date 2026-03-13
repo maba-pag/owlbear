@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Long-running daemon process that listens on a configured channel and dispatches to OwlBearAgent. See docs/daemon-entrypoint-research.md.
+Long-running daemon process that listens on a configured channel and dispatches to OwlBearAgent. See docs/research/daemon-entrypoint.md.
 
 ## AC
 - [ ] File: src/owlbear/daemon.py (~135 LOC)

@@ -60,4 +60,4 @@ Return json.dumps(error.to_dict()) so LLM receives structured JSON string.
 - Depends on #357 for ErrorCategory
 - Co-located in core/errors.py with ErrorCategory and classify_error
 - v1: 4 fields. Retry/suggestion/escalation fields added when #361/#362 built
-- See docs/error-recovery-research.md section 3.5
+- See docs/research/error-recovery.md section 3.5

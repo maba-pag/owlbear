@@ -30,4 +30,4 @@ Original scope: wrap all unretried external HTTP calls with tenacity retry. Spli
 ### Done when
 All 5 sub-tasks are done. This task can then be closed.
 
-See `docs/retry-decorators-research.md` for full analysis.
+See `docs/research/retry-decorators.md` for full analysis.

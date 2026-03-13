@@ -48,4 +48,4 @@ Builder/reviewer should verify existing code and tests, then advance to done.
 - #427 Unit tests for KnowledgeQueryService graph expansion
 
 ## Research doc
-See docs/context-aware-knowledge-injection-research.md for details.
+See docs/research/context-aware-knowledge-injection.md for details.

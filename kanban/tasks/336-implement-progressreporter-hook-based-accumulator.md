@@ -29,4 +29,4 @@ class: standard
 - [ ] channel.send() wrapped in try/except — errors logged, never interrupt agent
 - [ ] State reset on each start() call (for next turn)
 
-See docs/progress-reporting-research.md S4
+See docs/research/progress-reporting.md S4

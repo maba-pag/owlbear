@@ -26,4 +26,4 @@ AC:
 - [ ] No validation beyond float type (pydantic handles it)
 
 Depends on: #224 (test task), #207
-See docs/temporal-memory-research.md
+See docs/research/temporal-memory.md

@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #303 project-workspace-research.md. Add project_root: Path to OwlBearSettings (default ~/projects). Create ProjectWorkspace class in src/owlbear/projects/workspace.py with create_project(name, template) -> Path. Implements bare template (.gitignore, README.md, kanban/ via kanban-md init). Orchestrates: resolve dir, scaffold, git init, kanban-md init, register in ProjectStore. AC: ProjectWorkspace.create_project('my-proj', 'bare') creates dir with git repo, kanban board, README; project registered in store; project_root config field validated. Depends on #303.
+From #303 project-workspace.md. Add project_root: Path to OwlBearSettings (default ~/projects). Create ProjectWorkspace class in src/owlbear/projects/workspace.py with create_project(name, template) -> Path. Implements bare template (.gitignore, README.md, kanban/ via kanban-md init). Orchestrates: resolve dir, scaffold, git init, kanban-md init, register in ProjectStore. AC: ProjectWorkspace.create_project('my-proj', 'bare') creates dir with git repo, kanban board, README; project registered in store; project_root config field validated. Depends on #303.

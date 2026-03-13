@@ -19,7 +19,7 @@ claimed_at: 2026-03-11T09:23:55.1306712+01:00
 class: standard
 ---
 
-**Source:** docs/research/pinchtab-research.md S3e, S4.1
+**Source:** docs/research/pinchtab.md S3e, S4.1
 
 Port PinchTab's indirect prompt injection phrase detection to OwlBear's browser_read_text and extract_content output paths. Implement as a configurable guard.
 
@@ -302,7 +302,7 @@ Docked from 1.0 for:
 | 2 | Docstrings complete | Yes | Pass | content_guard.py: module, CheckResult, ContentInjectionError, ContentInjectionGuard, scan() all documented; config.py: content_scan_mode in Attributes; crawler.py: content_guard in Args |
 | 3 | sources/overview.md | Yes | Updated | Added implementation row: PinchTab content.go -> src/owlbear/tools/browser/content_guard.py |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/pinchtab-research.md and docs/research/idpi-content-scanning-research.md both exist; task body references them |
+| 5 | Research doc linked | Yes | Pass | docs/research/pinchtab.md and docs/research/idpi-content-scanning.md both exist; task body references them |
 
 ### Files Updated
 - docs/sources/overview.md (added implementation attribution row)

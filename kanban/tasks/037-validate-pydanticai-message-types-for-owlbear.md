@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.1)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.1)
 
 PydanticAI provides a complete message system (2121 LOC): ModelRequest, ModelResponse, UserPromptPart, TextPart, ToolCallPart, ToolReturn, streaming deltas. Building our own would fight the framework.
 

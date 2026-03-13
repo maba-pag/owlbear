@@ -27,4 +27,4 @@ class: standard
 - [ ] ProjectToolset added to toolsets list when ProjectStore is available
 - [ ] Integration test: bootstrap with active project vs without
 
-See docs/multi-project-session-research.md S3.8, S4
+See docs/research/multi-project-session.md S3.8, S4

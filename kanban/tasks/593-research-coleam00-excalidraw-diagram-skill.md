@@ -18,7 +18,7 @@ class: standard
 **Source:** https://github.com/coleam00/excalidraw-diagram-skill
 Analyzed for Excalidraw skill patterns, diagram generation prompts, and MCP integration.
 
-**Research doc:** See docs/excalidraw-diagram-skill-research.md
+**Research doc:** See docs/research/excalidraw-diagram-skill.md
 
 **Key findings:**
 - LLM-driven Excalidraw JSON generation is proven (coleam00 skill, yctimlin MCP 1.3k stars)
@@ -62,7 +62,7 @@ All referenced patterns and infrastructure exist. Follow-ups #628 and #629 corre
 ### AC Compliance (Research Task)
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| Research doc exists | docs/research/excalidraw-diagram-skill-research.md (200 lines, 6 sections) | N/A | PASS |
+| Research doc exists | docs/research/excalidraw-diagram-skill.md (200 lines, 6 sections) | N/A | PASS |
 | Sources studied (prior art) | 4 sources: coleam00 (.95), yctimlin (.80), lesleslie (.65), Excalidraw docs (.75) | N/A | PASS |
 | Trade-off matrix | Section 3.1: 3 approaches x 7 criteria | N/A | PASS |
 | Recommendation with confidence | Section 4: .85 confidence, skill + render service + toolset (~200 LOC) | N/A | PASS |
@@ -93,11 +93,11 @@ No issues  research task, no code changes.
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | 4 entries at lines 448-451 (coleam00, yctimlin, lesleslie, Excalidraw docs) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/excalidraw-diagram-skill-research.md exists; follow-ups #628, #629 in backlog |
+| 5 | Research doc linked | Yes | Pass | docs/research/excalidraw-diagram-skill.md exists; follow-ups #628, #629 in backlog |
 | 6 | No impact | -- | -- | Items 3 and 5 apply |
 
 ### Observations (non-blocking)
-- Task body path: says `docs/excalidraw-diagram-skill-research.md` but file is at `docs/research/excalidraw-diagram-skill-research.md` (cosmetic, also flagged by reviewer)
+- Task body path: says `docs/research/excalidraw-diagram-skill.md` but file is at `docs/research/excalidraw-diagram-skill.md` (cosmetic, also flagged by reviewer)
 - Research doc and sources/overview.md are untracked in git (never git-added). Not a docs-gate concern but should be committed before archive.
 
 ### Files Updated
@@ -111,7 +111,7 @@ No issues  research task, no code changes.
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Research doc exists | docs/research/excalidraw-diagram-skill-research.md (6 sections, complete) | PASS |
+| Research doc exists | docs/research/excalidraw-diagram-skill.md (6 sections, complete) | PASS |
 | Sources studied (prior art) | 4 sources: coleam00 (.95), yctimlin (.80), lesleslie (.65), Excalidraw docs (.75) | PASS |
 | Trade-off matrix | Section 3.1: 3 approaches x 7 criteria | PASS |
 | Recommendation with confidence | Section 4: .85 confidence, skill + render service + toolset (~200 LOC) | PASS |
@@ -126,7 +126,7 @@ No issues  research task, no code changes.
 - ruff: 3 pre-existing import order errors (no code changed by this task)
 
 ### Notes
-- Minor cosmetic: task body path says docs/excalidraw-diagram-skill-research.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
+- Minor cosmetic: task body path says docs/research/excalidraw-diagram-skill.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
 
 ### Confidence: .97
 ### Action: archive
@@ -136,7 +136,7 @@ No issues  research task, no code changes.
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Research doc exists | docs/research/excalidraw-diagram-skill-research.md (6 sections, complete) | PASS |
+| Research doc exists | docs/research/excalidraw-diagram-skill.md (6 sections, complete) | PASS |
 | Sources studied (prior art) | 4 sources: coleam00 (.95), yctimlin (.80), lesleslie (.65), Excalidraw docs (.75) | PASS |
 | Trade-off matrix | Section 3.1: 3 approaches x 7 criteria | PASS |
 | Recommendation with confidence | Section 4: .85 confidence, skill + render service + toolset (~200 LOC) | PASS |
@@ -151,7 +151,7 @@ No issues  research task, no code changes.
 - ruff: 3 pre-existing import order errors (no code changed by this task)
 
 ### Notes
-- Minor cosmetic: task body path says docs/excalidraw-diagram-skill-research.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
+- Minor cosmetic: task body path says docs/research/excalidraw-diagram-skill.md but file is at docs/research/... (flagged by reviewer and docs gate, non-blocking)
 
 ### Confidence: .97
 ### Action: archive

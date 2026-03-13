@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-ARC-15/INT-12: build_agent_registry() maintains hardcoded _aliases dict (11 entries). 4 toolsets missing. Research complete: see docs/toolset-alias-auto-registration-research.md.
+ARC-15/INT-12: build_agent_registry() maintains hardcoded _aliases dict (11 entries). 4 toolsets missing. Research complete: see docs/research/toolset-alias-auto-registration.md.
 
 Approach: Option A from research  add tool_alias class attribute to each FunctionToolset subclass. Resolver in build_agent_registry() reads it dynamically. Hardcoded _aliases dict deleted.
 

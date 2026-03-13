@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-Update VectorStore: store scope in bridge table, search_similar post-filters by scope. See docs/knowledge-scoping-research.md. Depends on #197.
+Update VectorStore: store scope in bridge table, search_similar post-filters by scope. See docs/research/knowledge-scoping.md. Depends on #197.

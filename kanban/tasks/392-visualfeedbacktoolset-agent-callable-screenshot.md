@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. FunctionToolset (~60 LOC) with: share_screenshot(caption) -> str (captures browser -> saves -> delivers -> returns path); share_terminal_output(output, caption) -> str (saves text -> delivers -> returns path). Injected with ScreenshotService, ChannelPlugin, BrowserToolset ref. AC: Agent can call share_screenshot to capture and deliver browser screenshot; share_terminal_output saves and delivers text output. Depends on #302, #391.
+From #302 screenshot-visual-feedback.md. FunctionToolset (~60 LOC) with: share_screenshot(caption) -> str (captures browser -> saves -> delivers -> returns path); share_terminal_output(output, caption) -> str (saves text -> delivers -> returns path). Injected with ScreenshotService, ChannelPlugin, BrowserToolset ref. AC: Agent can call share_screenshot to capture and deliver browser screenshot; share_terminal_output saves and delivers text output. Depends on #302, #391.

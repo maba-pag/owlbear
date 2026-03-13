@@ -17,7 +17,7 @@ class: standard
 
 **Source:** https://github.com/Ibrahim-3d/conductor-orchestrator-superpowers (MIT, v3.3.0, extends obra/superpowers v4.3.0)
 
-**Research doc:** See docs/conductor-orchestrator-superpowers-research.md
+**Research doc:** See docs/research/conductor-orchestrator-superpowers.md
 
 **Key Findings:**
 - Retrospective learning pattern (.80 confidence) - post-task pattern/error extraction into knowledge graph

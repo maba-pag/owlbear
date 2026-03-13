@@ -35,4 +35,4 @@ Add 'bearclaw usage' Typer subcommand for viewing token usage and cost stats. Fo
 - [ ] No inline test code — tests are in #105 (test_usage_cli.py)
 
 Depends on: #100 (UsageTracker must exist to read data)
-See docs/token-usage-tracking-research.md section 3.6
+See docs/research/token-usage-tracking.md section 3.6

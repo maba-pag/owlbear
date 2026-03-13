@@ -29,7 +29,7 @@ Depends on #255 (intra-document graph builder).
 - [x] Implementation approach: Entity clustering? Embedding similarity pre-filter? Community detection?
 
 ## Acceptance Criteria
-- [x] Research doc in docs/ -- docs/inter-document-graph-builder-research.md (139 lines)
+- [x] Research doc in docs/ -- docs/research/inter-document-graph-builder.md (139 lines)
 - [x] Follow-up implementation tasks created -- #388-390 (all done)
 - [x] Scaling analysis -- O(N^2*M^2) pair explosion quantified with N=50/200/500 scenarios
 - [x] Pre-filtering strategy -- embedding cosine similarity threshold (0.70) + cross-doc filter

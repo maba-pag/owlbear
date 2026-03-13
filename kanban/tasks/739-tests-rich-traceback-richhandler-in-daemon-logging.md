@@ -28,7 +28,7 @@ AC:
 - [ ] ruff clean
 
 Precedes: #632
-Research: docs/rich-traceback-richhandler-research.md
+Research: docs/research/rich-traceback-richhandler.md
 
 [[2026-03-11]] Wed 16:31
 ## Test-Writer Notes
@@ -89,7 +89,7 @@ All 4 TestFromAC_RichLogging tests PRESERVED (no builder modifications)
 | 2 | Docstrings complete | Yes | Updated | setup_logging() docstring updated to mention RichHandler, plain file handler, and rich.traceback.install() |
 | 3 | sources/overview.md | No | N/A | Already attributed under 'Rich Traceback and RichHandler Research (Task #632)' section |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/rich-traceback-richhandler-research.md exists and linked in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/rich-traceback-richhandler.md exists and linked in task body |
 | 6 | No impact | N/A |  | Items 2 and 5 apply |
 
 ### Files Updated

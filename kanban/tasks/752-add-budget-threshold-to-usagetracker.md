@@ -33,5 +33,5 @@ class: standard
 
 ## References
 - Paperclip budget model: docs/api/costs.md
-- Research: docs/research/paperclip-research.md
+- Research: docs/research/paperclip.md
 - Existing: src/owlbear/memory/usage.py, src/owlbear/core/agent.py L160-211

@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/chunker.py | Test: tests/test_knowledge_chunker.py | See docs/knowledge-ingestion-research.md S3.2.
+Module: src/owlbear/memory/knowledge/chunker.py | Test: tests/test_knowledge_chunker.py | See docs/research/knowledge-ingestion.md S3.2.
 
 AC:
 - TextChunker class with configurable target_tokens (default 512), overlap_tokens (default 50), and separators list

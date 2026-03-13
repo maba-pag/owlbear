@@ -20,7 +20,7 @@ The agent refactoring (#436-#451) updated .github/agents/*.agent.md but NOT src/
 
 ## Reference
 
-See docs/agent-definitions-sync-research.md for full research findings and canonical mapping.
+See docs/research/agent-definitions-sync.md for full research findings and canonical mapping.
 
 ## Scope
 

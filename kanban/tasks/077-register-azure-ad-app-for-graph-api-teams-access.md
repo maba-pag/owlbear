@@ -16,7 +16,7 @@ block_reason: Cannot register Azure AD app — IT admins block Entra ID app regi
 class: standard
 ---
 
-Register an Azure AD app with Chat.ReadWrite + ChatMessage.Send delegated permissions. Configure device-flow redirect URI. Document app ID/tenant in config. See docs/teams-integration-research.md.
+Register an Azure AD app with Chat.ReadWrite + ChatMessage.Send delegated permissions. Configure device-flow redirect URI. Document app ID/tenant in config. See docs/research/teams-integration.md.
 
 [[2026-02-27]] Fri 01:38
 CLOSED: Azure AD permanently blocked (AADSTS50105). Pivoting to Slack.

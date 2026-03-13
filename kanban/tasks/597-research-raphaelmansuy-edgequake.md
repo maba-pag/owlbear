@@ -23,7 +23,7 @@ Analyze for workflow efficiencies, developer tooling patterns, and automation id
 **Acceptance Criteria:**
 1. Clone repo to `docs/scratch/research/edgequake/` for analysis (gitignored  ephemeral).
 2. Identify architectural patterns, prompts, MCP server ideas, or code fragments reusable in OwlBear. Focus areas: agent orchestration, tool registration, CLI patterns, prompt engineering.
-3. Document findings in `docs/research/edgequake-research.md` following research-docs guardrails. End with a **Follow-up Tasks** section listing concrete `kanban-md create` commands (each with AC).
+3. Document findings in `docs/research/edgequake.md` following research-docs guardrails. End with a **Follow-up Tasks** section listing concrete `kanban-md create` commands (each with AC).
 4. Update `docs/sources/overview.md` with URL, license, what was studied, where used, and date.
 5. Create follow-up kanban tasks for any actionable patterns discovered (at `backlog` status).
 6. Delete `docs/scratch/research/edgequake/` after research is complete.
@@ -37,7 +37,7 @@ Analyze for workflow efficiencies, developer tooling patterns, and automation id
 |---------|------------|--------|
 | 1. Clone to docs/scratch/research/edgequake/ | Corrected from docs/research/  clones are ephemeral (gitignored) | Fixed |
 | 2. Identify patterns (orchestration, tools, CLI, prompts) | Focus areas added for specificity | Fixed |
-| 3. Document in docs/research/edgequake-research.md | Was vague (''task body or linked doc'')  now explicit path + research-docs guardrails | Fixed |
+| 3. Document in docs/research/edgequake.md | Was vague (''task body or linked doc'')  now explicit path + research-docs guardrails | Fixed |
 | 4. Update docs/sources/overview.md | Corrected from docs/sources.md | Fixed |
 | 5. Create follow-up tasks at backlog | Added status requirement | Fixed |
 | 6. Delete cloned repo after research | Was missing entirely  added per copilot-instructions | Added |
@@ -48,7 +48,7 @@ Corrected 5 issues from the original batch-created task template:
 - Wrong clone path (docs/research/ -> docs/scratch/research/) per copilot-instructions file placement rules
 - Wrong sources file (docs/sources.md -> docs/sources/overview.md) per attribution section
 - Missing cleanup step for ephemeral clone
-- Vague output location now pinned to docs/research/edgequake-research.md
+- Vague output location now pinned to docs/research/edgequake.md
 - Follow-up tasks now required at backlog status with AC per research-docs guardrails
 
 ### Changes Made
@@ -64,10 +64,10 @@ Non-implementation task (tagged research) - no tests applicable. Passing through
 
 [[2026-03-10]] Tue 19:54
 ## Builder Notes
-- Files changed: docs/research/edgequake-research.md (updated with MCP/tooling analysis), docs/sources/overview.md (added EdgeQuake entry)
+- Files changed: docs/research/edgequake.md (updated with MCP/tooling analysis), docs/sources/overview.md (added EdgeQuake entry)
 - AC1: Cloned repo to docs/scratch/research/edgequake/ (partial clone, 7743 files)
 - AC2: Identified 8 patterns; 3 applicable (MCP tool registration, orphaned task recovery, MCP prompt templates)
-- AC3: Updated docs/research/edgequake-research.md with new S6 section covering MCP server, tool registration, prompt templates, auto-discovery, models.toml, doc-traceability, startup recovery, smart mocks
+- AC3: Updated docs/research/edgequake.md with new S6 section covering MCP server, tool registration, prompt templates, auto-discovery, models.toml, doc-traceability, startup recovery, smart mocks
 - AC4: Updated docs/sources/overview.md with EdgeQuake entry
 - AC5: Created 3 follow-up tasks: #732 (LLM cost tracking), #733 (cooperative cancellation), #734 (gleaning bookmark)
 - AC6: Deleted docs/scratch/research/edgequake/ after analysis
@@ -96,7 +96,7 @@ Non-implementation task (tagged research) - no tests applicable. Passing through
 |---------|----------|--------|
 | 1. Clone to docs/scratch/research/edgequake/ | Builder notes confirm 7743-file clone; Test-Path confirms deleted | PASS |
 | 2. Identify patterns (orchestration, tools, CLI, prompts) | Research doc S3.2: 8 patterns evaluated; S6: 8 MCP/tooling findings | PASS |
-| 3. Document in docs/research/edgequake-research.md | File exists, has owning-task ref, Follow-up Tasks with kanban-md commands | PASS |
+| 3. Document in docs/research/edgequake.md | File exists, has owning-task ref, Follow-up Tasks with kanban-md commands | PASS |
 | 4. Update docs/sources/overview.md | Entry present  NOTE: duplicate sections at lines 1123 and 1357 (cosmetic, not blocking) | PASS (minor) |
 | 5. Create follow-up tasks at backlog | #732 (cost tracking), #733 (cancellation), #734 (gleaning)  all at backlog with AC | PASS |
 | 6. Delete clone after research | Test-Path docs/scratch/research/edgequake/ = False | PASS |
@@ -126,7 +126,7 @@ Non-implementation task (tagged research) - no tests applicable. Passing through
 | 2 | Docstrings | No | N/A | No Python modules created or changed |
 | 3 | sources/overview.md | Yes | Updated | Consolidated duplicate EdgeQuake sections (lines 1123 and 1357) into single section; merged MCP/tooling findings into one row |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/edgequake-research.md exists with owning-task ref #597; 3 follow-up tasks created (#732, #733, #734) at backlog |
+| 5 | Research doc linked | Yes | Pass | docs/research/edgequake.md exists with owning-task ref #597; 3 follow-up tasks created (#732, #733, #734) at backlog |
 
 ### Files Updated
 - docs/sources/overview.md (consolidated duplicate EdgeQuake sections)

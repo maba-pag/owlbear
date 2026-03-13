@@ -19,7 +19,7 @@ block_reason: 'Blocked on #77 — Azure AD app registration not possible (IT adm
 class: standard
 ---
 
-User-facing setup guide: Azure AD app creation steps, required permissions, bearclaw teams auth flow, target chat configuration. See docs/teams-integration-research.md.
+User-facing setup guide: Azure AD app creation steps, required permissions, bearclaw teams auth flow, target chat configuration. See docs/research/teams-integration.md.
 
 [[2026-02-27]] Fri 01:38
 CLOSED: Teams path abandoned. Replaced by Slack tasks.

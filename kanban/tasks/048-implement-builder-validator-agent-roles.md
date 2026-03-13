@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-See docs/agent-patterns-research.md para 3.3. Depends on agent loop (#45).
+See docs/research/agent-patterns.md para 3.3. Depends on agent loop (#45).
 
 ## Research required (gate: ideation to backlog)
 

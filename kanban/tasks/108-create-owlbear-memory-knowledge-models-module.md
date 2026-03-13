@@ -34,4 +34,4 @@ Pydantic models for the knowledge graph: Entity, Edge, Document. Creates the `ow
 - [ ] Validation: `entity_type` rejects invalid strings, `weight` must be >= 0
 - [ ] `ruff check` clean
 
-See docs/knowledge-graph-research.md section 4
+See docs/research/knowledge-graph.md section 4

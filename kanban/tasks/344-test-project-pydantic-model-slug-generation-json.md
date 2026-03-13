@@ -25,4 +25,4 @@ class: standard
 - [ ] Test invalid status value raises ValidationError
 - [ ] Test duplicate slug generation from different names: 'My Project' and 'my project' produce same slug
 
-See docs/multi-project-session-research.md S3.2
+See docs/research/multi-project-session.md S3.2

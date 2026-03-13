@@ -19,7 +19,7 @@ class: standard
 ---
 
 Deterministically parse task body for URLs and file paths, fetch/read them, and inject as structured pre-context into the agent dispatch prompt. Saves tokens and reduces first-turn hallucination.
-See docs/research/stripe-minions-research.md S3e and S5 for rationale.
+See docs/research/stripe-minions.md S3e and S5 for rationale.
 
 ## Acceptance Criteria
 
@@ -347,7 +347,7 @@ Verdict: PASS, confidence .92
 | 2 | Docstrings complete | Yes | Pass | Module docstring + all 5 public functions + HydrationResult class. |
 | 3 | sources/overview.md | No | N/A | Stripe Minions already attributed L1307. |
 | 4 | README.md | No | N/A | No CLI changes. |
-| 5 | Research doc linked | Yes | Pass | Task body refs stripe-minions-research.md S3e/S5. |
+| 5 | Research doc linked | Yes | Pass | Task body refs stripe-minions.md S3e/S5. |
 
 ### Files Updated
 - None

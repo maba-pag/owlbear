@@ -34,4 +34,4 @@ TDD test task for #123 (AskUserToolset).
 - Follow existing test patterns in tests/test_terminal_tools.py (async tests, mock injection)
 - AskUserToolset constructor: channel, timeout_seconds=120.0, max_retries=3, timeout_action=TimeoutAction.ABORT, default_response=''(no response)''
 - Tool signature: ask_user(question: str, options: list[str] | None = None) -> str
-- See docs/ask-user-tool-research.md for full design
+- See docs/research/ask-user-tool.md for full design

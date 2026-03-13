@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/tools/browser/crawl_config.py | Test: tests/test_crawl_config.py | See docs/web-crawling-research.md S3.3.
+Module: src/owlbear/tools/browser/crawl_config.py | Test: tests/test_crawl_config.py | See docs/research/web-crawling.md S3.3.
 
 AC:
 - CrawlConfig frozen Pydantic model (frozen=True) with fields:

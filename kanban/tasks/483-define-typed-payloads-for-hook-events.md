@@ -17,7 +17,7 @@ class: standard
 ---
 
 ARC-08/F-18/INT-05: Define typed payloads for hook events.
-See docs/research/typed-hook-payloads-research.md for full analysis.
+See docs/research/typed-hook-payloads.md for full analysis.
 
 ## Acceptance Criteria
 1. 9 TypedDict classes defined in src/owlbear/core/hooks.py:
@@ -207,7 +207,7 @@ Builder added TestBuilderDiscovered (6 tests) covering AC1 fields missing from t
 | 2 | Docstrings complete | Yes | Pass | All 9 TypedDicts have docstrings referencing HookEvent; Handler alias documented; module docstring present |
 | 3 | sources/overview.md | Yes | Pass | Already has pluggy + PEP 589/655/728 attribution for #483 (6 entries) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads-research.md exists and linked in task body; follow-ups #715-#717 created |
+| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads.md exists and linked in task body; follow-ups #715-#717 created |
 
 ### Files Updated
 - None

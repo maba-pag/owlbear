@@ -35,7 +35,7 @@ Analyze the gemini/agents/always-on-memory-agent section of GoogleCloudPlatform/
 - [ ] Freshness assessment: when was this code written/updated?
 - [ ] Comparison table: always-on-memory-agent vs OwlBear knowledge layer
 - [ ] Concrete recommendation: use directly / adapt / integrate / skip
-- [ ] Research doc at docs/gcp-always-on-memory-agent-research.md
+- [ ] Research doc at docs/research/gcp-always-on-memory-agent.md
 - [ ] Follow-up kanban tasks created for any recommended actions
 
 [[2026-03-09]] Mon 23:09
@@ -63,7 +63,7 @@ See docs/research/gcp-always-on-memory-agent.md for full findings.
 | 3. Freshness assessment | PASS -- Section 3 covers both sources with dates (GCP: 2026-03-03, Mem0: v1.0.5 active) | None |
 | 4. Comparison table | PASS -- Section 5 has 11-criterion table across GCP, OwlBear, Mem0 | None |
 | 5. Concrete recommendation | PASS -- Section 7: adapt consolidation + importance, skip rest (.70 confidence) | None |
-| 6. Research doc at docs/gcp-always-on-memory-agent-research.md | PARTIAL -- actual path is docs/research/gcp-always-on-memory-agent.md (follows project conventions, but AC path is wrong) | Fix AC path to match actual |
+| 6. Research doc at docs/research/gcp-always-on-memory-agent.md | PARTIAL -- actual path is docs/research/gcp-always-on-memory-agent.md (follows project conventions, but AC path is wrong) | Fix AC path to match actual |
 | 7. Follow-up kanban tasks created | **FAIL** -- kanban-md create commands exist in doc Section 8 but were never executed. Zero follow-up tasks on the board. | Execute or coordinate with #701 |
 
 ### Architecture Notes
@@ -78,7 +78,7 @@ See docs/research/gcp-always-on-memory-agent.md for full findings.
 
 ### Required Actions Before Approval
 1. Execute follow-up task creation (prefer #701's refined versions to avoid duplicates)
-2. Update AC #6 path from docs/gcp-always-on-memory-agent-research.md to docs/research/gcp-always-on-memory-agent.md
+2. Update AC #6 path from docs/research/gcp-always-on-memory-agent.md to docs/research/gcp-always-on-memory-agent.md
 3. Add depends_on: [700] to #701 frontmatter
 
 ### Dependencies

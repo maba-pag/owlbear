@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-From #254 source-registry-research.md. Data model and SQLite CRUD store for knowledge sources.
+From #254 source-registry.md. Data model and SQLite CRUD store for knowledge sources.
 
 ## Location
 - SourceType enum + KnowledgeSource model: src/owlbear/memory/knowledge/models.py (alongside Entity, Edge, Document)

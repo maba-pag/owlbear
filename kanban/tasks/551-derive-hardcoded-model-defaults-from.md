@@ -13,4 +13,12 @@ tags:
 class: standard
 ---
 
-INT-15: 'gpt-4o' hardcoded in 14 places (4 actionable, 10 docstrings/lookup tables). Research complete. See docs/hardcoded-model-defaults-research.md for full audit and recommendations. Summary: Remove redundant defaults from 3 bootstrap helpers + AgentRegistry.__init__, making chat_model/default_model required. Settings.chat_model is already the single source of truth at call sites.
+INT-15: 'gpt-4o' hardcoded in 14 places (4 actionable, 10 docstrings/lookup tables). Research complete. See docs/research/hardcoded-model-defaults.md for full audit and recommendations. Summary: Remove redundant defaults from 3 bootstrap helpers + AgentRegistry.__init__, making chat_model/default_model required. Settings.chat_model is already the single source of truth at call sites.
+
+## AC
+
+- [ ] Remove redundant defaults from 3 bootstrap helpers
+- [ ] Remove redundant default from AgentRegistry.__init__
+- [ ] chat_model/default_model become required parameters
+- [ ] Settings.chat_model remains single source of truth
+- [ ] Ruff clean, all tests pass

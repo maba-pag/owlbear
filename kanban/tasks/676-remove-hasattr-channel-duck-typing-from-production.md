@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Replace all 3 hasattr channel checks with direct method calls now that ChannelPlugin has defaults (from #675). See docs/channel-protocol-extension-research.md.
+Replace all 3 hasattr channel checks with direct method calls now that ChannelPlugin has defaults (from #675). See docs/research/channel-protocol-extension.md.
 
 AC:
 1. Zero matches for 'hasattr.*channel' in src/owlbear/ (currently 3: gate.py:101, screenshot.py:60, screenshot.py:62).

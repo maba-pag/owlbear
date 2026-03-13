@@ -17,7 +17,7 @@ class: standard
 
 **Source:** https://github.com/ComposioHQ/agent-orchestrator
 **License:** MIT
-**Findings:** See docs/agent-orchestrator-research.md
+**Findings:** See docs/research/agent-orchestrator.md
 
 **Research checklist:**
 1. Theoretical validity -- Sound concept: parallel AI agent orchestration with plugin architecture. Different paradigm than OwlBear (process mgmt vs in-process agents).

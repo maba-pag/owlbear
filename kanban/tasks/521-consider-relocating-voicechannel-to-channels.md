@@ -13,4 +13,18 @@ tags:
 class: standard
 ---
 
-ARC-03: All channel adapters (CLI, Slack) live under channels/ except VoiceChannel under voice/. voice/ conflates I/O abstraction with voice processing. Option: move VoiceChannel to channels/voice.py (importing STT/TTS from voice/).\n\n## Research Decision (.85 confidence): Keep VoiceChannel in voice/\n\nResearch checklist items 1-3: N/A -- trivial relocation decision.\n\n**Layout:** channels/ has thin I/O wrappers (cli.py, slack.py). voice/ is a cohesive subsystem: channel.py + stt.py + tts.py + streaming_stt.py, gated behind uv sync --extra voice.\n\n**Rationale:** VoiceChannel imports STTEngine, TTSEngine, and lazily StreamingSTT -- tight coupling to 3 sibling modules. Relocating to channels/voice.py would create cross-package deps without improving cohesion. CLI/Slack are self-contained thin adapters; VoiceChannel orchestrates an audio pipeline. KISS: current layout works. YAGNI: don't restructure for consistency alone.\n\n**Action:** No code change. Decision documented. Close task.\n\nAC: design decision documented -- DONE.
+ARC-03: All channel adapters (CLI, Slack) live under channels/ except VoiceChannel under voice/. voice/ conflates I/O abstraction with voice processing. Option: move VoiceChannel to channels/voice.py (importing STT/TTS from voice/).
+
+## Research Decision (.85 confidence): Keep VoiceChannel in voice/
+
+Research checklist items 1-3: N/A -- trivial relocation decision.
+
+**Layout:** channels/ has thin I/O wrappers (cli.py, slack.py). voice/ is a cohesive subsystem: channel.py + stt.py + tts.py + streaming_stt.py, gated behind uv sync --extra voice.
+
+**Rationale:** VoiceChannel imports STTEngine, TTSEngine, and lazily StreamingSTT -- tight coupling to 3 sibling modules. Relocating to channels/voice.py would create cross-package deps without improving cohesion. CLI/Slack are self-contained thin adapters; VoiceChannel orchestrates an audio pipeline. KISS: current layout works. YAGNI: don't restructure for consistency alone.
+
+**Action:** No code change. Decision documented. Close task.
+
+## AC
+
+- [x] Design decision documented

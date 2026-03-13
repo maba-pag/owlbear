@@ -22,4 +22,4 @@ class: standard
 - [ ] `src/owlbear/voice/__init__.py` exists (empty package init, exports nothing yet)
 - [ ] Test: `tests/test_voice_init.py` verifies `import owlbear.voice` succeeds
 
-See docs/voice-io-research.md section 4 for rationale.
+See docs/research/voice-io.md section 4 for rationale.

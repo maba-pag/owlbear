@@ -19,7 +19,7 @@ Implement a context condenser that prevents token overflow in long sessions. Use
 
 Pattern: rolling-window LLM summarization (OpenHands-inspired). When message count exceeds max_events, keep head (first keep_first messages) + tail (most recent messages), replace middle with a single LLM-generated summary message. Summary preserves key decisions and context.
 
-See docs/context-condenser-research.md for full research findings.
+See docs/research/context-condenser.md for full research findings.
 
 ## Key interfaces
 

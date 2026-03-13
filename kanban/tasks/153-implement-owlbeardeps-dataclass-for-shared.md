@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-Shared dependency type for all OwlBear agents, replacing manual __init__ params. Research: docs/pydantic-ai-multi-agent-research.md section 3.5.
+Shared dependency type for all OwlBear agents, replacing manual __init__ params. Research: docs/research/pydantic-ai-multi-agent.md section 3.5.
 
 ## AC
 - [ ] File: src/owlbear/core/deps.py

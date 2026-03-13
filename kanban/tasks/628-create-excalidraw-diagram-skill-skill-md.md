@@ -27,12 +27,12 @@ AC:
 - [ ] Skill loads via SkillRegistry (test manually)
 - [ ] Reference files contain 2-3 JSON templates (architecture, flowchart, sequence)
 
-Ref: docs/excalidraw-diagram-skill-research.md, docs/visuals-diagrams-mcp-research.md section 4 Tier 2
+Ref: docs/research/excalidraw-diagram-skill.md, docs/research/visuals-diagrams-mcp.md section 4 Tier 2
 
 [[2026-03-07]] Sat 13:56
 ## Research Notes (2026-03-07)
 
-Research complete. See docs/excalidraw-skill-creation-research.md.
+Research complete. See docs/research/excalidraw-skill-creation.md.
 
 Key decisions:
 - Adapt coleam00 SKILL.md (compress from 450 to ~150 lines)
@@ -130,7 +130,7 @@ Non-implementation task (Markdown/JSON skill files only, no Python code). Archit
 | 2 | Docstrings complete | No | N/A | Markdown/JSON-only deliverable, no Python modules changed |
 | 3 | sources/overview.md | Yes | Updated | Added coleam00/excalidraw-diagram-skill attribution row under Task #628 section |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/excalidraw-skill-creation-research.md exists and referenced in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/excalidraw-skill-creation.md exists and referenced in task body |
 | 6 | No impact | -- | -- | Items 3 and 5 apply |
 
 ### Files Updated

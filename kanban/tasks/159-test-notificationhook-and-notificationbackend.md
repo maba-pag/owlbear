@@ -32,4 +32,4 @@ Write tests FIRST for NotificationHook and NotificationBackend protocol.
 - [ ] Test: Sound backend calls winsound.MessageBeep (mocked)
 - [ ] ruff clean
 
-Research: docs/notification-hook-research.md
+Research: docs/research/notification-hook.md

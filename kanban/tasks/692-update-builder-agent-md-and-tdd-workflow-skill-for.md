@@ -18,7 +18,7 @@ class: standard
 
 ## Context
 
-Split from #683. Depends on #690 (test-writer agent, done). See docs/test-writer-agent-research.md.
+Split from #683. Depends on #690 (test-writer agent, done). See docs/research/test-writer-agent.md.
 
 With the test-writer handling RED phase, the builder's primary job shifts to GREEN: make existing tests pass. The builder retains the ability to add tests for implementation edge cases, but in a clearly marked separate class.
 
@@ -149,7 +149,7 @@ No issues -- no code execution surface
 | 2 | Docstrings complete | No | N/A | No Python code changed -- only .agent.md and SKILL.md |
 | 3 | sources.md | No | N/A | No new external patterns -- rewrite based on already-attributed research (#683) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | Task body references docs/test-writer-agent-research.md |
+| 5 | Research doc linked | Yes | Pass | Task body references docs/research/test-writer-agent.md |
 | 6 | SKILL.md frontmatter | Yes | Updated | tdd-workflow description updated to match GREEN-only content |
 
 ### Files Updated

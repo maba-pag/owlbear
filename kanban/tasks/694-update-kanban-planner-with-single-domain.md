@@ -18,7 +18,7 @@ class: standard
 
 Add single-domain decomposition gate to kanban-planner.agent.md. The domain list must
 align with OwlBear's architecture layers (see architecture.instructions.md), not generic
-web-app categories. See docs/task-decomposition-rules-research.md for background.
+web-app categories. See docs/research/task-decomposition-rules.md for background.
 
 ## Changes Required
 
@@ -126,7 +126,7 @@ N/A -- agent config markdown file, no Python code or tests.
 | 2 | Docstrings | No | N/A | No Python code modified |
 | 3 | sources.md | Yes | Pass | 4 attribution rows present (ChatDev, MetaGPT, OpenHands, Fowler DDD) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc | Yes | Pass | docs/task-decomposition-rules-research.md exists, linked in task Context |
+| 5 | Research doc | Yes | Pass | docs/research/task-decomposition-rules.md exists, linked in task Context |
 | 6 | No impact | -- | -- | Items 3+5 apply, evaluated above |
 
 ### Files Updated

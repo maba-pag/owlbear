@@ -31,4 +31,4 @@ Add notification configuration fields to OwlBearSettings in src/owlbear/config.p
 - Follows existing OwlBearSettings pattern (pydantic-settings, OWLBEAR_ prefix)
 - notification_events values correspond to HookEvent enum names (lowercase)
 - notification_backends values: 'bell' (stdout \\a), 'sound' (winsound.MessageBeep), future: 'toast', 'slack', 'tts'
-- Research: docs/notification-hook-research.md section 3.7
+- Research: docs/research/notification-hook.md section 3.7

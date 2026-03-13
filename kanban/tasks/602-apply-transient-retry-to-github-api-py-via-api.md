@@ -30,4 +30,4 @@ Extract HTTP calls in `GitHubToolset` into a shared `_api_request` helper method
 ### Architecture notes
 - DRY: 4 endpoints repeat identical `async with httpx.AsyncClient(...) as client`  extract once
 - `_api_request` handles only the HTTP call; response interpretation stays in each tool method
-- See `docs/retry-decorators-research.md` §3.6
+- See `docs/research/retry-decorators.md` §3.6

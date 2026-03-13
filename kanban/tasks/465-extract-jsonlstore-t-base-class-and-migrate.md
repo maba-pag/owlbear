@@ -17,7 +17,7 @@ class: standard
 
 ## Context
 
-Research: docs/jsonl-store-base-class-research.md
+Research: docs/research/jsonl-store-base-class.md
 Duplication: __init__, path, append, load are identical across UsageTracker, EventStore (~25 lines each).
 
 ## Acceptance Criteria

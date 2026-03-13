@@ -57,4 +57,4 @@ Fixtures (mock wiring -- follow test_visual_feedback.py):
 - toolset: DiagramToolset(diagram_svc, screenshot_svc, channel, workspace)
 
 Pattern: follow tests/test_visual_feedback.py structure exactly.
-Ref: docs/visuals-diagrams-mcp-research.md section 4 Tier 1
+Ref: docs/research/visuals-diagrams-mcp.md section 4 Tier 1

@@ -19,7 +19,7 @@ class: standard
 ## Context
 
 Replace bare OwlBearAgent in `bearclaw run` with fully-wired `bootstrap()`. Eliminates the 10%% wiring problem.
-See docs/bootstrap-assembly-research.md S3.3.
+See docs/research/bootstrap-assembly.md S3.3.
 
 ## Acceptance Criteria
 

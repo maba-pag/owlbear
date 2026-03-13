@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Update gate.py 'approve all' handler to create GrantRecord with policy defaults. See docs/approval-scope-limits-research.md.
+Update gate.py 'approve all' handler to create GrantRecord with policy defaults. See docs/research/approval-scope-limits.md.
 
 ## Acceptance Criteria
 

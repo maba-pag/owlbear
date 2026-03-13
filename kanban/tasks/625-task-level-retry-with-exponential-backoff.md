@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-When an agent run fails on a kanban task in the poll-dispatch-reconcile loop, schedule retry with exponential backoff instead of immediately discarding. See docs/symphony-research.md S3.2.
+When an agent run fails on a kanban task in the poll-dispatch-reconcile loop, schedule retry with exponential backoff instead of immediately discarding. See docs/research/symphony.md S3.2.
 
 Distinct from #512 (message-level retry within a single agent turn). This is task-level retry across agent dispatches in the autonomous loop.
 

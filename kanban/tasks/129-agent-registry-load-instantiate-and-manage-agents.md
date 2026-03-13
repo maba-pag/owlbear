@@ -16,7 +16,7 @@ class: standard
 ---
 
 Central registry: scan agent definitions, instantiate PydanticAI Agents with configured tools/skills, lookup by name.
-Research: docs/agent-framework-research.md section 3.2
+Research: docs/research/agent-framework.md section 3.2
 Depends on: #128 (AgentDefinition + parse_agent_definition)
 
 ## AC

@@ -28,6 +28,6 @@ class: standard
 - [ ] TDD: write tests first, then implement
 
 Depends on: #91
-See docs/voice-io-research.md sections 3.1-3.2.
+See docs/research/voice-io.md sections 3.1-3.2.
 
 Note: VoiceSettings removed from this task scope. Each component accepts config via constructor params. Unified settings integration deferred to #95 (VoiceChannel).

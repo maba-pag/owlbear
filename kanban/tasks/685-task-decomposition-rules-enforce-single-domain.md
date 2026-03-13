@@ -28,7 +28,7 @@ Instead of specializing the builder per domain (frontend/backend/database), ensu
 - The architect gate (backlog->todo) is the quality control for tasks created outside the planner. This already exists in the pipeline. The key rule is: follow-up tasks always go to backlog, never straight to todo, so the architect reviews them.
 
 [[2026-03-08]] Sun 17:26
-See docs/task-decomposition-rules-research.md for details. Follow-up tasks: #694, #695, #697.
+See docs/research/task-decomposition-rules.md for details. Follow-up tasks: #694, #695, #697.
 
 [[2026-03-08]] Sun 23:51
 Wave 4, agent: auditor

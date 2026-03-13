@@ -26,4 +26,4 @@ class: standard
 - [ ] All tests in tests/test_project_definition_models.py pass
 
 Patterns: owlbear/memory/knowledge/extractor.py ExtractionResult, owlbear/memory/knowledge/models.py Entity
-See docs/project-definition-workflow-research.md sec3.3
+See docs/research/project-definition-workflow.md sec3.3

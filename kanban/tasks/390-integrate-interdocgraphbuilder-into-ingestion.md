@@ -14,7 +14,7 @@ class: standard
 ---
 
 ## Context
-From #256 inter-document-graph-builder-research.md.
+From #256 inter-document-graph-builder.md.
 Hook InterDocGraphBuilder into IngestPipeline after intra-doc graph enrichment.
 Follows _schedule_graph_enrichment pattern in ingest.py.
 

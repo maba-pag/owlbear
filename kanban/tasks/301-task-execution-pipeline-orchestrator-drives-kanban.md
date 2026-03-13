@@ -23,6 +23,6 @@ SPLIT into atomic sub-tasks:
 - #315 — Wire KanbanToolset into bootstrap + orchestrator definition [backlog, depends-on #314]
 - #316 — Orchestrator kanban pipeline prompt + integration test [backlog, depends-on #315]
 
-Architect decision: Follow GitLocalToolset pattern exactly — async subprocess wrapper, FunctionToolset subclass, 7 tools (list, show, create, move, edit, pick, context). --no-color and --dir on every command. Mutating ops emit PRE_TOOL_USE hooks. Error handling via string returns, never exceptions. See docs/kanban-toolset-research.md.
+Architect decision: Follow GitLocalToolset pattern exactly — async subprocess wrapper, FunctionToolset subclass, 7 tools (list, show, create, move, edit, pick, context). --no-color and --dir on every command. Mutating ops emit PRE_TOOL_USE hooks. Error handling via string returns, never exceptions. See docs/research/kanban-toolset.md.
 
 This parent task is now complete — all work tracked via children.

@@ -18,7 +18,7 @@ Wire KnowledgeSourceToolset into bootstrap build_toolsets().
 
 ## Research findings (2026-03-06)
 
-See docs/knowledge-source-toolset-wiring-research.md for full analysis.
+See docs/research/knowledge-source-toolset-wiring.md for full analysis.
 
 ## Implementation spec
 

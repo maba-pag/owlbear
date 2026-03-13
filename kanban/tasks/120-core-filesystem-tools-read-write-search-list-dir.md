@@ -18,7 +18,7 @@ PydanticAI FunctionToolset with the minimum tools agents need to interact with t
 
 ## Research Findings
 
-See `docs/filesystem-tools-research.md` for full analysis.
+See `docs/research/filesystem-tools.md` for full analysis.
 
 **Key decisions:**
 - Path traversal guard: `Path.resolve()` + `is_relative_to()` (Python-idiomatic version of MCP server pattern)

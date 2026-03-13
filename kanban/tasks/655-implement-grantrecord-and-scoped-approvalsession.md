@@ -13,7 +13,7 @@ tags:
 class: standard
 ---
 
-Replace ApprovalSession._pre_grants set[str] with dict[str, GrantRecord]. See docs/approval-scope-limits-research.md Option B.
+Replace ApprovalSession._pre_grants set[str] with dict[str, GrantRecord]. See docs/research/approval-scope-limits.md Option B.
 
 ## Acceptance Criteria
 

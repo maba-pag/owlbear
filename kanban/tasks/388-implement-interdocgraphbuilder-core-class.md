@@ -15,7 +15,7 @@ class: standard
 ---
 
 ## Context
-From #256 inter-document-graph-builder-research.md.
+From #256 inter-document-graph-builder.md.
 Follows IntraDocGraphBuilder pattern from graph_builder.py.
 
 ## Acceptance Criteria

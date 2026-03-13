@@ -18,7 +18,7 @@ class: standard
 
 The fastest path to a working OwlBear: an interactive terminal session where the user types, OwlBear responds. Uses CLIChannel + OwlBearAgent.
 
-See `docs/chat-repl-research.md` for detailed findings.
+See `docs/research/chat-repl.md` for detailed findings.
 
 ## Research Summary
 

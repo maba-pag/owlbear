@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Register VisualFeedbackToolset, ScreenshotOnErrorHook, and screenshot_mode config in bootstrap assembly. Wire ScreenshotService with channel and browser refs. AC: Bootstrap creates and registers all screenshot components; screenshot toolset available to agents; ON_ERROR hook active when screenshot_mode != manual. Depends on #302, #391, #392, #393, #394.
+From #302 screenshot-visual-feedback.md. Register VisualFeedbackToolset, ScreenshotOnErrorHook, and screenshot_mode config in bootstrap assembly. Wire ScreenshotService with channel and browser refs. AC: Bootstrap creates and registers all screenshot components; screenshot toolset available to agents; ON_ERROR hook active when screenshot_mode != manual. Depends on #302, #391, #392, #393, #394.

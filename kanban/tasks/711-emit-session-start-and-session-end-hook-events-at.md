@@ -36,7 +36,7 @@ depends_on: #713
 - **workspace_root access:** `run_daemon()` currently lacks this parameter. Add `workspace_root: Path | None = None` to the signature. Both call sites in `bearclaw/cli.py` (`_run_daemon_cmd` and `_chat_cmd`) already resolve workspace_root  pass it through. If None, fall back to `Path.cwd()`.
 - **Error isolation:** `HookRegistry.emit()` wraps each handler in try/except (hooks.py L80+). No additional error handling needed at the emission site, except for session.load() in SESSION_END payload construction.
 - **Module layering:** daemon.py is assembly layer  importing from core/hooks is valid (top-down).
-- See docs/research/session-hook-emission-research.md for full analysis.
+- See docs/research/session-hook-emission.md for full analysis.
 
 [[2026-03-09]] Mon 19:17
 ## Architecture Review
@@ -215,7 +215,7 @@ Test file committed in #713 (c7acfe0). git diff HEAD -- tests/test_session_hooks
 | 2 | Docstrings | Yes | Pass | run_daemon() docstring includes workspace_root param with proper description (daemon.py L831). |
 | 3 | sources/overview.md | Yes | Pass | Task #711 section already present with OpenAI Agents SDK + PydanticAI references. |
 | 4 | README.md | No | N/A | No CLI changes. workspace_root is passed internally. |
-| 5 | Research doc | Yes | Pass | docs/research/session-hook-emission-research.md exists, linked in task body. |
+| 5 | Research doc | Yes | Pass | docs/research/session-hook-emission.md exists, linked in task body. |
 
 ### Files Updated
 - None

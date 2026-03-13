@@ -18,7 +18,7 @@ class: standard
 **Source:** https://github.com/quoroom-ai/room
 Analyze for multi-agent delegation, orchestration patterns, and task execution logic.
 
-**Research doc:** docs/quoroom-room-research.md
+**Research doc:** docs/research/quoroom-room.md
 
 **Key findings:**
 - **WIP continuity** (.80): save_wip/CONTINUE FORWARD pattern solves multi-cycle amnesia. Highest value.

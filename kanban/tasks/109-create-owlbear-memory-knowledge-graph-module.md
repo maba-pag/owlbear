@@ -43,4 +43,4 @@ CRUD operations for the knowledge graph. Adapted from tool.graphicator `db/graph
 - [ ] Metadata fields stored as JSON strings, deserialized on read
 - [ ] `ruff check` clean
 
-See docs/knowledge-graph-research.md section 3.4
+See docs/research/knowledge-graph.md section 3.4

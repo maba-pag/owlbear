@@ -24,4 +24,4 @@ class: standard
 - [ ] Regex-based, ~20 LOC — handle common cases only, not full markdown parser
 - [ ] No changes to ChannelPlugin protocol or CLIChannel
 
-See docs/slack-rich-messaging-research.md S3.6
+See docs/research/slack-rich-messaging.md S3.6

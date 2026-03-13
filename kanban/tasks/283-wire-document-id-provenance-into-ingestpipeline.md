@@ -27,4 +27,4 @@ AC:
 
 Pattern: follow existing GraphStore.list_entities() for query pattern.
 Depends on #278 (schema v4 must create the column first).
-See docs/intra-document-graph-research.md
+See docs/research/intra-document-graph.md

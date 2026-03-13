@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Add screenshot_mode: Literal['auto', 'manual', 'on_error'] = 'on_error' to OwlBearSettings. 'auto' = capture after every browser action; 'manual' = only when agent calls tool; 'on_error' = auto-capture on failure. Screenshot dir derived from workspace (not user-configurable). AC: screenshot_mode field validated; default is on_error; hooks and toolset respect the setting. Depends on #302.
+From #302 screenshot-visual-feedback.md. Add screenshot_mode: Literal['auto', 'manual', 'on_error'] = 'on_error' to OwlBearSettings. 'auto' = capture after every browser action; 'manual' = only when agent calls tool; 'on_error' = auto-capture on failure. Screenshot dir derived from workspace (not user-configurable). AC: screenshot_mode field validated; default is on_error; hooks and toolset respect the setting. Depends on #302.

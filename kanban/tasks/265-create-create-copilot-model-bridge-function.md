@@ -16,8 +16,8 @@ class: standard
 
 ## Context
 Bridges existing create_copilot_client() to PydanticAI OpenAIChatModel.
-See docs/bootstrap-assembly-research.md S3.3, step 1.
-See docs/daemon-bootstrap-research.md S3.1 for confirmed pattern.
+See docs/research/bootstrap-assembly.md S3.3, step 1.
+See docs/research/daemon-bootstrap.md S3.1 for confirmed pattern.
 
 ## Acceptance Criteria
 - [ ] Add async create_copilot_model(settings: OwlBearSettings | None = None) -> OpenAIChatModel to src/owlbear/providers/copilot.py
@@ -31,7 +31,7 @@ See docs/daemon-bootstrap-research.md S3.1 for confirmed pattern.
 - [ ] ~15 LOC implementation, ~40 LOC tests
 
 ## Architecture Notes
-- Pattern confirmed in tool.graphicator and daemon-bootstrap-research.md S3.1
+- Pattern confirmed in tool.graphicator and daemon-bootstrap.md S3.1
 - PydanticAI Agent.__init__ accepts model: Model | KnownModelName | str | None
 - This function is pure wiring — no new abstractions
 - Follows existing create_copilot_client() conventions (async, settings param, defaults to OwlBearSettings())

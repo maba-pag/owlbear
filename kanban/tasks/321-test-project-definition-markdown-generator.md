@@ -27,4 +27,4 @@ class: standard
 - [ ] Test: optional non-empty sections appear when populated
 - [ ] Tests import from owlbear.planning.markdown (fail until impl completes)
 
-See docs/project-definition-workflow-research.md sec4
+See docs/research/project-definition-workflow.md sec4

@@ -15,7 +15,7 @@ class: standard
 
 SEC-14: Security events (blocked commands, approvals, auth failures) mixed into standard rotating logs. Security events can be lost in rotation.
 
-Research complete. See docs/security-audit-log-research.md.
+Research complete. See docs/research/security-audit-log.md.
 
 **Recommendation (.90):** Create SecurityAuditLog(JsonlStore[SecurityEvent]) in src/owlbear/safety/audit_log.py. Pydantic model with OWASP-aligned fields (timestamp, event_type, severity, actor, session_id, tool_name, detail, metadata). 500K entry cap. Wire into CommandSafetyGuard, ApprovalGateToolset, TerminalToolset.
 

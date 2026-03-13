@@ -16,4 +16,4 @@ depends_on:
 class: standard
 ---
 
-From #305 context-aware-knowledge-injection-research.md. AC: - Add to OwlBearSettings in src/owlbear/config.py: knowledge_context_tokens: int = 2000 - Field validator: must be > 0 (raise ValueError with message 'knowledge_context_tokens must be greater than 0') - Environment variable: OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS - Place in Knowledge section (after embedding_model) - Depends on test task #424
+From #305 context-aware-knowledge-injection.md. AC: - Add to OwlBearSettings in src/owlbear/config.py: knowledge_context_tokens: int = 2000 - Field validator: must be > 0 (raise ValueError with message 'knowledge_context_tokens must be greater than 0') - Environment variable: OWLBEAR_KNOWLEDGE_CONTEXT_TOKENS - Place in Knowledge section (after embedding_model) - Depends on test task #424

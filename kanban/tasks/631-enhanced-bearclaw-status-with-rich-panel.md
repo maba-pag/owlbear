@@ -17,7 +17,7 @@ class: standard
 ---
 
 Replace `_daemon_status()` in `src/bearclaw/cli.py` with a rich.Panel + Table display.
-See `docs/enhanced-bearclaw-status-research.md` for research.
+See `docs/research/enhanced-bearclaw-status.md` for research.
 
 ## AC
 

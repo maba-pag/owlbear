@@ -28,4 +28,4 @@ AC:
 - [ ] No changes to EntityType or RelationType enums
 
 Depends on: #220 (test task)
-See docs/knowledge-scoping-research.md
+See docs/research/knowledge-scoping.md

@@ -16,7 +16,7 @@ class: standard
 
 Implement a SESSION_START hook that reads recent curated lessons from .owlbear/lessons/ and injects them into agent context.
 
-Ref: docs/research/olanetsoft-workflow-research.md (task #747)
+Ref: docs/research/olanetsoft-workflow.md (task #747)
 
 AC:
 - [ ] New hook class LessonsInjectionHook in src/owlbear/core/lessons_hook.py

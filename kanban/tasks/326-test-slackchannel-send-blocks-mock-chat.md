@@ -22,4 +22,4 @@ class: standard
 - [ ] Test send_blocks with empty blocks list raises ValueError
 - [ ] Mock AsyncWebClient to verify exact API call params
 
-See docs/slack-rich-messaging-research.md S3.1, S3.3
+See docs/research/slack-rich-messaging.md S3.1, S3.3

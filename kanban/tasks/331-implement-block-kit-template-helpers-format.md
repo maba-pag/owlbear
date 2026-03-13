@@ -25,4 +25,4 @@ class: standard
 - [ ] Truncate text fields to Slack limits (3000 chars for section text)
 - [ ] No external dependencies — pure dict construction
 
-See docs/slack-rich-messaging-research.md S3.3
+See docs/research/slack-rich-messaging.md S3.3

@@ -28,4 +28,4 @@ class: standard
 - [ ] Log approval events via hooks.emit(POST_TOOL_USE, ...) with event_type='approval_gate'
 - [ ] Nests outside HookedToolset in the wrapping chain
 
-See docs/approval-gates-research.md S3.5
+See docs/research/approval-gates.md S3.5

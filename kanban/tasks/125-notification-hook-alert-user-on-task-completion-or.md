@@ -23,7 +23,7 @@ SPLIT by architect review into:
 - #160: Implement NotificationHook with bell and sound backends
 
 Original scope was too broad (multiple responsibilities). Split follows one-responsibility-per-task rule.
-Research: docs/notification-hook-research.md
+Research: docs/research/notification-hook.md
 
 Future tasks (not created yet - YAGNI):
 - Toast backend (windows-toasts)

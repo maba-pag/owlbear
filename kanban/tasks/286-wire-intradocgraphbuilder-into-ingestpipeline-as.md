@@ -25,4 +25,4 @@ AC:
 - [ ] Skips if document already enriched (idempotent)
 - [ ] Test integration with mocked builder
 Depends on #284, #285
-See docs/intra-document-graph-research.md
+See docs/research/intra-document-graph.md

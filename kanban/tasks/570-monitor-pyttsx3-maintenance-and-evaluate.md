@@ -20,6 +20,6 @@ Risk downgraded from Medium to Low. Config-dependency-audit updated.
 
 Decision: Keep pyttsx3. When voice features are actively developed, consider adding edge-tts as optional online-quality fallback.
 
-See docs/pyttsx3-tts-alternatives-research.md for full analysis.
+See docs/research/pyttsx3-tts-alternatives.md for full analysis.
 
 AC: decision documented.

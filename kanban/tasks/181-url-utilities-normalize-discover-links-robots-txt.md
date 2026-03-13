@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/tools/browser/url_utils.py | Test: tests/test_url_utils.py | See docs/web-crawling-research.md S3.3-3.5.
+Module: src/owlbear/tools/browser/url_utils.py | Test: tests/test_url_utils.py | See docs/research/web-crawling.md S3.3-3.5.
 
 AC:
 - normalize_url(url: str) -> str — lowercase scheme+host, strip trailing slash, strip fragment (#...), sort query params

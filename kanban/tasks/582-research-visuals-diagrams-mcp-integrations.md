@@ -16,7 +16,7 @@ class: standard
 
 Epic: Analyze diagram generation, UI components, and Excalidraw MCP integration patterns. Children cover individual repos.
 
-**Research doc:** See docs/visuals-diagrams-mcp-research.md
+**Research doc:** See docs/research/visuals-diagrams-mcp.md
 
 **Key findings:**
 - Kroki.io (unified HTTP API, 20+ diagram types) is the simplest integration for quick diagrams  single httpx POST, zero new deps

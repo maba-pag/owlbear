@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-temporal_decay_rate and temporal_recency_weight fields. See docs/temporal-memory-research.md. Depends on #207.
+temporal_decay_rate and temporal_recency_weight fields. See docs/research/temporal-memory.md. Depends on #207.

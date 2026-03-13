@@ -16,7 +16,7 @@ class: standard
 
 Epic: Analyze agent autonomy, self-correction patterns, and web interaction from OpenClaw ecosystem. Children cover individual repos/skill areas.
 
-**Research:** See docs/openclaw-ecosystem-research.md
+**Research:** See docs/research/openclaw-ecosystem.md
 
 **Children:**
 - #590 (backlog) -- OpenClaw skills: heartbeat, hooks, browser, Lobster

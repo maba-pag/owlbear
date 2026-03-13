@@ -16,7 +16,7 @@ tags:
 class: standard
 ---
 
-RED phase tests for #483.\n\n## Acceptance Criteria\n1. Test module: tests/test_hook_payloads.py\n2. Tests verify 9 TypedDict classes importable from owlbear.core.hooks: PreToolUseData, PostToolUseData, OnMessageData, OnErrorData, SessionStartData, SessionEndData, SubagentCompleteData, TaskCompleteData, DaemonStartupData\n3. Tests verify PostToolUseData accepts both HookedToolset shape (tool_name + result) and ApprovalGateToolset shape (tool_name + event_type + approval_required + approval_decision)\n4. Tests verify Handler type alias is Callable[[dict[str, Any]], None]\n5. Tests verify all TypedDicts are in core/__init__.py __all__\n6. No QUESTION_PENDING TypedDict test (YAGNI - event not yet emitted)\n7. All tests FAIL before implementation (RED phase)\n\n## Architecture Notes\n- Follow TestResult(TypedDict) precedent in core/test_hook.py\n- See docs/research/typed-hook-payloads-research.md for payload shapes
+RED phase tests for #483.\n\n## Acceptance Criteria\n1. Test module: tests/test_hook_payloads.py\n2. Tests verify 9 TypedDict classes importable from owlbear.core.hooks: PreToolUseData, PostToolUseData, OnMessageData, OnErrorData, SessionStartData, SessionEndData, SubagentCompleteData, TaskCompleteData, DaemonStartupData\n3. Tests verify PostToolUseData accepts both HookedToolset shape (tool_name + result) and ApprovalGateToolset shape (tool_name + event_type + approval_required + approval_decision)\n4. Tests verify Handler type alias is Callable[[dict[str, Any]], None]\n5. Tests verify all TypedDicts are in core/__init__.py __all__\n6. No QUESTION_PENDING TypedDict test (YAGNI - event not yet emitted)\n7. All tests FAIL before implementation (RED phase)\n\n## Architecture Notes\n- Follow TestResult(TypedDict) precedent in core/test_hook.py\n- See docs/research/typed-hook-payloads.md for payload shapes
 
 [[2026-03-10]] Tue 00:43
 ## Test-Writer Notes
@@ -103,7 +103,7 @@ Builder did NOT modify test file (confirmed: git status shows untracked, git dif
 | 2 | Docstrings complete | Yes | Pass | All 9 TypedDicts have docstrings. Handler alias has inline comments explaining normalization. Module docstring present |
 | 3 | sources/overview.md | No | N/A | No external patterns adopted  TypedDicts are OwlBear's own design |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads-research.md exists and is referenced in task AC |
+| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads.md exists and is referenced in task AC |
 
 ### Files Updated
 - None

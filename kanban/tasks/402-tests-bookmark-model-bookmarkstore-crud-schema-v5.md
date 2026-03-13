@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. TDD for Bookmark model validation, BookmarkStore CRUD operations, schema v5 migration. Mock SQLite. AC: Model validation tested (required fields, types); CRUD tested (create, get_by_url, list, update_tags, delete); dedup tested; schema migration tested. Depends on #304.
+From #304 source-discovery-bookmarking.md. TDD for Bookmark model validation, BookmarkStore CRUD operations, schema v5 migration. Mock SQLite. AC: Model validation tested (required fields, types); CRUD tested (create, get_by_url, list, update_tags, delete); dedup tested; schema migration tested. Depends on #304.

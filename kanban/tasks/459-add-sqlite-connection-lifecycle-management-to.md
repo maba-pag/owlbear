@@ -15,7 +15,7 @@ class: standard
 ---
 
 ARC-04/C-1: SQLite connections created in bootstrap helpers are never closed. No cleanup hook, no context manager. BootstrapResult.cleanup doesnt include connection closure. Leaked FDs accumulate over daemon lifetime.
-Research complete (2026-03-06). See docs/sqlite-connection-lifecycle-research.md.
+Research complete (2026-03-06). See docs/research/sqlite-connection-lifecycle.md.
 
 AC:
 - [ ] After build_toolsets() completes, if _build_knowledge_infra() created a sqlite3.Connection, that connections close method is present in BootstrapResult.cleanup

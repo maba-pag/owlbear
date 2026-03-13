@@ -26,4 +26,4 @@ AC:
 - [ ] ~5 LOC in config.py + ~15 LOC conditional setup in daemon bootstrap
 
 Depends on: #230 (test task), #216
-See docs/agent-observability-research.md
+See docs/research/agent-observability.md

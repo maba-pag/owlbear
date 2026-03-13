@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/extractor.py | Test: tests/test_knowledge_extractor.py | See docs/knowledge-ingestion-research.md S3.1.
+Module: src/owlbear/memory/knowledge/extractor.py | Test: tests/test_knowledge_extractor.py | See docs/research/knowledge-ingestion.md S3.1.
 
 AC:
 - EntityExtractor class accepting a PydanticAI model (or model name string)

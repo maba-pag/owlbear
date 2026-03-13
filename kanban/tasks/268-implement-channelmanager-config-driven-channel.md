@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 Replaces the manual if/else channel selection in bearclaw CLI with a config-driven registry.
-Adapted from nanobot ChannelManager pattern. See docs/bootstrap-assembly-research.md S3.2.
+Adapted from nanobot ChannelManager pattern. See docs/research/bootstrap-assembly.md S3.2.
 
 ## Architectural Decision: MERGED into #267
 The create_channel() helper function inside bootstrap.py (#267) fulfills this task's requirements.

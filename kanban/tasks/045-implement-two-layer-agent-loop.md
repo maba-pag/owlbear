@@ -19,7 +19,7 @@ depends_on:
 class: standard
 ---
 
-See docs/agent-patterns-research.md para 2.1. This is the core of OwlBear.
+See docs/research/agent-patterns.md para 2.1. This is the core of OwlBear.
 
 ## Research required (gate: ideation to backlog)
 

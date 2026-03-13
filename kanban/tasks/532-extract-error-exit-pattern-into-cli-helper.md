@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-F-19: except SomeException: typer.echo(f'Error: {exc}'); raise typer.Exit(1) pattern repeated 21 times. Extract _cli_error(msg: str) -> NoReturn helper. See docs/cli-error-exit-research.md.
+F-19: except SomeException: typer.echo(f'Error: {exc}'); raise typer.Exit(1) pattern repeated 21 times. Extract _cli_error(msg: str) -> NoReturn helper. See docs/research/cli-error-exit.md.
 
 Research checklist: N/A - trivial DRY extraction of 2-line error-exit pattern.
 

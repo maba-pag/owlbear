@@ -28,4 +28,4 @@ class: standard
 - [ ] Test observability: approval events logged via hooks (PRE_TOOL_USE data extended)
 - [ ] Mock channel (send queue + receive queue) and inner toolset
 
-See docs/approval-gates-research.md S3.5, S3.6
+See docs/research/approval-gates.md S3.5, S3.6

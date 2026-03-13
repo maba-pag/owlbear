@@ -21,7 +21,7 @@ class: standard
 The _resolve closure in build_agent_registry() raises KeyError for unknown tools. AgentRegistry._build_agent() uses a list comprehension that propagates this. The knowledge toolset is conditionally created in build_toolsets() (returns None when qdrant-client missing), but the agent definition still references it.
 
 ## Research Findings
-See docs/optional-tool-graceful-degradation-research.md
+See docs/research/optional-tool-graceful-degradation.md
 
 **Approved approach (.90 confidence):** Catch-and-skip in _build_agent -- change the list comprehension to a loop with try/except KeyError, log WARNING per skipped tool. Consistent with 8 existing catch-and-skip patterns in bootstrap.py.
 

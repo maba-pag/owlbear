@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-**Source:** #725 (implementation task), docs/research/untrusted-content-wrapping-research.md
+**Source:** #725 (implementation task), docs/research/untrusted-content-wrapping.md
 
 **AC:**
 - [ ] Test `wrap_untrusted_content()` wraps text with `<untrusted_web_content>` tags and advisory preamble

@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-SUPERSEDED: Split into #675 (widen protocol with defaults), #676 (remove hasattr checks), #677 (tests). Original task combined protocol changes with consumer refactoring -- two distinct responsibilities. See docs/channel-protocol-extension-research.md for full research.
+SUPERSEDED: Split into #675 (widen protocol with defaults), #676 (remove hasattr checks), #677 (tests). Original task combined protocol changes with consumer refactoring -- two distinct responsibilities. See docs/research/channel-protocol-extension.md for full research.

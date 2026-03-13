@@ -14,8 +14,8 @@ class: standard
 ---
 
 ## Context
-From #275 provenance-tracking-research.md Option A (metadata dict approach).
-See docs/provenance-tracking-research.md S3–S4.
+From #275 provenance-tracking.md Option A (metadata dict approach).
+See docs/research/provenance-tracking.md S3–S4.
 
 ## Acceptance Criteria
 - [ ] IngestPipeline.__init__ accepts pipeline_name: str = 'ingest' parameter and stores as self._pipeline_name

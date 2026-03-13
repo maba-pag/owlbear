@@ -15,7 +15,7 @@ class: standard
 ---
 
 Write failing tests for the enhanced tab title prefix feature before implementation (TDD).
-See docs/cdp-tab-groups-research.md for context.
+See docs/research/cdp-tab-groups.md for context.
 
 Pattern: existing tests in tests/test_browser_toolset.py class TestBrowserToolsetTabNaming.
 

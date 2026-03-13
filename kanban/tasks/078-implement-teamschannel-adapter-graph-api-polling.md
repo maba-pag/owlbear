@@ -18,7 +18,7 @@ block_reason: 'Blocked on #77 — Azure AD app registration not possible (IT adm
 class: standard
 ---
 
-Create src/owlbear/channels/teams.py conforming to ChannelPlugin Protocol. Use msgraph-sdk + msal for auth. Polling loop for receive(), Graph API POST for send(). connect() authenticates via MSAL device-flow and resolves target chat ID. See docs/teams-integration-research.md.
+Create src/owlbear/channels/teams.py conforming to ChannelPlugin Protocol. Use msgraph-sdk + msal for auth. Polling loop for receive(), Graph API POST for send(). connect() authenticates via MSAL device-flow and resolves target chat ID. See docs/research/teams-integration.md.
 
 [[2026-02-27]] Fri 01:38
 CLOSED: Teams path abandoned. Replaced by Slack tasks.

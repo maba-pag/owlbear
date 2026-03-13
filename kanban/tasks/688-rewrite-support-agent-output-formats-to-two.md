@@ -41,7 +41,7 @@ class: standard
 
 - These agents have simpler outputs than the pipeline agents. Researcher already uses file references for its main output.
 - No TDD required -- these are .agent.md file edits.
-- Reference: docs/inter-agent-communication-protocol-research.md sections 3.3, 3.4, 3.5
+- Reference: docs/research/inter-agent-communication-protocol.md sections 3.3, 3.4, 3.5
 - Planner and curator have a conditional Channel B: only when a target task ID exists. This is documented in the AC sub-bullets. The protocol table in agent-common.instructions.md defines the format; the agent file defines when to apply it.
 
 [[2026-03-08]] Sun 17:51

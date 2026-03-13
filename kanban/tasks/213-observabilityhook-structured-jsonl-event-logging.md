@@ -33,4 +33,4 @@ AC:
 - [ ] Pattern follows NotificationHook.register() pattern for hook registration
 
 Depends on: #229 (test task)
-See docs/agent-observability-research.md, docs/agent-analytics-research.md
+See docs/research/agent-observability.md, docs/research/agent-analytics.md

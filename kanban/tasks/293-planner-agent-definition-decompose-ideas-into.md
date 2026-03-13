@@ -16,7 +16,7 @@ class: standard
 ## Context
 
 No agent definition exists for the planning role. The orchestrator delegates but doesn't plan. Need a planner agent that takes vague user ideas and produces structured project definitions with requirements, AC, task decomposition.
-See `docs/planner-agent-definition-research.md` for full research findings.
+See `docs/research/planner-agent-definition.md` for full research findings.
 
 ## Acceptance Criteria
 

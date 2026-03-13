@@ -18,7 +18,7 @@ class: standard
 **Source:** <https://github.com/excalidraw/excalidraw-mcp>
 Analyze for Excalidraw MCP server implementation, tool definitions, and integration patterns.
 
-**Research:** See docs/excalidraw-mcp-research.md
+**Research:** See docs/research/excalidraw-mcp.md
 
 **Findings:**
 
@@ -47,7 +47,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 ## Builder Notes
 
 - Non-implementation research task -- no code changes, no tests
-- Research doc verified: docs/excalidraw-mcp-research.md (complete, 5 sections)
+- Research doc verified: docs/research/excalidraw-mcp.md (complete, 5 sections)
 - Follow-up task #718 created at ideation (cheat-sheet tool pattern evaluation)
 - All 5 research checklist items checked
 - Findings match task body summary
@@ -58,7 +58,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 ## Builder Notes
 
 - Non-implementation research task -- no code changes, no tests
-- Research doc verified: docs/excalidraw-mcp-research.md (complete, 5 sections)
+- Research doc verified: docs/research/excalidraw-mcp.md (complete, 5 sections)
 - Follow-up task #718 created at ideation (cheat-sheet tool pattern evaluation)
 - All 5 research checklist items checked
 - Findings match task body summary
@@ -70,7 +70,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 
 ### Deliverables Verified
 
-- Research doc: docs/excalidraw-mcp-research.md (committed, 69 lines, 5 sections)
+- Research doc: docs/research/excalidraw-mcp.md (committed, 69 lines, 5 sections)
 - Follow-up task: #718 (ideation, nice-to-have, cheat-sheet pattern evaluation)
 
 ### Research Checklist (5/5)
@@ -116,12 +116,12 @@ N/A  pure research task, no code changes.
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Already attributed at line 1098-1104 (3 sources with URLs, dates, Where Used) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Fixed | Moved from docs/ root to docs/research/excalidraw-mcp-research.md per file placement rules (commit 2df32cb); task body links correctly |
+| 5 | Research doc linked | Yes | Fixed | Moved from docs/ root to docs/research/excalidraw-mcp.md per file placement rules (commit 2df32cb); task body links correctly |
 | 6 | Follow-up tasks | Yes | Pass | #718 exists at ideation status |
 
 ### Files Updated
 
-- docs/excalidraw-mcp-research.md -> docs/research/excalidraw-mcp-research.md (relocated, commit 2df32cb)
+- docs/research/excalidraw-mcp.md -> docs/research/excalidraw-mcp.md (relocated, commit 2df32cb)
 
 ### Scratch Files Cleaned
 
@@ -135,12 +135,12 @@ N/A  pure research task, no code changes.
 
 | AC Item | Evidence | Status |
 |---------|----------|--------|
-| Research doc written | docs/research/excalidraw-mcp-research.md - 69 lines, 5 sections | PASS |
+| Research doc written | docs/research/excalidraw-mcp.md - 69 lines, 5 sections | PASS |
 | Research checklist 5/5 | Task body all 5 checked | PASS |
 | Follow-up tasks created | #718 at ideation (cheat-sheet tool pattern) | PASS |
 | Sources attributed | docs/sources/overview.md L21 - 3 sources | PASS |
 | Doc in correct location | docs/research/ per rules (moved 2df32cb) | PASS |
-| Duplicate removed | docs/excalidraw-mcp-research.md absent | PASS |
+| Duplicate removed | docs/research/excalidraw-mcp.md absent | PASS |
 | Scratch files cleaned | No docs/scratch/594-* | PASS |
 
 ### Test Results

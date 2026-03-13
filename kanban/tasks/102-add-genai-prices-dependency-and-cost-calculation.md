@@ -30,4 +30,4 @@ Add genai-prices as a hard dependency and create a thin cost calculation wrapper
 - [ ] Follows project patterns: `from __future__ import annotations`, type hints on all signatures
 
 Depends on: #105 (test contracts written first — TDD)
-See docs/token-usage-tracking-research.md section 3.2
+See docs/research/token-usage-tracking.md section 3.2

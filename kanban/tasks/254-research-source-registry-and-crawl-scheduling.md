@@ -32,7 +32,7 @@ Need a way to manage knowledge sources: 'refresh all pages from Confluence space
 - CLI: bearclaw knowledge sources add/list/refresh/schedule?
 
 ## Acceptance Criteria
-- [x] Research doc in docs/ -- docs/source-registry-research.md (179 lines)
+- [x] Research doc in docs/ -- docs/research/source-registry.md (179 lines)
 - [x] Follow-up implementation tasks created -- #382-387 (all done)
 - [x] Source registry data model proposed -- SourceType enum + KnowledgeSource model
 - [x] Scheduling approach recommended -- manual refresh via RefreshOrchestrator, defer cron to phase-14

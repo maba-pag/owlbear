@@ -24,4 +24,4 @@ class: standard
 - [ ] Test empty policy: requires_approval always returns False
 - [ ] Test ApprovalPolicy is a Pydantic BaseModel with JSON serialization
 
-See docs/approval-gates-research.md S3.4, S3.5
+See docs/research/approval-gates.md S3.4, S3.5

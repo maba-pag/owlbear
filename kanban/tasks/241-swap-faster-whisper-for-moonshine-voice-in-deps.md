@@ -27,4 +27,4 @@ Replace faster-whisper with moonshine-voice in pyproject.toml [voice] extras.
 ## Notes
 - moonshine-voice v0.0.49, MIT license, ONNX Runtime core
 - sounddevice replaces pyaudio for mic capture (pulled in by moonshine-voice)
-- See docs/moonshine-streaming-research.md S4.2
+- See docs/research/moonshine-streaming.md S4.2

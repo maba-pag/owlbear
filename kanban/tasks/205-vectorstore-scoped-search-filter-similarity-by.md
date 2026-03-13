@@ -28,4 +28,4 @@ AC:
 - [ ] delete_embedding unchanged (deletes by ID regardless of scope)
 
 Depends on: #222 (test task), #197
-See docs/knowledge-scoping-research.md
+See docs/research/knowledge-scoping.md

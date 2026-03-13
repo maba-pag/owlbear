@@ -26,4 +26,4 @@ class: standard
 - [ ] Handles nonexistent project gracefully (returns error string, no exception)
 - [ ] ~60 LOC
 
-See docs/multi-project-session-research.md S3.10
+See docs/research/multi-project-session.md S3.10

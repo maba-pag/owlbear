@@ -19,7 +19,7 @@ block_reason: 'Blocked on #77 — Azure AD app registration not possible (IT adm
 class: standard
 ---
 
-Add bearclaw teams auth (device-flow login), bearclaw teams status (connection check), bearclaw teams chat (set target chat ID). See docs/teams-integration-research.md.
+Add bearclaw teams auth (device-flow login), bearclaw teams status (connection check), bearclaw teams chat (set target chat ID). See docs/research/teams-integration.md.
 
 [[2026-02-27]] Fri 01:38
 CLOSED: Teams path abandoned. Replaced by Slack tasks.

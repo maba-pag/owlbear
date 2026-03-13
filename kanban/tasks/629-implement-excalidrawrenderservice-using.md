@@ -31,7 +31,7 @@ AC:
 - [ ] All tests pass, ruff clean
 
 Pattern: follow ScreenshotService (stateless) + BrowserToolset (Playwright lifecycle)
-Ref: docs/excalidraw-diagram-skill-research.md section 3.2, docs/visuals-diagrams-mcp-research.md section 4 Tier 2
+Ref: docs/research/excalidraw-diagram-skill.md section 3.2, docs/research/visuals-diagrams-mcp.md section 4 Tier 2
 
 [[2026-03-12]] Thu 13:18
 ## Architecture Review
@@ -42,4 +42,4 @@ See docs/scratch/629-architect.md for full review.
 Recommendation (.85): Create Tier 0 Kroki passthrough first, keep #629 deferred.
 Kroki supports Excalidraw JSON -> SVG (confirmed). Font bug #1742 still open.
 coleam00 render pipeline proven (1k+ stars). Tier 0 = 1-line change; Tier 2 = ~120 LOC.
-Doc: docs/research/excalidraw-render-update-research.md
+Doc: docs/research/excalidraw-render-update.md

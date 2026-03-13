@@ -20,7 +20,7 @@ class: standard
 
 The full system (bootstrap -> agent -> tools -> daemon loop) has never been tested end-to-end.
 Individual modules have 1883 unit tests but the wiring has gaps.
-See docs/bootstrap-daemon-e2e-research.md for detailed findings.
+See docs/research/bootstrap-daemon-e2e.md for detailed findings.
 
 ## Acceptance Criteria
 

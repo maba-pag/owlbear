@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-From #254 source-registry-research.md. Orchestrator that reads source configs and dispatches refresh by type. Absorbs #387 (file_glob source type) since file_glob is just one handler method within the orchestrator.
+From #254 source-registry.md. Orchestrator that reads source configs and dispatches refresh by type. Absorbs #387 (file_glob source type) since file_glob is just one handler method within the orchestrator.
 
 ## Location
 - src/owlbear/memory/knowledge/refresh.py (new file)

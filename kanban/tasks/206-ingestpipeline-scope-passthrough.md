@@ -30,4 +30,4 @@ AC:
 - [ ] IngestResult model unchanged (no scope in result)
 
 Depends on: #223 (test task), #202, #205
-See docs/knowledge-scoping-research.md
+See docs/research/knowledge-scoping.md

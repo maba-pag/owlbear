@@ -25,4 +25,4 @@ AC:
 - [ ] No new dependencies
 
 Depends on: #231 (test task)
-See docs/github-bot-account-research.md
+See docs/research/github-bot-account.md

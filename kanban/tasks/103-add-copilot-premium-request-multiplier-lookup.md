@@ -35,4 +35,4 @@ Maintain a small model-to-multiplier dict for GitHub Copilot premium request tra
 - [ ] Module-level docstring section explaining the multiplier dict and update cadence (quarterly manual check)
 
 Depends on: #105 (test contracts written first — TDD)
-See docs/token-usage-tracking-research.md section 3.4
+See docs/research/token-usage-tracking.md section 3.4

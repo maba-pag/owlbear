@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 
-The orchestrator currently does ALL cognitive work in-context: reading the board, building dependency graphs, gate-checking tasks, planning waves. This is the primary cause of context overflow and the #663 class of failures. See docs/planner-agent-research.md for full analysis.
+The orchestrator currently does ALL cognitive work in-context: reading the board, building dependency graphs, gate-checking tasks, planning waves. This is the primary cause of context overflow and the #663 class of failures. See docs/research/planner-agent.md for full analysis.
 
 ## Acceptance Criteria
 

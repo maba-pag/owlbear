@@ -27,4 +27,4 @@ AC:
 - [ ] Higher importance = slower effective decay (decision with 0.9 importance has ~289-day half-life)
 
 Depends on: #225 (test task), #207
-See docs/temporal-memory-research.md
+See docs/research/temporal-memory.md

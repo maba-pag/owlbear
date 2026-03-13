@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-From docs/hybrid-search-benchmark-research.md §3.4 and §5.4.
+From docs/research/hybrid-search-benchmark.md §3.4 and §5.4.
 
 ## Acceptance Criteria
 

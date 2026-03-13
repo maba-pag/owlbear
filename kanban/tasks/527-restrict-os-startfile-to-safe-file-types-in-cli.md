@@ -16,7 +16,7 @@ class: standard
 SEC-16: send_file() calls os.startfile(path) on Windows. If LLM controls path, could open executables or macro documents.
 AC: only safe file types opened automatically.
 
-Research complete: allowlist approach (.90 confidence). Add SAFE_EXTENSIONS frozenset to cli.py, check path.suffix.lower() before os.startfile, log warning for blocked types. See docs/startfile-allowlist-research.md
+Research complete: allowlist approach (.90 confidence). Add SAFE_EXTENSIONS frozenset to cli.py, check path.suffix.lower() before os.startfile, log warning for blocked types. See docs/research/startfile-allowlist.md
 
 Research checklist:
 1. Theoretical validity: N/A - straightforward allow-list of file suffixes

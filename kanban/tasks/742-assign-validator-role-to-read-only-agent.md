@@ -34,7 +34,7 @@ Design notes:
 - If auditor needs tools beyond VALIDATOR_POLICY, create a follow-up task for AUDITOR_POLICY
 
 Files: .github/agents/reviewer.agent.md, .github/agents/writer.agent.md, .github/agents/auditor.agent.md
-Ref: docs/validator-role-policy-research.md
+Ref: docs/research/validator-role-policy.md
 
 [[2026-03-11]] Wed 17:00
 ## Test-Writer Notes
@@ -100,7 +100,7 @@ Verdict: PASS (confidence .92) -- all 93 tests pass, ruff clean, all 6 AC lines 
 | 2 | Docstrings complete | Yes | Pass | roles.py: module, AgentRole, RolePolicy, BUILDER/VALIDATOR_POLICY, apply_role_policy all have docstrings |
 | 3 | sources/overview.md | No | N/A | No new external patterns; #524 research sources already attributed |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/validator-role-policy-research.md exists, linked in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/validator-role-policy.md exists, linked in task body |
 
 ### Files Updated
 - .github/copilot-instructions.md (Safety row: Five->Six layers, added RolePolicy)

@@ -13,4 +13,11 @@ tags:
 class: standard
 ---
 
-F-20: Double Agent construction in _build_agent() when role != BUILDER. See docs/role-policy-before-agent-construction-research.md for analysis. AC: (1) _build_agent constructs exactly one Agent per call regardless of role, (2) apply_role_policy applied to toolsets before Agent(), (3) existing tests pass, (4) new test asserts single Agent construction for validator role.
+F-20: Double Agent construction in _build_agent() when role != BUILDER. See docs/research/role-policy-before-agent-construction.md for analysis.
+
+## AC
+
+- [ ] _build_agent constructs exactly one Agent per call regardless of role
+- [ ] apply_role_policy applied to toolsets before Agent()
+- [ ] Existing tests pass
+- [ ] New test asserts single Agent construction for validator role

@@ -22,7 +22,7 @@ class: standard
 The orchestrator is a pure mechanical sequencer: call planner, dispatch wave, check for crashes, re-plan. No board reading, no result interpretation, no failure analysis. The orchestrator should be so simple it cannot degrade.
 
 See .github/skills/orchestration/SKILL.md for the canonical 3-step workflow.
-See docs/orchestrator-rewrite-sequencer-research.md for full research.
+See docs/research/orchestrator-rewrite-sequencer.md for full research.
 See docs/research/evaluator-agent-final-disposition.md for evaluator supersession rationale.
 
 ## Acceptance Criteria

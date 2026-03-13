@@ -35,7 +35,7 @@ Axon is a **code intelligence engine** (not a multi-agent system). It indexes co
 - tree-sitter AST parsing -- Different domain (code vs documents)
 - Dead code detection, change coupling -- Code-specific
 
-See docs/axon-code-intelligence-research.md for full analysis.
+See docs/research/axon-code-intelligence.md for full analysis.
 
 ## Follow-up Tasks (pending creation)
 

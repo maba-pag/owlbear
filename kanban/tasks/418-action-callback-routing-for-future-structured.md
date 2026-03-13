@@ -15,7 +15,7 @@ class: standard
 ---
 
 ## Context
-From #307 slack-structured-proposals-research.md.
+From #307 slack-structured-proposals.md.
 Enables registering specific action handlers by action_id for Block Kit interactive messages, beyond the current text-bridge approach.
 
 ## Acceptance Criteria

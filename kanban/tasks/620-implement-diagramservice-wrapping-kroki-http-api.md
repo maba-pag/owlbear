@@ -28,10 +28,10 @@ class: standard
 **Already done (by #617 builder overreach  do NOT reimplement):**
 - DiagramService class in service.py 
 - async generate() method with correct signature 
-- POST with Content-Type: text/plain and raw source body (NOT deflate+base64  original AC was wrong, see docs/diagram-service-kroki-research.md) 
+- POST with Content-Type: text/plain and raw source body (NOT deflate+base64  original AC was wrong, see docs/research/diagram-service-kroki.md) 
 - Input validation (diagram_type, output_format, source) 
 - DiagramError on non-2xx 
 - httpx.AsyncClient with Timeout(30, connect=5) 
 
 Pattern: follow how `screenshot_mode` flows from OwlBearSettings to ScreenshotService.
-Ref: docs/diagram-service-kroki-research.md
+Ref: docs/research/diagram-service-kroki.md

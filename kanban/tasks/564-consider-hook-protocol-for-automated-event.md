@@ -13,4 +13,8 @@ tags:
 class: standard
 ---
 
-DECISION: Keep explicit hook registration. See docs/hook-protocol-research.md. The 8 hook classes (not 9 -- escalation.py deleted by #484) use 3 different registration patterns. Only 6/8 are uniform. Net LOC savings would be negative. KISS/YAGNI/Django all argue against auto-registration magic. AC satisfied: decision documented.
+DECISION: Keep explicit hook registration. See docs/research/hook-protocol.md. The 8 hook classes (not 9 -- escalation.py deleted by #484) use 3 different registration patterns. Only 6/8 are uniform. Net LOC savings would be negative. KISS/YAGNI/Django all argue against auto-registration magic.
+
+## AC
+
+- [x] Decision documented: Keep explicit registration

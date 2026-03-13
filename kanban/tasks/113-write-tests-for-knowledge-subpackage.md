@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-TDD test suite for schema, models, graph, vectors, embeddings modules. Target >=90%% coverage. See docs/knowledge-graph-research.md.
+TDD test suite for schema, models, graph, vectors, embeddings modules. Target >=90%% coverage. See docs/research/knowledge-graph.md.

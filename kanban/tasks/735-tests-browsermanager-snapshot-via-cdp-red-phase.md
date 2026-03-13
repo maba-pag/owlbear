@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-**Source:** docs/research/a11y-snapshot-research.md
+**Source:** docs/research/a11y-snapshot.md
 
 RED-phase tests for #726. Mock CDPSession.send() with canned AXNode responses.
 
@@ -35,7 +35,7 @@ RED-phase tests for #726. Mock CDPSession.send() with canned AXNode responses.
 ### AC Assessment
 | AC Line | Assessment | Action |
 |---------|------------|--------|
-| Test filter='full' returns all non-ignored nodes | Verifiable  clear filter semantics from a11y-snapshot-research.md S3e | Keep |
+| Test filter='full' returns all non-ignored nodes | Verifiable  clear filter semantics from a11y-snapshot.md S3e | Keep |
 | Test filter='interactive' returns focusable/actionable | Verifiable  role set defined in research S3e | Keep |
 | Test filter='text' returns StaticText + headings | Verifiable  cheapest filter, clear criteria | Keep |
 | Test CDP session created/detached per call | Verifiable  mock assertions on new_cdp_session/detach | Keep |
@@ -66,7 +66,7 @@ RED-phase tests for #726. Mock CDPSession.send() with canned AXNode responses.
 ### AC Assessment
 | AC Line | Assessment | Action |
 |---------|------------|--------|
-| Test filter='full' returns all non-ignored nodes | Verifiable  clear filter semantics from a11y-snapshot-research.md S3e | Keep |
+| Test filter='full' returns all non-ignored nodes | Verifiable  clear filter semantics from a11y-snapshot.md S3e | Keep |
 | Test filter='interactive' returns focusable/actionable | Verifiable  role set defined in research S3e | Keep |
 | Test filter='text' returns StaticText + headings | Verifiable  cheapest filter, clear criteria | Keep |
 | Test CDP session created/detached per call | Verifiable  mock assertions on new_cdp_session/detach | Keep |

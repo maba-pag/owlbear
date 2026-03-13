@@ -27,4 +27,4 @@ class: standard
 - [ ] All tests in tests/test_project_definition_markdown.py pass
 
 Pattern: string formatting, no Jinja — keep it simple
-See docs/project-definition-workflow-research.md sec4
+See docs/research/project-definition-workflow.md sec4

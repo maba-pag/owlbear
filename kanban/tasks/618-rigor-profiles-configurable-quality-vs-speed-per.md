@@ -15,7 +15,7 @@ class: standard
 
 Add rigor profile config model to OwlBearSettings. Profiles define quality-vs-speed presets that downstream consumers (orchestrator, agent turn loop) read from deps. This task covers the data model, config wiring, and resolution from kanban tags  NOT enforcement (turn limiting, review gate toggling).
 
-See docs/research/orchestration-agent-frameworks-research.md S3.2 and docs/research/nwave-research.md S3.3 P1.
+See docs/research/orchestration-agent-frameworks.md S3.2 and docs/research/nwave.md S3.3 P1.
 
 AC:
 - [ ] `RigorProfile` frozen dataclass in `config.py` with fields: `review_enabled: bool`, `tdd_depth: Literal['full', 'smoke', 'none']`, `turn_budget: int`
@@ -213,7 +213,7 @@ Builder notes state 'No TestFromAC classes modified'. Verified: git shows test f
 | 2 | Docstrings complete | Yes | Pass | RigorProfile (L22), resolve_rigor_profile (L431), OwlBearDeps (L20), OwlBearSettings fields have descriptions |
 | 3 | sources/overview.md | Yes | Pass | Already has 'Rigor Profiles (Task #618)' section with nWave + Conductor sources |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/rigor-profiles-research.md exists; task body references orchestration + nwave research |
+| 5 | Research doc linked | Yes | Pass | docs/research/rigor-profiles.md exists; task body references orchestration + nwave research |
 
 ### Files Updated
 - .github/copilot-instructions.md (added rigor: prefix to tag taxonomy)
@@ -230,7 +230,7 @@ Builder notes state 'No TestFromAC classes modified'. Verified: git shows test f
 | 2 | Docstrings complete | Yes | Pass | RigorProfile (L22), resolve_rigor_profile (L431), OwlBearDeps (L20), OwlBearSettings fields have descriptions |
 | 3 | sources/overview.md | Yes | Pass | Already has 'Rigor Profiles (Task #618)' section with nWave + Conductor sources |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/rigor-profiles-research.md exists; task body references orchestration + nwave research |
+| 5 | Research doc linked | Yes | Pass | docs/research/rigor-profiles.md exists; task body references orchestration + nwave research |
 
 ### Files Updated
 - .github/copilot-instructions.md (added rigor: prefix to tag taxonomy)

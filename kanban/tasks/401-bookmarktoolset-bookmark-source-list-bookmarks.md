@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. FunctionToolset with bookmark_source(url, reason) and list_bookmarks(tag?, min_score?) agent tools. Follow FunctionToolset pattern. Wire in bootstrap.py. AC: Agent can call bookmark_source to evaluate+save a URL; list_bookmarks filters by tag and min_score; wired in bootstrap. Depends on #304, #400.
+From #304 source-discovery-bookmarking.md. FunctionToolset with bookmark_source(url, reason) and list_bookmarks(tag?, min_score?) agent tools. Follow FunctionToolset pattern. Wire in bootstrap.py. AC: Agent can call bookmark_source to evaluate+save a URL; list_bookmarks filters by tag and min_score; wired in bootstrap. Depends on #304, #400.

@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.2)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.2)
 
 PydanticAI supports system prompt injection via: (1) static strings in system_prompt parameter, (2) dynamic functions via @agent.system_prompt decorator, (3) instructions parameter for agent-level instructions. These cover our context injection needs.
 

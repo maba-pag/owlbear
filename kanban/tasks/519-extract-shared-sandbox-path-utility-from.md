@@ -24,7 +24,7 @@ ARC-11/DRY-03: Identical _safe_path logic in FileToolset and KnowledgeToolset. S
 
 ## Research Findings (2026-03-06)
 
-**DUPLICATE OF #497 FOLLOW-UP.** Task #497 research (docs/knowledge-intake-path-sandboxing-research.md, section 3.3) already analyzed this extraction with .85 confidence and proposed the same shared utility.
+**DUPLICATE OF #497 FOLLOW-UP.** Task #497 research (docs/research/knowledge-intake-path-sandboxing.md, section 3.3) already analyzed this extraction with .85 confidence and proposed the same shared utility.
 
 ### Overlap Summary
 

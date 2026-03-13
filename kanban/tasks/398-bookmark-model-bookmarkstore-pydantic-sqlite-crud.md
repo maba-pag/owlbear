@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. Pydantic Bookmark model (id, url, title, description, tags, relevance_score, reason, scope, document_id, content_hash, created_at, updated_at). BookmarkStore with SQLite CRUD: create, get_by_url, list, update_tags, delete. Schema v5 migration for bookmarks table with indexes on url+scope and scope. AC: Bookmark model validates; store CRUD works; dedup by URL+scope; schema migration idempotent. Depends on #304.
+From #304 source-discovery-bookmarking.md. Pydantic Bookmark model (id, url, title, description, tags, relevance_score, reason, scope, document_id, content_hash, created_at, updated_at). BookmarkStore with SQLite CRUD: create, get_by_url, list, update_tags, delete. Schema v5 migration for bookmarks table with indexes on url+scope and scope. AC: Bookmark model validates; store CRUD works; dedup by URL+scope; schema migration idempotent. Depends on #304.

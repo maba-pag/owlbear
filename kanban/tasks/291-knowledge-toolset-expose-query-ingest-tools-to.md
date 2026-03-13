@@ -18,7 +18,7 @@ class: standard
 
 ## Context
 The knowledge pipeline (graph.py, qdrant.py, ingest.py, embeddings.py) is fully built and tested but agents have NO tool to use it. Create a KnowledgeToolset(FunctionToolset) in src/owlbear/tools/knowledge.py that exposes query/ingest tools.
-See docs/knowledge-toolset-research.md for full research findings.
+See docs/research/knowledge-toolset.md for full research findings.
 
 ## Acceptance Criteria
 

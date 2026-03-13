@@ -22,4 +22,4 @@ SEC-05 fix: Add run_command to default approval_policy in config.py.
 - [ ] Test: ApprovalPolicy built from defaults returns requires_approval('run_command', {}) == True
 - [ ] No other code changes needed (TerminalToolset already in _destructive set)
 
-See docs/run-command-approval-gate-research.md for details.
+See docs/research/run-command-approval-gate.md for details.

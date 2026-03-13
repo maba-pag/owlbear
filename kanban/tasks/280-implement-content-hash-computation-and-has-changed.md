@@ -26,4 +26,4 @@ AC:
 - [ ] Tests: identical content -> (False, id), changed content -> (True, id), new content -> (True, None)
 
 Depends on #279 (find_status_by_source query).
-See docs/content-hashing-research.md
+See docs/research/content-hashing.md

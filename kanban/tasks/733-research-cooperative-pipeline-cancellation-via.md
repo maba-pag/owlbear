@@ -18,5 +18,5 @@ EdgeQuake uses CancellationToken for cooperative early-exit. OwlBear's RefreshOr
 **AC:**
 1. Identify all OwlBear pipeline loops that could benefit from cancellation.
 2. Propose an asyncio.Event-based cancellation pattern.
-3. Document in docs/research/cooperative-cancellation-research.md.
+3. Document in docs/research/cooperative-cancellation.md.
 4. Create follow-up implementation tasks if warranted.

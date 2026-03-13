@@ -26,4 +26,4 @@ AC:
 - [ ] Tests: v3-to-v4 migration, idempotent re-run, both new columns present with correct defaults
 
 Pattern: follow existing _migrate_v2_to_v3() in schema.py (ALTER TABLE + contextlib.suppress for idempotency).
-See docs/content-hashing-research.md and docs/intra-document-graph-research.md
+See docs/research/content-hashing.md and docs/research/intra-document-graph.md

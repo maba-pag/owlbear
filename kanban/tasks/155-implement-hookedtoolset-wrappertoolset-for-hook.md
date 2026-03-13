@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-WrapperToolset subclass that emits PRE_TOOL_USE and POST_TOOL_USE hooks from within PydanticAI tool execution pipeline. Research: docs/pydantic-ai-multi-agent-research.md section 3.2.
+WrapperToolset subclass that emits PRE_TOOL_USE and POST_TOOL_USE hooks from within PydanticAI tool execution pipeline. Research: docs/research/pydantic-ai-multi-agent.md section 3.2.
 
 ## AC
 - [ ] File: src/owlbear/tools/hooked.py (~40 LOC)

@@ -14,7 +14,7 @@ class: standard
 ---
 
 Adapt visual-explainer's core workflow (think/structure/style/deliver) into a .github/skills/visual-output/SKILL.md. Include Mermaid routing table, aesthetic constraint rules, forbidden patterns. Target ~100 lines. Agents use existing filesystem_tools to write HTML, BrowserToolset to open it, VisualFeedbackToolset to capture/deliver.
-See docs/research/visual-explainer-research.md S4.
+See docs/research/visual-explainer.md S4.
 
 AC:
 - [ ] .github/skills/visual-output/SKILL.md exists (~100 lines)

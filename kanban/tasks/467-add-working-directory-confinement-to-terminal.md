@@ -42,4 +42,4 @@ SEC-02: working_dir parameter accepts any absolute path without confinement. App
 
 ## Research
 
-See docs/terminal-cwd-confinement-research.md
+See docs/research/terminal-cwd-confinement.md

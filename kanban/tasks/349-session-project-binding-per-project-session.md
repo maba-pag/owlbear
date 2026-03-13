@@ -24,4 +24,4 @@ class: standard
 - [ ] Unit tests: session creation in project dir, session isolation between two projects
 - [ ] SessionStore constructor receives project-aware path from bootstrap
 
-See docs/multi-project-session-research.md S3.4
+See docs/research/multi-project-session.md S3.4

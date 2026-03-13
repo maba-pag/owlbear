@@ -35,4 +35,4 @@ Local embedding generation using FastEmbed (ONNX). Protocol-based adapter patter
 - [ ] `ruff check` clean
 - [ ] No dependency on other knowledge modules (graph, schema, vectors) — embeddings is standalone
 
-See docs/knowledge-graph-research.md section 3.3, 4
+See docs/research/knowledge-graph.md section 3.3, 4

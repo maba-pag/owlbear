@@ -29,7 +29,7 @@ Companion test task for #507. Update tests/test_github_api.py mocking strategy f
 ## Architecture Notes
 
 - Prefer injecting mock client via constructor (optional _client param) over monkeypatching  cleaner DI for tests
-- See docs/httpx-client-reuse-research.md S3.5
+- See docs/research/httpx-client-reuse.md S3.5
 
 [[2026-03-09]] Mon 22:43
 ## Audit

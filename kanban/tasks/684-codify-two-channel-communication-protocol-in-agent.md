@@ -18,7 +18,7 @@ class: standard
 
 Currently every subagent returns a full prose report that the orchestrator accumulates in context. This causes context overflow. Two consumers need different data: the orchestrator needs routing signals (pass/fail, next status); the next-pipeline agent needs rich context (evidence, tables, findings).
 
-Research complete: see docs/inter-agent-communication-protocol-research.md for the full design, including per-agent signal formats, body section headers, and field-by-field audit.
+Research complete: see docs/research/inter-agent-communication-protocol.md for the full design, including per-agent signal formats, body section headers, and field-by-field audit.
 
 ## Acceptance Criteria
 
@@ -34,7 +34,7 @@ Research complete: see docs/inter-agent-communication-protocol-research.md for t
 ## Notes
 
 - This is a specification-writing task, not a code task. No TDD required.
-- The research doc (docs/inter-agent-communication-protocol-research.md) is the authoritative design reference. This task codifies it as agent-facing instructions.
+- The research doc (docs/research/inter-agent-communication-protocol.md) is the authoritative design reference. This task codifies it as agent-facing instructions.
 - Keep the section concise: agents already have large context loads (see #686). Target < 60 lines.
 
 [[2026-03-08]] Sun 23:51

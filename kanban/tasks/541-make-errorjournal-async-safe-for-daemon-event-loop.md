@@ -15,7 +15,7 @@ class: standard
 
 J-2: ErrorJournal uses blocking file I/O (path.open('a')). In async daemon loop, rotation of 10K entries blocks event loop.
 
-Research complete (2026-03-07): asyncio.to_thread at call site is the recommended approach (.85 confidence). Make _log_to_journal async in daemon.py, wrap journal.log() in asyncio.to_thread(). Zero new deps, follows existing codebase pattern (3 prior uses). See docs/error-journal-async-research.md for full analysis.
+Research complete (2026-03-07): asyncio.to_thread at call site is the recommended approach (.85 confidence). Make _log_to_journal async in daemon.py, wrap journal.log() in asyncio.to_thread(). Zero new deps, follows existing codebase pattern (3 prior uses). See docs/research/error-journal-async.md for full analysis.
 
 Research checklist:
 1. Theoretical validity: wrapping sync I/O in asyncio.to_thread is well-established

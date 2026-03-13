@@ -23,4 +23,4 @@ class: standard
 - [ ] Test error fallback: when files_upload_v2 raises, falls back to sending caption as text via send()
 - [ ] Mock AsyncWebClient.files_upload_v2 to verify exact call params
 
-See docs/slack-rich-messaging-research.md S3.4
+See docs/research/slack-rich-messaging.md S3.4

@@ -22,7 +22,7 @@ Scope:
 3. Study coleam00 repos and disler/hooks-mastery for agent structures, personas, skill definitions, boundary patterns.
 
 Deliverables:
-- docs/agent-patterns-research.md with: architecture comparisons, recommended patterns for OwlBear agent loop, build pipeline design, communication gateway abstraction, quality gate patterns (Ralph Wiggum prevention), voice input pipeline notes.
+- docs/research/agent-patterns.md with: architecture comparisons, recommended patterns for OwlBear agent loop, build pipeline design, communication gateway abstraction, quality gate patterns (Ralph Wiggum prevention), voice input pipeline notes.
 - Architecture doc template/structure recommendations (gleaned from how these projects document their own architecture).
 - Follow-up kanban tasks per research-docs guardrails.
 - Log all repos in docs/sources.md.

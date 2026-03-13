@@ -39,4 +39,4 @@ Vector storage and similarity search using sqlite-vec. Adapted from tool.graphic
 - [ ] rowid_map bridge table maps vec0 rowids to entity/document string ids
 - [ ] `ruff check` clean
 
-See docs/knowledge-graph-research.md section 3.1, 3.4
+See docs/research/knowledge-graph.md section 3.1, 3.4

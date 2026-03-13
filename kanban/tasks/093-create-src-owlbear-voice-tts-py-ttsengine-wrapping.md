@@ -28,4 +28,4 @@ class: standard
 - [ ] TDD: write tests first, then implement
 
 Depends on: #91
-See docs/voice-io-research.md section 3.3.
+See docs/research/voice-io.md section 3.3.

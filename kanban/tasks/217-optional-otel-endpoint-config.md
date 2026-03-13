@@ -13,7 +13,7 @@ tags:
 class: standard
 ---
 
-OWLBEAR_OTEL_ENDPOINT field in OwlBearSettings. See docs/agent-observability-research.md.
+OWLBEAR_OTEL_ENDPOINT field in OwlBearSettings. See docs/research/agent-observability.md.
 
 Research: N/A — already implemented. otel_endpoint field exists in config.py L59. daemon.py configure_otel() uses it. This task is complete.
 

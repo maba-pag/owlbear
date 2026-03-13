@@ -24,7 +24,7 @@ All three children must reach done before this epic can be closed.
 
 ## Context
 Apply Cognee's provenance tracking pattern: stamp each entity and edge with source_pipeline and source_task metadata.
-See docs/provenance-tracking-research.md S4.
+See docs/research/provenance-tracking.md S4.
 
 ## Original Acceptance Criteria (delegated to children)
 - [ ] Add source_pipeline and source_task fields to Entity/Edge metadata - #410

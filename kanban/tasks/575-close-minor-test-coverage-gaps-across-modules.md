@@ -12,4 +12,10 @@ tags:
 class: standard
 ---
 
-Coverage gaps verified 2026-03-07. github_api already at 100%% (gap closed). Remaining: 27 lines across 5 modules. See docs/close-test-coverage-gaps-research.md for exact lines and test strategies. Split into 2 follow-up tasks: bootstrap handlers (14 lines) + quick wins (13 lines across browser config, ask_user, filesystem, usage).
+Coverage gaps verified 2026-03-07. github_api already at 100% (gap closed). Remaining: 27 lines across 5 modules. See docs/research/close-test-coverage-gaps.md for exact lines and test strategies. Split into 2 follow-up tasks: bootstrap handlers (14 lines) + quick wins (13 lines across browser config, ask_user, filesystem, usage).
+
+## AC
+
+- [x] Research doc at docs/research/close-test-coverage-gaps.md
+- [x] Verified remaining 27 lines across 5 modules
+- [x] Split into 2 follow-up tasks: bootstrap handlers (14 lines) + quick wins (13 lines)

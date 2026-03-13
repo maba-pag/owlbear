@@ -24,5 +24,5 @@ Before building the agent framework, understand what PydanticAI offers natively.
 - [ ] How does PydanticAI's dependency injection work with agent hierarchy?
 - [ ] What does the PydanticAI Agent Playground / Logfire offer?
 - [ ] Clone pydantic/pydantic-ai into docs/research/ for analysis
-- [ ] Document findings in docs/agent-framework-research.md
+- [ ] Document findings in docs/research/agent-framework.md
 - [ ] Create follow-up implementation tasks on kanban board

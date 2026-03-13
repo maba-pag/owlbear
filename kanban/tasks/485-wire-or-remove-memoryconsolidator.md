@@ -26,7 +26,7 @@ Delete all MemoryConsolidator code and tests. No functional behavior changes (co
 
 ### What stays (do NOT delete)
 - `SessionStore.last_consolidated` property + `_load_meta`/`_save_meta` in `src/owlbear/memory/session.py`  low-cost plumbing for future re-add
-- `docs/memory-consolidator-research.md`  documents the decision rationale
+- `docs/research/memory-consolidator.md`  documents the decision rationale
 - Line 472 in `docs/architecture.md` (nanobot comparison table)  historical comparison, not a recommendation
 
 ### Verification
@@ -36,5 +36,5 @@ Delete all MemoryConsolidator code and tests. No functional behavior changes (co
 - [ ] `grep -r 'from owlbear.memory.consolidation' src/ tests/` zero matches
 
 ### Out of scope
-Do NOT edit audit/research docs (software-design-audit.md, integration-audit.md, executive-audit-report.md, bootstrap-assembly-research.md). These are historical records.
+Do NOT edit audit/research docs (software-design-audit.md, integration-audit.md, executive-audit-report.md, bootstrap-assembly.md). These are historical records.
 Do NOT edit the nanobot comparison table row at line 472 of architecture.md  that describes nanobot's approach, not ours.

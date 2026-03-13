@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-See docs/agent-patterns-research.md §2.7. AC: Research doc on local Whisper STT integration (model size, latency, accuracy tradeoffs) + pyttsx3 TTS for output. Recommend architecture. Create follow-up implementation tasks.
+See docs/research/agent-patterns.md §2.7. AC: Research doc on local Whisper STT integration (model size, latency, accuracy tradeoffs) + pyttsx3 TTS for output. Recommend architecture. Create follow-up implementation tasks.

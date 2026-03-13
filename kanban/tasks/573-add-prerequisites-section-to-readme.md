@@ -12,4 +12,11 @@ tags:
 class: standard
 ---
 
-DOC-F-05: README missing Python version requirement, OS support, hardware constraints. Add brief Requirements section mentioning Python 3.12+, uv, corporate laptop constraints. AC: requirements section in README. See docs/documentation-audit.md.
+DOC-F-05: README missing Python version requirement, OS support, hardware constraints. See docs/documentation-audit.md.
+
+## AC
+
+- [ ] README has a Prerequisites/Requirements section
+- [ ] Mentions Python 3.12+
+- [ ] Mentions uv package manager
+- [ ] Notes corporate laptop constraints if relevant

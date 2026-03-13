@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-INT-07: memory/knowledge/refresh.py imports tools.browser.crawl_config and tools.browser.integration. Violates layering (memory depends on tools). Option A from research: inject crawl function as callback parameter. See docs/memory-tools-dependency-inversion-research.md.
+INT-07: memory/knowledge/refresh.py imports tools.browser.crawl_config and tools.browser.integration. Violates layering (memory depends on tools). Option A from research: inject crawl function as callback parameter. See docs/research/memory-tools-dependency-inversion.md.
 
 ## Acceptance Criteria
 

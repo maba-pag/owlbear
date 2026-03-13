@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #303 project-workspace-research.md. Extend ProjectToolset with workspace_create_project(name, template) tool that delegates to ProjectWorkspace.create_project(). AC: Agent can call workspace_create_project to scaffold a new project; returns path and confirmation. Depends on #303, #365.
+From #303 project-workspace.md. Extend ProjectToolset with workspace_create_project(name, template) tool that delegates to ProjectWorkspace.create_project(). AC: Agent can call workspace_create_project to scaffold a new project; returns path and confirmation. Depends on #303, #365.

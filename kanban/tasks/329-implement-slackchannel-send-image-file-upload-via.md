@@ -24,4 +24,4 @@ class: standard
 - [ ] Method on SlackChannel only — no ChannelPlugin protocol change
 - [ ] NOTE: Requires files:write bot scope — document in method docstring
 
-See docs/slack-rich-messaging-research.md S3.4
+See docs/research/slack-rich-messaging.md S3.4

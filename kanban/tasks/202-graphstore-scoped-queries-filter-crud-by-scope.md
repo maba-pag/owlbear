@@ -31,4 +31,4 @@ AC:
 - [ ] Parameter type: scopes: list[str] | None = None
 
 Depends on: #221 (test task), #197, #198
-See docs/knowledge-scoping-research.md
+See docs/research/knowledge-scoping.md

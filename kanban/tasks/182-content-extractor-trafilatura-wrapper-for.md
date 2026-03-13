@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/tools/browser/content_extractor.py | Test: tests/test_content_extractor.py | See docs/web-crawling-research.md S3.2.
+Module: src/owlbear/tools/browser/content_extractor.py | Test: tests/test_content_extractor.py | See docs/research/web-crawling.md S3.2.
 
 AC:
 - ExtractionResult frozen Pydantic model: text: str, title: str | None, author: str | None, date: str | None, metadata: dict[str, Any]

@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 TDD tests for InterDocGraphBuilder. Write before implementation.
-See docs/inter-document-graph-builder-research.md for design.
+See docs/research/inter-document-graph-builder.md for design.
 Follows test pattern from tests/test_graph_builder.py (IntraDocGraphBuilder tests).
 
 ## Acceptance Criteria

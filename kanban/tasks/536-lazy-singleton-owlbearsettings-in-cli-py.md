@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-DRY-05: OwlBearSettings() instantiated 12 times in cli.py. pydantic-settings re-reads env vars each time. See docs/lazy-singleton-settings-research.md
+DRY-05: OwlBearSettings() instantiated 12 times in cli.py. pydantic-settings re-reads env vars each time. See docs/research/lazy-singleton-settings.md
 
 **Approach:** functools.cache getter (.90 confidence). Add @functools.cache on a get_settings() function, replace 12 call sites. Add autouse cache_clear() fixture for tests.
 

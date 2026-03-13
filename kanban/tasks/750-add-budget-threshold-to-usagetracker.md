@@ -40,7 +40,7 @@ class: standard
 
 ## References
 
-- Paperclip budget model: docs/research/paperclip-research.md
+- Paperclip budget model: docs/research/paperclip.md
 - Existing: src/owlbear/memory/usage.py (UsageTracker.summary), src/owlbear/core/agent.py (_record_usage + turn())
 - Errors: src/owlbear/core/errors.py (classify_error, error taxonomy)
 - Daemon: src/owlbear/daemon.py (reconcile_tasks retry logic)
@@ -201,7 +201,7 @@ Note: test_exactly_80pct MERGED with test_80pct_fires_warning is NOT weakening Ã
 | 2 | Docstrings | Yes | Updated | reconcile_tasks docstring updated for budget-exceeded skip |
 | 3 | sources/overview.md | No | N/A | Paperclip already attributed (line 15) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc | Yes | Pass | paperclip-research.md exists and linked |
+| 5 | Research doc | Yes | Pass | paperclip.md exists and linked |
 
 ### Files Updated
 

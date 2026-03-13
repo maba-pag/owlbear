@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-TDD tests for SlackChannel. See docs/slack-integration-research.md.
+TDD tests for SlackChannel. See docs/research/slack-integration.md.
 
 AC:
 - Protocol compliance: isinstance(SlackChannel, ChannelPlugin)

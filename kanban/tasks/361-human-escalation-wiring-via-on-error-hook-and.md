@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #306 error-recovery-research.md. After retries exhausted, invoke ask_user with structured error context and options: [retry / skip / abort]. Wire through ON_ERROR hook. ~50 LOC. AC: When all retries fail, user receives structured error message with action options; user response routes to retry, skip, or abort. Depends on #306, #357, #360.
+From #306 error-recovery.md. After retries exhausted, invoke ask_user with structured error context and options: [retry / skip / abort]. Wire through ON_ERROR hook. ~50 LOC. AC: When all retries fail, user receives structured error message with action options; user response routes to retry, skip, or abort. Depends on #306, #357, #360.

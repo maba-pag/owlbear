@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/reranker.py | Test: tests/test_knowledge_reranker.py | See docs/knowledge-ingestion-research.md S3.3.
+Module: src/owlbear/memory/knowledge/reranker.py | Test: tests/test_knowledge_reranker.py | See docs/research/knowledge-ingestion.md S3.3.
 
 AC:
 - RerankerProvider runtime_checkable Protocol: rerank(query: str, passages: list[str]) -> list[tuple[int, float]] (index, score pairs sorted by descending score)

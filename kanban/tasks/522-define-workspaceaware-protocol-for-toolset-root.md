@@ -16,4 +16,4 @@ block_reason: 'Superseded by #466 sub-task 3 (WorkspaceAware protocol). Closing 
 class: standard
 ---
 
-CLOSED AS DUPLICATE: Superseded by #466 sub-task 3 (WorkspaceAware protocol + update_workspace). See docs/slf001-public-api-research.md section 4d.
+CLOSED AS DUPLICATE: Superseded by #466 sub-task 3 (WorkspaceAware protocol + update_workspace). See docs/research/slf001-public-api.md section 4d.

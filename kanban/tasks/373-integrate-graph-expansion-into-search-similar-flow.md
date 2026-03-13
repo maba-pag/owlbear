@@ -19,7 +19,7 @@ class: standard
 
 Integrate GraphAugmentedRetriever into KnowledgeQueryService so knowledge queries can opt into graph expansion. Composition approach (not VectorStore protocol modification).
 
-See docs/graph-augmented-retrieval-research.md for design rationale. Depends on #258 (research), #372 (GraphAugmentedRetriever impl), #427 (TDD test task).
+See docs/research/graph-augmented-retrieval.md for design rationale. Depends on #258 (research), #372 (GraphAugmentedRetriever impl), #427 (TDD test task).
 
 ## AC — KnowledgeQueryService changes
 

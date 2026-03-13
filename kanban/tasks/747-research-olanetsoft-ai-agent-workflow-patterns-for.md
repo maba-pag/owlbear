@@ -19,11 +19,11 @@ AC:
 - [ ] Identify workflow patterns relevant to OwlBear (orchestration, agent coordination, pipeline design, etc.)
 - [ ] Write trade-off analysis: effort vs value for each candidate pattern
 - [ ] Create follow-up kanban tasks for approved additions
-- [ ] Write research doc to docs/research/olanetsoft-workflow-research.md
+- [ ] Write research doc to docs/research/olanetsoft-workflow.md
 
 [[2026-03-12]] Thu 08:51
 ## Research
-Doc: docs/research/olanetsoft-workflow-research.md
+Doc: docs/research/olanetsoft-workflow.md
 8 patterns analyzed, 1 adopted (LessonsInjectionHook), 2 rejected. See research doc for full details.
 
 [[2026-03-12]] Thu 10:49
@@ -37,7 +37,7 @@ Doc: docs/research/olanetsoft-workflow-research.md
 | Identify workflow patterns relevant to OwlBear | Done: per-pattern overlap scores (.40-1.0) | Kept |
 | Write trade-off analysis | Done: 3 candidates with value/effort/risk/KISS/YAGNI | Kept |
 | Create follow-up kanban tasks | NOT DONE by researcher -- command in doc but not executed | Fixed: created #751 |
-| Write research doc | Done: docs/research/olanetsoft-workflow-research.md | Kept |
+| Write research doc | Done: docs/research/olanetsoft-workflow.md | Kept |
 
 ### Architecture Notes
 - Research quality is high: structured overlap analysis, rigorous YAGNI filter
@@ -62,7 +62,7 @@ Doc: docs/research/olanetsoft-workflow-research.md
 [[2026-03-12]] Thu 11:49
 ## Builder Notes
 - Non-implementation task (research): no code changes needed
-- Verified: docs/research/olanetsoft-workflow-research.md exists (80+ lines, 8 patterns analyzed)
+- Verified: docs/research/olanetsoft-workflow.md exists (80+ lines, 8 patterns analyzed)
 - Verified: follow-up task #751 created in backlog
 - All 5 AC lines satisfied by researcher + architect
 - Lint/tests: N/A (no code changes)
@@ -76,7 +76,7 @@ Pure research task -- no code changes, no tests applicable.
 ### AC Compliance
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Fetch and analyze workflow document | docs/research/olanetsoft-workflow-research.md S1-S2: 8 sources listed, 8 patterns analyzed | PASS |
+| Fetch and analyze workflow document | docs/research/olanetsoft-workflow.md S1-S2: 8 sources listed, 8 patterns analyzed | PASS |
 | Identify workflow patterns relevant to OwlBear | S3 overlap table: 8 patterns with quantified overlap (.40-1.0), gaps identified for 3 | PASS |
 | Write trade-off analysis: effort vs value | S4: 3 candidates (4a/4b/4c) with Value/Effort/Risk/KISS/YAGNI dimensions, confidence scores | PASS |
 | Create follow-up kanban tasks | Task #751 (backlog, nice-to-have, hooks/agent/scope:core) with 6 AC lines | PASS |
@@ -122,7 +122,7 @@ Pure research task -- no code changes, no tests applicable.
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Entry present at line 21 with full attribution table |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/olanetsoft-workflow-research.md exists (86 lines, 6 sections); follow-up #751 created in backlog |
+| 5 | Research doc linked | Yes | Pass | docs/research/olanetsoft-workflow.md exists (86 lines, 6 sections); follow-up #751 created in backlog |
 | 6 | No impact (remaining) | -- | -- | Items 3 and 5 apply; rest have no docs impact |
 
 ### Files Updated
@@ -136,11 +136,11 @@ Pure research task -- no code changes, no tests applicable.
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Fetch and analyze workflow document | docs/research/olanetsoft-workflow-research.md: 8 sources, 8 patterns analyzed in S1-S3 | PASS |
+| Fetch and analyze workflow document | docs/research/olanetsoft-workflow.md: 8 sources, 8 patterns analyzed in S1-S3 | PASS |
 | Identify workflow patterns relevant to OwlBear | S3 overlap table: 8 patterns with .40-1.0 scores, 3 gaps identified | PASS |
 | Write trade-off analysis | S4: 3 candidates (4a/4b/4c) with Value/Effort/Risk/KISS/YAGNI dimensions | PASS |
 | Create follow-up kanban tasks | #751 (backlog, nice-to-have, hooks/agent/scope:core) with 6 AC lines verified | PASS |
-| Write research doc to docs/research/ | olanetsoft-workflow-research.md: 86+ lines, 6 sections, well-structured | PASS |
+| Write research doc to docs/research/ | olanetsoft-workflow.md: 86+ lines, 6 sections, well-structured | PASS |
 
 ### Test Results
 - pytest: 3086 passed, 2 skipped, 51 failed (all pre-existing: ranx/pandas env, unimplemented TDD RED tests, role policy drift)

@@ -33,4 +33,4 @@ AC:
 - [ ] All tests fail before #614 implementation exists
 
 Pattern: follow existing test_daemon.py structure. Mock KanbanToolset._run_kanban and AgentRegistry.get at toolset/registry level — never shell out to real kanban-md.
-Ref: docs/poll-dispatch-reconcile-research.md S3.8
+Ref: docs/research/poll-dispatch-reconcile.md S3.8

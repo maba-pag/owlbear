@@ -22,4 +22,4 @@ class: standard
 - [ ] Env vars: OWLBEAR_PROGRESS_ENABLED, OWLBEAR_PROGRESS_INTERVAL, OWLBEAR_PROGRESS_DETAIL
 - [ ] Unit test: default values, env var override, validation (interval must be > 0)
 
-See docs/progress-reporting-research.md S3.8
+See docs/research/progress-reporting.md S3.8

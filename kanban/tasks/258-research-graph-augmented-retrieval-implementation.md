@@ -22,11 +22,11 @@ Research #234 proposed graph-augmented retrieval: after vector search finds rele
 Depends on QdrantVectorStore (#249) and intra-document graph builder (#255).
 
 ## Research Done
-- docs/graph-augmented-retrieval-research.md -- full analysis (271 lines)
+- docs/research/graph-augmented-retrieval.md -- full analysis (271 lines)
 - Proposed: get_neighbors(), schema v5 (chunk_id on entities), GraphAugmentedRetriever
 
 ## Acceptance Criteria
-- [x] Research doc updated or new doc in docs/ -- docs/graph-augmented-retrieval-research.md (271 lines)
+- [x] Research doc updated or new doc in docs/ -- docs/research/graph-augmented-retrieval.md (271 lines)
 - [x] Follow-up implementation tasks created -- #370-373 (all done)
 - [x] GraphAugmentedRetriever API design proposed -- retrieve(query, top_k, scopes) -> RetrievalResult
 - [x] Quality assessment -- graph expansion helps for cross-reference/policy-lookup failure modes; 1-hop sufficient, 2-hop adds noise

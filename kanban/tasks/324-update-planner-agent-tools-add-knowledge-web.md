@@ -28,4 +28,4 @@ class: standard
 - [ ] All tests pass: uv run pytest tests/test_agent_definitions.py -v
 
 Architecture note: bootstrap._aliases already has 'knowledge' and 'web_search' entries. Both toolsets are conditional (only built when deps are available). The planner must degrade gracefully when they are absent — this is handled by tool_resolver raising KeyError which AgentRegistry already catches.
-See docs/project-definition-workflow-research.md sec3.5
+See docs/research/project-definition-workflow.md sec3.5

@@ -13,4 +13,10 @@ tags:
 class: standard
 ---
 
-INT-10: auth, planning, projects, providers, safety, tools, tools/browser have empty __init__.py. No public API surface defined. Add re-exports for key public types. AC: public API discoverable via package imports. See docs/integration-audit.md.
+INT-10: auth, planning, projects, providers, safety, tools, tools/browser have empty __init__.py. No public API surface defined. Add re-exports for key public types. See docs/integration-audit.md.
+
+## AC
+
+- [ ] Each listed __init__.py re-exports key public types
+- [ ] Public API discoverable via package imports
+- [ ] Ruff clean, all tests pass

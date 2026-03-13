@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/intake.py | Test: tests/test_knowledge_intake.py | See docs/knowledge-ingestion-research.md S3.4.
+Module: src/owlbear/memory/knowledge/intake.py | Test: tests/test_knowledge_intake.py | See docs/research/knowledge-ingestion.md S3.4.
 
 AC:
 - IntakeResult frozen Pydantic model: content: str, source: str, metadata: dict[str, Any]

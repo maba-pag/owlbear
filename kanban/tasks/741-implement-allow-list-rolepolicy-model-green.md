@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-TDD GREEN phase for #524 split. See docs/validator-role-policy-research.md Section 5.
+TDD GREEN phase for #524 split. See docs/research/validator-role-policy.md Section 5.
 
 AC:
 1. RolePolicy gains allowed_tools: frozenset[str] field (default frozenset() = no restriction)
@@ -35,7 +35,7 @@ Design notes:
 - #561 addresses the double-build in AgentRegistry separately  do not refactor _build_agent here
 
 Files: src/owlbear/core/roles.py
-Ref: docs/validator-role-policy-research.md
+Ref: docs/research/validator-role-policy.md
 
 [[2026-03-11]] Wed 16:58
 ## Test-Writer Notes
@@ -82,7 +82,7 @@ Modified 4 tests, added 9 new. Total 13, all FAIL. ruff clean.
 | 2 | Docstrings complete | Yes | Pass | RolePolicy, apply_role_policy, BUILDER_POLICY, VALIDATOR_POLICY all have accurate docstrings |
 | 3 | sources/overview.md | No | N/A | External sources (OWASP, NeMo) already attributed under #524 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/validator-role-policy-research.md exists, linked in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/validator-role-policy.md exists, linked in task body |
 
 ### Files Updated
 - None

@@ -18,7 +18,7 @@ class: standard
 
 CB-1 from docs/resilience-audit.md: No circuit breakers anywhere. If Copilot API returns 503 for 10 minutes, every turn burns retries with backoff. No fast-fail mechanism.
 
-See docs/circuit-breaker-research.md for full analysis.
+See docs/research/circuit-breaker.md for full analysis.
 
 ## Architecture Decision
 

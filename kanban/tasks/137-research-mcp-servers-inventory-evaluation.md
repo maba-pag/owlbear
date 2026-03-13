@@ -16,11 +16,11 @@ class: standard
 
 PydanticAI has native MCP client support (MCPServerStdio, MCPServerHTTP). Survey available MCP servers and evaluate which fill gaps vs our native tools.
 
-Research doc: docs/mcp-servers-research.md
+Research doc: docs/research/mcp-servers.md
 
 ## AC (research task)
 
-- [x] Research doc complete: docs/mcp-servers-research.md
+- [x] Research doc complete: docs/research/mcp-servers.md
 - [x] Research checklist: theoretical validity, prior art, technical feasibility, architecture fit, implementation approach — all addressed
 - [x] Server evaluation matrix: GitHub (.90 Adopt), Git (.80 Consider), Fetch (.75 Consider), Brave (.70 Defer), Filesystem/Memory/Playwright (.15–.30 Skip)
 - [x] Recommendation: hybrid model — keep native toolsets, add MCP for new capabilities

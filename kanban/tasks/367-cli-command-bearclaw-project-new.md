@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #303 project-workspace-research.md. Add 'bearclaw project new <name> --template <t>' CLI command that calls ProjectWorkspace.create_project(). Template choices: bare, python-uv, python-pip, node. Resolves workspace path from settings.project_root + slugify(name). AC: 'bearclaw project new my-proj --template python-uv' creates scaffolded project at project_root/my-proj; registered in project store; prints path. Depends on #303, #365.
+From #303 project-workspace.md. Add 'bearclaw project new <name> --template <t>' CLI command that calls ProjectWorkspace.create_project(). Template choices: bare, python-uv, python-pip, node. Resolves workspace path from settings.project_root + slugify(name). AC: 'bearclaw project new my-proj --template python-uv' creates scaffolded project at project_root/my-proj; registered in project store; prints path. Depends on #303, #365.

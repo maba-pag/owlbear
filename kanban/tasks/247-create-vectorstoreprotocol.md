@@ -18,8 +18,8 @@ class: standard
 Extract a Protocol class from current VectorStore API. Both sqlite-vec (current) and Qdrant (new) implement it. Clean swap point for the migration.
 
 ## Research Done
-- docs/qdrant-local-research.md section 3.4 defines the migration steps
-- docs/knowledge-pipeline-research.md confirms custom pipeline approach
+- docs/research/qdrant-local.md section 3.4 defines the migration steps
+- docs/research/knowledge-pipeline.md confirms custom pipeline approach
 - Current VectorStore API: store_embedding(), get_embedding(), search_similar(), delete_embedding()
 - New protocol must also support hybrid embeddings (dense+sparse+ColBERT)
 

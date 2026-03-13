@@ -14,8 +14,8 @@ class: standard
 ---
 
 ## Context
-From #275 provenance-tracking-research.md S3.4.
-See docs/provenance-tracking-research.md.
+From #275 provenance-tracking.md S3.4.
+See docs/research/provenance-tracking.md.
 
 ## Acceptance Criteria
 - [ ] GraphStore.list_entities() accepts optional source_pipeline: str | None = None parameter

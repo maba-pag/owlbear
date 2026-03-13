@@ -13,4 +13,8 @@ tags:
 class: standard
 ---
 
-MOD-04: Decision documented in docs/knowledge-subpackages-research.md. **Decision: Keep flat (.80 confidence).** 22 files is below the split threshold. No circular imports, no navigation pain, PEP 20 flat-is-better. Revisit if package exceeds 30 files. AC: decision documented.
+MOD-04: Decision documented in docs/research/knowledge-subpackages.md. **Decision: Keep flat (.80 confidence).** 22 files is below the split threshold. No circular imports, no navigation pain, PEP 20 flat-is-better. Revisit if package exceeds 30 files.
+
+## AC
+
+- [x] Decision documented: Keep flat

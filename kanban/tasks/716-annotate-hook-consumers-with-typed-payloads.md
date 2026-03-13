@@ -20,7 +20,7 @@ claimed_at: 2026-03-11T09:41:14.3064193+01:00
 class: standard
 ---
 
-Remove isinstance(data, dict) boilerplate from 11 hook consumers.\n\n## Acceptance Criteria\n1. Update __call__ (or handler method) signatures in 11 consumers to use specific TypedDict param type:\n   - CommandSafetyGuard.__call__(data: PreToolUseData)\n   - URLSafetyGuard.__call__(data: PreToolUseData)\n   - AutoLintHook.__call__(data: PostToolUseData)\n   - ContextInjectionHook.__call__(data: SessionStartData)\n   - SubagentVerificationHook.__call__(data: SubagentCompleteData)\n   - TestVerificationHook.__call__(data: SessionEndData)\n   - RetrospectiveHook.__call__(data: TaskCompleteData)\n   - ProgressReporter.on_tool_complete(data: PostToolUseData)\n   - ScreenshotOnErrorHook.handle(data: OnErrorData)\n   - NotificationHook: dict[str, Any] (multi-event)\n   - ObservabilityHook: dict[str, Any] (multi-event)\n2. Remove isinstance(data, dict) early-return guards from all 11 consumers (13 occurrences total)\n3. Do NOT touch skills/registry.py isinstance guard (different concern)\n4. All existing hook tests pass; ruff check clean\n5. Zero runtime behavior changes beyond removing unreachable guard branches\n\n## Architecture Notes\n- HookRegistry.emit always passes dict - isinstance guards are dead code\n- NotificationHook._make_handler and ObservabilityHook._make_handler use closures that inject event; keep dict[str, Any] for these\n- See docs/research/typed-hook-payloads-research.md
+Remove isinstance(data, dict) boilerplate from 11 hook consumers.\n\n## Acceptance Criteria\n1. Update __call__ (or handler method) signatures in 11 consumers to use specific TypedDict param type:\n   - CommandSafetyGuard.__call__(data: PreToolUseData)\n   - URLSafetyGuard.__call__(data: PreToolUseData)\n   - AutoLintHook.__call__(data: PostToolUseData)\n   - ContextInjectionHook.__call__(data: SessionStartData)\n   - SubagentVerificationHook.__call__(data: SubagentCompleteData)\n   - TestVerificationHook.__call__(data: SessionEndData)\n   - RetrospectiveHook.__call__(data: TaskCompleteData)\n   - ProgressReporter.on_tool_complete(data: PostToolUseData)\n   - ScreenshotOnErrorHook.handle(data: OnErrorData)\n   - NotificationHook: dict[str, Any] (multi-event)\n   - ObservabilityHook: dict[str, Any] (multi-event)\n2. Remove isinstance(data, dict) early-return guards from all 11 consumers (13 occurrences total)\n3. Do NOT touch skills/registry.py isinstance guard (different concern)\n4. All existing hook tests pass; ruff check clean\n5. Zero runtime behavior changes beyond removing unreachable guard branches\n\n## Architecture Notes\n- HookRegistry.emit always passes dict - isinstance guards are dead code\n- NotificationHook._make_handler and ObservabilityHook._make_handler use closures that inject event; keep dict[str, Any] for these\n- See docs/research/typed-hook-payloads.md
 
 [[2026-03-10]] Tue 22:45
 ## Architecture Review
@@ -161,7 +161,7 @@ Remove isinstance(data, dict) boilerplate from 11 hook consumers.\n\n## Acceptan
 | 2 | Docstrings complete | Yes | Pass | All 11 consumer classes + handler methods have accurate docstrings (verified via search) |
 | 3 | sources/overview.md | No | N/A | No external patterns used; internal TypedDicts from core/hooks.py |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads-research.md exists and linked in AC body |
+| 5 | Research doc linked | Yes | Pass | docs/research/typed-hook-payloads.md exists and linked in AC body |
 
 ### Files Updated
 - None

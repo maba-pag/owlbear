@@ -44,7 +44,7 @@ Full exception details stay in server-side logs (already handled by logger.excep
 
 ### Architecture notes
 
-See docs/error-message-sanitization-research.md. This task is the helper only;
+See docs/research/error-message-sanitization.md. This task is the helper only;
 call-site replacement is a separate task.
 
 ### Out of scope

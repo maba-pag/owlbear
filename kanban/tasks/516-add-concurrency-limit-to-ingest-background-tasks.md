@@ -20,7 +20,7 @@ CF-1: asyncio.create_task() stored in_background_tasks set. Task failures caught
 
 ## Research Findings
 
-See docs/ingest-concurrency-limit-research.md for full analysis.
+See docs/research/ingest-concurrency-limit.md for full analysis.
 
 **Recommendation (.90 confidence):** asyncio.Semaphore wrapping _enrich_graph and _enrich_inter_doc_graph bodies. Default limit 5, configurable via ingest_bg_concurrency setting. ~10 LOC change, zero new deps, preserves fire-and-forget pattern.
 

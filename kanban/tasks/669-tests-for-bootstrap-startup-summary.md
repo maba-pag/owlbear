@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Write tests for the StartupSummary mechanism added in #668. AC: (1) Test all-OK summary when every component loads successfully. (2) Test FAIL entry when a configured component raises (mock _build_knowledge_infra to raise). (3) Test SKIP/WARNING entry when optional dep import fails. (4) Test channel.send is called with formatted summary text. (5) Test summary suppressed when log_startup_summary=False. (6) Test StartupSummary is present on BootstrapResult. (7) All tests pass; ruff clean. See docs/bootstrap-startup-summary-research.md.
+Write tests for the StartupSummary mechanism added in #668. AC: (1) Test all-OK summary when every component loads successfully. (2) Test FAIL entry when a configured component raises (mock _build_knowledge_infra to raise). (3) Test SKIP/WARNING entry when optional dep import fails. (4) Test channel.send is called with formatted summary text. (5) Test summary suppressed when log_startup_summary=False. (6) Test StartupSummary is present on BootstrapResult. (7) All tests pass; ruff clean. See docs/research/bootstrap-startup-summary.md.
 
 [[2026-03-08]] Sun 23:57
 Wave 3, agent: auditor

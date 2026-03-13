@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-Research complete (docs/voice-channel-import-research.md).
+Research complete (docs/research/voice-channel-import.md).
 
 Fix: change bootstrap.py L241 from `from owlbear.channels.voice import VoiceChannel` to `from owlbear.voice import VoiceChannel`.
 

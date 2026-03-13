@@ -20,7 +20,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/ingest.py | Test: tests/test_knowledge_ingest.py | See docs/knowledge-ingestion-research.md S3.4.
+Module: src/owlbear/memory/knowledge/ingest.py | Test: tests/test_knowledge_ingest.py | See docs/research/knowledge-ingestion.md S3.4.
 
 AC:
 - IngestPipeline class accepting GraphStore, VectorStore, EmbeddingProvider, EntityExtractor, TextChunker

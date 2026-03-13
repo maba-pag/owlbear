@@ -14,7 +14,7 @@ class: standard
 ---
 
 ## Context
-From #275 provenance-tracking-research.md S4.
+From #275 provenance-tracking.md S4.
 
 ## Acceptance Criteria
 - [ ] IngestResult model gains source_pipeline: str = 'ingest' field (default matches IngestPipeline default)

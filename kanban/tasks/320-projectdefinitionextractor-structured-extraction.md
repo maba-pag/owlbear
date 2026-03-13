@@ -29,4 +29,4 @@ class: standard
 - [ ] All tests in tests/test_project_definition_extractor.py pass
 
 Pattern: owlbear/memory/knowledge/extractor.py EntityExtractor
-See docs/project-definition-workflow-research.md sec4
+See docs/research/project-definition-workflow.md sec4

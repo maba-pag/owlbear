@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/memory/knowledge/schema.py (extend existing) | Test: tests/test_knowledge_schema.py (extend existing) | See docs/knowledge-ingestion-research.md S3.4.
+Module: src/owlbear/memory/knowledge/schema.py (extend existing) | Test: tests/test_knowledge_schema.py (extend existing) | See docs/research/knowledge-ingestion.md S3.4.
 
 AC:
 - New document_status table: document_id TEXT PK, status TEXT, source TEXT, error TEXT, created_at TEXT, updated_at TEXT

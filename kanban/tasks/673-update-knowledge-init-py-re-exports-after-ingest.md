@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-After #671 and #672 complete, update src/owlbear/memory/knowledge/__init__.py to re-export DocumentStore, GraphEnricher, DocumentStatus, compute_content_hash from their new modules. AC: (1) __init__.py exports DocumentStore from document_store. (2) __init__.py exports GraphEnricher from enrichment. (3) __init__.py exports DocumentStatus and compute_content_hash from document_store. (4) All external import paths (bootstrap.py, tests, etc.) work without changes to their import statements. (5) Ruff clean. See docs/ingest-complexity-reduction-research.md.
+After #671 and #672 complete, update src/owlbear/memory/knowledge/__init__.py to re-export DocumentStore, GraphEnricher, DocumentStatus, compute_content_hash from their new modules. AC: (1) __init__.py exports DocumentStore from document_store. (2) __init__.py exports GraphEnricher from enrichment. (3) __init__.py exports DocumentStatus and compute_content_hash from document_store. (4) All external import paths (bootstrap.py, tests, etc.) work without changes to their import statements. (5) Ruff clean. See docs/research/ingest-complexity-reduction.md.
 
 [[2026-03-09]] Mon 16:17
 ## Audit

@@ -27,6 +27,6 @@ class: standard
 - [ ] TDD: write tests first, then implement
 
 Depends on: #95
-See docs/voice-io-research.md section 4.
+See docs/research/voice-io.md section 4.
 
 Note: `bearclaw voice chat` (interactive agent loop) deferred -- requires agent integration which is out of voice I/O module scope. Create as separate task when agent loop is ready.

@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-Add Slack SDK dependency for Socket Mode integration. See docs/slack-integration-research.md.
+Add Slack SDK dependency for Socket Mode integration. See docs/research/slack-integration.md.
 
 AC:
 - Add slack_sdk[socket_mode] to pyproject.toml dependencies

@@ -16,7 +16,7 @@ class: standard
 
 SEC-07 from docs/security-audit.md: CDP mode attaches to user's existing browser using contexts[0], gaining access to all authenticated sessions, cookies, and localStorage. Must create isolated context instead.
 
-See docs/cdp-context-isolation-research.md for full analysis.
+See docs/research/cdp-context-isolation.md for full analysis.
 
 ## Architecture Decision
 

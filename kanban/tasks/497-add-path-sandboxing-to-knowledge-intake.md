@@ -21,7 +21,7 @@ SEC-11: intake.py read_file() reads any path without sandboxing.
 - #652  Add workspace_root sandboxing to intake.read_file
 - #654  Add path sandboxing to RefreshOrchestrator._handle_file_glob
 
-See docs/knowledge-intake-path-sandboxing-research.md for full analysis.
+See docs/research/knowledge-intake-path-sandboxing.md for full analysis.
 
 [[2026-03-09]] Mon 20:44
 ## Audit

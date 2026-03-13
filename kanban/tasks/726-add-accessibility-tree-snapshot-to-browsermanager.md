@@ -18,7 +18,7 @@ claimed_at: 2026-03-11T10:26:58.168604+01:00
 class: standard
 ---
 
-**Source:** docs/research/a11y-snapshot-research.md, docs/research/pinchtab-research.md S4.3
+**Source:** docs/research/a11y-snapshot.md, docs/research/pinchtab.md S4.3
 
 Add an async `snapshot(filter)` method to `BrowserManager` that returns a parsed accessibility tree via CDP `Accessibility.getFullAXTree`. The deprecated `page.accessibility.snapshot()` API no longer exists in modern Playwright.
 
@@ -68,7 +68,7 @@ Add an async `snapshot(filter)` method to `BrowserManager` that returns a parsed
 - **Single domain:** Browser tools only  no cross-domain concerns.
 
 ### Changes Made
-- Rewrote task body with precise AC (7 verifiable criteria) based on a11y-snapshot-research.md
+- Rewrote task body with precise AC (7 verifiable criteria) based on a11y-snapshot.md
 - Added implementation guidance: CDP approach, data model, filter definitions, patterns to follow
 - Created #735: Tests: BrowserManager.snapshot() via CDP (RED phase)  preceding test task for TDD compliance
 - Noted dependency: #726 depends on #735 (test-first)

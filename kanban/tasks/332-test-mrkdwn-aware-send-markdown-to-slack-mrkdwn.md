@@ -25,4 +25,4 @@ class: standard
 - [ ] Test mixed formatting in a single message
 - [ ] Tests are for the conversion function only (pure function, no API mock)
 
-See docs/slack-rich-messaging-research.md S3.6
+See docs/research/slack-rich-messaging.md S3.6

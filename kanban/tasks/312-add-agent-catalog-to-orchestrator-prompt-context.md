@@ -25,4 +25,4 @@ Ensure orchestrator system prompt includes all available agent names and one-lin
 - [ ] ruff clean
 
 This is lower priority than #311 because the routing rules already name agents. This task ensures descriptions are also present for better LLM selection accuracy.
-See docs/conversation-router-research.md S4
+See docs/research/conversation-router.md S4

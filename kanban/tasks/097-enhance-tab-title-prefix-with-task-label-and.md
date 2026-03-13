@@ -16,7 +16,7 @@ class: standard
 ---
 
 Enhance tab title prefix with task label and MutationObserver in CDP mode.
-See docs/cdp-tab-groups-research.md for details.
+See docs/research/cdp-tab-groups.md for details.
 
 ## Scope
 - CDP mode only (launch mode unchanged)

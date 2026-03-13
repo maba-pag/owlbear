@@ -15,7 +15,7 @@ parent: 581
 class: standard
 ---
 
-See docs/openclaw-skills-research.md for details.
+See docs/research/openclaw-skills.md for details.
 
 **Research checklist:**
 1. Theoretical validity -- Heartbeat proactive pattern is sound (timer + checklist + suppression). Session-memory hook prevents context loss. Both are well-tested in OpenClaw (271k stars).

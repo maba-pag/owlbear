@@ -37,4 +37,4 @@ Refactor VoiceChannel.receive() to support brainstorming mode. Two modes: quick 
 - VAD auto-segments at pauses (max 15s segments); idle_timeout is a separate higher-level timer
 
 ## Design Reference
-See docs/moonshine-streaming-research.md S4.1 and S4.3.
+See docs/research/moonshine-streaming.md S4.1 and S4.3.

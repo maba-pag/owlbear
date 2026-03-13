@@ -30,4 +30,4 @@ AC:
 - [ ] Tests: re-ingest same content -> skip, re-ingest changed -> delete+new doc, first ingest -> normal path
 
 Depends on #278 (schema), #279 (find_status_by_source), #280 (hash check), #281 (delete cascade).
-See docs/content-hashing-research.md
+See docs/research/content-hashing.md

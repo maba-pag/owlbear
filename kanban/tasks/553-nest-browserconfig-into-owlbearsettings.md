@@ -13,7 +13,7 @@ tags:
 class: standard
 ---
 
-INT-18: BrowserConfig not configurable via OWLBEAR_ env vars. See docs/browser-config-nesting-research.md for full analysis.
+INT-18: BrowserConfig not configurable via OWLBEAR_ env vars. See docs/research/browser-config-nesting.md for full analysis.
 
 Approach: Nest BrowserConfig into OwlBearSettings using env_nested_delimiter='__' and nested_model_default_partial_update=True.
 

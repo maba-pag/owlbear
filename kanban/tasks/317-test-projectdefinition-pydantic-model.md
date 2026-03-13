@@ -24,5 +24,5 @@ class: standard
 - [ ] Test both models are frozen (ConfigDict(frozen=True)) — assignment raises ValidationError
 - [ ] Tests import from owlbear.planning.models (will fail until impl task completes)
 
-See docs/project-definition-workflow-research.md sec3.3
+See docs/research/project-definition-workflow.md sec3.3
 Follows test_knowledge_extractor.py structure.

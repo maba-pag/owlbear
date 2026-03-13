@@ -20,11 +20,11 @@ AC:
 - [ ] Identify features relevant to OwlBear (AI-assisted workflows, content processing, etc.)
 - [ ] Write trade-off analysis: effort vs value for each candidate feature
 - [ ] Create follow-up kanban tasks for approved additions
-- [ ] Write research doc to docs/research/paperclip-research.md
+- [ ] Write research doc to docs/research/paperclip.md
 
 ## Research
 
-**Doc:** `docs/research/paperclip-research.md`
+**Doc:** `docs/research/paperclip.md`
 
 ### Key Findings
 
@@ -54,7 +54,7 @@ Added Paperclip entry to `docs/sources/overview.md`.
 | Identify features relevant to OwlBear | Complete: 12 patterns evaluated with KISS/YAGNI filter | Kept |
 | Write trade-off analysis | Complete: effort vs value matrix with confidence scores | Kept |
 | Create follow-up kanban tasks | NOT DONE by researcher (commands listed but not run) | Fixed: created #750, #755 |
-| Write research doc | Complete: docs/research/paperclip-research.md | Kept |
+| Write research doc | Complete: docs/research/paperclip.md | Kept |
 
 ### Architecture Notes
 - Research quality is high: structured comparison matrix, rigorous YAGNI filter, clear adopt/defer/skip decisions
@@ -86,11 +86,11 @@ Pure research task  no code changes, no pytest/ruff/coverage applicable.
 ### AC Compliance
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Clone + analyze architecture | paperclip-research.md Sec 2: 9 sources, Sec 3: 12-pattern matrix | PASS |
+| Clone + analyze architecture | paperclip.md Sec 2: 9 sources, Sec 3: 12-pattern matrix | PASS |
 | Identify relevant features | Sec 3: 3 adoptable (.65-.80), 6 rejected with YAGNI/N-A reasons | PASS |
 | Trade-off analysis: effort vs value | Matrix with Gap/KISS columns; per-pattern LOC estimates + confidence scores | PASS |
 | Create follow-up kanban tasks | #750 (budget threshold, todo) + #755 (blocked-task dedup, archived) confirmed | PASS |
-| Write research doc | docs/research/paperclip-research.md exists, 150 lines, 5 sections, task ref | PASS |
+| Write research doc | docs/research/paperclip.md exists, 150 lines, 5 sections, task ref | PASS |
 
 Attribution: docs/sources/overview.md line 15  Paperclip entry verified.
 
@@ -106,7 +106,7 @@ Research doc is thorough, well-structured, and actionable. Follow-up tasks exist
 | 2 | Docstrings complete | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Paperclip entry at line 15 with MIT license, patterns, and date |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/paperclip-research.md exists; follow-up tasks #750, #755 created |
+| 5 | Research doc linked | Yes | Pass | docs/research/paperclip.md exists; follow-up tasks #750, #755 created |
 
 ### Files Updated
 - None
@@ -119,11 +119,11 @@ Research doc is thorough, well-structured, and actionable. Follow-up tasks exist
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Clone repo + analyze architecture | paperclip-research.md Sec 2: 9 sources, Sec 3: 12-pattern matrix | PASS |
+| Clone repo + analyze architecture | paperclip.md Sec 2: 9 sources, Sec 3: 12-pattern matrix | PASS |
 | Identify relevant features | Sec 3: 3 adoptable (.65-.80), 6 rejected with KISS/YAGNI | PASS |
 | Trade-off analysis: effort vs value | Matrix with Gap/KISS columns, LOC estimates, confidence | PASS |
 | Create follow-up kanban tasks | #750 (budget, review), #755 (dedup, archived) exist with AC | PASS |
-| Write research doc | docs/research/paperclip-research.md: 150+ lines, 5 sections, task ref | PASS |
+| Write research doc | docs/research/paperclip.md: 150+ lines, 5 sections, task ref | PASS |
 
 Attribution: docs/sources/overview.md line 15 -- Paperclip entry verified.
 Scratch cleanup: no 746-* files, cloned repo removed.

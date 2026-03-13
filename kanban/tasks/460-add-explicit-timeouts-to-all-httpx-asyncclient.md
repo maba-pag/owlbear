@@ -24,4 +24,4 @@ class: standard
 - [ ] Existing timeout sites (`web_search.py`, `bookmark_pipeline.py`) left unchanged -- already correct
 - [ ] Tests: Add grep-based or AST test asserting every `httpx.AsyncClient` in src/ has explicit `timeout` kwarg
 
-See docs/httpx-timeout-research.md for rationale and prior art.
+See docs/research/httpx-timeout.md for rationale and prior art.

@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #304 source-discovery-bookmarking-research.md. TDD with mocked web_read, SourceEvaluator, IngestPipeline. Test full pipeline flow, dedup behavior, ingest threshold logic. AC: Full pipeline tested with mocks; dedup tested (duplicate URL skipped); ingest threshold tested (low score skips ingest, high score triggers ingest). Depends on #304.
+From #304 source-discovery-bookmarking.md. TDD with mocked web_read, SourceEvaluator, IngestPipeline. Test full pipeline flow, dedup behavior, ingest threshold logic. AC: Full pipeline tested with mocks; dedup tested (duplicate URL skipped); ingest threshold tested (low score skips ingest, high score triggers ingest). Depends on #304.

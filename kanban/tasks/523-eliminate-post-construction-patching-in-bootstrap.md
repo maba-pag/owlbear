@@ -13,4 +13,11 @@ tags:
 class: standard
 ---
 
-ARC-14: bootstrap creates placeholder for ProjectToolset, patches real agent after construction. agent._deps.agent_registry set after agent construction. Two-phase init creates temporal coupling. Use lazy property or reorder construction. AC: no post-construction patching. See docs/architecture-audit.md.
+ARC-14: bootstrap creates placeholder for ProjectToolset, patches real agent after construction. agent._deps.agent_registry set after agent construction. Two-phase init creates temporal coupling. Use lazy property or reorder construction. See docs/architecture-audit.md.
+
+## AC
+
+- [ ] No post-construction patching of agent or agent._deps
+- [ ] ProjectToolset constructed before Agent, or accessed via lazy property
+- [ ] Existing tests pass
+- [ ] Ruff clean

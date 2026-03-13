@@ -13,4 +13,4 @@ tags:
 class: standard
 ---
 
-From #307 slack-structured-proposals-research.md. Add format_proposal_text(), format_approval_text(), format_progress_text() for non-interactive channels (CLI, etc.). Template functions return both blocks and text_fallback. Caller uses hasattr(channel, 'send_blocks') to decide. AC: All interactive templates have text equivalents; CLI receives readable text versions of proposals/approvals/progress; ChannelPlugin protocol unchanged. Depends on #307.
+From #307 slack-structured-proposals.md. Add format_proposal_text(), format_approval_text(), format_progress_text() for non-interactive channels (CLI, etc.). Template functions return both blocks and text_fallback. Caller uses hasattr(channel, 'send_blocks') to decide. AC: All interactive templates have text equivalents; CLI receives readable text versions of proposals/approvals/progress; ChannelPlugin protocol unchanged. Depends on #307.

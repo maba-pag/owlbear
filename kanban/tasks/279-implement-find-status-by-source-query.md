@@ -25,4 +25,4 @@ AC:
 
 Pattern: follow existing _set_status() in ingest.py for DB access.
 Depends on #278 (content_hash column must exist).
-See docs/content-hashing-research.md
+See docs/research/content-hashing.md

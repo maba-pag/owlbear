@@ -27,4 +27,4 @@ class: standard
 - [ ] archive(id) -> None: reads project, sets status='archived', writes back
 - [ ] ~60 LOC total
 
-See docs/multi-project-session-research.md S3.3
+See docs/research/multi-project-session.md S3.3

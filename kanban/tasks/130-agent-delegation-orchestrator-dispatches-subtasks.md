@@ -18,7 +18,7 @@ class: standard
 ---
 
 The outer agent (orchestrator) can delegate work to specialized inner agents via a tool function.
-Research: docs/agent-framework-research.md section 3.3
+Research: docs/research/agent-framework.md section 3.3
 Depends on: #128 (AgentDefinition), #129 (AgentRegistry), #161 (OwlBearDeps extension)
 
 ## AC

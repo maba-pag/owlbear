@@ -15,7 +15,7 @@ class: standard
 ---
 
 ## Research Complete
-See [docs/shutdown-event-research.md](docs/shutdown-event-research.md) for full analysis.
+See [docs/research/shutdown-event.md](docs/research/shutdown-event.md) for full analysis.
 
 ### Summary
 Replace module-level `_shutdown: bool` + `global` statements with `asyncio.Event` created locally in `run_daemon()`. Signal handler calls `loop.call_soon_threadsafe(shutdown_event.set)` -- documented as safe from signal handlers, works cross-platform (keeps `signal.signal()`, does NOT use Unix-only `loop.add_signal_handler()`). Confidence: .90.

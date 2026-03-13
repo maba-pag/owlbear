@@ -32,4 +32,4 @@ Implement Moonshine streaming STT using MicTranscriber for brainstorming session
 - [ ] All tests mock the moonshine_voice C library layer
 - [ ] TDD: write failing tests first
 
-See docs/moonshine-streaming-research.md S4.3 for class design.
+See docs/research/moonshine-streaming.md S4.3 for class design.

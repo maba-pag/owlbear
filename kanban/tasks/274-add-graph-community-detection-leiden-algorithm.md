@@ -15,7 +15,7 @@ class: standard
 
 ## Context
 Apply GraphRAG's community detection pattern to our entity graph. Use python-igraph or leidenalg to detect communities and generate community summaries.
-See docs/knowledge-pipeline-research.md S4.
+See docs/research/knowledge-pipeline.md S4.
 
 ## Acceptance Criteria
 - [ ] Implement community detection on GraphStore entities

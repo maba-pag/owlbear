@@ -22,7 +22,7 @@ Wrap FlagEmbedding BGEM3FlagModel. Lazy loading, embed_hybrid() returns dense+sp
 
 ## Research Done
 
-- docs/bge-m3-integration-research.md (328 lines) — full code analysis
+- docs/research/bge-m3-integration.md (328 lines) — full code analysis
 - FP16 auto-disabled on CPU, FP32 ~3.0 GB RAM
 - Sparse output: Dict[str(token_id), float], positive-only (ReLU)
 - ColBERT output: ndarray (T-1, 1024), skip CLS

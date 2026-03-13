@@ -17,7 +17,7 @@ claimed_at: 2026-03-11T22:19:32.3550112+01:00
 class: standard
 ---
 
-MOD-01/F-04: cli.py is 1233 lines with 8+ concern areas. Split into bearclaw/commands/ modules, wire via app.add_typer(). See docs/research/cli-split-research.md.
+MOD-01/F-04: cli.py is 1233 lines with 8+ concern areas. Split into bearclaw/commands/ modules, wire via app.add_typer(). See docs/research/cli-split.md.
 
 ## Acceptance Criteria
 
@@ -34,7 +34,7 @@ MOD-01/F-04: cli.py is 1233 lines with 8+ concern areas. Split into bearclaw/com
 
 ## Architecture Notes
 
-- Pattern: Typer-idiomatic flat modules per docs/research/cli-split-research.md section 4
+- Pattern: Typer-idiomatic flat modules per docs/research/cli-split.md section 4
 - No shared mutable state  each module instantiates its own OwlBearSettings()
 - No new dependencies introduced
 - This is pure refactoring  no TDD RED phase needed; existing 10 test files are the regression safety net
@@ -296,7 +296,7 @@ Verdict: FAIL (AC#7)
 | 2 | Docstrings complete | Yes | Pass | All 9 new command modules have module docstrings. All private helpers have function docstrings. Typer command functions use decorator help= params (matches pre-split state). |
 | 3 | sources/overview.md | No | N/A | Typer add_typer pattern already attributed at line 954 from research phase. No new external patterns. |
 | 4 | README.md | No | N/A | No CLI commands added/changed. Same command structure confirmed by reviewer (AC#8). |
-| 5 | Research doc linked | Yes | Pass | docs/research/cli-split-research.md exists (9494 bytes), referenced in task body line 1. |
+| 5 | Research doc linked | Yes | Pass | docs/research/cli-split.md exists (9494 bytes), referenced in task body line 1. |
 | 6 | No impact | -- | -- | Items 2 and 5 applied; evaluated with evidence. |
 
 ### Files Updated

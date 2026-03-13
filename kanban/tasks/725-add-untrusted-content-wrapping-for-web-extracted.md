@@ -19,7 +19,7 @@ claimed_at: 2026-03-11T23:29:16.655563+01:00
 class: standard
 ---
 
-**Source:** docs/research/untrusted-content-wrapping-research.md (Option A, .85 confidence)
+**Source:** docs/research/untrusted-content-wrapping.md (Option A, .85 confidence)
 **Depends on:** #730 (test task)
 
 Create `owlbear/core/content_safety.py` with a central wrapping utility and apply it at each web-extraction return point that feeds LLM context.
@@ -290,7 +290,7 @@ All 12 AC lines PASS
 | 2 | Docstrings complete | Yes | Pass | Module docstring + wrap_untrusted_content docstring in content_safety.py; all 4 integration functions have docstrings |
 | 3 | sources/overview.md | Yes | Pass | Section 'Untrusted Content Wrapping Research (Task #725)' with PinchTab, Willison x2, Greshake already present |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/untrusted-content-wrapping-research.md exists and linked in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/untrusted-content-wrapping.md exists and linked in task body |
 | 6 | No impact | N/A | N/A | Items 1-3, 5 apply |
 
 ### Files Updated

@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Add Slack token config to pydantic-settings. See docs/slack-integration-research.md.
+Add Slack token config to pydantic-settings. See docs/research/slack-integration.md.
 
 AC:
 - Add OWLBEAR_SLACK_APP_TOKEN (SecretStr, optional) to settings

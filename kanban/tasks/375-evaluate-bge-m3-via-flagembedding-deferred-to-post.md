@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #258 graph-augmented-retrieval-research.md. When/if Qdrant migration (#236) happens, evaluate bge-m3 as single-model replacement for bge-small + SPLADE++. Benchmark memory/latency on Ryzen 8840U. AC: Decision doc comparing bge-m3 vs dual-FastEmbed on quality, latency, and resource usage. Depends on #258.
+From #258 graph-augmented-retrieval.md. When/if Qdrant migration (#236) happens, evaluate bge-m3 as single-model replacement for bge-small + SPLADE++. Benchmark memory/latency on Ryzen 8840U. AC: Decision doc comparing bge-m3 vs dual-FastEmbed on quality, latency, and resource usage. Depends on #258.

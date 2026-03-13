@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Move graph enrichment scheduling from IngestPipeline to a new GraphEnricher class in src/owlbear/memory/knowledge/enrichment.py. See docs/ingest-complexity-reduction-research.md.
+Move graph enrichment scheduling from IngestPipeline to a new GraphEnricher class in src/owlbear/memory/knowledge/enrichment.py. See docs/research/ingest-complexity-reduction.md.
 
 AC:
 1. GraphEnricher class exists in enrichment.py with methods: schedule_graph_enrichment, schedule_inter_doc_enrichment (public), _enrich_graph, _enrich_graph_inner, _enrich_inter_doc_graph (private).

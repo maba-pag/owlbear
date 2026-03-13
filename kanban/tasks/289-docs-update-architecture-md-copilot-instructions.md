@@ -18,7 +18,7 @@ class: standard
 
 ## Scope
 Docs-only task: update 3 documentation files with 9 corrections identified by the phase-9 docs audit.
-See [docs/docs-audit-phase9-research.md](docs/docs-audit-phase9-research.md) for full analysis.
+See [docs/research/docs-audit-phase9.md](docs/research/docs-audit-phase9.md) for full analysis.
 
 ## Acceptance Criteria
 

@@ -22,7 +22,7 @@ Add single-domain validation to architect.agent.md step 3 (Evaluate Architecture
 The architect gate must verify that each task entering `todo` targets exactly one domain.
 References the canonical 11-domain list defined in kanban-planner.agent.md (task #694).
 
-See docs/task-decomposition-rules-research.md for background.
+See docs/research/task-decomposition-rules.md for background.
 
 ## Changes Required
 
@@ -110,9 +110,9 @@ No issues -- prompt/instruction file only, no application code.
 |---|-------|----------|--------|----------|
 | 1 | copilot-instructions.md | No | N/A | Agent-internal workflow item added; no behavior/API/convention change visible to copilot-instructions |
 | 2 | Docstrings | No | N/A | No Python code changed -- agent config file only |
-| 3 | sources.md | No | N/A | External sources already logged for research doc (task-decomposition-rules-research.md) by researcher |
+| 3 | sources.md | No | N/A | External sources already logged for research doc (task-decomposition-rules.md) by researcher |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/task-decomposition-rules-research.md referenced in task body; sources.md has 4 attribution rows |
+| 5 | Research doc linked | Yes | Pass | docs/research/task-decomposition-rules.md referenced in task body; sources.md has 4 attribution rows |
 | 6 | No impact | Partial | N/A | Items 1-4 have no impact; item 5 already satisfied |
 
 ### Files Updated
@@ -130,7 +130,7 @@ No issues -- prompt/instruction file only, no application code.
 | 2 | Docstrings | No | N/A | No Python code changed -- agent config file only |
 | 3 | sources.md | No | N/A | External sources already logged for research doc |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/task-decomposition-rules-research.md referenced in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/task-decomposition-rules.md referenced in task body |
 | 6 | No impact | Partial | N/A | Items 1-4 no impact; item 5 already satisfied |
 
 ### Files Updated
@@ -237,7 +237,7 @@ Builder delegated Step 3 item 9 to arch-review SKILL.md (already present at comm
 | 2 | Docstrings | No | N/A | No Python code changed -- agent config file only |
 | 3 | sources/overview.md | No | N/A | No new external patterns; research doc sources already attributed |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/task-decomposition-rules-research.md exists and is referenced in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/task-decomposition-rules.md exists and is referenced in task body |
 | 6 | No impact | Partial | N/A | Items 1-4 no impact; item 5 verified |
 
 ### Files Updated

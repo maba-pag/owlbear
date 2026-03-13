@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-ARC-05/INT-16: 10 SLF001 suppressions across 4 files. Research complete  see docs/slf001-public-api-research.md.
+ARC-05/INT-16: 10 SLF001 suppressions across 4 files. Research complete  see docs/research/slf001-public-api.md.
 
 Implementation plan (4 fix groups, all in one task  unified goal, each is 3-15 LOC):
 

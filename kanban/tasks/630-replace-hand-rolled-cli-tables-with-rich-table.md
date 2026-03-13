@@ -16,7 +16,7 @@ class: standard
 
 Replace _print_usage_table() and project_list/ks_list hand-rolled column formatting with rich.table.Table. Rich is already installed (transitive dep of Typer, logfire, etc.  zero new deps). Supersedes #520 (extract _print_table helper), which should be closed.
 
-See docs/rich-table-cli-research.md for full analysis.
+See docs/research/rich-table-cli.md for full analysis.
 
 AC:
 - [ ] project_list() renders via rich.table.Table with columns: Name, Workspace, Last Active, Status

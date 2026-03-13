@@ -62,7 +62,7 @@ Non-implementation task (tagged research). No testable code will be produced. Pa
 
 [[2026-03-11]] Wed 16:17
 ## Builder Notes
-- Research doc: docs/research/mission-control-research.md (already complete)
+- Research doc: docs/research/mission-control.md (already complete)
 - Sources: docs/sources/overview.md entry exists
 - Cloned repo analyzed and cleaned up
 - Follow-up task commands documented in research doc S5 (3 tasks: loop detection, cost tracking, board-state context)
@@ -78,7 +78,7 @@ Non-implementation task (tagged research). No testable code will be produced. Pa
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Entry exists at line 934 (MeisnerDan/mission-control, MIT, comprehensive pattern list, dated 2026-03-06) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/mission-control-research.md exists and is referenced in Builder Notes. Follow-up #732 (cost tracking) created. Note: research doc S5 documents 3 follow-up commands but only 1 was created on board; remaining commands are preserved in the doc for future use. |
+| 5 | Research doc linked | Yes | Pass | docs/research/mission-control.md exists and is referenced in Builder Notes. Follow-up #732 (cost tracking) created. Note: research doc S5 documents 3 follow-up commands but only 1 was created on board; remaining commands are preserved in the doc for future use. |
 | 6 | No impact | -- | -- | Items 3 and 5 apply |
 
 ### Files Updated
@@ -122,7 +122,7 @@ Pure research task -- no code, no tests, no security surface.
 | 1. Update docs/sources.md | Entry at L940: URL, MIT license, 10 patterns listed, dated 2026-03-06 | PASS |
 | 2. Clone repo for analysis | Builder confirms cloned, analyzed, cleaned up | PASS |
 | 3. Identify patterns | Research doc S3.2: 8 patterns with confidence scores (.35-.85) | PASS |
-| 4. Document findings | docs/research/mission-control-research.md exists (76 lines, 5 sections) | PASS |
+| 4. Document findings | docs/research/mission-control.md exists (76 lines, 5 sections) | PASS |
 | 5. Create follow-up tasks | Only #732 (cost tracking) created. Missing: loop detection task + board-state context task. Research doc S5 lists 3 commands. | **FAIL** |
 
 ### Rejection
@@ -162,7 +162,7 @@ Pure research task -- no code, no tests, no security surface.
 | 1. Update docs/sources.md | Entry at L940: URL, MIT license, 10 patterns listed, dated 2026-03-06 | PASS |
 | 2. Clone repo for analysis | Builder confirms cloned, analyzed, cleaned up (standard for research) | PASS |
 | 3. Identify patterns | Research doc S3.2: 8 patterns with confidence scores (.35-.85), S3.3: 5 rejected patterns with rationale | PASS |
-| 4. Document findings | docs/research/mission-control-research.md: 5 sections, S4 recommendation with prioritization | PASS |
+| 4. Document findings | docs/research/mission-control.md: 5 sections, S4 recommendation with prioritization | PASS |
 | 5. Create follow-up tasks | #732 (cost tracking, backlog), #743 (loop detection, ideation), #744 (board-state context, ideation) -- all 3 have bodies referencing research doc | PASS |
 
 ### Prior Review Gap Resolution
@@ -184,7 +184,7 @@ Pure research task -- no code, no tests, no security surface.
 | 1. Update docs/sources.md | Entry at L940: URL, MIT license, 10 patterns listed, dated 2026-03-06 | PASS |
 | 2. Clone repo for analysis | Builder confirms cloned, analyzed, cleaned up (standard for research) | PASS |
 | 3. Identify patterns | Research doc S3.2: 8 patterns with confidence scores (.35-.85), S3.3: 5 rejected patterns with rationale | PASS |
-| 4. Document findings | docs/research/mission-control-research.md: 5 sections, S4 recommendation with prioritization | PASS |
+| 4. Document findings | docs/research/mission-control.md: 5 sections, S4 recommendation with prioritization | PASS |
 | 5. Create follow-up tasks | #732 (cost tracking, backlog), #743 (loop detection, ideation), #744 (board-state context, ideation) -- all 3 have bodies referencing research doc | PASS |
 
 ### Prior Review Gap Resolution
@@ -205,7 +205,7 @@ Pure research task -- no code, no tests, no security surface.
 | 1. Update docs/sources.md | Entry at L940: URL, MIT, 10 patterns, 2026-03-06 | PASS |
 | 2. Clone repo | Builder confirms cloned, analyzed, cleaned up | PASS |
 | 3. Identify patterns | S3.2: 8 patterns (.35-.85), S3.3: 5 rejected | PASS |
-| 4. Document findings | mission-control-research.md (5 sections) | PASS |
+| 4. Document findings | mission-control.md (5 sections) | PASS |
 | 5. Follow-up tasks | #732 + #743 + #744 all exist with bodies | PASS |
 
 ### Prior Gap Resolved
@@ -223,7 +223,7 @@ Cycle 1 FAILed AC5 (1/3 tasks). Cycle 2 created #743 and #744.
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Entry at L940: MeisnerDan/mission-control, MIT, 10 patterns, dated 2026-03-06 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/mission-control-research.md exists (76 lines, 5 sections). Follow-ups: #732 (backlog), #743 (ideation), #744 (ideation) -- all 3 on board |
+| 5 | Research doc linked | Yes | Pass | docs/research/mission-control.md exists (76 lines, 5 sections). Follow-ups: #732 (backlog), #743 (ideation), #744 (ideation) -- all 3 on board |
 | 6 | No impact | -- | -- | Items 3 and 5 apply |
 
 ### Files Updated
@@ -241,7 +241,7 @@ Cycle 1 FAILed AC5 (1/3 tasks). Cycle 2 created #743 and #744.
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Entry at L940: MeisnerDan/mission-control, MIT, 10 patterns, dated 2026-03-06 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/mission-control-research.md exists (76 lines, 5 sections). Follow-ups: #732 (backlog), #743 (ideation), #744 (ideation) -- all 3 on board |
+| 5 | Research doc linked | Yes | Pass | docs/research/mission-control.md exists (76 lines, 5 sections). Follow-ups: #732 (backlog), #743 (ideation), #744 (ideation) -- all 3 on board |
 | 6 | No impact | -- | -- | Items 3 and 5 apply |
 
 ### Files Updated

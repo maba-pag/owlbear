@@ -27,7 +27,7 @@ Use directory paths instead of dotted module names with --cov:
 - BAD:  --cov=owlbear.tools.diagram.toolset
 - GOOD: --cov=src/owlbear/tools/diagram
 
-See docs/pytest-cov-pydantic-mro-crash-research.md
+See docs/research/pytest-cov-pydantic-mro-crash.md
 
 ## Acceptance Criteria
 - [ ] code-review SKILL.md uses --cov=src/owlbear/{path} not --cov=owlbear.{module}

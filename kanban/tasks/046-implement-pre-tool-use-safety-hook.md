@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-See docs/agent-patterns-research.md para 3.4. Depends on HookRegistry (#38).
+See docs/research/agent-patterns.md para 3.4. Depends on HookRegistry (#38).
 
 ## Research required (gate: ideation to backlog)
 

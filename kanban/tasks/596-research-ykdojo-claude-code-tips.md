@@ -23,8 +23,8 @@ Analyze for command-line tips, prompt engineering patterns, and developer workfl
 **Status:** Research complete. Remaining work is cleanup and follow-up task creation.
 
 **Acceptance Criteria:**
-1. Delete duplicate research doc at `docs/claude-code-tips-research.md` (root copy). Keep only `docs/research/claude-code-tips-research.md`.
-2. Correct follow-up task commands in `docs/research/claude-code-tips-research.md` section 5:
+1. Delete duplicate research doc at `docs/research/claude-code-tips.md` (root copy). Keep only `docs/research/claude-code-tips.md`.
+2. Correct follow-up task commands in `docs/research/claude-code-tips.md` section 5:
    - Follow-up #1 target: `agent-common.instructions.md` section Task coordination > Handoff / blocked (not nonexistent 'kanban-based-development skill').
    - Follow-up #2 target: `agent-common.instructions.md` section Terminal discipline (not nonexistent `terminal.instructions.md`).
 3. Create corrected follow-up kanban tasks at `backlog` status, each with verifiable AC. Both are `nice-to-have` priority.
@@ -88,7 +88,7 @@ N/A - research task.
 ### AC Compliance
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| 1. Delete root duplicate | Test-Path docs/claude-code-tips-research.md = False | PASS |
+| 1. Delete root duplicate | Test-Path docs/research/claude-code-tips.md = False | PASS |
 | 2. Correct section 5 targets | Lines 104,106 target agent-common.instructions.md | PASS |
 | 3. Create follow-up tasks | #728 and #729 at backlog, nice-to-have, with AC | PASS |
 | 4. Verify sources entry | docs/sources/overview.md line 998 | PASS |
@@ -107,7 +107,7 @@ N/A - research task.
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Entry verified at line 998 (ykdojo/claude-code-tips, All Rights Reserved) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/claude-code-tips-research.md exists, linked in task body. Follow-ups #728 (handoff template) and #729 (command decomposition) at backlog, nice-to-have, with AC |
+| 5 | Research doc linked | Yes | Pass | docs/research/claude-code-tips.md exists, linked in task body. Follow-ups #728 (handoff template) and #729 (command decomposition) at backlog, nice-to-have, with AC |
 | 6 | No impact | Partial | N/A | Items 1,2,4 have no docs impact; items 3,5 verified |
 
 ### Files Updated

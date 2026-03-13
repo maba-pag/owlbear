@@ -15,7 +15,7 @@ class: standard
 
 ARC-16: AgentRegistry.scan() only supports file-based agent definitions (globs .md files). No register(defn) method for dynamic agents. Add register() alongside scan(). AC: both file and programmatic registration supported. See docs/architecture-audit.md.
 
-Research complete (2026-03-07). See docs/programmatic-agent-registration-research.md.
+Research complete (2026-03-07). See docs/research/programmatic-agent-registration.md.
 
 Findings: AgentDefinition is already decoupled from filesystem. Adding register(defn) is ~8 LOC. scan() clears all (including programmatic) which is acceptable per KISS. Prior art (PydanticAI, CrewAI) confirms programmatic registration as first-class pattern.
 

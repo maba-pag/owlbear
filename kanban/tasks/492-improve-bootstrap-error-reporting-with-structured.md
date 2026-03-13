@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-SUPERSEDED: Split into #668 (impl), #669 (tests), #670 (config). Original scope combined data model, 9 exception-site modifications, severity classification, config setting, and channel delivery -- too many concerns for one task. See docs/bootstrap-startup-summary-research.md for full research.
+SUPERSEDED: Split into #668 (impl), #669 (tests), #670 (config). Original scope combined data model, 9 exception-site modifications, severity classification, config setting, and channel delivery -- too many concerns for one task. See docs/research/bootstrap-startup-summary.md for full research.
 
 [[2026-03-09]] Mon 20:33
 ## Audit

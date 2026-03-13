@@ -24,4 +24,4 @@ class: standard
 - [ ] Skill is loadable by SkillRegistry: YAML frontmatter parses without error
 - [ ] Follows .github/skills/kanban-md/SKILL.md structure (frontmatter + markdown body)
 
-See docs/project-definition-workflow-research.md sec3.4
+See docs/research/project-definition-workflow.md sec3.4

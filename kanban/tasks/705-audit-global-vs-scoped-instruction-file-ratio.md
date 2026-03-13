@@ -24,7 +24,7 @@ AC:
 - [ ] Propose scoping changes with rationale, OR document 'no changes needed' with evidence (e.g. only N files are global, each has a documented reason)
 - [ ] Output: brief summary in task body (no separate research doc needed for this size)
 
-See docs/research/stripe-minions-research.md S3c for rationale.
+See docs/research/stripe-minions.md S3c for rationale.
 
 [[2026-03-11]] Wed 20:45
 ## Architecture Review
@@ -51,7 +51,7 @@ Verdict: APPROVED
 - Moved to todo
 
 ### Dependencies
-- None required; research doc (stripe-minions-research.md S3c) exists and is complete
+- None required; research doc (stripe-minions.md S3c) exists and is complete
 
 [[2026-03-11]] Wed 21:11
 ## Test-Writer Notes
@@ -147,7 +147,7 @@ Pure audit/documentation - no code changes, no tests, no pytest/ruff/coverage ap
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | No | N/A | Stripe Minions already attributed (rows exist in overview.md) |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | docs/research/stripe-minions-research.md exists and is referenced in task body |
+| 5 | Research doc linked | Yes | Pass | docs/research/stripe-minions.md exists and is referenced in task body |
 | 6 | No impact | N/A | N/A | Items 1-4 don't apply; item 5 passes |
 
 ### Files Updated

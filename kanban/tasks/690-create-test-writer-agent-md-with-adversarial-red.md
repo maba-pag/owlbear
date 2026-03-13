@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 
-Split from #683. See docs/test-writer-agent-research.md (AgentCoder empirical validation, grey model design).
+Split from #683. See docs/research/test-writer-agent.md (AgentCoder empirical validation, grey model design).
 
 The test-writer is a new agent that writes failing tests from AC before the builder sees the task. It tests the CONTRACT, not an implementation. The builder then makes the tests pass. This eliminates implementation bias from tests (AgentCoder: +26.8% test accuracy on HumanEval).
 

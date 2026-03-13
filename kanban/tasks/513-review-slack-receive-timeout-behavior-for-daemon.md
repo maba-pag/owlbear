@@ -16,7 +16,7 @@ class: standard
 
 T-5 from docs/resilience-audit.md: SlackChannel.receive() returns None on 30s timeout. Daemon interprets None as shutdown signal (correct for CLI, wrong for Slack). Causes premature daemon exit on Slack idle periods.
 
-See docs/slack-receive-timeout-research.md for full analysis.
+See docs/research/slack-receive-timeout.md for full analysis.
 
 ## Architecture Decision
 

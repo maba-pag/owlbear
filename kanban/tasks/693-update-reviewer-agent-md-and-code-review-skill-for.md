@@ -17,7 +17,7 @@ class: standard
 ---
 
 ## Context
-Split from #683. Depends on #692 (builder update with TestBuilderDiscovered convention  done). See docs/test-writer-agent-research.md.
+Split from #683. Depends on #692 (builder update with TestBuilderDiscovered convention  done). See docs/research/test-writer-agent.md.
 With two-agent TDD, the reviewer gains a powerful new check: comparing the test-writer's original tests against the builder's final test file. If the builder weakened assertions to make tests easier to pass, the reviewer catches it.
 
 ## Acceptance Criteria
@@ -120,7 +120,7 @@ N/A - prose-only .md files, no Python code
 | 2 | Docstrings | No | N/A | No Python modules modified, only .md files |
 | 3 | sources.md | No | N/A | No external patterns used, original OwlBear convention |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | Yes | Pass | Task body references docs/test-writer-agent-research.md |
+| 5 | Research doc linked | Yes | Pass | Task body references docs/research/test-writer-agent.md |
 | 6 | No impact | - | - | Items 1-4 N/A, item 5 passes |
 
 ### Files Updated

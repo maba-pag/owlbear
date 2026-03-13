@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-Replace custom FilteredToolset usage in apply_role_policy with PydanticAI native .filtered() on any AbstractToolset. Research: docs/pydantic-ai-multi-agent-research.md section 3.2.
+Replace custom FilteredToolset usage in apply_role_policy with PydanticAI native .filtered() on any AbstractToolset. Research: docs/research/pydantic-ai-multi-agent.md section 3.2.
 
 ## AC
 - [ ] Update apply_role_policy() in src/owlbear/core/roles.py: accept AbstractToolset (not just FunctionToolset) as first param

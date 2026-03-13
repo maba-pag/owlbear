@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #307 slack-structured-proposals-research.md. Teach ApprovalGateToolset to use send_blocks() when channel supports it (isinstance check or duck-typing). Send interactive approval buttons instead of plain text. Non-Slack channels fall back to send(). AC: ApprovalGateToolset sends Block Kit approval buttons on Slack; plain text on CLI; button clicks route through text bridge to existing yes/no flow. Depends on #307, #413, #414.
+From #307 slack-structured-proposals.md. Teach ApprovalGateToolset to use send_blocks() when channel supports it (isinstance check or duck-typing). Send interactive approval buttons instead of plain text. Non-Slack channels fall back to send(). AC: ApprovalGateToolset sends Block Kit approval buttons on Slack; plain text on CLI; button clicks route through text bridge to existing yes/no flow. Depends on #307, #413, #414.

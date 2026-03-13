@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-Implement the human-in-the-loop mechanism. Uses the active ChannelPlugin for I/O. See docs/ask-user-tool-research.md.
+Implement the human-in-the-loop mechanism. Uses the active ChannelPlugin for I/O. See docs/research/ask-user-tool.md.
 
 ## AC
 - [ ] File: src/owlbear/tools/ask_user.py (~80 LOC)

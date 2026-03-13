@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-From docs/graph-augmented-retrieval-impl-research.md §3.5 (quality assessment) and §5.5 (follow-up).
+From docs/research/graph-augmented-retrieval-impl.md §3.5 (quality assessment) and §5.5 (follow-up).
 
 ## Acceptance Criteria
 

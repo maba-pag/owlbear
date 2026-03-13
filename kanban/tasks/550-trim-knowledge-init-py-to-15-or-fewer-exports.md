@@ -15,7 +15,7 @@ class: standard
 
 INT-11: knowledge/__init__.py exports 35 symbols. Target <=15 public re-exports.
 
-Research complete: see docs/knowledge-init-trim-research.md
+Research complete: see docs/research/knowledge-init-trim.md
 
 **Recommended 14 exports:** Document, Edge, Entity, EntityType, RelationType, DocumentStatus, GraphStore, IngestPipeline, IngestResult, KnowledgeQueryService, BookmarkStore, EmbeddingProvider, VectorStoreProtocol, init_db
 

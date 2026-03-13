@@ -21,7 +21,7 @@ SessionMemoryHook: on SESSION_END, persist a compact LLM-generated summary to
 {workspace}/.owlbear/session-memory.md. On next startup, ContextManager.instructions
 reads the file and injects it into the agent's system prompt.
 
-See docs/research/session-memory-hook-research.md.
+See docs/research/session-memory-hook.md.
 depends_on: #711 (archived $([char]0x2714))
 
 AC:
@@ -297,9 +297,9 @@ Test: 20 passed 0 failed. Full suite: 1453 passed 17 failed (none 622-related). 
 |---|-------|----------|--------|----------|
 | 1 | copilot-instructions.md | No | N/A | Internal hook following existing patterns; no behavior/API/convention change. Tech stack table doesn't list individual hooks. |
 | 2 | Docstrings complete | Yes | Updated | session_memory_hook.py: module + class + all methods have docstrings. context.py: updated instructions property docstring to mention session-memory.md. config.py: Field(description=...) present. |
-| 3 | sources/overview.md | Yes | Pass | Already has 4 entries (LangGraph Checkpointer, OpenHands Condenser, OpenClaw session-memory hook, OpenClaw Hooks docs) linked to session-memory-hook-research.md. |
+| 3 | sources/overview.md | Yes | Pass | Already has 4 entries (LangGraph Checkpointer, OpenHands Condenser, OpenClaw session-memory hook, OpenClaw Hooks docs) linked to session-memory-hook.md. |
 | 4 | README.md | No | N/A | No CLI changes. |
-| 5 | Research doc linked | Yes | Pass | docs/research/session-memory-hook-research.md exists, linked from task body. |
+| 5 | Research doc linked | Yes | Pass | docs/research/session-memory-hook.md exists, linked from task body. |
 
 ### Files Updated
 - src/owlbear/memory/context.py (docstring only: instructions property)

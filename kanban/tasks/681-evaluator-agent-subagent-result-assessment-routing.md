@@ -16,7 +16,7 @@ class: standard
 
 ## Context
 
-The orchestrator currently reads subagent results, decides pass/fail, chooses retry vs block vs advance, and accumulates all this in context across waves. This cognitive work must be offloaded to a fresh-context subagent. See docs/evaluator-agent-research.md for the full research.
+The orchestrator currently reads subagent results, decides pass/fail, chooses retry vs block vs advance, and accumulates all this in context across waves. This cognitive work must be offloaded to a fresh-context subagent. See docs/research/evaluator-agent.md for the full research.
 
 ## Acceptance Criteria
 
@@ -41,7 +41,7 @@ The orchestrator currently reads subagent results, decides pass/fail, chooses re
 - Orchestrator wiring (replacing Steps 7-8) is #682's scope, not this task's.
 - The EvalResult here is a text contract in the agent's output_format. A PydanticAI model for daemon-side structured output is a separate future task.
 - Pattern to follow: reviewer.agent.md (read-only, adversarial, structured output, self-defense rules).
-- Research doc: docs/evaluator-agent-research.md
+- Research doc: docs/research/evaluator-agent.md
 
 [[2026-03-08]] Sun 23:51
 Wave 3, agent: auditor

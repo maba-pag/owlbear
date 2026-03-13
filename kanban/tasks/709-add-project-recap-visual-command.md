@@ -18,7 +18,7 @@ class: standard
 ---
 
 Adapt visual-explainer project-recap as VS Code prompt file.
-See docs/research/project-recap-command-research.md.
+See docs/research/project-recap-command.md.
 
 ## Acceptance Criteria
 
@@ -97,7 +97,7 @@ Verdict: PASS (confidence .93)
 | 2 | Docstrings | No | N/A | No Python modules created or modified |
 | 3 | sources/overview.md | Yes | Pass | Already updated: 3 rows at lines 42-44 (visual-explainer, Aider RepoMap, VS Code prompt docs) |
 | 4 | README.md | No | N/A | No CLI commands added or modified |
-| 5 | Research doc linked | Yes | Pass | docs/research/project-recap-command-research.md exists, references #709 at line 3, follow-up task created |
+| 5 | Research doc linked | Yes | Pass | docs/research/project-recap-command.md exists, references #709 at line 3, follow-up task created |
 | 6 | No impact | -- | -- | Items 3+5 apply; 1,2,4 do not |
 
 ### Files Updated

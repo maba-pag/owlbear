@@ -15,4 +15,10 @@ block_reason: Needs 1 more source on multivector quantization quality impact + e
 class: standard
 ---
 
-Test uint8 quantization on ColBERT multivectors in Qdrant. Measure storage reduction and quality impact on sample queries. See docs/bge-m3-evaluation.md. AC: Quantization config tested, storage delta and quality delta documented.
+Test uint8 quantization on ColBERT multivectors in Qdrant. Measure storage reduction and quality impact on sample queries. See docs/bge-m3-evaluation.md.
+
+## AC
+
+- [ ] uint8 scalar quantization config tested on ColBERT multivectors
+- [ ] Storage reduction delta measured and documented
+- [ ] Quality impact delta measured on sample queries and documented

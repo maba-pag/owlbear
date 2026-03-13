@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.2)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.2)
 
 PydanticAI tracks message_history in GraphAgentState but does NOT persist it to disk. This is a genuine gap. pydantic-deepagents has checkpointing (save/rewind/fork) but not simple JSONL persistence.
 

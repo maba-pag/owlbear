@@ -24,6 +24,6 @@ SPLIT into atomic sub-tasks:
 - #311 — Update orchestrator system prompt with routing rules [todo, depends-on #310]
 - #312 — Add agent catalog to orchestrator prompt [todo, depends-on #311]
 
-Architect decision: Approach A (prompt-based routing in orchestrator system prompt). No dedicated router agent, no IntentClassification model, no semantic-router dependency. See docs/conversation-router-research.md.
+Architect decision: Approach A (prompt-based routing in orchestrator system prompt). No dedicated router agent, no IntentClassification model, no semantic-router dependency. See docs/research/conversation-router.md.
 
 This parent task is now complete — all work tracked via children.

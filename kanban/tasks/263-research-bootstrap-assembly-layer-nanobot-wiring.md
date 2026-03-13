@@ -43,6 +43,6 @@ Nanobot uses LiteLLM + raw OpenAI messages. OwlBear uses PydanticAI which manage
 - [ ] MessageBus adoption: yes/no decision with rationale
 - [ ] Memory consolidation: yes/no decision with rationale
 - [ ] Follow-up implementation tasks created on kanban
-- [ ] daemon-bootstrap-research.md findings integrated
+- [ ] daemon-bootstrap.md findings integrated
 
-See docs/daemon-bootstrap-research.md and docs/agent-patterns-research.md for prior art.
+See docs/research/daemon-bootstrap.md and docs/research/agent-patterns.md for prior art.

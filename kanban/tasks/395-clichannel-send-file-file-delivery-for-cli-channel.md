@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Add send_file(path, caption) to CLIChannel. Prints path to console, optionally opens viewer via os.startfile on Windows. ChannelPlugin protocol stays minimal (duck typing via hasattr check in ScreenshotService). AC: CLIChannel.send_file() prints path and caption; os.startfile used on Windows; graceful fallback on other OS. Depends on #302.
+From #302 screenshot-visual-feedback.md. Add send_file(path, caption) to CLIChannel. Prints path to console, optionally opens viewer via os.startfile on Windows. ChannelPlugin protocol stays minimal (duck typing via hasattr check in ScreenshotService). AC: CLIChannel.send_file() prints path and caption; os.startfile used on Windows; graceful fallback on other OS. Depends on #302.

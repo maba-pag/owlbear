@@ -17,7 +17,7 @@ depends_on:
 class: standard
 ---
 
-CLI commands for Slack integration. See docs/slack-integration-research.md.
+CLI commands for Slack integration. See docs/research/slack-integration.md.
 
 AC:
 - bearclaw slack auth: validate tokens (call auth.test API)

@@ -27,4 +27,4 @@ AC:
 - [ ] Robots.txt-aware (server handles this natively)
 
 Depends on: #227 (test task), #168
-See docs/mcp-servers-research.md, evaluation: .75 Consider
+See docs/research/mcp-servers.md, evaluation: .75 Consider

@@ -34,4 +34,4 @@ Add knowledge configuration fields to `OwlBearSettings` in `src/owlbear/config.p
 - [ ] Existing config tests still pass
 - [ ] Follow existing field patterns (see `copilot_token_path` for Path, `chat_model` for str)
 
-See docs/knowledge-graph-research.md section 4, key decision 1-2
+See docs/research/knowledge-graph.md section 4, key decision 1-2

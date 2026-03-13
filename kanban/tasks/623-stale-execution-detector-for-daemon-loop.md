@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Periodic scan of in-progress tasks. If no agent activity for stale_timeout, cancel task, block on kanban, and alert user. See docs/stale-execution-detector-research.md for full analysis.
+Periodic scan of in-progress tasks. If no agent activity for stale_timeout, cancel task, block on kanban, and alert user. See docs/research/stale-execution-detector.md for full analysis.
 
 AC:
 - [ ] `stale_task_timeout` config field (float, default 300.0) in `OwlBearSettings` with `@field_validator` ensuring > 0  follows `poll_interval` pattern

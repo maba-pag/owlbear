@@ -18,7 +18,7 @@ class: standard
 ---
 
 RetrospectiveHook listens on TASK_COMPLETE, filters trivial tasks, runs PydanticAI agent for structured retrospective, ingests findings into knowledge graph. Fire-and-forget via asyncio.create_task().
-See docs/retrospective-learning-hook-research.md for full design.
+See docs/research/retrospective-learning-hook.md for full design.
 
 ## AC
 

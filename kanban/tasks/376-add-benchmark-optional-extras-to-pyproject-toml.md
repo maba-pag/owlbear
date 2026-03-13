@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-From #252 (deleted umbrella) and docs/hybrid-search-benchmark-research.md §3.6.
+From #252 (deleted umbrella) and docs/research/hybrid-search-benchmark.md §3.6.
 
 ## Acceptance Criteria
 

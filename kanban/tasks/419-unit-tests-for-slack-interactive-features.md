@@ -15,4 +15,4 @@ tags:
 class: standard
 ---
 
-From #307 slack-structured-proposals-research.md. Tests: mock interactive payloads (block_actions), template output validation (valid Block Kit JSON), thread registry (create/get/auto-thread), fallback paths (CLI gets text, Slack gets blocks), approval gate enrichment (isinstance routing). AC: Interactive payload routing tested; templates produce valid blocks; thread registry tested; fallback paths verified; >= 90%% coverage for new Slack interactive code. Depends on #307.
+From #307 slack-structured-proposals.md. Tests: mock interactive payloads (block_actions), template output validation (valid Block Kit JSON), thread registry (create/get/auto-thread), fallback paths (CLI gets text, Slack gets blocks), approval gate enrichment (isinstance routing). AC: Interactive payload routing tested; templates produce valid blocks; thread registry tested; fallback paths verified; >= 90%% coverage for new Slack interactive code. Depends on #307.

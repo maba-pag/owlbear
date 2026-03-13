@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #306 error-recovery-research.md. Append-only JSONL log in {workspace}/.owlbear/error_journal.jsonl capturing every error and resolution. Query tool: query_error_journal(tool_name?, error_type?, last_n?) for agents to learn from past failures. 10K entry cap with rotation. ~80 LOC in memory/error_journal.py. AC: Errors logged with ts/type/tool/exc/action/attempt/resolved/session_id; query tool returns filtered entries; rotation triggers at 10K entries. Depends on #306.
+From #306 error-recovery.md. Append-only JSONL log in {workspace}/.owlbear/error_journal.jsonl capturing every error and resolution. Query tool: query_error_journal(tool_name?, error_type?, last_n?) for agents to learn from past failures. 10K entry cap with rotation. ~80 LOC in memory/error_journal.py. AC: Errors logged with ts/type/tool/exc/action/attempt/resolved/session_id; query tool returns filtered entries; rotation triggers at 10K entries. Depends on #306.

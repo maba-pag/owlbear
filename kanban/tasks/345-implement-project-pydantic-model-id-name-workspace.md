@@ -25,4 +25,4 @@ class: standard
 - [ ] JSON serialization works for Path and datetime fields
 - [ ] Frozen model (immutable once created, use model_copy for updates)
 
-See docs/multi-project-session-research.md S3.2
+See docs/research/multi-project-session.md S3.2

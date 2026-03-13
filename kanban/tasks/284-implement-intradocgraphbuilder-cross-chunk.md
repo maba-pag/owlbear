@@ -26,4 +26,4 @@ AC:
 - [ ] Constrained to existing RelationType enum
 - [ ] Returns GraphBuildResult with edges_added count
 Depends on #283
-See docs/intra-document-graph-research.md
+See docs/research/intra-document-graph.md

@@ -19,7 +19,7 @@ class: standard
 ---
 
 Implement a SESSION_START hook that reads recent curated lessons from .owlbear/lessons/ and injects them into agent context.
-Ref: docs/research/olanetsoft-workflow-research.md (task #747)
+Ref: docs/research/olanetsoft-workflow.md (task #747)
 Follows ContextInjectionHook pattern (src/owlbear/core/context_hook.py).
 
 AC:
@@ -171,7 +171,7 @@ kanban move 751 docs
 | 2 | Docstrings complete | Yes | Pass | Module, class, method docstrings present in lessons_hook.py; Field description on config.py |
 | 3 | sources/overview.md | No | N/A | Internal pattern; Olanetsoft entry already under #747 |
 | 4 | README.md | No | N/A | No CLI changes |
-| 5 | Research doc linked | No | N/A | Research was #747; doc exists at docs/research/olanetsoft-workflow-research.md |
+| 5 | Research doc linked | No | N/A | Research was #747; doc exists at docs/research/olanetsoft-workflow.md |
 
 ### Files Updated
 - None

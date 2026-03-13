@@ -41,4 +41,4 @@ httpx.AsyncHTTPTransport(retries=N) + tenacity wrapper if needed.
 - Layer 1 (innermost) — retries before errors reach agent/daemon
 - Independent of ErrorCategory (#357) — HTTP status codes determine retry
 - tenacity already a project dependency
-- See docs/error-recovery-research.md section 3.2 (L1) and 4.1
+- See docs/research/error-recovery.md section 3.2 (L1) and 4.1

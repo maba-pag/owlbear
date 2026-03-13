@@ -18,7 +18,7 @@ Agents need to run shell commands (pytest, ruff, git, etc.). This is the second 
 
 ## Research
 
-See `docs/terminal-tool-research.md` for full analysis.
+See `docs/research/terminal-tool.md` for full analysis.
 
 ## AC
 

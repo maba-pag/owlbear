@@ -28,4 +28,4 @@ Add `RateLimitErrorRetryHandler(max_retry_count=1)` to the `AsyncWebClient` cons
 - Slack SDK's retry is a different mechanism from tenacity  intentional. The SDK respects Slack's `Retry-After` header natively.
 - `ConnectionErrorRetryHandler` is enabled by default in `AsyncWebClient`  we only add `RateLimitErrorRetryHandler`
 - depends_on #600 is soft  this task doesn't import `core/retry.py`, but logically belongs to the same initiative
-- See `docs/retry-decorators-research.md` §3.4
+- See `docs/research/retry-decorators.md` §3.4

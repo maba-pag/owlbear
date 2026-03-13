@@ -13,6 +13,12 @@ tags:
 class: standard
 ---
 
-SEC-15: Messages from Slack DMs fed to agent as prompts with no sanitization. Inherent to design, but mitigate: validate messages come from expected user IDs, add rate limiting, log all incoming messages. AC: sender validation active. See docs/security-audit.md.
+SEC-15: Messages from Slack DMs fed to agent as prompts with no sanitization. Inherent to design, but mitigate: validate messages come from expected user IDs, add rate limiting, log all incoming messages. See docs/security-audit.md.
 
-Research complete: see docs/slack-sender-validation-research.md. Recommendation: (1) Config allowlist with slack_allowed_user_ids (.85 confidence), (2) Sliding window rate limiter (.80), (3) Structured INFO logging (.85). Follow-up implementation tasks created.
+Research complete: see docs/research/slack-sender-validation.md. Recommendation: (1) Config allowlist with slack_allowed_user_ids (.85 confidence), (2) Sliding window rate limiter (.80), (3) Structured INFO logging (.85). Follow-up implementation tasks created.
+
+## AC
+
+- [x] Research doc at docs/research/slack-sender-validation.md
+- [x] Recommendation with confidence scores (.80-.85)
+- [x] Follow-up implementation tasks created

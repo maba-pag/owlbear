@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #307 slack-structured-proposals-research.md. Add _thread_registry: dict[str, str] to SlackChannel mapping context_key (project_id:task_id) to thread_ts. Modify send_blocks() to capture ts from chat_postMessage response. Add get_or_create_thread() method. AC: Subsequent messages in same context auto-thread; thread_ts captured from first message; get_or_create_thread returns existing or starts new thread. Depends on #307.
+From #307 slack-structured-proposals.md. Add _thread_registry: dict[str, str] to SlackChannel mapping context_key (project_id:task_id) to thread_ts. Modify send_blocks() to capture ts from chat_postMessage response. Add get_or_create_thread() method. AC: Subsequent messages in same context auto-thread; thread_ts captured from first message; get_or_create_thread returns existing or starts new thread. Depends on #307.

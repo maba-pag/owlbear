@@ -24,4 +24,4 @@ class: standard
 - [ ] Method is on SlackChannel only — ChannelPlugin protocol unchanged
 - [ ] Callers use isinstance(channel, SlackChannel) or hasattr check
 
-See docs/slack-rich-messaging-research.md S4
+See docs/research/slack-rich-messaging.md S4

@@ -26,4 +26,4 @@ class: standard
 - [ ] ApprovalSession.grant(tool_name) -> None: adds to pre-grant set
 - [ ] ApprovalSession.clear() -> None: resets all pre-grants
 
-See docs/approval-gates-research.md S3.5
+See docs/research/approval-gates.md S3.5

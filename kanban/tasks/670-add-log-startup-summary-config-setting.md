@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-Add log_startup_summary: bool field (default True) to OwlBearSettings. When False, suppress channel.send of startup summary (still log at DEBUG). AC: (1) Field exists in OwlBearSettings with default True. (2) OWLBEAR_LOG_STARTUP_SUMMARY=false env var disables channel delivery. (3) bootstrap() respects the setting. (4) Ruff clean. See docs/bootstrap-startup-summary-research.md S4.4.
+Add log_startup_summary: bool field (default True) to OwlBearSettings. When False, suppress channel.send of startup summary (still log at DEBUG). AC: (1) Field exists in OwlBearSettings with default True. (2) OWLBEAR_LOG_STARTUP_SUMMARY=false env var disables channel delivery. (3) bootstrap() respects the setting. (4) Ruff clean. See docs/research/bootstrap-startup-summary.md S4.4.
 
 [[2026-03-09]] Mon 16:11
 ## Audit

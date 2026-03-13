@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-**Context:** bootstrap.py is now 1247 lines (was 894 at task creation). build_toolsets has C901/PLR0912/PLR0915 suppressions. See docs/bootstrap-split-research.md for full analysis.
+**Context:** bootstrap.py is now 1247 lines (was 894 at task creation). build_toolsets has C901/PLR0912/PLR0915 suppressions. See docs/research/bootstrap-split.md for full analysis.
 
 **Approach:** Split `bootstrap.py` into a `bootstrap/` package following the 5-file layout from the research doc. Re-export all current public and test-imported symbols from `__init__.py` for zero-breakage.
 
@@ -40,7 +40,7 @@ class: standard
 **TDD:** This is a pure structural refactor  behavior is unchanged. Existing test_bootstrap.py and test_bootstrap_integration.py serve as the regression suite. No new test task required.
 
 **Depends on:** Nothing (no unmet dependencies).
-**See:** docs/bootstrap-split-research.md
+**See:** docs/research/bootstrap-split.md
 
 [[2026-03-09]] Mon 19:35
 ## Audit

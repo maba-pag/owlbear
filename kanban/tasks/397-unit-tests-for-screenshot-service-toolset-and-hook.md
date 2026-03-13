@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Tests with mock browser, mock channel: ScreenshotService save/deliver, VisualFeedbackToolset share_screenshot/share_terminal_output, ScreenshotOnErrorHook fires on error, respects screenshot_mode, no-op without browser. AC: >= 90%% coverage for screenshot.py; all capture/save/deliver paths tested; hook behavior verified under each screenshot_mode. Depends on #302.
+From #302 screenshot-visual-feedback.md. Tests with mock browser, mock channel: ScreenshotService save/deliver, VisualFeedbackToolset share_screenshot/share_terminal_output, ScreenshotOnErrorHook fires on error, respects screenshot_mode, no-op without browser. AC: >= 90%% coverage for screenshot.py; all capture/save/deliver paths tested; hook behavior verified under each screenshot_mode. Depends on #302.

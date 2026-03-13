@@ -15,7 +15,7 @@ class: standard
 
 ## Research Findings
 
-See docs/ks-rename-research.md. Rename confirmed as correct approach (.85 confidence).
+See docs/research/ks-rename.md. Rename confirmed as correct approach (.85 confidence).
 
 ### Scope
 

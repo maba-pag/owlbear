@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-Manual setup steps for Slack integration. See docs/slack-integration-research.md.
+Manual setup steps for Slack integration. See docs/research/slack-integration.md.
 
 AC:
 - Document: create free Slack workspace

@@ -27,4 +27,4 @@ class: standard
 - [ ] Tests import from owlbear.planning.extractor (fail until impl completes)
 
 Pattern: tests/test_knowledge_extractor.py
-See docs/project-definition-workflow-research.md sec3.6
+See docs/research/project-definition-workflow.md sec3.6

@@ -47,4 +47,4 @@ Replace bare except in run_daemon() (src/owlbear/daemon.py L253-267) with classi
 - Layer 4 (outermost) — retry around whole agent turn
 - Subsumes existing _is_auth_error + auth retry block (L258-264)
 - channel.send(f'Error: ...') will be replaced with ToolError JSON in #363 follow-up
-- See docs/error-recovery-research.md section 3.2 (L4) and 4.4
+- See docs/research/error-recovery.md section 3.2 (L4) and 4.4

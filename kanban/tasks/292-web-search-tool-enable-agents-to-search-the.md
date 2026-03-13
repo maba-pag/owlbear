@@ -17,7 +17,7 @@ block_reason: '2 AC violations: (1) pyproject.toml missing search optional extra
 class: standard
 ---
 
-Implement WebSearchToolset — a dedicated FunctionToolset for web search and content retrieval. See docs/web-search-tool-research.md for research findings. Uses `ddgs` library for search, `httpx` + `trafilatura` for content extraction.
+Implement WebSearchToolset — a dedicated FunctionToolset for web search and content retrieval. See docs/research/web-search-tool.md for research findings. Uses `ddgs` library for search, `httpx` + `trafilatura` for content extraction.
 
 ## Acceptance Criteria
 

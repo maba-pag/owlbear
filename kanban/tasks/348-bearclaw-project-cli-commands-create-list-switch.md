@@ -25,4 +25,4 @@ class: standard
 - [ ] Error handling: nonexistent project, duplicate name
 - [ ] Unit tests: each subcommand with CliRunner and tmp_path ProjectStore
 
-See docs/multi-project-session-research.md S3.9
+See docs/research/multi-project-session.md S3.9

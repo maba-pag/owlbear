@@ -29,4 +29,4 @@ Test each intent classification path using PydanticAI FunctionModel (see tests/t
 - [ ] ruff clean
 
 Pattern: follow TestDelegation in tests/test_integration_e2e.py — FunctionModel + ToolCallPart + OwlBearAgent.turn()
-See docs/conversation-router-research.md S3.4 for intent taxonomy
+See docs/research/conversation-router.md S3.4 for intent taxonomy

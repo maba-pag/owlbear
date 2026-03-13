@@ -18,7 +18,7 @@ depends_on:
 class: standard
 ---
 
-Module: src/owlbear/tools/browser/integration.py | Test: tests/test_crawl_integration.py | See docs/web-crawling-research.md S3.6.
+Module: src/owlbear/tools/browser/integration.py | Test: tests/test_crawl_integration.py | See docs/research/web-crawling.md S3.6.
 
 AC:
 - async crawl_and_ingest(crawler: WebCrawler, pipeline: IngestPipeline, config: CrawlConfig) -> list[IngestResult] function

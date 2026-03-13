@@ -14,7 +14,7 @@ tags:
 class: standard
 ---
 
-DOC-F-01: architecture.md (v0.2) is severely outdated. Full discrepancy analysis in docs/architecture-rewrite-research.md.
+DOC-F-01: architecture.md (v0.2) is severely outdated. Full discrepancy analysis in docs/research/architecture-rewrite.md.
 
 **Sections to rewrite:** 2 (diagram only), 3, 4.3, 4.4, 4.6, 5.2, 6, 7
 

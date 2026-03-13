@@ -17,11 +17,11 @@ depends_on:
 class: standard
 ---
 
-Add Slack integration section to README.md. See docs/slack-integration-research.md.
+Add Slack integration section to README.md. See docs/research/slack-integration.md.
 
 AC:
 - Slack workspace creation steps
 - App manifest example for quick setup
 - Token configuration (env vars)
 - bearclaw slack commands reference
-- Link to docs/slack-integration-research.md for background
+- Link to docs/research/slack-integration.md for background

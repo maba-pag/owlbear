@@ -24,7 +24,7 @@ class: standard
 ---
 
 ## Context
-See docs/e2e-pipeline-test-research.md for full analysis.
+See docs/research/e2e-pipeline-test.md for full analysis.
 
 ## Test file
 tests/test_pipeline_e2e.py

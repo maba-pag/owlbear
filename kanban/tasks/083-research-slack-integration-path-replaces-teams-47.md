@@ -26,4 +26,4 @@ Research checklist:
 4. Architecture fit: Map to ChannelPlugin protocol (send/receive/connect/disconnect)
 5. Implementation approach: slack_bolt vs raw SDK vs minimal REST+WS
 
-Deliver: docs/slack-integration-research.md + follow-up kanban tasks.
+Deliver: docs/research/slack-integration.md + follow-up kanban tasks.

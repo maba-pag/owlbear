@@ -14,4 +14,4 @@ tags:
 class: standard
 ---
 
-From #302 screenshot-visual-feedback-research.md. Create src/owlbear/tools/screenshot.py (~80 LOC). Methods: save(image_bytes, name, workspace) -> Path (saves PNG to .owlbear/screenshots/{timestamp}_{name}.png); deliver(path, channel, caption) dispatches via send_image() (Slack) or send() with path (CLI); capture_browser(page) -> bytes (thin wrapper); capture_terminal(result) -> bytes. AC: Screenshots saved to correct path with timestamps; delivery works for Slack and CLI channels; capture from browser returns PNG bytes. Depends on #302.
+From #302 screenshot-visual-feedback.md. Create src/owlbear/tools/screenshot.py (~80 LOC). Methods: save(image_bytes, name, workspace) -> Path (saves PNG to .owlbear/screenshots/{timestamp}_{name}.png); deliver(path, channel, caption) dispatches via send_image() (Slack) or send() with path (CLI); capture_browser(page) -> bytes (thin wrapper); capture_terminal(result) -> bytes. AC: Screenshots saved to correct path with timestamps; delivery works for Slack and CLI channels; capture from browser returns PNG bytes. Depends on #302.

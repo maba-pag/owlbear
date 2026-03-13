@@ -15,7 +15,7 @@ tags:
 class: standard
 ---
 
-YAGNI-02/INT-03: EscalationHook is fully implemented and tested but never imported or registered in bootstrap.py. Orphan code. Decision: DELETE (.85 confidence). See docs/escalation-hook-research.md.
+YAGNI-02/INT-03: EscalationHook is fully implemented and tested but never imported or registered in bootstrap.py. Orphan code. Decision: DELETE (.85 confidence). See docs/research/escalation-hook.md.
 
 ## Acceptance Criteria
 
@@ -48,12 +48,12 @@ Delete all EscalationHook code, tests, and documentation references. No function
 
 ### Out of scope
 
-- Do NOT edit audit/research docs (`docs/escalation-hook-research.md`, `docs/architecture-audit.md`, `docs/software-design-audit.md`, `docs/integration-audit.md`, `docs/executive-audit-report.md`, `docs/error-message-sanitization-research.md`). These are historical records and remain accurate as-is.
-- Do NOT delete `docs/escalation-hook-research.md` — it documents the decision rationale.
+- Do NOT edit audit/research docs (`docs/research/escalation-hook.md`, `docs/architecture-audit.md`, `docs/software-design-audit.md`, `docs/integration-audit.md`, `docs/executive-audit-report.md`, `docs/research/error-message-sanitization.md`). These are historical records and remain accurate as-is.
+- Do NOT delete `docs/research/escalation-hook.md` — it documents the decision rationale.
 
 ### Patterns to follow
 
 - When removing test classes from `test_error_recovery.py`, preserve the section comment structure (numbered `# ===` blocks). Renumber remaining section headers if needed.
 - `_make_channel` helper is ONLY used by the EscalationHook test classes. Delete it (lines 46-51).
 
-See `docs/escalation-hook-research.md` for full analysis.
+See `docs/research/escalation-hook.md` for full analysis.

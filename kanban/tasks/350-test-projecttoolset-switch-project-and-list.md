@@ -26,4 +26,4 @@ class: standard
 - [ ] Test switch_project updates project.last_active timestamp
 - [ ] Mock ProjectStore and OwlBearAgent for isolation
 
-See docs/multi-project-session-research.md S3.10
+See docs/research/multi-project-session.md S3.10

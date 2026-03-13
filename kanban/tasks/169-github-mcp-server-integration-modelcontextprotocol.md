@@ -28,4 +28,4 @@ AC:
 - [ ] Agent definitions can reference tools=['mcp:github']
 
 Depends on: #227 (test task), #168
-See docs/mcp-servers-research.md, evaluation: .90 Adopt
+See docs/research/mcp-servers.md, evaluation: .90 Adopt

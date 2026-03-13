@@ -16,7 +16,7 @@ L3: 77 warnings about model name without provider prefix. Bootstrap tests pass M
 
 ## Research (2026-03-07)
 
-See docs/pydanticai-deprecation-warnings-research.md for full analysis.
+See docs/research/pydanticai-deprecation-warnings.md for full analysis.
 
 **Root cause:** PydanticAI v0.8.1 deprecated bare model names in infer_model(). 77 warnings from 2 categories: 43 bare 'gpt-4o' string (build_toolsets fallback to settings.chat_model) + 34 MagicMock (bootstrap tests pass MagicMock without spec=Model).
 

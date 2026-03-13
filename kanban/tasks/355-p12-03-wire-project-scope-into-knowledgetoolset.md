@@ -23,6 +23,6 @@ AC:
 - When active project exists, KnowledgeToolset queries include scope='project:{id}'
 - When no active project, queries use default global scope only
 - Integration test verifies scoped queries
-- See docs/multi-project-session-research.md and docs/knowledge-scoping-research.md
+- See docs/research/multi-project-session.md and docs/research/knowledge-scoping.md
 
 Context: Unfinished acceptance criterion from task #352, found during phase-12 review.

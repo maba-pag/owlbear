@@ -35,7 +35,7 @@ class: standard
 
 ## References
 - Paperclip skip-blocked pattern: skills/paperclip/SKILL.md step 4
-- Research: docs/research/paperclip-research.md
+- Research: docs/research/paperclip.md
 - Existing: src/owlbear/daemon.py poll_tick(), OrchestratorState
 - Test patterns: tests/test_poll_dispatch.py, tests/test_daemon_coverage_gaps.py
 

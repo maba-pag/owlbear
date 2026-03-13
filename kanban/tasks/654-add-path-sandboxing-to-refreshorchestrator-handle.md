@@ -27,7 +27,7 @@ SEC-11 related: `_handle_file_glob` accepts `base_dir` from source config withou
 - [ ] Tests: base_dir outside workspace raises, glob result with symlink escape skipped/rejected, valid base_dir + pattern works
 - [ ] ruff clean
 
-See docs/knowledge-intake-path-sandboxing-research.md section 3.5.
+See docs/research/knowledge-intake-path-sandboxing.md section 3.5.
 
 [[2026-03-08]] Sun 23:50
 Wave 1, agent: auditor

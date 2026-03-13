@@ -22,9 +22,9 @@ Wrap qdrant-client local mode. 3 named vectors (dense 1024d COSINE, sparse learn
 
 ## Research Done
 
-- docs/qdrant-local-research.md — collection schema, API patterns, ~200 LOC estimate
-- docs/qdrant-local-features-research.md — all 7 features verified in source code
-- docs/colbert-vs-crossencoder-research.md — prefetch->ColBERT rescore pattern
+- docs/research/qdrant-local.md — collection schema, API patterns, ~200 LOC estimate
+- docs/research/qdrant-local-features.md — all 7 features verified in source code
+- docs/research/colbert-vs-crossencoder.md — prefetch->ColBERT rescore pattern
 - Collection config: dense + sparse + colbert (hnsw m=0)
 - Payloads replace bridge table: {chunk_id, document_id, entity_id, scope, type, created_at}
 - Local: QdrantClient(path='./data/qdrant'), pure Python, numpy, no HNSW

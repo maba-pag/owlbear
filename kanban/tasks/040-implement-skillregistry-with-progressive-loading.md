@@ -15,7 +15,7 @@ depends_on:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.2)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.2)
 
 PydanticAI has no skill/progressive loading concept. pydantic-deepagents provides SkillsToolset(FunctionToolset) — markdown files with YAML frontmatter, list_skills + load_skill tools, directory scanning. Nanobot uses summary + lazy loader pattern.
 

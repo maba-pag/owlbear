@@ -16,7 +16,7 @@ depends_on:
 class: standard
 ---
 
-## Research findings (See docs/pydantic-ai-integration-research.md §3.1)
+## Research findings (See docs/research/pydantic-ai-integration.md §3.1)
 
 PydanticAI provides: Tool class, @tool decorator, ToolDefinition, RunContext for DI, FunctionToolset, AbstractToolset, and 9 toolset variants (FilteredToolset, PrefixedToolset, etc.). Building our own Tool ABC would duplicate all of this.
 
