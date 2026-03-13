@@ -145,7 +145,7 @@ Return **only** the signal line — no other text after it.
 - Split tasks must maintain atomicity (one responsibility each)
 
 **Rejection path:** `backlog → ideation` — research insufficient, needs more investigation.
-Use `kanban\kanban-md.exe move {id} ideation --block "reason"`.
+Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release`.
 
 **Red flags — STOP and reassess:**
 
@@ -183,6 +183,8 @@ Quick checks:
 - [ ] Codebase searched for related patterns before approving
 - [ ] TDD compliance checked — preceding test task exists
 - [ ] Single-domain verified — task targets exactly one domain from the canonical list
+- [ ] Failure mode map assessed (if task introduces codepaths)
+- [ ] Did NOT create/edit .py, .toml, or test files
 
 </self_critique>
 
@@ -246,15 +248,3 @@ Existing pattern: bearclaw/cli.py uses Typer subcommands.
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `arch-review` skill checklist for the full pre-report verification.
-
-Quick checks:
-
-- [ ] Every AC line evaluated individually — no vague AC remains
-- [ ] Searched codebase for related patterns
-- [ ] TDD compliance checked (preceding test task exists)
-- [ ] Did NOT create/edit .py, .toml, or test files
-
-</self_critique>

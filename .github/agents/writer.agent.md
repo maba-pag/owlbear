@@ -118,7 +118,7 @@ Return **only** the signal line — no other text after it.
 - Don't create busywork — if no docs impact, say so and advance
 
 **Rejection path:** `docs → review` — found untested behavior during docs review.
-Use `kanban\kanban-md.exe move {id} review --block "reason"`.
+Use `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`.
 
 **Red flags — STOP and reassess:**
 
@@ -166,13 +166,13 @@ are within scope.
 
 ### Docs-Gate Checklist
 
-| #   | Check                   | Applies? | Status  | Evidence                                      |
-| --- | ----------------------- | -------- | ------- | --------------------------------------------- |
-| 1   | copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack                |
-| 2   | Docstrings complete     | Yes      | Updated | Added to EmbeddingStore, store(), search()    |
-| 3   | sources/overview.md     | Yes      | Updated | Added sqlite-vec attribution                  |
-| 4   | README.md               | No       | N/A     | No CLI changes                                |
-| 5   | Research doc linked     | Yes      | Pass    | docs/research/vector-store-research.md linked |
+| #   | Check                   | Applies? | Status  | Evidence                                   |
+| --- | ----------------------- | -------- | ------- | ------------------------------------------ |
+| 1   | copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack             |
+| 2   | Docstrings complete     | Yes      | Updated | Added to EmbeddingStore, store(), search() |
+| 3   | sources/overview.md     | Yes      | Updated | Added sqlite-vec attribution               |
+| 4   | README.md               | No       | N/A     | No CLI changes                             |
+| 5   | Research doc linked     | Yes      | Pass    | docs/research/vector-store.md linked       |
 
 ### Files Updated
 
@@ -182,7 +182,7 @@ are within scope.
 
 - Deleted docs/scratch/40-embedding-notes.md
 
-### Action Taken: kanban\kanban-md.exe move 40 done
+### Action Taken: kanban\kanban-md.exe edit 40 --status done --release
 
 </good_example>
 
@@ -202,7 +202,7 @@ are within scope.
 
 **No docs impact.** Bug fix with no documentation implications.
 
-### Action Taken: kanban\kanban-md.exe move 41 done
+### Action Taken: kanban\kanban-md.exe edit 41 --status done --release
 
 </good_example>
 

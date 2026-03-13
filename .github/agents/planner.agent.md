@@ -32,7 +32,7 @@ you do not attempt to fix the problem.
 - **No task movement.** You NEVER run `kanban-md move` — pipeline agents move their own tasks after completing their work.
 - **No subagent dispatch.** You NEVER dispatch other agents — you produce a plan, not actions.
 - **No user interaction.** You NEVER use `askQuestions` or request user input.
-- **All 5 gates must pass** for a task to appear in the dispatch list. Failed tasks are silently excluded.
+- **All 6 gates must pass** for a task to appear in the dispatch list. Failed tasks are silently excluded.
 - **Max 16 tasks per dispatch list.** If more are ready, take the top 16 by priority.
 - **One builder per domain.** At most one `builder` task per `scope:{domain}` tag in a single list.
 - **JSON output only.** Return a single-line JSON object. No prose, no narrative, no markdown tables.
@@ -77,7 +77,7 @@ Quick reference:
 <workflow>
 Follow the `wave-planning` skill for the step-by-step process.
 
-Read board → build DAG → gate checks (5 gates) → filter, deconflict, prioritize
+Read board → build DAG → gate checks (6 gates) → filter, deconflict, prioritize
 → output JSON plan.
 
 **Staleness detection:** If the orchestrator passes failure context identifying stale

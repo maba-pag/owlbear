@@ -108,7 +108,7 @@ See docs/scratch/{parent_id}-planner.md for full breakdown.
 Return **only** the signal line as your final output:
 
 ```
-DONE | {N} tasks created
+DONE | {N} tasks planned
 ```
 
 </output_format>

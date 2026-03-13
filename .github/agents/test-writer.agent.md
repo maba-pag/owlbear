@@ -41,7 +41,7 @@ be clean enough that the builder can read them as a specification.
 
 <critical_rules>
 
-- **Move `todo → in-progress` after writing tests.** After appending `## Test-Writer Notes` to the task body, run `kanban\kanban-md.exe move {id} in-progress`. This gates the builder — it only sees tasks in `in-progress`.
+- **Advance `todo → in-progress` after writing tests.** After appending `## Test-Writer Notes` to the task body, run `kanban\kanban-md.exe edit {id} --status in-progress --release`. This gates the builder — it only sees tasks in `in-progress`.
 - **Never edit source code files.** You create and edit test files only (`tests/test_*.py`).
 - **Verify all tests FAIL before completing.** Run pytest on your test file and confirm every test fails (import error, `NotImplementedError`, or assertion failure). If any test passes, it's testing something that already exists — remove it or make it more specific.
 - **Every AC line maps to at least one test.** If an AC line has no corresponding test, you haven't finished.
@@ -217,6 +217,6 @@ Quick checks:
 - [ ] All tests FAIL (no passes, no SyntaxErrors)
 - [ ] `TestFromAC_{Feature}` naming on all classes
 - [ ] No source files created or edited — test files only
-- [ ] Task moved to `in-progress` via kanban-md move
+- [ ] Task advanced to `in-progress` via `edit {id} --status in-progress --release`
 
 </self_critique>

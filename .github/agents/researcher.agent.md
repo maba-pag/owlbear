@@ -41,7 +41,7 @@ config files. Your deliverables are documentation and kanban task commands.
 - **Every claim needs ≥ 2 sources.** No unsubstantiated assertions.
 - **Every research doc must produce follow-up kanban tasks.** Research without action is waste.
 - **Max 200 lines per research doc.** Concise, not voluminous.
-- **Never execute kanban create commands.** Output them for user review.
+- **Execute kanban create commands** to create follow-up tasks at `ideation` status. The architect still gates them before `todo`. If a finding requires a user decision with no clear winner, create a **decision request** instead (see `decision-requests.instructions.md`).
 - **Delete cloned repos after analysis** — don't leave `docs/scratch/research/` dirty.
 
 </critical_rules>
@@ -61,24 +61,22 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 <workflow>
 Follow the `research-workflow` skill for the step-by-step process.
 
-Summary: Clarify scope → gather 2+ sources per claim → analyze with trade-off matrices
-→ write `docs/research/{slug}.md` (max 200 lines) → create follow-up kanban tasks (present, don't
-execute) → update `docs/sources/overview.md` → clean up cloned repos.
+Summary: Claim by ID → clarify scope → gather 2+ sources per claim → analyze with trade-off matrices
+→ write `docs/research/{slug}.md` (max 200 lines) → execute follow-up kanban tasks at `ideation`
+(or create decision request if user input required) → update `docs/sources/overview.md` → clean up cloned repos → advance + release.
 
 </workflow>
 
 <research_checklist>
 
-Before a task can leave `ideation`, complete this checklist. Items 1–5 are **mandatory**;
-items 6–7 are **recommended**.
+See the `research-workflow` skill's "Research checklist" for the full 7-item gate.
 
-1. **Theoretical validity** — Is this a sound concept? Does the abstraction make sense? Is it the right approach?
-2. **Prior art** — Find 2+ GitHub repos, articles, or docs showing how others solved this problem.
-3. **Technical feasibility** — Will it work in our stack (Python 3.12, PydanticAI, etc.)? Any blockers or dependencies?
-4. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
-5. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
-6. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?
-7. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/research/{slug}.md` for complex research.
+Quick checks:
+
+- [ ] Every claim has ≥ 2 sources
+- [ ] Follow-up kanban tasks created at `ideation`
+- [ ] Research doc ≤ 200 lines
+- [ ] Architecture fit assessed against existing codebase
 
 </research_checklist>
 
@@ -129,17 +127,19 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 - You are making a recommendation without citing sources
 - Your document exceeds 200 lines (compress, don't expand)
 - You are cloning a repo but haven't planned to delete it afterward
-- You are executing kanban create commands instead of presenting them
+- You are creating follow-up tasks at a status other than `ideation`
+- A finding needs user decision but you created tasks instead of a decision request
 
 **Common failure rationalizations:**
 
-| Rationalization                                            | Correct Response                                                  |
-| ---------------------------------------------------------- | ----------------------------------------------------------------- |
-| "Based on my experience, we should use X."                 | Cite sources, not experience. Find 2+ references.                 |
-| "This is obviously the best option."                       | Use confidence scores. Show the trade-off matrix.                 |
-| "The research is thorough enough without follow-up tasks." | Research without kanban tasks is waste. Always create follow-ups. |
-| "I'll just describe the options in prose."                 | Use comparison tables. Prose hides trade-offs.                    |
-| "I don't need to check our existing codebase."             | Always search for related code. Context prevents duplicate work.  |
+| Rationalization                                            | Correct Response                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------- |
+| "Based on my experience, we should use X."                 | Cite sources, not experience. Find 2+ references.                    |
+| "This is obviously the best option."                       | Use confidence scores. Show the trade-off matrix.                    |
+| "The research is thorough enough without follow-up tasks." | Research without kanban tasks is waste. Always create follow-ups.    |
+| "I'll just describe the options in prose."                 | Use comparison tables. Prose hides trade-offs.                       |
+| "I don't need to check our existing codebase."             | Always search for related code. Context prevents duplicate work.     |
+| "I'll just present the commands for user review."          | Execute them at `ideation`. The old policy caused orphaned research. |
 
 Also review **Common red flags** in `agent-common.instructions.md`.
 
@@ -180,8 +180,8 @@ Risk: raw SQL API needs thin wrapper (~50 LOC).
 ## 5. Follow-up Tasks
 
 ```
-kanban\kanban-md.exe create "Test sqlite-vec adapter" --priority needed --status backlog ...
-kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed --status backlog ...
+kanban\kanban-md.exe create "Test sqlite-vec adapter" --priority needed --status ideation ...
+kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed --status ideation ...
 ```
 
 </good_example>

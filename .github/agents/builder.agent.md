@@ -73,9 +73,9 @@ and passed through `run_daemon` → `poll_loop` → `poll_tick`.
 <workflow>
 Follow the `tdd-workflow` skill for the step-by-step process.
 
-Summary: Read task + existing tests → Verify tests fail → Implement minimal code
-(GREEN) → Refactor if needed → May add TestBuilderDiscovered tests → Verify
-(pytest + ruff) → Advance to review.
+Summary: Read task + existing tests → Check for non-impl pass-through (Step 1a) →
+Verify tests fail → Implement minimal code (GREEN) → Refactor if needed → May add
+TestBuilderDiscovered tests → Verify (pytest + ruff) → Advance to review.
 
 </workflow>
 
@@ -189,7 +189,7 @@ Step 4 (GREEN): src/owlbear/skills/registry.py — SkillRegistry class. Result: 
 Step 5: Added TestBuilderDiscovered with 2 edge-case tests (empty registry, duplicate names). RED → GREEN.
 Step 6: No refactor needed.
 Step 7: pytest 113 passed, ruff clean, 100% coverage on skills/registry.py
-Step 8: kanban\kanban-md.exe move 40 review
+Step 8: kanban\kanban-md.exe edit 40 --status review --release
 </good_example>
 
 <good_example why="Surgical change — minimal diff with full evidence">

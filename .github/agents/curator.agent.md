@@ -178,7 +178,7 @@ Found 4 entries about retry strategy that contradict each other:
 
 These cannot be auto-resolved — the correct strategy depends on the layer (tool vs transport vs daemon).
 **Flagged for user review.** Recommended: consolidate into a single "retry strategy" lesson
-scoped by layer, referencing `circuit-breaker-research.md`.
+scoped by layer, referencing `circuit-breaker.md`.
 
 </good_example>
 
