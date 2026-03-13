@@ -185,7 +185,7 @@ v2.92-2.99 between Sep 2024 and Jul 2025. The project is no longer dormant.
 Works on Windows; macOS driver is deprecated by Apple.
 
 **Recommendation:** Keep pyttsx3. Risk downgraded to Low. See
-`docs/pyttsx3-tts-alternatives-research.md` for full analysis.
+`docs/research/pyttsx3-tts-alternatives.md` for full analysis.
 
 ---
 
@@ -252,7 +252,7 @@ unpinned deps can break CI unexpectedly.
 | F-14 | LOW | .85 | Small — add validators |
 | F-01 | LOW | .75 | Trivial — tighten version spec |
 | F-08 | LOW | .70 | Medium — restructure extras |
-| F-10 | LOW | .80 | N/A — risk downgraded; see `docs/pyttsx3-tts-alternatives-research.md` |
+| F-10 | LOW | .80 | N/A — risk downgraded; see `docs/research/pyttsx3-tts-alternatives.md` |
 | F-11 | LOW | .80 | Small — lazy import |
 | F-15 | LOW | .75 | Trivial — add version specs |
 

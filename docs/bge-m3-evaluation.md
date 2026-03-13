@@ -21,10 +21,10 @@ OwlBear migrated from a dual-FastEmbed pipeline (bge-small-en-v1.5 dense + SPLAD
 | bge-m3 paper (Chen et al. 2024) | arxiv.org/abs/2402.03216 | 1.0 | MIRACL/MLDR/NarrativeQA retrieval benchmarks (Tables 1, 3, 4) |
 | BAAI/bge-m3 HuggingFace model card | huggingface.co/BAAI/bge-m3 | .95 | Usage, specs, model architecture, ONNX file tree |
 | Yannael — OpenAI vs open-source multilingual embeddings | towardsdatascience.com/openai-vs-open-source-multilingual-embedding-models-e5ccb7c90f05 | .90 | Independent MRR eval on EU AI Act: bge-m3 top performer across 4 languages |
-| OwlBear bge-m3-integration-research | docs/bge-m3-integration-research.md | .95 | FlagEmbedding code analysis, FP32 CPU behavior, RAM, latency estimates, dependency audit |
+| OwlBear bge-m3-integration-research | docs/research/bge-m3-integration.md | .95 | FlagEmbedding code analysis, FP32 CPU behavior, RAM, latency estimates, dependency audit |
 | OwlBear embedding-model-shootout | docs/embedding-model-shootout.md | .95 | Dense model BEIR nDCG@10 comparison; deferred bge-m3; dual-FastEmbed RAM/throughput |
-| OwlBear colbert-vs-crossencoder-research | docs/colbert-vs-crossencoder-research.md | .90 | ColBERT max_sim vs cross-encoder: quality gap, latency, RAM savings |
-| OwlBear dual-embedding-rrf-research | docs/dual-embedding-rrf-research.md | .90 | Original dual-FastEmbed architecture, RRF design, SPLADE++ pairing |
+| OwlBear colbert-vs-crossencoder-research | docs/research/colbert-vs-crossencoder.md | .90 | ColBERT max_sim vs cross-encoder: quality gap, latency, RAM savings |
+| OwlBear dual-embedding-rrf-research | docs/research/dual-embedding-rrf.md | .90 | Original dual-FastEmbed architecture, RRF design, SPLADE++ pairing |
 | FastEmbed issue #107 (bge-m3 support) | github.com/qdrant/fastembed/issues/107 | .85 | 2+ year open issue; no all-3-output support planned |
 
 ## 3. Analysis

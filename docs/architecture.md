@@ -3,7 +3,7 @@
 > **Version:** 0.3 (codebase-aligned rewrite)
 > **Date:** 2026-03-06
 > **Previous:** v0.2 (2026-02-28, post-implementation audit)
-> **Based on:** Full code audit of all modules, bootstrap.py wiring verification, [architecture-rewrite-research.md](architecture-rewrite-research.md)
+> **Based on:** Full code audit of all modules, bootstrap.py wiring verification, [architecture-rewrite.md](architecture-rewrite.md)
 
 ## 1. Vision
 
@@ -339,7 +339,7 @@ GitHub Copilot OAuth device-flow: `request_device_code()` → user authorizes �
 - **WebCrawler**: Async BFS with robots.txt compliance and rate limiting
 - **content_extractor**: trafilatura-based main content extraction
 
-**Why custom** (see [browser-automation-research.md](browser-automation-research.md) for full analysis):
+**Why custom** (see [browser-automation.md](browser-automation.md) for full analysis):
 
 1. **No OSS library handles the Edge CDP lifecycle.** Our ~100 LOC launcher performs find → probe → launch → connect for a corporate-locked Edge browser. browser-use and crawl4ai both support `connect_over_cdp()` but assume CDP is already running — they cannot discover, launch, or probe Edge readiness.
 2. **browser-use conflicts with PydanticAI agent architecture.** browser-use brings its own AI agent loop that decides which elements to click and type. This creates a double-agent problem: our PydanticAI agent would delegate to browser-use's agent, doubling inference cost and splitting control flow. Our `BrowserToolset` is a `FunctionToolset` subclass where PydanticAI remains the single intelligence layer.
@@ -455,7 +455,7 @@ Each `build_*` helper is independently testable. Conditional subsystems (knowled
 | Channel abstraction | Protocol (structural typing) | ChannelPlugin with name, send(), receive() |
 | CLI | Typer (BearClaw) | Entry point for all user commands |
 | Config | pydantic-settings | Env vars (OWLBEAR_ prefix) + TOML, validated at startup |
-| Browser | Custom (Playwright + CDP) | No OSS tool handles Edge CDP lifecycle; browser-use conflicts with PydanticAI agent loop; KISS 1200 LOC vs 15–20k ([research](browser-automation-research.md)) |
+| Browser | Custom (Playwright + CDP) | No OSS tool handles Edge CDP lifecycle; browser-use conflicts with PydanticAI agent loop; KISS 1200 LOC vs 15–20k ([research](browser-automation.md)) |
 | Agent definitions | Markdown + YAML frontmatter | Human-readable, parsed by AgentDefinition model |
 | Role policies | BUILDER/VALIDATOR with FilteredToolset | Validator denied write_file, create_file |
 

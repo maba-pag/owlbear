@@ -23,8 +23,8 @@ OwlBear's knowledge pipeline serves a mixed-domain corpus: ~35% ISO norms/polici
 | jina-embeddings-v3 model card | huggingface.co/jinaai/jina-embeddings-v3 | .70 | 0.6B params, CC-BY-NC-4.0 — license disqualifies |
 | e5-mistral-7b-instruct model card | huggingface.co/intfloat/e5-mistral-7b-instruct | .60 | 7B reference model, MIT, infeasible on 16GB |
 | pplx-embed-context-v1 (0.6B + 4B) | huggingface.co/pplx/ | .95 | **HTTP 401 on both** — gated, no MTEB submission |
-| OwlBear dual-embedding-rrf-research | docs/dual-embedding-rrf-research.md | .90 | Current pipeline design, SPLADE++ pairing |
-| OwlBear retrieve-rerank-research | docs/retrieve-rerank-research.md | .85 | Reranker comparison, local feasibility data |
+| OwlBear dual-embedding-rrf-research | docs/research/dual-embedding-rrf.md | .90 | Current pipeline design, SPLADE++ pairing |
+| OwlBear retrieve-rerank-research | docs/research/retrieve-rerank.md | .85 | Reranker comparison, local feasibility data |
 
 ## 3. Analysis
 
