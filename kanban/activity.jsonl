@@ -7185,3 +7185,299 @@
 {"timestamp":"2026-03-13T06:51:03.723708+01:00","action":"move","task_id":718,"detail":"todo -\u003e backlog"}
 {"timestamp":"2026-03-13T06:51:07.0449595+01:00","action":"move","task_id":718,"detail":"backlog -\u003e ideation"}
 {"timestamp":"2026-03-13T06:51:22.2177221+01:00","action":"move","task_id":740,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T08:32:14.4328613+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-13T08:32:20.9768862+01:00","action":"move","task_id":702,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T08:36:01.1359427+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T08:36:07.0107627+01:00","action":"move","task_id":719,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T08:36:59.3477863+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T08:37:09.0535109+01:00","action":"move","task_id":736,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T08:39:07.8301079+01:00","action":"edit","task_id":740,"detail":"Test allow-list RolePolicy filtering (RED)"}
+{"timestamp":"2026-03-13T08:39:16.0661303+01:00","action":"move","task_id":740,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T08:45:39.7796132+01:00","action":"edit","task_id":740,"detail":"Test allow-list RolePolicy filtering (RED)"}
+{"timestamp":"2026-03-13T08:45:46.5355068+01:00","action":"move","task_id":740,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T08:55:17.7462128+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-13T08:55:25.2192011+01:00","action":"move","task_id":702,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T08:58:45.5547395+01:00","action":"create","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T08:58:56.0039721+01:00","action":"create","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T08:59:26.0336968+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T08:59:28.8872974+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:00:04.2410071+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T09:00:12.4757501+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:00:19.219828+01:00","action":"move","task_id":765,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T09:00:22.3084222+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T09:00:25.5314772+01:00","action":"move","task_id":763,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T09:00:28.2510577+01:00","action":"edit","task_id":740,"detail":"Test allow-list RolePolicy filtering (RED)"}
+{"timestamp":"2026-03-13T09:00:29.040407+01:00","action":"move","task_id":764,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T09:00:29.7507408+01:00","action":"move","task_id":762,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T09:00:35.3665703+01:00","action":"move","task_id":740,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T09:01:43.988586+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:01:49.3345007+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:01:59.351922+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:03:14.6322902+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:10:17.483143+01:00","action":"edit","task_id":740,"detail":"Test allow-list RolePolicy filtering (RED)"}
+{"timestamp":"2026-03-13T09:10:25.7423338+01:00","action":"move","task_id":740,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T09:10:30.3249539+01:00","action":"delete","task_id":576,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T09:10:36.7589141+01:00","action":"move","task_id":517,"detail":"todo -\u003e done"}
+{"timestamp":"2026-03-13T09:10:45.9233152+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T09:10:45.9275266+01:00","action":"unblock","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T09:10:53.9964198+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T09:10:55.3718112+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-13T09:11:02.2564285+01:00","action":"move","task_id":702,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T09:11:09.1049616+01:00","action":"edit","task_id":718,"detail":"Evaluate cheat-sheet tool pattern for complex toolsets"}
+{"timestamp":"2026-03-13T09:11:09.1103054+01:00","action":"release","task_id":718,"detail":"researcher"}
+{"timestamp":"2026-03-13T09:11:09.8619612+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T09:11:09.8672608+01:00","action":"release","task_id":743,"detail":"researcher"}
+{"timestamp":"2026-03-13T09:11:28.409087+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T09:11:48.5547863+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T09:12:18.0398743+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-13T09:12:28.2984036+01:00","action":"edit","task_id":718,"detail":"Evaluate cheat-sheet tool pattern for complex toolsets"}
+{"timestamp":"2026-03-13T09:12:35.4871943+01:00","action":"edit","task_id":744,"detail":"Evaluate compact board-state context injection for agents"}
+{"timestamp":"2026-03-13T09:12:46.7267309+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T09:14:47.9453266+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T09:14:52.9501229+01:00","action":"move","task_id":736,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T09:20:07.2331453+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T09:20:13.2315724+01:00","action":"move","task_id":765,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T09:31:00.3406085+01:00","action":"edit","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T09:31:08.2352315+01:00","action":"move","task_id":764,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T09:31:39.354771+01:00","action":"create","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T09:31:49.4263221+01:00","action":"create","task_id":767,"detail":"BearClaw CLI: decision request commands"}
+{"timestamp":"2026-03-13T09:50:08.5189833+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-13T09:50:17.6744425+01:00","action":"move","task_id":702,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T09:58:17.7861585+01:00","action":"edit","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T09:58:24.1847292+01:00","action":"move","task_id":764,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T10:00:09.9061028+01:00","action":"edit","task_id":740,"detail":"Test allow-list RolePolicy filtering (RED)"}
+{"timestamp":"2026-03-13T10:00:17.9927531+01:00","action":"move","task_id":740,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T10:20:39.5784728+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T10:20:45.2329078+01:00","action":"move","task_id":736,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T10:27:28.4410992+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T10:27:34.676515+01:00","action":"move","task_id":743,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T10:28:09.5125313+01:00","action":"claim","task_id":766,"detail":"researcher"}
+{"timestamp":"2026-03-13T10:28:09.5167675+01:00","action":"move","task_id":766,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T10:28:20.864424+01:00","action":"claim","task_id":718,"detail":"researcher"}
+{"timestamp":"2026-03-13T10:28:20.8688597+01:00","action":"move","task_id":718,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T10:28:35.9940771+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T10:28:35.9990122+01:00","action":"release","task_id":766,"detail":"researcher"}
+{"timestamp":"2026-03-13T10:28:36.6624515+01:00","action":"move","task_id":766,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T10:28:37.3157126+01:00","action":"edit","task_id":744,"detail":"Evaluate compact board-state context injection for agents"}
+{"timestamp":"2026-03-13T10:28:37.3204847+01:00","action":"claim","task_id":744,"detail":"researcher"}
+{"timestamp":"2026-03-13T10:28:44.9163479+01:00","action":"move","task_id":744,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T10:34:42.0759475+01:00","action":"create","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T10:35:42.9005789+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T10:36:31.6391314+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T10:36:49.827493+01:00","action":"move","task_id":722,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T10:36:56.5982182+01:00","action":"move","task_id":768,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T10:37:12.9879922+01:00","action":"create","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T10:38:24.7975548+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T10:39:05.2747064+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T10:39:28.4107301+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T10:39:48.9488543+01:00","action":"move","task_id":721,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T10:39:59.0681871+01:00","action":"create","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T10:40:14.3976546+01:00","action":"create","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-13T10:40:31.8369344+01:00","action":"create","task_id":772,"detail":"Fix ContextInjectionHook: wire kanban_summary to system prompt"}
+{"timestamp":"2026-03-13T10:41:44.8771537+01:00","action":"create","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T10:41:51.3969929+01:00","action":"create","task_id":774,"detail":"Create knowledge-ops SKILL.md for KnowledgeToolset guidance"}
+{"timestamp":"2026-03-13T10:41:58.2590395+01:00","action":"create","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-13T10:42:00.3343924+01:00","action":"edit","task_id":744,"detail":"Evaluate compact board-state context injection for agents"}
+{"timestamp":"2026-03-13T10:42:08.3998128+01:00","action":"move","task_id":744,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T10:43:04.5067497+01:00","action":"edit","task_id":718,"detail":"Evaluate cheat-sheet tool pattern for complex toolsets"}
+{"timestamp":"2026-03-13T10:43:11.3950733+01:00","action":"move","task_id":718,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T10:50:45.6511066+01:00","action":"edit","task_id":702,"detail":"Research: Audit GCP generative-ai repo for other reusable patterns (2025+)"}
+{"timestamp":"2026-03-13T10:50:50.8198777+01:00","action":"move","task_id":702,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T10:51:44.8527074+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T10:52:12.9242508+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T10:52:19.69374+01:00","action":"move","task_id":736,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T11:03:30.7304725+01:00","action":"edit","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T11:03:39.1652457+01:00","action":"edit","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T11:03:45.3671173+01:00","action":"move","task_id":764,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T11:04:45.2511436+01:00","action":"claim","task_id":766,"detail":"researcher"}
+{"timestamp":"2026-03-13T11:04:45.2564207+01:00","action":"move","task_id":766,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T11:08:25.6135938+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T11:08:34.0215598+01:00","action":"move","task_id":743,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T11:15:31.029867+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T11:15:39.4199186+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T11:16:19.7640867+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T11:16:25.2247271+01:00","action":"move","task_id":765,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T11:18:50.5846623+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T11:19:14.5605308+01:00","action":"move","task_id":769,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T11:19:56.4574481+01:00","action":"create","task_id":776,"detail":"Add graph community detection (Leiden algorithm) to knowledge graph"}
+{"timestamp":"2026-03-13T11:20:36.7407518+01:00","action":"move","task_id":766,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T11:21:24.3590755+01:00","action":"claim","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T11:21:24.3644342+01:00","action":"move","task_id":770,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T11:21:56.6109178+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T11:21:56.6174943+01:00","action":"release","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T11:21:57.312675+01:00","action":"move","task_id":770,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T11:21:58.0063786+01:00","action":"move","task_id":767,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T11:21:58.6914935+01:00","action":"edit","task_id":767,"detail":"BearClaw CLI: decision request commands"}
+{"timestamp":"2026-03-13T11:21:58.6951326+01:00","action":"claim","task_id":767,"detail":"researcher"}
+{"timestamp":"2026-03-13T11:28:29.7264676+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T11:28:37.1473306+01:00","action":"move","task_id":768,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T11:31:47.9774256+01:00","action":"create","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T11:32:08.6471093+01:00","action":"create","task_id":778,"detail":"Tests for bearclaw decisions commands"}
+{"timestamp":"2026-03-13T11:32:55.0941944+01:00","action":"edit","task_id":767,"detail":"BearClaw CLI: decision request commands"}
+{"timestamp":"2026-03-13T11:33:03.2889309+01:00","action":"move","task_id":767,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T11:51:48.3221512+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T11:51:49.0989942+01:00","action":"move","task_id":719,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T11:56:19.9905853+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T11:56:51.8087418+01:00","action":"move","task_id":765,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T12:08:41.6886101+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T12:08:47.5563999+01:00","action":"move","task_id":743,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T12:12:10.2645061+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T12:12:16.0142297+01:00","action":"move","task_id":727,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T12:13:43.4805069+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:13:59.2184895+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:14:58.6486875+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:14:58.654608+01:00","action":"block","task_id":517,"detail":"Tests fail: test_inter_doc_pipeline_integration.py uses old kwarg inter_doc_builder but IngestPipeline now accepts enricher. 3rd cycle same defect."}
+{"timestamp":"2026-03-13T12:14:59.5879382+01:00","action":"move","task_id":517,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-13T12:16:20.4915049+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T12:16:26.553263+01:00","action":"move","task_id":769,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T12:25:20.4409757+01:00","action":"edit","task_id":736,"detail":"Tests: browser_snapshot tool in BrowserToolset (RED phase for #727)"}
+{"timestamp":"2026-03-13T12:25:26.8859175+01:00","action":"move","task_id":736,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T12:28:01.8991691+01:00","action":"claim","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:28:01.904937+01:00","action":"move","task_id":770,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T12:28:08.1132509+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T12:28:08.121664+01:00","action":"release","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:28:08.937001+01:00","action":"move","task_id":770,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T12:28:14.2388456+01:00","action":"edit","task_id":778,"detail":"Tests for bearclaw decisions commands"}
+{"timestamp":"2026-03-13T12:28:14.247579+01:00","action":"claim","task_id":778,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:28:32.454377+01:00","action":"edit","task_id":776,"detail":"Add graph community detection (Leiden algorithm) to knowledge graph"}
+{"timestamp":"2026-03-13T12:28:32.4608866+01:00","action":"claim","task_id":776,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:28:36.4691763+01:00","action":"move","task_id":778,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T12:28:38.7818832+01:00","action":"move","task_id":776,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T12:30:39.4049919+01:00","action":"edit","task_id":776,"detail":"Add graph community detection (Leiden algorithm) to knowledge graph"}
+{"timestamp":"2026-03-13T12:30:47.1647672+01:00","action":"move","task_id":776,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T12:30:52.7145518+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T12:30:52.7191345+01:00","action":"claim","task_id":777,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:32:49.8309067+01:00","action":"move","task_id":777,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T12:33:01.9858654+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T12:33:01.9903441+01:00","action":"release","task_id":777,"detail":"researcher"}
+{"timestamp":"2026-03-13T12:33:29.2409219+01:00","action":"edit","task_id":778,"detail":"Tests for bearclaw decisions commands"}
+{"timestamp":"2026-03-13T12:33:42.330734+01:00","action":"move","task_id":778,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T12:44:22.9251678+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T12:44:32.2112506+01:00","action":"move","task_id":743,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T12:46:36.3242487+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:46:46.2894004+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:47:01.7296981+01:00","action":"move","task_id":517,"detail":"review -\u003e todo"}
+{"timestamp":"2026-03-13T12:47:08.5420748+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-13T12:47:57.1544444+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T12:48:05.1786581+01:00","action":"move","task_id":769,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T12:58:07.5984183+01:00","action":"move","task_id":517,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-03-13T13:05:57.7715003+01:00","action":"edit","task_id":764,"detail":"Tests for line-boundary terminal truncation"}
+{"timestamp":"2026-03-13T13:06:03.5636734+01:00","action":"move","task_id":764,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T13:09:29.4119733+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T13:09:33.6845336+01:00","action":"move","task_id":765,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T13:11:07.4443788+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T13:11:22.809177+01:00","action":"move","task_id":762,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T13:27:59.6891789+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T13:28:04.2564448+01:00","action":"move","task_id":719,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T13:36:41.4806566+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T13:36:46.5846372+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T13:36:53.436879+01:00","action":"move","task_id":719,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T13:41:38.7171667+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T13:41:46.0162755+01:00","action":"edit","task_id":743,"detail":"Implement loop detection in orchestrator dispatch"}
+{"timestamp":"2026-03-13T13:41:48.3004404+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T13:41:54.2437208+01:00","action":"move","task_id":743,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T13:42:14.4801957+01:00","action":"move","task_id":769,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T13:44:27.0575794+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T13:44:32.7552912+01:00","action":"move","task_id":768,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T13:46:38.9242967+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T13:46:46.9649482+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T13:46:53.2108186+01:00","action":"move","task_id":763,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T13:52:14.2744025+01:00","action":"edit","task_id":765,"detail":"Tests: soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T13:52:22.1220801+01:00","action":"move","task_id":765,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T13:57:56.1881741+01:00","action":"move","task_id":769,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T13:59:10.4627331+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T13:59:16.4776102+01:00","action":"move","task_id":727,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T14:06:07.1761087+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T14:06:14.0181737+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T14:06:43.4634987+01:00","action":"move","task_id":768,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T14:07:08.5135328+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T14:07:15.1416072+01:00","action":"edit","task_id":719,"detail":"Implement tool-trajectory evaluation harness"}
+{"timestamp":"2026-03-13T14:07:21.3766859+01:00","action":"move","task_id":719,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T14:09:44.8116951+01:00","action":"claim","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:09:44.8154084+01:00","action":"move","task_id":770,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:09:46.3579502+01:00","action":"claim","task_id":772,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:09:46.3630481+01:00","action":"move","task_id":772,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:10:03.1933995+01:00","action":"edit","task_id":772,"detail":"Fix ContextInjectionHook: wire kanban_summary to system prompt"}
+{"timestamp":"2026-03-13T14:10:03.1975504+01:00","action":"release","task_id":772,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:10:03.910189+01:00","action":"move","task_id":772,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T14:10:05.3302333+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T14:10:06.0839038+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T14:10:06.0886211+01:00","action":"release","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:10:06.8151+01:00","action":"move","task_id":770,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T14:10:07.6721697+01:00","action":"edit","task_id":772,"detail":"Fix ContextInjectionHook: wire kanban_summary to system prompt"}
+{"timestamp":"2026-03-13T14:10:07.6776961+01:00","action":"claim","task_id":772,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:10:11.2263992+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T14:10:12.2877902+01:00","action":"move","task_id":770,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:10:25.4256512+01:00","action":"edit","task_id":772,"detail":"Fix ContextInjectionHook: wire kanban_summary to system prompt"}
+{"timestamp":"2026-03-13T14:10:33.0901456+01:00","action":"move","task_id":770,"detail":"in-progress -\u003e ideation"}
+{"timestamp":"2026-03-13T14:10:33.7644012+01:00","action":"move","task_id":772,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:10:45.9119739+01:00","action":"edit","task_id":770,"detail":"Implement BoardContextProvider with TTL caching"}
+{"timestamp":"2026-03-13T14:10:45.9156598+01:00","action":"release","task_id":770,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:13:28.5567046+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T14:13:33.4344396+01:00","action":"move","task_id":773,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T14:13:40.2103266+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-13T14:13:40.2145032+01:00","action":"claim","task_id":771,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:16:29.6512527+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-13T14:16:40.539287+01:00","action":"move","task_id":770,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T14:16:52.2402197+01:00","action":"move","task_id":771,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T14:22:35.8851413+01:00","action":"create","task_id":779,"detail":"Remove dead ContextInjectionHook"}
+{"timestamp":"2026-03-13T14:22:56.8366085+01:00","action":"edit","task_id":772,"detail":"Fix ContextInjectionHook: wire kanban_summary to system prompt"}
+{"timestamp":"2026-03-13T14:23:22.794385+01:00","action":"move","task_id":772,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T14:23:37.0554933+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-13T14:23:37.0595985+01:00","action":"claim","task_id":775,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:24:45.2605438+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-13T14:25:36.0242961+01:00","action":"move","task_id":775,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T14:26:22.3568769+01:00","action":"edit","task_id":774,"detail":"Create knowledge-ops SKILL.md for KnowledgeToolset guidance"}
+{"timestamp":"2026-03-13T14:26:22.3655728+01:00","action":"claim","task_id":774,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:26:31.6368035+01:00","action":"move","task_id":774,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:31:09.6073444+01:00","action":"create","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T14:31:20.9682675+01:00","action":"create","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T14:32:00.2577438+01:00","action":"move","task_id":774,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T14:42:16.5482882+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T14:42:27.0187083+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T14:42:30.5792806+01:00","action":"move","task_id":721,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-13T14:42:33.9376514+01:00","action":"move","task_id":768,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-13T14:55:53.4996535+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T14:57:04.1194676+01:00","action":"move","task_id":769,"detail":"done -\u003e review"}
+{"timestamp":"2026-03-13T14:57:04.7760184+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T14:57:04.7796399+01:00","action":"block","task_id":769,"detail":"2 regressions in test_bookmark.py: test_schema_version_is_7 (L440) and test_version_bumped_to_7 (L509) assert version==7 but _SCHEMA_VERSION is now 8. Builder must update these 2 assertions."}
+{"timestamp":"2026-03-13T14:57:28.6299792+01:00","action":"move","task_id":727,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T14:58:11.9793904+01:00","action":"edit","task_id":779,"detail":"Remove dead ContextInjectionHook"}
+{"timestamp":"2026-03-13T14:58:11.9841116+01:00","action":"claim","task_id":779,"detail":"researcher"}
+{"timestamp":"2026-03-13T14:58:19.867021+01:00","action":"move","task_id":779,"detail":"ideation -\u003e in-progress"}
+{"timestamp":"2026-03-13T15:00:36.9929714+01:00","action":"move","task_id":779,"detail":"in-progress -\u003e backlog"}
+{"timestamp":"2026-03-13T15:01:08.7154516+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:01:15.1310476+01:00","action":"move","task_id":762,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T15:03:11.9747602+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T15:03:11.9795479+01:00","action":"claim","task_id":773,"detail":"architect"}
+{"timestamp":"2026-03-13T15:03:23.8685705+01:00","action":"create","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T15:03:32.1123069+01:00","action":"move","task_id":782,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-03-13T15:03:58.6513731+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T15:04:14.6172335+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T15:04:34.9159925+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T15:04:34.9206474+01:00","action":"release","task_id":773,"detail":"architect"}
+{"timestamp":"2026-03-13T15:04:42.8310182+01:00","action":"move","task_id":773,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T15:04:43.4413036+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T15:04:43.4471278+01:00","action":"release","task_id":773,"detail":"architect"}
+{"timestamp":"2026-03-13T15:10:08.4409461+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T15:10:08.448957+01:00","action":"claim","task_id":727,"detail":"writer"}
+{"timestamp":"2026-03-13T15:10:14.4327654+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T15:10:14.4390022+01:00","action":"claim","task_id":721,"detail":"builder"}
+{"timestamp":"2026-03-13T15:10:34.7999173+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T15:10:34.8041259+01:00","action":"claim","task_id":768,"detail":"auditor"}
+{"timestamp":"2026-03-13T15:11:09.5364471+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T15:11:09.5431362+01:00","action":"claim","task_id":722,"detail":"test-writer"}
+{"timestamp":"2026-03-13T15:12:06.4677845+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T15:12:23.8386135+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T15:12:23.8466175+01:00","action":"release","task_id":727,"detail":"writer"}
+{"timestamp":"2026-03-13T15:12:24.800824+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T15:12:29.2469651+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T15:12:29.2516995+01:00","action":"release","task_id":722,"detail":"test-writer"}
+{"timestamp":"2026-03-13T15:14:21.9604225+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T15:14:28.6366369+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T15:14:28.6418788+01:00","action":"release","task_id":721,"detail":"builder"}
+{"timestamp":"2026-03-13T15:30:50.7102457+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T15:30:55.3638242+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T15:31:03.0355+01:00","action":"move","task_id":768,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T15:31:03.672474+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
+{"timestamp":"2026-03-13T15:31:03.6794513+01:00","action":"release","task_id":768,"detail":"auditor"}
