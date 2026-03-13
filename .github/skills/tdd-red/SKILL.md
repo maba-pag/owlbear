@@ -7,12 +7,13 @@ description: "TDD RED phase workflow: read AC → search codebase → plan test 
 
 Step-by-step process for the test-writer to produce failing tests from a task's acceptance criteria. This is the RED phase of TDD — all tests must fail when complete.
 
-## Step 1 — Read the task
+## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
-2. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, or `type:docs`). If so, go to **Step 1a — Pass-through**.
-3. Identify referenced source files, modules, and interfaces in the AC
-4. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
+2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+3. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, or `type:docs`). If so, go to **Step 1a — Pass-through**.
+4. Identify referenced source files, modules, and interfaces in the AC
+5. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
 
 ### Step 1a — Pass-through for non-implementation tasks
 
@@ -23,7 +24,7 @@ you encounter one:
    ```powershell
    kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder." -t
    ```
-2. Move the task: `kanban\kanban-md.exe move {id} in-progress`
+2. Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
 3. Return the signal:
    ```
    DONE #{id} -> in-progress | non-impl pass-through, no tests needed
@@ -105,12 +106,12 @@ kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes
 - ruff: clean" -t
 ```
 
-## Step 7 — Advance
+## Step 7 — Advance + release
 
-Move the task to `in-progress` to signal the builder:
+Advance the task to `in-progress` and release the claim in one atomic command:
 
 ```powershell
-kanban\kanban-md.exe move {id} in-progress
+kanban\kanban-md.exe edit {id} --status in-progress --release
 ```
 
 ## Verification checklist
@@ -124,4 +125,4 @@ kanban\kanban-md.exe move {id} in-progress
 - [ ] No source files created or edited
 - [ ] `from __future__ import annotations` on new files
 - [ ] Summary appended to task body
-- [ ] Task moved to `in-progress`
+- [ ] Task advanced to `in-progress` and claim released via `edit {id} --status in-progress --release`

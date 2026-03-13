@@ -1,6 +1,6 @@
 ---
 name: task-verification
-description: "Exit gate verification workflow: verify AC with evidence → score confidence → archive or reject → commit + push. Use when closing completed tasks."
+description: "Exit gate verification workflow: verify AC with evidence → score confidence → archive or reject → commit. Use when closing completed tasks."
 ---
 
 # Task Verification Workflow
@@ -13,7 +13,12 @@ Step-by-step process for the exit gate (done → archived).
 kanban\kanban-md.exe list --compact --status done
 ```
 
-For each task, read full AC: `kanban\kanban-md.exe show {id}`
+For each task, read full AC and claim it:
+
+```powershell
+kanban\kanban-md.exe show {id}
+kanban\kanban-md.exe edit {id} --claim <agent>
+```
 
 ## Step 2 — Verify each task
 
@@ -47,9 +52,9 @@ For every AC item on every task, collect concrete evidence:
 | `.85` | Functional, minor non-trivial deviation | Reject to review |
 | `< .85` | Incomplete or unverifiable | Reject to backlog |
 
-- **≥ .95:** `kanban\kanban-md.exe archive {id}`
-- **< .95 fixable:** `kanban\kanban-md.exe move {id} review --block "reason"`
-- **< .95 fundamental:** `kanban\kanban-md.exe move {id} backlog --block "reason"`
+- **≥ .95:** `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release`
+- **< .95 fixable:** `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`
+- **< .95 fundamental:** `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release`
 
 ## Step 4 — Audit report
 
@@ -68,8 +73,13 @@ Totals: X archived, Y rejected, Z flagged.
    - Docs → `docs:`
    - Agent definitions + prompts → `docs:`
 3. Stage each package's files, commit with conventional message, next package
-4. `git push` — ask user first if there are rejected tasks
+4. Do **not** push — the user pushes manually
 
 ## Step 6 — Final summary
 
-Commits made (with hashes), tasks archived, tasks rejected, remaining items.
+Write the final summary to **Channel B** (append to the last task's body or
+`docs/scratch/{id}-auditor.md`). Include: commits made (with hashes), tasks archived,
+tasks rejected, remaining items.
+
+Your return to the caller is **Channel A only** — the signal line(s). No commit tables,
+no summaries in the return text.

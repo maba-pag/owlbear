@@ -5,6 +5,11 @@ description: "Generate styled HTML diagrams, tables, and architecture visuals. C
 
 # Visual Output Skill
 
+> **VS Code agent note:** This skill references OwlBear PydanticAI runtime tools
+> (FileToolset, BrowserToolset, VisualFeedbackToolset, DiagramToolset) not available
+> in VS Code Copilot agent mode. Use VS Code edit/file/terminal tools instead when
+> adapting these procedures for agent use.
+
 Produce high-quality, self-contained visual output (diagrams, tables, architecture maps)
 for delivery to the user via browser screenshot or Kroki render.
 

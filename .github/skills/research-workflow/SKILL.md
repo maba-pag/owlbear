@@ -24,11 +24,19 @@ For trivial tasks (rename, typo, config tweak): items 1–3 get a one-liner
 `N/A — trivial change, rationale: X` and the task moves through quickly. **The gate
 still exists** — it just doesn't create busywork.
 
+## Step 0 — Claim
+
+Immediately claim the task by ID (never use `pick` — see **kanban-md skill** → Agent Task Lifecycle Protocol):
+
+```powershell
+kanban\kanban-md.exe show {id}
+kanban\kanban-md.exe edit {id} --claim <agent>
+```
+
 ## Step 1 — Clarify scope
 
-Before starting research, understand exactly what's being asked:
+Understand exactly what's being asked:
 
-- If referencing a kanban task: `kanban\kanban-md.exe show {id}`
 - If ambiguous: use `askQuestions` (what aspects? what decision? what constraints?)
 - Read `copilot-instructions.md` for tech stack and principles
 
@@ -77,7 +85,11 @@ Max 200 lines. Every claim needs a source reference.
 ## Step 5 — Create follow-up tasks
 
 Generate `kanban-md create` commands for every actionable finding.
-Present for user review — do NOT execute.
+**Execute them** to create tasks at `ideation` status — the architect still gates them before `todo`.
+
+If a finding requires a user decision with no clear winner, create a **decision request**
+in `docs/decisions/pending/` instead. See `decision-requests.instructions.md` for the format.
+Block the current task and move on to other work if available.
 
 ## Step 6 — Update attribution
 
@@ -87,12 +99,12 @@ Add rows to `docs/sources/overview.md` for any external sources used.
 
 Delete any cloned repos from `docs/scratch/research/`.
 
-## Step 8 — Advance
+## Step 8 — Advance + release
 
-Move the task to `backlog` to signal the architect:
+Advance the task to `backlog` and release the claim in one atomic command:
 
 ```powershell
-kanban\kanban-md.exe move {id} backlog
+kanban\kanban-md.exe edit {id} --status backlog --release
 ```
 
 ## Self-critique checklist
@@ -107,5 +119,5 @@ Before submitting:
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in sources/overview.md
 - [ ] Cloned repos deleted
-- [ ] Task moved to `backlog` via `kanban\kanban-md.exe move`
+- [ ] Task advanced to `backlog` and claim released via `edit {id} --status backlog --release`
 - [ ] Recommendations align with KISS/YAGNI

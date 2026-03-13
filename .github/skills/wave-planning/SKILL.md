@@ -37,6 +37,26 @@ backlog → todo approval.
 The orchestrator passes a scope filter and optional failure context from the previous
 cycle.
 
+### Check pending decision requests
+
+Before reading the board, check for resolved decision requests:
+
+```powershell
+Get-ChildItem docs/decisions/pending/*.md -ErrorAction SilentlyContinue
+```
+
+For each file found, read the frontmatter. If `status: resolved`, unblock the corresponding task:
+
+```powershell
+kanban\kanban-md.exe edit {task_id} --unblock
+```
+
+Then move the file from `docs/decisions/pending/` to `docs/decisions/resolved/`.
+
+If `status: pending` and the file is older than 30 days (check `created` field), auto-resolve with the agent's recommendation: update the file's status to `auto-resolved`, unblock the task, and add a note: "Auto-resolved after 30-day timeout. User can override."
+
+Proceed with normal scope processing after this check.
+
 Apply the filter to `kanban\kanban-md.exe list --compact`. Examples:
 
 - Tag filter: `kanban\kanban-md.exe list --compact --tag phase-3`
@@ -107,7 +127,7 @@ External-blocked tasks go to the BLOCKED section with the out-of-scope dependenc
 
 ## Step 4 — Gate checks
 
-For each **ready** task (not blocked, not external), run all 5 gate checks. A task must
+For each **ready** task (not blocked, not external), run all 6 gate checks. A task must
 pass ALL gates to be dispatched. Any failure → task is silently excluded from the output.
 
 **Gate 1 — Status gate:**
@@ -138,6 +158,12 @@ this gate is redundant — which is by design (belt-and-suspenders).
 Task body contains non-empty acceptance criteria with at least one bullet point
 (`- ` or `- [ ]`) describing a verifiable criterion.
 Tasks with empty or missing AC fail this gate.
+
+**Gate 6 — Claim gate (defense-in-depth):**
+If a task is already claimed by an agent (check claim field in `kanban-md show` output),
+skip it from dispatch — it is already being worked on. This prevents double-dispatch
+even if the prior agent hasn't advanced the task yet. Stale claims are handled separately
+by the first-stale / second-stale detection logic.
 
 ## Step 5 — Filter, deconflict, prioritize
 
@@ -203,7 +229,7 @@ Before outputting:
 - [ ] Scope filter was applied — not reading the entire board unfiltered (unless scope is "all")
 - [ ] Every candidate task was read with `kanban\kanban-md.exe show {id}` (not just list output)
 - [ ] DAG was built — tasks classified as ready, blocked, or external
-- [ ] All 5 gate checks were run on every ready task
+- [ ] All 6 gate checks were run on every ready task
 - [ ] No task in `dispatch` failed any gate check
 - [ ] At most one builder per `scope:{domain}` in the list
 - [ ] Batch does not exceed 16 tasks

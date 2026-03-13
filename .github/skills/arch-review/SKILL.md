@@ -13,8 +13,9 @@ ensuring architectural soundness, and approving tasks for development.
 Read the single task dispatched to you:
 
 1. `kanban\kanban-md.exe show {id}` — read full details, verify `backlog` status
-2. If task references a research doc (`docs/{slug}.md`), read it
-3. Note each AC line for evaluation
+2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+3. If task references a research doc (`docs/research/{slug}.md`), read it
+4. Note each AC line for evaluation
 
 Initialize `manage_todo_list` with steps to complete.
 
@@ -51,16 +52,22 @@ and general architectural principles:
 9. **Single domain** — does this task target exactly one domain (see canonical list in
    kanban-planner.agent.md)? Multi-domain → split. Edge case: an ancillary `config.py`
    field addition for a feature is NOT a domain violation — domain = primary concern.
+10. **Failure Mode Map** — if the task introduces or modifies codepaths with potential
+    failure modes, fill in the template below. Skip for docs/config-only tasks.
+
+    | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
+    |----------|--------------|-----------|----------|-------------|
+    | `store()` | DB write fails | `sqlite3.OperationalError` | Yes — retry 2× | Stale data until next sync |
 
 ## Step 4 — Decide and act
 
-| Verdict     | When                              | Action                                              |
-| ----------- | --------------------------------- | --------------------------------------------------- |
-| **Approve** | AC precise, architecture sound    | `kanban\kanban-md.exe move {id} todo`               |
-| **Refine**  | Good concept, AC needs tightening | `kanban\kanban-md.exe edit {id} --body "..."`       |
-| **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original |
-| **Merge**   | Two tasks = one logical change    | Edit one, delete redundant                          |
-| **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --block "reason"`   |
+| Verdict     | When                              | Action                                                                  |
+| ----------- | --------------------------------- | ----------------------------------------------------------------------- |
+| **Approve** | AC precise, architecture sound    | `kanban\kanban-md.exe edit {id} --status todo --release`               |
+| **Refine**  | Good concept, AC needs tightening | `kanban\kanban-md.exe edit {id} --body "..." --claim <agent>` (keep)   |
+| **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original, then `--release`   |
+| **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
+| **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --block "reason" --release`            |
 
 ## Step 5 — Produce report
 
@@ -81,3 +88,4 @@ Before submitting:
 - [ ] Did NOT create/edit .py, .toml, or test files
 - [ ] Dependency graph has no cycles
 - [ ] Single-domain verified — task targets exactly one domain from the canonical list
+- [ ] Failure mode map assessed (for tasks with new/modified codepaths)

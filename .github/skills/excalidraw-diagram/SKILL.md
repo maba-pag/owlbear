@@ -5,6 +5,10 @@ description: "Generate Excalidraw JSON diagrams with design methodology, element
 
 # Excalidraw Diagram Skill
 
+> **VS Code agent note:** This skill references OwlBear PydanticAI runtime tools
+> (FileToolset, DiagramToolset) not available in VS Code Copilot agent mode. Use
+> VS Code edit/file/terminal tools instead when adapting these procedures for agent use.
+
 Generate valid `.excalidraw` JSON diagrams that communicate ideas visually.
 Diagrams should **argue, not just display** — use layout, color, and grouping to
 guide the viewer's eye and convey relationships.

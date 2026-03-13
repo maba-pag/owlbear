@@ -1,7 +1,6 @@
 ---
 name: project-definition
 description: LLM-guided project scoping and definition workflow. Turns a vague idea into a structured ProjectDefinition through clarification, research, and iterative refinement with the user.
-user-invocable: true
 ---
 
 # Project Definition Workflow

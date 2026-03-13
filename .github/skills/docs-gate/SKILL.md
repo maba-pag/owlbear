@@ -7,11 +7,12 @@ description: "Documentation gate checklist: verify and update docs before markin
 
 Step-by-step process for the documentation gate (docs → done).
 
-## Step 1 — Read task details
+## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full task details
-2. Verify task is in `docs` status
-3. Identify what changed: files created/modified, behavior added
+2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+3. Verify task is in `docs` status
+4. Identify what changed: files created/modified, behavior added
 
 ## Step 2 — Run docs-gate checklist
 
@@ -54,10 +55,12 @@ Evaluate each item with evidence, not assumptions:
 - Look for `docs/scratch/{task-id}-*` files
 - Delete any that exist
 
-## Step 4 — Advance
+## Step 4 — Advance + release
+
+Advance the task to `done` and release the claim in one atomic command:
 
 ```powershell
-kanban\kanban-md.exe move {id} done
+kanban\kanban-md.exe edit {id} --status done --release
 ```
 
 ## Docs gate output format
@@ -76,11 +79,11 @@ kanban\kanban-md.exe move {id} done
 - {list or "None"}
 
 ### Action Taken
-kanban\kanban-md.exe move {id} done
+kanban\kanban-md.exe edit {id} --status done --release
 ```
 
 ## Boundaries
 
 - Only edit: README.md, copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
 - Never change application logic — only documentation content
-- If you find untested behavior: reject to review with `kanban\kanban-md.exe move {id} review --block "reason"`
+- If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`

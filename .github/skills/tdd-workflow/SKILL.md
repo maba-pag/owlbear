@@ -7,12 +7,26 @@ description: "TDD GREEN phase workflow: read existing tests → verify they fail
 
 Step-by-step process for implementing a kanban task using test-driven development.
 
-## Step 1 — Read the task
+## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
-2. Verify task is in `in-progress` status (the test-writer already moved it here)
-3. Read referenced source files to understand existing code
-4. Initialize `manage_todo_list` with implementation steps
+2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+3. Verify task is in `in-progress` status (the test-writer already moved it here)
+4. Read referenced source files to understand existing code
+5. Initialize `manage_todo_list` with implementation steps
+
+### Step 1a — Pass-through for non-implementation tasks
+
+Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or
+"non-impl pass-through". If found:
+
+1. Append a brief note to the task body:
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review." -t
+   ```
+2. Advance + release: `kanban\kanban-md.exe edit {id} --status review --release`
+3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
+4. **Stop here.** Do not proceed to Step 2.
 
 ## Step 2 — Plan the change
 
@@ -104,10 +118,12 @@ re-read that section before retrying — do NOT iterate through flag variations.
 
 All must pass. Target ≥ 90% coverage on touched modules.
 
-## Step 8 — Advance
+## Step 8 — Advance + release
+
+Advance the task to `review` and release the claim in one atomic command:
 
 ```powershell
-kanban\kanban-md.exe move {id} review
+kanban\kanban-md.exe edit {id} --status review --release
 ```
 
 ## Verification checklist

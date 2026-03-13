@@ -31,6 +31,61 @@ Each task is a `.md` file in `kanban/tasks/`. The CLI is `kanban-md`
 - Default statuses: backlog, todo, in-progress, review, done.
 - Default priorities: low, medium, high, critical.
 
+## Agent Task Lifecycle Protocol
+
+The kanban board is shared — multiple agents and humans may work on it simultaneously.
+These rules prevent destructive race conditions between parallel agents.
+
+### Three-phase claiming
+
+Claiming is **mandatory** — no task edits, no code changes without a claim.
+Every agent workflow follows these three phases:
+
+**Phase 1 — Claim (start of work):**
+Immediately after reading the task with `show {id}`, claim it by ID. The task stays in its current status — claiming is not a status change.
+
+```powershell
+kanban\kanban-md.exe edit {id} --claim <agent>
+```
+
+**Phase 2 — Maintain (during work):**
+Renew the claim on every body append to keep it fresh:
+
+```powershell
+kanban\kanban-md.exe edit {id} -a "## Section\ncontent" -t --claim <agent>
+```
+
+**Phase 3 — Advance + release (end of work):**
+When work is complete, change status and release the claim in a single atomic command:
+
+```powershell
+kanban\kanban-md.exe edit {id} --status <next-status> --release
+```
+
+Status change = completion signal. Never move a task at the start of your workflow — movement happens only when you are done.
+
+### Dispatched vs self-selected claiming
+
+| Mode                     | When                                | Command                             | Notes                                 |
+| ------------------------ | ----------------------------------- | ----------------------------------- | ------------------------------------- |
+| **Dispatched** (normal)  | Orchestrator gave you a task ID     | `edit {id} --claim <agent>`         | Always use direct ID. Never `pick`.   |
+| **Self-selected** (rare) | Interactive use, no pre-assigned ID | `pick --claim <agent> --status <s>` | Only for manual/interactive sessions. |
+
+**Rule: When dispatched with a task ID, always claim by ID. Never use `pick`.** The `pick` command grabs the highest-priority unclaimed task, which may not be yours — this causes destructive race conditions when multiple agents run in parallel.
+
+### Cross-task boundaries
+
+| Action                               | Allowed? | Example                                      |
+| ------------------------------------ | -------- | -------------------------------------------- |
+| Read any task                        | Yes      | `show {id}` for context                      |
+| Create new tasks                     | Yes      | `create "title" --priority P` for follow-ups |
+| Modify your dispatched task          | Yes      | `edit {id} -a "..." --claim <agent>`         |
+| Move/edit/claim/release another task | **No**   | Causes parallel-agent race conditions        |
+
+### Crash safety
+
+Stale claims persist after agent crashes — this is intentional. The planner detects stale tasks (dispatched but unchanged between cycles) and the orchestrator retries with a `retry_hint`. No special cleanup is needed. Surviving claims prevent double-dispatch.
+
 ## Decision Tree
 
 | User wants to...                        | Command                                                          |
@@ -156,6 +211,12 @@ Atomically finds the highest-priority unclaimed, unblocked task and claims it. U
 restrict which column to pick from. Use `--move` to simultaneously move the task to a new status.
 Replaces the slower list → claim → move sequence.
 
+> **Dispatch rule:** When an agent is dispatched with a specific task ID (the normal case), it must
+> claim by ID using `edit {id} --claim <agent>` — never `pick`. The `pick` command grabs the
+> highest-priority unclaimed task, which may not be the dispatched task. Use `pick` only in
+> interactive/manual sessions where no task ID is pre-assigned. See **Agent Task Lifecycle Protocol**
+> above for the full three-phase claiming workflow.
+
 **v0.33.0:** `pick` now prints the full task details (including body) after the confirmation line,
 so a separate `show` call is no longer needed. Use `--no-body` to suppress the body and get
 the old one-line behavior.
@@ -274,9 +335,12 @@ kanban-md board --compact                        # orient: what's active, blocke
 
 ### Claim next task (atomic pick + move)
 
+> **Dispatched agents:** If you were given a specific task ID by the orchestrator, skip `pick`
+> and claim by ID instead: `kanban-md edit {id} --claim <agent>`. See **Agent Task Lifecycle Protocol**
+> above for the full three-phase claiming workflow.
+
 ```bash
-# Pick highest-priority unclaimed task from todo and move it to in-progress in one step
-# (v0.33.0: pick now prints full task details — no separate show needed)
+# Self-selected / interactive only — picks highest-priority unclaimed task
 kanban-md pick --claim <agent> --status todo --move in-progress
 
 # If todo is empty, pick from backlog
@@ -303,12 +367,16 @@ kanban-md edit <ID> --body "Steps to reproduce: ..."
 kanban-md edit <ID> -a "Implemented X, running tests." -t --claim <agent>
 ```
 
-### Finish task (release claim + mark done)
+### Finish task (advance + release, atomic)
 
 ```bash
-# Run from board home, after merging
-kanban-md edit <ID> --release
-kanban-md move <ID> done
+# Change status and release claim in one atomic command
+kanban-md edit <ID> --status done --release
+
+# Or for other status transitions:
+kanban-md edit <ID> --status review --release    # builder → reviewer
+kanban-md edit <ID> --status docs --release      # reviewer → writer
+kanban-md edit <ID> --status backlog --release   # researcher → architect
 ```
 
 ### Park / handoff (moves to review, appends note, releases claim)
@@ -354,7 +422,8 @@ kanban-md list --compact --status in-progress,review   # all active/parked work
 - **DO** use `--compact` for listing, board, metrics, and log commands — it is the most token-efficient format.
 - **DO** use `kanban-md show ID` (default format) to read task details — it is readable and includes the full body.
 - **DO** pass `--yes` on delete. Without it, the command hangs waiting for stdin.
-- **DO** use `pick --claim <agent> --status todo --move in-progress` rather than list → edit → move — it's atomic and prevents claim races.
+- **DO** use `pick --claim <agent> --status todo --move in-progress` for **interactive/manual** sessions where no task ID is pre-assigned. **Dispatched agents** (called by the orchestrator with a specific task ID) must use `edit {id} --claim <agent>` instead — `pick` grabs the highest-priority unclaimed task, which may not be the agent's assigned task.
+- **DO** use `edit {id} --status <next> --release` to advance and release in one atomic command — this prevents stale claims and minimizes race windows.
 - **DO** use `-a` / `--append-body` with `--claim <agent>` when adding progress notes — this renews the claim and appends without overwriting the body.
 - **DO NOT** use `--json` unless you are piping output to another tool or parsing fields programmatically. Default and `--compact` formats are sufficient for reading.
 - **DO NOT** hardcode status or priority values. Read them from `kanban-md board --compact`.
