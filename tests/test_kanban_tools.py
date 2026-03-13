@@ -819,3 +819,81 @@ class TestHookEmission:
             result = await ts.kanban_create(title="no hooks")
 
         assert "Created" in result
+
+
+# ---------------------------------------------------------------------------
+# Tool description enrichment (#782)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_KanbanToolDescriptions:  # noqa: N801
+    """Enriched tool descriptions expose board semantics to the LLM."""
+
+    def _desc(self, tool_name: str) -> str:
+        ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
+        return ts.tools[tool_name].description
+
+    # -- kanban_create: mentions each priority --------------------------
+
+    @pytest.mark.parametrize(
+        "priority",
+        ["someday", "nice-to-have", "important", "needed", "critical"],
+    )
+    def test_create_description_mentions_priority(self, priority: str) -> None:
+        desc = self._desc("kanban_create")
+        assert priority in desc.lower(), (
+            f"kanban_create description should mention priority '{priority}'"
+        )
+
+    # -- kanban_create: mentions default status -------------------------
+
+    def test_create_description_mentions_default_status_ideation(self) -> None:
+        desc = self._desc("kanban_create")
+        assert "ideation" in desc.lower(), (
+            "kanban_create description should mention default status 'ideation'"
+        )
+
+    # -- kanban_move: mentions each status ------------------------------
+
+    @pytest.mark.parametrize(
+        "status",
+        ["ideation", "backlog", "todo", "in-progress", "review", "docs", "done"],
+    )
+    def test_move_description_mentions_status(self, status: str) -> None:
+        desc = self._desc("kanban_move")
+        assert status in desc.lower(), f"kanban_move description should mention status '{status}'"
+
+    # -- kanban_edit: mentions editable fields --------------------------
+
+    @pytest.mark.parametrize(
+        "field",
+        ["body", "block", "unblock", "tags", "priority", "append_body"],
+    )
+    def test_edit_description_mentions_field(self, field: str) -> None:
+        desc = self._desc("kanban_edit")
+        # Accept either underscore or hyphen variants
+        assert field in desc.lower() or field.replace("_", "-") in desc.lower(), (
+            f"kanban_edit description should mention field '{field}'"
+        )
+
+    # -- kanban_list: mentions filters ----------------------------------
+
+    @pytest.mark.parametrize(
+        "filter_name",
+        ["status", "tag", "priority", "blocked"],
+    )
+    def test_list_description_mentions_filter(self, filter_name: str) -> None:
+        desc = self._desc("kanban_list")
+        assert filter_name in desc.lower(), (
+            f"kanban_list description should mention filter '{filter_name}'"
+        )
+
+    # -- kanban_pick: mentions claim and move semantics -----------------
+
+    def test_pick_description_mentions_claim(self) -> None:
+        desc = self._desc("kanban_pick")
+        assert "claim" in desc.lower(), "kanban_pick description should mention 'claim' semantics"
+
+    def test_pick_description_mentions_move(self) -> None:
+        desc = self._desc("kanban_pick")
+        assert "move" in desc.lower(), "kanban_pick description should mention 'move' semantics"
