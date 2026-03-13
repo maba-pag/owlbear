@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 PKG = Path("src/owlbear/bootstrap")
 
 
@@ -63,7 +62,6 @@ class TestReExports:
 
     def test_private_helpers_importable(self) -> None:
         from owlbear.bootstrap import (
-            _KnowledgeInfra,
             _add_project_toolset,
             _build_bookmark_toolset,
             _build_knowledge_infra,
@@ -71,7 +69,7 @@ class TestReExports:
             _build_knowledge_toolset,
             _build_screenshot_components,
             _build_web_search_toolset,
-            _patch_project_toolset_agent,
+            _KnowledgeInfra,
             _resolve_active_project,
         )
 
@@ -84,6 +82,5 @@ class TestReExports:
             _build_knowledge_toolset,
             _build_screenshot_components,
             _build_web_search_toolset,
-            _patch_project_toolset_agent,
             _resolve_active_project,
         ])

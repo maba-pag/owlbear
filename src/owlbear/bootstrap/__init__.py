@@ -33,7 +33,6 @@ from .knowledge import (
 from .registry import build_agent_registry, build_mcp_registry
 from .toolsets import (
     _add_project_toolset,
-    _patch_project_toolset_agent,
     _resolve_active_project,
     build_toolsets,
 )
@@ -167,12 +166,24 @@ async def bootstrap(
 
     _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline)
 
+    session_path = (
+        settings.config_dir / "projects" / active_project.id / "sessions" / "session.jsonl"
+        if active_project is not None
+        else workspace / ".owlbear" / "session.jsonl"
+    )
+
+    session = SessionStore(session_path)
+    context = ContextManager(workspace)
+
     if active_project is not None and project_store is not None:
         _add_project_toolset(
             toolsets,
             project_store,
             settings.config_dir,
             hooks,
+            session=session,
+            context=context,
+            agent_toolsets=toolsets,
             project_root=settings.project_root,
             summary=component_statuses,
         )
@@ -190,14 +201,6 @@ async def bootstrap(
         model=model,
     )
 
-    session_path = (
-        settings.config_dir / "projects" / active_project.id / "sessions" / "session.jsonl"
-        if active_project is not None
-        else workspace / ".owlbear" / "session.jsonl"
-    )
-
-    session = SessionStore(session_path)
-    context = ContextManager(workspace)
     tracker = UsageTracker(settings.usage_path)
 
     history_processors = None
@@ -220,12 +223,9 @@ async def bootstrap(
         knowledge_service=knowledge_service,
         history_processors=history_processors,
         rigor_profile=settings.rigor_profiles[settings.default_rigor],
+        agent_registry=agent_registry,
     )
-    agent.set_agent_registry(agent_registry)
     agent._openai_client = openai_client  # noqa: SLF001  # daemon auth refresh needs this
-
-    if active_project is not None:
-        _patch_project_toolset_agent(toolsets, agent)
 
     startup_summary = StartupSummary(
         components=component_statuses,

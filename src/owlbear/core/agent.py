@@ -66,6 +66,7 @@ class OwlBearAgent:
         history_processors: Sequence[HistoryProcessor[OwlBearDeps]] | None = None,
         knowledge_service: KnowledgeQueryService | None = None,
         rigor_profile: RigorProfile | None = None,
+        agent_registry: AgentRegistry | None = None,
     ) -> None:
         self.session = session
         self.context = context
@@ -77,7 +78,10 @@ class OwlBearAgent:
         self.toolsets: list[AbstractToolset] = list(toolsets or [])
         self._model_name = self._extract_model_name(model)
         self._deps = OwlBearDeps(
-            hooks=self.hooks, tracker=self.tracker, rigor_profile=rigor_profile
+            hooks=self.hooks,
+            tracker=self.tracker,
+            rigor_profile=rigor_profile,
+            agent_registry=agent_registry,
         )
         self._knowledge_service = knowledge_service
 
@@ -103,10 +107,6 @@ class OwlBearAgent:
         """
         self.inner.model = new_model
         self._model_name = self._extract_model_name(new_model)
-
-    def set_agent_registry(self, registry: AgentRegistry) -> None:
-        """Assign the agent registry on the shared deps."""
-        self._deps.agent_registry = registry
 
     @staticmethod
     def _extract_model_name(model: str | Model) -> str:

@@ -3,7 +3,7 @@
 TDD red-phase: these tests define the expected behavior of ProjectToolset.
 The module does not exist yet — all tests should fail on ImportError.
 
-Task #350 — see docs/multi-project-session-research.md §3.10
+Task #350 — see docs/multi-project-session.md §3.10
 Task #369 — workspace switching improvements (CWD + context reload)
 """
 
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,12 +36,11 @@ def mock_store() -> MagicMock:
 
 
 @pytest.fixture
-def mock_agent() -> MagicMock:
-    """Return a mocked OwlBearAgent with a session attribute."""
-    agent = MagicMock()
-    agent.session = MagicMock()
-    agent.session.path = Path("/old/session.jsonl")
-    return agent
+def mock_session() -> MagicMock:
+    """Return a mocked SessionStore with a path attribute."""
+    session = MagicMock()
+    session.path = Path("/old/session.jsonl")
+    return session
 
 
 @pytest.fixture
@@ -68,13 +66,13 @@ def sample_project(tmp_path: Path) -> MagicMock:
 @pytest.fixture
 def toolset(
     mock_store: MagicMock,
-    mock_agent: MagicMock,
+    mock_session: MagicMock,
     config_dir: Path,
 ) -> ProjectToolset:
     """Return a ProjectToolset wired to mocks."""
     return ProjectToolset(
         store=mock_store,
-        agent=mock_agent,
+        session=mock_session,
         config_dir=config_dir,
     )
 
@@ -92,19 +90,17 @@ class TestSwitchProjectSessionPath:
         self,
         toolset: ProjectToolset,
         mock_store: MagicMock,
-        mock_agent: MagicMock,
+        mock_session: MagicMock,
         sample_project: MagicMock,
         config_dir: Path,
     ) -> None:
-        """After switch, agent.session.path is under config_dir/projects/{id}/sessions/."""
+        """After switch, session.path is under config_dir/projects/{id}/sessions/."""
         mock_store.get_by_name.return_value = sample_project
 
         await toolset._switch_project("My Project")
 
-        # The new session should be in the project's session directory
-        new_session = mock_agent.session
         expected_dir = config_dir / "projects" / "my-project" / "sessions"
-        assert new_session.path.parent == expected_dir
+        assert mock_session.path.parent == expected_dir
 
 
 # ---------------------------------------------------------------------------
@@ -332,17 +328,11 @@ def _real_store(project: Project) -> MagicMock:
     return store
 
 
-def _agent_ns(
-    *,
-    context: ContextManager | None = None,
-    toolsets: list | None = None,
-) -> SimpleNamespace:
-    """Minimal agent-like namespace with context + toolsets."""
-    return SimpleNamespace(
-        session=SimpleNamespace(path=Path("/old/session.jsonl")),
-        context=context,
-        toolsets=toolsets or [],
-    )
+def _mock_session() -> MagicMock:
+    """Return a mock session with a path attribute."""
+    session = MagicMock()
+    session.path = Path("/old/session.jsonl")
+    return session
 
 
 class TestSwitchProjectCWD:
@@ -354,11 +344,11 @@ class TestSwitchProjectCWD:
         workspace.mkdir(parents=True)
         project = _real_project("alpha", workspace)
         store = _real_store(project)
-        agent = _agent_ns()
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir)
 
         with patch("owlbear.projects.toolset.os.chdir") as mock_chdir:
             result = await ts._switch_project("alpha")
@@ -370,11 +360,11 @@ class TestSwitchProjectCWD:
     async def test_chdir_not_called_on_missing_project(self, tmp_path: Path) -> None:
         store = MagicMock()
         store.get_by_name.side_effect = KeyError("nope")
-        agent = _agent_ns()
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir)
 
         with patch("owlbear.projects.toolset.os.chdir") as mock_chdir:
             result = await ts._switch_project("nonexistent")
@@ -400,11 +390,11 @@ class TestSwitchProjectContextUpdate:
         ctx = ContextManager(old_root)
         project = _real_project("beta", new_ws)
         store = _real_store(project)
-        agent = _agent_ns(context=ctx)
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir, context=ctx)
 
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("beta")
@@ -417,11 +407,11 @@ class TestSwitchProjectContextUpdate:
         workspace.mkdir(parents=True)
         project = _real_project("gamma", workspace)
         store = _real_store(project)
-        agent = _agent_ns(context=None)
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir, context=None)
 
         with patch("owlbear.projects.toolset.os.chdir"):
             result = await ts._switch_project("gamma")
@@ -429,19 +419,17 @@ class TestSwitchProjectContextUpdate:
         assert "gamma" in result
 
     @pytest.mark.asyncio
-    async def test_no_error_when_agent_lacks_context_attr(self, tmp_path: Path) -> None:
-        """Agent without a context attribute (e.g. placeholder) doesn't crash."""
+    async def test_no_error_when_context_is_none(self, tmp_path: Path) -> None:
+        """ProjectToolset with context=None doesn't crash."""
         workspace = tmp_path / "projects" / "kappa"
         workspace.mkdir(parents=True)
         project = _real_project("kappa", workspace)
         store = _real_store(project)
-        agent = SimpleNamespace(
-            session=SimpleNamespace(path=Path("/x")),
-        )  # no context attr
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir)
 
         with patch("owlbear.projects.toolset.os.chdir"):
             result = await ts._switch_project("kappa")
@@ -472,11 +460,11 @@ class TestSwitchProjectToolsetRootUpdate:
                 self.workspace = ws
 
         fake_ts = FakeToolset()
-        agent = _agent_ns(toolsets=[fake_ts])
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir, toolsets=[fake_ts])
 
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("delta")
@@ -499,11 +487,11 @@ class TestSwitchProjectToolsetRootUpdate:
                 self.workspace = ws
 
         fake_ts = FakeToolset()
-        agent = _agent_ns(toolsets=[fake_ts])
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir, toolsets=[fake_ts])
 
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("epsilon")
@@ -527,11 +515,11 @@ class TestSwitchProjectToolsetRootUpdate:
 
         inner_ts = FakeToolset()
         wrapper = HookedToolset(wrapped=inner_ts, hooks=MagicMock())
-        agent = _agent_ns(toolsets=[wrapper])
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir, toolsets=[wrapper])
 
         with patch("owlbear.projects.toolset.os.chdir"):
             await ts._switch_project("zeta")
@@ -539,19 +527,17 @@ class TestSwitchProjectToolsetRootUpdate:
         assert inner_ts.workspace == workspace
 
     @pytest.mark.asyncio
-    async def test_no_error_when_agent_has_no_toolsets_attr(self, tmp_path: Path) -> None:
-        """Graceful when agent has no toolsets attribute."""
+    async def test_no_error_when_toolsets_empty(self, tmp_path: Path) -> None:
+        """Graceful when toolsets is empty."""
         workspace = tmp_path / "projects" / "theta"
         workspace.mkdir(parents=True)
         project = _real_project("theta", workspace)
         store = _real_store(project)
-        agent = SimpleNamespace(
-            session=SimpleNamespace(path=Path("/x")),
-        )  # no toolsets attr
+        session = _mock_session()
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        ts = ProjectToolset(store=store, agent=agent, config_dir=config_dir)
+        ts = ProjectToolset(store=store, session=session, config_dir=config_dir)
 
         with patch("owlbear.projects.toolset.os.chdir"):
             result = await ts._switch_project("theta")
@@ -571,14 +557,14 @@ class TestWorkspaceCreateProject:
     async def test_returns_confirmation_with_path(
         self,
         mock_store: MagicMock,
-        mock_agent: MagicMock,
+        mock_session: MagicMock,
         config_dir: Path,
         tmp_path: Path,
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
             store=mock_store,
-            agent=mock_agent,
+            session=mock_session,
             config_dir=config_dir,
             project_root=project_root,
         )
@@ -593,14 +579,14 @@ class TestWorkspaceCreateProject:
     async def test_delegates_to_workspace(
         self,
         mock_store: MagicMock,
-        mock_agent: MagicMock,
+        mock_session: MagicMock,
         config_dir: Path,
         tmp_path: Path,
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
             store=mock_store,
-            agent=mock_agent,
+            session=mock_session,
             config_dir=config_dir,
             project_root=project_root,
         )
@@ -613,14 +599,14 @@ class TestWorkspaceCreateProject:
     async def test_invalid_template_returns_error(
         self,
         mock_store: MagicMock,
-        mock_agent: MagicMock,
+        mock_session: MagicMock,
         config_dir: Path,
         tmp_path: Path,
     ) -> None:
         project_root = tmp_path / "project-root"
         ts = ProjectToolset(
             store=mock_store,
-            agent=mock_agent,
+            session=mock_session,
             config_dir=config_dir,
             project_root=project_root,
         )
@@ -635,13 +621,13 @@ class TestWorkspaceCreateProject:
     async def test_no_project_root_returns_error(
         self,
         mock_store: MagicMock,
-        mock_agent: MagicMock,
+        mock_session: MagicMock,
         config_dir: Path,
     ) -> None:
         """Without project_root, tool returns an error message."""
         ts = ProjectToolset(
             store=mock_store,
-            agent=mock_agent,
+            session=mock_session,
             config_dir=config_dir,
         )
         result = await ts._workspace_create_project("My App", "bare")

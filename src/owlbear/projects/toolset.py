@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import ClassVar
 
+    from owlbear.memory.context import ContextManager
+    from owlbear.memory.session import SessionStore
     from owlbear.projects.store import ProjectStore
 
 __all__ = ["ProjectToolset"]
@@ -37,7 +39,9 @@ class ProjectToolset(FunctionToolset):
 
     Args:
         store: :class:`ProjectStore` for project CRUD operations.
-        agent: Agent instance whose ``session.path`` is updated on switch.
+        session: :class:`SessionStore` whose path is updated on project switch.
+        context: Optional :class:`ContextManager` whose root is updated on switch.
+        toolsets: Agent toolsets whose workspace roots are updated on switch.
         config_dir: Root config directory; sessions stored under
             ``config_dir/projects/{id}/sessions/``.
         project_root: Base directory for new projects.  When supplied,
@@ -46,24 +50,24 @@ class ProjectToolset(FunctionToolset):
 
     tool_alias: ClassVar[str] = "project"
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         store: ProjectStore,
-        agent: object,
+        session: SessionStore,
         config_dir: Path,
         *,
+        context: ContextManager | None = None,
+        toolsets: list[object] | None = None,
         project_root: Path | None = None,
     ) -> None:
         super().__init__()
         self._store = store
-        self._agent = agent
+        self._session = session
+        self._context = context
+        self._toolsets: list[object] = toolsets or []
         self._config_dir = config_dir
         self._project_root = project_root
         self._register_tools()
-
-    def bind_agent(self, agent: object) -> None:
-        """Replace the agent reference (used after deferred construction)."""
-        self._agent = agent
 
     def _register_tools(self) -> None:
         """Register project tools on this toolset."""
@@ -78,9 +82,9 @@ class ProjectToolset(FunctionToolset):
 
         1. Changes the process CWD to the project workspace (so
            subprocess-based tools operate in the new workspace).
-        2. Updates the agent's :class:`ContextManager` root (if present)
+        2. Updates the :class:`ContextManager` root (if present)
            so instructions are loaded from the new workspace.
-        3. Walks the agent's toolsets and updates any
+        3. Walks the toolsets list and updates any
            ``_workspace_root`` / ``_root`` attributes to the new
            workspace path.
         """
@@ -95,7 +99,7 @@ class ProjectToolset(FunctionToolset):
         session_dir = self._config_dir / "projects" / project.id / "sessions"
         session_dir.mkdir(parents=True, exist_ok=True)
         session_file = session_dir / "session.jsonl"
-        self._agent.session.path = session_file
+        self._session.path = session_file
 
         # Update last_active timestamp
         updated = project.model_copy(update={"last_active": datetime.now(tz=UTC)})
@@ -105,12 +109,11 @@ class ProjectToolset(FunctionToolset):
         os.chdir(workspace)
 
         # Update ContextManager workspace root
-        ctx = getattr(self._agent, "context", None)
-        if ctx is not None and hasattr(ctx, "update_root"):
-            ctx.update_root(workspace)
+        if self._context is not None and hasattr(self._context, "update_root"):
+            self._context.update_root(workspace)
 
         # Update toolset workspace_root references
-        _update_toolset_roots(getattr(self._agent, "toolsets", []), workspace)
+        _update_toolset_roots(self._toolsets, workspace)
 
         logger.info("Switched to project '%s' (cwd=%s)", project.name, workspace)
         name = project.name

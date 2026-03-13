@@ -15,7 +15,7 @@ from owlbear.tools.git_local import GitLocalToolset
 from owlbear.tools.github_api import GitHubToolset
 from owlbear.tools.hooked import HookedToolset
 from owlbear.tools.kanban import KanbanToolset
-from owlbear.tools.protocols import find_toolset, unwrap
+from owlbear.tools.protocols import unwrap
 from owlbear.tools.terminal import TerminalToolset
 
 from ._types import ComponentStatus
@@ -30,10 +30,11 @@ if TYPE_CHECKING:
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
-    from owlbear.core.agent import OwlBearAgent
     from owlbear.core.hooks import HookRegistry
+    from owlbear.memory.context import ContextManager
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
+    from owlbear.memory.session import SessionStore
     from owlbear.projects.models import Project
     from owlbear.projects.store import ProjectStore
 
@@ -341,22 +342,22 @@ def _add_project_toolset(  # noqa: PLR0913
     config_dir: Path,
     hooks: HookRegistry,
     *,
+    session: SessionStore,
+    context: ContextManager | None = None,
+    agent_toolsets: list[AbstractToolset] | None = None,
     project_root: Path | None = None,
     summary: list[ComponentStatus] | None = None,
 ) -> None:
-    """Append a :class:`ProjectToolset` to *toolsets* if import succeeds.
-
-    The toolset is created with a placeholder agent reference that
-    :func:`bootstrap` patches after agent construction.
-    """
+    """Append a :class:`ProjectToolset` to *toolsets* if import succeeds."""
     try:
         from owlbear.projects.toolset import ProjectToolset  # noqa: PLC0415
 
-        placeholder = type("_Placeholder", (), {"session": None})()
         project_toolset = ProjectToolset(
             store=project_store,
-            agent=placeholder,
+            session=session,
             config_dir=config_dir,
+            context=context,
+            toolsets=agent_toolsets,
             project_root=project_root,
         )
         toolsets.append(HookedToolset(wrapped=project_toolset, hooks=hooks))
@@ -368,15 +369,3 @@ def _add_project_toolset(  # noqa: PLR0913
             summary.append(
                 ComponentStatus(name="ProjectToolset", loaded=False, error=str(exc), level="ERROR")
             )
-
-
-def _patch_project_toolset_agent(
-    toolsets: list[AbstractToolset],
-    agent: OwlBearAgent,
-) -> None:
-    """Replace the placeholder agent reference inside :class:`ProjectToolset`."""
-    from owlbear.projects.toolset import ProjectToolset  # noqa: PLC0415
-
-    match = find_toolset(toolsets, ProjectToolset)
-    if match is not None:
-        match.bind_agent(agent)
