@@ -2,6 +2,33 @@
 
 External repos and resources studied during OwlBear development.
 
+## Retro Skill Research (Task #786)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| garrytan/gstack retro v2.0 | https://github.com/garrytan/gstack/blob/main/retro/SKILL.md | MIT | 14-step retro workflow: git metrics, 45min session detection, per-contributor breakdown, streak tracking, compare mode, conventional commit categorization | `docs/research/retro-skill.md` | 2026-03-13 |
+| IonicaBizau/git-stats v3.5 | https://github.com/IonicaBizau/git-stats | MIT | GitHub-like contribution calendars, per-author additions/deletions stats, date-range filtering, Node.js CLI for local git statistics | `docs/research/retro-skill.md` | 2026-03-13 |
+
+## Error and Rescue Map Research (Task #785)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| gstack plan-eng-review SKILL.md | https://github.com/garrytan/gstack/blob/main/plan-eng-review/SKILL.md | MIT | "Failure modes" required output: per-codepath failure scenario + test coverage + error handling + user impact; architecture review failure scenario requirement | `docs/research/error-rescue-map.md` | 2026-03-13 |
+| FMEA (Wikipedia / MIL-STD-1629A) | https://en.wikipedia.org/wiki/Failure_mode_and_effects_analysis | CC-BY-SA-4.0 | Industry-standard failure analysis: Item → Failure Mode → Cause → Effect → Severity → Probability → Detection → Risk Level. Software FMEA variant with existence/controls/detectability | `docs/research/error-rescue-map.md` | 2026-03-13 |
+
+## Two-Pass Review Checklist Research (Task #784)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Google Engineering Practices — Code Review Standard | https://google.github.io/eng-practices/review/reviewer/standard.html | CC-BY-3.0 | "Nit:" prefix convention for non-blocking review comments; reviewer should not block progress on polish | `docs/research/two-pass-review-checklist.md` | 2026-03-13 |
+| Conventional Comments | https://conventionalcomments.org/ | CC-BY-3.0 | Label taxonomy (issue/suggestion/nitpick) with blocking/non-blocking decorations for structured review feedback | `docs/research/two-pass-review-checklist.md` | 2026-03-13 |
+
+## gstack Agent Patterns (Task #783)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| garrytan/gstack v1.1.0 | https://github.com/garrytan/gstack | MIT | 8 Claude Code skills: two-pass review checklist with suppressions, Error & Rescue Map failure analysis template, retro/metrics skill, structured question protocol, scope modes, QA health scoring | `docs/research/gstack-agent-patterns.md` | 2026-03-13 |
+
 ## Knowledge-ops SKILL.md Research (Task #774)
 
 | Source | URL | License | What we studied | Where Used | Date |
