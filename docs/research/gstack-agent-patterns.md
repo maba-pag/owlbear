@@ -11,7 +11,7 @@ gstack (garrytan/gstack) is a Claude Code skill pack that turns a single LLM ses
 
 | Source | URL | Relevance | What |
 |--------|-----|-----------|------|
-| garrytan/gstack v1.1.0 | https://github.com/garrytan/gstack | .90 | Full repo analysis — 8 skills, review checklist, browse binary |
+| garrytan/gstack v1.1.0 | <https://github.com/garrytan/gstack> | .90 | Full repo analysis — 8 skills, review checklist, browse binary |
 | OwlBear agent ecosystem | local codebase | 1.0 | 11 agents, 15+ skills, orchestration pipeline |
 
 ## 3. Analysis
