@@ -87,6 +87,7 @@ class Entity(BaseModel):
     scope: str = "global"
     document_id: str | None = None
     chunk_id: str | None = None
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class Edge(BaseModel):

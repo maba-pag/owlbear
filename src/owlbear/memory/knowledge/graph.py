@@ -64,8 +64,8 @@ class GraphStore:
         self._conn.execute(
             "INSERT INTO entities"
             " (id, name, entity_type, description, metadata,"
-            "  created_at, scope, document_id, chunk_id)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "  created_at, scope, document_id, chunk_id, importance)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entity.id,
                 entity.name,
@@ -76,6 +76,7 @@ class GraphStore:
                 entity.scope,
                 entity.document_id,
                 entity.chunk_id,
+                entity.importance,
             ),
         )
         self._conn.commit()
@@ -83,8 +84,9 @@ class GraphStore:
     def get_entity(self, entity_id: str) -> Entity | None:
         """Return the :class:`Entity` with *entity_id*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
-            "FROM entities WHERE id = ?",
+            "SELECT id, name, entity_type, description, metadata,"
+            " scope, document_id, chunk_id, importance"
+            " FROM entities WHERE id = ?",
             (entity_id,),
         ).fetchone()
         if row is None:
@@ -98,6 +100,7 @@ class GraphStore:
             scope=row[5],
             document_id=row[6],
             chunk_id=row[7],
+            importance=row[8] if row[8] is not None else 0.5,
         )
 
     def list_entities(
@@ -125,8 +128,9 @@ class GraphStore:
             params.append(source_pipeline)
 
         sql = (
-            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
-            "FROM entities"
+            "SELECT id, name, entity_type, description, metadata,"
+            " scope, document_id, chunk_id, importance"
+            " FROM entities"
         )
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
@@ -142,6 +146,7 @@ class GraphStore:
                 scope=r[5],
                 document_id=r[6],
                 chunk_id=r[7],
+                importance=r[8] if r[8] is not None else 0.5,
             )
             for r in rows
         ]
@@ -164,8 +169,9 @@ class GraphStore:
             params.extend(scopes)
 
         sql = (
-            "SELECT id, name, entity_type, description, metadata, scope, document_id, chunk_id "
-            "FROM entities WHERE " + " AND ".join(clauses)
+            "SELECT id, name, entity_type, description, metadata,"
+            " scope, document_id, chunk_id, importance"
+            " FROM entities WHERE " + " AND ".join(clauses)
         )
 
         rows = self._conn.execute(sql, params).fetchall()
@@ -179,6 +185,7 @@ class GraphStore:
                 scope=r[5],
                 document_id=r[6],
                 chunk_id=r[7],
+                importance=r[8] if r[8] is not None else 0.5,
             )
             for r in rows
         ]

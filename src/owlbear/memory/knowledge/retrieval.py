@@ -85,6 +85,9 @@ class GraphAugmentedRetriever:
         ``max_nodes`` passed to :meth:`GraphStore.get_neighbors`.
     expansion_enabled:
         Master kill-switch — ``False`` disables all graph expansion.
+    weight_by_importance:
+        When ``True``, sort expanded neighbors by :attr:`Entity.importance`
+        descending so higher-importance entities appear first.
     """
 
     def __init__(  # noqa: PLR0913
@@ -97,6 +100,7 @@ class GraphAugmentedRetriever:
         max_expansion_tokens: int = 2000,
         max_neighbors_per_entity: int = 10,
         expansion_enabled: bool = True,
+        weight_by_importance: bool = False,
     ) -> None:
         self._vectors = vector_store
         self._graph = graph_store
@@ -105,6 +109,7 @@ class GraphAugmentedRetriever:
         self._max_tokens = max_expansion_tokens
         self._max_neighbors = max_neighbors_per_entity
         self._enabled = expansion_enabled
+        self._weight_by_importance = weight_by_importance
 
     # ------------------------------------------------------------------
     # Public API
@@ -139,7 +144,10 @@ class GraphAugmentedRetriever:
         if scopes is not None:
             search_kwargs["scopes"] = scopes
         chunks = self._vectors.search_similar(
-            embedding, top_k=top_k, embedding_type="document", **search_kwargs,
+            embedding,
+            top_k=top_k,
+            embedding_type="document",
+            **search_kwargs,
         )
 
         if not chunks or not self._enabled or self._depth < 1:
@@ -206,6 +214,12 @@ class GraphAugmentedRetriever:
                 max_nodes=self._max_neighbors,
                 scopes=scopes,
             )
+            if self._weight_by_importance:
+                neighbors = sorted(
+                    neighbors,
+                    key=lambda pair: pair[0].importance,
+                    reverse=True,
+                )
             for neighbor, edge in neighbors:
                 desc = neighbor.description or neighbor.name
                 line = f"{seed.name} --[{edge.relation}]--> {neighbor.name}: {desc}"

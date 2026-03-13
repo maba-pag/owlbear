@@ -1,8 +1,8 @@
 """DDL and database initialization for the knowledge graph.
 
 Creates all relational tables required by the knowledge graph: documents,
-entities, edges, chunks, document_status, knowledge_sources, and a schema
-version tracker.
+entities, edges, chunks, document_status, knowledge_sources, bookmarks,
+consolidations, and a schema version tracker.
 Calling ``init_db`` multiple times is safe (idempotent).
 
 Vector storage is handled externally by Qdrant (see ``qdrant.py``).
@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 7
+_SCHEMA_VERSION: int = 8
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS entities (
     created_at  TEXT,
     scope       TEXT DEFAULT 'global',
     document_id TEXT,
-    chunk_id    TEXT
+    chunk_id    TEXT,
+    importance  REAL DEFAULT 0.5
 )
 """
 
@@ -80,7 +81,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     content       TEXT,
     metadata      TEXT,
     created_at    TEXT,
-    scope         TEXT DEFAULT 'global'
+    scope         TEXT DEFAULT 'global',
+    consolidated  INTEGER DEFAULT 0
 )
 """
 
@@ -127,6 +129,17 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     content_hash    TEXT,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
+)
+"""
+
+_CREATE_CONSOLIDATIONS = """\
+CREATE TABLE IF NOT EXISTS consolidations (
+    id         TEXT PRIMARY KEY,
+    source_ids TEXT NOT NULL,
+    summary    TEXT,
+    insight    TEXT,
+    created_at TEXT,
+    scope      TEXT DEFAULT 'global'
 )
 """
 
@@ -256,6 +269,26 @@ def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
+    """Migrate a v7 knowledge-graph database to v8.
+
+    Adds ``importance`` REAL column to ``entities``, ``consolidated``
+    INTEGER column to ``chunks``, and creates the ``consolidations``
+    table.  Safe to call multiple times (idempotent).
+    """
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute("ALTER TABLE entities ADD COLUMN importance REAL DEFAULT 0.5")
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute("ALTER TABLE chunks ADD COLUMN consolidated INTEGER DEFAULT 0")
+    conn.execute(_CREATE_CONSOLIDATIONS)
+
+    # Bump the stored version.
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (8, datetime.now(tz=UTC).isoformat()),
+    )
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     """Create all knowledge-graph relational tables if they do not exist.
 
@@ -269,13 +302,15 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2, v3, v4, v5, v6, and v7.  The v2 migration adds ``chunks`` and
-    ``document_status``; the v3 migration adds ``scope`` columns to five
+    through v2, v3, v4, v5, v6, v7, and v8.  The v2 migration adds ``chunks``
+    and ``document_status``; the v3 migration adds ``scope`` columns to five
     tables; the v4 migration adds ``content_hash`` to ``document_status``,
     ``document_id`` to ``entities``, and indexes ``document_status(source)``;
     the v5 migration adds ``chunk_id`` to ``entities``; the v6 migration
     adds the ``knowledge_sources`` table with indexes; the v7 migration
-    adds the ``bookmarks`` table with indexes.
+    adds the ``bookmarks`` table with indexes; the v8 migration adds
+    ``importance`` to ``entities``, ``consolidated`` to ``chunks``, and
+    creates the ``consolidations`` table.
 
     Vector storage is handled externally by Qdrant — no sqlite-vec
     extension or vec0 virtual tables are used.
@@ -291,6 +326,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_DOCUMENT_STATUS)
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
     conn.execute(_CREATE_BOOKMARKS)
+    conn.execute(_CREATE_CONSOLIDATIONS)
     conn.execute(_CREATE_SCHEMA_VERSION)
 
     # Schema version — insert or migrate ------------------------------------
@@ -317,6 +353,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             _migrate_v5_to_v6(conn)
         if current < 7:  # noqa: PLR2004
             _migrate_v6_to_v7(conn)
+        if current < 8:  # noqa: PLR2004
+            _migrate_v7_to_v8(conn)
 
     # Scope indexes (idempotent) --------------------------------------------
     for table in _SCOPE_TABLES:
