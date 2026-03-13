@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from owlbear.core.hooks import HookRegistry
 
-__all__ = ["TerminalResult", "TerminalToolset"]
+__all__ = ["TerminalResult", "TerminalToolset", "classify_exit"]
 
 logger = logging.getLogger(__name__)
 
@@ -52,22 +52,63 @@ class TerminalResult:
     stderr: str
     exit_code: int
     timed_out: bool
+    soft_fail: bool = False
+
+
+def classify_exit(exit_code: int, stdout: str) -> bool:
+    """Return ``True`` when *exit_code* is 1 and *stdout* has meaningful content.
+
+    A "soft fail" is a command that exited with code 1 but produced useful
+    output (e.g. ``grep`` with no matches, ``diff`` with differences).  Exit 0
+    (success) and exit >= 2 (real errors) are never classified as soft fail.
+    """
+    return exit_code == 1 and bool(stdout.strip())
 
 
 def _truncate(output: str, max_bytes: int) -> str:
     """Apply head+tail truncation if *output* exceeds *max_bytes*.
 
-    Keeps the first ``max_bytes // 2`` and last ``max_bytes // 2``
-    characters with a ``[...truncated N bytes...]`` marker in between.
+    Uses a 60/40 head/tail byte budget and snaps at newline boundaries
+    when possible.  Produces a marker like::
+
+        [N lines / X.YKB truncated -- showing first A + last B lines]
     """
     if len(output) <= max_bytes:
         return output
 
-    half = max_bytes // 2
-    head = output[:half]
-    tail = output[-half:]
-    omitted = len(output) - max_bytes
-    return f"{head}\n[...truncated {omitted} bytes...]\n{tail}"
+    head_budget = int(max_bytes * 0.6)
+    tail_budget = max_bytes - head_budget
+
+    # --- head: snap to last newline within budget -----------------------
+    newline_pos = output.rfind("\n", 0, head_budget)
+    head = output[: newline_pos + 1] if newline_pos > 0 else output[:head_budget]
+
+    # --- tail: snap to first newline within tail region -----------------
+    tail_start_raw = len(output) - tail_budget
+    newline_pos = output.find("\n", tail_start_raw)
+    if newline_pos != -1 and newline_pos < len(output) - 1:
+        tail = output[newline_pos + 1 :]  # start after the newline
+    else:
+        tail = output[tail_start_raw:]  # no newline → character split
+
+    # --- marker ---------------------------------------------------------
+    total_lines = output.count("\n") + (0 if output.endswith("\n") else 1)
+    head_lines = head.count("\n") + (0 if head.endswith("\n") else 1)
+    tail_lines = tail.count("\n") + (0 if tail.endswith("\n") else 1)
+    # For zero-newline content, count as 1 line each
+    if "\n" not in head and head:
+        head_lines = 1
+    if "\n" not in tail and tail:
+        tail_lines = 1
+    truncated_lines = max(total_lines - head_lines - tail_lines, 0)
+    omitted_bytes = len(output) - len(head) - len(tail)
+    omitted_kb = round(omitted_bytes / 1024, 1)
+
+    marker = (
+        f"[{truncated_lines} lines / {omitted_kb}KB truncated"
+        f" -- showing first {head_lines} + last {tail_lines} lines]"
+    )
+    return f"{head}{marker}\n{tail}"
 
 
 class TerminalToolset(FunctionToolset):
@@ -135,6 +176,8 @@ class TerminalToolset(FunctionToolset):
         parts = [f"exit_code={result.exit_code}"]
         if result.timed_out:
             parts.append("TIMED OUT")
+        if result.soft_fail:
+            parts.append("(soft-fail)")
         if result.stdout:
             parts.append(f"stdout:\n{result.stdout}")
         if result.stderr:
@@ -215,4 +258,5 @@ class TerminalToolset(FunctionToolset):
             stderr=stderr,
             exit_code=exit_code,
             timed_out=timed_out,
+            soft_fail=classify_exit(exit_code, stdout),
         )
