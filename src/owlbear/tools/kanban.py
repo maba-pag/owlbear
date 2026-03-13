@@ -94,7 +94,10 @@ class KanbanToolset(FunctionToolset):
         self.add_function(
             self.kanban_list,
             name="kanban_list",
-            description="List kanban tasks with optional filters.",
+            description=(
+                "List kanban tasks with optional filters."
+                " Filters: status, tag, priority, blocked."
+            ),
         )
         self.add_function(
             self.kanban_show,
@@ -104,22 +107,35 @@ class KanbanToolset(FunctionToolset):
         self.add_function(
             self.kanban_create,
             name="kanban_create",
-            description="Create a new kanban task.",
+            description=(
+                "Create a new kanban task."
+                " Default status: ideation."
+                " Priorities: someday, nice-to-have, important, needed, critical."
+            ),
         )
         self.add_function(
             self.kanban_move,
             name="kanban_move",
-            description="Move a kanban task to a new status.",
+            description=(
+                "Move a kanban task to a new status."
+                " Statuses: ideation, backlog, todo, in-progress, review, docs, done."
+            ),
         )
         self.add_function(
             self.kanban_edit,
             name="kanban_edit",
-            description="Edit a kanban task's properties.",
+            description=(
+                "Edit a kanban task's properties."
+                " Editable fields: body, block, unblock, tags, priority, append_body."
+            ),
         )
         self.add_function(
             self.kanban_pick,
             name="kanban_pick",
-            description="Pick the next task from the board.",
+            description=(
+                "Pick the next task from the board."
+                " Supports claim and move options to claim a task and move it in one step."
+            ),
         )
         self.add_function(
             self.kanban_context,
