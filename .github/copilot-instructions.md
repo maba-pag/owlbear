@@ -27,7 +27,7 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 - **askQuestions liberally.** Use the askQuestions tool at every decision point. Never assume — when in doubt, ask. Include `(bp:)` for best practice and `(rec:)` for recommendation per mcp.instructions.md conventions.
 - **manage_todo_list extensively.** Track progress, create checkpoints, add a reflection step at the end.
 - **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90 % coverage per phase gate.
-- **Deliverables are kanban tasks and working code, not documents.** Research documents are _supporting artifacts_ — they have value, but writing a doc is never the end goal. After completing a research or analysis task, always create the follow-up kanban tasks that the research recommends. A research task is not done until its findings are actionable items on the board. Link the kanban task body to the research doc (e.g., `See docs/{task-id}-research.md for details`).
+- **Deliverables are kanban tasks and working code, not documents.** Research documents are _supporting artifacts_ — they have value, but writing a doc is never the end goal. After completing a research or analysis task, always create the follow-up kanban tasks that the research recommends. A research task is not done until its findings are actionable items on the board. Link the kanban task body to the research doc (e.g., `See docs/research/{slug}.md for details`).
 - **Verify subagent output, never trust self-reports.** After a subagent reports completion, verify the deliverables exist and match the acceptance criteria. Run tests yourself. Check that promised kanban tasks were actually created.
 
 ## Formatting rules for writing files
@@ -37,25 +37,25 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 
 ## Tech stack
 
-| Component       | Technology                                 | Notes                                                                                                                                                                                                              |
-| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Language        | Python 3.12+                               | `uv` package manager, never bare `pip`                                                                                                                                                                             |
-| Runtime         | Standalone daemon                          | BearClaw CLI daemon; dual-coroutine (`channel_loop` + `poll_loop`) in `asyncio.TaskGroup`                                                                                                                          |
-| Agents          | PydanticAI                                 | Structured output, dependency injection; opt-in `SummarizingCondenser` for long conversations                                                                                                                      |
-| LLM provider    | GitHub Copilot OAuth                       | Device-flow auth, `api.individual.githubcopilot.com`                                                                                                                                                               |
-| Retry           | tenacity                                   | Two-layer retry (tool + daemon); `CircuitBreaker` on Copilot HTTP transport                                                                                                                                        |
-| CLI             | Typer (BearClaw)                           | Entry point for daemon, auth, and user commands                                                                                                                                                                    |
-| HTTP            | httpx + truststore                         | Always `timeout=httpx.Timeout(T, connect=5)` on every `httpx.AsyncClient`                                                                                                                                          |
-| Config          | pydantic-settings                          | Env vars + TOML config file, validated at startup                                                                                                                                                                  |
-| Knowledge       | SQLite (graph) + Qdrant (vectors) + BGE-M3 | Hybrid search (graph + vector); queries scoped to active project when set                                                                                                                                          |
-| Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via trafilatura; optional `search` extra                                                                                                                             |
-| Browser         | Playwright                                 | CDP `localhost` only; isolated browser context (SEC-07); `screenshot_mode` config setting; a11y snapshot via CDP `getFullAXTree`                                                                                   |
-| Messaging       | Slack (slack_sdk)                          | `ChannelPlugin` protocol; CLI + Slack implementations; Socket Mode WebSocket                                                                                                                                       |
+| Component       | Technology                                 | Notes                                                                                                                                                                                                                                            |
+| --------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Language        | Python 3.12+                               | `uv` package manager, never bare `pip`                                                                                                                                                                                                           |
+| Runtime         | Standalone daemon                          | BearClaw CLI daemon; dual-coroutine (`channel_loop` + `poll_loop`) in `asyncio.TaskGroup`                                                                                                                                                        |
+| Agents          | PydanticAI                                 | Structured output, dependency injection; opt-in `SummarizingCondenser` for long conversations                                                                                                                                                    |
+| LLM provider    | GitHub Copilot OAuth                       | Device-flow auth, `api.individual.githubcopilot.com`                                                                                                                                                                                             |
+| Retry           | tenacity                                   | Two-layer retry (tool + daemon); `CircuitBreaker` on Copilot HTTP transport                                                                                                                                                                      |
+| CLI             | Typer (BearClaw)                           | Entry point for daemon, auth, and user commands                                                                                                                                                                                                  |
+| HTTP            | httpx + truststore                         | Always `timeout=httpx.Timeout(T, connect=5)` on every `httpx.AsyncClient`                                                                                                                                                                        |
+| Config          | pydantic-settings                          | Env vars + TOML config file, validated at startup                                                                                                                                                                                                |
+| Knowledge       | SQLite (graph) + Qdrant (vectors) + BGE-M3 | Hybrid search (graph + vector); queries scoped to active project when set                                                                                                                                                                        |
+| Web search      | ddgs + trafilatura                         | DuckDuckGo search via `ddgs`; page extraction via trafilatura; optional `search` extra                                                                                                                                                           |
+| Browser         | Playwright                                 | CDP `localhost` only; isolated browser context (SEC-07); `screenshot_mode` config setting; a11y snapshot via CDP `getFullAXTree`                                                                                                                 |
+| Messaging       | Slack (slack_sdk)                          | `ChannelPlugin` protocol; CLI + Slack implementations; Socket Mode WebSocket                                                                                                                                                                     |
 | Safety          | Approval gates                             | Six layers: `RolePolicy` tool allow-list + `ApprovalPolicy` gates + `sandbox_path()` confinement + `CommandSafetyGuard` blocklist + `ContentInjectionGuard` content scanning + `wrap_untrusted_content()` web-content tagging. See `SECURITY.md` |
-| Projects        | JSON file store                            | Multi-project `ProjectStore` CRUD; 4 templates (bare, python-uv, python-pip, node)                                                                                                                                 |
-| Diagrams        | Kroki HTTP API                             | Kroki API; supports mermaid, plantuml, graphviz, d2, c4plantuml; output svg/png                                                                                                                                    |
-| Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                                                                                                                              |
-| Task board      | kanban-md                                  | Go CLI binary in `kanban/`; `KanbanToolset` exposes board ops to agents                                                                                                                                            |
+| Projects        | JSON file store                            | Multi-project `ProjectStore` CRUD; 4 templates (bare, python-uv, python-pip, node)                                                                                                                                                               |
+| Diagrams        | Kroki HTTP API                             | Kroki API; supports mermaid, plantuml, graphviz, d2, c4plantuml; output svg/png                                                                                                                                                                  |
+| Voice (planned) | Whisper STT + pyttsx3 TTS                  | Local-first voice I/O                                                                                                                                                                                                                            |
+| Task board      | kanban-md                                  | Go CLI binary in `kanban/`; `KanbanToolset` exposes board ops to agents                                                                                                                                                                          |
 
 ## kanban-md usage
 
@@ -111,7 +111,7 @@ Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,
 
 ### Research tasks
 
-Tag research tasks with `research`. Follow the research-docs instruction (`docs/*.md`). The research lifecycle is: complete checklist → write doc → create follow-up kanban tasks → move to `backlog`.
+Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see `decision-requests.instructions.md`).
 It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
 
 ## Directory structure
@@ -121,10 +121,11 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `src/owlbear/`      | Main Python package                                 |
 | `src/bearclaw/`     | CLI python                                          |
 | `tests/`            | pytest test suite (unit + integration)              |
-| `tests/benchmarks/` | Performance benchmark scripts                       |
+| `tests/benchmarks/` | Performance benchmarks and evaluation harnesses     |
 | `docs/`             | Non-research documents (architecture, audits, etc.) |
 | `docs/research/`    | Research and analysis documents                     |
 | `docs/sources/`     | External attribution and sources                    |
+| `docs/decisions/`   | Async decision requests (pending + resolved)        |
 | `docs/scratch/`     | Ephemeral working files (gitignored)                |
 | `kanban/`           | kanban-md board, binary, and setup script           |
 | `.github/`          | Copilot instructions, agent/skill/prompt files      |
@@ -133,14 +134,15 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 
 Keep the project root clean. Every file created during a task must go to the right location:
 
-| File type             | Location                 | Naming                               | Tracked?        |
-| --------------------- | ------------------------ | ------------------------------------ | --------------- |
-| Temp/debug output     | `docs/scratch/`          | `{task-id}-{desc}.{ext}`             | No (gitignored) |
-| Research documents    | `docs/research/`         | `{slug}.md` with task ref in content | Yes             |
-| Cloned external repos | `docs/scratch/research/` | `{repo-name}/`                       | No (gitignored) |
-| Benchmark scripts     | `tests/benchmarks/`      | descriptive `.py` name               | Yes             |
-| Source code           | `src/`                   | follow existing package structure    | Yes             |
-| Tests                 | `tests/`                 | `test_{module}.py`                   | Yes             |
+| File type                | Location                  | Naming                               | Tracked?        |
+| ------------------------ | ------------------------- | ------------------------------------ | --------------- |
+| Temp/debug output        | `docs/scratch/`           | `{task-id}-{desc}.{ext}`             | No (gitignored) |
+| Research documents       | `docs/research/`          | `{slug}.md` with task ref in content | Yes             |
+| Cloned external repos    | `docs/scratch/research/`  | `{repo-name}/`                       | No (gitignored) |
+| Benchmark / eval scripts | `tests/benchmarks/`       | descriptive `.py` name               | Yes             |
+| Source code              | `src/`                    | follow existing package structure    | Yes             |
+| Tests                    | `tests/`                  | `test_{module}.py`                   | Yes             |
+| Decision requests        | `docs/decisions/pending/` | `{task-id}-{slug}.md`                | Yes             |
 
 Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task. See `docs/scratch/.instructions.md` for details.
 
