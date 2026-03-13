@@ -2,7 +2,7 @@
 name: architect
 description: "Review researched tasks, refine acceptance criteria, ensure architectural soundness, approve for development"
 argument-hint: "Architect Review: {task_id_or_scope}"
-user-invocable: true
+user-invocable: false
 tools:
   [
     vscode/askQuestions,
