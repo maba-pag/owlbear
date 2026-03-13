@@ -7481,3 +7481,392 @@
 {"timestamp":"2026-03-13T15:31:03.0355+01:00","action":"move","task_id":768,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-13T15:31:03.672474+01:00","action":"edit","task_id":768,"detail":"Tests: importance scoring for EntityExtractor and retrieval"}
 {"timestamp":"2026-03-13T15:31:03.6794513+01:00","action":"release","task_id":768,"detail":"auditor"}
+{"timestamp":"2026-03-13T15:33:43.868186+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T15:33:43.8734198+01:00","action":"claim","task_id":782,"detail":"test-writer"}
+{"timestamp":"2026-03-13T15:33:46.7199719+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:33:46.7236328+01:00","action":"claim","task_id":762,"detail":"reviewer"}
+{"timestamp":"2026-03-13T15:43:50.9472447+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:44:08.9474383+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:44:08.9539214+01:00","action":"release","task_id":762,"detail":"reviewer"}
+{"timestamp":"2026-03-13T15:47:59.8482584+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T15:48:06.3559045+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T15:48:06.362114+01:00","action":"release","task_id":782,"detail":"test-writer"}
+{"timestamp":"2026-03-13T15:55:21.9604237+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:55:21.9668598+01:00","action":"claim","task_id":762,"detail":"writer"}
+{"timestamp":"2026-03-13T15:55:29.9791016+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T15:55:29.9838586+01:00","action":"claim","task_id":721,"detail":"reviewer"}
+{"timestamp":"2026-03-13T15:58:55.7412158+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T15:58:55.7459391+01:00","action":"release","task_id":762,"detail":"writer"}
+{"timestamp":"2026-03-13T16:01:06.3300327+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:01:06.335562+01:00","action":"claim","task_id":722,"detail":"builder"}
+{"timestamp":"2026-03-13T16:02:12.7658264+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:02:33.1068119+01:00","action":"move","task_id":722,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T16:02:45.1857815+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:02:45.191047+01:00","action":"release","task_id":722,"detail":"builder"}
+{"timestamp":"2026-03-13T16:06:08.0948994+01:00","action":"create","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T16:07:10.735084+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T16:07:18.3879207+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T16:07:18.3925526+01:00","action":"release","task_id":721,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:13:17.7311777+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T16:13:39.7196654+01:00","action":"move","task_id":727,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T16:17:03.0919908+01:00","action":"edit","task_id":727,"detail":"Add browser_snapshot tool to BrowserToolset"}
+{"timestamp":"2026-03-13T16:23:16.3343167+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:23:16.3389839+01:00","action":"claim","task_id":782,"detail":"builder"}
+{"timestamp":"2026-03-13T16:23:33.99817+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T16:23:34.0028616+01:00","action":"claim","task_id":762,"detail":"auditor"}
+{"timestamp":"2026-03-13T16:23:35.5655409+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:23:35.5708311+01:00","action":"claim","task_id":722,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:24:08.11938+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T16:24:08.1251656+01:00","action":"claim","task_id":769,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:32:41.8235211+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:32:51.6851059+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:32:51.6906546+01:00","action":"release","task_id":782,"detail":"builder"}
+{"timestamp":"2026-03-13T16:35:09.3772703+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T16:35:18.5443056+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T16:35:18.5502087+01:00","action":"release","task_id":769,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:40:17.855571+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T16:40:24.2699371+01:00","action":"move","task_id":762,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T16:40:24.9345681+01:00","action":"edit","task_id":762,"detail":"Improve terminal output truncation with line-boundary snapping"}
+{"timestamp":"2026-03-13T16:40:24.9397405+01:00","action":"release","task_id":762,"detail":"auditor"}
+{"timestamp":"2026-03-13T16:41:04.5846085+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:41:12.68265+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:41:57.458961+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:41:57.4647573+01:00","action":"block","task_id":722,"detail":"AC-2: EXTRACTION_PROMPT not updated to instruct LLM about importance scoring. extractor.py has 0 diff lines."}
+{"timestamp":"2026-03-13T16:41:58.1209935+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:41:58.1253945+01:00","action":"release","task_id":722,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:42:44.718315+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T16:42:44.7224708+01:00","action":"claim","task_id":783,"detail":"researcher"}
+{"timestamp":"2026-03-13T16:47:52.3791395+01:00","action":"create","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T16:48:00.1718219+01:00","action":"create","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T16:48:07.3495981+01:00","action":"create","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T16:48:43.2342611+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T16:48:49.5917705+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T16:48:49.598464+01:00","action":"release","task_id":783,"detail":"researcher"}
+{"timestamp":"2026-03-13T16:54:31.0135235+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T16:54:31.0201708+01:00","action":"claim","task_id":721,"detail":"writer"}
+{"timestamp":"2026-03-13T16:54:32.504706+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:54:32.5095427+01:00","action":"claim","task_id":782,"detail":"reviewer"}
+{"timestamp":"2026-03-13T16:54:57.7851306+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T16:54:57.7913866+01:00","action":"claim","task_id":769,"detail":"writer"}
+{"timestamp":"2026-03-13T16:55:32.7971346+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T16:55:32.8030409+01:00","action":"release","task_id":721,"detail":"writer"}
+{"timestamp":"2026-03-13T16:56:11.5732519+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T16:56:23.4104475+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T16:56:23.4141312+01:00","action":"release","task_id":769,"detail":"writer"}
+{"timestamp":"2026-03-13T16:57:10.8321488+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T16:57:10.837383+01:00","action":"claim","task_id":722,"detail":"test-writer"}
+{"timestamp":"2026-03-13T16:58:36.0157463+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:59:10.6235758+01:00","action":"move","task_id":782,"detail":"review -\u003e docs"}
+{"timestamp":"2026-03-13T16:59:17.656942+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T16:59:17.6616877+01:00","action":"release","task_id":782,"detail":"reviewer"}
+{"timestamp":"2026-03-13T17:00:15.6096091+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:00:25.1473302+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:00:25.1525278+01:00","action":"release","task_id":722,"detail":"test-writer"}
+{"timestamp":"2026-03-13T17:01:04.3076234+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:01:04.31403+01:00","action":"claim","task_id":784,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:01:07.5955648+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:01:07.6013493+01:00","action":"claim","task_id":785,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:01:08.4974874+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:01:08.5026814+01:00","action":"claim","task_id":783,"detail":"architect"}
+{"timestamp":"2026-03-13T17:01:13.9271625+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:01:13.9314145+01:00","action":"claim","task_id":763,"detail":"builder"}
+{"timestamp":"2026-03-13T17:01:15.3005772+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:01:22.3698797+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:01:40.5526269+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:03:23.116254+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:03:23.1220369+01:00","action":"release","task_id":783,"detail":"architect"}
+{"timestamp":"2026-03-13T17:04:23.959136+01:00","action":"create","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T17:04:58.8015249+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:05:00.5007036+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:05:05.9741335+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:05:05.980107+01:00","action":"release","task_id":763,"detail":"builder"}
+{"timestamp":"2026-03-13T17:05:11.2841402+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:05:11.2902604+01:00","action":"release","task_id":784,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:05:18.9194715+01:00","action":"move","task_id":784,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T17:05:25.8939923+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:05:25.8977386+01:00","action":"release","task_id":784,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:06:25.0745643+01:00","action":"move","task_id":785,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-13T17:06:34.8702826+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:06:34.8739433+01:00","action":"release","task_id":785,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:07:29.2642636+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T17:07:29.2694347+01:00","action":"claim","task_id":786,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:14:35.7866532+01:00","action":"create","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T17:15:15.8120335+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T17:15:23.171564+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T17:15:23.1741637+01:00","action":"release","task_id":786,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:20:44.2828706+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:20:44.2886942+01:00","action":"claim","task_id":784,"detail":"architect"}
+{"timestamp":"2026-03-13T17:20:49.3490383+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T17:20:49.3553713+01:00","action":"claim","task_id":721,"detail":"auditor"}
+{"timestamp":"2026-03-13T17:20:56.2409538+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T17:20:56.2462362+01:00","action":"claim","task_id":769,"detail":"auditor"}
+{"timestamp":"2026-03-13T17:21:56.703158+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:21:56.7084881+01:00","action":"claim","task_id":722,"detail":"builder"}
+{"timestamp":"2026-03-13T17:25:55.8887449+01:00","action":"edit","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:25:55.8960156+01:00","action":"release","task_id":784,"detail":"architect"}
+{"timestamp":"2026-03-13T17:25:56.8957447+01:00","action":"delete","task_id":784,"detail":"Add two-pass review checklist with suppressions to reviewer skill"}
+{"timestamp":"2026-03-13T17:26:15.2422258+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T17:30:36.6806771+01:00","action":"edit","task_id":769,"detail":"Tests: schema v8 migration (RED)"}
+{"timestamp":"2026-03-13T17:30:44.1398252+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:30:50.4989991+01:00","action":"move","task_id":769,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T17:30:55.5624299+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:31:07.4146492+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:31:24.0524572+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T17:31:24.0586826+01:00","action":"release","task_id":722,"detail":"builder"}
+{"timestamp":"2026-03-13T17:35:33.5979213+01:00","action":"move","task_id":721,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T17:35:34.2353559+01:00","action":"edit","task_id":721,"detail":"Schema v8: add importance, consolidated, consolidations table"}
+{"timestamp":"2026-03-13T17:35:34.2405656+01:00","action":"release","task_id":721,"detail":"auditor"}
+{"timestamp":"2026-03-13T17:36:22.918928+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:36:22.9241392+01:00","action":"claim","task_id":783,"detail":"test-writer"}
+{"timestamp":"2026-03-13T17:36:24.4844836+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T17:36:24.4949378+01:00","action":"claim","task_id":787,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:36:28.8384581+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:36:32.885319+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:36:32.8905976+01:00","action":"claim","task_id":785,"detail":"architect"}
+{"timestamp":"2026-03-13T17:36:41.7850765+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T17:36:41.7903021+01:00","action":"claim","task_id":782,"detail":"writer"}
+{"timestamp":"2026-03-13T17:36:48.4954349+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:36:58.2945046+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:37:14.0738697+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:37:20.7714578+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T17:37:20.7771367+01:00","action":"release","task_id":783,"detail":"test-writer"}
+{"timestamp":"2026-03-13T17:37:29.9688203+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T17:37:29.9738456+01:00","action":"release","task_id":787,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:37:52.8905456+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T17:38:04.6020326+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T17:38:04.6073382+01:00","action":"release","task_id":782,"detail":"writer"}
+{"timestamp":"2026-03-13T17:39:23.3140282+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:39:39.4543115+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:39:49.0800436+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T17:39:49.0853581+01:00","action":"release","task_id":785,"detail":"architect"}
+{"timestamp":"2026-03-13T17:40:34.0216694+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:40:34.0258893+01:00","action":"claim","task_id":763,"detail":"reviewer"}
+{"timestamp":"2026-03-13T17:40:38.49285+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T17:40:38.4993368+01:00","action":"claim","task_id":788,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:48:48.9463268+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T17:48:56.0710126+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T17:48:56.07665+01:00","action":"release","task_id":788,"detail":"researcher"}
+{"timestamp":"2026-03-13T17:56:17.7507677+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:56:36.289574+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T17:56:36.2954981+01:00","action":"release","task_id":763,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:01:37.3479267+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:01:37.3527241+01:00","action":"claim","task_id":783,"detail":"builder"}
+{"timestamp":"2026-03-13T18:01:39.1252292+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T18:01:39.12978+01:00","action":"claim","task_id":785,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:01:39.8270522+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:01:39.833392+01:00","action":"claim","task_id":787,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:01:47.4273618+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:01:48.6276852+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T18:01:48.6338582+01:00","action":"release","task_id":785,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:01:53.9605395+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T18:01:53.9652215+01:00","action":"claim","task_id":722,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:01:55.3606013+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:01:55.3653757+01:00","action":"release","task_id":783,"detail":"builder"}
+{"timestamp":"2026-03-13T18:01:58.7201039+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T18:02:12.5009921+01:00","action":"move","task_id":783,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T18:02:18.0573987+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:02:25.6895416+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:02:43.2550868+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:02:50.1082281+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:02:50.1149112+01:00","action":"release","task_id":787,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:05:54.5334974+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T18:06:10.2006689+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T18:06:10.2048496+01:00","action":"release","task_id":722,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:06:45.4976299+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T18:06:45.5023206+01:00","action":"claim","task_id":763,"detail":"writer"}
+{"timestamp":"2026-03-13T18:06:49.5393723+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T18:06:49.5453287+01:00","action":"claim","task_id":782,"detail":"auditor"}
+{"timestamp":"2026-03-13T18:07:50.8243075+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:07:50.8280066+01:00","action":"claim","task_id":773,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:08:24.1901692+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T18:08:24.1945133+01:00","action":"release","task_id":763,"detail":"writer"}
+{"timestamp":"2026-03-13T18:13:44.9289072+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:13:56.9839438+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:13:56.9965127+01:00","action":"release","task_id":773,"detail":"test-writer"}
+{"timestamp":"2026-03-13T18:21:50.267099+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T18:21:55.935253+01:00","action":"move","task_id":782,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T18:21:56.577796+01:00","action":"edit","task_id":782,"detail":"Tests: KanbanToolset enriched descriptions (RED)"}
+{"timestamp":"2026-03-13T18:21:56.5819425+01:00","action":"release","task_id":782,"detail":"auditor"}
+{"timestamp":"2026-03-13T18:28:14.1103417+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:28:14.1163361+01:00","action":"claim","task_id":787,"detail":"builder"}
+{"timestamp":"2026-03-13T18:28:15.9615923+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T18:28:15.9666482+01:00","action":"claim","task_id":763,"detail":"auditor"}
+{"timestamp":"2026-03-13T18:28:45.1178211+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:28:45.1222392+01:00","action":"claim","task_id":783,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:29:49.3960118+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:29:49.4022678+01:00","action":"claim","task_id":773,"detail":"builder"}
+{"timestamp":"2026-03-13T18:30:43.0810945+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:30:43.085529+01:00","action":"release","task_id":783,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:31:53.4113466+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:32:16.2050045+01:00","action":"move","task_id":787,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-13T18:32:16.9040951+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:32:16.9130937+01:00","action":"release","task_id":787,"detail":"builder"}
+{"timestamp":"2026-03-13T18:32:55.9118598+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:33:03.8052008+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:33:03.8116235+01:00","action":"release","task_id":773,"detail":"builder"}
+{"timestamp":"2026-03-13T18:48:44.9372864+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T18:48:51.9979201+01:00","action":"move","task_id":763,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T18:48:52.6382209+01:00","action":"edit","task_id":763,"detail":"Add soft-fail exit classification for terminal commands"}
+{"timestamp":"2026-03-13T18:48:52.6458227+01:00","action":"release","task_id":763,"detail":"auditor"}
+{"timestamp":"2026-03-13T18:55:19.5744237+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:55:19.5792011+01:00","action":"claim","task_id":783,"detail":"writer"}
+{"timestamp":"2026-03-13T18:55:32.7426436+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T18:55:32.7482598+01:00","action":"claim","task_id":773,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:55:33.5190892+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T18:55:33.5293951+01:00","action":"claim","task_id":785,"detail":"builder"}
+{"timestamp":"2026-03-13T18:55:37.9632016+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:55:37.9695133+01:00","action":"claim","task_id":787,"detail":"reviewer"}
+{"timestamp":"2026-03-13T18:56:58.1144424+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-13T18:57:13.6343284+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T18:57:13.6389775+01:00","action":"release","task_id":783,"detail":"writer"}
+{"timestamp":"2026-03-13T18:59:26.1086728+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:59:42.656481+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:59:54.1407915+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T18:59:54.1460946+01:00","action":"release","task_id":787,"detail":"reviewer"}
+{"timestamp":"2026-03-13T19:04:22.5683087+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:04:22.5732647+01:00","action":"release","task_id":773,"detail":"reviewer"}
+{"timestamp":"2026-03-13T19:09:56.0261567+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:09:56.02722+01:00","action":"claim","task_id":787,"detail":"writer"}
+{"timestamp":"2026-03-13T19:10:03.2097217+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T19:10:03.2155513+01:00","action":"claim","task_id":783,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:10:09.5059675+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T19:10:09.5125717+01:00","action":"claim","task_id":722,"detail":"writer"}
+{"timestamp":"2026-03-13T19:10:43.5227684+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:10:43.5271716+01:00","action":"claim","task_id":773,"detail":"writer"}
+{"timestamp":"2026-03-13T19:10:54.224979+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:10:54.2300409+01:00","action":"release","task_id":787,"detail":"writer"}
+{"timestamp":"2026-03-13T19:12:27.1233946+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T19:12:36.9009689+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:12:36.906372+01:00","action":"release","task_id":773,"detail":"writer"}
+{"timestamp":"2026-03-13T19:12:41.2386009+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-13T19:29:52.4255706+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T19:30:00.9515898+01:00","action":"move","task_id":783,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T19:30:14.5120484+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T19:30:22.9377083+01:00","action":"edit","task_id":783,"detail":"Research garrytan/gstack agent patterns for OwlBear improvement"}
+{"timestamp":"2026-03-13T19:30:22.9420041+01:00","action":"release","task_id":783,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:38:10.4259642+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:38:10.4311984+01:00","action":"claim","task_id":773,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:38:11.8438354+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:38:11.8501744+01:00","action":"claim","task_id":787,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:41:56.3573388+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:42:20.5021171+01:00","action":"move","task_id":787,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T19:42:33.973065+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:42:40.6657865+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:42:40.6715346+01:00","action":"release","task_id":787,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:42:51.9286119+01:00","action":"edit","task_id":787,"detail":"Implement two-pass review checklist in code-review SKILL.md"}
+{"timestamp":"2026-03-13T19:56:38.1166692+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:56:43.7637881+01:00","action":"move","task_id":773,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T19:56:52.0981569+01:00","action":"edit","task_id":773,"detail":"Enrich KanbanToolset tool descriptions with valid statuses/priorities"}
+{"timestamp":"2026-03-13T19:56:52.1039266+01:00","action":"release","task_id":773,"detail":"auditor"}
+{"timestamp":"2026-03-13T19:59:51.8820939+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T19:59:51.886396+01:00","action":"claim","task_id":781,"detail":"researcher"}
+{"timestamp":"2026-03-13T19:59:55.2855638+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T19:59:55.2948243+01:00","action":"claim","task_id":780,"detail":"researcher"}
+{"timestamp":"2026-03-13T20:02:10.2508956+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:02:20.2343982+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:02:20.2412739+01:00","action":"release","task_id":781,"detail":"researcher"}
+{"timestamp":"2026-03-13T20:04:03.2231918+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:04:33.6910548+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:04:40.1863388+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:04:40.1911253+01:00","action":"release","task_id":780,"detail":"researcher"}
+{"timestamp":"2026-03-13T20:10:11.8033275+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:10:11.8091166+01:00","action":"claim","task_id":786,"detail":"architect"}
+{"timestamp":"2026-03-13T20:10:12.7108773+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:10:12.7155548+01:00","action":"claim","task_id":780,"detail":"architect"}
+{"timestamp":"2026-03-13T20:10:16.6544285+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:10:16.6593795+01:00","action":"claim","task_id":788,"detail":"architect"}
+{"timestamp":"2026-03-13T20:10:17.9871645+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:10:18.692792+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-13T20:10:18.6972349+01:00","action":"claim","task_id":723,"detail":"architect"}
+{"timestamp":"2026-03-13T20:10:21.0296615+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:10:22.8214643+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:10:26.3871932+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-13T20:12:57.7023097+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:13:15.7839477+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:13:15.7907664+01:00","action":"release","task_id":786,"detail":"architect"}
+{"timestamp":"2026-03-13T20:13:22.2197812+01:00","action":"move","task_id":786,"detail":"backlog -\u003e done"}
+{"timestamp":"2026-03-13T20:13:26.8230077+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:13:33.9554954+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:13:43.2487807+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:13:49.222981+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:13:59.0751666+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:13:59.0799227+01:00","action":"release","task_id":780,"detail":"architect"}
+{"timestamp":"2026-03-13T20:14:07.2471793+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:14:08.6639024+01:00","action":"move","task_id":788,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-03-13T20:14:13.3532771+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:14:15.9350611+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:14:15.9403324+01:00","action":"release","task_id":788,"detail":"architect"}
+{"timestamp":"2026-03-13T20:14:18.6971788+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:14:18.7013613+01:00","action":"release","task_id":786,"detail":"architect"}
+{"timestamp":"2026-03-13T20:14:20.5951011+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:16:58.2156409+01:00","action":"create","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-13T20:17:27.3812941+01:00","action":"create","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-13T20:20:01.8061156+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-13T20:20:01.8107484+01:00","action":"release","task_id":723,"detail":"architect"}
+{"timestamp":"2026-03-13T20:20:23.374702+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-13T20:21:36.5494213+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:21:36.5548559+01:00","action":"claim","task_id":728,"detail":"architect"}
+{"timestamp":"2026-03-13T20:21:38.9983643+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:21:39.0025754+01:00","action":"claim","task_id":781,"detail":"architect"}
+{"timestamp":"2026-03-13T20:21:40.023764+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:21:40.028793+01:00","action":"claim","task_id":777,"detail":"architect"}
+{"timestamp":"2026-03-13T20:21:41.6071907+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:21:46.6768485+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:22:01.0939713+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:22:01.0986519+01:00","action":"claim","task_id":729,"detail":"architect"}
+{"timestamp":"2026-03-13T20:22:39.1724101+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:22:59.2440948+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:23:03.8455357+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:23:14.5257453+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:23:15.1835855+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:23:15.1870776+01:00","action":"release","task_id":728,"detail":"architect"}
+{"timestamp":"2026-03-13T20:23:21.5642096+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:23:27.8139833+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:23:27.8188638+01:00","action":"release","task_id":729,"detail":"architect"}
+{"timestamp":"2026-03-13T20:24:36.2690276+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:24:36.2735595+01:00","action":"release","task_id":781,"detail":"architect"}
+{"timestamp":"2026-03-13T20:26:25.5277684+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:26:50.8733935+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:27:44.5121591+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:27:51.4306745+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:28:05.2851468+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:28:05.90515+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-13T20:28:05.9092778+01:00","action":"release","task_id":777,"detail":"architect"}
+{"timestamp":"2026-03-13T20:32:40.292513+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:32:40.2966405+01:00","action":"claim","task_id":780,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:32:42.5410016+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:32:42.545738+01:00","action":"claim","task_id":786,"detail":"auditor"}
+{"timestamp":"2026-03-13T20:32:57.2763666+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:32:57.2823875+01:00","action":"claim","task_id":728,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:33:02.4569768+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-13T20:33:02.4622674+01:00","action":"claim","task_id":789,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:33:07.0361264+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T20:33:07.0431722+01:00","action":"release","task_id":728,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:42:25.5681851+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T20:42:25.5761736+01:00","action":"block","task_id":786,"detail":"Primary AC item (SKILL.md at .github/skills/retro/SKILL.md) does not exist. Task executed as research-only but AC requires file creation. Either create the SKILL.md or revise AC to reflect research scope."}
+{"timestamp":"2026-03-13T20:42:25.5819772+01:00","action":"release","task_id":786,"detail":"auditor"}
+{"timestamp":"2026-03-13T20:42:43.7899727+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-13T20:42:59.0991541+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-13T20:43:06.6515646+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-13T20:43:06.6562972+01:00","action":"release","task_id":789,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:44:02.7827886+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:44:08.9659184+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T20:44:08.9717751+01:00","action":"release","task_id":780,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:44:59.9433961+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:45:05.7785255+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:45:11.9343455+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T20:45:13.154456+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:45:13.1613344+01:00","action":"claim","task_id":788,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:45:14.9602711+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:45:14.9661702+01:00","action":"claim","task_id":781,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:45:28.2498869+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:45:32.2726198+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:45:38.5932138+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:45:41.9653957+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:45:45.0479065+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:45:47.988361+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:45:50.963069+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T20:45:50.9677203+01:00","action":"release","task_id":788,"detail":"test-writer"}
+{"timestamp":"2026-03-13T20:45:57.3598955+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:46:12.6329485+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-13T20:46:12.6408423+01:00","action":"release","task_id":781,"detail":"test-writer"}
