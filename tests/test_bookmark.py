@@ -438,7 +438,7 @@ class TestSchemaV7FreshDB:
         return conn
 
     def test_schema_version_is_7(self, db: sqlite3.Connection) -> None:  # noqa: ARG002
-        assert _SCHEMA_VERSION == 7
+        assert _SCHEMA_VERSION == 8
 
     def test_bookmarks_table_exists(self, db: sqlite3.Connection) -> None:
         assert _table_exists(db, "bookmarks")
@@ -511,7 +511,7 @@ class TestSchemaV7Migration:
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 7
+        assert row[0] == 8
 
     def test_existing_data_preserved(self) -> None:
         """Pre-existing knowledge_sources rows survive the migration."""
