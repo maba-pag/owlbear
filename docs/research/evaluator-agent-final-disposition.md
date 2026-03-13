@@ -7,7 +7,7 @@
 
 Task #681 proposed a standalone `evaluator.agent.md` to offload result-assessment and routing decisions from the orchestrator. Two prior research docs exist:
 
-- [evaluator-agent-research.md](evaluator-agent-research.md) (2026-03-08): recommended creation (.85)
+- [evaluator-agent.md](evaluator-agent.md) (2026-03-08): recommended creation (.85)
 - [evaluator-agent-revisited.md](evaluator-agent-revisited.md) (2026-03-09): recommended closure (.85)
 
 Since the last research, the codebase evolved further. This doc resolves the conflict with a final recommendation based on verified codebase state and updated industry patterns.

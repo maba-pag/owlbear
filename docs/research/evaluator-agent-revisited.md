@@ -5,7 +5,7 @@
 
 ## 1. Context and Question
 
-Task #681 originally proposed a standalone `evaluator.agent.md`. The original research ([evaluator-agent-research.md](evaluator-agent-research.md)) recommended this based on Reflexion and Conductor patterns. Task #682 (orchestrator rewrite) was designed to depend on this evaluator.
+Task #681 originally proposed a standalone `evaluator.agent.md`. The original research ([evaluator-agent.md](evaluator-agent.md)) recommended this based on Reflexion and Conductor patterns. Task #682 (orchestrator rewrite) was designed to depend on this evaluator.
 
 **However, the actual state of the codebase diverges from the task history:**
 

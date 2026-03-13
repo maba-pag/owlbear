@@ -1,7 +1,7 @@
-"""BrowserToolset — FunctionToolset wrapping all 6 browser action tools.
+"""BrowserToolset — FunctionToolset wrapping all 7 browser action tools.
 
 Registers browser_navigate, browser_click, browser_type, browser_select,
-browser_read_text, and browser_screenshot as tools on a
+browser_read_text, browser_screenshot, and browser_snapshot as tools on a
 :class:`~pydantic_ai.toolsets.FunctionToolset`.  Owns a
 :class:`BrowserManager` instance and injects ``page`` / ``config`` into
 each tool wrapper.
@@ -62,7 +62,7 @@ _TITLE_OBSERVER_JS = """
 
 
 class BrowserToolset(FunctionToolset):
-    """FunctionToolset subclass that registers all 6 browser action tools.
+    """FunctionToolset subclass that registers all 7 browser action tools.
 
     Owns a :class:`BrowserManager` and injects ``page`` and ``config``
     into each tool wrapper.  The caller manages browser lifecycle via
@@ -142,7 +142,7 @@ class BrowserToolset(FunctionToolset):
     # ------------------------------------------------------------------
 
     def _register_tools(self) -> None:
-        """Register all 6 browser action tools on this toolset."""
+        """Register all 7 browser action tools on this toolset."""
         self.add_function(
             self._navigate,
             name="browser_navigate",
@@ -172,6 +172,16 @@ class BrowserToolset(FunctionToolset):
             self._screenshot,
             name="browser_screenshot",
             description="Capture a screenshot as base64 PNG.",
+        )
+        self.add_function(
+            self._snapshot,
+            name="browser_snapshot",
+            description=(
+                "Get accessibility tree snapshot of the current page. "
+                "Token cost by filter: text (~800 tokens) — page text only; "
+                "interactive (~3600) — clickable elements; "
+                "full (~10500) — complete tree. Default: interactive."
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -223,3 +233,15 @@ class BrowserToolset(FunctionToolset):
             selector=selector,
             full_page=full_page,
         )
+
+    async def _snapshot(
+        self,
+        *,
+        filter: str = "interactive",  # noqa: A002
+    ) -> str:
+        """Get accessibility tree snapshot, formatted as text."""
+        if self._manager is None:
+            msg = "BrowserToolset not set up. Call setup() first."
+            raise RuntimeError(msg)
+        nodes = await self._manager.snapshot(filter=filter)
+        return "\n".join(f"[{node.id}] {node.role}: {node.name}" for node in nodes)
