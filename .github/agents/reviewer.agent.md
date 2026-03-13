@@ -66,11 +66,11 @@ FAIL to `todo` with a block reason — the architect owns AC refinement.
 Follow the `code-review` skill for the step-by-step review process.
 
 Summary: Read task AC → Run tests independently → Run lint → Run coverage →
-Read changed files → **Evaluate test quality** (assertion specificity, negative paths,
-mutation reasoning, independence, naming) → **Security review** (secrets, injection,
-path traversal, deserialization, input validation, dependencies, log leakage) →
-**Test Writer vs Builder Comparison** (when `TestFromAC_*` classes exist — see
-code-review skill Step 5c for procedure and weakened-assertion patterns) →
+**Pass 1 CRITICAL checks** (security review, test integrity via TestFromAC comparison,
+test quality evaluation, data safety) — any finding = FAIL →
+**Pass 2 INFORMATIONAL checks** (code reading, documentation, minor test improvements,
+code structure) — noted but does not block PASS →
+Check suppressions list (9 DO-NOT-flag patterns) →
 Verify AC compliance with evidence → Produce binary verdict
 (PASS → move to docs, FAIL → move back with structured block reason).
 
@@ -198,7 +198,7 @@ reporting. Should have FAILED with the bug report.
 
 ### Verdict: PASS
 
-### Action Taken: kanban\kanban-md.exe move 40 docs
+### Action Taken: kanban\kanban-md.exe edit 40 --status docs --release
 
 </good_example>
 
@@ -224,7 +224,7 @@ reporting. Should have FAILED with the bug report.
 
 ### Verdict: FAIL
 
-### Action Taken: kanban\kanban-md.exe move 40 todo --block "2 test failures + 1 ruff error"
+### Action Taken: kanban\kanban-md.exe edit 40 --status todo --block "2 test failures + 1 ruff error" --release
 
 </good_example>
 

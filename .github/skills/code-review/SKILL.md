@@ -7,10 +7,11 @@ description: "Evidence-based code review workflow: run tests → lint → read c
 
 Step-by-step process for reviewing a completed implementation task.
 
-## Step 1 — Read the task
+## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
-2. Note every AC line — each will be verified individually
+2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+3. Note every AC line — each will be verified individually
 
 ## Step 2 — Run tests independently
 
@@ -52,43 +53,11 @@ Run coverage per the `pytest-and-linting` skill (read it with `read_file` if not
 
 Verify touched modules have ≥ 90% coverage.
 
-## Step 5 — Read changed files
+## Step 5 — Pass 1: CRITICAL checks
 
-Use `read_file` to examine the actual code:
+Any finding in Pass 1 = automatic FAIL verdict. These are non-negotiable.
 
-- Type hints present on all signatures?
-- Docstrings on public classes and functions?
-- `from __future__ import annotations` at top?
-- Follows existing patterns in the project?
-- No unused imports, dead code, missing error handling?
-
-For agent/prompt files: valid YAML frontmatter, required sections present.
-
-## Step 5a — Evaluate test quality
-
-**Your job is to find weak tests, not confirm they exist.** A test suite that passes
-is worthless if it would also pass with a broken implementation.
-
-Read every test file for the task and evaluate:
-
-1. **Assertion specificity** — flag lazy assertions: `assert result`, `assert result is not None`,
-   `assert len(items) > 0`. Tests must check *specific values, types, and structures*. Every AC
-   item deserves an assertion that would fail if the behavior were subtly wrong.
-2. **Negative / error-path coverage** — for every happy-path test, ask: where is the test for
-   invalid input? Missing data? Boundary values? Permission denied? If AC says "reject X", there
-   must be a test that supplies X and verifies rejection.
-3. **Manual mutation reasoning** — for each AC item, mentally flip the implementation:
-   "If I changed `>` to `>=`, removed a return, or swapped two arguments, would a test catch it?"
-   If the answer is "probably not", the tests are too permissive. Flag it as WEAK.
-4. **Test independence** — no shared mutable state between tests, proper setup/teardown. A test
-   that passes only when run after another test is not a test.
-5. **Descriptive test names** — `test_1`, `test_it_works`, `test_basic` are unacceptable. Test
-   names must describe the scenario and expected outcome (e.g., `test_negative_amount_raises_value_error`).
-
-Rate each dimension: **STRONG** / **ADEQUATE** / **WEAK**.
-Any WEAK rating = automatic FAIL verdict (builder must improve tests before re-review).
-
-## Step 5b — Security review
+### 5.1 Security review
 
 Check the changed code for common security vulnerabilities. This is not an exhaustive
 audit — it targets the OWASP Top 10 patterns most likely to appear in Python code.
@@ -111,11 +80,11 @@ audit — it targets the OWASP Top 10 patterns most likely to appear in Python c
 
 Any vulnerability found = FAIL. Security issues are non-negotiable.
 
-## Step 5c — Test Writer vs Builder Comparison
+### 5.2 Test integrity — TestFromAC comparison
 
 > **Conditional:** Only perform this step when `TestFromAC_*` classes exist in the
 > test file. If no such classes are present (e.g., older single-agent TDD tasks),
-> skip to Step 6.
+> skip to 5.3.
 
 The test-writer agent writes `TestFromAC_*` tests before the builder implements.
 The builder must never modify these classes. Your job is to verify that.
@@ -155,7 +124,95 @@ rejection naming the specific test methods and the nature of the weakening.
 The builder must restore the original test-writer assertions or file a BLOCK
 if the interface is genuinely infeasible.
 
-## Step 6 — Verify AC compliance
+### 5.3 Test quality
+
+**Your job is to find weak tests, not confirm they exist.** A test suite that passes
+is worthless if it would also pass with a broken implementation.
+
+Read every test file for the task and evaluate:
+
+1. **Assertion specificity** — flag lazy assertions: `assert result`, `assert result is not None`,
+   `assert len(items) > 0`. Tests must check *specific values, types, and structures*. Every AC
+   item deserves an assertion that would fail if the behavior were subtly wrong.
+2. **Negative / error-path coverage** — for every happy-path test, ask: where is the test for
+   invalid input? Missing data? Boundary values? Permission denied? If AC says "reject X", there
+   must be a test that supplies X and verifies rejection.
+3. **Manual mutation reasoning** — for each AC item, mentally flip the implementation:
+   "If I changed `>` to `>=`, removed a return, or swapped two arguments, would a test catch it?"
+   If the answer is "probably not", the tests are too permissive. Flag it as WEAK.
+4. **Test independence** — no shared mutable state between tests, proper setup/teardown. A test
+   that passes only when run after another test is not a test.
+5. **Descriptive test names** — `test_1`, `test_it_works`, `test_basic` are unacceptable. Test
+   names must describe the scenario and expected outcome (e.g., `test_negative_amount_raises_value_error`).
+
+Rate each dimension: **STRONG** / **ADEQUATE** / **WEAK**.
+Any WEAK rating = automatic FAIL verdict (builder must improve tests before re-review).
+
+### 5.4 Data safety
+
+Check the changed code for data integrity risks:
+
+1. **Unvalidated LLM output** — LLM-generated content persisted to disk or database without
+   validation or sanitization.
+2. **Race conditions** — shared mutable state accessed from multiple coroutines or threads
+   without synchronization.
+3. **Missing atomicity** — multi-step operations (file writes, DB transactions) that can
+   leave inconsistent state on partial failure.
+4. **Unbounded input** — user or external input passed to resource-intensive operations
+   (regex, recursion, large allocations) without size limits.
+
+Any data safety issue found = FAIL.
+
+## Step 6 — Pass 2: INFORMATIONAL checks
+
+Findings in Pass 2 are noted in the review but do NOT block a PASS verdict.
+Include them as suggestions for the builder to consider in future work.
+
+### 6.1 Code reading
+
+Use `read_file` to examine the actual code for style and convention adherence:
+
+- Type hints present on all signatures?
+- `from __future__ import annotations` at top?
+- Follows existing patterns in the project?
+- Naming conventions consistent with the codebase?
+- No unused imports or dead code?
+
+For agent/prompt files: valid YAML frontmatter, required sections present.
+
+### 6.2 Documentation
+
+- Missing or stale docstrings on public classes and functions
+- Comments that contradict the code
+- Missing module-level docstring
+
+### 6.3 Minor test improvements
+
+- Could-be-tighter assertions that already cover behavior adequately
+- Redundant test setup that could be simplified
+- Test helper extraction opportunities
+
+### 6.4 Code structure
+
+- Flat-vs-nested suggestions
+- Function length (>50 lines)
+- Opportunities for extraction or simplification
+
+## Suppressions
+
+DO NOT flag these patterns — they are intentional or harmless:
+
+1. **Threshold/constant values without justification comments** — tuned empirically; comments rot faster than the values change.
+2. **Redundant guards that aid readability** — harmless defensive checks (e.g., `if x is not None` before an operation that would already handle `None`).
+3. **Test exercises multiple guards simultaneously** — valid integration-style testing; not every guard needs isolated unit coverage.
+4. **Already-addressed items in the diff** — if the issue appears earlier in the diff and is fixed later, do not flag it.
+5. **Style-only consistency changes** — renaming for consistency across the codebase is not a defect and not worth flagging.
+6. **Regex edge cases for constrained inputs** — when the input domain is known and bounded, regex edge cases that cannot occur in practice are not worth flagging.
+7. **`from __future__ import annotations` presence in test files** — this is a project convention, not a defect to flag repeatedly.
+8. **Agent/skill markdown formatting nits** — formatting is fluid during active development; minor markdown style differences are not defects.
+9. **Coverage gaps in code not touched by the task** — out of scope for task-scoped review; coverage is only evaluated on modules changed by the task.
+
+## Step 7 — Verify AC compliance
 
 Build an evidence table — every AC line needs specific proof:
 
@@ -169,17 +226,19 @@ Additionally, verify that every AC line maps to at least one **specific, meaning
 General coverage is not enough — if AC says "reject negative numbers", show the exact test
 that supplies a negative number and asserts on the rejection.
 
-## Step 7 — Produce verdict
+## Step 8 — Produce verdict
 
-**PASS** (all criteria met):
+**PASS** (all Pass 1 criteria met, no CRITICAL findings):
 
-- `kanban\kanban-md.exe move {id} docs`
+- `kanban\kanban-md.exe edit {id} --status docs --release`
 - Your job ends here — writer owns the docs gate
 
-**FAIL** (any criterion unmet):
+**FAIL** (any Pass 1 criterion unmet):
 
 - List every failing criterion with evidence
-- `kanban\kanban-md.exe move {id} todo --block "reason"`
+- `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release`
+
+Pass 2 informational findings are included in the review body but do not affect the verdict.
 
 ## Review output format
 
@@ -196,7 +255,16 @@ that supplies a negative number and asserts on the rejection.
 ### Coverage
 - {module}: {X}%
 
-### Test Quality
+### Pass 1 — CRITICAL
+#### Security Review
+- {findings or "No security issues found"}
+
+#### Test Integrity (if TestFromAC classes exist)
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| {TestFromAC_Class::method} | {description or "No change"} | PRESERVED / WEAKENED / REMOVED / STRENGTHENED |
+
+#### Test Quality
 | Dimension | Rating | Evidence |
 |-----------|--------|----------|
 | Assertion specificity | STRONG/ADEQUATE/WEAK | {examples} |
@@ -205,13 +273,15 @@ that supplies a negative number and asserts on the rejection.
 | Test independence | STRONG/ADEQUATE/WEAK | {evidence} |
 | Descriptive names | STRONG/ADEQUATE/WEAK | {examples} |
 
-### Security Review
-- {findings or "No security issues found"}
+#### Data Safety
+- {findings or "No data safety issues found"}
 
-### Test Writer vs Builder Comparison (if TestFromAC classes exist)
-| Original Test | Change Made | Assessment |
-|---------------|-------------|------------|
-| {TestFromAC_Class::method} | {description or "No change"} | PRESERVED / WEAKENED / REMOVED / STRENGTHENED |
+### Pass 2 — INFORMATIONAL
+- {code reading notes}
+- {documentation suggestions}
+- {minor test improvements}
+- {code structure suggestions}
+- (or "No informational findings")
 
 ### AC Compliance
 | AC Line | Evidence | Mapped Test | Status |
