@@ -129,10 +129,13 @@ Append a summary to the subtask body:
 - Transitive dependencies are out of scope unless they have security implications
 
 [[2026-03-09]] Mon 17:45
+
 ## Architecture Review
+
 **Verdict:** APPROVED
 
 ### AC Assessment
+
 | Phase/Gate | Assessment | Status |
 |------------|------------|--------|
 | Phase 1: Inventory | Clear  reads pyproject.toml, groups by extras. One inaccuracy: voice lists 3 deps, actual has 4 (missing sounddevice). Fixed. | PASS (fixed) |
@@ -146,6 +149,7 @@ Append a summary to the subtask body:
 | Execution Protocol | Subtask creation pattern matches sibling SOP #577 | PASS |
 
 ### Architecture Notes
+
 - Recurring SOP template  no code implementation, no TDD needed
 - Follows sibling SOP pattern (#577 source audit, #579 project audit)
 - Fixed voice extras inventory: was 3 deps, actually 4 (sounddevice missing)
@@ -153,20 +157,26 @@ Append a summary to the subtask body:
 - Security surface well covered: Phase 3b requires CVE analysis, quality gates require CVE numbers
 
 ### Changes Made
+
 - Fixed voice extras count and added sounddevice to inventory
 - Moved to todo
 
 ### Dependencies
+
 - None required  standalone recurring SOP
 
 [[2026-03-09]] Mon 19:44
+
 ## Test-Writer Notes
+
 - Non-implementation task (tagged recurring, sop)  no tests applicable.
 - This is a recurring operational procedure for dependency audits, not code.
 - Passing through to builder.
 
 [[2026-03-09]] Mon 20:02
+
 ## Builder Notes
+
 - Non-implementation task: recurring SOP definition
 - No code changes, no tests applicable
 - Task body contains the complete audit procedure (Phases 1-7)
@@ -174,9 +184,11 @@ Append a summary to the subtask body:
 - Passing through to review
 
 [[2026-03-09]] Mon 22:56
+
 ## Review Evidence
 
 ### Task Type
+
 - Non-implementation SOP definition (recurring, sop tags)
 - No code changes, no tests applicable
 - Deliverable is the SOP procedure in the task body
@@ -200,38 +212,48 @@ Cross-checked Phase 1 inventory against actual `pyproject.toml`:
 **Finding:** Voice extras group lists 3 deps but actual pyproject.toml has 4 (sounddevice>=0.4 missing). Architect noted `Fixed voice extras count and added sounddevice to inventory` but the fix is NOT present in the SOP body.
 
 ### SOP Structure & Completeness
+
 - 7 phases covering inventory through reporting: PASS
 - Quality gates section with 6 verifiable rules: PASS
 - Execution protocol matches sibling SOP #577 pattern: PASS
 - Schedule section with recurring metadata: PASS
 
 ### Verdict: FAIL
+
 - Confidence: .80
 - Gap: Voice extras inventory inaccurate (3 listed, 4 actual). Architect flagged and claimed fix, but fix not applied to SOP body.
 - Required fix: Update voice line to `**voice** (4): moonshine-voice, numpy, pyttsx3, sounddevice`
 
 [[2026-03-10]] Tue 01:28
+
 ## Test-Writer Notes
+
 Non-implementation task (recurring SOP template, tagged: recurring, sop). No testable code will be produced. Passing through to builder.
 
 [[2026-03-10]] Tue 01:54
+
 ## Builder Notes
+
 - Non-implementation task: recurring SOP definition
 - Fixed reviewer-flagged gap: voice extras inventory updated from 3 to 4 deps (added sounddevice)
 - No code changes, no tests applicable
 
 [[2026-03-10]] Tue 02:28
+
 ## Review Evidence (round 2)
 
 ### Task Type
+
 Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint applicable. Deliverable is SOP procedure text in the task body.
 
 ### Round 1 Gap Resolution
+
 - Gap: Voice extras inventory listed 3 deps, actual pyproject.toml has 4 (sounddevice missing)
 - Fix verified: Line now reads `**voice** (4): moonshine-voice, numpy, pyttsx3, sounddevice`
 - Confirmed against pyproject.toml lines 34-39
 
 ### SOP Inventory Accuracy (re-verified against pyproject.toml)
+
 | Group | SOP Count | Actual Count | Match |
 |-------|-----------|--------------|-------|
 | Core | 9 | 9 | PASS |
@@ -245,6 +267,7 @@ Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint
 | dev | 6 | 6 | PASS |
 
 ### SOP Structure & Completeness
+
 - 7 phases (Inventory through Report): PASS
 - Quality gates (6 verifiable rules): PASS
 - Execution protocol (subtask creation, pipeline): PASS
@@ -253,12 +276,15 @@ Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint
 ### Verdict: PASS confidence .92
 
 [[2026-03-10]] Tue 02:29
+
 ## Review Evidence (round 2)
 
 ### Task Type
+
 Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint applicable. Deliverable is SOP procedure text in the task body.
 
 ### Round 1 Gap Resolution
+
 - Gap: Voice extras inventory listed 3 deps, actual pyproject.toml has 4 (sounddevice missing)
 - Fix verified: Line now reads **voice** (4): moonshine-voice, numpy, pyttsx3, sounddevice
 - Confirmed against pyproject.toml lines 34-39
@@ -278,6 +304,7 @@ Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint
 | dev | 6 | 6 | PASS |
 
 ### SOP Structure and Completeness
+
 - 7 phases (Inventory through Report): PASS
 - Quality gates (6 verifiable rules): PASS
 - Execution protocol (subtask creation, pipeline): PASS
@@ -286,20 +313,25 @@ Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint
 ### Verdict: PASS confidence .92
 
 [[2026-03-10]] Tue 02:29
+
 ## Review Evidence (round 2)
 
 ### Task Type
+
 Non-implementation SOP definition (recurring, sop tags). No code, tests, or lint applicable.
 
 ### Round 1 Gap Resolution
+
 - Gap: Voice extras inventory listed 3 deps, actual has 4 (sounddevice missing)
 - Fix verified: voice line now shows (4) with sounddevice included
 - Confirmed against pyproject.toml lines 34-39
 
 ### SOP Inventory Accuracy (re-verified)
+
 All 9 groups match pyproject.toml: Core(9), browser(1), crawl(1), knowledge(2), search(2), slack(2), voice(4), benchmark(3), dev(6).
 
 ### SOP Structure
+
 - 7 phases (Inventory through Report): PASS
 - Quality gates (6 verifiable rules): PASS
 - Execution protocol (subtask creation, pipeline): PASS
@@ -308,8 +340,11 @@ All 9 groups match pyproject.toml: Core(9), browser(1), crawl(1), knowledge(2), 
 ### Verdict: PASS confidence .92
 
 [[2026-03-10]] Tue 03:05
+
 ## Docs Gate
+
 ### Checklist
+
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
 | 1 | copilot-instructions.md | No | N/A | SOP definition only -- no behavior, API, or convention changes |
@@ -320,14 +355,19 @@ All 9 groups match pyproject.toml: Core(9), browser(1), crawl(1), knowledge(2), 
 | 6 | No impact | Yes | Pass | Pure SOP procedure definition -- no code, no docs impact |
 
 ### Files Updated
+
 - None
 
 ### Scratch Files Cleaned
+
 - None (no scratch files found for task 578)
 
 [[2026-03-10]] Tue 04:23
+
 ## Audit
+
 ### AC Verification
+
 | AC Line | Evidence | Status |
 |---------|----------|--------|
 | SOP inventory matches pyproject.toml | All 9 groups verified against pyproject.toml L13-48: Core(9), browser(1), crawl(1), knowledge(2), search(2), slack(2), voice(4), benchmark(3), dev(6) | PASS |
@@ -339,8 +379,10 @@ All 9 groups match pyproject.toml: Core(9), browser(1), crawl(1), knowledge(2), 
 | Docs gate passed | No docs impact, checklist at end of body | PASS |
 
 ### Test Results
+
 - pytest: 3825 passed (29 failed + 48 errors all pre-existing, unrelated to #578 -- no code changes)
 - ruff: 3 pre-existing errors (screenshot.py, test_bootstrap_structure.py) -- none from #578
 
 ### Confidence: .96
+
 ### Action: archive

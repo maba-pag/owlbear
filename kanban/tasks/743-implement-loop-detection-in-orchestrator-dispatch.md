@@ -1,14 +1,17 @@
 ---
 id: 743
 title: Implement loop detection in orchestrator dispatch
-status: ideation
+status: todo
 priority: needed
 created: 2026-03-11T21:16:59.0137115+01:00
-updated: 2026-03-11T21:16:59.0137115+01:00
+updated: 2026-03-12T08:38:40.0876961+01:00
+started: 2026-03-12T08:38:40.0876961+01:00
 tags:
     - phase-daemon
     - agent
     - orchestrator
+claimed_by: researcher
+claimed_at: 2026-03-12T08:38:40.0876961+01:00
 class: standard
 ---
 

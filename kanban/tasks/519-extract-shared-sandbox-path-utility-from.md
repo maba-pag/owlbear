@@ -1,12 +1,12 @@
 ---
 id: 519
 title: Extract shared sandbox_path utility from duplicated _safe_path
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-03-04T07:38:28.7733322+01:00
-updated: 2026-03-08T01:36:11.9839734+01:00
+updated: 2026-03-10T04:38:28.3792932+01:00
 started: 2026-03-06T23:58:23.339179+01:00
-completed: 2026-03-08T01:36:11.9839734+01:00
+completed: 2026-03-10T04:38:28.3792932+01:00
 tags:
     - audit
     - dry
@@ -45,3 +45,23 @@ ARC-11/DRY-03: Identical _safe_path logic in FileToolset and KnowledgeToolset. S
 ### Recommendation
 
 Merge into #497. Step 4 of #497 research recommendation covers #519 entirely. Close as duplicate or block on #497.
+
+[[2026-03-10]] Tue 04:38
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Single sandbox_path implementation | paths.py L14: sandbox_path(root, user_path)  single function, leaf module | PASS |
+| FileToolset uses it | filesystem.py L71: return sandbox_path(self._root, user_path) | PASS |
+| KnowledgeToolset uses it | knowledge.py L98: return sandbox_path(self._root, user_path) | PASS |
+
+### Context
+Task is a duplicate of #651 (subtask of archived #497). Work was completed and archived under #651 at confidence 1.0. All three AC items satisfied by the same implementation.
+
+### Test Results
+- pytest (scoped: test_paths, test_filesystem_tools, test_knowledge_toolset): 65 passed, 0 failed
+- pytest (full suite excl. daemon): 3825 passed, 29 failed (all pre-existing, none related to sandbox_path)
+- ruff: All checks passed (paths.py, filesystem.py, knowledge.py)
+
+### Confidence: .98
+### Action: archive (duplicate resolved by #651)

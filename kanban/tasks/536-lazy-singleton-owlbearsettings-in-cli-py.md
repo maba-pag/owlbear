@@ -4,12 +4,14 @@ title: Lazy-singleton OwlBearSettings in cli.py
 status: backlog
 priority: nice-to-have
 created: 2026-03-04T07:38:41.3865662+01:00
-updated: 2026-03-07T00:35:22.4874333+01:00
+updated: 2026-03-10T17:33:21.5568366+01:00
 started: 2026-03-07T00:29:37.413524+01:00
 tags:
     - audit
     - dry
     - scope:cli
+depends_on:
+    - 481
 class: standard
 ---
 

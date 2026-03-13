@@ -1,21 +1,23 @@
 ---
 id: 702
 title: 'Research: Audit GCP generative-ai repo for other reusable patterns (2025+)'
-status: backlog
+status: todo
 priority: important
 created: 2026-03-08T18:40:33.5940382+01:00
-updated: 2026-03-10T02:44:18.4067137+01:00
+updated: 2026-03-10T17:30:37.2851809+01:00
 started: 2026-03-09T23:04:28.1434718+01:00
 tags:
     - research
     - phase-research
     - scope:core
     - agent
+claimed_by: test-writer
+claimed_at: 2026-03-10T17:30:37.2851809+01:00
 class: standard
 ---
 
 ## Goal
-Scan the broader GoogleCloudPlatform/generative-ai repo for other patterns, tools, or architectures that OwlBear could benefit from  but ONLY content from 2025-2026. The repo contains a mix of very recent and 2+ year old content; anything pre-2025 is likely outdated for our stack (March 2026).
+Scan the broader GoogleCloudPlatform/generative-ai repo for other patterns, tools, or architectures that OwlBear could benefit from -- but ONLY content from 2025-2026. The repo contains a mix of very recent and 2+ year old content; anything pre-2025 is likely outdated for our stack (March 2026).
 
 ## Research Checklist
 
@@ -30,35 +32,41 @@ Scan the broader GoogleCloudPlatform/generative-ai repo for other patterns, tool
 - Note: the repo is large. Focus on directories that look relevant to our agent/memory/tool/safety concerns.
 
 ## Acceptance Criteria
-- [ ] Repo cloned to docs/research/generative-ai/ (shared with task #700)
-- [ ] Directory-level inventory with last-commit dates for relevant sections
-- [ ] Shortlist of 2025+ patterns worth adopting (minimum: comparison table)
-- [ ] For each shortlisted pattern: feasibility note and adaptation cost
-- [ ] Research doc at docs/gcp-generative-ai-audit-research.md
-- [ ] Follow-up kanban tasks for any patterns worth pursuing
+- [x] Repo cloned to docs/scratch/research/generative-ai/ (ephemeral, shared with #700)
+- [x] Directory-level inventory with last-commit dates for relevant sections
+- [x] Shortlist of 2025+ patterns worth adopting (comparison table)
+- [x] For each shortlisted pattern: feasibility note and adaptation cost
+- [x] Research doc at docs/research/gcp-generative-ai-audit-research.md
+- [x] Follow-up kanban tasks for patterns worth pursuing: #719, #720
 
-[[2026-03-10]] Tue 02:44
-## Architecture Review
-**Verdict:** REFINE
+[[2026-03-10]] Tue 17:11
+## Architecture Review (2nd pass)
+**Verdict:** APPROVED
 
 ### AC Assessment
 | AC Line | Assessment | Action |
 |---------|------------|--------|
-| 1. Repo cloned to docs/research/generative-ai/ | Path violates project convention (`docs/scratch/research/` per copilot-instructions.md). Moot now  research is complete, clone is ephemeral. | Fix path in AC to `docs/scratch/research/generative-ai/` |
-| 2. Directory-level inventory with last-commit dates | Present in research doc §3  clear table with freshness flags. | None  verifiable |
-| 3. Shortlist of 2025+ patterns (comparison table) | Present in §4.1  7-row comparison table with verdicts and confidence scores. | None  verifiable |
-| 4. Feasibility note and adaptation cost per shortlisted pattern | Present in §4.3-4.4  adaptation path table with GCP-to-OwlBear mapping, cost estimate (~200 LOC). | None  verifiable |
-| 5. Research doc at docs/gcp-generative-ai-audit-research.md | File exists, well-structured, status marked Complete. | None  verifiable |
-| 6. Follow-up kanban tasks for any patterns worth pursuing | **NOT MET.** kanban-md create commands are documented in §6 of the research doc but were never executed. Zero `evaluation` tagged tasks on the board. | Researcher must execute the two `kanban-md create` commands from §6 |
+| 1. Repo cloned to docs/scratch/research/ | Ephemeral artifact, gitignored. Path corrected from docs/research/ to docs/scratch/research/ per convention. | FIXED path in AC |
+| 2. Directory inventory with dates | Present in research doc section 3: 8-row table with freshness flags. | MET |
+| 3. Shortlist comparison table | Present in section 4.1: 7-row table with verdicts and confidence scores. | MET |
+| 4. Feasibility + adaptation cost | Present in section 4.3-4.4: adaptation path table, ~200 LOC estimate. | MET |
+| 5. Research doc | Exists at docs/research/gcp-generative-ai-audit-research.md. Fixed path in AC (was docs/gcp-...). | FIXED path in AC |
+| 6. Follow-up kanban tasks | Previously NOT MET. Created #719 (eval harness) and #720 (eval dataset) per section 6 spec. | FIXED -- tasks created |
 
 ### Architecture Notes
-Research quality is strong. The freshness filter (2025+ only), systematic directory inventory, and SKIP rationale for Gemini-locked patterns are well-reasoned. The recommendation to adapt the agent behavioral eval pattern (not the Gemini SDK) is architecturally sound  it fills a real gap (no agent tool-selection testing) without adding vendor lock-in.
-
-Note: #700 (always-on-memory-agent research) is still in `backlog`, but the research doc explicitly scopes #702 to exclude that subdirectory. No true dependency conflict.
+- Research quality is strong (.80 confidence). Freshness filter (2025+ only) is well-applied.
+- SKIP rationale for 5 of 7 patterns is sound: existing OwlBear capabilities cover them.
+- ADAPT recommendation for agent behavioral eval is architecturally valid: fills a real gap (no tool-selection testing) without vendor lock-in.
+- Attribution verified in docs/sources/overview.md (3 entries under section 702).
+- No code, no module layering concerns. TDD not applicable (research task).
 
 ### Changes Made
-- No kanban edits yet  refinement needed from researcher.
+- Created #719: Design agent tool-trajectory evaluation harness (backlog, nice-to-have)
+- Created #720: Create eval dataset: orchestrator routing test cases (backlog, nice-to-have, depends_on #719)
+- Fixed AC #1 path: docs/research/ -> docs/scratch/research/ (convention)
+- Fixed AC #5 path: docs/gcp-... -> docs/research/gcp-... (actual location)
+- Marked all 6 ACs as complete
 
 ### Dependencies
-- #700 (GCP always-on-memory-agent): in backlog, no blocking dependency  #702 explicitly defers that subdirectory to #700.
-- Follow-up tasks (not yet created): will depend on nothing in the current pipeline.
+- #700 (always-on-memory-agent research): no blocking dependency, #702 explicitly defers that directory.
+- Created: #719, #720 (follow-up evaluation tasks, both at backlog).

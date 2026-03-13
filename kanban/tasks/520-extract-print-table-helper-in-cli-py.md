@@ -1,18 +1,19 @@
 ---
 id: 520
 title: Extract _print_table helper in cli.py
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-04T07:38:29.4319581+01:00
-updated: 2026-03-07T05:52:57.0670703+01:00
+updated: 2026-03-12T10:32:59.1578714+01:00
 started: 2026-03-06T23:58:23.9523377+01:00
+completed: 2026-03-12T10:32:59.1578714+01:00
 tags:
     - audit
     - dry
     - refactor
     - scope:cli
-blocked: true
-block_reason: 'Superseded by #630 (rich.table.Table approach). Close when #630 is done.'
+depends_on:
+    - 481
 class: standard
 ---
 
@@ -46,3 +47,30 @@ Rich table considered but rejected (KISS/YAGNI): Rich is only a transitive dep, 
 - [ ] _print_usage_table uses _print_table with footer=totals
 - [ ] Output unchanged for all 3 commands
 - [ ] Tests pass, ruff clean
+
+[[2026-03-12]] Thu 10:29
+## Architecture Review
+**Verdict:** BLOCK (Superseded)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| _print_table helper exists | Superseded by #630 (rich.table.Table) | N/A |
+| project_list uses _print_table | #630 replaced with rich.table.Table | N/A |
+| ks_list uses _print_table | #630 replaced with rich.table.Table | N/A |
+| _print_usage_table uses _print_table | #630 replaced with rich.table.Table | N/A |
+| Output unchanged | N/A - #630 changed output format | N/A |
+| Tests pass, ruff clean | N/A | N/A |
+
+### Architecture Notes
+Task #630 (archived) superseded this entire task. It replaced all hand-rolled table
+formatting with rich.table.Table - a superior approach. Confirmed: no col_widths,
+_print_table, or hand-rolled header+sep+rows patterns remain in CLI code.
+
+### Changes Made
+- Unblocked task
+- Deleting as superseded (all AC fulfilled by #630)
+
+### Dependencies
+- #481 (CLI split): archived
+- #630 (rich.table.Table): archived - fully supersedes this task

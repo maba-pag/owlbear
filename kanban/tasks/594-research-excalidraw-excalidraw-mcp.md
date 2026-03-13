@@ -43,7 +43,9 @@ Analyze for Excalidraw MCP server implementation, tool definitions, and integrat
 Non-implementation task (tagged research) -- no tests applicable. Passing through to builder.
 
 [[2026-03-10]] Tue 01:53
+
 ## Builder Notes
+
 - Non-implementation research task -- no code changes, no tests
 - Research doc verified: docs/excalidraw-mcp-research.md (complete, 5 sections)
 - Follow-up task #718 created at ideation (cheat-sheet tool pattern evaluation)
@@ -52,7 +54,9 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 - No lint/test evidence needed (pure research)
 
 [[2026-03-10]] Tue 01:53
+
 ## Builder Notes
+
 - Non-implementation research task -- no code changes, no tests
 - Research doc verified: docs/excalidraw-mcp-research.md (complete, 5 sections)
 - Follow-up task #718 created at ideation (cheat-sheet tool pattern evaluation)
@@ -61,13 +65,16 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 - No lint/test evidence needed (pure research)
 
 [[2026-03-10]] Tue 02:29
+
 ## Review Evidence
 
 ### Deliverables Verified
+
 - Research doc: docs/excalidraw-mcp-research.md (committed, 69 lines, 5 sections)
 - Follow-up task: #718 (ideation, nice-to-have, cheat-sheet pattern evaluation)
 
 ### Research Checklist (5/5)
+
 | Checklist Item | Doc Section | Status |
 |----------------|-------------|--------|
 | Theoretical validity | S3.3 row 1 | PASS |
@@ -77,6 +84,7 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 | Implementation approach | S3.2 + S4 | PASS |
 
 ### Document Quality
+
 - Sources table with relevance ratings (.80-.90)
 - Architecture analysis: 6 reusable patterns with OwlBear relevance
 - MCP Apps assessment: 5 criteria evaluated
@@ -85,18 +93,23 @@ Non-implementation task (tagged research) -- no tests applicable. Passing throug
 - YAGNI/KISS principles applied correctly
 
 ### Issues (non-blocking, for docs gate)
+
 1. **Duplicate file:** committed at docs/ root (wrong per file placement rules), untracked copy at docs/research/ (correct). The docs gate should ensure canonical location is docs/research/ and remove the root copy.
 2. **Follow-up already executed:** #718 was created by builder. Research-docs instructions say to present commands for user review, not execute. Minor process issue.
 3. **Duplicate builder notes** in task body (cosmetic).
 
 ### Security Review
+
 N/A  pure research task, no code changes.
 
 ### Verdict: PASS confidence .91
 
 [[2026-03-10]] Tue 03:06
+
 ## Docs Gate
+
 ### Checklist
+
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
 | 1 | copilot-instructions.md | No | N/A | Pure research task, no behavior/API/convention change |
@@ -107,14 +120,19 @@ N/A  pure research task, no code changes.
 | 6 | Follow-up tasks | Yes | Pass | #718 exists at ideation status |
 
 ### Files Updated
+
 - docs/excalidraw-mcp-research.md -> docs/research/excalidraw-mcp-research.md (relocated, commit 2df32cb)
 
 ### Scratch Files Cleaned
+
 - Deleted docs/scratch/594-builder.tmp
 
 [[2026-03-10]] Tue 04:21
+
 ## Audit
+
 ### AC Verification
+
 | AC Item | Evidence | Status |
 |---------|----------|--------|
 | Research doc written | docs/research/excalidraw-mcp-research.md - 69 lines, 5 sections | PASS |
@@ -126,8 +144,10 @@ N/A  pure research task, no code changes.
 | Scratch files cleaned | No docs/scratch/594-* | PASS |
 
 ### Test Results
+
 - pytest: 177 passed (representative sample)
 - ruff: 3 pre-existing errors, none from #594
 
 ### Confidence: .97
+
 ### Action: archive

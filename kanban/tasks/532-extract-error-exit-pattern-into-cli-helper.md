@@ -4,12 +4,14 @@ title: Extract error-exit pattern into CLI helper
 status: backlog
 priority: nice-to-have
 created: 2026-03-04T07:38:37.5818336+01:00
-updated: 2026-03-07T00:29:10.9393642+01:00
+updated: 2026-03-10T17:33:21.0005128+01:00
 started: 2026-03-07T00:26:12.332562+01:00
 tags:
     - audit
     - dry
     - scope:cli
+depends_on:
+    - 481
 class: standard
 ---
 

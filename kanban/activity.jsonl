@@ -7176,3 +7176,12 @@
 {"timestamp":"2026-03-12T22:47:13.5812602+01:00","action":"edit","task_id":745,"detail":"Research mksglu/claude-context-mode for OwlBear"}
 {"timestamp":"2026-03-12T22:47:48.1936473+01:00","action":"move","task_id":745,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-12T22:48:30.6426635+01:00","action":"move","task_id":751,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-13T06:50:29.9749813+01:00","action":"move","task_id":743,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:50:32.3187576+01:00","action":"move","task_id":736,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:50:33.8544309+01:00","action":"move","task_id":727,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:50:34.9317797+01:00","action":"move","task_id":702,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:50:35.7982491+01:00","action":"move","task_id":719,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:50:59.6878767+01:00","action":"move","task_id":718,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-13T06:51:03.723708+01:00","action":"move","task_id":718,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-03-13T06:51:07.0449595+01:00","action":"move","task_id":718,"detail":"backlog -\u003e ideation"}
+{"timestamp":"2026-03-13T06:51:22.2177221+01:00","action":"move","task_id":740,"detail":"in-progress -\u003e todo"}

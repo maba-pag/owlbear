@@ -4,7 +4,8 @@ title: Evaluate compact board-state context injection for agents
 status: ideation
 priority: nice-to-have
 created: 2026-03-11T21:17:18.1414264+01:00
-updated: 2026-03-11T21:17:18.1414264+01:00
+updated: 2026-03-12T15:14:42.895444+01:00
+started: 2026-03-12T08:38:53.5327917+01:00
 tags:
     - research
     - agent
