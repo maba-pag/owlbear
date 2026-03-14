@@ -31,6 +31,13 @@ from owlbear.memory.session import SessionStore
 # ---------------------------------------------------------------------------
 
 
+def _import_settings() -> type:
+    """Import OwlBearSettings without polluting module scope."""
+    from owlbear.config import OwlBearSettings
+
+    return OwlBearSettings
+
+
 def _mock_result(output: str, messages: list[object]) -> MagicMock:
     """Build a mock PydanticAI AgentRunResult."""
     result = MagicMock()
@@ -396,25 +403,51 @@ class TestFromAC_BoardContextConfig:  # noqa: N801
 class TestFromAC_BoardContextBootstrap:  # noqa: N801
     """Bootstrap constructs BoardContextProvider when enabled and passes to agent."""
 
-    def test_bootstrap_passes_provider_when_enabled(self) -> None:
-        """When board_context_enabled=True, OwlBearAgent receives a provider."""
+    @pytest.mark.asyncio
+    async def test_bootstrap_passes_provider_when_enabled(self, tmp_path: Path) -> None:
+        """When board_context_enabled=True, bootstrap passes a BoardContextProvider to agent."""
+        from owlbear.bootstrap import bootstrap
         from owlbear.core.board_context import BoardContextProvider
 
-        # Verify the class exists and is importable
-        assert BoardContextProvider is not None
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings_cls = _import_settings()
+        settings = settings_cls(board_context_enabled=True)
 
-    def test_bootstrap_no_provider_when_disabled(self) -> None:
-        """When board_context_enabled=False, agent should NOT receive a provider.
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=AsyncMock(),
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
 
-        We verify this by checking that OwlBearAgent can be constructed with
-        board_context_provider=None (the default).
-        """
-        # This is a contract test: when disabled, None should be passed
-        # The actual bootstrap wiring will be tested by the builder
-        from owlbear.core.board_context import BoardContextProvider  # noqa: F401
+        assert result.agent._board_context_provider is not None
+        assert isinstance(result.agent._board_context_provider, BoardContextProvider)
 
-        # The provider exists but is NOT passed when disabled
-        # (bootstrap integration test will verify the full path)
+    @pytest.mark.asyncio
+    async def test_bootstrap_no_provider_when_disabled(self, tmp_path: Path) -> None:
+        """When board_context_enabled=False, agent gets board_context_provider=None."""
+        from owlbear.bootstrap import bootstrap
+
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        settings_cls = _import_settings()
+        settings = settings_cls(board_context_enabled=False)
+
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=AsyncMock(),
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        assert result.agent._board_context_provider is None
 
     def test_provider_has_async_get_context(self) -> None:
         """BoardContextProvider must have an async get_context() method."""
@@ -422,7 +455,26 @@ class TestFromAC_BoardContextBootstrap:  # noqa: N801
 
         provider = BoardContextProvider.__new__(BoardContextProvider)
         assert hasattr(provider, "get_context")
-        # get_context should be a coroutine function
-        import asyncio
-
         assert asyncio.iscoroutinefunction(provider.get_context)
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_provider_default_matches_config_default(self, tmp_path: Path) -> None:
+        """Default settings (board_context_enabled=True) → provider is wired."""
+        from owlbear.bootstrap import bootstrap
+        from owlbear.core.board_context import BoardContextProvider
+
+        settings_cls = _import_settings()
+        settings = settings_cls()  # defaults
+
+        with (
+            patch(
+                "owlbear.bootstrap.create_copilot_client",
+                new_callable=AsyncMock,
+                return_value=AsyncMock(),
+            ),
+            patch("owlbear.core.agent.Agent"),
+        ):
+            result = await bootstrap(settings, workspace_root=tmp_path)
+
+        # Default is enabled, so provider must be wired
+        assert isinstance(result.agent._board_context_provider, BoardContextProvider)
