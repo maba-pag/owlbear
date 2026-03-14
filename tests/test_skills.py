@@ -373,10 +373,10 @@ class TestFromAC_RealSkillsDiscovery:  # noqa: N801
         reason="Real skills directory not found",
     )
     def test_discovers_18_real_skills(self) -> None:
-        """SkillRegistry finds exactly 18 skills in .github/skills."""
+        """SkillRegistry finds exactly 19 skills in .github/skills."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 18, (
-            f"Expected 18 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
+        assert len(registry.skills) == 19, (
+            f"Expected 19 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
         )
 
     @pytest.mark.skipif(
@@ -386,7 +386,7 @@ class TestFromAC_RealSkillsDiscovery:  # noqa: N801
     def test_real_skills_have_nonempty_names(self) -> None:
         """Every discovered real skill has a non-empty name and description."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 18, "Must discover 18 skills first"
+        assert len(registry.skills) == 19, "Must discover 19 skills first"
         for name, meta in registry.skills.items():
             assert name, "Skill name must be non-empty"
             assert meta.description, f"Skill '{name}' has empty description"
@@ -395,10 +395,10 @@ class TestFromAC_RealSkillsDiscovery:  # noqa: N801
         not _REAL_SKILLS_DIR.is_dir(),
         reason="Real skills directory not found",
     )
-    def test_list_skills_includes_all_18(self) -> None:
-        """list_skills output mentions all 18 skill names."""
+    def test_list_skills_includes_all_19(self) -> None:
+        """list_skills output mentions all 19 skill names."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 18, "Must discover 18 skills first"
+        assert len(registry.skills) == 19, "Must discover 19 skills first"
         output = registry.list_skills()
         for name in registry.skills:
             assert name in output, f"Skill '{name}' missing from list_skills output"
