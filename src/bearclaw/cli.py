@@ -18,6 +18,7 @@ from bearclaw.commands.auth import app as auth_app
 from bearclaw.commands.browser import app as browser_app
 from bearclaw.commands.chat import app as chat_app
 from bearclaw.commands.daemon import app as daemon_app
+from bearclaw.commands.decisions import app as decisions_app
 from bearclaw.commands.knowledge_source import app as knowledge_source_app
 from bearclaw.commands.project import app as project_app
 from bearclaw.commands.slack import app as slack_app
@@ -43,6 +44,7 @@ app = typer.Typer(
 # Sub-groups (named → nested commands)
 app.add_typer(auth_app)
 app.add_typer(browser_app)
+app.add_typer(decisions_app)
 app.add_typer(slack_app)
 app.add_typer(project_app)
 app.add_typer(usage_app)
