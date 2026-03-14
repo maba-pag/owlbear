@@ -46,6 +46,10 @@ class SlackChannel(ChannelPlugin):
         Default Slack channel ID for outgoing messages.
     receive_timeout:
         Seconds to wait for an incoming message before returning ``None``.
+    allowed_user_ids:
+        Slack user IDs permitted to send messages.  When non-empty, messages
+        from any other sender are silently dropped.  An empty set (default)
+        allows all senders.
     """
 
     def __init__(
@@ -316,7 +320,11 @@ class SlackChannel(ChannelPlugin):
         """Process incoming Socket Mode events.
 
         Only ``message`` events with ``channel_type == 'im'`` are enqueued.
-        All ``events_api`` requests are acknowledged.
+        Messages with a ``subtype`` (bot echoes, edits, deletes) are silently
+        dropped.  When :attr:`_allowed_user_ids` is non-empty, messages from
+        unlisted senders are dropped and logged at WARNING.
+
+        All ``events_api`` envelopes are acknowledged regardless of filtering.
         """
         if request.type == "events_api":
             # Always acknowledge
