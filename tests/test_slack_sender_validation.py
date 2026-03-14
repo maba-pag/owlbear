@@ -745,3 +745,481 @@ class TestFromAC_CheckOrdering:  # noqa: N801
         assert len(sender_warnings) == 0, (
             "Subtype filter must catch bot_message BEFORE user validation logs a warning"
         )
+
+
+# ===========================================================================
+# Task #802 — Slack message rate limiting (RED phase)
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# AC 1 — Config field: slack_rate_limit_per_minute on OwlBearSettings
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RateLimitConfig:  # noqa: N801
+    """Config + constructor wiring for rate limiting."""
+
+    def test_settings_field_exists(self, default_settings: object) -> None:
+        """OwlBearSettings must have slack_rate_limit_per_minute attribute."""
+        assert hasattr(default_settings, "slack_rate_limit_per_minute"), (
+            "OwlBearSettings must have a slack_rate_limit_per_minute field"
+        )
+
+    def test_settings_field_default_is_30(self, default_settings: object) -> None:
+        """Default value must be 30."""
+        assert default_settings.slack_rate_limit_per_minute == 30
+
+    def test_settings_field_is_int(self, default_settings: object) -> None:
+        """Field type must be int."""
+        assert isinstance(default_settings.slack_rate_limit_per_minute, int)
+
+    def test_init_accepts_rate_limit_per_minute_kwarg(self) -> None:
+        """SlackChannel.__init__ must accept rate_limit_per_minute keyword-only arg."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=10,
+        )
+        assert channel._rate_limit_per_minute == 10
+
+    def test_init_rate_limit_default_is_zero(self) -> None:
+        """Default rate_limit_per_minute must be 0 (disabled)."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        assert channel._rate_limit_per_minute == 0
+
+    def test_init_creates_empty_rate_windows(self) -> None:
+        """__init__ must initialise self._rate_windows as an empty dict."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=5,
+        )
+        assert channel._rate_windows == {}
+        assert isinstance(channel._rate_windows, dict)
+
+
+# ---------------------------------------------------------------------------
+# AC 2 — Rate limit enforcement
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RateLimitEnforcement:  # noqa: N801
+    """Enforcement of sliding-window rate limiting in _handle_socket_event."""
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_message_within_limit_enqueued(
+        self, mock_socket_cls: MagicMock
+    ) -> None:
+        """Message from user within limit (< rate_limit_per_minute) is enqueued."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=5,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "events_api"
+        fake_request.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_USER1",
+                "text": "hello rate limit",
+            },
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "hello rate limit"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_message_at_limit_dropped(
+        self, mock_socket_cls: MagicMock
+    ) -> None:
+        """Message at limit (== rate_limit_per_minute in last 60s) is dropped."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=3,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        # Send exactly 3 messages (== limit) — all should be accepted
+        for i in range(3):
+            fake_request = MagicMock()
+            fake_request.type = "events_api"
+            fake_request.payload = {
+                "event": {
+                    "type": "message",
+                    "channel_type": "im",
+                    "user": "U_SPAMMER",
+                    "text": f"msg {i}",
+                },
+            }
+            await handler(mock_socket_instance, fake_request)
+
+        # 4th message should be dropped
+        fake_request = MagicMock()
+        fake_request.type = "events_api"
+        fake_request.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_SPAMMER",
+                "text": "this should be dropped",
+            },
+        }
+        await handler(mock_socket_instance, fake_request)
+
+        # Should have exactly 3 messages, not 4
+        enqueued = []
+        while not channel._message_queue.empty():
+            enqueued.append(channel._message_queue.get_nowait())
+        assert len(enqueued) == 3, (
+            f"Expected 3 enqueued messages, got {len(enqueued)}"
+        )
+        assert "this should be dropped" not in enqueued
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_dropped_message_logs_warning_with_user_id(
+        self, mock_socket_cls: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Dropped message must log WARNING with user_id."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=1,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        # First message accepted
+        req1 = MagicMock()
+        req1.type = "events_api"
+        req1.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_FLOOD",
+                "text": "msg 1",
+            },
+        }
+        await handler(mock_socket_instance, req1)
+
+        # Second message should be rate-limited
+        req2 = MagicMock()
+        req2.type = "events_api"
+        req2.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_FLOOD",
+                "text": "SUPER_SECRET_FLOOD_CONTENT",
+            },
+        }
+
+        with caplog.at_level(logging.WARNING, logger="owlbear.channels.slack"):
+            await handler(mock_socket_instance, req2)
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) >= 1, "Must log at WARNING level when rate limited"
+
+        warning_text = " ".join(r.getMessage() for r in warning_records)
+        assert "U_FLOOD" in warning_text, "WARNING must include user_id"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_dropped_message_log_excludes_content(
+        self, mock_socket_cls: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Rate-limit WARNING must NOT contain message content (security)."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=1,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        # First message accepted
+        req1 = MagicMock()
+        req1.type = "events_api"
+        req1.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_FLOOD",
+                "text": "msg 1",
+            },
+        }
+        await handler(mock_socket_instance, req1)
+
+        secret_text = "TOP_SECRET_FLOOD_PAYLOAD_xyz789"
+        req2 = MagicMock()
+        req2.type = "events_api"
+        req2.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_FLOOD",
+                "text": secret_text,
+            },
+        }
+
+        with caplog.at_level(logging.DEBUG, logger="owlbear.channels.slack"):
+            await handler(mock_socket_instance, req2)
+
+        all_log_text = " ".join(r.getMessage() for r in caplog.records)
+        assert secret_text not in all_log_text, (
+            "Message content MUST NOT appear in any log line"
+        )
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_rate_limit_zero_disables_limiting(
+        self, mock_socket_cls: MagicMock
+    ) -> None:
+        """rate_limit_per_minute=0 disables rate limiting entirely."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=0,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        # Send 100 messages rapidly — all should be accepted
+        for i in range(100):
+            fake_request = MagicMock()
+            fake_request.type = "events_api"
+            fake_request.payload = {
+                "event": {
+                    "type": "message",
+                    "channel_type": "im",
+                    "user": "U_UNLIMITED",
+                    "text": f"msg {i}",
+                },
+            }
+            await handler(mock_socket_instance, fake_request)
+
+        enqueued = []
+        while not channel._message_queue.empty():
+            enqueued.append(channel._message_queue.get_nowait())
+        assert len(enqueued) == 100, (
+            f"With rate_limit=0, all 100 messages should be accepted, got {len(enqueued)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC 3 — Sliding window: expiry and per-user isolation
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SlidingWindow:  # noqa: N801
+    """Sliding window behaviour: expiry pruning and per-user isolation."""
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_expired_entries_pruned_message_accepted(
+        self, mock_socket_cls: MagicMock
+    ) -> None:
+        """Expired entries (>60s old) are pruned; message accepted after window slides."""
+        import time
+        from collections import deque
+
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=2,
+        )
+
+        # Pre-fill the rate window with 2 expired timestamps (>60s ago)
+        old_time = time.monotonic() - 120.0  # 2 minutes ago
+        channel._rate_windows["U_PATIENT"] = deque([old_time, old_time])
+
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        fake_request = MagicMock()
+        fake_request.type = "events_api"
+        fake_request.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_PATIENT",
+                "text": "after window slides",
+            },
+        }
+
+        await handler(mock_socket_instance, fake_request)
+
+        result = channel._message_queue.get_nowait()
+        assert result == "after window slides"
+
+    @pytest.mark.asyncio
+    @patch("owlbear.channels.slack.SocketModeClient")
+    async def test_per_user_isolation(
+        self, mock_socket_cls: MagicMock
+    ) -> None:
+        """User A at limit does not affect user B."""
+        from owlbear.channels.slack import SlackChannel
+
+        mock_socket_instance = AsyncMock()
+        mock_socket_instance.socket_mode_request_listeners = []
+        mock_socket_cls.return_value = mock_socket_instance
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+            rate_limit_per_minute=2,
+        )
+        await channel.connect()
+        handler = mock_socket_instance.socket_mode_request_listeners[0]
+
+        # User A sends 2 messages (hits limit)
+        for i in range(2):
+            req = MagicMock()
+            req.type = "events_api"
+            req.payload = {
+                "event": {
+                    "type": "message",
+                    "channel_type": "im",
+                    "user": "U_ALICE",
+                    "text": f"alice msg {i}",
+                },
+            }
+            await handler(mock_socket_instance, req)
+
+        # User A's 3rd message should be dropped
+        req_a3 = MagicMock()
+        req_a3.type = "events_api"
+        req_a3.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_ALICE",
+                "text": "alice blocked",
+            },
+        }
+        await handler(mock_socket_instance, req_a3)
+
+        # User B should STILL be able to send
+        req_b = MagicMock()
+        req_b.type = "events_api"
+        req_b.payload = {
+            "event": {
+                "type": "message",
+                "channel_type": "im",
+                "user": "U_BOB",
+                "text": "bob is fine",
+            },
+        }
+        await handler(mock_socket_instance, req_b)
+
+        enqueued = []
+        while not channel._message_queue.empty():
+            enqueued.append(channel._message_queue.get_nowait())
+
+        assert "bob is fine" in enqueued, "User B must not be affected by User A's limit"
+        assert "alice blocked" not in enqueued, "User A's excess message must be dropped"
+        assert len(enqueued) == 3, (
+            f"Expected 3 messages (2 alice + 1 bob), got {len(enqueued)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC 4 — Bootstrap wiring: create_channel passes rate_limit_per_minute
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RateLimitBootstrap:  # noqa: N801
+    """Bootstrap wiring: create_channel passes rate_limit_per_minute from settings."""
+
+    @patch("owlbear.channels.slack.SlackChannel")
+    def test_create_channel_passes_rate_limit(
+        self, mock_slack_cls: MagicMock
+    ) -> None:
+        """create_channel must pass rate_limit_per_minute to SlackChannel."""
+        from owlbear.bootstrap.channel import create_channel
+        from owlbear.config import OwlBearSettings
+
+        settings = MagicMock(spec=OwlBearSettings)
+        settings.slack_app_token = MagicMock()
+        settings.slack_app_token.get_secret_value.return_value = "xapp-test"
+        settings.slack_bot_token = MagicMock()
+        settings.slack_bot_token.get_secret_value.return_value = "xoxb-test"
+        settings.slack_channel_id = "C12345"
+        settings.slack_allowed_user_ids = []
+        settings.slack_rate_limit_per_minute = 30
+
+        mock_slack_cls.return_value = MagicMock()
+        create_channel(settings, "slack")
+
+        call_kwargs = mock_slack_cls.call_args.kwargs
+        assert "rate_limit_per_minute" in call_kwargs, (
+            "create_channel must pass rate_limit_per_minute to SlackChannel"
+        )
+        assert call_kwargs["rate_limit_per_minute"] == 30
