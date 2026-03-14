@@ -506,3 +506,160 @@ class TestFallbackPathsIntegration:
         cli.send_blocks.assert_called_once()
         inner.call_tool.assert_not_called()
         assert "denied" in str(result).lower()
+
+
+# ---------------------------------------------------------------------------
+# AC #533 / Task #794: send_image context_key threading
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SendImageContextKey:  # noqa: N801
+    """send_image must support context_key for thread registry integration."""
+
+    @pytest.mark.asyncio
+    async def test_send_image_accepts_context_key_kwarg(self) -> None:
+        """send_image signature must accept context_key as keyword argument."""
+        import inspect
+
+        from owlbear.channels.slack import SlackChannel
+
+        sig = inspect.signature(SlackChannel.send_image)
+        assert "context_key" in sig.parameters, (
+            "send_image must accept a context_key keyword argument"
+        )
+        param = sig.parameters["context_key"]
+        assert param.kind in (
+            inspect.Parameter.KEYWORD_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_image_context_key_resolves_thread_ts(self) -> None:
+        """send_image with context_key uses thread_ts from _thread_registry."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {"id": "F123"},
+        }
+        # Pre-populate registry so context_key resolves
+        channel._thread_registry["img:task42"] = "8888888888.000001"
+
+        await channel.send_image(b"png-data", caption="chart", context_key="img:task42")
+
+        call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
+        assert call_kwargs["thread_ts"] == "8888888888.000001"
+
+    @pytest.mark.asyncio
+    async def test_send_image_first_call_registers_ts(self) -> None:
+        """First send_image with context_key registers ts from response."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {"id": "F456", "shares": {"public": {"C12345": [{"ts": "7777777777.000001"}]}}},
+        }
+
+        await channel.send_image(
+            b"img-bytes", caption="screenshot", context_key="proj:task99"
+        )
+
+        assert "proj:task99" in channel._thread_registry
+        assert channel._thread_registry["proj:task99"]  # non-empty string
+
+    @pytest.mark.asyncio
+    async def test_explicit_thread_ts_takes_precedence(self) -> None:
+        """Explicit thread_ts must take precedence over context_key lookup."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {"id": "F789"},
+        }
+        # Pre-populate registry
+        channel._thread_registry["proj:task1"] = "9999999999.000001"
+
+        await channel.send_image(
+            b"data",
+            caption="img",
+            thread_ts="5555555555.000001",
+            context_key="proj:task1",
+        )
+
+        call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
+        # Explicit thread_ts wins over registry
+        assert call_kwargs["thread_ts"] == "5555555555.000001"
+
+    @pytest.mark.asyncio
+    async def test_error_fallback_forwards_context_key(self) -> None:
+        """When files_upload_v2 fails, fallback send() receives context_key."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.side_effect = Exception("upload boom")
+        channel._web_client.chat_postMessage.return_value = {
+            "ok": True,
+            "ts": "6666666666.000001",
+        }
+
+        await channel.send_image(
+            b"data", caption="fallback", context_key="ctx:fallback"
+        )
+
+        # send() should have been called with context_key
+        channel._web_client.chat_postMessage.assert_awaited_once()
+        # After fallback send, context_key should register from the send() call
+        assert "ctx:fallback" in channel._thread_registry
+
+    @pytest.mark.asyncio
+    async def test_send_image_without_context_key_regression(self) -> None:
+        """send_image without context_key works exactly as before (regression).
+
+        Also verifies that context_key=None is the default (signature check),
+        ensuring the parameter exists even when unused.
+        """
+        import inspect
+
+        from owlbear.channels.slack import SlackChannel
+
+        # Verify context_key parameter exists with None default
+        sig = inspect.signature(SlackChannel.send_image)
+        param = sig.parameters["context_key"]
+        assert param.default is None
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+
+        await channel.send_image("/images/chart.png", caption="Chart")
+
+        channel._web_client.files_upload_v2.assert_awaited_once()
+        call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
+        assert "thread_ts" not in call_kwargs
+        assert channel._thread_registry == {}
