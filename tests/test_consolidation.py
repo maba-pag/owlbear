@@ -1,8 +1,8 @@
-"""Tests for ConsolidationService — TDD RED phase for task #789.
+"""Tests for ConsolidationService — TDD RED phase for tasks #789 and #723.
 
 Contract tests for the consolidation service that periodically synthesizes
-cross-document insights from unconsolidated chunks.  All tests must fail
-until #723 implements the service.
+cross-document insights from unconsolidated chunks, plus config, bootstrap,
+and export tests for the remaining #723 AC lines.
 """
 
 from __future__ import annotations
@@ -450,3 +450,202 @@ class TestFromAC_Constructor:  # noqa: N801
         conn = _make_db()
         svc = ConsolidationService(conn=conn, graph_store=None, model="test")  # type: ignore[arg-type]
         assert hasattr(svc, "_conn") or hasattr(svc, "conn")
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ConfigConsolidationEnabled  (#723 AC5)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConfigConsolidationEnabled:  # noqa: N801
+    """AC: consolidation_enabled: bool = False added to OwlBearSettings."""
+
+    def test_default_is_false(self, default_settings: object) -> None:
+        """consolidation_enabled must default to False (feature-flagged off)."""
+        from owlbear.config import OwlBearSettings
+
+        settings: OwlBearSettings = default_settings  # type: ignore[assignment]
+        assert settings.consolidation_enabled is False
+
+    def test_env_override_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_CONSOLIDATION_ENABLED=true should enable the feature."""
+        from owlbear.config import OwlBearSettings
+
+        monkeypatch.setenv("OWLBEAR_CONSOLIDATION_ENABLED", "true")
+        settings = OwlBearSettings()
+        assert settings.consolidation_enabled is True
+
+    def test_env_override_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_CONSOLIDATION_ENABLED=false should keep it disabled."""
+        from owlbear.config import OwlBearSettings
+
+        monkeypatch.setenv("OWLBEAR_CONSOLIDATION_ENABLED", "false")
+        settings = OwlBearSettings()
+        assert settings.consolidation_enabled is False
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ConfigConsolidationInterval  (#723 AC6)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConfigConsolidationInterval:  # noqa: N801
+    """AC: consolidation_interval: int = 1800 added to OwlBearSettings."""
+
+    def test_default_is_1800(self, default_settings: object) -> None:
+        """consolidation_interval must default to 1800 seconds (30 min)."""
+        from owlbear.config import OwlBearSettings
+
+        settings: OwlBearSettings = default_settings  # type: ignore[assignment]
+        assert settings.consolidation_interval == 1800
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_CONSOLIDATION_INTERVAL=900 should change the interval."""
+        from owlbear.config import OwlBearSettings
+
+        monkeypatch.setenv("OWLBEAR_CONSOLIDATION_INTERVAL", "900")
+        settings = OwlBearSettings()
+        assert settings.consolidation_interval == 900
+
+    def test_is_int_type(self, default_settings: object) -> None:
+        """The field must be an integer, not a float or string."""
+        from owlbear.config import OwlBearSettings
+
+        settings: OwlBearSettings = default_settings  # type: ignore[assignment]
+        assert isinstance(settings.consolidation_interval, int)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BootstrapWiring  (#723 AC7)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BootstrapWiring:  # noqa: N801
+    """AC: Bootstrap constructs ConsolidationService in _build_knowledge_toolset when enabled."""
+
+    def test_accepts_consolidation_enabled_kwarg(self, tmp_path: object) -> None:
+        """_build_knowledge_toolset must accept a consolidation_enabled keyword argument."""
+        from owlbear.bootstrap.knowledge import (
+            _build_knowledge_toolset,
+        )
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+
+            # Must accept consolidation_enabled without TypeError
+            result = _build_knowledge_toolset(
+                tmp_path,  # type: ignore[arg-type]
+                infra,
+                consolidation_enabled=True,
+                consolidation_interval=1800,
+            )
+
+        assert result is not None
+
+    def test_returns_consolidation_service_when_enabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=True, return tuple includes ConsolidationService."""
+        from owlbear.bootstrap.knowledge import (
+            _build_knowledge_toolset,
+        )
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+
+            result = _build_knowledge_toolset(
+                tmp_path,  # type: ignore[arg-type]
+                infra,
+                consolidation_enabled=True,
+                consolidation_interval=1800,
+            )
+
+        assert result is not None
+        # Return tuple should be extended to 4 elements with ConsolidationService
+        assert len(result) >= 4, (  # type: ignore[arg-type]
+            "_build_knowledge_toolset should return ConsolidationService as 4th element"
+        )
+        consolidation_svc = result[3]  # type: ignore[index]
+        assert type(consolidation_svc).__name__ == "ConsolidationService"
+
+    def test_no_consolidation_service_when_disabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=False, no ConsolidationService returned."""
+        from owlbear.bootstrap.knowledge import (
+            _build_knowledge_toolset,
+        )
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+
+            # Must accept consolidation_enabled=False without TypeError
+            result = _build_knowledge_toolset(
+                tmp_path,  # type: ignore[arg-type]
+                infra,
+                consolidation_enabled=False,
+            )
+
+        assert result is not None
+        # When disabled: return tuple should be extended to 4 elements
+        # with None as the 4th (ConsolidationService slot).
+        assert len(result) >= 4, (  # type: ignore[arg-type]
+            "_build_knowledge_toolset should return 4-tuple even when disabled"
+        )
+        assert result[3] is None  # type: ignore[index]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_Export  (#723 AC8)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_Export:  # noqa: N801
+    """AC: ConsolidationService exported from owlbear.memory.knowledge.__init__."""
+
+    def test_importable_from_package(self) -> None:
+        """ConsolidationService must be importable from owlbear.memory.knowledge."""
+        from owlbear.memory.knowledge import ConsolidationService
+
+        assert ConsolidationService is not None
+
+    def test_in_all(self) -> None:
+        """ConsolidationService must appear in __all__."""
+        import owlbear.memory.knowledge as pkg
+
+        assert "ConsolidationService" in pkg.__all__
