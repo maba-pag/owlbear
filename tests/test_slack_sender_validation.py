@@ -651,6 +651,7 @@ class TestFromAC_BootstrapWiring:  # noqa: N801
         settings.slack_bot_token.get_secret_value.return_value = "xoxb-test"
         settings.slack_channel_id = "C12345"
         settings.slack_allowed_user_ids = ["U111", "U222"]
+        settings.slack_rate_limit_per_minute = 30
 
         mock_slack_cls.return_value = MagicMock()
         create_channel(settings, "slack")
@@ -677,6 +678,7 @@ class TestFromAC_BootstrapWiring:  # noqa: N801
         settings.slack_bot_token.get_secret_value.return_value = "xoxb-test"
         settings.slack_channel_id = "C12345"
         settings.slack_allowed_user_ids = []
+        settings.slack_rate_limit_per_minute = 30
 
         mock_slack_cls.return_value = MagicMock()
         create_channel(settings, "slack")

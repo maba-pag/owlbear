@@ -101,6 +101,13 @@ class OwlBearSettings(BaseSettings):
             " Empty list (default) allows all senders."
         ),
     )
+    slack_rate_limit_per_minute: int = Field(
+        default=30,
+        description=(
+            "Maximum messages accepted per user per minute via Slack."
+            " 0 disables rate limiting."
+        ),
+    )
 
     # --- Knowledge ---
     knowledge_db_path: Path = Field(

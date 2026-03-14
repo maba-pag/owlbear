@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
 try:
@@ -52,7 +54,7 @@ class SlackChannel(ChannelPlugin):
         allows all senders.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         app_token: str,
         bot_token: str,
@@ -60,6 +62,7 @@ class SlackChannel(ChannelPlugin):
         *,
         receive_timeout: float = 30.0,
         allowed_user_ids: frozenset[str] = frozenset(),
+        rate_limit_per_minute: int = 0,
     ) -> None:
         if AsyncWebClient is None:  # pragma: no cover
             msg = "slack_sdk is not installed. Install with: uv sync --extra slack"
@@ -70,6 +73,8 @@ class SlackChannel(ChannelPlugin):
         self._channel_id = channel_id
         self._receive_timeout = receive_timeout
         self._allowed_user_ids = allowed_user_ids
+        self._rate_limit_per_minute = rate_limit_per_minute
+        self._rate_windows: dict[str, deque[float]] = {}
 
         self._web_client = AsyncWebClient(
             token=bot_token,
@@ -181,6 +186,15 @@ class SlackChannel(ChannelPlugin):
 
         if context_key is not None and context_key not in self._thread_registry:
             self._thread_registry[context_key] = response["ts"]
+
+    async def send_file(
+        self,
+        path: Path,
+        *,
+        caption: str | None = None,
+    ) -> None:
+        """Deliver a file by delegating to :meth:`send_image`."""
+        await self.send_image(path, caption=caption if caption is not None else path.name)
 
     async def send_image(
         self,
@@ -312,7 +326,24 @@ class SlackChannel(ChannelPlugin):
 
     # -- Internal ------------------------------------------------------------
 
-    async def _handle_socket_event(
+    def _check_rate_limit(self, user_id: str) -> bool:
+        """Return True if *user_id* exceeds the per-minute message limit."""
+        now = time.monotonic()
+        window = self._rate_windows.setdefault(user_id, deque())
+        cutoff = now - 60.0
+        while window and window[0] <= cutoff:
+            window.popleft()
+        if len(window) >= self._rate_limit_per_minute:
+            logger.warning(
+                "Rate limited user %s (%d msgs in window)",
+                user_id,
+                len(window),
+            )
+            return True
+        window.append(now)
+        return False
+
+    async def _handle_socket_event(  # noqa: C901
         self,
         client: AsyncBaseSocketModeClient,
         request: SocketModeRequest,
@@ -346,6 +377,12 @@ class SlackChannel(ChannelPlugin):
                             sender,
                         )
                         return
+
+                # Rate limiting: sliding window per user
+                if self._rate_limit_per_minute > 0 and self._check_rate_limit(
+                    event.get("user", "")
+                ):
+                    return
 
                 text = event.get("text", "")
                 await self._message_queue.put(text)
