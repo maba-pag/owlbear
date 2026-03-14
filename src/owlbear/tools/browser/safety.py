@@ -11,6 +11,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from owlbear.core.exceptions import OwlBearError
 from owlbear.core.hooks import PreToolUseData  # noqa: TC001
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class BlockedURLError(Exception):
+class BlockedURLError(OwlBearError):
     """Raised when a navigation URL is denied by the safety guard.
 
     Attributes:

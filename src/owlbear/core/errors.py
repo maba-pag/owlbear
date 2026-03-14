@@ -31,6 +31,7 @@ except ImportError:  # openai is an optional dependency
 
 from owlbear.core.circuit_breaker import CircuitOpenError
 from owlbear.core.command_guard import BlockedCommandError
+from owlbear.tools.browser.safety import BlockedURLError
 
 
 class BudgetExceededError(Exception):
@@ -113,6 +114,7 @@ def classify_error(exc: Exception) -> ErrorCategory:
             FileNotFoundError,
             PermissionError,
             BlockedCommandError,
+            BlockedURLError,
             CircuitOpenError,
             BudgetExceededError,
         ),

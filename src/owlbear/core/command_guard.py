@@ -15,6 +15,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from owlbear.core.exceptions import OwlBearError
 from owlbear.core.hooks import PreToolUseData  # noqa: TC001
 
 if TYPE_CHECKING:
@@ -87,7 +88,7 @@ _FILE_TOOLS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-class BlockedCommandError(Exception):
+class BlockedCommandError(OwlBearError):
     """Raised when a command or file path is denied by the safety guard.
 
     Attributes:

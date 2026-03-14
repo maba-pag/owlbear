@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets import FunctionToolset
 
+from owlbear.core.exceptions import OwlBearError
+
 if TYPE_CHECKING:
     from typing import ClassVar
 
@@ -40,7 +42,7 @@ class TimeoutAction(enum.StrEnum):
     SKIP = "skip"
 
 
-class AskUserTimeoutError(TimeoutError):
+class AskUserTimeoutError(OwlBearError, TimeoutError):
     """Raised when the user does not respond and ``timeout_action`` is ABORT."""
 
 
