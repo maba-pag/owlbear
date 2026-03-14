@@ -365,7 +365,9 @@ class SlackChannel(ChannelPlugin):
             event = request.payload.get("event", {})
             if event.get("type") == "message" and event.get("channel_type") == "im":
                 # AC 3/5: drop messages with a subtype (bot_message, message_changed, etc.)
-                if event.get("subtype"):
+                subtype = event.get("subtype")
+                if subtype:
+                    logger.debug("Dropped message with subtype=%s", subtype)
                     return
 
                 # AC 4/7: drop disallowed senders when allowlist is non-empty
@@ -386,7 +388,11 @@ class SlackChannel(ChannelPlugin):
 
                 text = event.get("text", "")
                 await self._message_queue.put(text)
-                logger.debug("Enqueued Slack message: %s", text[:80])
+                logger.info(
+                    "Accepted message from %s (len=%d)",
+                    event.get("user", "unknown"),
+                    len(text),
+                )
 
         elif request.type == "interactive":
             # Always acknowledge interactive envelopes
