@@ -663,3 +663,119 @@ class TestFromAC_SendImageContextKey:  # noqa: N801
         call_kwargs = channel._web_client.files_upload_v2.call_args.kwargs
         assert "thread_ts" not in call_kwargs
         assert channel._thread_registry == {}
+
+
+# ---------------------------------------------------------------------------
+# AC #533 line 4: ts extraction failure → log debug + skip registration
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SendImageTsExtractionFailure:  # noqa: N801
+    """When ts cannot be extracted from files_upload_v2 response, send_image
+    must log a debug message and skip thread registry registration — without
+    raising an exception.
+    """
+
+    @pytest.mark.asyncio
+    async def test_missing_shares_logs_debug_and_skips_registration(
+        self,
+    ) -> None:
+        """Response has file but no shares dict → debug log, no registration."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {"id": "F100"},
+        }
+
+        with patch("owlbear.channels.slack.logger") as mock_logger:
+            await channel.send_image(
+                b"img-data", caption="test", context_key="ctx:no-shares"
+            )
+
+        # Registration must be skipped
+        assert "ctx:no-shares" not in channel._thread_registry
+        # A debug-level log must be emitted explaining why registration was skipped
+        mock_logger.debug.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_empty_shares_logs_debug_and_skips_registration(
+        self,
+    ) -> None:
+        """Response has file.shares but both public and private are empty."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {"id": "F200", "shares": {"public": {}, "private": {}}},
+        }
+
+        with patch("owlbear.channels.slack.logger") as mock_logger:
+            await channel.send_image(
+                b"img-data", caption="test", context_key="ctx:empty-shares"
+            )
+
+        assert "ctx:empty-shares" not in channel._thread_registry
+        mock_logger.debug.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_minimal_response_logs_debug_and_skips_registration(
+        self,
+    ) -> None:
+        """Response is minimal (no file key at all) → graceful degradation."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {"ok": True}
+
+        with patch("owlbear.channels.slack.logger") as mock_logger:
+            await channel.send_image(
+                b"img-data", caption="test", context_key="ctx:minimal"
+            )
+
+        assert "ctx:minimal" not in channel._thread_registry
+        mock_logger.debug.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_shares_with_missing_ts_logs_debug(self) -> None:
+        """Response has shares entries but ts key is absent → debug log."""
+        from owlbear.channels.slack import SlackChannel
+
+        channel = SlackChannel(
+            app_token="xapp-test",
+            bot_token="xoxb-test",
+            channel_id="C12345",
+        )
+        channel._web_client = AsyncMock()
+        channel._web_client.files_upload_v2.return_value = {
+            "ok": True,
+            "file": {
+                "id": "F300",
+                "shares": {"public": {"C12345": [{"no_ts_here": "1"}]}},
+            },
+        }
+
+        with patch("owlbear.channels.slack.logger") as mock_logger:
+            await channel.send_image(
+                b"img-data", caption="test", context_key="ctx:no-ts-field"
+            )
+
+        assert "ctx:no-ts-field" not in channel._thread_registry
+        mock_logger.debug.assert_called_once()
