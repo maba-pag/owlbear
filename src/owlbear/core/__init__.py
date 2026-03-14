@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.deps import OwlBearDeps
+from owlbear.core.exceptions import OwlBearError
 from owlbear.core.hooks import (
     DaemonStartupData,
     HookEvent,
@@ -28,6 +29,7 @@ __all__ = [
     "OnMessageData",
     "OwlBearAgent",
     "OwlBearDeps",
+    "OwlBearError",
     "PostToolUseData",
     "PreToolUseData",
     "RolePolicy",
