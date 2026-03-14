@@ -94,6 +94,13 @@ class OwlBearSettings(BaseSettings):
             "Slack channel ID to post messages to. All three Slack fields must be set together."
         ),
     )
+    slack_allowed_user_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Slack user IDs allowed to interact with the bot."
+            " Empty list (default) allows all senders."
+        ),
+    )
 
     # --- Knowledge ---
     knowledge_db_path: Path = Field(

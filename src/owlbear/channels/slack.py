@@ -55,6 +55,7 @@ class SlackChannel(ChannelPlugin):
         channel_id: str,
         *,
         receive_timeout: float = 30.0,
+        allowed_user_ids: frozenset[str] = frozenset(),
     ) -> None:
         if AsyncWebClient is None:  # pragma: no cover
             msg = "slack_sdk is not installed. Install with: uv sync --extra slack"
@@ -64,6 +65,7 @@ class SlackChannel(ChannelPlugin):
         self._bot_token = bot_token
         self._channel_id = channel_id
         self._receive_timeout = receive_timeout
+        self._allowed_user_ids = allowed_user_ids
 
         self._web_client = AsyncWebClient(
             token=bot_token,
@@ -317,6 +319,20 @@ class SlackChannel(ChannelPlugin):
 
             event = request.payload.get("event", {})
             if event.get("type") == "message" and event.get("channel_type") == "im":
+                # AC 3/5: drop messages with a subtype (bot_message, message_changed, etc.)
+                if event.get("subtype"):
+                    return
+
+                # AC 4/7: drop disallowed senders when allowlist is non-empty
+                if self._allowed_user_ids:
+                    sender = event.get("user")
+                    if sender not in self._allowed_user_ids:
+                        logger.warning(
+                            "Rejected message from disallowed sender: %s",
+                            sender,
+                        )
+                        return
+
                 text = event.get("text", "")
                 await self._message_queue.put(text)
                 logger.debug("Enqueued Slack message: %s", text[:80])

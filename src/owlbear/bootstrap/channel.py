@@ -35,6 +35,7 @@ def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugi
             app_token=settings.slack_app_token.get_secret_value(),
             bot_token=settings.slack_bot_token.get_secret_value(),
             channel_id=settings.slack_channel_id,
+            allowed_user_ids=frozenset(settings.slack_allowed_user_ids),
         )
 
     if channel_name == "voice":
