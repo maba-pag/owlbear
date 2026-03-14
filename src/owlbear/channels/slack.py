@@ -237,6 +237,12 @@ class SlackChannel(ChannelPlugin):
             ts = self._extract_upload_ts(response)
             if ts:
                 self._thread_registry[context_key] = ts
+            else:
+                logger.debug(
+                    "Could not extract ts from files_upload_v2 response"
+                    " for context_key=%s; skipping thread registration",
+                    context_key,
+                )
 
     @staticmethod
     def _extract_upload_ts(response: dict[str, Any]) -> str | None:
