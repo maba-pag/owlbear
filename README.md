@@ -43,6 +43,9 @@ bearclaw knowledge-source add --name N --type TYPE [opts]  # register a knowledg
 bearclaw knowledge-source list [--scope S]                 # list registered sources
 bearclaw knowledge-source show NAME                        # show source details
 bearclaw knowledge-source remove NAME                      # delete a source
+bearclaw decisions list                    # list pending decision requests
+bearclaw decisions show TASK_ID            # display a pending decision by task ID
+bearclaw decisions resolve TASK_ID         # interactively resolve a decision
 ```
 
 ## Slack Integration
