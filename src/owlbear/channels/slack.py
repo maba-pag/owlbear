@@ -182,6 +182,7 @@ class SlackChannel(ChannelPlugin):
         caption: str = "",
         *,
         thread_ts: str | None = None,
+        context_key: str | None = None,
     ) -> None:
         """Upload an image file to the configured Slack channel.
 
@@ -199,6 +200,9 @@ class SlackChannel(ChannelPlugin):
             Optional caption used as both ``title`` and ``initial_comment``.
         thread_ts:
             Optional thread timestamp to reply in a thread.
+        context_key:
+            Optional context identifier for automatic thread registry
+            integration.  Explicit *thread_ts* takes precedence.
         """
         kwargs: dict[str, Any] = {
             "file": file_or_bytes,
@@ -211,15 +215,41 @@ class SlackChannel(ChannelPlugin):
             kwargs["title"] = "image"
         if thread_ts is not None:
             kwargs["thread_ts"] = thread_ts
+        elif context_key is not None:
+            registry_ts = self._thread_registry.get(context_key)
+            if registry_ts is not None:
+                kwargs["thread_ts"] = registry_ts
 
         try:
-            await self._web_client.files_upload_v2(**kwargs)
+            response = await self._web_client.files_upload_v2(**kwargs)
         except Exception:  # noqa: BLE001 — deliberate catch-all; fallback to plain text
             logger.warning(
                 "files_upload_v2 failed, falling back to plain text",
                 exc_info=True,
             )
-            await self.send(caption or "[image upload failed]")
+            await self.send(caption or "[image upload failed]", context_key=context_key)
+            return
+
+        if context_key is not None and context_key not in self._thread_registry:
+            # Extract ts from the files_upload_v2 response when available.
+            ts = self._extract_upload_ts(response)
+            if ts:
+                self._thread_registry[context_key] = ts
+
+    @staticmethod
+    def _extract_upload_ts(response: dict[str, Any]) -> str | None:
+        """Best-effort extraction of message ts from a files_upload_v2 response."""
+        try:
+            shares = response["file"]["shares"]
+            # shares has "public" and/or "private" dicts keyed by channel id
+            for visibility in ("public", "private"):
+                channels = shares.get(visibility, {})
+                for entries in channels.values():
+                    if entries and entries[0].get("ts"):
+                        return entries[0]["ts"]  # type: ignore[no-any-return]
+        except (KeyError, TypeError, IndexError):
+            pass
+        return None
 
     async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
         """Wait for the next incoming message from Slack.
