@@ -485,3 +485,64 @@ class TestImportanceByTypeKeys:
 
         for key in IMPORTANCE_BY_TYPE:
             assert isinstance(key, EntityType), f"{key!r} is not an EntityType"
+
+
+# ---------------------------------------------------------------------------
+# ColBERT scalar quantization config (#793)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ColBERTQuantizationConfig:  # noqa: N801
+    """After _ensure_collection(), ColBERT vector has ScalarQuantization(INT8)."""
+
+    def test_colbert_has_scalar_quantization(self, store) -> None:
+        """ColBERT vector params include ScalarQuantization with INT8."""
+        from qdrant_client import models as qmodels
+
+        # Trigger collection creation
+        store._ensure_collection()
+
+        info = store._client.get_collection(store._collection)
+        colbert_params = info.config.params.vectors["colbert"]
+
+        assert colbert_params.quantization_config is not None
+        scalar_cfg = colbert_params.quantization_config.scalar
+        assert scalar_cfg.type == qmodels.ScalarType.INT8
+
+    def test_colbert_quantization_quantile(self, store) -> None:
+        """ColBERT ScalarQuantization uses quantile=0.99."""
+        store._ensure_collection()
+
+        info = store._client.get_collection(store._collection)
+        colbert_params = info.config.params.vectors["colbert"]
+
+        scalar_cfg = colbert_params.quantization_config.scalar
+        assert scalar_cfg.quantile == pytest.approx(0.99)
+
+    def test_colbert_quantization_always_ram(self, store) -> None:
+        """ColBERT ScalarQuantization has always_ram=True."""
+        store._ensure_collection()
+
+        info = store._client.get_collection(store._collection)
+        colbert_params = info.config.params.vectors["colbert"]
+
+        scalar_cfg = colbert_params.quantization_config.scalar
+        assert scalar_cfg.always_ram is True
+
+    def test_dense_has_no_quantization(self, store) -> None:
+        """Dense vector params have quantization_config=None."""
+        store._ensure_collection()
+
+        info = store._client.get_collection(store._collection)
+        dense_params = info.config.params.vectors["dense"]
+
+        assert dense_params.quantization_config is None
+
+    def test_existing_store_operations_still_work(self, store) -> None:
+        """Store + retrieve roundtrip works with quantization config present."""
+        hybrid = _hybrid_embedding(0.42)
+        store.store_embedding("quant-test-1", hybrid, "document")
+
+        result = store.get_embedding("quant-test-1")
+        assert result is not None
+        assert len(result) == DIM
