@@ -351,9 +351,11 @@ class SlackChannel(ChannelPlugin):
         """Process incoming Socket Mode events.
 
         Only ``message`` events with ``channel_type == 'im'`` are enqueued.
-        Messages with a ``subtype`` (bot echoes, edits, deletes) are silently
-        dropped.  When :attr:`_allowed_user_ids` is non-empty, messages from
-        unlisted senders are dropped and logged at WARNING.
+        Messages with a ``subtype`` (bot echoes, edits, deletes) are dropped
+        and logged at DEBUG.  When :attr:`_allowed_user_ids` is non-empty,
+        messages from unlisted senders are dropped and logged at WARNING.
+        Accepted messages are logged at INFO with sender ID and message
+        length; message content is never included in log output.
 
         All ``events_api`` envelopes are acknowledged regardless of filtering.
         """
