@@ -36,6 +36,7 @@ If you cannot continue without the user:
 ```powershell
 kanban\kanban-md.exe handoff <ID> --claim <agent> --block "Waiting on user: <what>" --note "## Handoff
 - Current state:
+- What failed:
 - Open questions:
 - Next step:" --timestamp --release
 ```
@@ -50,6 +51,42 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Repeated test/lint failures cannot be resolved
 
 **For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. See `decision-requests.instructions.md` for the format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+
+## Commit discipline
+
+Pipeline agents that produce deliverables (source code, tests, documentation) must commit their changes before handing off to the next stage. Kanban board files (`kanban/tasks/*.md`) are metadata — they stay uncommitted and get batched by the auditor.
+
+### Commit message format
+
+```
+type: description (#task-id, agent-role)
+```
+
+**Types:** `feat` (new feature), `fix` (bug fix), `test` (test additions/changes), `docs` (documentation), `chore` (tooling, deps, config), `refactor` (code restructure, no behavior change).
+
+**Examples:**
+
+```
+test: add failing tests for retry logic (#480, test-writer)
+feat: implement retry logic (#480, builder)
+docs: add retry module docstrings (#480, writer)
+chore: archive tasks #478 #479 #480 (#480, auditor)
+```
+
+### Who commits what
+
+| Agent       | Commits                                        | When                         |
+| ----------- | ---------------------------------------------- | ---------------------------- |
+| Test-writer | Test files                                     | Before moving to in-progress |
+| Builder     | Source code + builder-discovered tests         | Before moving to review      |
+| Writer      | Documentation files                            | Before moving to done        |
+| Auditor     | Kanban board files + any uncommitted leftovers | During Step 5 (packages)     |
+
+### Rules
+
+- **Commit only files touched by your current task.** Run `git status --short` and `git diff --cached` before committing to avoid staging other tasks' changes.
+- **One logical commit per agent per task.** Don't split into micro-commits or batch multiple tasks.
+- **Do not push.** The user pushes manually.
 
 ## Evidence over claims
 
@@ -135,6 +172,7 @@ These rules apply to ALL agents that use the terminal (most of them).
 - **No brute-force retries.** If a command fails, read the error and diagnose before retrying. Maximum 2 attempts at the same logical operation before reassessing.
 - **No Write-Host fencing.** The terminal tool reports exit codes automatically. Don't wrap commands in `Write-Host` markers.
 - **Chain with `;`** — never `&&` (PowerShell 5.1).
+- **Command decomposition.** Break complex multi-step operations into separate terminal calls rather than long chained pipelines. Each call is independently reviewable and reduces approval friction. Use `;`-chaining for closely related commands within one logical operation (e.g., `cd dir ; run cmd`), but separate distinct logical steps into their own calls.
 
 Agents that run pytest/ruff/coverage: read the `pytest-and-linting` skill for
 correct commands and PS 5.1 piping pitfalls.
