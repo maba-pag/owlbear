@@ -145,6 +145,13 @@ class QdrantVectorStore:
                             comparator=qmodels.MultiVectorComparator.MAX_SIM,
                         ),
                         hnsw_config=qmodels.HnswConfigDiff(m=0),
+                        quantization_config=qmodels.ScalarQuantization(
+                            scalar=qmodels.ScalarQuantizationConfig(
+                                type=qmodels.ScalarType.INT8,
+                                quantile=0.99,
+                                always_ram=True,
+                            ),
+                        ),
                     ),
                 },
                 sparse_vectors_config={
