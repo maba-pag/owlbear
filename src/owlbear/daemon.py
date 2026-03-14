@@ -846,7 +846,7 @@ async def poll_loop(  # noqa: PLR0913
             )
 
 
-async def run_daemon(  # noqa: PLR0913, PLR0915
+async def run_daemon(  # noqa: PLR0913, PLR0915, PLR0912, C901
     *,
     channel: ChannelPlugin,
     agent: OwlBearAgent,
@@ -858,6 +858,7 @@ async def run_daemon(  # noqa: PLR0913, PLR0915
     agent_registry: AgentRegistry | None = None,
     workspace_root: Path | None = None,
     hydrator: Callable | None = None,
+    consolidation_svc: object | None = None,
 ) -> None:
     """Run the daemon loop.
 
@@ -946,6 +947,15 @@ async def run_daemon(  # noqa: PLR0913, PLR0915
             )
             heartbeat_task = asyncio.create_task(hb_runner.run(), name="heartbeat")
 
+        # --- Consolidation timer ---
+        consolidation_task: asyncio.Task[None] | None = None
+        if consolidation_svc is not None and settings is not None:
+            interval = getattr(settings, "consolidation_interval", 1800)
+            consolidation_task = asyncio.create_task(
+                consolidation_svc.schedule_periodic(interval=interval),
+                name="consolidation",
+            )
+
         autonomous = (
             settings is not None
             and settings.autonomous_mode
@@ -1013,6 +1023,12 @@ async def run_daemon(  # noqa: PLR0913, PLR0915
             heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
+
+        # Cancel consolidation timer if running
+        if consolidation_task is not None and not consolidation_task.done():
+            consolidation_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await consolidation_task
 
         # Emit SESSION_END before restoring signal handlers
         try:

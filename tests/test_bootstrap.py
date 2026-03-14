@@ -1531,8 +1531,8 @@ class TestBuildToolsetsKnowledgeService:
             result = build_toolsets(settings, tmp_path, hooks, channel)
 
         assert isinstance(result, tuple)
-        assert len(result) == 3
-        toolsets, service, _pipeline = result
+        assert len(result) == 4
+        toolsets, service, _pipeline, _consolidation = result
         assert isinstance(toolsets, list)
         assert service is mock_service
 
@@ -1546,7 +1546,7 @@ class TestBuildToolsetsKnowledgeService:
             "owlbear.bootstrap._build_knowledge_infra",
             return_value=None,
         ):
-            toolsets, service, _ = build_toolsets(settings, tmp_path, hooks, channel)
+            toolsets, service, _, _ = build_toolsets(settings, tmp_path, hooks, channel)
 
         assert isinstance(toolsets, list)
         assert service is None
@@ -1610,7 +1610,7 @@ class TestBootstrapKnowledgeServiceWiring:
             patch("owlbear.core.agent.Agent"),
             patch(
                 "owlbear.bootstrap.build_toolsets",
-                return_value=([], mock_service, None),
+                return_value=([], mock_service, None, None),
             ),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)
@@ -1635,7 +1635,7 @@ class TestBootstrapKnowledgeServiceWiring:
             patch("owlbear.core.agent.Agent"),
             patch(
                 "owlbear.bootstrap.build_toolsets",
-                return_value=([], None, None),
+                return_value=([], None, None, None),
             ),
         ):
             result = await bootstrap(settings, workspace_root=tmp_path)

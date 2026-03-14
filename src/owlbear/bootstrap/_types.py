@@ -113,4 +113,5 @@ class BootstrapResult:
     startup_summary: StartupSummary | None = None
     progress_reporter: ProgressReporter | None = None
     hydrator: Callable | None = None
+    consolidation_svc: object | None = None
     cleanup: list[Callable] = field(default_factory=list)

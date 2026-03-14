@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from owlbear.config import OwlBearSettings
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.context import ContextManager
+    from owlbear.memory.knowledge.consolidation import ConsolidationService
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
@@ -71,7 +72,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
     cleanup: list[Callable] | None,
     summary: list[ComponentStatus],
     _pkg: object,
-) -> tuple[KnowledgeQueryService | None, IngestPipeline | None]:
+) -> tuple[KnowledgeQueryService | None, IngestPipeline | None, ConsolidationService | None]:
     """Build knowledge, bookmark, source, and web-search toolsets.
 
     Uses *_pkg* (the package module) to resolve ``_build_knowledge_infra``
@@ -79,6 +80,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
     """
     knowledge_service: KnowledgeQueryService | None = None
     ingest_pipeline: IngestPipeline | None = None
+    consolidation_svc: ConsolidationService | None = None
     try:
         infra = _pkg._build_knowledge_infra(  # noqa: SLF001
             workspace,
@@ -113,7 +115,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
             consolidation_interval=settings.consolidation_interval,
         )
         if knowledge_result is not None:
-            knowledge_ts, knowledge_service, ingest_pipeline, _consolidation_svc = knowledge_result
+            knowledge_ts, knowledge_service, ingest_pipeline, consolidation_svc = knowledge_result
             raw.append(knowledge_ts)
             summary.append(ComponentStatus(name="KnowledgeToolset", loaded=True))
         else:
@@ -171,7 +173,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
             )
         )
 
-    return knowledge_service, ingest_pipeline
+    return knowledge_service, ingest_pipeline, consolidation_svc
 
 
 def _wire_web_search(
@@ -261,13 +263,19 @@ def build_toolsets(  # noqa: PLR0913
     chat_model: str | Model | None = None,
     cleanup: list[Callable] | None = None,
     summary: list[ComponentStatus] | None = None,
-) -> tuple[list[AbstractToolset], KnowledgeQueryService | None, IngestPipeline | None]:
+) -> tuple[
+    list[AbstractToolset],
+    KnowledgeQueryService | None,
+    IngestPipeline | None,
+    ConsolidationService | None,
+]:
     """Build all toolsets, wrapping non-delegation ones in :class:`HookedToolset`.
 
     Returns
     -------
-    tuple[list[AbstractToolset], KnowledgeQueryService | None, IngestPipeline | None]
-        Toolset list, optional knowledge service, optional ingest pipeline.
+    tuple
+        Toolset list, optional knowledge service, optional ingest pipeline,
+        optional consolidation service.
     """
     # Resolve _build_knowledge_infra through the package module so that
     # ``mock.patch("owlbear.bootstrap._build_knowledge_infra", ...)`` works.
@@ -321,7 +329,7 @@ def build_toolsets(  # noqa: PLR0913
             )
 
     # Knowledge + web search toolsets
-    knowledge_service, ingest_pipeline = _wire_knowledge_toolsets(
+    knowledge_service, ingest_pipeline, consolidation_svc = _wire_knowledge_toolsets(
         raw,
         settings,
         workspace,
@@ -335,7 +343,7 @@ def build_toolsets(  # noqa: PLR0913
 
     # Wrap and gate
     wrapped = _wrap_toolsets(raw, settings, hooks, channel)
-    return wrapped, knowledge_service, ingest_pipeline
+    return wrapped, knowledge_service, ingest_pipeline, consolidation_svc
 
 
 def _add_project_toolset(  # noqa: PLR0913

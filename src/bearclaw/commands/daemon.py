@@ -73,6 +73,7 @@ def run_cmd(
                 settings=settings,
                 error_journal=result.error_journal,
                 hydrator=result.hydrator,
+                consolidation_svc=result.consolidation_svc,
             )
         finally:
             if result.mcp_registry:

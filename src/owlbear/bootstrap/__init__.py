@@ -153,7 +153,7 @@ async def bootstrap(
     model = OpenAIChatModel(settings.chat_model, provider=provider)
 
     component_statuses: list[ComponentStatus] = []
-    toolsets, knowledge_service, ingest_pipeline = build_toolsets(
+    toolsets, knowledge_service, ingest_pipeline, consolidation_svc = build_toolsets(
         settings,
         workspace,
         hooks,
@@ -250,5 +250,6 @@ async def bootstrap(
         startup_summary=startup_summary,
         progress_reporter=progress_reporter,
         hydrator=hydrator,
+        consolidation_svc=consolidation_svc,
         cleanup=cleanup,
     )
