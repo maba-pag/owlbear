@@ -6,6 +6,7 @@ from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
 from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
 from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset
 from owlbear.memory.knowledge.chunker import Chunk, TextChunker
+from owlbear.memory.knowledge.consolidation import ConsolidationService
 from owlbear.memory.knowledge.document_store import (
     DocumentStatus,
     DocumentStore,
@@ -48,6 +49,7 @@ __all__ = [
     "BookmarkStore",
     "BookmarkToolset",
     "Chunk",
+    "ConsolidationService",
     "Document",
     "DocumentStatus",
     "DocumentStore",

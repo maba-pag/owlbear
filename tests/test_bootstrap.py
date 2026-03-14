@@ -1300,6 +1300,8 @@ class TestBuildToolsetsProjectScope:
                 knowledge_graph_expansion=True,
                 inter_doc_graph_building=False,
                 bg_concurrency=5,
+                consolidation_enabled=False,
+                consolidation_interval=1800,
             )
 
 
@@ -1332,8 +1334,8 @@ class TestBuildKnowledgeToolsetReturnsService:
 
         assert result is not None
         assert isinstance(result, tuple)
-        assert len(result) == 3
-        toolset, service, _pipeline = result
+        assert len(result) == 4
+        toolset, service, _pipeline, _consolidation = result
         assert type(toolset).__name__ == "KnowledgeToolset"
         assert type(service).__name__ == "KnowledgeQueryService"
 
@@ -1357,7 +1359,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
 
         assert result is not None
-        _, service, _ = result
+        _, service, _, _ = result
         assert service._scopes == ["global", "project:proj-42"]
 
     def test_service_no_scopes_when_no_project(self, tmp_path: Path) -> None:
@@ -1380,7 +1382,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        _, service, _ = result
+        _, service, _, _ = result
         assert service._scopes is None
 
     def test_max_tokens_stored_on_service(self, tmp_path: Path) -> None:
@@ -1403,7 +1405,7 @@ class TestBuildKnowledgeToolsetReturnsService:
             result = _build_knowledge_toolset(tmp_path, infra, max_tokens=3000)
 
         assert result is not None
-        _, service, _ = result
+        _, service, _, _ = result
         assert service.default_max_tokens == 3000
 
     def test_returns_none_on_failure(self, tmp_path: Path) -> None:
@@ -1523,7 +1525,7 @@ class TestBuildToolsetsKnowledgeService:
             ),
             patch(
                 "owlbear.bootstrap._build_knowledge_toolset",
-                return_value=(mock_toolset, mock_service, mock_pipeline),
+                return_value=(mock_toolset, mock_service, mock_pipeline, None),
             ),
         ):
             result = build_toolsets(settings, tmp_path, hooks, channel)
@@ -1581,6 +1583,8 @@ class TestBuildToolsetsKnowledgeService:
             knowledge_graph_expansion=True,
             inter_doc_graph_building=False,
             bg_concurrency=5,
+            consolidation_enabled=False,
+            consolidation_interval=1800,
         )
 
 
@@ -1827,7 +1831,7 @@ class TestSharedKnowledgeInfra:
             result = _build_knowledge_toolset(tmp_path, infra)
 
         assert result is not None
-        toolset, service, _ = result
+        toolset, service, *_ = result
         assert type(toolset).__name__ == "KnowledgeToolset"
         assert type(service).__name__ == "KnowledgeQueryService"
 
@@ -2481,7 +2485,7 @@ class TestComponentStatusErrorSites:
             patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
             patch(
                 "owlbear.bootstrap._build_knowledge_toolset",
-                return_value=(mock_knowledge_ts, mock_service, mock_pipeline),
+                return_value=(mock_knowledge_ts, mock_service, mock_pipeline, None),
             ),
             patch("owlbear.bootstrap._build_bookmark_toolset", return_value=None),
             patch("owlbear.bootstrap._build_knowledge_source_toolset", return_value=None),
@@ -2508,7 +2512,7 @@ class TestComponentStatusErrorSites:
             patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
             patch(
                 "owlbear.bootstrap._build_knowledge_toolset",
-                return_value=(mock_knowledge_ts, mock_service, mock_pipeline),
+                return_value=(mock_knowledge_ts, mock_service, mock_pipeline, None),
             ),
             patch("owlbear.bootstrap._build_bookmark_toolset", return_value=MagicMock()),
             patch("owlbear.bootstrap._build_knowledge_source_toolset", return_value=None),

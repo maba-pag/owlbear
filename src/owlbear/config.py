@@ -298,6 +298,16 @@ class OwlBearSettings(BaseSettings):
         description="Message count threshold that triggers context condensation.",
     )
 
+    # --- Consolidation ---
+    consolidation_enabled: bool = Field(
+        default=False,
+        description="Enable periodic cross-document insight consolidation (feature-flagged off).",
+    )
+    consolidation_interval: int = Field(
+        default=1800,
+        description="Seconds between consolidation ticks. Must be > 0.",
+    )
+
     # --- Session memory ---
     session_memory_enabled: bool = Field(
         default=False,

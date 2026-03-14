@@ -109,9 +109,11 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
             knowledge_graph_expansion=settings.knowledge_graph_expansion,
             inter_doc_graph_building=settings.inter_doc_graph_building,
             bg_concurrency=settings.ingest_bg_concurrency,
+            consolidation_enabled=settings.consolidation_enabled,
+            consolidation_interval=settings.consolidation_interval,
         )
         if knowledge_result is not None:
-            knowledge_ts, knowledge_service, ingest_pipeline = knowledge_result
+            knowledge_ts, knowledge_service, ingest_pipeline, _consolidation_svc = knowledge_result
             raw.append(knowledge_ts)
             summary.append(ComponentStatus(name="KnowledgeToolset", loaded=True))
         else:

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from owlbear.config import OwlBearSettings
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.knowledge.chunker import TextChunker
+    from owlbear.memory.knowledge.consolidation import ConsolidationService
     from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider
     from owlbear.memory.knowledge.extractor import EntityExtractor
     from owlbear.memory.knowledge.graph import GraphStore
@@ -106,10 +107,22 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     knowledge_graph_expansion: bool = True,
     inter_doc_graph_building: bool = False,
     bg_concurrency: int = 5,
-) -> tuple[AbstractToolset, KnowledgeQueryService, IngestPipeline] | None:
+    consolidation_enabled: bool = False,
+    consolidation_interval: int = 1800,  # noqa: ARG001
+) -> (
+    tuple[
+        AbstractToolset,
+        KnowledgeQueryService,
+        IngestPipeline,
+        ConsolidationService | None,
+    ]
+    | None
+):
     """Create a :class:`KnowledgeToolset` and :class:`KnowledgeQueryService`.
 
     Returns ``None`` when the knowledge subsystem cannot be initialised.
+    The fourth element is a :class:`ConsolidationService` when
+    *consolidation_enabled* is ``True``, otherwise ``None``.
     """
     try:
         from owlbear.memory.knowledge import IngestPipeline  # noqa: PLC0415
@@ -195,7 +208,20 @@ def _build_knowledge_toolset(  # noqa: PLR0913
             ingest_pipeline=ingest_pipeline,
             project_scope=project_id,
         )
-        return toolset, service, ingest_pipeline  # noqa: TRY300
+        # Build optional consolidation service.
+        consolidation_svc = None
+        if consolidation_enabled:
+            from owlbear.memory.knowledge.consolidation import (  # noqa: PLC0415
+                ConsolidationService,
+            )
+
+            consolidation_svc = ConsolidationService(
+                conn=infra.conn,
+                graph_store=infra.graph_store,
+                model=chat_model,
+            )
+
+        return toolset, service, ingest_pipeline, consolidation_svc  # noqa: TRY300
     except Exception:  # noqa: BLE001
         logger.warning("Failed to create KnowledgeToolset", exc_info=True)
         return None
