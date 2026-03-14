@@ -28,6 +28,8 @@ Each entity needs:
   - name: a short identifier
   - entity_type: one of file, function, class_, decision, pattern, concept
   - description: a brief description of what it is or does
+  - importance: a 0.0 to 1.0 score indicating how important the entity is
+    (0.0 = trivial, 1.0 = critical)
 
 Each edge needs:
   - source_id: the id of the source entity

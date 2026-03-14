@@ -14,7 +14,7 @@ import pydantic_ai.models
 import pytest
 from pydantic import ValidationError
 
-from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
+from owlbear.memory.knowledge.extractor import EXTRACTION_PROMPT, EntityExtractor, ExtractionResult
 from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear.memory.knowledge.protocol import HybridEmbedding
@@ -169,6 +169,23 @@ class TestFromAC_EntityImportanceField:  # noqa: N801
 
 class TestFromAC_ExtractorImportance:  # noqa: N801
     """EntityExtractor.extract() returns entities with importance populated."""
+
+    def test_extraction_prompt_mentions_importance(self) -> None:
+        """EXTRACTION_PROMPT instructs the LLM to output an importance score."""
+        prompt_lower = EXTRACTION_PROMPT.lower()
+        assert "importance" in prompt_lower, (
+            "EXTRACTION_PROMPT must instruct the LLM to output a 0.0-1.0 "
+            "importance score per entity"
+        )
+
+    def test_extraction_prompt_specifies_importance_range(self) -> None:
+        """EXTRACTION_PROMPT specifies the 0.0-1.0 range for importance."""
+        assert "0.0" in EXTRACTION_PROMPT, (
+            "EXTRACTION_PROMPT must mention 0.0 lower bound for importance"
+        )
+        assert "1.0" in EXTRACTION_PROMPT, (
+            "EXTRACTION_PROMPT must mention 1.0 upper bound for importance"
+        )
 
     @pytest.mark.asyncio
     async def test_extracted_entities_have_importance(self) -> None:

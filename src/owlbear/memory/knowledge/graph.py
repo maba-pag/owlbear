@@ -169,7 +169,7 @@ class GraphStore:
             params.extend(scopes)
 
         sql = (
-            "SELECT id, name, entity_type, description, metadata,"
+            "SELECT id, name, entity_type, description, metadata,"  # noqa: S608
             " scope, document_id, chunk_id, importance"
             " FROM entities WHERE " + " AND ".join(clauses)
         )
