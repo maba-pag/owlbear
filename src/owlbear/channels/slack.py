@@ -52,6 +52,9 @@ class SlackChannel(ChannelPlugin):
         Slack user IDs permitted to send messages.  When non-empty, messages
         from any other sender are silently dropped.  An empty set (default)
         allows all senders.
+    rate_limit_per_minute:
+        Maximum messages accepted per user per minute.  ``0`` (default)
+        disables rate limiting.
     """
 
     def __init__(  # noqa: PLR0913
