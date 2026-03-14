@@ -7870,3 +7870,840 @@
 {"timestamp":"2026-03-13T20:45:57.3598955+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
 {"timestamp":"2026-03-13T20:46:12.6329485+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
 {"timestamp":"2026-03-13T20:46:12.6408423+01:00","action":"release","task_id":781,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:06:12.1756845+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:06:12.1824458+01:00","action":"claim","task_id":786,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:06:28.7113401+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:06:28.7194846+01:00","action":"claim","task_id":728,"detail":"builder"}
+{"timestamp":"2026-03-13T23:06:33.2215183+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:06:39.4753216+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:06:39.4797533+01:00","action":"claim","task_id":780,"detail":"builder"}
+{"timestamp":"2026-03-13T23:06:41.392846+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:06:41.3979659+01:00","action":"claim","task_id":788,"detail":"builder"}
+{"timestamp":"2026-03-13T23:06:43.7605204+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:06:43.766109+01:00","action":"release","task_id":728,"detail":"builder"}
+{"timestamp":"2026-03-13T23:07:55.7539915+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:07:55.7582713+01:00","action":"release","task_id":788,"detail":"builder"}
+{"timestamp":"2026-03-13T23:08:31.6721811+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:08:37.2063694+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:08:37.2116654+01:00","action":"release","task_id":786,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:08:38.349947+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:08:42.9128398+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:10:18.9470178+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:10:46.5636737+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T23:10:46.5727727+01:00","action":"claim","task_id":539,"detail":"architect"}
+{"timestamp":"2026-03-13T23:10:48.4425629+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:10:48.4482056+01:00","action":"claim","task_id":523,"detail":"architect"}
+{"timestamp":"2026-03-13T23:10:52.8130081+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:10:52.819021+01:00","action":"claim","task_id":434,"detail":"architect"}
+{"timestamp":"2026-03-13T23:13:44.9227829+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:13:44.9281602+01:00","action":"release","task_id":434,"detail":"architect"}
+{"timestamp":"2026-03-13T23:14:17.2773241+01:00","action":"create","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-13T23:15:03.1437727+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T23:15:24.1394504+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T23:15:28.8309906+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T23:15:46.8998313+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-13T23:15:46.9048949+01:00","action":"release","task_id":539,"detail":"architect"}
+{"timestamp":"2026-03-13T23:15:59.9077104+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:16:26.9477873+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:16:41.5476391+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:16:42.0483584+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:16:42.0520275+01:00","action":"release","task_id":523,"detail":"architect"}
+{"timestamp":"2026-03-13T23:27:41.0505074+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-13T23:27:41.0563137+01:00","action":"claim","task_id":771,"detail":"architect"}
+{"timestamp":"2026-03-13T23:28:56.9376804+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:28:56.9442801+01:00","action":"claim","task_id":728,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:29:28.9313344+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:29:30.4923306+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:29:30.4989896+01:00","action":"claim","task_id":766,"detail":"architect"}
+{"timestamp":"2026-03-13T23:29:42.8946026+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:30:25.5374928+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:30:26.2665007+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:30:26.2718015+01:00","action":"release","task_id":728,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:30:55.8450439+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:31:04.9120915+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:31:10.6816909+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:31:14.3387516+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:31:14.3516409+01:00","action":"release","task_id":780,"detail":"builder"}
+{"timestamp":"2026-03-13T23:31:16.1052093+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:31:26.0060746+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:31:26.0082065+01:00","action":"release","task_id":766,"detail":"architect"}
+{"timestamp":"2026-03-13T23:32:31.1639193+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-13T23:32:31.1707075+01:00","action":"release","task_id":771,"detail":"architect"}
+{"timestamp":"2026-03-13T23:33:31.4423047+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T23:33:31.4479143+01:00","action":"claim","task_id":729,"detail":"builder"}
+{"timestamp":"2026-03-13T23:34:01.4067567+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T23:34:05.9862421+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-13T23:34:05.9910143+01:00","action":"release","task_id":729,"detail":"builder"}
+{"timestamp":"2026-03-13T23:35:02.3384915+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-13T23:35:02.344265+01:00","action":"claim","task_id":791,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:35:05.1499941+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:35:05.153102+01:00","action":"claim","task_id":523,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:35:38.8374952+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:35:38.8417825+01:00","action":"claim","task_id":788,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:36:08.3426293+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:36:08.3562952+01:00","action":"release","task_id":788,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:37:47.0377916+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-13T23:37:58.0863781+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-13T23:38:03.4374092+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-13T23:38:03.4399845+01:00","action":"release","task_id":791,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:42:15.081939+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:42:24.7978421+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:42:30.2752874+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-13T23:42:30.2804085+01:00","action":"release","task_id":523,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:42:56.446988+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:42:56.4534315+01:00","action":"claim","task_id":434,"detail":"researcher"}
+{"timestamp":"2026-03-13T23:42:59.934624+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:42:59.9396545+01:00","action":"claim","task_id":786,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:43:10.0246806+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:43:19.1907377+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:43:23.8210481+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-13T23:43:23.8266946+01:00","action":"release","task_id":786,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:48:12.9147942+01:00","action":"create","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-13T23:48:19.5875824+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-13T23:48:49.1383937+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:48:59.4437235+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:49:04.0602895+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-13T23:49:04.0644973+01:00","action":"release","task_id":434,"detail":"researcher"}
+{"timestamp":"2026-03-13T23:55:08.9547453+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:55:08.9652286+01:00","action":"claim","task_id":766,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:55:11.4997084+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:55:11.5081905+01:00","action":"claim","task_id":728,"detail":"writer"}
+{"timestamp":"2026-03-13T23:55:13.6425077+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-13T23:55:13.6518423+01:00","action":"release","task_id":766,"detail":"test-writer"}
+{"timestamp":"2026-03-13T23:55:25.0016349+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-13T23:55:25.0065306+01:00","action":"claim","task_id":780,"detail":"reviewer"}
+{"timestamp":"2026-03-13T23:55:28.2312284+01:00","action":"edit","task_id":788,"detail":"Implement retro SKILL.md with git metrics workflow"}
+{"timestamp":"2026-03-13T23:55:28.2379157+01:00","action":"claim","task_id":788,"detail":"writer"}
+{"timestamp":"2026-03-13T23:55:46.9370875+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:58:15.9964894+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:58:16.5538341+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-13T23:58:16.5586034+01:00","action":"release","task_id":728,"detail":"writer"}
+{"timestamp":"2026-03-14T00:01:14.9031932+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T00:01:14.9128174+01:00","action":"release","task_id":780,"detail":"reviewer"}
+{"timestamp":"2026-03-14T00:01:58.5795481+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T00:01:58.5857078+01:00","action":"claim","task_id":792,"detail":"researcher"}
+{"timestamp":"2026-03-14T00:02:10.4614518+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:02:10.4650585+01:00","action":"claim","task_id":729,"detail":"reviewer"}
+{"timestamp":"2026-03-14T00:02:18.5715454+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:02:18.5854851+01:00","action":"claim","task_id":789,"detail":"builder"}
+{"timestamp":"2026-03-14T00:03:39.243073+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:03:49.7098004+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:03:49.7150974+01:00","action":"release","task_id":729,"detail":"reviewer"}
+{"timestamp":"2026-03-14T00:04:44.3372176+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T00:04:54.7227645+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T00:04:54.7294079+01:00","action":"release","task_id":792,"detail":"researcher"}
+{"timestamp":"2026-03-14T00:08:43.2945158+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:08:54.0058405+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:08:54.0110344+01:00","action":"release","task_id":789,"detail":"builder"}
+{"timestamp":"2026-03-14T00:36:26.7898341+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T00:36:26.7950358+01:00","action":"claim","task_id":766,"detail":"builder"}
+{"timestamp":"2026-03-14T00:36:31.6871808+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T00:36:31.6929886+01:00","action":"claim","task_id":771,"detail":"test-writer"}
+{"timestamp":"2026-03-14T00:36:33.6829559+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-14T00:36:33.6888306+01:00","action":"claim","task_id":728,"detail":"auditor"}
+{"timestamp":"2026-03-14T00:36:41.7183767+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-14T00:36:48.1539302+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T00:36:48.1539302+01:00","action":"claim","task_id":780,"detail":"writer"}
+{"timestamp":"2026-03-14T00:37:29.1933795+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T00:37:38.6924701+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T00:37:39.285551+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T00:37:39.2898138+01:00","action":"release","task_id":780,"detail":"writer"}
+{"timestamp":"2026-03-14T00:38:36.2052318+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T00:38:46.4114963+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T00:42:52.536987+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-14T00:43:17.1553315+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T00:43:25.3143057+01:00","action":"move","task_id":728,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T00:43:29.5635883+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T00:43:34.9258185+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T00:43:34.9361815+01:00","action":"release","task_id":771,"detail":"test-writer"}
+{"timestamp":"2026-03-14T00:43:43.1971978+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-14T00:43:43.202781+01:00","action":"release","task_id":728,"detail":"auditor"}
+{"timestamp":"2026-03-14T00:44:43.2526648+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:44:43.256608+01:00","action":"claim","task_id":729,"detail":"writer"}
+{"timestamp":"2026-03-14T00:44:50.6264342+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:44:50.6323453+01:00","action":"claim","task_id":789,"detail":"reviewer"}
+{"timestamp":"2026-03-14T00:45:09.7108045+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:30.1778248+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:30.7835965+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:30.7888128+01:00","action":"release","task_id":729,"detail":"writer"}
+{"timestamp":"2026-03-14T00:45:31.4388954+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:45:31.4409038+01:00","action":"claim","task_id":786,"detail":"builder"}
+{"timestamp":"2026-03-14T00:45:37.9395906+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:45:38.6115706+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:38.6175533+01:00","action":"claim","task_id":729,"detail":"writer"}
+{"timestamp":"2026-03-14T00:45:48.5998993+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:53.9142388+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T00:45:53.9186773+01:00","action":"release","task_id":729,"detail":"writer"}
+{"timestamp":"2026-03-14T00:46:22.9428777+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T00:46:22.9479456+01:00","action":"claim","task_id":523,"detail":"builder"}
+{"timestamp":"2026-03-14T00:46:56.4011349+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:46:56.4057687+01:00","action":"unblock","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:47:18.4600225+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:47:28.4539101+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:47:29.0332495+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T00:47:29.0419906+01:00","action":"release","task_id":786,"detail":"builder"}
+{"timestamp":"2026-03-14T00:52:56.9480836+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:53:40.1311624+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:53:40.7298018+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:53:40.7345773+01:00","action":"release","task_id":789,"detail":"reviewer"}
+{"timestamp":"2026-03-14T00:54:47.7092187+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T00:55:35.0267245+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T00:55:45.2684446+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T00:55:45.2742732+01:00","action":"release","task_id":523,"detail":"builder"}
+{"timestamp":"2026-03-14T01:00:11.6592776+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T01:00:11.6644779+01:00","action":"claim","task_id":780,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:00:14.4059627+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-14T01:00:14.414444+01:00","action":"claim","task_id":722,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:00:30.0714671+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:00:30.0768922+01:00","action":"claim","task_id":771,"detail":"builder"}
+{"timestamp":"2026-03-14T01:00:35.1587649+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:00:36.0938413+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:00:36.1034281+01:00","action":"release","task_id":766,"detail":"builder"}
+{"timestamp":"2026-03-14T01:00:36.9811817+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:00:36.9877261+01:00","action":"claim","task_id":766,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:00:45.017354+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:07:14.224726+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:07:19.7196361+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:07:20.3952419+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:07:20.40752+01:00","action":"release","task_id":766,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:07:55.7117975+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:08:02.6476099+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:08:03.2935032+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:08:03.2977813+01:00","action":"release","task_id":771,"detail":"builder"}
+{"timestamp":"2026-03-14T01:10:17.6208931+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T01:10:35.8761903+01:00","action":"move","task_id":780,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:10:57.1424571+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-14T01:10:57.1527528+01:00","action":"release","task_id":780,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:17:05.9054583+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-14T01:17:12.8814664+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-14T01:17:17.9460195+01:00","action":"move","task_id":722,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:17:23.3419876+01:00","action":"edit","task_id":722,"detail":"Add importance scoring to EntityExtractor"}
+{"timestamp":"2026-03-14T01:17:23.3419876+01:00","action":"release","task_id":722,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:17:54.3136209+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T01:17:54.3214313+01:00","action":"claim","task_id":729,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:17:56.9866687+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:17:56.9914411+01:00","action":"claim","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:18:01.4865799+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:18:01.4939937+01:00","action":"claim","task_id":789,"detail":"writer"}
+{"timestamp":"2026-03-14T01:18:10.0251941+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:18:10.0301893+01:00","action":"claim","task_id":786,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:18:50.4372154+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:19:18.5200525+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:19:19.160437+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:19:19.1670664+01:00","action":"release","task_id":789,"detail":"writer"}
+{"timestamp":"2026-03-14T01:19:46.8623675+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:19:52.7468925+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:19:53.3474205+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:19:53.3531968+01:00","action":"release","task_id":786,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:24:58.3819065+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T01:25:13.4991757+01:00","action":"move","task_id":729,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:25:21.5950526+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:25:28.3531521+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T01:25:28.3584161+01:00","action":"release","task_id":729,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:25:39.992055+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:25:40.5935901+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:25:40.6082584+01:00","action":"release","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:26:19.7013045+01:00","action":"edit","task_id":729,"detail":"Add command decomposition guideline to Terminal discipline"}
+{"timestamp":"2026-03-14T01:31:34.725521+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:31:34.7308122+01:00","action":"claim","task_id":789,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:31:40.16405+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:31:40.1692447+01:00","action":"claim","task_id":771,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:31:42.4148552+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:31:42.4199365+01:00","action":"claim","task_id":523,"detail":"writer"}
+{"timestamp":"2026-03-14T01:32:29.5106857+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:32:29.5164384+01:00","action":"claim","task_id":766,"detail":"writer"}
+{"timestamp":"2026-03-14T01:32:42.0144261+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:32:47.3513541+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:32:48.0045534+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:32:48.0098464+01:00","action":"release","task_id":523,"detail":"writer"}
+{"timestamp":"2026-03-14T01:33:11.6003698+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:33:16.9537105+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:33:17.5748211+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:33:17.579034+01:00","action":"release","task_id":766,"detail":"writer"}
+{"timestamp":"2026-03-14T01:33:54.1998272+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:33:58.5875521+01:00","action":"move","task_id":789,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:34:03.542246+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-14T01:34:03.5475215+01:00","action":"release","task_id":789,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:37:38.1802467+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:37:43.6792708+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:37:44.2776862+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:37:44.2819055+01:00","action":"release","task_id":771,"detail":"reviewer"}
+{"timestamp":"2026-03-14T01:38:20.7974172+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:38:20.8035589+01:00","action":"claim","task_id":786,"detail":"writer"}
+{"timestamp":"2026-03-14T01:38:22.8179579+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T01:38:22.8229818+01:00","action":"claim","task_id":791,"detail":"builder"}
+{"timestamp":"2026-03-14T01:38:39.7834994+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T01:38:39.7888109+01:00","action":"claim","task_id":723,"detail":"test-writer"}
+{"timestamp":"2026-03-14T01:39:16.2364419+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:39:21.5096555+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:39:22.1415343+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:39:22.1468529+01:00","action":"release","task_id":786,"detail":"writer"}
+{"timestamp":"2026-03-14T01:42:28.4563294+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T01:42:33.8301785+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T01:42:34.4845971+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T01:42:34.4890804+01:00","action":"release","task_id":791,"detail":"builder"}
+{"timestamp":"2026-03-14T01:45:55.3518714+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T01:46:05.658725+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T01:46:06.3022984+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T01:46:06.3064792+01:00","action":"release","task_id":723,"detail":"test-writer"}
+{"timestamp":"2026-03-14T01:51:19.2777206+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T01:51:19.2860105+01:00","action":"claim","task_id":523,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:51:31.3428139+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:51:31.3481473+01:00","action":"claim","task_id":766,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:51:33.1564003+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:51:33.1632474+01:00","action":"claim","task_id":786,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:51:34.9275353+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:51:34.9323176+01:00","action":"claim","task_id":771,"detail":"writer"}
+{"timestamp":"2026-03-14T01:51:39.3242875+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:52:39.5677212+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:52:51.7385755+01:00","action":"move","task_id":766,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:53:02.6597365+01:00","action":"edit","task_id":766,"detail":"Triage orphaned research tasks — backfill follow-ups"}
+{"timestamp":"2026-03-14T01:53:02.6657561+01:00","action":"release","task_id":766,"detail":"auditor"}
+{"timestamp":"2026-03-14T01:53:25.8631927+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:54:50.6728565+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:55:01.9330283+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:55:07.0851071+01:00","action":"move","task_id":786,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T01:55:10.0433786+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T01:55:10.0508907+01:00","action":"release","task_id":771,"detail":"writer"}
+{"timestamp":"2026-03-14T01:55:14.4553115+01:00","action":"edit","task_id":786,"detail":"Create retro skill for development analytics"}
+{"timestamp":"2026-03-14T01:55:14.4612058+01:00","action":"release","task_id":786,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:01:21.9772714+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T02:01:26.2979937+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T02:01:38.411214+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T02:01:38.4189562+01:00","action":"block","task_id":523,"detail":"test_bootstrap.py::test_project_toolset_failure_component_status fails: _add_project_toolset() missing session= kwarg after signature change. Fix: add session=MagicMock() to the call on L2554."}
+{"timestamp":"2026-03-14T02:01:43.1840399+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T02:01:43.1892237+01:00","action":"release","task_id":523,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:02:14.742563+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:02:14.7473337+01:00","action":"claim","task_id":792,"detail":"architect"}
+{"timestamp":"2026-03-14T02:02:21.9311725+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:02:21.935836+01:00","action":"claim","task_id":521,"detail":"architect"}
+{"timestamp":"2026-03-14T02:02:27.2302452+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:02:27.2366721+01:00","action":"claim","task_id":723,"detail":"builder"}
+{"timestamp":"2026-03-14T02:02:33.619355+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:02:33.6247025+01:00","action":"claim","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:04:08.9413342+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:04:27.2822635+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:04:27.9535913+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:04:27.9583646+01:00","action":"release","task_id":521,"detail":"architect"}
+{"timestamp":"2026-03-14T02:04:51.0824118+01:00","action":"create","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T02:05:07.2427223+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T02:05:07.2504703+01:00","action":"block","task_id":793,"detail":"Deferred: corpus below 5K chunks per YAGNI. Unblock when storage becomes a concern."}
+{"timestamp":"2026-03-14T02:06:52.8016814+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:06:53.4481468+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:06:53.4534341+01:00","action":"release","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:06:54.1478274+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:06:54.1519703+01:00","action":"claim","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:06:54.8102255+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:06:54.8159259+01:00","action":"release","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:07:09.2288426+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:07:09.2354581+01:00","action":"claim","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:07:10.5742906+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:07:10.5799993+01:00","action":"release","task_id":791,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:07:29.7021595+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:07:39.6468161+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:17.0317093+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:21.3873683+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:26.9570799+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:26.9638664+01:00","action":"block","task_id":792,"detail":"Deferred: corpus below 5K chunks per YAGNI"}
+{"timestamp":"2026-03-14T02:08:43.7935527+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:48.7995922+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-14T02:08:48.8046774+01:00","action":"release","task_id":792,"detail":"architect"}
+{"timestamp":"2026-03-14T02:13:45.7091763+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:13:51.1925923+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:13:51.8218073+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:13:51.8276242+01:00","action":"release","task_id":723,"detail":"builder"}
+{"timestamp":"2026-03-14T02:14:33.3355244+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T02:14:33.3418421+01:00","action":"claim","task_id":533,"detail":"architect"}
+{"timestamp":"2026-03-14T02:16:48.9018833+01:00","action":"create","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:16:55.3913895+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:16:55.3976988+01:00","action":"claim","task_id":526,"detail":"architect"}
+{"timestamp":"2026-03-14T02:17:07.4607579+01:00","action":"create","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T02:17:16.6926695+01:00","action":"create","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T02:17:22.5033243+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T02:17:24.223417+01:00","action":"create","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T02:17:40.0678832+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T02:17:40.7876026+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T02:17:41.4241325+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T02:17:42.0568463+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T02:17:45.2092872+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T02:17:45.8761688+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T02:17:45.8813735+01:00","action":"release","task_id":533,"detail":"architect"}
+{"timestamp":"2026-03-14T02:18:26.9981871+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:18:34.0498748+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:18:34.758732+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:18:34.7648368+01:00","action":"release","task_id":526,"detail":"architect"}
+{"timestamp":"2026-03-14T02:25:34.0808162+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:25:34.0857998+01:00","action":"claim","task_id":521,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:25:35.7300818+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:25:35.7354832+01:00","action":"claim","task_id":723,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:25:39.5369374+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:25:39.5416539+01:00","action":"claim","task_id":791,"detail":"writer"}
+{"timestamp":"2026-03-14T02:26:23.5497109+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:26:33.3743958+01:00","action":"move","task_id":521,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T02:26:40.6184271+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-14T02:26:40.6237715+01:00","action":"release","task_id":521,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:27:53.8402741+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:27:59.0978446+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:27:59.7509494+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:27:59.7564932+01:00","action":"release","task_id":791,"detail":"writer"}
+{"timestamp":"2026-03-14T02:31:06.4853271+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T02:31:06.490977+01:00","action":"claim","task_id":771,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:31:18.7476405+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T02:31:18.7521092+01:00","action":"block","task_id":771,"detail":"AC #7 not implemented: bootstrap/__init__.py does not construct BoardContextProvider when board_context_enabled=True, nor pass board_context_provider= to OwlBearAgent(). Feature is dead code in production. Fix: add ~5 lines to bootstrap to gate on settings.board_context_enabled and pass provider to agent constructor."}
+{"timestamp":"2026-03-14T02:31:23.3047639+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T02:31:23.3101637+01:00","action":"release","task_id":771,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:37:38.5227718+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T02:37:38.5285639+01:00","action":"block","task_id":723,"detail":"AC7 incomplete: ConsolidationService created in _build_knowledge_toolset but discarded in _wire_knowledge_toolsets (_consolidation_svc unused). Daemon timer never starts. Need: 1) surface svc from _wire_knowledge_toolsets, 2) return from build_toolsets, 3) daemon calls schedule_periodic(interval=consolidation_interval)"}
+{"timestamp":"2026-03-14T02:37:38.5343492+01:00","action":"release","task_id":723,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:38:26.6919114+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:38:26.6986563+01:00","action":"claim","task_id":526,"detail":"test-writer"}
+{"timestamp":"2026-03-14T02:38:32.695787+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:38:35.1367581+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:38:35.1429833+01:00","action":"release","task_id":526,"detail":"test-writer"}
+{"timestamp":"2026-03-14T02:39:16.9434444+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:39:16.9484157+01:00","action":"claim","task_id":781,"detail":"builder"}
+{"timestamp":"2026-03-14T02:39:19.0880462+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:39:19.0924137+01:00","action":"claim","task_id":794,"detail":"test-writer"}
+{"timestamp":"2026-03-14T02:43:17.4130754+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:43:22.7869777+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:43:23.448695+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:43:23.4534888+01:00","action":"release","task_id":781,"detail":"builder"}
+{"timestamp":"2026-03-14T02:43:49.3208292+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:44:01.4044474+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:44:02.0728948+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:44:02.078424+01:00","action":"release","task_id":794,"detail":"test-writer"}
+{"timestamp":"2026-03-14T02:49:36.0563163+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:49:36.0610082+01:00","action":"claim","task_id":526,"detail":"builder"}
+{"timestamp":"2026-03-14T02:49:38.7583296+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:49:38.7641315+01:00","action":"claim","task_id":794,"detail":"builder"}
+{"timestamp":"2026-03-14T02:49:40.5534229+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:49:40.5581999+01:00","action":"claim","task_id":791,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:50:30.8531353+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:50:46.3818623+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:50:47.0676419+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:50:47.0724229+01:00","action":"release","task_id":526,"detail":"builder"}
+{"timestamp":"2026-03-14T02:50:54.2467319+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:50:54.2536662+01:00","action":"claim","task_id":526,"detail":"builder"}
+{"timestamp":"2026-03-14T02:51:00.6801355+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T02:51:00.6847969+01:00","action":"release","task_id":526,"detail":"builder"}
+{"timestamp":"2026-03-14T02:52:02.3485835+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:52:02.3532806+01:00","action":"claim","task_id":781,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:52:42.2821954+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:52:47.7182752+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:52:48.4096686+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T02:52:48.4159439+01:00","action":"release","task_id":781,"detail":"reviewer"}
+{"timestamp":"2026-03-14T02:53:30.2009988+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:53:35.6906779+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:53:36.3811968+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T02:53:36.3893451+01:00","action":"release","task_id":794,"detail":"builder"}
+{"timestamp":"2026-03-14T02:55:53.9683775+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:56:29.2656472+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:56:46.7350663+01:00","action":"move","task_id":791,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T02:57:01.104685+01:00","action":"edit","task_id":791,"detail":"Tests for OwlBearError base exception hierarchy (RED)"}
+{"timestamp":"2026-03-14T02:57:01.1098354+01:00","action":"release","task_id":791,"detail":"auditor"}
+{"timestamp":"2026-03-14T02:57:34.1661937+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T02:57:34.1715951+01:00","action":"claim","task_id":790,"detail":"architect"}
+{"timestamp":"2026-03-14T03:00:48.7951583+01:00","action":"create","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:01:56.1005766+01:00","action":"create","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:02:02.1922168+01:00","action":"create","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:02:25.7284852+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T03:02:45.829082+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T03:02:51.526881+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T03:02:52.2599824+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T03:02:52.2672691+01:00","action":"release","task_id":790,"detail":"architect"}
+{"timestamp":"2026-03-14T03:09:55.0313998+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:09:55.0377969+01:00","action":"claim","task_id":795,"detail":"architect"}
+{"timestamp":"2026-03-14T03:09:56.8745414+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:09:56.8828588+01:00","action":"claim","task_id":781,"detail":"writer"}
+{"timestamp":"2026-03-14T03:10:00.5017594+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:10:00.5069622+01:00","action":"claim","task_id":526,"detail":"reviewer"}
+{"timestamp":"2026-03-14T03:10:09.9418243+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:10:09.9465842+01:00","action":"claim","task_id":794,"detail":"reviewer"}
+{"timestamp":"2026-03-14T03:10:15.1639495+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:10:44.0567004+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:11:03.8053757+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:11:13.5113325+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:11:14.1777444+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:11:14.1829256+01:00","action":"release","task_id":781,"detail":"writer"}
+{"timestamp":"2026-03-14T03:12:23.9908142+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:12:32.5785766+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:12:32.5837322+01:00","action":"release","task_id":526,"detail":"reviewer"}
+{"timestamp":"2026-03-14T03:12:52.1577542+01:00","action":"create","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:13:12.6840353+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:13:33.7439147+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:13:39.5356333+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:13:51.0793579+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:14:07.3700133+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:14:09.9834074+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:14:13.4110134+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:14:15.4087796+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:14:16.0666486+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:14:16.0720796+01:00","action":"release","task_id":795,"detail":"architect"}
+{"timestamp":"2026-03-14T03:14:19.0873711+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:14:19.8051553+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:14:19.8117031+01:00","action":"release","task_id":794,"detail":"reviewer"}
+{"timestamp":"2026-03-14T03:14:49.0503492+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:14:49.0560106+01:00","action":"claim","task_id":800,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:18:20.3199169+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:18:30.8653684+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:18:31.6175226+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:18:31.6237856+01:00","action":"release","task_id":800,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:24:45.9202485+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:24:45.9257901+01:00","action":"claim","task_id":526,"detail":"writer"}
+{"timestamp":"2026-03-14T03:24:50.7610506+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:25:34.5292908+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:25:34.541718+01:00","action":"claim","task_id":800,"detail":"builder"}
+{"timestamp":"2026-03-14T03:25:40.6975757+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:25:52.8677515+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:26:13.7060203+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:26:22.9780693+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:26:22.983307+01:00","action":"release","task_id":526,"detail":"writer"}
+{"timestamp":"2026-03-14T03:26:40.7084733+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:26:40.7137335+01:00","action":"claim","task_id":801,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:27:02.7693162+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:27:02.774896+01:00","action":"claim","task_id":781,"detail":"auditor"}
+{"timestamp":"2026-03-14T03:27:07.52396+01:00","action":"move","task_id":781,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T03:27:14.0380559+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-14T03:27:14.0427894+01:00","action":"release","task_id":781,"detail":"auditor"}
+{"timestamp":"2026-03-14T03:30:42.058299+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:31:23.6382699+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:31:23.6438277+01:00","action":"release","task_id":801,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:31:58.2637723+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:32:03.8628657+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:32:04.5367665+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:32:04.5410578+01:00","action":"release","task_id":800,"detail":"builder"}
+{"timestamp":"2026-03-14T03:32:44.0337694+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:32:44.0394926+01:00","action":"claim","task_id":794,"detail":"writer"}
+{"timestamp":"2026-03-14T03:33:21.9737906+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:33:27.8039188+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:33:28.4819397+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:33:28.4872454+01:00","action":"release","task_id":794,"detail":"writer"}
+{"timestamp":"2026-03-14T03:34:11.6154745+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:34:11.6210446+01:00","action":"claim","task_id":799,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:34:12.5982394+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:34:12.6034745+01:00","action":"claim","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:34:25.0551967+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:34:35.5079274+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:34:36.1775013+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:34:36.1821509+01:00","action":"release","task_id":799,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:37:03.5963004+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:37:08.9917866+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:37:08.9964743+01:00","action":"release","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:44:28.5718153+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:44:28.5761074+01:00","action":"claim","task_id":794,"detail":"auditor"}
+{"timestamp":"2026-03-14T03:44:41.1969898+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:44:41.2097806+01:00","action":"claim","task_id":526,"detail":"auditor"}
+{"timestamp":"2026-03-14T03:45:38.9870741+01:00","action":"edit","task_id":526,"detail":"Add sender validation to Slack message queue"}
+{"timestamp":"2026-03-14T03:45:44.4795017+01:00","action":"move","task_id":526,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T03:45:49.9016766+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:45:49.9068643+01:00","action":"claim","task_id":801,"detail":"builder"}
+{"timestamp":"2026-03-14T03:46:07.0501982+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:46:22.4557148+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:46:22.4626486+01:00","action":"claim","task_id":795,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:47:16.3599254+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:47:23.0876735+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:47:23.7587532+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T03:47:23.7634542+01:00","action":"release","task_id":795,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:49:02.5811215+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:49:08.5538603+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:49:09.4785668+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T03:49:09.4854843+01:00","action":"release","task_id":801,"detail":"builder"}
+{"timestamp":"2026-03-14T03:53:14.428603+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:53:19.5656113+01:00","action":"move","task_id":794,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T03:53:24.26041+01:00","action":"edit","task_id":794,"detail":"Tests: send_image context_key threading"}
+{"timestamp":"2026-03-14T03:53:24.2662716+01:00","action":"release","task_id":794,"detail":"auditor"}
+{"timestamp":"2026-03-14T03:54:08.9226516+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:54:08.926899+01:00","action":"claim","task_id":799,"detail":"builder"}
+{"timestamp":"2026-03-14T03:54:10.58969+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T03:54:10.5954823+01:00","action":"claim","task_id":800,"detail":"reviewer"}
+{"timestamp":"2026-03-14T03:55:39.7323203+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:55:39.7379546+01:00","action":"claim","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-14T03:55:40.5438583+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:55:45.7021371+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:56:02.1470539+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T03:56:19.6546373+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:56:25.2272238+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:56:26.0361708+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T03:56:26.0419085+01:00","action":"release","task_id":799,"detail":"builder"}
+{"timestamp":"2026-03-14T03:57:18.970385+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T03:57:18.9767932+01:00","action":"claim","task_id":533,"detail":"test-writer"}
+{"timestamp":"2026-03-14T03:58:53.6641653+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T03:58:59.1383012+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T03:58:59.1488626+01:00","action":"release","task_id":533,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:01:01.1448249+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:01:44.1663515+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T04:01:51.8513177+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T04:01:54.2508887+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T04:01:54.2645898+01:00","action":"release","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-14T04:02:33.7829211+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:02:34.5832656+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:02:34.589141+01:00","action":"release","task_id":800,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:04:27.094535+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:04:27.1006981+01:00","action":"claim","task_id":790,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:05:07.3196782+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:05:07.3243713+01:00","action":"claim","task_id":798,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:05:12.4628938+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:05:12.4682783+01:00","action":"release","task_id":798,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:05:56.3084431+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:06:01.914137+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:06:01.9194288+01:00","action":"release","task_id":790,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:12:21.4783793+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:12:21.4840883+01:00","action":"claim","task_id":801,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:12:32.3182746+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:12:32.3234693+01:00","action":"claim","task_id":795,"detail":"builder"}
+{"timestamp":"2026-03-14T04:13:15.7379963+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:13:26.4630912+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:13:26.4687684+01:00","action":"claim","task_id":800,"detail":"writer"}
+{"timestamp":"2026-03-14T04:13:27.1721411+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:13:27.1777275+01:00","action":"release","task_id":800,"detail":"writer"}
+{"timestamp":"2026-03-14T04:13:40.8219171+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:13:40.8278566+01:00","action":"claim","task_id":771,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:13:42.2882684+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:14:09.9026594+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:16:01.9026739+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:16:07.141314+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:16:07.8306882+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:16:07.835929+01:00","action":"release","task_id":795,"detail":"builder"}
+{"timestamp":"2026-03-14T04:16:16.876759+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:16:22.2800675+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:16:22.9302281+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:16:22.936265+01:00","action":"release","task_id":801,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:18:43.7464874+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:18:50.9512757+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:18:51.6524967+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:18:51.6593234+01:00","action":"release","task_id":771,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:19:33.0261494+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:19:33.0305198+01:00","action":"claim","task_id":790,"detail":"builder"}
+{"timestamp":"2026-03-14T04:19:51.9610993+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T04:19:51.9660649+01:00","action":"claim","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:21:22.3054041+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T04:21:30.6806308+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T04:21:31.4691479+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T04:21:31.4754817+01:00","action":"release","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:21:57.6057516+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:21:57.6133936+01:00","action":"claim","task_id":799,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:22:03.4643076+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:22:31.7060294+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:22:51.9994254+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:22:52.0052163+01:00","action":"claim","task_id":533,"detail":"builder"}
+{"timestamp":"2026-03-14T04:22:53.1792797+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:22:53.8310754+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:22:53.8352678+01:00","action":"release","task_id":799,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:22:58.7819127+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:22:59.4546849+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:22:59.4609316+01:00","action":"release","task_id":533,"detail":"builder"}
+{"timestamp":"2026-03-14T04:23:11.6109412+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:23:17.0535224+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:23:17.7008487+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:23:17.7050435+01:00","action":"release","task_id":790,"detail":"builder"}
+{"timestamp":"2026-03-14T04:23:50.7030277+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:23:50.7100767+01:00","action":"claim","task_id":796,"detail":"architect"}
+{"timestamp":"2026-03-14T04:23:51.7064194+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T04:23:51.7115961+01:00","action":"claim","task_id":793,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:24:00.2949435+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:24:00.3002103+01:00","action":"claim","task_id":723,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:24:27.4149822+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:24:27.4207144+01:00","action":"claim","task_id":539,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:24:31.0431175+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:25:55.6825058+01:00","action":"create","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:27:18.765356+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:27:37.5568686+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T04:27:49.0655074+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:27:59.7922146+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:28:00.4945435+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T04:28:00.5006144+01:00","action":"release","task_id":796,"detail":"architect"}
+{"timestamp":"2026-03-14T04:28:03.4514605+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:28:08.4038297+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T04:28:09.1536616+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T04:28:09.1598245+01:00","action":"release","task_id":793,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:28:10.075198+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:28:10.0815355+01:00","action":"release","task_id":539,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:30:23.539422+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:30:23.5462479+01:00","action":"unblock","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:32:34.2916629+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:32:45.2301967+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:32:45.912436+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T04:32:45.9203381+01:00","action":"release","task_id":723,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:33:34.6187012+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:33:34.6235306+01:00","action":"claim","task_id":797,"detail":"architect"}
+{"timestamp":"2026-03-14T04:33:35.7778403+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:33:35.7829049+01:00","action":"claim","task_id":552,"detail":"architect"}
+{"timestamp":"2026-03-14T04:35:03.2033551+01:00","action":"create","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T04:35:26.1889991+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:35:40.8799975+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:35:50.0620706+01:00","action":"create","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T04:35:59.4199665+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:36:04.2044375+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:36:04.8531284+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T04:36:04.857283+01:00","action":"release","task_id":552,"detail":"architect"}
+{"timestamp":"2026-03-14T04:36:09.8210916+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T04:37:14.2663295+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:37:22.1428525+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:37:31.9244305+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:37:51.2782143+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:37:55.7750243+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T04:37:55.7799503+01:00","action":"release","task_id":797,"detail":"architect"}
+{"timestamp":"2026-03-14T04:44:35.0411439+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:44:35.0466987+01:00","action":"claim","task_id":800,"detail":"auditor"}
+{"timestamp":"2026-03-14T04:44:37.0858537+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:44:37.0929298+01:00","action":"claim","task_id":795,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:45:43.6028801+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:45:43.608158+01:00","action":"claim","task_id":801,"detail":"writer"}
+{"timestamp":"2026-03-14T04:45:55.3638474+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:45:56.0425727+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T04:45:56.047708+01:00","action":"release","task_id":801,"detail":"writer"}
+{"timestamp":"2026-03-14T04:48:47.1637876+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:48:47.1697758+01:00","action":"claim","task_id":771,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:49:01.6153904+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:49:20.8604591+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:49:21.6847708+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T04:49:21.6923609+01:00","action":"release","task_id":795,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:50:20.2607284+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:50:25.7678618+01:00","action":"edit","task_id":771,"detail":"Wire BoardContextProvider into agent turn() instructions"}
+{"timestamp":"2026-03-14T04:50:25.7750128+01:00","action":"release","task_id":771,"detail":"test-writer"}
+{"timestamp":"2026-03-14T04:51:15.2944161+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:51:20.0791141+01:00","action":"move","task_id":800,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T04:51:24.5947491+01:00","action":"edit","task_id":800,"detail":"Tests: consolidation insight injection in query_for_context"}
+{"timestamp":"2026-03-14T04:51:24.6005189+01:00","action":"release","task_id":800,"detail":"auditor"}
+{"timestamp":"2026-03-14T04:52:04.5824916+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:52:04.5891048+01:00","action":"claim","task_id":799,"detail":"writer"}
+{"timestamp":"2026-03-14T04:52:10.3766731+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:52:10.3830284+01:00","action":"claim","task_id":533,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:52:19.1146419+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:52:42.335967+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:52:51.2754166+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:52:51.2824055+01:00","action":"claim","task_id":790,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:52:52.0786283+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T04:53:19.129685+01:00","action":"edit","task_id":799,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T04:56:47.5532563+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:57:06.0850205+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:57:21.8367835+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T04:57:21.8419577+01:00","action":"release","task_id":533,"detail":"reviewer"}
+{"timestamp":"2026-03-14T04:57:51.3213962+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:57:51.3272073+01:00","action":"claim","task_id":539,"detail":"builder"}
+{"timestamp":"2026-03-14T04:58:10.1982318+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:58:10.9107824+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T04:58:10.9155884+01:00","action":"release","task_id":539,"detail":"builder"}
+{"timestamp":"2026-03-14T05:00:07.0046039+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:00:12.8046291+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:00:13.4797643+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:00:13.4844413+01:00","action":"release","task_id":790,"detail":"reviewer"}
+{"timestamp":"2026-03-14T05:00:16.943267+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:00:16.9497143+01:00","action":"claim","task_id":790,"detail":"reviewer"}
+{"timestamp":"2026-03-14T05:00:22.4900778+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:00:22.4954611+01:00","action":"release","task_id":790,"detail":"reviewer"}
+{"timestamp":"2026-03-14T05:01:32.8846661+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T05:01:32.8910199+01:00","action":"claim","task_id":793,"detail":"builder"}
+{"timestamp":"2026-03-14T05:01:59.3551808+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T05:01:59.3609712+01:00","action":"claim","task_id":803,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:02:10.5257872+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:02:10.5323894+01:00","action":"claim","task_id":523,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:04:14.733351+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:04:19.4701075+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:04:45.5351879+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:05:04.586161+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T05:05:11.5282216+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:05:15.0017031+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T05:05:15.0072238+01:00","action":"release","task_id":803,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:05:47.5898645+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:05:48.4454881+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T05:05:48.4507846+01:00","action":"release","task_id":523,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:06:45.2112068+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:06:45.2169943+01:00","action":"claim","task_id":802,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:06:50.4069848+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:06:50.4131041+01:00","action":"release","task_id":802,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:07:46.4284473+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T05:07:51.8200488+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T05:07:52.5024624+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T05:07:52.5076645+01:00","action":"release","task_id":793,"detail":"builder"}
+{"timestamp":"2026-03-14T05:08:21.3987874+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T05:08:21.4039958+01:00","action":"claim","task_id":804,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:12:52.5237081+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T05:12:57.8750333+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T05:12:58.5512841+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T05:12:58.5575418+01:00","action":"release","task_id":804,"detail":"test-writer"}
+{"timestamp":"2026-03-14T05:20:02.3536594+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T05:20:02.3585598+01:00","action":"claim","task_id":533,"detail":"writer"}
+{"timestamp":"2026-03-14T05:20:05.7434702+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T05:20:05.7481017+01:00","action":"claim","task_id":795,"detail":"writer"}
+{"timestamp":"2026-03-14T05:20:11.377597+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T05:20:11.3833733+01:00","action":"claim","task_id":801,"detail":"auditor"}
+{"timestamp":"2026-03-14T05:20:20.1082935+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:20:20.1141187+01:00","action":"claim","task_id":790,"detail":"writer"}
+{"timestamp":"2026-03-14T05:21:00.2646267+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:21:01.6878446+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T05:21:06.0911437+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:21:06.8083531+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:21:06.8130597+01:00","action":"release","task_id":790,"detail":"writer"}
+{"timestamp":"2026-03-14T05:21:07.5836173+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T05:21:08.2836211+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T05:21:08.2895187+01:00","action":"release","task_id":533,"detail":"writer"}
+{"timestamp":"2026-03-14T05:21:14.1993102+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T05:21:17.3951986+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:21:17.4009567+01:00","action":"claim","task_id":790,"detail":"writer"}
+{"timestamp":"2026-03-14T05:21:18.9032509+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T05:21:22.2818189+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T05:21:22.2870718+01:00","action":"release","task_id":790,"detail":"writer"}
+{"timestamp":"2026-03-14T05:21:24.3707535+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T05:21:25.0610112+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T05:21:25.0687052+01:00","action":"release","task_id":795,"detail":"writer"}
+{"timestamp":"2026-03-14T05:28:40.7830396+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T05:28:45.8920954+01:00","action":"move","task_id":801,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T05:28:50.6739133+01:00","action":"edit","task_id":801,"detail":"Test Slack sender validation (RED)"}
+{"timestamp":"2026-03-14T05:28:50.67916+01:00","action":"release","task_id":801,"detail":"auditor"}
+{"timestamp":"2026-03-14T05:29:25.7453175+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:29:25.7505579+01:00","action":"claim","task_id":802,"detail":"builder"}
+{"timestamp":"2026-03-14T05:29:30.2372012+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T05:29:30.2418924+01:00","action":"claim","task_id":777,"detail":"reviewer"}
+{"timestamp":"2026-03-14T05:29:42.6569864+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:29:42.6621809+01:00","action":"claim","task_id":723,"detail":"builder"}
+{"timestamp":"2026-03-14T05:29:46.2659024+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T05:29:46.271144+01:00","action":"claim","task_id":803,"detail":"builder"}
+{"timestamp":"2026-03-14T05:41:54.0920578+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:41:58.3383475+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:42:10.8524301+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:42:16.1987593+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:42:17.061376+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T05:42:17.0685402+01:00","action":"release","task_id":723,"detail":"builder"}
+{"timestamp":"2026-03-14T05:42:29.0615848+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T05:42:29.0685533+01:00","action":"release","task_id":777,"detail":"reviewer"}
+{"timestamp":"2026-03-14T05:43:12.2404435+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:43:17.7958326+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:43:18.4987627+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T05:43:18.5061763+01:00","action":"release","task_id":802,"detail":"builder"}
+{"timestamp":"2026-03-14T10:16:11.4438973+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:16:29.7705671+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:17:36.679426+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:17:36.6847192+01:00","action":"claim","task_id":796,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:17:47.0073599+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:17:47.0163685+01:00","action":"claim","task_id":804,"detail":"builder"}
+{"timestamp":"2026-03-14T10:18:19.7879959+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:18:19.7937994+01:00","action":"claim","task_id":552,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:19:04.4683668+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:19:05.6201494+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:20:21.8833482+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:20:37.8207844+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:20:37.8275638+01:00","action":"release","task_id":552,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:21:16.2575041+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:21:21.035161+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:21:21.0410521+01:00","action":"release","task_id":796,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:21:25.0622537+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:21:34.2662706+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:21:34.2717529+01:00","action":"release","task_id":804,"detail":"builder"}
+{"timestamp":"2026-03-14T10:26:44.1931631+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T10:26:44.1985261+01:00","action":"claim","task_id":533,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:26:44.8083631+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T10:26:44.8141832+01:00","action":"claim","task_id":795,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:26:45.5419587+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T10:26:45.5478406+01:00","action":"claim","task_id":777,"detail":"writer"}
+{"timestamp":"2026-03-14T10:26:53.5940125+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T10:26:56.2247242+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T10:26:59.3264306+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T10:26:59.3331635+01:00","action":"claim","task_id":790,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:28:30.3347477+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T10:28:41.9177816+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T10:28:51.372429+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T10:28:51.377976+01:00","action":"release","task_id":777,"detail":"writer"}
+{"timestamp":"2026-03-14T10:33:32.9402916+01:00","action":"move","task_id":790,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T10:33:33.6605509+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T10:33:33.6676463+01:00","action":"release","task_id":790,"detail":"auditor"}
