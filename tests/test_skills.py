@@ -11,27 +11,31 @@ from owlbear.skills.registry import SkillMeta, SkillRegistry
 
 @pytest.fixture
 def skills_dir(tmp_path: Path) -> Path:
-    """Create a temp directory with sample skill files."""
-    skill_a = tmp_path / "alpha.md"
+    """Create a temp directory with sample skill files in subdirectory layout."""
+    skill_a = tmp_path / "alpha" / "SKILL.md"
+    skill_a.parent.mkdir()
     skill_a.write_text(
         "---\nname: alpha\ndescription: Alpha skill for testing\n"
         "---\n\n# Alpha\n\nFull alpha content.\n",
         encoding="utf-8",
     )
 
-    skill_b = tmp_path / "beta.md"
+    skill_b = tmp_path / "beta" / "SKILL.md"
+    skill_b.parent.mkdir()
     skill_b.write_text(
         "---\nname: beta\ndescription: Beta skill for analytics\n"
         "---\n\n# Beta\n\nFull beta content with details.\n",
         encoding="utf-8",
     )
 
-    # A file without frontmatter — should be skipped
-    no_fm = tmp_path / "no-frontmatter.md"
+    # A subdirectory with SKILL.md without frontmatter — should be skipped
+    no_fm = tmp_path / "no-frontmatter" / "SKILL.md"
+    no_fm.parent.mkdir()
     no_fm.write_text("# No Frontmatter\n\nJust plain markdown.\n", encoding="utf-8")
 
-    # A non-markdown file — should be ignored
-    txt = tmp_path / "notes.txt"
+    # A non-SKILL.md file in subdir — should be ignored
+    txt = tmp_path / "notes" / "notes.txt"
+    txt.parent.mkdir()
     txt.write_text("Not a skill.", encoding="utf-8")
 
     return tmp_path
@@ -190,7 +194,9 @@ class TestSkillRegistryEdgeCases:
 
     def test_unreadable_file_is_skipped(self, tmp_path: Path) -> None:
         """A file that raises OSError on read is silently skipped."""
-        bad = tmp_path / "bad.md"
+        bad_dir = tmp_path / "bad"
+        bad_dir.mkdir()
+        bad = bad_dir / "SKILL.md"
         bad.write_text("---\nname: bad\n---\n", encoding="utf-8")
         # Make the file unreadable by replacing it with a directory
         bad.unlink()
@@ -201,14 +207,18 @@ class TestSkillRegistryEdgeCases:
 
     def test_no_closing_frontmatter_delimiter(self, tmp_path: Path) -> None:
         """A file with opening --- but no closing --- is skipped."""
-        f = tmp_path / "broken.md"
+        d = tmp_path / "broken"
+        d.mkdir()
+        f = d / "SKILL.md"
         f.write_text("---\nname: broken\n# Content\n", encoding="utf-8")
         registry = SkillRegistry(tmp_path)
         assert "broken" not in registry.skills
 
     def test_frontmatter_missing_name_is_skipped(self, tmp_path: Path) -> None:
         """A file with valid YAML but no 'name' key is skipped."""
-        f = tmp_path / "noname.md"
+        d = tmp_path / "noname"
+        d.mkdir()
+        f = d / "SKILL.md"
         f.write_text(
             "---\ndescription: has desc but no name\n---\n",
             encoding="utf-8",
@@ -218,7 +228,9 @@ class TestSkillRegistryEdgeCases:
 
     def test_invalid_yaml_is_skipped(self, tmp_path: Path) -> None:
         """A file with malformed YAML in frontmatter is skipped."""
-        f = tmp_path / "badfm.md"
+        d = tmp_path / "badfm"
+        d.mkdir()
+        f = d / "SKILL.md"
         f.write_text(
             "---\n: [invalid yaml{{{\n---\n# Body\n",
             encoding="utf-8",
@@ -226,3 +238,167 @@ class TestSkillRegistryEdgeCases:
         registry = SkillRegistry(tmp_path)
         assert "badfm" not in registry.skills
         assert len(registry.skills) == 0
+
+
+# ---------------------------------------------------------------------------
+# Task #780 — Fix SkillRegistry glob → */SKILL.md
+# ---------------------------------------------------------------------------
+
+# Real skills directory for integration tests.
+_REAL_SKILLS_DIR = Path(__file__).resolve().parent.parent / ".github" / "skills"
+
+
+@pytest.fixture
+def subdir_skills_dir(tmp_path: Path) -> Path:
+    """Create a temp directory with subdirectory-layout skill files.
+
+    Layout::
+
+        tmp/
+          alpha/SKILL.md     ← valid skill
+          beta/SKILL.md      ← valid skill
+          gamma/SKILL.md     ← no frontmatter → skipped
+          delta/README.md    ← wrong filename → skipped
+          flat.md            ← flat file → skipped (no subdir)
+    """
+    alpha = tmp_path / "alpha" / "SKILL.md"
+    alpha.parent.mkdir()
+    alpha.write_text(
+        "---\nname: alpha\ndescription: Alpha subdir skill\n---\n\n# Alpha\n\nAlpha content.\n",
+        encoding="utf-8",
+    )
+
+    beta = tmp_path / "beta" / "SKILL.md"
+    beta.parent.mkdir()
+    beta.write_text(
+        "---\nname: beta\ndescription: Beta subdir skill\n---\n\n# Beta\n\nBeta content.\n",
+        encoding="utf-8",
+    )
+
+    gamma = tmp_path / "gamma" / "SKILL.md"
+    gamma.parent.mkdir()
+    gamma.write_text("# No Frontmatter\n\nPlain markdown.\n", encoding="utf-8")
+
+    delta = tmp_path / "delta" / "README.md"
+    delta.parent.mkdir()
+    delta.write_text(
+        "---\nname: delta\ndescription: Delta in README\n---\nContent.\n",
+        encoding="utf-8",
+    )
+
+    flat = tmp_path / "flat.md"
+    flat.write_text(
+        "---\nname: flat\ndescription: Flat file skill\n---\nFlat content.\n",
+        encoding="utf-8",
+    )
+
+    return tmp_path
+
+
+class TestFromAC_SubdirGlob:  # noqa: N801
+    """AC1: _scan() uses glob('*/SKILL.md') — discovers subdir layout only."""
+
+    def test_scan_discovers_subdir_skill_md(self, subdir_skills_dir: Path) -> None:
+        """A skill file at alpha/SKILL.md is discovered by _scan."""
+        registry = SkillRegistry(subdir_skills_dir)
+        assert "alpha" in registry.skills
+
+    def test_scan_discovers_multiple_subdir_skills(self, subdir_skills_dir: Path) -> None:
+        """Both alpha/SKILL.md and beta/SKILL.md are discovered."""
+        registry = SkillRegistry(subdir_skills_dir)
+        assert "alpha" in registry.skills
+        assert "beta" in registry.skills
+        assert len(registry.skills) == 2
+
+    def test_scan_ignores_flat_md_files(self, subdir_skills_dir: Path) -> None:
+        """A flat .md file at the root of skills_dir is NOT discovered."""
+        registry = SkillRegistry(subdir_skills_dir)
+        assert "flat" not in registry.skills
+
+    def test_scan_ignores_non_skill_md_in_subdir(self, subdir_skills_dir: Path) -> None:
+        """A file named README.md inside a subdir is NOT discovered."""
+        registry = SkillRegistry(subdir_skills_dir)
+        # Guard: alpha & beta must be found for this to be non-vacuous
+        assert len(registry.skills) >= 2, "subdir skills must be discovered first"
+        assert "delta" not in registry.skills
+
+    def test_scan_skips_subdir_without_frontmatter(self, subdir_skills_dir: Path) -> None:
+        """gamma/SKILL.md has no frontmatter → skipped."""
+        registry = SkillRegistry(subdir_skills_dir)
+        # Guard: alpha & beta must be found for this to be non-vacuous
+        assert len(registry.skills) >= 2, "subdir skills must be discovered first"
+        assert "gamma" not in registry.skills
+
+    def test_scan_ignores_deeply_nested(self, tmp_path: Path) -> None:
+        """A SKILL.md two levels deep (a/b/SKILL.md) is NOT discovered."""
+        # Add a valid one-level skill so the test is non-vacuous
+        valid = tmp_path / "valid" / "SKILL.md"
+        valid.parent.mkdir(parents=True)
+        valid.write_text(
+            "---\nname: valid\ndescription: Valid skill\n---\nContent.\n",
+            encoding="utf-8",
+        )
+        nested = tmp_path / "deep" / "inner" / "SKILL.md"
+        nested.parent.mkdir(parents=True)
+        nested.write_text(
+            "---\nname: deep\ndescription: Deep skill\n---\nContent.\n",
+            encoding="utf-8",
+        )
+        registry = SkillRegistry(tmp_path)
+        assert "valid" in registry.skills, "one-level subdir must be found"
+        assert "deep" not in registry.skills
+
+
+class TestFromAC_DocstringsUpdated:  # noqa: N801
+    """AC2: Class and _scan docstrings reference subdirectory layout."""
+
+    def test_class_docstring_references_subdirectory(self) -> None:
+        """SkillRegistry class docstring must mention SKILL.md or subdirectory."""
+        docstring = SkillRegistry.__doc__ or ""
+        assert "SKILL.md" in docstring, (
+            "Class docstring should reference SKILL.md subdirectory layout"
+        )
+
+    def test_scan_docstring_references_subdirectory(self) -> None:
+        """_scan docstring must mention */SKILL.md or SKILL.md."""
+        docstring = SkillRegistry._scan.__doc__ or ""
+        assert "SKILL.md" in docstring, "_scan docstring should reference SKILL.md pattern"
+
+
+class TestFromAC_RealSkillsDiscovery:  # noqa: N801
+    """AC5: list_skills discovers 18 skills from real .github/skills dir."""
+
+    @pytest.mark.skipif(
+        not _REAL_SKILLS_DIR.is_dir(),
+        reason="Real skills directory not found",
+    )
+    def test_discovers_18_real_skills(self) -> None:
+        """SkillRegistry finds exactly 18 skills in .github/skills."""
+        registry = SkillRegistry(_REAL_SKILLS_DIR)
+        assert len(registry.skills) == 18, (
+            f"Expected 18 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
+        )
+
+    @pytest.mark.skipif(
+        not _REAL_SKILLS_DIR.is_dir(),
+        reason="Real skills directory not found",
+    )
+    def test_real_skills_have_nonempty_names(self) -> None:
+        """Every discovered real skill has a non-empty name and description."""
+        registry = SkillRegistry(_REAL_SKILLS_DIR)
+        assert len(registry.skills) == 18, "Must discover 18 skills first"
+        for name, meta in registry.skills.items():
+            assert name, "Skill name must be non-empty"
+            assert meta.description, f"Skill '{name}' has empty description"
+
+    @pytest.mark.skipif(
+        not _REAL_SKILLS_DIR.is_dir(),
+        reason="Real skills directory not found",
+    )
+    def test_list_skills_includes_all_18(self) -> None:
+        """list_skills output mentions all 18 skill names."""
+        registry = SkillRegistry(_REAL_SKILLS_DIR)
+        assert len(registry.skills) == 18, "Must discover 18 skills first"
+        output = registry.list_skills()
+        for name in registry.skills:
+            assert name in output, f"Skill '{name}' missing from list_skills output"

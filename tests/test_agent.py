@@ -720,7 +720,7 @@ class TestOwlBearAgentKnowledgeInjection:
         assert "instructions" not in call_kwargs.kwargs
 
     def test_turn_passes_none_instructions_when_service_returns_none(self, tmp_path: Path) -> None:
-        """When service returns None, instructions=None passed (PydanticAI ignores it)."""
+        """When service returns None, no instructions= kwarg passed (filtered as empty)."""
         svc = MagicMock()
         svc.query_for_context.return_value = None
 
@@ -736,7 +736,7 @@ class TestOwlBearAgentKnowledgeInjection:
         asyncio.run(agent.turn("hi"))
 
         call_kwargs = agent.inner.run.call_args
-        assert call_kwargs.kwargs["instructions"] is None
+        assert "instructions" not in call_kwargs.kwargs
 
     def test_turn_continues_on_service_exception(self, tmp_path: Path) -> None:
         """When knowledge_service raises, turn() logs WARNING and continues."""

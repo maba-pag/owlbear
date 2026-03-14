@@ -41,8 +41,8 @@ class SkillMeta:
 class SkillRegistry(FunctionToolset):
     """Progressive-loading registry backed by :class:`FunctionToolset`.
 
-    Scans *skills_dir* for ``*.md`` files with YAML frontmatter and
-    registers two tools on itself:
+    Scans *skills_dir* for ``*/SKILL.md`` files (one per subdirectory) with
+    YAML frontmatter and registers two tools on itself:
 
     * **list_skills** — returns a summary of all available skills.
     * **load_skill** — loads the full content of a skill by name.
@@ -118,7 +118,7 @@ class SkillRegistry(FunctionToolset):
     # ------------------------------------------------------------------
 
     def _scan(self) -> None:
-        """Walk *skills_dir* for ``*.md`` files with valid frontmatter."""
+        """Walk *skills_dir* for ``*/SKILL.md`` files with valid frontmatter."""
         if not self._skills_dir.is_dir():
             logger.debug(
                 "Skills directory does not exist: %s",
@@ -126,7 +126,7 @@ class SkillRegistry(FunctionToolset):
             )
             return
 
-        for md_path in sorted(self._skills_dir.glob("*.md")):
+        for md_path in sorted(self._skills_dir.glob("*/SKILL.md")):
             meta = self._parse_frontmatter(md_path)
             if meta is not None:
                 self._skill_map[meta.name] = meta

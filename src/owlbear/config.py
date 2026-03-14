@@ -276,6 +276,12 @@ class OwlBearSettings(BaseSettings):
         ),
     )
 
+    # --- Board context ---
+    board_context_enabled: bool = Field(
+        default=True,
+        description="Inject kanban board state into agent turn instructions.",
+    )
+
     # --- Startup summary ---
     log_startup_summary: bool = Field(
         default=True,

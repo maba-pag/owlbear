@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import RigorProfile
     from owlbear.core.agent_registry import AgentRegistry
+    from owlbear.core.board_context import BoardContextProvider
     from owlbear.memory.context import ContextManager
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
@@ -67,6 +68,7 @@ class OwlBearAgent:
         knowledge_service: KnowledgeQueryService | None = None,
         rigor_profile: RigorProfile | None = None,
         agent_registry: AgentRegistry | None = None,
+        board_context_provider: BoardContextProvider | None = None,
     ) -> None:
         self.session = session
         self.context = context
@@ -84,6 +86,7 @@ class OwlBearAgent:
             agent_registry=agent_registry,
         )
         self._knowledge_service = knowledge_service
+        self._board_context_provider = board_context_provider
 
         instructions = context.instructions if context else ""
         hp = list(history_processors or [])
@@ -130,17 +133,34 @@ class OwlBearAgent:
 
         history = self.session.load()
 
+        # Board context injection (per-turn)
+        board_ctx: str | None = None
+        if self._board_context_provider is not None:
+            try:
+                board_ctx = await self._board_context_provider.get_context()
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Board context injection failed",
+                    exc_info=True,
+                )
+
         # Knowledge context injection (per-turn)
-        run_kwargs: dict[str, object] = {}
+        knowledge_ctx: str | None = None
         if self._knowledge_service is not None:
             try:
-                run_kwargs["instructions"] = self._knowledge_service.query_for_context(prompt)
+                knowledge_ctx = self._knowledge_service.query_for_context(prompt)
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Knowledge context injection failed for prompt: %s",
                     prompt[:100],
                     exc_info=True,
                 )
+
+        # Concatenate non-empty context parts into instructions
+        run_kwargs: dict[str, object] = {}
+        parts = [p for p in (board_ctx, knowledge_ctx) if p]
+        if parts:
+            run_kwargs["instructions"] = "\n\n".join(parts)
 
         try:
             result = await self.inner.run(
