@@ -2560,6 +2560,7 @@ class TestComponentStatusErrorSites:
                 project_store=MagicMock(),
                 config_dir=tmp_path,
                 hooks=hooks,
+                session=MagicMock(),
                 summary=summary,
             )
 
