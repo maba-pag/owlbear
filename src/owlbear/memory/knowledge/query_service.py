@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 from owlbear.memory.knowledge.protocol import HybridEmbedding
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from owlbear.memory.knowledge.embeddings import EmbeddingProvider
     from owlbear.memory.knowledge.graph import GraphStore
     from owlbear.memory.knowledge.protocol import VectorStoreProtocol
@@ -45,6 +47,8 @@ class KnowledgeQueryService:
         retriever: Optional :class:`GraphAugmentedRetriever`.  When set,
             ``_query()`` delegates to the retriever instead of calling
             ``_embed()`` and ``vector_store.search_similar()`` directly.
+        consolidation_conn: Optional SQLite connection to the consolidation
+            database.  When set, recent insights are appended after RAG output.
     """
 
     def __init__(  # noqa: PLR0913
@@ -56,6 +60,7 @@ class KnowledgeQueryService:
         scopes: list[str] | None = None,
         similarity_threshold: float = 0.3,
         retriever: GraphAugmentedRetriever | None = None,
+        consolidation_conn: sqlite3.Connection | None = None,
     ) -> None:
         self._vectors = vector_store
         self._graph = graph_store
@@ -63,6 +68,7 @@ class KnowledgeQueryService:
         self._scopes = scopes
         self._threshold = similarity_threshold
         self._retriever = retriever
+        self._consolidation_conn = consolidation_conn
 
     # ------------------------------------------------------------------
     # Public API
@@ -129,6 +135,10 @@ class KnowledgeQueryService:
                 trimmed = " ".join(words[:budget])
                 if trimmed:
                     output += expansion_header + trimmed
+                    budget -= _token_count(trimmed)
+
+        # Append consolidation insights if available and budget allows.
+        output, budget = self._append_consolidation_insights(output, budget)
 
         return output
 
@@ -182,6 +192,56 @@ class KnowledgeQueryService:
             return None, 0
 
         return header + "\n\n" + "\n".join(lines), budget
+
+    def _append_consolidation_insights(
+        self, output: str, budget: int,
+    ) -> tuple[str, int]:
+        """Append consolidation insights to *output* within *budget*.
+
+        Queries the consolidations table for the 3 most recent insights,
+        formats them as ``Consolidation insights`` header + bullet list,
+        and appends within the remaining token budget.  Exceptions are
+        caught and logged at WARNING so RAG output is never lost.
+        """
+        if self._consolidation_conn is None:
+            return output, budget
+
+        try:
+            rows = self._consolidation_conn.execute(
+                "SELECT insight FROM consolidations ORDER BY created_at DESC LIMIT 3",
+            ).fetchall()
+        except Exception:  # noqa: BLE001
+            logger.warning("Consolidation insight query failed", exc_info=True)
+            return output, budget
+
+        if not rows:
+            return output, budget
+
+        header = "\n\nConsolidation insights:\n"
+        header_cost = _token_count(header)
+        if header_cost >= budget:
+            return output, budget
+
+        budget -= header_cost
+        bullets: list[str] = []
+        for (insight_text,) in rows:
+            bullet = f"- {insight_text}"
+            cost = _token_count(bullet)
+            if cost > budget:
+                # Try word-boundary truncation for partial fit.
+                words = bullet.split()
+                trimmed = " ".join(words[:budget])
+                if trimmed and trimmed != "-":
+                    bullets.append(trimmed)
+                    budget -= _token_count(trimmed)
+                break
+            bullets.append(bullet)
+            budget -= cost
+
+        if not bullets:
+            return output, budget
+
+        return output + header + "\n".join(bullets), budget
 
     def _embed(self, text: str) -> list[float] | HybridEmbedding:
         """Embed text, preferring ``embed_hybrid`` with dense fallback."""

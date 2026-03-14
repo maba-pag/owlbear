@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear.memory.knowledge.query_service import KnowledgeQueryService
 from owlbear.tools.browser.config import BrowserConfig
 
 if TYPE_CHECKING:
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.graph import GraphStore
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.qdrant import QdrantVectorStore
-    from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.tools.browser.toolset import BrowserToolset
 
 logger = logging.getLogger(__name__)
@@ -128,9 +128,6 @@ def _build_knowledge_toolset(  # noqa: PLR0913
         from owlbear.memory.knowledge import IngestPipeline  # noqa: PLC0415
         from owlbear.memory.knowledge.document_store import DocumentStore  # noqa: PLC0415
         from owlbear.memory.knowledge.enrichment import GraphEnricher  # noqa: PLC0415
-        from owlbear.memory.knowledge.query_service import (  # noqa: PLC0415
-            KnowledgeQueryService,
-        )
         from owlbear.tools.knowledge import KnowledgeToolset  # noqa: PLC0415
 
         # Build optional inter-document graph builder.
@@ -197,6 +194,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
             embedding_provider=infra.embedding_provider,
             scopes=scopes,
             retriever=retriever,
+            consolidation_conn=infra.conn if consolidation_enabled else None,
         )
         service.default_max_tokens = max_tokens
 
