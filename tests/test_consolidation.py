@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import sqlite3
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -649,3 +649,350 @@ class TestFromAC_Export:  # noqa: N801
         import owlbear.memory.knowledge as pkg
 
         assert "ConsolidationService" in pkg.__all__
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_WireSurfacesConsolidation  (#723 AC7 — wiring gap)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_WireSurfacesConsolidation:  # noqa: N801
+    """AC7: _wire_knowledge_toolsets must surface ConsolidationService (not discard it)."""
+
+    def test_returns_3_tuple(self, tmp_path: object) -> None:
+        """Return value must include ConsolidationService slot (3-tuple, not 2-tuple)."""
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings(consolidation_enabled=True, approval_policy=[])
+        raw: list[object] = []
+        summary: list[object] = []
+        cleanup: list[object] = []
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            import owlbear.bootstrap as _pkg
+
+            result = _wire_knowledge_toolsets(
+                raw,
+                settings,
+                tmp_path,  # type: ignore[arg-type]
+                None,
+                None,
+                cleanup,
+                summary,
+                _pkg,
+            )
+
+        assert len(result) == 3, (  # type: ignore[arg-type]
+            "_wire_knowledge_toolsets should return 3-tuple "
+            "(knowledge_service, ingest_pipeline, consolidation_svc)"
+        )
+
+    def test_consolidation_service_when_enabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=True, third element is ConsolidationService."""
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings(consolidation_enabled=True, approval_policy=[])
+        raw: list[object] = []
+        summary: list[object] = []
+        cleanup: list[object] = []
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            import owlbear.bootstrap as _pkg
+
+            result = _wire_knowledge_toolsets(
+                raw,
+                settings,
+                tmp_path,  # type: ignore[arg-type]
+                None,
+                None,
+                cleanup,
+                summary,
+                _pkg,
+            )
+
+        consolidation_svc = result[2]  # type: ignore[index]
+        assert type(consolidation_svc).__name__ == "ConsolidationService"
+
+    def test_none_when_disabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=False, third element is None."""
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings(consolidation_enabled=False, approval_policy=[])
+        raw: list[object] = []
+        summary: list[object] = []
+        cleanup: list[object] = []
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            import owlbear.bootstrap as _pkg
+
+            result = _wire_knowledge_toolsets(
+                raw,
+                settings,
+                tmp_path,  # type: ignore[arg-type]
+                None,
+                None,
+                cleanup,
+                summary,
+                _pkg,
+            )
+
+        assert len(result) == 3  # type: ignore[arg-type]
+        assert result[2] is None  # type: ignore[index]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BuildToolsetsReturnsConsolidation  (#723 AC7 — wiring gap)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BuildToolsetsReturnsConsolidation:  # noqa: N801
+    """AC7: build_toolsets must include ConsolidationService in its return value."""
+
+    def test_returns_4_tuple(self, tmp_path: object) -> None:
+        """build_toolsets should return a 4-tuple including ConsolidationService slot."""
+        from owlbear.bootstrap import build_toolsets
+        from owlbear.channels.base import ChannelPlugin
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.hooks import HookRegistry
+
+        settings = OwlBearSettings(consolidation_enabled=True, approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            result = build_toolsets(settings, tmp_path, hooks, channel)  # type: ignore[arg-type]
+
+        assert len(result) == 4, (
+            "build_toolsets should return 4-tuple "
+            "(toolsets, knowledge_service, ingest_pipeline, consolidation_svc)"
+        )
+
+    def test_consolidation_service_when_enabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=True, 4th element is ConsolidationService."""
+        from owlbear.bootstrap import build_toolsets
+        from owlbear.channels.base import ChannelPlugin
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.hooks import HookRegistry
+
+        settings = OwlBearSettings(consolidation_enabled=True, approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            result = build_toolsets(settings, tmp_path, hooks, channel)  # type: ignore[arg-type]
+
+        consolidation_svc = result[3]  # type: ignore[index]
+        assert type(consolidation_svc).__name__ == "ConsolidationService"
+
+    def test_none_when_disabled(self, tmp_path: object) -> None:
+        """When consolidation_enabled=False, 4th element is None."""
+        from owlbear.bootstrap import build_toolsets
+        from owlbear.channels.base import ChannelPlugin
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.hooks import HookRegistry
+
+        settings = OwlBearSettings(consolidation_enabled=False, approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.evaluator.SourceEvaluator.__init__",
+                return_value=None,
+            ),
+        ):
+            result = build_toolsets(settings, tmp_path, hooks, channel)  # type: ignore[arg-type]
+
+        assert len(result) == 4  # type: ignore[arg-type]
+        assert result[3] is None  # type: ignore[index]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_DaemonStartsConsolidationTimer  (#723 AC7 — daemon gap)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DaemonStartsConsolidationTimer:  # noqa: N801
+    """AC7: Daemon starts schedule_periodic when ConsolidationService is provided."""
+
+    @pytest.mark.asyncio
+    async def test_run_daemon_accepts_consolidation_svc(self, tmp_path: object) -> None:
+        """run_daemon must accept a consolidation_svc keyword argument."""
+        from owlbear.daemon import run_daemon
+
+        mock_channel = AsyncMock()
+        mock_channel.receive = AsyncMock(return_value=None)  # EOF immediately
+        mock_channel.name = "test"
+        mock_agent = AsyncMock()
+        mock_agent.hooks = MagicMock()
+        mock_agent.hooks.emit = AsyncMock()
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = tmp_path / "session.jsonl"  # type: ignore[union-attr]
+        mock_agent.session.load = MagicMock(return_value=[])
+
+        mock_svc = MagicMock()
+        mock_svc.schedule_periodic = AsyncMock()
+
+        # Must accept consolidation_svc without TypeError
+        await run_daemon(
+            channel=mock_channel,
+            agent=mock_agent,
+            config_dir=tmp_path,  # type: ignore[arg-type]
+            consolidation_svc=mock_svc,
+        )
+
+    @pytest.mark.asyncio
+    async def test_schedule_periodic_called(self, tmp_path: object) -> None:
+        """When consolidation_svc is provided, schedule_periodic must be started."""
+        from owlbear.daemon import run_daemon
+
+        mock_channel = AsyncMock()
+        mock_channel.receive = AsyncMock(return_value=None)  # EOF immediately
+        mock_channel.name = "test"
+        mock_agent = AsyncMock()
+        mock_agent.hooks = MagicMock()
+        mock_agent.hooks.emit = AsyncMock()
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = tmp_path / "session.jsonl"  # type: ignore[union-attr]
+        mock_agent.session.load = MagicMock(return_value=[])
+
+        mock_svc = MagicMock()
+        # Make schedule_periodic a never-ending async that we can detect
+        mock_svc.schedule_periodic = AsyncMock(side_effect=asyncio.CancelledError)
+
+        settings = MagicMock()
+        settings.consolidation_interval = 900
+        settings.autonomous_mode = False
+        settings.heartbeat_enabled = False
+
+        await run_daemon(
+            channel=mock_channel,
+            agent=mock_agent,
+            config_dir=tmp_path,  # type: ignore[arg-type]
+            consolidation_svc=mock_svc,
+            settings=settings,
+        )
+
+        mock_svc.schedule_periodic.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_schedule_periodic_receives_interval(self, tmp_path: object) -> None:
+        """schedule_periodic must be called with interval=consolidation_interval from settings."""
+        from owlbear.daemon import run_daemon
+
+        mock_channel = AsyncMock()
+        mock_channel.receive = AsyncMock(return_value=None)
+        mock_channel.name = "test"
+        mock_agent = AsyncMock()
+        mock_agent.hooks = MagicMock()
+        mock_agent.hooks.emit = AsyncMock()
+        mock_agent.session = MagicMock()
+        mock_agent.session.path = tmp_path / "session.jsonl"  # type: ignore[union-attr]
+        mock_agent.session.load = MagicMock(return_value=[])
+
+        mock_svc = MagicMock()
+        mock_svc.schedule_periodic = AsyncMock(side_effect=asyncio.CancelledError)
+
+        settings = MagicMock()
+        settings.consolidation_interval = 900
+        settings.autonomous_mode = False
+        settings.heartbeat_enabled = False
+
+        await run_daemon(
+            channel=mock_channel,
+            agent=mock_agent,
+            config_dir=tmp_path,  # type: ignore[arg-type]
+            consolidation_svc=mock_svc,
+            settings=settings,
+        )
+
+        # Verify the interval was passed correctly
+        call_kwargs = mock_svc.schedule_periodic.call_args
+        assert call_kwargs is not None
+        # Check interval=900 was passed
+        if call_kwargs.kwargs:
+            assert call_kwargs.kwargs.get("interval") == 900
+        else:
+            assert call_kwargs.args[0] == 900
