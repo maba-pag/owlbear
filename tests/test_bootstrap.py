@@ -1205,9 +1205,9 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra)
+            result = _build_knowledge_toolset(tmp_path, infra, chat_model="test-model")
 
         assert result is not None
         toolset, *_ = result
@@ -1228,9 +1228,14 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
+            result = _build_knowledge_toolset(
+                tmp_path,
+                infra,
+                project_id="proj-42",
+                chat_model="test-model",
+            )
 
         assert result is not None
         toolset, *_ = result
@@ -1251,9 +1256,9 @@ class TestBuildKnowledgeToolset:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra)
+            result = _build_knowledge_toolset(tmp_path, infra, chat_model="test-model")
 
         assert result is not None
         toolset, *_ = result
@@ -1328,9 +1333,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra)
+            result = _build_knowledge_toolset(tmp_path, infra, chat_model="test-model")
 
         assert result is not None
         assert isinstance(result, tuple)
@@ -1354,9 +1359,14 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra, project_id="proj-42")
+            result = _build_knowledge_toolset(
+                tmp_path,
+                infra,
+                project_id="proj-42",
+                chat_model="test-model",
+            )
 
         assert result is not None
         _, service, _, _ = result
@@ -1377,9 +1387,9 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra)
+            result = _build_knowledge_toolset(tmp_path, infra, chat_model="test-model")
 
         assert result is not None
         _, service, _, _ = result
@@ -1400,9 +1410,14 @@ class TestBuildKnowledgeToolsetReturnsService:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra, max_tokens=3000)
+            result = _build_knowledge_toolset(
+                tmp_path,
+                infra,
+                chat_model="test-model",
+                max_tokens=3000,
+            )
 
         assert result is not None
         _, service, _, _ = result
@@ -1412,7 +1427,7 @@ class TestBuildKnowledgeToolsetReturnsService:
         """When knowledge subsystem fails, returns None (unchanged)."""
         from owlbear.bootstrap import _build_knowledge_infra
 
-        result = _build_knowledge_infra(tmp_path)
+        result = _build_knowledge_infra(tmp_path, chat_model="test-model")
         # Without proper mocks, infra creation fails -> None
         assert result is None
 
@@ -1686,7 +1701,7 @@ class TestKnowledgeInfra:
                 return_value=None,
             ),
         ):
-            result = _build_knowledge_infra(tmp_path)
+            result = _build_knowledge_infra(tmp_path, chat_model="test-model")
 
         assert result is not None
         assert isinstance(result, _KnowledgeInfra)
@@ -1699,7 +1714,7 @@ class TestKnowledgeInfra:
             "owlbear.memory.knowledge.qdrant.QdrantClient",
             side_effect=RuntimeError("boom"),
         ):
-            result = _build_knowledge_infra(tmp_path)
+            result = _build_knowledge_infra(tmp_path, chat_model="test-model")
 
         assert result is None
 
@@ -1826,9 +1841,9 @@ class TestSharedKnowledgeInfra:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_knowledge_toolset(tmp_path, infra)
+            result = _build_knowledge_toolset(tmp_path, infra, chat_model="test-model")
 
         assert result is not None
         toolset, service, *_ = result
@@ -1854,9 +1869,9 @@ class TestSharedKnowledgeInfra:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
             assert infra is not None
-            result = _build_bookmark_toolset(infra, tmp_path)
+            result = _build_bookmark_toolset(infra, tmp_path, chat_model="test-model")
 
         assert result is not None
         assert type(result).__name__ == "BookmarkToolset"
@@ -1876,7 +1891,7 @@ class TestSharedKnowledgeInfra:
                 return_value=None,
             ),
         ):
-            infra = _build_knowledge_infra(tmp_path)
+            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
 
         assert infra is not None
         # All fields are the same object  -- identity, not equality
