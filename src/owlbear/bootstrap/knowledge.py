@@ -50,7 +50,7 @@ class _KnowledgeInfra:
 
 def _build_knowledge_infra(
     workspace: Path,
-    chat_model: str | Model = "gpt-4o",
+    chat_model: str | Model,
 ) -> _KnowledgeInfra | None:
     """Create shared knowledge infrastructure objects once.
 
@@ -102,7 +102,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     infra: _KnowledgeInfra,
     project_id: str | None = None,
     *,
-    chat_model: str | Model = "gpt-4o",
+    chat_model: str | Model,
     max_tokens: int = 2000,
     knowledge_graph_expansion: bool = True,
     inter_doc_graph_building: bool = False,
@@ -228,7 +228,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
 def _build_bookmark_toolset(
     infra: _KnowledgeInfra,
     workspace: Path,
-    chat_model: str | Model = "gpt-4o",
+    chat_model: str | Model,
     ingest_threshold: float = 0.7,
 ) -> AbstractToolset | None:
     """Create a :class:`BookmarkToolset` backed by the knowledge DB.

@@ -61,8 +61,9 @@ class AgentRegistry:
         self,
         agents_dir: Path,
         tool_resolver: Callable[[str], AbstractToolset],
+        *,
         skill_registry: SkillRegistry | None = None,
-        default_model: str | Model = "gpt-4o",
+        default_model: str | Model,
         mcp_registry: MCPServerRegistry | None = None,
     ) -> None:
         self._agents_dir = agents_dir
