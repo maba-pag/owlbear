@@ -8,6 +8,7 @@ Uses pydantic-settings to load configuration from environment variables
 from __future__ import annotations
 
 import dataclasses
+import functools
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -104,8 +105,7 @@ class OwlBearSettings(BaseSettings):
     slack_rate_limit_per_minute: int = Field(
         default=30,
         description=(
-            "Maximum messages accepted per user per minute via Slack."
-            " 0 disables rate limiting."
+            "Maximum messages accepted per user per minute via Slack. 0 disables rate limiting."
         ),
     )
 
@@ -513,6 +513,17 @@ class OwlBearSettings(BaseSettings):
             )
             raise ValueError(msg)
         return self
+
+
+@functools.cache
+def get_settings() -> OwlBearSettings:
+    """Return the cached :class:`OwlBearSettings` singleton.
+
+    Uses :func:`functools.cache` so repeated calls return the same instance.
+    Call ``get_settings.cache_clear()`` to force a fresh instance on the
+    next invocation (useful in tests or after environment changes).
+    """
+    return OwlBearSettings()
 
 
 def resolve_rigor_profile(
