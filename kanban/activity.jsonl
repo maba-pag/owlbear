@@ -8707,3 +8707,570 @@
 {"timestamp":"2026-03-14T10:33:32.9402916+01:00","action":"move","task_id":790,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-14T10:33:33.6605509+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
 {"timestamp":"2026-03-14T10:33:33.6676463+01:00","action":"release","task_id":790,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:33:54.3064182+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T10:33:59.6039884+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T10:34:05.0603479+01:00","action":"edit","task_id":790,"detail":"Include consolidation insights in KnowledgeQueryService context injection"}
+{"timestamp":"2026-03-14T10:34:20.8558072+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T10:34:21.4509399+01:00","action":"move","task_id":795,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T10:34:27.2567628+01:00","action":"edit","task_id":795,"detail":"Implement Slack sender validation"}
+{"timestamp":"2026-03-14T10:34:27.2624397+01:00","action":"release","task_id":795,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:35:47.4464202+01:00","action":"move","task_id":533,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T10:36:01.9607734+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T10:36:01.9660452+01:00","action":"release","task_id":533,"detail":"auditor"}
+{"timestamp":"2026-03-14T10:36:24.0026671+01:00","action":"edit","task_id":533,"detail":"Fix send_image kwargs to support context_key threading"}
+{"timestamp":"2026-03-14T10:37:11.8977193+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:37:11.9029985+01:00","action":"claim","task_id":802,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:37:18.674832+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:37:18.6808923+01:00","action":"claim","task_id":804,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:37:33.1481735+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:37:33.1549992+01:00","action":"claim","task_id":723,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:37:57.3270713+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:37:57.3333507+01:00","action":"claim","task_id":803,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:40:27.7466311+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:40:40.0452919+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:41:04.7909737+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:41:15.9562066+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:41:15.9630847+01:00","action":"release","task_id":804,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:44:18.5502161+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:44:20.9380779+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:44:26.2066218+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:44:26.2119954+01:00","action":"release","task_id":802,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:44:28.3797778+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:44:33.5085331+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:44:33.5132159+01:00","action":"release","task_id":723,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:45:51.4180095+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:46:24.271079+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:47:00.7648037+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:47:32.6747178+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:47:32.679507+01:00","action":"release","task_id":803,"detail":"reviewer"}
+{"timestamp":"2026-03-14T10:48:45.8583668+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T10:48:45.8639706+01:00","action":"claim","task_id":798,"detail":"builder"}
+{"timestamp":"2026-03-14T10:49:09.6032034+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:49:09.6137304+01:00","action":"claim","task_id":552,"detail":"builder"}
+{"timestamp":"2026-03-14T10:49:10.2815925+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:49:10.2890453+01:00","action":"claim","task_id":796,"detail":"builder"}
+{"timestamp":"2026-03-14T10:49:11.3287323+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T10:49:11.3349004+01:00","action":"claim","task_id":797,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:49:14.3484677+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:49:15.4611045+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T10:49:26.028608+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T10:50:42.5126754+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T10:51:45.1640972+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T10:51:50.4524827+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:51:56.726011+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:52:07.8585418+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:52:12.3221557+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:52:12.3295478+01:00","action":"release","task_id":796,"detail":"builder"}
+{"timestamp":"2026-03-14T10:52:19.234759+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T10:52:36.3106331+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T10:52:36.3118146+01:00","action":"release","task_id":797,"detail":"test-writer"}
+{"timestamp":"2026-03-14T10:57:41.0291519+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:57:41.0365446+01:00","action":"claim","task_id":803,"detail":"writer"}
+{"timestamp":"2026-03-14T10:57:46.2660799+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:57:46.2722021+01:00","action":"claim","task_id":804,"detail":"writer"}
+{"timestamp":"2026-03-14T10:57:49.9918813+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:57:49.9987408+01:00","action":"claim","task_id":723,"detail":"writer"}
+{"timestamp":"2026-03-14T10:57:57.1211765+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:57:57.1269441+01:00","action":"claim","task_id":802,"detail":"writer"}
+{"timestamp":"2026-03-14T10:58:18.1203931+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:58:22.5870643+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T10:58:22.5934483+01:00","action":"release","task_id":803,"detail":"writer"}
+{"timestamp":"2026-03-14T10:59:04.4546899+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:59:05.3286311+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:59:10.0181147+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:59:10.7199075+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:59:10.7269978+01:00","action":"release","task_id":804,"detail":"writer"}
+{"timestamp":"2026-03-14T10:59:14.2670792+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:59:15.2275727+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T10:59:25.79366+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:59:34.1397587+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:59:38.8545681+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T10:59:38.8596381+01:00","action":"release","task_id":802,"detail":"writer"}
+{"timestamp":"2026-03-14T10:59:46.5822914+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:59:51.8655651+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T10:59:51.8763592+01:00","action":"release","task_id":723,"detail":"writer"}
+{"timestamp":"2026-03-14T11:00:57.8149383+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:00:57.819966+01:00","action":"claim","task_id":798,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:05:16.599121+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:05:40.9537786+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:05:52.814949+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:05:58.1640646+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:05:58.1693249+01:00","action":"release","task_id":798,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:11:02.8119101+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T11:11:02.8188392+01:00","action":"claim","task_id":723,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:11:07.485548+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T11:11:07.4911921+01:00","action":"claim","task_id":777,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:11:09.3242632+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:11:09.329949+01:00","action":"claim","task_id":802,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:11:13.7137819+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T11:11:13.7201907+01:00","action":"claim","task_id":803,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:17:55.7202726+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T11:18:00.8251808+01:00","action":"move","task_id":777,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T11:18:05.9097287+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-14T11:18:05.9165386+01:00","action":"release","task_id":777,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:21:59.0840401+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T11:22:09.7374859+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T11:22:15.7938846+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:22:20.7920764+01:00","action":"move","task_id":802,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T11:22:25.8813225+01:00","action":"edit","task_id":802,"detail":"Tests for Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:22:25.8859704+01:00","action":"release","task_id":802,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:22:34.6001646+01:00","action":"move","task_id":723,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T11:22:59.9412746+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T11:23:05.2598052+01:00","action":"move","task_id":803,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T11:23:06.2393379+01:00","action":"edit","task_id":723,"detail":"Implement ConsolidationService (feature-flagged)"}
+{"timestamp":"2026-03-14T11:23:06.2461829+01:00","action":"release","task_id":723,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:23:11.7148705+01:00","action":"edit","task_id":803,"detail":"Tests for SlackChannel.send_file delegation"}
+{"timestamp":"2026-03-14T11:23:11.7217803+01:00","action":"release","task_id":803,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:24:05.0274738+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T11:24:05.0321538+01:00","action":"claim","task_id":804,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:24:12.2037979+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:24:12.209646+01:00","action":"claim","task_id":798,"detail":"writer"}
+{"timestamp":"2026-03-14T11:24:18.0840897+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:24:18.0898336+01:00","action":"claim","task_id":552,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:24:43.0003733+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:24:43.0058775+01:00","action":"claim","task_id":796,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:24:48.3392024+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:24:54.71198+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:26:43.2539825+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:26:44.6583546+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:26:44.6669734+01:00","action":"release","task_id":798,"detail":"writer"}
+{"timestamp":"2026-03-14T11:26:50.3506771+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:26:50.3563798+01:00","action":"claim","task_id":798,"detail":"writer"}
+{"timestamp":"2026-03-14T11:26:56.6863366+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:26:56.6921254+01:00","action":"release","task_id":798,"detail":"writer"}
+{"timestamp":"2026-03-14T11:29:25.6719526+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:30:09.8845714+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:30:24.3320154+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:30:24.3377265+01:00","action":"release","task_id":552,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:30:56.795051+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:31:25.4220533+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:31:25.4278695+01:00","action":"release","task_id":796,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:31:51.0556227+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:31:51.0613438+01:00","action":"claim","task_id":796,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:31:51.7863267+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:31:51.7926212+01:00","action":"release","task_id":796,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:47:20.2971967+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T11:47:25.8986546+01:00","action":"move","task_id":804,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T11:47:31.2379375+01:00","action":"edit","task_id":804,"detail":"Test Slack message audit logging (RED)"}
+{"timestamp":"2026-03-14T11:47:31.2453762+01:00","action":"release","task_id":804,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:48:08.85245+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:48:08.860389+01:00","action":"claim","task_id":797,"detail":"builder"}
+{"timestamp":"2026-03-14T11:48:36.2335538+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:48:41.0916789+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:48:46.0964566+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:48:46.1032458+01:00","action":"release","task_id":797,"detail":"builder"}
+{"timestamp":"2026-03-14T11:54:56.4344836+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:54:56.441299+01:00","action":"claim","task_id":552,"detail":"writer"}
+{"timestamp":"2026-03-14T11:55:01.8753117+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:55:01.8800025+01:00","action":"claim","task_id":796,"detail":"writer"}
+{"timestamp":"2026-03-14T11:55:10.2103857+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:55:10.9587002+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:55:10.9650673+01:00","action":"claim","task_id":797,"detail":"reviewer"}
+{"timestamp":"2026-03-14T11:55:14.7612407+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T11:55:14.7662006+01:00","action":"claim","task_id":798,"detail":"auditor"}
+{"timestamp":"2026-03-14T11:55:16.2345849+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:55:16.2414251+01:00","action":"release","task_id":796,"detail":"writer"}
+{"timestamp":"2026-03-14T11:55:19.7416707+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:55:19.7463819+01:00","action":"claim","task_id":796,"detail":"writer"}
+{"timestamp":"2026-03-14T11:55:23.9371603+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:55:26.5121303+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:55:31.6299731+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:55:36.0144044+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T11:55:36.0230352+01:00","action":"release","task_id":552,"detail":"writer"}
+{"timestamp":"2026-03-14T11:56:23.9397281+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:56:29.2206713+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:56:35.1605532+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T11:56:35.1664007+01:00","action":"release","task_id":796,"detail":"writer"}
+{"timestamp":"2026-03-14T11:58:14.0907101+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:58:20.0569271+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:58:20.8468044+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T11:58:20.8526504+01:00","action":"release","task_id":797,"detail":"reviewer"}
+{"timestamp":"2026-03-14T12:08:36.8680857+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T12:09:02.5526133+01:00","action":"move","task_id":798,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T12:09:21.7383137+01:00","action":"edit","task_id":798,"detail":"Tests: consolidation insight injection in query_for_context (#790)"}
+{"timestamp":"2026-03-14T12:09:21.7418593+01:00","action":"release","task_id":798,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:13:36.5109062+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T12:13:36.5166503+01:00","action":"claim","task_id":552,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:13:38.3178365+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T12:13:38.3247584+01:00","action":"claim","task_id":796,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:13:44.8973245+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:13:44.9051916+01:00","action":"claim","task_id":797,"detail":"writer"}
+{"timestamp":"2026-03-14T12:14:37.5938224+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:14:42.7969281+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:14:47.3709362+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:14:47.3782923+01:00","action":"release","task_id":797,"detail":"writer"}
+{"timestamp":"2026-03-14T12:25:11.398609+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T12:25:16.8322834+01:00","action":"move","task_id":552,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T12:25:22.5742079+01:00","action":"edit","task_id":552,"detail":"Add send_file to Slack channel via files_upload_v2"}
+{"timestamp":"2026-03-14T12:25:22.5806899+01:00","action":"release","task_id":552,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:26:07.7602962+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T12:26:13.6371116+01:00","action":"move","task_id":796,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T12:26:18.8627878+01:00","action":"edit","task_id":796,"detail":"Add Slack message rate limiting"}
+{"timestamp":"2026-03-14T12:26:18.8680271+01:00","action":"release","task_id":796,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:29:55.2764104+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:29:55.2825683+01:00","action":"claim","task_id":797,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:40:37.9152551+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:40:43.3581922+01:00","action":"move","task_id":797,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T12:40:48.5357039+01:00","action":"edit","task_id":797,"detail":"Add Slack message audit logging"}
+{"timestamp":"2026-03-14T12:40:48.5425564+01:00","action":"release","task_id":797,"detail":"auditor"}
+{"timestamp":"2026-03-14T12:48:38.5784259+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T12:48:38.584675+01:00","action":"claim","task_id":793,"detail":"reviewer"}
+{"timestamp":"2026-03-14T12:48:39.8816202+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T12:48:39.8863121+01:00","action":"claim","task_id":539,"detail":"reviewer"}
+{"timestamp":"2026-03-14T12:48:59.3892623+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:48:59.3992698+01:00","action":"claim","task_id":523,"detail":"builder"}
+{"timestamp":"2026-03-14T12:52:30.5481405+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:52:30.5556683+01:00","action":"claim","task_id":434,"detail":"architect"}
+{"timestamp":"2026-03-14T12:52:33.7000786+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:52:36.4715295+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:52:48.3364686+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:53:09.6669291+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:53:19.3383236+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:53:29.2593403+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:53:34.0526426+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:53:41.1613166+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:53:46.9763976+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:53:53.7708258+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:54:02.7382986+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:54:02.7462728+01:00","action":"unblock","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:54:04.0804567+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:54:04.0867999+01:00","action":"unblock","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:54:08.3405834+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:54:09.3993691+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:54:31.3907204+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:54:31.3981035+01:00","action":"release","task_id":434,"detail":"architect"}
+{"timestamp":"2026-03-14T12:54:34.4767962+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T12:54:39.7959354+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T12:54:39.8044149+01:00","action":"release","task_id":523,"detail":"builder"}
+{"timestamp":"2026-03-14T12:54:40.6006458+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T12:54:42.8780157+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T12:54:43.8497871+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-14T12:54:43.8565459+01:00","action":"release","task_id":539,"detail":"reviewer"}
+{"timestamp":"2026-03-14T12:56:22.8319734+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T12:56:55.1048219+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T12:57:13.0556772+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-14T12:57:13.0643527+01:00","action":"release","task_id":793,"detail":"reviewer"}
+{"timestamp":"2026-03-14T13:02:49.5483859+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:02:49.5530823+01:00","action":"claim","task_id":434,"detail":"test-writer"}
+{"timestamp":"2026-03-14T13:03:02.7337238+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:03:09.2896459+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:03:09.2975697+01:00","action":"claim","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T13:03:13.9043916+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:03:18.7168981+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:03:23.7020314+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:03:28.8869792+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:03:28.8945949+01:00","action":"release","task_id":434,"detail":"test-writer"}
+{"timestamp":"2026-03-14T13:03:34.5265972+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:03:38.9646395+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:08:12.3825932+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:08:18.2708929+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:08:23.6222322+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:08:23.6285384+01:00","action":"release","task_id":523,"detail":"reviewer"}
+{"timestamp":"2026-03-14T13:15:15.5564215+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:15:15.5636933+01:00","action":"claim","task_id":434,"detail":"builder"}
+{"timestamp":"2026-03-14T13:15:25.6610814+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:15:30.6282875+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:15:31.2980216+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:15:31.3043585+01:00","action":"release","task_id":434,"detail":"builder"}
+{"timestamp":"2026-03-14T13:15:58.5274659+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:15:58.5346994+01:00","action":"claim","task_id":523,"detail":"writer"}
+{"timestamp":"2026-03-14T13:16:35.3390206+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:16:40.3749939+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:16:45.353251+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:16:45.3585423+01:00","action":"release","task_id":523,"detail":"writer"}
+{"timestamp":"2026-03-14T13:24:18.5053077+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:24:18.5121615+01:00","action":"claim","task_id":523,"detail":"auditor"}
+{"timestamp":"2026-03-14T13:24:22.6567828+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:24:22.661717+01:00","action":"claim","task_id":434,"detail":"reviewer"}
+{"timestamp":"2026-03-14T13:26:28.0827866+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:26:33.9282345+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:26:34.5899786+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:26:34.5993209+01:00","action":"release","task_id":434,"detail":"reviewer"}
+{"timestamp":"2026-03-14T13:35:59.0389146+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:36:04.6046686+01:00","action":"move","task_id":523,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T13:36:09.6606331+01:00","action":"edit","task_id":523,"detail":"Eliminate post-construction patching in bootstrap"}
+{"timestamp":"2026-03-14T13:36:09.6691066+01:00","action":"release","task_id":523,"detail":"auditor"}
+{"timestamp":"2026-03-14T13:41:08.8304097+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:41:08.8373716+01:00","action":"claim","task_id":434,"detail":"writer"}
+{"timestamp":"2026-03-14T13:41:37.926003+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:41:43.6421511+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:41:48.2467096+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:41:48.2541929+01:00","action":"release","task_id":434,"detail":"writer"}
+{"timestamp":"2026-03-14T13:47:57.4015212+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:47:57.4061375+01:00","action":"claim","task_id":434,"detail":"auditor"}
+{"timestamp":"2026-03-14T13:49:42.3340209+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:49:47.5789066+01:00","action":"move","task_id":434,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-14T13:49:53.2696715+01:00","action":"edit","task_id":434,"detail":"Evaluate ColBERT scalar quantization in Qdrant"}
+{"timestamp":"2026-03-14T13:49:53.2754376+01:00","action":"release","task_id":434,"detail":"auditor"}
+{"timestamp":"2026-03-14T20:54:32.1595265+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T20:54:32.1639383+01:00","action":"claim","task_id":551,"detail":"architect"}
+{"timestamp":"2026-03-14T20:54:42.2795337+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:54:42.2852896+01:00","action":"claim","task_id":532,"detail":"architect"}
+{"timestamp":"2026-03-14T20:54:45.382451+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T20:54:45.3871616+01:00","action":"claim","task_id":536,"detail":"architect"}
+{"timestamp":"2026-03-14T20:55:16.4271768+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:55:16.433114+01:00","action":"claim","task_id":545,"detail":"-t"}
+{"timestamp":"2026-03-14T20:55:52.9533416+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:55:52.9580667+01:00","action":"release","task_id":545,"detail":"-t"}
+{"timestamp":"2026-03-14T20:55:57.4369853+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:55:57.4448637+01:00","action":"claim","task_id":545,"detail":"@architect"}
+{"timestamp":"2026-03-14T20:56:49.1679105+01:00","action":"create","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-14T20:57:12.2582759+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-14T20:57:20.9945299+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:57:23.2421214+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:57:32.1471722+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:57:44.9800039+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:57:48.9837035+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-14T20:57:48.9912302+01:00","action":"release","task_id":545,"detail":"@architect"}
+{"timestamp":"2026-03-14T20:58:33.5881951+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:58:40.0430848+01:00","action":"create","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-14T20:58:48.7122325+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:11.0827688+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:19.4991005+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T20:59:25.2841528+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:35.3484034+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T20:59:39.5589512+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T20:59:44.6264399+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T20:59:45.4108896+01:00","action":"create","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-14T20:59:48.3587295+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:52.6136547+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:52.6189123+01:00","action":"release","task_id":532,"detail":"architect"}
+{"timestamp":"2026-03-14T20:59:53.2640153+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-14T20:59:56.5242695+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-14T20:59:58.1495226+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:00:02.8385344+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:00:10.4541419+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:00:21.3368303+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T21:00:27.4689993+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T21:00:29.0572163+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:00:33.3433976+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:00:33.348687+01:00","action":"release","task_id":551,"detail":"architect"}
+{"timestamp":"2026-03-14T21:00:49.7186665+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-14T21:01:26.8961207+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T21:01:42.3370007+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T21:01:46.7270948+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-14T21:01:46.7330659+01:00","action":"release","task_id":536,"detail":"architect"}
+{"timestamp":"2026-03-14T21:01:51.6590086+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-14T21:02:36.3783878+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-14T21:02:36.3836252+01:00","action":"claim","task_id":549,"detail":"architect"}
+{"timestamp":"2026-03-14T21:02:39.9364177+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-14T21:02:39.9416481+01:00","action":"claim","task_id":555,"detail":"architect"}
+{"timestamp":"2026-03-14T21:02:47.2147911+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-14T21:02:47.2189918+01:00","action":"claim","task_id":554,"detail":"architect"}
+{"timestamp":"2026-03-14T21:04:58.5811238+01:00","action":"create","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-14T21:05:08.885936+01:00","action":"create","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-14T21:05:33.8302571+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-14T21:05:43.9870195+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-14T21:05:43.9916853+01:00","action":"release","task_id":555,"detail":"architect"}
+{"timestamp":"2026-03-14T21:05:54.3880565+01:00","action":"create","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-14T21:06:01.5919094+01:00","action":"create","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-14T21:06:44.1207132+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-14T21:06:54.5824779+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-14T21:06:54.5892165+01:00","action":"release","task_id":554,"detail":"architect"}
+{"timestamp":"2026-03-14T21:07:43.2056753+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-14T21:07:43.2104567+01:00","action":"block","task_id":549,"detail":"Research (docs/research/init-reexports.md) found adding re-exports is counterproductive  0/66 consumers use existing re-exports. Task contradicts research findings. Recommend closing."}
+{"timestamp":"2026-03-14T21:07:43.2167567+01:00","action":"release","task_id":549,"detail":"architect"}
+{"timestamp":"2026-03-14T21:07:50.8314437+01:00","action":"create","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T00:02:02.9983807+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T00:02:03.0054387+01:00","action":"claim","task_id":555,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:02:13.7905589+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:13.7961915+01:00","action":"claim","task_id":545,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:02:18.124503+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:18.8479444+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T00:02:23.5903316+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T00:02:27.8299994+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T00:02:27.83522+01:00","action":"release","task_id":555,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:02:32.0669338+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:38.1691496+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:52.0454569+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:52.5940584+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T00:02:52.5993185+01:00","action":"release","task_id":545,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:03:04.0088723+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T00:03:04.0146102+01:00","action":"claim","task_id":806,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:03:11.2003245+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T00:03:11.205202+01:00","action":"claim","task_id":807,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:04:19.3854424+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T00:04:28.887128+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T00:04:28.8924393+01:00","action":"release","task_id":807,"detail":"test-writer"}
+{"timestamp":"2026-03-15T00:06:49.4156989+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T00:06:59.6746835+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T00:06:59.6794339+01:00","action":"release","task_id":806,"detail":"test-writer"}
+{"timestamp":"2026-03-15T03:52:44.9538855+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-15T03:52:44.9612728+01:00","action":"claim","task_id":809,"detail":"architect"}
+{"timestamp":"2026-03-15T04:01:04.2421454+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:01:04.2504812+01:00","action":"claim","task_id":555,"detail":"builder"}
+{"timestamp":"2026-03-15T04:01:07.8085463+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:01:07.8133129+01:00","action":"claim","task_id":545,"detail":"builder"}
+{"timestamp":"2026-03-15T04:01:24.7955882+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:01:29.6206594+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:01:29.6273834+01:00","action":"claim","task_id":554,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:01:33.0192362+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:01:37.0803898+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:01:45.2370217+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:01:45.2432274+01:00","action":"release","task_id":555,"detail":"builder"}
+{"timestamp":"2026-03-15T04:01:45.8634128+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:01:52.4362633+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:01:52.4404474+01:00","action":"claim","task_id":806,"detail":"builder"}
+{"timestamp":"2026-03-15T04:02:07.0999974+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:02:11.3565518+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:02:11.3634341+01:00","action":"release","task_id":554,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:03:02.0206402+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:03:06.2940347+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:03:06.2997078+01:00","action":"release","task_id":545,"detail":"builder"}
+{"timestamp":"2026-03-15T04:07:33.7809092+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:07:43.2198695+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:07:43.2250986+01:00","action":"release","task_id":806,"detail":"builder"}
+{"timestamp":"2026-03-15T04:08:09.699349+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:08:09.7056728+01:00","action":"claim","task_id":811,"detail":"architect"}
+{"timestamp":"2026-03-15T04:08:13.6995274+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:08:14.2840371+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:08:14.2887758+01:00","action":"claim","task_id":805,"detail":"architect"}
+{"timestamp":"2026-03-15T04:08:16.9509457+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:08:16.955704+01:00","action":"claim","task_id":810,"detail":"architect"}
+{"timestamp":"2026-03-15T04:08:17.9461406+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:08:18.7390507+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:09:46.7431048+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:09:56.9579525+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:09:59.2946542+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:10:01.7625788+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:10:01.7723241+01:00","action":"release","task_id":810,"detail":"architect"}
+{"timestamp":"2026-03-15T04:10:11.3392519+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:10:11.3452218+01:00","action":"release","task_id":811,"detail":"architect"}
+{"timestamp":"2026-03-15T04:10:59.0259801+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:11:13.9848109+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:11:22.0970754+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:11:22.1023076+01:00","action":"release","task_id":805,"detail":"architect"}
+{"timestamp":"2026-03-15T04:18:42.3739451+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:18:42.3803962+01:00","action":"claim","task_id":806,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:18:45.9748029+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:18:45.9813854+01:00","action":"claim","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:18:59.0044445+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:18:59.0119679+01:00","action":"claim","task_id":807,"detail":"builder"}
+{"timestamp":"2026-03-15T04:19:09.400978+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:19:12.7740504+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:19:56.5195133+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:20:01.501467+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:20:41.8718362+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:20:41.8781547+01:00","action":"release","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:21:54.7304318+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:22:05.6172317+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:22:05.6220616+01:00","action":"release","task_id":807,"detail":"builder"}
+{"timestamp":"2026-03-15T04:24:49.4002187+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:24:59.5343819+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:25:04.7598989+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:25:04.7666592+01:00","action":"release","task_id":806,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:25:41.0828009+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:25:41.0874717+01:00","action":"claim","task_id":811,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:25:41.8331176+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:25:41.8390251+01:00","action":"claim","task_id":554,"detail":"builder"}
+{"timestamp":"2026-03-15T04:25:44.51933+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:25:44.5257743+01:00","action":"claim","task_id":810,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:25:45.191642+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:25:45.8461075+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:25:45.8525009+01:00","action":"claim","task_id":805,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:25:46.5684953+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:25:50.7732973+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:25:52.0609688+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:25:54.4526251+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:25:54.4586549+01:00","action":"release","task_id":810,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:25:59.5038038+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:26:01.5476344+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:26:02.1940741+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:26:02.1993181+01:00","action":"claim","task_id":810,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:26:05.368695+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:26:08.1696722+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:26:11.9521056+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:26:15.5536282+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:26:16.4774964+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:26:16.484971+01:00","action":"release","task_id":811,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:26:17.2179029+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:26:17.2253959+01:00","action":"release","task_id":554,"detail":"builder"}
+{"timestamp":"2026-03-15T04:26:19.3249361+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:26:22.607967+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:26:23.3351293+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T04:26:28.165609+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T04:26:28.1716823+01:00","action":"release","task_id":810,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:29:00.4855665+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:29:31.8452067+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:29:57.2378843+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:29:57.2433438+01:00","action":"release","task_id":805,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:35:54.9771086+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T04:35:54.9828407+01:00","action":"claim","task_id":539,"detail":"writer"}
+{"timestamp":"2026-03-15T04:36:05.8208332+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:36:05.8275239+01:00","action":"claim","task_id":554,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:36:06.7040387+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:36:06.7092718+01:00","action":"claim","task_id":805,"detail":"builder"}
+{"timestamp":"2026-03-15T04:36:12.2317844+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:36:12.2373609+01:00","action":"claim","task_id":807,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:36:21.0669083+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:36:35.3056662+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:37:39.4258727+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T04:37:42.358004+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:37:48.6397356+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T04:37:49.2300526+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T04:37:49.2384548+01:00","action":"release","task_id":539,"detail":"writer"}
+{"timestamp":"2026-03-15T04:37:52.5658101+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:37:53.1712563+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T04:37:53.1783664+01:00","action":"release","task_id":554,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:38:31.5812853+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:38:36.2755672+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:38:36.2808112+01:00","action":"release","task_id":805,"detail":"builder"}
+{"timestamp":"2026-03-15T04:38:44.7094257+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:38:44.7157509+01:00","action":"block","task_id":805,"detail":"Test bugs: inspect.get_type_hints DNE, strip() vs trailing space"}
+{"timestamp":"2026-03-15T04:38:44.7239785+01:00","action":"claim","task_id":805,"detail":"builder"}
+{"timestamp":"2026-03-15T04:38:55.0785641+01:00","action":"edit","task_id":805,"detail":"Tests for _cli_error helper"}
+{"timestamp":"2026-03-15T04:38:55.08395+01:00","action":"release","task_id":805,"detail":"builder"}
+{"timestamp":"2026-03-15T04:39:41.4744069+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:39:51.061078+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:39:51.6671638+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T04:39:51.6736046+01:00","action":"release","task_id":807,"detail":"reviewer"}
+{"timestamp":"2026-03-15T04:40:23.0482045+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:40:23.0534282+01:00","action":"claim","task_id":806,"detail":"writer"}
+{"timestamp":"2026-03-15T04:40:25.9024598+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:40:25.9094316+01:00","action":"claim","task_id":555,"detail":"writer"}
+{"timestamp":"2026-03-15T04:40:34.1364682+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:40:34.1428731+01:00","action":"claim","task_id":545,"detail":"writer"}
+{"timestamp":"2026-03-15T04:40:35.2042988+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T04:40:35.2094729+01:00","action":"claim","task_id":793,"detail":"writer"}
+{"timestamp":"2026-03-15T04:40:56.1488378+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:41:09.244858+01:00","action":"edit","task_id":555,"detail":"Extract shared test helpers to conftest.py"}
+{"timestamp":"2026-03-15T04:41:36.4035033+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T04:41:37.4009261+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:41:43.8313435+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:41:45.1081245+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T04:41:45.1149716+01:00","action":"release","task_id":793,"detail":"writer"}
+{"timestamp":"2026-03-15T04:41:46.4371446+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:41:47.0692119+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:41:47.0751089+01:00","action":"release","task_id":545,"detail":"writer"}
+{"timestamp":"2026-03-15T04:41:52.7772291+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:41:53.3639943+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:41:53.3703848+01:00","action":"release","task_id":806,"detail":"writer"}
+{"timestamp":"2026-03-15T04:42:21.5349385+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T04:42:21.5431719+01:00","action":"claim","task_id":536,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:46:59.5545922+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T04:47:04.9292224+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T04:47:04.9355171+01:00","action":"release","task_id":536,"detail":"test-writer"}
+{"timestamp":"2026-03-15T04:51:55.2414078+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:51:55.2469173+01:00","action":"claim","task_id":806,"detail":"auditor"}
+{"timestamp":"2026-03-15T04:52:00.9157017+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T04:52:00.9221355+01:00","action":"claim","task_id":793,"detail":"auditor"}
+{"timestamp":"2026-03-15T04:52:09.4908002+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T04:52:09.496206+01:00","action":"claim","task_id":545,"detail":"auditor"}
+{"timestamp":"2026-03-15T04:52:26.8758818+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T04:52:26.8817563+01:00","action":"claim","task_id":539,"detail":"auditor"}
+{"timestamp":"2026-03-15T04:57:49.1233073+01:00","action":"move","task_id":806,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T04:58:10.7902451+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T04:58:10.7982622+01:00","action":"release","task_id":806,"detail":"auditor"}
+{"timestamp":"2026-03-15T04:58:33.2224696+01:00","action":"edit","task_id":806,"detail":"Tests: model parameter required in bootstrap helpers and AgentRegistry"}
+{"timestamp":"2026-03-15T05:01:38.1848698+01:00","action":"move","task_id":545,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T05:01:42.7492696+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T05:01:42.7545133+01:00","action":"release","task_id":545,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:01:46.9692017+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T05:01:54.3336539+01:00","action":"edit","task_id":545,"detail":"Resolve TOML config support: add or update docs"}
+{"timestamp":"2026-03-15T05:01:57.1285682+01:00","action":"move","task_id":793,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T05:02:02.5172026+01:00","action":"edit","task_id":793,"detail":"Tests for ColBERT scalar quantization config"}
+{"timestamp":"2026-03-15T05:02:02.5262921+01:00","action":"release","task_id":793,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:02:14.1765731+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T05:02:48.3460829+01:00","action":"move","task_id":539,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T05:03:06.3904869+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T05:03:06.3974315+01:00","action":"release","task_id":539,"detail":"auditor"}
