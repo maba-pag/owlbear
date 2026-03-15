@@ -9331,3 +9331,100 @@
 {"timestamp":"2026-03-15T05:40:36.8153476+01:00","action":"move","task_id":554,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-15T05:40:41.2161478+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
 {"timestamp":"2026-03-15T05:40:41.2213722+01:00","action":"release","task_id":554,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:40:55.9150401+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:40:55.9203412+01:00","action":"claim","task_id":554,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:41:01.229091+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:41:01.234957+01:00","action":"release","task_id":554,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:41:41.3574345+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T05:41:41.3637598+01:00","action":"claim","task_id":814,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:41:45.0572341+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:41:45.0635475+01:00","action":"claim","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:42:34.217063+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T05:42:34.2229056+01:00","action":"claim","task_id":536,"detail":"builder"}
+{"timestamp":"2026-03-15T05:43:41.1337424+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T05:43:41.1411755+01:00","action":"claim","task_id":532,"detail":"test-writer"}
+{"timestamp":"2026-03-15T05:43:54.0133626+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T05:44:06.3434421+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T05:44:07.0277349+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T05:44:07.03395+01:00","action":"release","task_id":814,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:44:29.9086554+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:44:39.4288567+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:44:40.4293463+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:44:40.4345983+01:00","action":"release","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:46:45.9460259+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T05:46:52.9504828+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T05:46:52.9573219+01:00","action":"release","task_id":532,"detail":"test-writer"}
+{"timestamp":"2026-03-15T05:50:08.8288612+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T05:50:13.7938081+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T05:50:14.4777756+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T05:50:14.4830439+01:00","action":"release","task_id":536,"detail":"builder"}
+{"timestamp":"2026-03-15T05:50:35.2985465+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T05:50:35.3061763+01:00","action":"claim","task_id":815,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:52:35.5853846+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T05:53:07.1868411+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T05:53:07.7968107+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T05:53:07.8047328+01:00","action":"release","task_id":815,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:57:19.6383208+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:57:19.6430177+01:00","action":"claim","task_id":813,"detail":"architect"}
+{"timestamp":"2026-03-15T05:57:23.2185311+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T05:57:23.2251881+01:00","action":"claim","task_id":536,"detail":"reviewer"}
+{"timestamp":"2026-03-15T05:57:23.9889288+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:57:23.995055+01:00","action":"claim","task_id":810,"detail":"writer"}
+{"timestamp":"2026-03-15T05:57:29.0991295+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:57:29.1043927+01:00","action":"claim","task_id":551,"detail":"reviewer"}
+{"timestamp":"2026-03-15T05:57:33.0248008+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:57:36.4469801+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:57:40.4171147+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:57:41.7906646+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:59:47.548701+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:00:20.2415283+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:00:20.8793461+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:00:20.8865178+01:00","action":"release","task_id":810,"detail":"writer"}
+{"timestamp":"2026-03-15T06:00:48.802682+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T06:00:54.7314159+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T06:00:54.7374571+01:00","action":"block","task_id":813,"detail":"Contradictory research: init-reexports.md says NO (.85), init-re-exports.md says YES (.90). Board conflict with #812. Decision request needed."}
+{"timestamp":"2026-03-15T06:00:59.4693165+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T06:00:59.4745459+01:00","action":"release","task_id":813,"detail":"architect"}
+{"timestamp":"2026-03-15T06:03:35.3867799+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:03:45.5475991+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:03:46.2465654+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:03:46.2514452+01:00","action":"release","task_id":551,"detail":"reviewer"}
+{"timestamp":"2026-03-15T06:03:54.7976012+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T06:04:05.2399926+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T06:04:05.9576803+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T06:04:05.963766+01:00","action":"release","task_id":536,"detail":"reviewer"}
+{"timestamp":"2026-03-15T06:04:44.6036418+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T06:04:44.6104961+01:00","action":"claim","task_id":814,"detail":"architect"}
+{"timestamp":"2026-03-15T06:04:45.3318929+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T06:04:45.3381429+01:00","action":"claim","task_id":815,"detail":"architect"}
+{"timestamp":"2026-03-15T06:06:34.2759026+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T06:06:34.2820614+01:00","action":"block","task_id":814,"detail":"Dependency #813 blocked with contradictory research. 0 consumers use existing re-exports. Resolve #812/#813 conflict first."}
+{"timestamp":"2026-03-15T06:06:34.2901314+01:00","action":"release","task_id":814,"detail":"architect"}
+{"timestamp":"2026-03-15T06:06:37.2419995+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T06:06:43.2463542+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T06:06:43.2534606+01:00","action":"block","task_id":815,"detail":"Dependency #813 blocked (contradictory research). Fundamental decision unresolved: should non-library packages get re-exports? File decision request at docs/decisions/pending/."}
+{"timestamp":"2026-03-15T06:06:47.4245931+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T06:06:47.4302407+01:00","action":"release","task_id":815,"detail":"architect"}
+{"timestamp":"2026-03-15T06:12:00.6338297+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:12:00.6396402+01:00","action":"claim","task_id":551,"detail":"writer"}
+{"timestamp":"2026-03-15T06:12:08.7128493+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:12:09.5499723+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T06:12:09.5552957+01:00","action":"claim","task_id":536,"detail":"writer"}
+{"timestamp":"2026-03-15T06:12:14.5114384+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-15T06:12:18.8303271+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:12:18.837521+01:00","action":"claim","task_id":810,"detail":"auditor"}
+{"timestamp":"2026-03-15T06:12:27.6643989+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:12:31.5743514+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:12:31.5813603+01:00","action":"claim","task_id":811,"detail":"builder"}
+{"timestamp":"2026-03-15T06:13:02.8503489+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:13:55.3164312+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:14:09.1547386+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:14:09.1612353+01:00","action":"release","task_id":551,"detail":"writer"}
+{"timestamp":"2026-03-15T06:15:15.9944691+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:15:21.0412194+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:15:21.8599015+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:15:21.8662853+01:00","action":"release","task_id":811,"detail":"builder"}
+{"timestamp":"2026-03-15T06:29:25.2193853+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:29:29.7734622+01:00","action":"move","task_id":810,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T06:29:34.1870545+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:29:34.1929094+01:00","action":"release","task_id":810,"detail":"auditor"}
