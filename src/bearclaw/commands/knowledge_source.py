@@ -39,7 +39,7 @@ _VALID_SOURCE_TYPES = ("url_list", "crawl", "file_glob")
 
 
 @app.command("add")
-def ks_add(  # noqa: PLR0913
+def knowledge_source_add(  # noqa: PLR0913
     name: Annotated[str, typer.Option("--name", "-n", help="Source name.")],
     source_type: Annotated[
         str, typer.Option("--type", "-t", help="Source type: url_list, crawl, or file_glob.")
@@ -102,7 +102,7 @@ def ks_add(  # noqa: PLR0913
 
 
 @app.command("list")
-def ks_list(
+def knowledge_source_list(
     scope: Annotated[str, typer.Option("--scope", "-s", help="Filter by scope.")] = "",
 ) -> None:
     """List knowledge sources."""
@@ -130,7 +130,7 @@ def ks_list(
 
 
 @app.command("show")
-def ks_show(
+def knowledge_source_show(
     name: Annotated[str, typer.Argument(help="Name of the source to show.")],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
 ) -> None:
@@ -154,7 +154,7 @@ def ks_show(
 
 
 @app.command("remove")
-def ks_remove(
+def knowledge_source_remove(
     name: Annotated[str, typer.Argument(help="Name of the source to remove.")],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Source scope.")] = "global",
 ) -> None:

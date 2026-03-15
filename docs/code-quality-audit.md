@@ -215,13 +215,11 @@ The error classifier imports `openai` at module level. This means any code that 
 
 ---
 
-### F-17 · LOW · Naming · bearclaw/cli.py (L460-550)
+### F-17 · ~~LOW~~ RESOLVED · Naming · bearclaw/commands/knowledge_source.py
 
 **Title:** `ks_add`, `ks_list`, `ks_show`, `ks_remove` use abbreviated prefix
 
-All other CLI commands use full words (`project_create`, `slack_auth`, `browser_status`). The knowledge-source commands use the `ks_` abbreviation, which is inconsistent.
-
-**Recommendation:** Rename to `knowledge_source_add`, etc. (or at minimum `ksource_add`). The Typer command names remain `add`, `list`, etc. under the subgroup — these are the Python function names, not user-facing.
+**Resolved (#560):** Renamed to `knowledge_source_add`, `knowledge_source_list`, `knowledge_source_show`, `knowledge_source_remove`. CLI command names unchanged.
 
 ---
 
