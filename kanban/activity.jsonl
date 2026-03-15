@@ -9760,3 +9760,203 @@
 {"timestamp":"2026-03-15T09:23:33.1100821+01:00","action":"move","task_id":538,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-15T09:23:36.9504736+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
 {"timestamp":"2026-03-15T09:23:36.9593562+01:00","action":"release","task_id":538,"detail":"auditor"}
+{"timestamp":"2026-03-15T09:26:00.9450179+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T09:26:01.6928324+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:26:02.7259862+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:28:06.4396756+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:28:06.4462601+01:00","action":"release","task_id":540,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:28:07.6824693+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:08.4511564+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:08.4581596+01:00","action":"claim","task_id":529,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:28:09.294071+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:10.7490147+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:15.9348353+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:25.7495881+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:31.7645448+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:36.0173436+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:40.7427785+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:28:40.7527041+01:00","action":"release","task_id":529,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:30:24.1411966+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:30:29.8310889+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:30:30.5492457+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:30:30.5552111+01:00","action":"release","task_id":528,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:31:09.8646599+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:31:09.871146+01:00","action":"claim","task_id":530,"detail":"builder"}
+{"timestamp":"2026-03-15T09:31:13.7104695+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:31:13.7174031+01:00","action":"claim","task_id":817,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:31:16.4059569+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:31:16.4135868+01:00","action":"claim","task_id":820,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:31:21.2531248+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:31:21.2605257+01:00","action":"claim","task_id":546,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:32:44.1316546+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:32:44.1403607+01:00","action":"release","task_id":530,"detail":"builder"}
+{"timestamp":"2026-03-15T09:33:05.8250858+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:33:05.8337351+01:00","action":"claim","task_id":530,"detail":"builder"}
+{"timestamp":"2026-03-15T09:33:08.4453254+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:33:08.4517581+01:00","action":"release","task_id":530,"detail":"builder"}
+{"timestamp":"2026-03-15T09:33:10.889393+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:33:18.5877469+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:33:24.6541934+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:35:07.3990199+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:35:17.7768277+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:35:24.1446925+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:35:24.1520364+01:00","action":"release","task_id":546,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:37:20.9899473+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:37:27.1755537+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:37:27.93048+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:37:27.9384515+01:00","action":"release","task_id":817,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:38:16.3281464+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:38:35.8962294+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:38:36.6191521+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:38:36.6249109+01:00","action":"release","task_id":820,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:39:40.5155512+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T09:39:40.5225202+01:00","action":"claim","task_id":814,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:39:46.5069696+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:39:46.5140049+01:00","action":"claim","task_id":812,"detail":"architect"}
+{"timestamp":"2026-03-15T09:40:01.3860397+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T09:40:01.3936132+01:00","action":"claim","task_id":537,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:40:07.2263978+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T09:40:07.2325953+01:00","action":"claim","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:40:11.025581+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T09:41:42.5079615+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T09:41:48.0693469+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T09:41:48.8192058+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T09:41:48.829197+01:00","action":"release","task_id":814,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:41:50.1466773+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:41:50.1523688+01:00","action":"release","task_id":812,"detail":"architect"}
+{"timestamp":"2026-03-15T09:42:51.5982174+01:00","action":"create","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-15T09:42:57.2537566+01:00","action":"create","task_id":825,"detail":"Migrate bookmark_pipeline.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-15T09:43:03.3758907+01:00","action":"create","task_id":826,"detail":"Migrate context_hydration.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-15T09:43:22.0081297+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T09:43:33.0197038+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T09:43:33.8001996+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T09:43:33.8076348+01:00","action":"release","task_id":537,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:43:41.6792483+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T09:43:50.5372126+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T09:43:55.341116+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T09:43:55.3476825+01:00","action":"release","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:44:34.0298809+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T09:44:34.0349797+01:00","action":"claim","task_id":815,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:48:40.9029844+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T09:48:46.2077487+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T09:48:46.2139942+01:00","action":"release","task_id":815,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:55:57.0831043+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:55:57.0888381+01:00","action":"claim","task_id":529,"detail":"writer"}
+{"timestamp":"2026-03-15T09:55:59.5839988+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:55:59.5907268+01:00","action":"claim","task_id":540,"detail":"writer"}
+{"timestamp":"2026-03-15T09:56:05.1228374+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:56:05.1291865+01:00","action":"claim","task_id":546,"detail":"writer"}
+{"timestamp":"2026-03-15T09:56:09.5659271+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:56:09.5728311+01:00","action":"claim","task_id":528,"detail":"writer"}
+{"timestamp":"2026-03-15T09:56:26.6148029+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:56:32.2085891+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:56:32.9100033+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T09:56:32.9163388+01:00","action":"release","task_id":529,"detail":"writer"}
+{"timestamp":"2026-03-15T09:56:51.9521391+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:56:57.1048498+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:56:57.8064826+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:56:57.8118746+01:00","action":"release","task_id":546,"detail":"writer"}
+{"timestamp":"2026-03-15T09:57:00.3453218+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:57:05.3105157+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:57:06.0853199+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:57:06.0948701+01:00","action":"release","task_id":540,"detail":"writer"}
+{"timestamp":"2026-03-15T09:57:24.7693499+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:57:30.1135172+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:57:30.824184+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:57:30.8316161+01:00","action":"release","task_id":528,"detail":"writer"}
+{"timestamp":"2026-03-15T09:58:01.4368988+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T09:58:01.4470917+01:00","action":"claim","task_id":530,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:58:05.2611728+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:58:05.2676756+01:00","action":"claim","task_id":817,"detail":"writer"}
+{"timestamp":"2026-03-15T09:58:09.4473601+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:58:10.2284662+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:58:10.2349167+01:00","action":"claim","task_id":820,"detail":"writer"}
+{"timestamp":"2026-03-15T09:58:21.4361676+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T09:58:21.4427269+01:00","action":"claim","task_id":548,"detail":"builder"}
+{"timestamp":"2026-03-15T09:59:03.972203+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:11.4028449+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:18.4573017+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:24.0808491+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:24.9108545+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:24.9186831+01:00","action":"release","task_id":820,"detail":"writer"}
+{"timestamp":"2026-03-15T09:59:51.917111+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:59:56.1777048+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T10:00:02.2734979+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T10:00:03.1701125+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T10:00:03.1781148+01:00","action":"release","task_id":817,"detail":"writer"}
+{"timestamp":"2026-03-15T10:00:21.4174681+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:00:34.0650388+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:00:34.9730763+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:00:34.9812551+01:00","action":"release","task_id":530,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:00:41.2746757+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:00:41.2833714+01:00","action":"claim","task_id":530,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:00:42.141018+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:00:42.1478367+01:00","action":"release","task_id":530,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:02:19.3464681+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:02:24.5015905+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:02:24.5095691+01:00","action":"release","task_id":548,"detail":"builder"}
+{"timestamp":"2026-03-15T10:03:47.9743016+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:03:47.9829017+01:00","action":"claim","task_id":821,"detail":"builder"}
+{"timestamp":"2026-03-15T10:03:55.523938+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:04:00.6488758+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:04:01.5169718+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:04:01.5251198+01:00","action":"release","task_id":821,"detail":"builder"}
+{"timestamp":"2026-03-15T10:04:58.2378469+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:04:58.2451871+01:00","action":"claim","task_id":812,"detail":"test-writer"}
+{"timestamp":"2026-03-15T10:06:11.7445861+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:06:17.6105811+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:06:18.4871475+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:06:18.4956673+01:00","action":"release","task_id":812,"detail":"test-writer"}
+{"timestamp":"2026-03-15T10:11:21.9295992+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:11:21.9377426+01:00","action":"claim","task_id":821,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:11:24.6030635+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:11:24.6096122+01:00","action":"claim","task_id":548,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:11:25.3827343+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:11:25.3880305+01:00","action":"claim","task_id":530,"detail":"writer"}
+{"timestamp":"2026-03-15T10:11:28.5147892+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:11:31.0491811+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:11:55.8959241+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:11:55.9038747+01:00","action":"claim","task_id":532,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:12:11.5970113+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:12:44.7386616+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:12:46.0237654+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:12:47.1159767+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:12:47.9397976+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:12:48.9867156+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:13:02.0996586+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:13:02.9549031+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:13:16.9865567+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T10:13:16.9930014+01:00","action":"release","task_id":530,"detail":"writer"}
+{"timestamp":"2026-03-15T10:14:20.0107699+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:14:25.8658142+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:14:26.6730439+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T10:14:26.6817743+01:00","action":"release","task_id":821,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:16:25.2830936+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:16:58.3875457+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:16:59.1753443+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T10:16:59.1824067+01:00","action":"release","task_id":548,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:17:06.9995183+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:17:13.2791932+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:17:14.0193352+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T10:17:14.026908+01:00","action":"release","task_id":532,"detail":"reviewer"}
+{"timestamp":"2026-03-15T10:17:58.0451374+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T10:17:58.0530014+01:00","action":"claim","task_id":528,"detail":"auditor"}
+{"timestamp":"2026-03-15T10:18:08.5909898+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T10:18:08.5995882+01:00","action":"claim","task_id":529,"detail":"auditor"}
+{"timestamp":"2026-03-15T10:18:32.143264+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:18:32.1497016+01:00","action":"claim","task_id":812,"detail":"builder"}
+{"timestamp":"2026-03-15T10:19:38.0693115+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:19:38.0800909+01:00","action":"claim","task_id":534,"detail":"test-writer"}
+{"timestamp":"2026-03-15T10:19:47.5584838+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:19:55.7434901+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:19:55.7493452+01:00","action":"release","task_id":534,"detail":"test-writer"}
+{"timestamp":"2026-03-15T10:20:01.5830245+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:20:18.7178025+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:20:25.9339426+01:00","action":"edit","task_id":534,"detail":"Replace kanban_list conflicting booleans with block_filter enum"}
+{"timestamp":"2026-03-15T10:21:51.6376092+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:21:57.338324+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T10:21:57.3467679+01:00","action":"release","task_id":812,"detail":"builder"}
+{"timestamp":"2026-03-15T10:26:57.8762336+01:00","action":"move","task_id":529,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T10:27:03.6385052+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T10:27:03.6461511+01:00","action":"release","task_id":529,"detail":"auditor"}
+{"timestamp":"2026-03-15T10:27:20.4101605+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
