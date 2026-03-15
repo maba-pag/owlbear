@@ -9274,3 +9274,56 @@
 {"timestamp":"2026-03-15T05:02:48.3460829+01:00","action":"move","task_id":539,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-15T05:03:06.3904869+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
 {"timestamp":"2026-03-15T05:03:06.3974315+01:00","action":"release","task_id":539,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:04:16.1696971+01:00","action":"edit","task_id":539,"detail":"Establish OwlBearError base exception hierarchy"}
+{"timestamp":"2026-03-15T05:05:14.2285309+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:05:14.2339688+01:00","action":"claim","task_id":810,"detail":"builder"}
+{"timestamp":"2026-03-15T05:05:16.5804862+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:05:16.5851469+01:00","action":"claim","task_id":551,"detail":"test-writer"}
+{"timestamp":"2026-03-15T05:05:26.34325+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:05:26.3492564+01:00","action":"claim","task_id":554,"detail":"writer"}
+{"timestamp":"2026-03-15T05:05:32.4075714+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:05:32.4128118+01:00","action":"claim","task_id":807,"detail":"writer"}
+{"timestamp":"2026-03-15T05:06:29.8801449+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:06:42.1137182+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:06:48.7234948+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:07:02.9281739+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:07:03.5750344+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:07:03.581318+01:00","action":"release","task_id":554,"detail":"writer"}
+{"timestamp":"2026-03-15T05:07:13.7728451+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:07:30.9368045+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:07:30.9439085+01:00","action":"release","task_id":807,"detail":"writer"}
+{"timestamp":"2026-03-15T05:07:43.1655117+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:07:47.7470275+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:07:47.7527062+01:00","action":"release","task_id":810,"detail":"builder"}
+{"timestamp":"2026-03-15T05:07:49.0529388+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:07:49.0586407+01:00","action":"release","task_id":551,"detail":"test-writer"}
+{"timestamp":"2026-03-15T05:08:14.7801272+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-15T05:08:14.7855468+01:00","action":"claim","task_id":549,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:11:26.8577762+01:00","action":"create","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-15T05:11:33.6876698+01:00","action":"create","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-15T05:11:39.5110246+01:00","action":"create","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-15T05:12:19.4713085+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-15T05:12:30.3788277+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-15T05:12:30.9945882+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-15T05:12:31.0000452+01:00","action":"release","task_id":549,"detail":"researcher"}
+{"timestamp":"2026-03-15T05:18:20.3375958+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:18:20.3443933+01:00","action":"claim","task_id":810,"detail":"reviewer"}
+{"timestamp":"2026-03-15T05:18:27.7873653+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:18:27.7946444+01:00","action":"claim","task_id":554,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:18:29.7103607+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:18:29.71654+01:00","action":"claim","task_id":807,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:18:33.0107553+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:18:33.0179368+01:00","action":"claim","task_id":551,"detail":"builder"}
+{"timestamp":"2026-03-15T05:18:37.8126134+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:21:07.0097309+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:21:17.7663083+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:21:18.5372056+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T05:21:18.5458608+01:00","action":"release","task_id":810,"detail":"reviewer"}
+{"timestamp":"2026-03-15T05:21:25.2656095+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:21:35.474386+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:21:36.3057092+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T05:21:36.3121789+01:00","action":"release","task_id":551,"detail":"builder"}
+{"timestamp":"2026-03-15T05:26:50.0589919+01:00","action":"move","task_id":807,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T05:27:04.1482552+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:27:04.1541373+01:00","action":"release","task_id":807,"detail":"auditor"}
+{"timestamp":"2026-03-15T05:27:24.3555468+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
