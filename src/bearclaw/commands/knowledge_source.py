@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from owlbear.config import OwlBearSettings
+from bearclaw.commands import _cli_error
+from owlbear.config import get_settings
 
 if TYPE_CHECKING:
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
@@ -27,7 +28,7 @@ def _get_source_store() -> KnowledgeSourceStore:
         KnowledgeSourceStore,
     )
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     settings.knowledge_db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(settings.knowledge_db_path))
     init_db(conn)
@@ -66,27 +67,23 @@ def ks_add(  # noqa: PLR0913
 
     if source_type not in _VALID_SOURCE_TYPES:
         valid = ", ".join(_VALID_SOURCE_TYPES)
-        typer.echo(f"Error: Invalid type '{source_type}'. Must be one of: {valid}")
-        raise typer.Exit(code=1)
+        _cli_error(f"Invalid type '{source_type}'. Must be one of: {valid}")
 
     # Build config dict based on type
     config: dict[str, object] = {}
     if source_type == "url_list":
         if not urls:
-            typer.echo("Error: --urls is required for type 'url_list'.")
-            raise typer.Exit(code=1)
+            _cli_error("--urls is required for type 'url_list'.")
         config["urls"] = [u.strip() for u in urls.split(",")]
     elif source_type == "crawl":
         if not seeds:
-            typer.echo("Error: --seeds is required for type 'crawl'.")
-            raise typer.Exit(code=1)
+            _cli_error("--seeds is required for type 'crawl'.")
         config["seeds"] = [s.strip() for s in seeds.split(",")]
         config["max_depth"] = max_depth
         config["max_pages"] = max_pages
     elif source_type == "file_glob":
         if not pattern:
-            typer.echo("Error: --pattern is required for type 'file_glob'.")
-            raise typer.Exit(code=1)
+            _cli_error("--pattern is required for type 'file_glob'.")
         config["pattern"] = pattern
 
     now = datetime.now(tz=UTC).isoformat()
@@ -143,8 +140,7 @@ def ks_show(
     store = _get_source_store()
     source = store.get_by_name(name, scope=scope)
     if source is None:
-        typer.echo(f"Error: No knowledge source named '{name}' (scope: {scope})")
-        raise typer.Exit(code=1)
+        _cli_error(f"No knowledge source named '{name}' (scope: {scope})")
 
     typer.echo(f"Name:           {source.name}")
     typer.echo(f"Type:           {source.source_type}")
@@ -166,8 +162,7 @@ def ks_remove(
     store = _get_source_store()
     source = store.get_by_name(name, scope=scope)
     if source is None:
-        typer.echo(f"Error: No knowledge source named '{name}'")
-        raise typer.Exit(code=1)
+        _cli_error(f"No knowledge source named '{name}'")
 
     store.delete(source.id)
     typer.echo(f"Removed knowledge source '{name}'")

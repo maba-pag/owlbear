@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import os
 import ssl
+from typing import TYPE_CHECKING
 
 import httpx
 import truststore
 import typer
 
-from owlbear.config import OwlBearSettings
+from bearclaw.commands import _cli_error
+from owlbear.config import get_settings
 from owlbear.core.errors import error_to_user_message
+
+if TYPE_CHECKING:
+    from owlbear.config import OwlBearSettings
 
 app = typer.Typer(
     name="slack",
@@ -26,7 +31,7 @@ def _slack_ssl_context() -> ssl.SSLContext:
 
 def _load_slack_settings() -> OwlBearSettings | None:
     """Load settings and return them if Slack is fully configured, else None."""
-    settings = OwlBearSettings()
+    settings = get_settings()
     if (
         settings.slack_app_token is None
         or settings.slack_bot_token is None
@@ -40,11 +45,10 @@ def _require_slack_settings() -> OwlBearSettings:
     """Load settings or exit with an error if Slack tokens are missing."""
     settings = _load_slack_settings()
     if settings is None:
-        typer.echo(
-            "Error: Slack tokens not configured. Set OWLBEAR_SLACK_APP_TOKEN, "
+        _cli_error(
+            "Slack tokens not configured. Set OWLBEAR_SLACK_APP_TOKEN, "
             "OWLBEAR_SLACK_BOT_TOKEN, OWLBEAR_SLACK_CHANNEL_ID."
         )
-        raise typer.Exit(code=1)
     return settings
 
 
@@ -63,12 +67,10 @@ def slack_auth() -> None:
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
-        typer.echo(f"Error: Slack API request failed: {error_to_user_message(exc)}")
-        raise typer.Exit(code=1) from exc
+        _cli_error(f"Slack API request failed: {error_to_user_message(exc)}")
 
     if not data.get("ok"):
-        typer.echo(f"Error: auth.test failed — {data.get('error', 'unknown error')}")
-        raise typer.Exit(code=1)
+        _cli_error(f"auth.test failed — {data.get('error', 'unknown error')}")
 
     typer.echo(f"Authenticated as {data['user']} in workspace {data['team']}")
 
@@ -93,12 +95,10 @@ def slack_test() -> None:
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
-        typer.echo(f"Error: Slack API request failed: {error_to_user_message(exc)}")
-        raise typer.Exit(code=1) from exc
+        _cli_error(f"Slack API request failed: {error_to_user_message(exc)}")
 
     if not data.get("ok"):
-        typer.echo(f"Error: chat.postMessage failed — {data.get('error', 'unknown error')}")
-        raise typer.Exit(code=1)
+        _cli_error(f"chat.postMessage failed — {data.get('error', 'unknown error')}")
 
     typer.echo(f"Test message sent to channel {channel_id}")
 

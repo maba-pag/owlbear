@@ -7,7 +7,8 @@ from typing import Annotated
 
 import typer
 
-from owlbear.config import OwlBearSettings
+from bearclaw.commands import _cli_error
+from owlbear.config import get_settings
 from owlbear.tools.browser.launcher import (
     is_cdp_available,
     kill_edge,
@@ -26,12 +27,11 @@ def start(
     port: Annotated[int, typer.Option(help="CDP debugging port.")] = 9222,
 ) -> None:
     """Launch Edge with Chrome DevTools Protocol enabled."""
-    settings = OwlBearSettings()
+    settings = get_settings()
     try:
         pid = launch_edge_cdp(port=port)
     except FileNotFoundError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from exc
+        _cli_error(str(exc))
 
     pid_file = settings.config_dir / "browser.pid"
     pid_file.parent.mkdir(parents=True, exist_ok=True)
@@ -42,12 +42,11 @@ def start(
 @app.command()
 def stop() -> None:
     """Stop the Edge browser started by 'bearclaw browser start'."""
-    settings = OwlBearSettings()
+    settings = get_settings()
     pid_file = settings.config_dir / "browser.pid"
 
     if not pid_file.exists():
-        typer.echo("Error: browser not running (no PID file)")
-        raise typer.Exit(code=1)
+        _cli_error("browser not running (no PID file)")
 
     pid = int(pid_file.read_text().strip())
     kill_edge(pid)

@@ -7,6 +7,8 @@ from typing import Annotated
 
 import typer
 
+from bearclaw.commands import _cli_error
+
 app = typer.Typer(
     name="voice",
     help="Voice I/O commands (requires: uv sync --extra voice).",
@@ -36,8 +38,7 @@ def voice_listen(
     try:
         ch = _make_voice_channel(duration)
     except ImportError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from None
+        _cli_error(str(exc))
 
     text = asyncio.run(ch.receive())  # type: ignore[union-attr]
 
@@ -55,8 +56,7 @@ def voice_speak(
     try:
         ch = _make_voice_channel()
     except ImportError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from None
+        _cli_error(str(exc))
 
     asyncio.run(ch.send(text))  # type: ignore[union-attr]
 
@@ -80,8 +80,7 @@ def voice_brainstorm(
     try:
         ch = _make_voice_channel()
     except ImportError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from None
+        _cli_error(str(exc))
 
     def _on_update(text: str) -> None:
         typer.echo(f"\r{text}", nl=False)

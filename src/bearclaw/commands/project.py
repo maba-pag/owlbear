@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from owlbear.config import OwlBearSettings
+from bearclaw.commands import _cli_error
+from owlbear.config import get_settings
 
 if TYPE_CHECKING:
     from owlbear.projects.store import ProjectStore
@@ -23,7 +24,7 @@ def _get_project_store() -> ProjectStore:
     """Return a ProjectStore rooted at ``config_dir/projects``."""
     from owlbear.projects.store import ProjectStore  # noqa: PLC0415
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     return ProjectStore(Path(str(settings.config_dir)) / "projects")
 
 
@@ -45,8 +46,7 @@ def project_create(
     try:
         project = store.create(name, ws)
     except ValueError as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from None
+        _cli_error(str(exc))
     typer.echo(f"Created project '{project.name}' (id: {project.id})")
 
 
@@ -87,10 +87,9 @@ def project_switch(
     try:
         project = store.get_by_name(name)
     except KeyError:
-        typer.echo(f"Error: No project named '{name}'")
-        raise typer.Exit(code=1) from None
+        _cli_error(f"No project named '{name}'")
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     active_path = Path(str(settings.config_dir)) / "active_project"
     active_path.parent.mkdir(parents=True, exist_ok=True)
     active_path.write_text(project.id, encoding="utf-8")
@@ -106,8 +105,7 @@ def project_archive(
     try:
         project = store.get_by_name(name)
     except KeyError:
-        typer.echo(f"Error: No project named '{name}'")
-        raise typer.Exit(code=1) from None
+        _cli_error(f"No project named '{name}'")
 
     store.archive(project.id)
     typer.echo(f"Archived project '{project.name}'")
@@ -128,12 +126,11 @@ def project_new(
     """Scaffold a new project under project_root with a template."""
     from owlbear.projects.workspace import ProjectWorkspace  # noqa: PLC0415
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     store = _get_project_store()
     ws = ProjectWorkspace(project_root=settings.project_root, store=store)
     try:
         path = ws.create_project(name, template)
     except (ValueError, FileExistsError) as exc:
-        typer.echo(f"Error: {exc}")
-        raise typer.Exit(code=1) from None
+        _cli_error(str(exc))
     typer.echo(str(path))

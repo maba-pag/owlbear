@@ -14,6 +14,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 
+from bearclaw.commands import _cli_error
+
 # ---------------------------------------------------------------------------
 # Module constants (relative to cwd)
 # ---------------------------------------------------------------------------
@@ -169,8 +171,7 @@ def decisions_show(
     """Show a pending decision request by task ID."""
     path = _find_decision_file(task_id)
     if path is None:
-        typer.echo(f"Decision with task_id '{task_id}' not found.")
-        raise typer.Exit(code=1)
+        _cli_error(f"Decision with task_id '{task_id}' not found.")
 
     content = path.read_text(encoding="utf-8")
     console.print(Markdown(content))
@@ -183,8 +184,7 @@ def decisions_resolve(
     """Interactively resolve a pending decision request."""
     path = _find_decision_file(task_id)
     if path is None:
-        typer.echo(f"Decision with task_id '{task_id}' not found.")
-        raise typer.Exit(code=1)
+        _cli_error(f"Decision with task_id '{task_id}' not found.")
 
     _, body = _parse_decision_file(path)
     options = _extract_options(body)
