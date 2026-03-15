@@ -190,6 +190,7 @@ class OwlBearAgent:
             usage = result.usage()  # type: ignore[attr-defined]
 
             estimated_cost: float | None = None
+            premium: float | None = None
             try:
                 from owlbear.memory.usage_cost import (  # noqa: PLC0415
                     calc_estimated_cost,
@@ -201,19 +202,14 @@ class OwlBearAgent:
                     usage.input_tokens or 0,
                     usage.output_tokens or 0,
                 )
-            except Exception:  # noqa: BLE001
-                logger.debug("Cost calculation unavailable", exc_info=True)
-
-            premium: float | None = None
-            if self.provider == "copilot":
-                try:
+                if self.provider == "copilot":
                     from owlbear.providers.copilot_multipliers import (  # noqa: PLC0415
                         get_premium_requests,
                     )
 
                     premium = get_premium_requests(self._model_name)
-                except Exception:  # noqa: BLE001
-                    logger.debug("Premium request lookup unavailable", exc_info=True)
+            except Exception:  # noqa: BLE001
+                logger.warning("Usage enrichment unavailable", exc_info=True)
 
             record = UsageRecord(
                 timestamp=datetime.now(UTC),
@@ -231,7 +227,7 @@ class OwlBearAgent:
             )
             self.tracker.append(record)  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
-            logger.debug("Failed to record usage", exc_info=True)
+            logger.warning("Failed to record usage", exc_info=True)
 
     async def _check_budget(self) -> None:
         """Check cumulative spend against the budget limit.

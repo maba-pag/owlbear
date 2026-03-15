@@ -332,7 +332,7 @@ class TestUsageRecordCostAndPremium:
         assert records[0].premium_requests is None
 
     def test_cost_import_error_returns_none(self, tmp_path: Path) -> None:
-        """If calc_estimated_cost import fails, estimated_cost_usd is None."""
+        """If calc_estimated_cost raises, both cost and premium are None."""
         tracker = UsageTracker(tmp_path / "usage.jsonl")
         agent = OwlBearAgent(
             model="test",
@@ -345,21 +345,16 @@ class TestUsageRecordCostAndPremium:
         agent.inner = MagicMock()
         agent.inner.run = AsyncMock(return_value=mock)
 
-        with (
-            patch(
-                "owlbear.memory.usage_cost.calc_estimated_cost",
-                side_effect=Exception("boom"),
-            ),
-            patch(
-                "owlbear.providers.copilot_multipliers.get_premium_requests",
-                return_value=1.0,
-            ),
+        with patch(
+            "owlbear.memory.usage_cost.calc_estimated_cost",
+            side_effect=Exception("boom"),
         ):
             asyncio.run(agent.turn("hi"))
 
         records = tracker.load()
         assert len(records) == 1
         assert records[0].estimated_cost_usd is None
+        assert records[0].premium_requests is None
 
     def test_provider_defaults_to_copilot(self, tmp_path: Path) -> None:
         """provider parameter defaults to 'copilot'."""
