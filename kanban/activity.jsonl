@@ -9428,3 +9428,28 @@
 {"timestamp":"2026-03-15T06:29:29.7734622+01:00","action":"move","task_id":810,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-15T06:29:34.1870545+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
 {"timestamp":"2026-03-15T06:29:34.1929094+01:00","action":"release","task_id":810,"detail":"auditor"}
+{"timestamp":"2026-03-15T06:29:58.9280517+01:00","action":"edit","task_id":810,"detail":"Replace brittle prompt assertions in test_kanban_pipeline.py"}
+{"timestamp":"2026-03-15T06:30:24.5631919+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:30:24.5694952+01:00","action":"claim","task_id":808,"detail":"architect"}
+{"timestamp":"2026-03-15T06:32:25.6558864+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:32:34.8371498+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:32:35.514516+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:32:35.5207104+01:00","action":"release","task_id":808,"detail":"architect"}
+{"timestamp":"2026-03-15T06:37:12.527267+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:37:12.5346515+01:00","action":"claim","task_id":811,"detail":"reviewer"}
+{"timestamp":"2026-03-15T06:37:24.3341668+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:37:24.3414872+01:00","action":"claim","task_id":551,"detail":"auditor"}
+{"timestamp":"2026-03-15T06:38:03.5461827+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:38:03.5528021+01:00","action":"claim","task_id":808,"detail":"test-writer"}
+{"timestamp":"2026-03-15T06:38:22.3313678+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:38:27.2584457+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:38:27.955276+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:38:27.9605388+01:00","action":"release","task_id":811,"detail":"reviewer"}
+{"timestamp":"2026-03-15T06:41:35.1531155+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:41:40.3287716+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:41:41.156596+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:41:41.1618936+01:00","action":"release","task_id":808,"detail":"test-writer"}
+{"timestamp":"2026-03-15T06:46:42.4339862+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:46:47.1391565+01:00","action":"move","task_id":551,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T06:46:51.8207594+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:46:51.8281745+01:00","action":"release","task_id":551,"detail":"auditor"}
