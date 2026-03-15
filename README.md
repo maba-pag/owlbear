@@ -9,6 +9,12 @@ autonomously, and delivers results — with human approval gates for destructive
 publishing actions. It owns the full build pipeline from ideation through delivery
 and operates as a standalone daemon process.
 
+## Prerequisites
+
+- **Python ≥ 3.12**
+- **[uv](https://docs.astral.sh/uv/)** package manager
+- **Windows** is the primary development OS; Linux and macOS are expected to work but untested
+
 ## Quick Start
 
 ```bash
