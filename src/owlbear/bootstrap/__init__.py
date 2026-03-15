@@ -9,6 +9,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from owlbear.core.agent import OwlBearAgent
+from owlbear.core.board_context import BoardContextProvider
 from owlbear.core.condenser import SummarizingCondenser
 from owlbear.memory.context import ContextManager
 from owlbear.memory.error_journal import ErrorJournal
@@ -211,6 +212,10 @@ async def bootstrap(
         )
         history_processors = [condenser]
 
+    board_context_provider: BoardContextProvider | None = None
+    if settings.board_context_enabled:
+        board_context_provider = BoardContextProvider()
+
     agent = OwlBearAgent(
         model=model,
         session=session,
@@ -224,6 +229,7 @@ async def bootstrap(
         history_processors=history_processors,
         rigor_profile=settings.rigor_profiles[settings.default_rigor],
         agent_registry=agent_registry,
+        board_context_provider=board_context_provider,
     )
     agent._openai_client = openai_client  # noqa: SLF001  # daemon auth refresh needs this
 
