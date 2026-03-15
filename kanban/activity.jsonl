@@ -9327,3 +9327,7 @@
 {"timestamp":"2026-03-15T05:27:04.1482552+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
 {"timestamp":"2026-03-15T05:27:04.1541373+01:00","action":"release","task_id":807,"detail":"auditor"}
 {"timestamp":"2026-03-15T05:27:24.3555468+01:00","action":"edit","task_id":807,"detail":"Tests for get_settings() cache singleton"}
+{"timestamp":"2026-03-15T05:40:32.3549612+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:40:36.8153476+01:00","action":"move","task_id":554,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T05:40:41.2161478+01:00","action":"edit","task_id":554,"detail":"Replace brittle prompt substring assertions with semantic checks"}
+{"timestamp":"2026-03-15T05:40:41.2213722+01:00","action":"release","task_id":554,"detail":"auditor"}
