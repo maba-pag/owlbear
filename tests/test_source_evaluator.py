@@ -191,7 +191,7 @@ class TestEvaluateWithProjectContext:
 
         call_args = evaluator._agent.run.call_args
         prompt_text = call_args[0][0]
-        assert "always-on AI development system" in prompt_text
+        assert SAMPLE_PROJECT_CONTEXT["description"] in prompt_text
 
     def test_prompt_includes_project_goals(self) -> None:
         """The prompt includes project goals from context."""
@@ -203,7 +203,7 @@ class TestEvaluateWithProjectContext:
 
         call_args = evaluator._agent.run.call_args
         prompt_text = call_args[0][0]
-        assert "Autonomous coding" in prompt_text
+        assert SAMPLE_PROJECT_CONTEXT["goals"][0] in prompt_text
 
     def test_tags_propagated(self) -> None:
         evaluator = SourceEvaluator(model="test")
