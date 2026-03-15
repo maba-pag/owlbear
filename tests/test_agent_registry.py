@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pydantic_ai.models
 import pytest
@@ -283,3 +283,124 @@ class TestBuildAgentMissingTools:
         # No warnings logged.
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert warnings == []
+
+
+class TestFromAC_SingleAgentConstruction:  # noqa: N801
+    """Tests that _build_agent constructs exactly one Agent() per call (#827).
+
+    Contract: regardless of role, _build_agent must call Agent() exactly once.
+    Role-policy filtering must happen BEFORE the single Agent() construction.
+    """
+
+    def test_validator_role_calls_agent_exactly_once(self, tmp_path: Path) -> None:
+        """Validator role must construct Agent() exactly once, not twice."""
+        md = tmp_path / "val.md"
+        md.write_text(
+            "---\nname: val\ndescription: Validates\nrole: validator\ntools:\n  - t1\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        mock_agent = MagicMock()
+        with patch("owlbear.core.agent_registry.Agent", return_value=mock_agent) as cls:
+            registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+            registry.scan()
+            registry.get("val")
+
+        assert cls.call_count == 1
+
+    def test_builder_role_calls_agent_exactly_once(self, tmp_path: Path) -> None:
+        """Builder role must construct Agent() exactly once (regression guard)."""
+        md = tmp_path / "builder.md"
+        md.write_text(
+            "---\nname: builder\ndescription: Builds\nrole: builder\ntools:\n  - t1\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        mock_agent = MagicMock()
+        with patch("owlbear.core.agent_registry.Agent", return_value=mock_agent) as cls:
+            registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+            registry.scan()
+            registry.get("builder")
+
+        assert cls.call_count == 1
+
+    def test_validator_role_passes_filtered_toolsets(self, tmp_path: Path) -> None:
+        """Validator role must pass role-filtered toolsets to Agent(), not raw ones."""
+        md = tmp_path / "val2.md"
+        md.write_text(
+            "---\nname: val2\ndescription: Validates\nrole: validator\n"
+            "tools:\n  - t1\n  - t2\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        raw_ts1 = FunctionToolset()
+        raw_ts2 = FunctionToolset()
+        filtered_ts1 = MagicMock(name="filtered_ts1")
+        filtered_ts2 = MagicMock(name="filtered_ts2")
+
+        def resolver(name: str) -> FunctionToolset:
+            return raw_ts1 if name == "t1" else raw_ts2
+
+        def mock_apply(ts: object, _policy: object) -> object:
+            if ts is raw_ts1:
+                return filtered_ts1
+            if ts is raw_ts2:
+                return filtered_ts2
+            return ts
+
+        mock_agent = MagicMock()
+        with (
+            patch("owlbear.core.agent_registry.Agent", return_value=mock_agent) as cls,
+            patch("owlbear.core.agent_registry.apply_role_policy", side_effect=mock_apply),
+        ):
+            registry = AgentRegistry(tmp_path, resolver, default_model=_TEST_MODEL)
+            registry.scan()
+            registry.get("val2")
+
+        # Single Agent() call must receive the filtered toolsets.
+        assert cls.call_count == 1
+        _, kwargs = cls.call_args
+        toolsets_arg = kwargs.get(
+            "toolsets",
+            cls.call_args[0][1] if len(cls.call_args[0]) > 1 else None,
+        )
+        assert toolsets_arg is not None
+        assert filtered_ts1 in toolsets_arg
+        assert filtered_ts2 in toolsets_arg
+        # Raw (unfiltered) toolsets must NOT appear in the single call.
+        assert raw_ts1 not in toolsets_arg
+        assert raw_ts2 not in toolsets_arg
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge-case tests for _build_agent (#561)."""
+
+    def test_empty_policy_skips_apply_role_policy(self, tmp_path: Path) -> None:
+        """When role policy has empty denied_tools AND allowed_tools,
+        apply_role_policy must NOT be called (guard condition).
+        """
+        md = tmp_path / "custom.md"
+        md.write_text(
+            "---\nname: custom\ndescription: Custom role\nrole: validator\n"
+            "tools:\n  - t1\n---\nBody.\n",
+            encoding="utf-8",
+        )
+
+        empty_policy = MagicMock()
+        empty_policy.denied_tools = frozenset()
+        empty_policy.allowed_tools = frozenset()
+
+        mock_agent = MagicMock()
+        with (
+            patch("owlbear.core.agent_registry.Agent", return_value=mock_agent),
+            patch(
+                "owlbear.core.agent_registry._ROLE_POLICIES",
+                {"validator": empty_policy},
+            ),
+            patch("owlbear.core.agent_registry.apply_role_policy") as mock_apply,
+        ):
+            registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+            registry.scan()
+            registry.get("custom")
+
+        mock_apply.assert_not_called()
