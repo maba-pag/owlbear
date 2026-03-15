@@ -1,8 +1,40 @@
-"""Tests for owlbear.memory.knowledge public exports (task #290)."""
+"""Tests for owlbear.memory.knowledge public exports (task #290, #546)."""
 
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import owlbear.memory.knowledge as pkg
+
+
+class TestFromAC_QdrantNotEagerlyLoaded:  # noqa: N801
+    """Importing the knowledge package must not eagerly pull in qdrant (#546)."""
+
+    def test_knowledge_import_does_not_load_qdrant(self) -> None:
+        """After `import owlbear.memory.knowledge`, neither qdrant_client nor the
+        qdrant submodule should appear in sys.modules."""
+        result = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; import owlbear.memory.knowledge; "
+                    "assert 'qdrant_client' not in sys.modules, "
+                    "'qdrant_client eagerly loaded'; "
+                    "assert 'owlbear.memory.knowledge.qdrant' not in sys.modules, "
+                    "'qdrant submodule eagerly loaded'"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"Import side-effect check failed:\n{result.stderr}"
+
+    def test_qdrant_vector_store_not_in_all(self) -> None:
+        """QdrantVectorStore must not appear in the package __all__."""
+        assert "QdrantVectorStore" not in pkg.__all__
 
 
 class TestPhase9Exports:
@@ -52,7 +84,6 @@ class TestPhase9Exports:
             "ExtractionResult",
             "GraphStore",
             "HybridEmbedding",
-            "QdrantVectorStore",
             "RelationType",
             "SparseVector",
             "VectorStoreProtocol",

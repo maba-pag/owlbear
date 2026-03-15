@@ -36,7 +36,6 @@ from owlbear.memory.knowledge.protocol import (
     SparseVector,
     VectorStoreProtocol,
 )
-from owlbear.memory.knowledge.qdrant import QdrantVectorStore
 from owlbear.memory.knowledge.query_service import KnowledgeQueryService
 from owlbear.memory.knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
 from owlbear.memory.knowledge.schema import init_db
@@ -71,7 +70,6 @@ __all__ = [
     "InterDocGraphBuilder",
     "IntraDocGraphBuilder",
     "KnowledgeQueryService",
-    "QdrantVectorStore",
     "RelationType",
     "RetrievalResult",
     "SourceEvaluator",
