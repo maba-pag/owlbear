@@ -9482,3 +9482,68 @@
 {"timestamp":"2026-03-15T07:19:28.4829226+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
 {"timestamp":"2026-03-15T07:19:28.4886372+01:00","action":"claim","task_id":811,"detail":"auditor"}
 {"timestamp":"2026-03-15T07:19:31.0728995+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T07:19:52.3876785+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T07:19:52.3931569+01:00","action":"release","task_id":811,"detail":"auditor"}
+{"timestamp":"2026-03-15T07:20:04.8659442+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T07:20:04.8726667+01:00","action":"block","task_id":537,"detail":"Research incomplete: missed 4th call site (context_hydration.py), follow-up tasks never created"}
+{"timestamp":"2026-03-15T07:20:09.6087752+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T07:20:09.6162606+01:00","action":"release","task_id":537,"detail":"architect"}
+{"timestamp":"2026-03-15T07:34:01.9595006+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:34:07.6944092+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:34:08.3745538+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:34:08.3824873+01:00","action":"release","task_id":808,"detail":"reviewer"}
+{"timestamp":"2026-03-15T07:34:31.0740108+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:34:31.0798709+01:00","action":"claim","task_id":538,"detail":"architect"}
+{"timestamp":"2026-03-15T07:36:05.4807126+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:36:15.3065707+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:36:15.9920956+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:36:15.9972723+01:00","action":"release","task_id":538,"detail":"architect"}
+{"timestamp":"2026-03-15T07:40:15.4433602+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:40:15.4503362+01:00","action":"claim","task_id":538,"detail":"test-writer"}
+{"timestamp":"2026-03-15T07:40:17.8296472+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:40:17.8357804+01:00","action":"claim","task_id":808,"detail":"writer"}
+{"timestamp":"2026-03-15T07:40:26.8956178+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:40:27.7962833+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:40:27.8024939+01:00","action":"claim","task_id":785,"detail":"reviewer"}
+{"timestamp":"2026-03-15T07:40:31.8756634+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:40:32.5323381+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:40:32.5397951+01:00","action":"release","task_id":538,"detail":"test-writer"}
+{"timestamp":"2026-03-15T07:40:58.0450196+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:41:03.2230527+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:41:03.8915054+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:41:03.8979232+01:00","action":"release","task_id":808,"detail":"writer"}
+{"timestamp":"2026-03-15T07:42:16.5431216+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:42:21.3467387+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:42:22.0043772+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:42:22.0100345+01:00","action":"release","task_id":785,"detail":"reviewer"}
+{"timestamp":"2026-03-15T07:47:28.9592486+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:47:28.9654934+01:00","action":"claim","task_id":528,"detail":"architect"}
+{"timestamp":"2026-03-15T07:47:32.9202913+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:47:32.9261098+01:00","action":"claim","task_id":538,"detail":"builder"}
+{"timestamp":"2026-03-15T07:47:40.9137231+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:47:40.9215869+01:00","action":"claim","task_id":808,"detail":"auditor"}
+{"timestamp":"2026-03-15T07:47:41.6245335+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:47:45.6838601+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:47:45.6896469+01:00","action":"claim","task_id":785,"detail":"writer"}
+{"timestamp":"2026-03-15T07:47:47.3815513+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:47:52.1877476+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:48:01.4011322+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:48:06.799962+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:48:11.8802635+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:48:17.4054342+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:48:17.4165976+01:00","action":"release","task_id":538,"detail":"builder"}
+{"timestamp":"2026-03-15T07:48:21.0687309+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T07:48:54.1401978+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:48:59.9327051+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:49:00.6162182+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:49:00.6227498+01:00","action":"release","task_id":785,"detail":"writer"}
+{"timestamp":"2026-03-15T07:49:17.8961482+01:00","action":"create","task_id":816,"detail":"Tests for _record_usage exception consolidation"}
+{"timestamp":"2026-03-15T07:49:51.0730804+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:50:04.803148+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:50:10.3643762+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:50:11.0651027+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T07:50:11.070297+01:00","action":"release","task_id":528,"detail":"architect"}
+{"timestamp":"2026-03-15T07:59:59.9489567+01:00","action":"move","task_id":808,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T08:00:18.7962465+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T08:00:18.8025483+01:00","action":"release","task_id":808,"detail":"auditor"}
+{"timestamp":"2026-03-15T08:00:43.4789894+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
