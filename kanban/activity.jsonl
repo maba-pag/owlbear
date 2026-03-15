@@ -9453,3 +9453,32 @@
 {"timestamp":"2026-03-15T06:46:47.1391565+01:00","action":"move","task_id":551,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-15T06:46:51.8207594+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
 {"timestamp":"2026-03-15T06:46:51.8281745+01:00","action":"release","task_id":551,"detail":"auditor"}
+{"timestamp":"2026-03-15T06:47:09.0394677+01:00","action":"edit","task_id":551,"detail":"Derive hardcoded model defaults from OwlBearSettings"}
+{"timestamp":"2026-03-15T06:51:54.9424716+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:51:54.9476159+01:00","action":"claim","task_id":811,"detail":"writer"}
+{"timestamp":"2026-03-15T06:52:20.1404098+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:52:25.1594557+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:52:25.7968591+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T06:52:25.8021481+01:00","action":"release","task_id":811,"detail":"writer"}
+{"timestamp":"2026-03-15T06:52:42.2471995+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T06:52:42.2537054+01:00","action":"claim","task_id":808,"detail":"builder"}
+{"timestamp":"2026-03-15T07:11:00.4849227+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:11:06.2078346+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:11:06.9127498+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:11:06.9192939+01:00","action":"release","task_id":808,"detail":"builder"}
+{"timestamp":"2026-03-15T07:17:42.6818794+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T07:17:42.6890592+01:00","action":"claim","task_id":811,"detail":"auditor"}
+{"timestamp":"2026-03-15T07:17:45.3484844+01:00","action":"edit","task_id":537,"detail":"Centralize trafilatura.extract into shared utility"}
+{"timestamp":"2026-03-15T07:17:45.3543456+01:00","action":"claim","task_id":537,"detail":"architect"}
+{"timestamp":"2026-03-15T07:17:54.0012704+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:17:54.0071063+01:00","action":"claim","task_id":808,"detail":"reviewer"}
+{"timestamp":"2026-03-15T07:17:59.1746023+01:00","action":"edit","task_id":808,"detail":"Extract MockChannel, make_mock_toolset, make_settings to conftest.py"}
+{"timestamp":"2026-03-15T07:18:08.661641+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:18:13.4710535+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
+{"timestamp":"2026-03-15T07:18:13.4796815+01:00","action":"release","task_id":785,"detail":"builder"}
+{"timestamp":"2026-03-15T07:18:55.3390546+01:00","action":"move","task_id":811,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T07:19:04.6074755+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T07:19:04.6167075+01:00","action":"release","task_id":811,"detail":"auditor"}
+{"timestamp":"2026-03-15T07:19:28.4829226+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
+{"timestamp":"2026-03-15T07:19:28.4886372+01:00","action":"claim","task_id":811,"detail":"auditor"}
+{"timestamp":"2026-03-15T07:19:31.0728995+01:00","action":"edit","task_id":811,"detail":"Replace brittle project-description assertions in test_source_evaluator.py"}
