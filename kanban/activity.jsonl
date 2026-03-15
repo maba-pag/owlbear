@@ -9634,3 +9634,129 @@
 {"timestamp":"2026-03-15T08:21:11.6867251+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
 {"timestamp":"2026-03-15T08:21:17.9336088+01:00","action":"edit","task_id":785,"detail":"Add Error and Rescue Map template to arch-review skill"}
 {"timestamp":"2026-03-15T08:21:25.4089104+01:00","action":"edit","task_id":557,"detail":"Add unit test for _default_web_read in bookmark_pipeline"}
+{"timestamp":"2026-03-15T08:21:40.7033315+01:00","action":"edit","task_id":557,"detail":"Add unit test for _default_web_read in bookmark_pipeline"}
+{"timestamp":"2026-03-15T08:23:09.0004756+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:23:14.2407076+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:23:14.956133+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:23:14.9624108+01:00","action":"release","task_id":528,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:23:56.2009924+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:23:56.2078423+01:00","action":"claim","task_id":540,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:00.0926748+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:24:13.0671828+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T08:24:13.0752833+01:00","action":"claim","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:16.1736931+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:24:22.477826+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:24:22.4829505+01:00","action":"claim","task_id":546,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:23.2813635+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T08:24:27.0991153+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:24:28.1992241+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:24:28.2050269+01:00","action":"release","task_id":546,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:31.765674+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:24:31.7720667+01:00","action":"claim","task_id":546,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:34.5822941+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:24:37.6886259+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T08:24:39.195574+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:24:39.2009856+01:00","action":"release","task_id":540,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:24:42.2080887+01:00","action":"edit","task_id":530,"detail":"Parameterize observability metadata dict type"}
+{"timestamp":"2026-03-15T08:24:42.2146947+01:00","action":"release","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:25:13.9131851+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:25:13.9190866+01:00","action":"claim","task_id":529,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:26:46.5321573+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:26:52.3597765+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:26:53.1086499+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:26:53.1150307+01:00","action":"release","task_id":546,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:29:16.9476388+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:29:22.2895236+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:29:23.0990075+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:29:23.1074066+01:00","action":"release","task_id":529,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:30:12.3790138+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:30:12.3860295+01:00","action":"claim","task_id":817,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:30:55.4518245+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:30:55.4596898+01:00","action":"claim","task_id":820,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:31:47.4152981+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T08:31:47.4207585+01:00","action":"claim","task_id":548,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:38:37.1623633+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T08:38:56.083812+01:00","action":"edit","task_id":548,"detail":"Move BlockedCommandError to core/errors.py"}
+{"timestamp":"2026-03-15T08:38:56.0909884+01:00","action":"release","task_id":548,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:40:08.1263874+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:40:13.2078671+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:40:13.2137053+01:00","action":"release","task_id":817,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:42:11.294862+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:42:17.1684866+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:42:17.1759213+01:00","action":"release","task_id":820,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:42:22.3396075+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:42:22.3458557+01:00","action":"claim","task_id":820,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:42:23.0680367+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:42:23.0769+01:00","action":"release","task_id":820,"detail":"test-writer"}
+{"timestamp":"2026-03-15T08:50:36.2811911+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T08:50:36.2868187+01:00","action":"claim","task_id":532,"detail":"builder"}
+{"timestamp":"2026-03-15T08:50:46.9850475+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:50:46.9915993+01:00","action":"claim","task_id":528,"detail":"builder"}
+{"timestamp":"2026-03-15T08:51:16.9234155+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:51:16.9302154+01:00","action":"claim","task_id":529,"detail":"builder"}
+{"timestamp":"2026-03-15T08:51:59.3891915+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T08:52:30.4440313+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T08:52:59.0831168+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T08:52:59.089173+01:00","action":"claim","task_id":538,"detail":"writer"}
+{"timestamp":"2026-03-15T08:52:59.9266338+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T08:52:59.934711+01:00","action":"release","task_id":538,"detail":"writer"}
+{"timestamp":"2026-03-15T08:55:14.288876+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T08:55:14.2953847+01:00","action":"release","task_id":529,"detail":"builder"}
+{"timestamp":"2026-03-15T08:56:23.8357845+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:56:23.8430389+01:00","action":"release","task_id":528,"detail":"builder"}
+{"timestamp":"2026-03-15T08:56:28.111267+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T08:58:27.1612242+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T08:58:32.633575+01:00","action":"edit","task_id":532,"detail":"Extract error-exit pattern into CLI helper"}
+{"timestamp":"2026-03-15T08:58:32.6400196+01:00","action":"release","task_id":532,"detail":"builder"}
+{"timestamp":"2026-03-15T08:59:09.9440265+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T08:59:09.9525059+01:00","action":"claim","task_id":540,"detail":"builder"}
+{"timestamp":"2026-03-15T08:59:25.1204158+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T08:59:25.1283905+01:00","action":"claim","task_id":546,"detail":"builder"}
+{"timestamp":"2026-03-15T08:59:58.3093267+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T08:59:58.31675+01:00","action":"claim","task_id":820,"detail":"builder"}
+{"timestamp":"2026-03-15T09:00:19.4104974+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:00:19.4175706+01:00","action":"release","task_id":540,"detail":"builder"}
+{"timestamp":"2026-03-15T09:00:39.5043585+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:00:40.4970496+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:05:14.479033+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:05:19.9076034+01:00","action":"edit","task_id":817,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:05:27.3577549+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:05:27.3651545+01:00","action":"release","task_id":820,"detail":"builder"}
+{"timestamp":"2026-03-15T09:05:32.3258948+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:06:36.0633932+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:06:41.8183656+01:00","action":"edit","task_id":820,"detail":"Tests for kanban_list block_filter enum replacement"}
+{"timestamp":"2026-03-15T09:06:57.1199404+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:07:17.1689847+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:07:17.8811495+01:00","action":"edit","task_id":546,"detail":"Lazy-import QdrantVectorStore in knowledge __init__.py"}
+{"timestamp":"2026-03-15T09:07:17.8877198+01:00","action":"release","task_id":546,"detail":"builder"}
+{"timestamp":"2026-03-15T09:07:59.3622112+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:07:59.36987+01:00","action":"claim","task_id":812,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:08:10.9031665+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T09:08:10.9099725+01:00","action":"claim","task_id":821,"detail":"test-writer"}
+{"timestamp":"2026-03-15T09:09:30.8390353+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T09:09:36.0884747+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T09:09:36.9974936+01:00","action":"edit","task_id":821,"detail":"Tests for lazy-import QdrantVectorStore (#546)"}
+{"timestamp":"2026-03-15T09:09:37.0054967+01:00","action":"release","task_id":821,"detail":"test-writer"}
+{"timestamp":"2026-03-15T09:11:23.4340369+01:00","action":"create","task_id":822,"detail":"Implement core __init__.py re-export removal"}
+{"timestamp":"2026-03-15T09:11:29.0137322+01:00","action":"create","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-15T09:11:44.8154359+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:12:09.7440898+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:12:10.5261065+01:00","action":"edit","task_id":812,"detail":"Remove unused re-exports from core __init__.py"}
+{"timestamp":"2026-03-15T09:12:10.5335168+01:00","action":"release","task_id":812,"detail":"researcher"}
+{"timestamp":"2026-03-15T09:12:29.3862643+01:00","action":"edit","task_id":816,"detail":"Tests for _record_usage exception consolidation"}
+{"timestamp":"2026-03-15T09:12:29.393068+01:00","action":"claim","task_id":816,"detail":"test-writer"}
+{"timestamp":"2026-03-15T09:15:13.6987489+01:00","action":"edit","task_id":816,"detail":"Tests for _record_usage exception consolidation"}
+{"timestamp":"2026-03-15T09:15:19.1335386+01:00","action":"edit","task_id":816,"detail":"Tests for _record_usage exception consolidation"}
+{"timestamp":"2026-03-15T09:15:19.1393884+01:00","action":"release","task_id":816,"detail":"test-writer"}
+{"timestamp":"2026-03-15T09:22:01.3510069+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T09:22:01.3576086+01:00","action":"claim","task_id":528,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:22:09.1080908+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T09:22:09.1144337+01:00","action":"claim","task_id":538,"detail":"auditor"}
+{"timestamp":"2026-03-15T09:22:11.5225422+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:22:11.5290333+01:00","action":"claim","task_id":540,"detail":"reviewer"}
+{"timestamp":"2026-03-15T09:22:15.8409985+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:22:19.5483832+01:00","action":"edit","task_id":540,"detail":"Align retry max attempts: docs say 5, code uses 3"}
+{"timestamp":"2026-03-15T09:23:19.662311+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T09:23:33.1100821+01:00","action":"move","task_id":538,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T09:23:36.9504736+01:00","action":"edit","task_id":538,"detail":"Evaluate declarative tool registration for toolsets"}
+{"timestamp":"2026-03-15T09:23:36.9593562+01:00","action":"release","task_id":538,"detail":"auditor"}
