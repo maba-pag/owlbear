@@ -347,7 +347,11 @@ agents: [builder, reviewer, writer, closer, architect, researcher, kanban-planne
 | T16 | Update copilot-instructions.md agent/skill/instruction inventories | needed | T1–T14 |
 | T17 | End-to-end test: run orchestrator on a real task through the pipeline | needed | T7–T14 |
 
-## 9. Sources
+## 9. Follow-up Tasks
+
+All 17 tasks from the Implementation Sequence (§8) have been completed. The agent refactoring shipped as part of the multi-agent pipeline work: `agent-common.instructions.md`, workflow skills (`tdd-workflow`, `code-review`, `docs-gate`, `task-verification`), slimmed agent files, orchestrator rewrite with routing table, and `user-invocable: false` on pipeline agents. No remaining action items.
+
+## 10. Sources
 
 | Source | URL | What | Where Used |
 |--------|-----|------|-----------|
