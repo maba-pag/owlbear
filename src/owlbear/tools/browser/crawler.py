@@ -26,6 +26,7 @@ from owlbear.tools.browser.url_utils import (
 if TYPE_CHECKING:
     from owlbear.tools.browser.content_guard import ContentInjectionGuard
     from owlbear.tools.browser.crawl_config import CrawlConfig
+    from owlbear.tools.browser.html_cache import HtmlCache
     from owlbear.tools.browser.manager import BrowserManager
 
 logger = logging.getLogger(__name__)
@@ -77,9 +78,11 @@ class WebCrawler:
         self,
         browser_manager: BrowserManager,
         content_guard: ContentInjectionGuard | None = None,
+        html_cache: HtmlCache | None = None,
     ) -> None:
         self._browser_manager = browser_manager
         self._content_guard = content_guard
+        self._html_cache = html_cache
 
     async def crawl(self, config: CrawlConfig) -> CrawlResult:
         """Perform a breadth-first crawl starting from seed URLs.
@@ -112,7 +115,9 @@ class WebCrawler:
             first_fetch = False
 
             try:
-                crawl_page, html = await self._fetch_and_extract(url)
+                crawl_page, html = await self._fetch_and_extract(
+                    url, cache_ttl_seconds=config.cache_ttl_seconds,
+                )
             except Exception as exc:  # noqa: BLE001 — per-page errors are captured
                 errors.append(f"{url}: {exc}")
                 logger.debug("Page failed for %s: %s", url, exc)
@@ -173,8 +178,14 @@ class WebCrawler:
             logger.debug("Robots.txt disallows: %s", url)
         return allowed
 
-    async def _fetch_and_extract(self, url: str) -> tuple[CrawlPage, str]:
+    async def _fetch_and_extract(
+        self, url: str, *, cache_ttl_seconds: int = 86400,
+    ) -> tuple[CrawlPage, str]:
         """Navigate to *url*, fetch HTML, extract content.
+
+        Checks the HTML cache first (if configured).  On a cache hit the
+        browser is not used at all.  On a miss the fetched HTML is stored
+        in the cache for future requests.
 
         Returns:
             A ``(CrawlPage, html)`` tuple.
@@ -182,9 +193,26 @@ class WebCrawler:
         Raises:
             Exception: On navigation or extraction failure.
         """
+        # Cache hit path — skip navigation entirely
+        if self._html_cache is not None:
+            cached = self._html_cache.get(url, ttl_seconds=cache_ttl_seconds)
+            if cached is not None:
+                extraction = extract_content(cached, url=url)
+                return CrawlPage(
+                    url=url,
+                    content=extraction.text,
+                    title=extraction.title,
+                    metadata=extraction.metadata,
+                ), cached
+
+        # Cache miss — live fetch
         page = self._browser_manager.page
         await page.goto(url)
         html = await page.content()
+
+        if self._html_cache is not None:
+            self._html_cache.put(url, html)
+
         extraction = extract_content(html, url=url)
         return CrawlPage(
             url=url,

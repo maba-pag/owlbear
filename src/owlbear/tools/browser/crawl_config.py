@@ -36,6 +36,7 @@ class CrawlConfig(BaseModel, frozen=True):
     delay_seconds: float = 1.5
     respect_robots: bool = True
     user_agent: str = "OwlBear/1.0 (research crawler)"
+    cache_ttl_seconds: int = 86400
 
     # --- validators ---
 
@@ -72,6 +73,15 @@ class CrawlConfig(BaseModel, frozen=True):
         """delay_seconds must be >= 0."""
         if value < 0:
             msg = "delay_seconds must be >= 0"
+            raise ValueError(msg)
+        return value
+
+    @field_validator("cache_ttl_seconds", mode="after")
+    @classmethod
+    def _cache_ttl_non_negative(cls, value: int) -> int:
+        """cache_ttl_seconds must be >= 0."""
+        if value < 0:
+            msg = "cache_ttl_seconds must be >= 0"
             raise ValueError(msg)
         return value
 
