@@ -179,30 +179,36 @@ class TestKanbanList:
 
     @pytest.mark.asyncio
     async def test_blocked_filter(self) -> None:
+        from owlbear.tools.kanban import BlockFilter
+
         proc = _make_proc(stdout="blocked tasks\n")
         with _patch_exec(proc) as mock_exec:
             ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
-            await ts.kanban_list(blocked=True)
+            await ts.kanban_list(block_filter=BlockFilter.BLOCKED)
 
         args = mock_exec.call_args[0]
         assert "--blocked" in args
 
     @pytest.mark.asyncio
     async def test_not_blocked_filter(self) -> None:
+        from owlbear.tools.kanban import BlockFilter
+
         proc = _make_proc(stdout="unblocked tasks\n")
         with _patch_exec(proc) as mock_exec:
             ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
-            await ts.kanban_list(not_blocked=True)
+            await ts.kanban_list(block_filter=BlockFilter.NOT_BLOCKED)
 
         args = mock_exec.call_args[0]
         assert "--not-blocked" in args
 
     @pytest.mark.asyncio
     async def test_unblocked_filter(self) -> None:
+        from owlbear.tools.kanban import BlockFilter
+
         proc = _make_proc(stdout="unblocked tasks\n")
         with _patch_exec(proc) as mock_exec:
             ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
-            await ts.kanban_list(unblocked=True)
+            await ts.kanban_list(block_filter=BlockFilter.UNBLOCKED)
 
         args = mock_exec.call_args[0]
         assert "--unblocked" in args
@@ -234,6 +240,75 @@ class TestKanbanList:
         assert "--status" in args
         assert "--tag" in args
         assert "--priority" in args
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BlockFilterEnum — block_filter enum replacement (#820)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BlockFilterEnum:  # noqa: N801
+    """Tests that kanban_list accepts a block_filter enum instead of 3 bools."""
+
+    @pytest.mark.asyncio
+    async def test_block_filter_blocked(self) -> None:
+        """block_filter='blocked' passes --blocked to CLI."""
+        from owlbear.tools.kanban import BlockFilter
+
+        proc = _make_proc(stdout="blocked tasks\n")
+        with _patch_exec(proc) as mock_exec:
+            ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
+            await ts.kanban_list(block_filter=BlockFilter.BLOCKED)
+
+        args = mock_exec.call_args[0]
+        assert "--blocked" in args
+        assert "--not-blocked" not in args
+        assert "--unblocked" not in args
+
+    @pytest.mark.asyncio
+    async def test_block_filter_not_blocked(self) -> None:
+        """block_filter='not_blocked' passes --not-blocked to CLI."""
+        from owlbear.tools.kanban import BlockFilter
+
+        proc = _make_proc(stdout="not-blocked tasks\n")
+        with _patch_exec(proc) as mock_exec:
+            ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
+            await ts.kanban_list(block_filter=BlockFilter.NOT_BLOCKED)
+
+        args = mock_exec.call_args[0]
+        assert "--not-blocked" in args
+        assert "--blocked" not in args
+        assert "--unblocked" not in args
+
+    @pytest.mark.asyncio
+    async def test_block_filter_unblocked(self) -> None:
+        """block_filter='unblocked' passes --unblocked to CLI."""
+        from owlbear.tools.kanban import BlockFilter
+
+        proc = _make_proc(stdout="unblocked tasks\n")
+        with _patch_exec(proc) as mock_exec:
+            ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
+            await ts.kanban_list(block_filter=BlockFilter.UNBLOCKED)
+
+        args = mock_exec.call_args[0]
+        assert "--unblocked" in args
+        assert "--blocked" not in args
+        assert "--not-blocked" not in args
+
+    @pytest.mark.asyncio
+    async def test_block_filter_none_default(self) -> None:
+        """block_filter=None (default) adds no block-related flags."""
+        from owlbear.tools.kanban import BlockFilter  # noqa: F401 — verify enum importable
+
+        proc = _make_proc(stdout="all tasks\n")
+        with _patch_exec(proc) as mock_exec:
+            ts = KanbanToolset(kanban_dir=KANBAN_DIR, kanban_bin=KANBAN_BIN)
+            await ts.kanban_list(block_filter=None)
+
+        args = mock_exec.call_args[0]
+        assert "--blocked" not in args
+        assert "--not-blocked" not in args
+        assert "--unblocked" not in args
 
 
 # ---------------------------------------------------------------------------
