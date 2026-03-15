@@ -63,7 +63,7 @@ OwlBear is an always-on, laptop-resident AI development system. The user describ
 │  ┌─ Auth ─────────────────┐  ┌─ Config ──────────────┐                     │
 │  │ Copilot OAuth          │  │ OwlBearSettings        │                     │
 │  │ (device-flow, token    │  │ (pydantic-settings,    │                     │
-│  │  cache, proxy-ep)      │  │  env + TOML)           │                     │
+│  │  cache, proxy-ep)      │  │  env vars)             │                     │
 │  └────────────────────────┘  └────────────────────────┘                     │
 │                                                                             │
 │  ┌─ Daemon ───────────────┐  ┌─ CLI (BearClaw) ──────┐                     │
@@ -454,7 +454,7 @@ Each `build_*` helper is independently testable. Conditional subsystems (knowled
 | Skill loading | Progressive (lazy) | Frontmatter at scan time, full content on demand |
 | Channel abstraction | Protocol (structural typing) | ChannelPlugin with name, send(), receive() |
 | CLI | Typer (BearClaw) | Entry point for all user commands |
-| Config | pydantic-settings | Env vars (OWLBEAR_ prefix) + TOML, validated at startup |
+| Config | pydantic-settings | Env vars (OWLBEAR_ prefix), validated at startup |
 | Browser | Custom (Playwright + CDP) | No OSS tool handles Edge CDP lifecycle; browser-use conflicts with PydanticAI agent loop; KISS 1200 LOC vs 15–20k ([research](browser-automation.md)) |
 | Agent definitions | Markdown + YAML frontmatter | Human-readable, parsed by AgentDefinition model |
 | Role policies | BUILDER/VALIDATOR with FilteredToolset | Validator denied write_file, create_file |
@@ -471,7 +471,7 @@ OwlBear draws architectural patterns from [nanobot](https://github.com/HKUDS/nan
 | Memory | MEMORY.md + HISTORY.md + LLM consolidation | SessionStore (JSONL) + ContextManager (.md) |
 | Skill system | SkillsLoader (similar progressive) | SkillRegistry (FunctionToolset-based) |
 | Agent delegation | SubagentManager (spawn tool) | DelegationToolset (delegate_to_agent tool) |
-| Config | YAML schema | pydantic-settings (env + TOML) |
+| Config | YAML schema | pydantic-settings (env vars) |
 
 **Patterns to adopt** (per task #263 research):
 
