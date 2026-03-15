@@ -65,7 +65,10 @@ def extract_content(html: str, url: str | None = None) -> ExtractionResult:
         ImportError: If trafilatura is not installed.
     """
     if trafilatura is None:  # pragma: no cover
-        msg = "trafilatura is not installed — install it with: uv pip install 'owlbear[crawl]'"
+        msg = (
+            "trafilatura is not installed — install with:"
+            " uv sync --extra crawl  or  uv sync --extra search"
+        )
         raise ImportError(msg)
 
     # --- Extract text -------------------------------------------------------
