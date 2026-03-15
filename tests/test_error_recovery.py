@@ -19,8 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from owlbear.core.command_guard import BlockedCommandError
-from owlbear.core.errors import ErrorCategory, ToolError, classify_error
+from owlbear.core.errors import BlockedCommandError, ErrorCategory, ToolError, classify_error
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.memory.error_journal import ErrorJournal
 from owlbear.tools.hooked import HookedToolset, _is_transient

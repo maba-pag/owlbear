@@ -11,8 +11,7 @@ import openai
 import pydantic
 import pytest
 
-from owlbear.core.command_guard import BlockedCommandError
-from owlbear.core.errors import ErrorCategory, ToolError, classify_error
+from owlbear.core.errors import BlockedCommandError, ErrorCategory, ToolError, classify_error
 
 # ---------------------------------------------------------------------------
 # ErrorCategory enum

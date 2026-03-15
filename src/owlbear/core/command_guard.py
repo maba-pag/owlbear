@@ -15,7 +15,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from owlbear.core.exceptions import OwlBearError
+from owlbear.core.errors import BlockedCommandError
 from owlbear.core.hooks import PreToolUseData  # noqa: TC001
 
 if TYPE_CHECKING:
@@ -81,25 +81,6 @@ _FILE_TOOLS: frozenset[str] = frozenset(
         "multi_replace_string_in_file",
     }
 )
-
-
-# ---------------------------------------------------------------------------
-# Exception
-# ---------------------------------------------------------------------------
-
-
-class BlockedCommandError(OwlBearError):
-    """Raised when a command or file path is denied by the safety guard.
-
-    Attributes:
-        command: The command string or file path that was blocked.
-        pattern: The regex pattern that matched.
-    """
-
-    def __init__(self, command: str, pattern: str) -> None:
-        self.command = command
-        self.pattern = pattern
-        super().__init__(f"Command blocked by pattern {pattern!r}: {command}")
 
 
 # ---------------------------------------------------------------------------

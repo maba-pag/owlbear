@@ -10,8 +10,7 @@ The import of ``OwlBearError`` from ``owlbear.core.exceptions`` will raise
 
 from __future__ import annotations
 
-from owlbear.core.command_guard import BlockedCommandError
-from owlbear.core.errors import ErrorCategory, classify_error
+from owlbear.core.errors import BlockedCommandError, ErrorCategory, classify_error
 from owlbear.core.exceptions import OwlBearError
 from owlbear.tools.ask_user import AskUserTimeoutError
 from owlbear.tools.browser.safety import BlockedURLError

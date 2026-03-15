@@ -38,8 +38,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from owlbear.core.command_guard import BlockedCommandError
-from owlbear.core.errors import ErrorCategory, classify_error
+from owlbear.core.errors import BlockedCommandError, ErrorCategory, classify_error
 from owlbear.core.hooks import HookEvent, HookRegistry
 
 if TYPE_CHECKING:

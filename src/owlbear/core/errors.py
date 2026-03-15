@@ -30,8 +30,22 @@ except ImportError:  # openai is an optional dependency
     openai = None  # type: ignore[assignment]
 
 from owlbear.core.circuit_breaker import CircuitOpenError
-from owlbear.core.command_guard import BlockedCommandError
+from owlbear.core.exceptions import OwlBearError
 from owlbear.tools.browser.safety import BlockedURLError
+
+
+class BlockedCommandError(OwlBearError):
+    """Raised when a command or file path is denied by the safety guard.
+
+    Attributes:
+        command: The command string or file path that was blocked.
+        pattern: The regex pattern that matched.
+    """
+
+    def __init__(self, command: str, pattern: str) -> None:
+        self.command = command
+        self.pattern = pattern
+        super().__init__(f"Command blocked by pattern {pattern!r}: {command}")
 
 
 class BudgetExceededError(Exception):
