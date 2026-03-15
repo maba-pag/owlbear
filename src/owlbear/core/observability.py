@@ -51,7 +51,7 @@ class ObservabilityEvent(BaseModel, frozen=True):
     success: bool = True
     error: str | None = None
     duration_ms: float | None = None
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
 
 
 class ToolStats(TypedDict):
