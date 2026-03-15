@@ -95,8 +95,7 @@ class KanbanToolset(FunctionToolset):
             self.kanban_list,
             name="kanban_list",
             description=(
-                "List kanban tasks with optional filters."
-                " Filters: status, tag, priority, blocked."
+                "List kanban tasks with optional filters. Filters: status, tag, priority, blocked."
             ),
         )
         self.add_function(
@@ -147,15 +146,13 @@ class KanbanToolset(FunctionToolset):
     # Tool implementations
     # ------------------------------------------------------------------
 
-    async def kanban_list(  # noqa: PLR0913
+    async def kanban_list(
         self,
         *,
         status: str | None = None,
         tag: str | None = None,
         priority: str | None = None,
-        blocked: bool = False,
-        not_blocked: bool = False,
-        unblocked: bool = False,
+        block_filter: str | None = None,
     ) -> str:
         """List tasks with optional filters.
 
@@ -163,10 +160,14 @@ class KanbanToolset(FunctionToolset):
             status: Filter by status column.
             tag: Filter by tag.
             priority: Filter by priority level.
-            blocked: Show only blocked tasks.
-            not_blocked: Show only non-blocked tasks.
-            unblocked: Show only unblocked tasks.
+            block_filter: Block-state filter — ``'blocked'``, ``'not_blocked'``,
+                or ``'unblocked'``.  ``None`` applies no block filter.
         """
+        _block_flags = {
+            "blocked": "--blocked",
+            "not_blocked": "--not-blocked",
+            "unblocked": "--unblocked",
+        }
         args: list[str] = ["list", "--compact"]
         if status is not None:
             args.extend(["--status", status])
@@ -174,12 +175,8 @@ class KanbanToolset(FunctionToolset):
             args.extend(["--tag", tag])
         if priority is not None:
             args.extend(["--priority", priority])
-        if blocked:
-            args.append("--blocked")
-        if not_blocked:
-            args.append("--not-blocked")
-        if unblocked:
-            args.append("--unblocked")
+        if block_filter is not None:
+            args.append(_block_flags[block_filter])
         stdout, stderr, rc = await self._run_kanban(*args)
         if rc != 0:
             return f"error: {stderr.strip()}"
