@@ -10,10 +10,9 @@ The import of ``OwlBearError`` from ``owlbear.core.exceptions`` will raise
 
 from __future__ import annotations
 
-from owlbear.core.exceptions import OwlBearError
-
 from owlbear.core.command_guard import BlockedCommandError
 from owlbear.core.errors import ErrorCategory, classify_error
+from owlbear.core.exceptions import OwlBearError
 from owlbear.tools.ask_user import AskUserTimeoutError
 from owlbear.tools.browser.safety import BlockedURLError
 
@@ -152,3 +151,31 @@ class TestFromAC_ClassifyBlockedURL:  # noqa: N801
         """Edge: the pattern string doesn't affect the category."""
         exc = BlockedURLError(url="http://x.com", pattern="<not in allowlist>")
         assert classify_error(exc) is ErrorCategory.PERMANENT
+
+
+# ---------------------------------------------------------------------------
+# AC 7 (arch review): OwlBearError re-exported from core/__init__.py
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CoreReExport:  # noqa: N801
+    """OwlBearError must be importable from owlbear.core (re-export)."""
+
+    def test_importable_from_owlbear_core(self) -> None:
+        """Happy: ``from owlbear.core import OwlBearError`` must work."""
+        from owlbear.core import OwlBearError as CoreOwlBearError
+
+        assert CoreOwlBearError is OwlBearError
+
+    def test_in_core_all(self) -> None:
+        """Edge: OwlBearError must appear in core.__all__."""
+        import owlbear.core as core_mod
+
+        assert "OwlBearError" in core_mod.__all__
+
+    def test_identity_with_exceptions_module(self) -> None:
+        """Boundary: re-export is the same class, not a copy."""
+        from owlbear.core import OwlBearError as CoreOwlBearError
+        from owlbear.core.exceptions import OwlBearError as ExcOwlBearError
+
+        assert CoreOwlBearError is ExcOwlBearError
