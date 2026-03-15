@@ -9960,3 +9960,7 @@
 {"timestamp":"2026-03-15T10:27:03.6385052+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
 {"timestamp":"2026-03-15T10:27:03.6461511+01:00","action":"release","task_id":529,"detail":"auditor"}
 {"timestamp":"2026-03-15T10:27:20.4101605+01:00","action":"edit","task_id":529,"detail":"Extract _entity_from_row and _edge_from_row helpers in graph.py"}
+{"timestamp":"2026-03-15T10:47:55.4562192+01:00","action":"move","task_id":528,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-15T10:48:01.3046012+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
+{"timestamp":"2026-03-15T10:48:01.3131608+01:00","action":"release","task_id":528,"detail":"auditor"}
+{"timestamp":"2026-03-15T10:48:19.752594+01:00","action":"edit","task_id":528,"detail":"Consolidate triple-nested exception swallowing in agent._record_usage"}
