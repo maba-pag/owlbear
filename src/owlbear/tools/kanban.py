@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic_ai.toolsets import FunctionToolset
 
@@ -152,7 +152,7 @@ class KanbanToolset(FunctionToolset):
         status: str | None = None,
         tag: str | None = None,
         priority: str | None = None,
-        block_filter: str | None = None,
+        block_filter: Literal["blocked", "not_blocked", "unblocked"] | None = None,
     ) -> str:
         """List tasks with optional filters.
 
