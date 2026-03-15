@@ -87,6 +87,7 @@ quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 asyncio_mode = "strict"
 markers = [
   "api: marks tests requiring live API access (deselect with '-m \"not api\"')",

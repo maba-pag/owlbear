@@ -7,25 +7,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from conftest import make_settings  # type: ignore[import-untyped]
 from pydantic_ai.models.test import TestModel
 
 from owlbear.bootstrap import BootstrapResult, bootstrap
 from owlbear.channels.cli import CLIChannel
-from owlbear.config import OwlBearSettings
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.agent_registry import AgentRegistry
 from owlbear.core.hooks import HookEvent
-
-
-def _make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
-    """Build test-safe settings pointing at *tmp_path*."""
-    defaults = {
-        "copilot_token_path": tmp_path / "token.json",
-        "agents_dir": tmp_path / "agents",
-        "usage_path": tmp_path / "usage.jsonl",
-    }
-    defaults.update(overrides)
-    return OwlBearSettings(**defaults)  # type: ignore[arg-type]
 
 
 def _toolset_names(result: BootstrapResult) -> set[str]:
@@ -55,7 +44,7 @@ def _mock_copilot_client():
 @pytest_asyncio.fixture
 async def cli_result(tmp_path: Path) -> BootstrapResult:
     """Bootstrap with CLI channel, mocked model."""
-    settings = _make_settings(tmp_path)
+    settings = make_settings(tmp_path)
     return await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
 
 
@@ -126,7 +115,7 @@ async def test_no_github_toolset_without_token(cli_result: BootstrapResult) -> N
 async def test_github_toolset_with_token(tmp_path: Path) -> None:
     from pydantic import SecretStr
 
-    settings = _make_settings(tmp_path, github_token=SecretStr("ghp_test123"))
+    settings = make_settings(tmp_path, github_token=SecretStr("ghp_test123"))
     result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)
     names = _toolset_names(result)
     assert "GitHubToolset" in names
@@ -135,7 +124,7 @@ async def test_github_toolset_with_token(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_agent_turn_e2e(tmp_path: Path) -> None:
     """Verify agent.turn() works end-to-end with the test model."""
-    settings = _make_settings(tmp_path)
+    settings = make_settings(tmp_path)
     model = TestModel(custom_output_text="Hello!", call_tools=[])
     with patch("owlbear.bootstrap.OpenAIChatModel", return_value=model):
         result = await bootstrap(settings, channel_name="cli", workspace_root=tmp_path)

@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import openai
 import pytest
+from conftest import MockChannel  # type: ignore[import-untyped]
 
 from owlbear.core.errors import ErrorCategory
 from owlbear.daemon import PidFile, run_daemon, setup_logging
@@ -26,29 +27,6 @@ from owlbear.memory.error_journal import ErrorJournal
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-class MockChannel:
-    """Minimal ChannelPlugin mock with programmable receive sequence."""
-
-    def __init__(self, messages: list[str | None]) -> None:
-        self._messages = list(messages)
-        self._index = 0
-        self.sent: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return "mock"
-
-    async def send(self, message: str) -> None:
-        self.sent.append(message)
-
-    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
-        if self._index >= len(self._messages):
-            return None
-        msg = self._messages[self._index]
-        self._index += 1
-        return msg
 
 
 def _run(coro: object) -> object:
@@ -785,7 +763,7 @@ class TestBearclawStatus:
         from bearclaw.commands.daemon import _daemon_status
 
         with patch(
-            "bearclaw.commands.daemon.OwlBearSettings",
+            "owlbear.config.OwlBearSettings",
             return_value=self._mock_settings(tmp_path),
         ):
             _daemon_status()
@@ -801,7 +779,7 @@ class TestBearclawStatus:
 
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=self._mock_settings(tmp_path),
             ),
             patch(
@@ -823,7 +801,7 @@ class TestBearclawStatus:
 
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=self._mock_settings(tmp_path),
             ),
             patch(

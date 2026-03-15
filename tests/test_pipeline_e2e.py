@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, patch
 import pydantic_ai.models
 import pytest
 import pytest_asyncio
+from conftest import make_settings  # type: ignore[import-untyped]
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
@@ -51,15 +52,6 @@ ALL_AGENTS = [
 # ---------------------------------------------------------------------------
 
 
-def _make_settings(tmp_path: Path) -> OwlBearSettings:
-    """Build test-safe settings pointing at the real agents dir."""
-    return OwlBearSettings(
-        copilot_token_path=tmp_path / "token.json",
-        agents_dir=AGENTS_DIR,
-        usage_path=tmp_path / "usage.jsonl",
-    )
-
-
 def _noop_model_fn(
     _messages: list[ModelMessage],
     _info: AgentInfo,
@@ -72,7 +64,7 @@ def _noop_model_fn(
 async def bootstrapped(tmp_path: Path) -> BootstrapResult:
     """Full bootstrap result with real agents dir and FunctionModel."""
     fn_model = FunctionModel(_noop_model_fn)
-    settings = _make_settings(tmp_path)
+    settings = make_settings(tmp_path, agents_dir=AGENTS_DIR)
     mock_client = AsyncMock()
     with (
         patch(

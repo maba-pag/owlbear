@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from conftest import MockChannel  # type: ignore[import-untyped]
 from typer.testing import CliRunner
 
 from owlbear.core.deps import OwlBearDeps
@@ -24,29 +25,6 @@ from owlbear.core.hooks import HookRegistry
 # ---------------------------------------------------------------------------
 
 runner = CliRunner()
-
-
-class MockChannel:
-    """Minimal ChannelPlugin mock with programmable receive sequence."""
-
-    def __init__(self, messages: list[str | None]) -> None:
-        self._messages = list(messages)
-        self._index = 0
-        self.sent: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return "mock"
-
-    async def send(self, message: str) -> None:
-        self.sent.append(message)
-
-    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
-        if self._index >= len(self._messages):
-            return None
-        msg = self._messages[self._index]
-        self._index += 1
-        return msg
 
 
 def _run(coro: object) -> object:
@@ -170,7 +148,7 @@ class TestCliReplSanitisesErrors:
         bootstrap_fn = AsyncMock(side_effect=_fake_bootstrap)
 
         with (
-            patch("bearclaw.commands.chat.OwlBearSettings", settings_cls),
+            patch("owlbear.config.OwlBearSettings", settings_cls),
             patch("bearclaw.commands.chat.SessionStore", session_cls),
             patch("bearclaw.commands.chat.bootstrap", bootstrap_fn),
         ):

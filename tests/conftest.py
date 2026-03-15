@@ -1,13 +1,15 @@
-"""Shared pytest fixtures for the OwlBear test suite."""
+"""Shared pytest fixtures and helpers for the OwlBear test suite."""
 
 from __future__ import annotations
 
 import os
 import warnings
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from owlbear.config import OwlBearSettings
+from owlbear.config import OwlBearSettings, get_settings
 
 # ---------------------------------------------------------------------------
 # Skip test files that need optional dependencies not installed in dev
@@ -66,3 +68,55 @@ def default_settings(monkeypatch: pytest.MonkeyPatch) -> OwlBearSettings:
     for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
         monkeypatch.delenv(var, raising=False)
     return OwlBearSettings()
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache() -> None:
+    """Clear the ``get_settings`` cache between tests."""
+    get_settings.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Shared test helpers (extracted from individual test files — task #808)
+# ---------------------------------------------------------------------------
+
+
+class MockChannel:
+    """Minimal ChannelPlugin mock with programmable receive sequence."""
+
+    def __init__(self, messages: list[str | None]) -> None:
+        self._messages = list(messages)
+        self._index = 0
+        self.sent: list[str] = []
+
+    @property
+    def name(self) -> str:
+        return "mock"
+
+    async def send(self, message: str) -> None:
+        self.sent.append(message)
+
+    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
+        if self._index >= len(self._messages):
+            return None
+        msg = self._messages[self._index]
+        self._index += 1
+        return msg
+
+
+def make_mock_toolset(return_value: object = "tool_result") -> MagicMock:
+    """Create a mock AbstractToolset with an async call_tool."""
+    mock_ts = MagicMock()
+    mock_ts.call_tool = AsyncMock(return_value=return_value)
+    return mock_ts
+
+
+def make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
+    """Build test-safe settings pointing at *tmp_path*."""
+    defaults: dict[str, object] = {
+        "copilot_token_path": tmp_path / "token.json",
+        "agents_dir": tmp_path / "agents",
+        "usage_path": tmp_path / "usage.jsonl",
+    }
+    defaults.update(overrides)
+    return OwlBearSettings(**defaults)  # type: ignore[arg-type]

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from conftest import make_mock_toolset  # type: ignore[import-untyped]
+
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.safety.gate import ApprovalGateToolset
 from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
@@ -23,13 +25,6 @@ from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
 def _run(coro: object) -> object:
     """Run an async coroutine synchronously."""
     return asyncio.run(coro)  # type: ignore[arg-type]
-
-
-def _make_mock_toolset(return_value: object = "tool_result") -> MagicMock:
-    """Create a mock AbstractToolset with an async call_tool."""
-    mock_ts = MagicMock()
-    mock_ts.call_tool = AsyncMock(return_value=return_value)
-    return mock_ts
 
 
 def _make_channel(
@@ -78,7 +73,7 @@ def _make_gate(
         session = ApprovalSession()
     if channel is None:
         channel = _make_channel()
-    inner = _make_mock_toolset()
+    inner = make_mock_toolset()
 
     gate = ApprovalGateToolset(
         wrapped=inner,

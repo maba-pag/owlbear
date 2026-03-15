@@ -17,17 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import openai
 import pytest
-
-from owlbear.config import OwlBearSettings
-
-
-def _make_settings(tmp_path: Path) -> OwlBearSettings:
-    """Build test-safe settings pointing at *tmp_path*."""
-    return OwlBearSettings(
-        copilot_token_path=tmp_path / "token.json",
-        agents_dir=tmp_path / "agents",
-        usage_path=tmp_path / "usage.jsonl",
-    )
+from conftest import make_settings  # type: ignore[import-untyped]
 
 
 def _make_openai_auth_error() -> openai.AuthenticationError:
@@ -52,7 +42,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
         from owlbear.bootstrap import bootstrap
 
         mock_client = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with patch(
             "owlbear.bootstrap.create_copilot_client",
@@ -69,7 +59,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
         from owlbear.bootstrap import bootstrap
 
         mock_client = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with patch(
             "owlbear.bootstrap.create_copilot_client",
@@ -87,7 +77,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
         from owlbear.bootstrap import bootstrap
 
         mock_client = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with (
             patch(
@@ -112,7 +102,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
         from owlbear.bootstrap import bootstrap
 
         mock_client = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with patch(
             "owlbear.bootstrap.create_copilot_client",
@@ -148,7 +138,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
 
         client_a = AsyncMock()
         client_b = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with patch(
             "owlbear.bootstrap.create_copilot_client",
@@ -184,7 +174,7 @@ class TestFromAC_CleanupAwaitsAsync:  # noqa: N801
         from owlbear.bootstrap import bootstrap
 
         mock_client = AsyncMock()
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
 
         with patch(
             "owlbear.bootstrap.create_copilot_client",
@@ -243,7 +233,7 @@ class TestFromAC_CleanupAwaitsAsync:  # noqa: N801
         with (  # noqa: SIM117
             patch(
                 "bearclaw.commands.chat.OwlBearSettings",
-                return_value=_make_settings(tmp_path),
+                return_value=make_settings(tmp_path),
             ),
             patch(
                 "bearclaw.commands.chat.bootstrap",

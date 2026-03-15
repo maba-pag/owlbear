@@ -16,58 +16,19 @@ from unittest.mock import AsyncMock, patch
 
 import pydantic_ai.models
 import pytest
+from conftest import MockChannel, make_settings  # type: ignore[import-untyped]
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from owlbear.bootstrap import bootstrap
 from owlbear.channels.cli import CLIChannel
-from owlbear.config import OwlBearSettings
 from owlbear.core.agent import OwlBearAgent
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.daemon import run_daemon
 
 # Block real LLM requests globally — FunctionModel / TestModel are exempt.
 pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
-    """Build test-safe settings pointing at *tmp_path*."""
-    defaults = {
-        "copilot_token_path": tmp_path / "token.json",
-        "agents_dir": tmp_path / "agents",
-        "usage_path": tmp_path / "usage.jsonl",
-    }
-    defaults.update(overrides)
-    return OwlBearSettings(**defaults)  # type: ignore[arg-type]
-
-
-class MockChannel:
-    """Minimal channel with a pre-programmed message sequence."""
-
-    def __init__(self, messages: list[str | None]) -> None:
-        self._messages = list(messages)
-        self._index = 0
-        self.sent: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return "mock"
-
-    async def send(self, message: str) -> None:
-        self.sent.append(message)
-
-    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
-        if self._index >= len(self._messages):
-            return None
-        msg = self._messages[self._index]
-        self._index += 1
-        return msg
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +50,7 @@ class TestRunDaemonWithRealAgent:
 
         fn_model = FunctionModel(model_fn)
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(
@@ -125,7 +86,7 @@ class TestRunDaemonWithRealAgent:
 
         fn_model = FunctionModel(model_fn)
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(
@@ -169,7 +130,7 @@ class TestRunDaemonWithRealAgent:
 
         fn_model = FunctionModel(model_fn)
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(
@@ -403,7 +364,7 @@ class TestHookPipeline:
         # Create the file the tool will read
         (tmp_path / "hook_test.txt").write_text("hook content", encoding="utf-8")
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(
@@ -449,7 +410,7 @@ class TestHookPipeline:
 
         (tmp_path / "data.txt").write_text("some data", encoding="utf-8")
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(
@@ -507,7 +468,7 @@ class TestHookPipeline:
         (tmp_path / "a.txt").write_text("aaa", encoding="utf-8")
         (tmp_path / "b.txt").write_text("bbb", encoding="utf-8")
 
-        settings = _make_settings(tmp_path)
+        settings = make_settings(tmp_path)
         mock_client = AsyncMock()
         with (
             patch(

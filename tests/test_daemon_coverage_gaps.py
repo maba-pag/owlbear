@@ -21,6 +21,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from conftest import MockChannel  # type: ignore[import-untyped]
+
 from owlbear.core.hooks import HookEvent
 from owlbear.core.lint_gate import LintGateResult
 from owlbear.daemon import (
@@ -63,29 +65,6 @@ def _make_kanban_show_json(
 ) -> str:
     """Build fake kanban-md show output."""
     return json.dumps({"id": task_id, "title": title, "status": "todo", "body": body})
-
-
-class MockChannel:
-    """Minimal ChannelPlugin mock with programmable receive sequence."""
-
-    def __init__(self, messages: list[str | None]) -> None:
-        self._messages = list(messages)
-        self._index = 0
-        self.sent: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return "mock"
-
-    async def send(self, message: str) -> None:
-        self.sent.append(message)
-
-    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
-        if self._index >= len(self._messages):
-            return None
-        msg = self._messages[self._index]
-        self._index += 1
-        return msg
 
 
 # ---------------------------------------------------------------------------

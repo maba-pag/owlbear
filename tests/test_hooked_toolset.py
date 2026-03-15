@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from conftest import make_mock_toolset  # type: ignore[import-untyped]
 
 from owlbear.core.command_guard import CommandSafetyGuard
 from owlbear.core.hooks import HookEvent, HookRegistry
@@ -30,13 +31,6 @@ def _run(coro: object) -> object:
     return asyncio.run(coro)  # type: ignore[arg-type]
 
 
-def _make_mock_toolset(return_value: object = "mock_result") -> MagicMock:
-    """Create a mock AbstractToolset with an async call_tool."""
-    mock_ts = MagicMock()
-    mock_ts.call_tool = AsyncMock(return_value=return_value)
-    return mock_ts
-
-
 def _make_hooked(
     return_value: object = "mock_result",
     hooks: HookRegistry | None = None,
@@ -44,7 +38,7 @@ def _make_hooked(
     """Create a HookedToolset wrapping a mock toolset."""
     if hooks is None:
         hooks = HookRegistry()
-    mock_ts = _make_mock_toolset(return_value)
+    mock_ts = make_mock_toolset(return_value)
     hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
     return hooked, mock_ts
 
@@ -421,7 +415,7 @@ class TestRetryTransientErrors:
     def test_retries_on_transient_then_succeeds(self) -> None:
         """Tool fails once with transient error, then succeeds on retry."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "success"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -435,7 +429,7 @@ class TestRetryTransientErrors:
     def test_retries_on_timeout_then_succeeds(self) -> None:
         """Tool fails with timeout, then succeeds on retry."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=[_make_timeout_error(), "ok"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -449,7 +443,7 @@ class TestRetryTransientErrors:
     def test_retries_on_http_429_then_succeeds(self) -> None:
         """Tool fails with 429 rate limit, then succeeds on retry."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=[_make_http_429_error(), "done"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -463,7 +457,7 @@ class TestRetryTransientErrors:
     def test_max_3_attempts_then_propagates(self) -> None:
         """After 3 transient failures, the original exception propagates."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         err = _make_transient_error()
         mock_ts.call_tool = AsyncMock(side_effect=err)
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
@@ -478,7 +472,7 @@ class TestRetryTransientErrors:
     def test_exhausted_retries_marks_tool_retries_exhausted(self) -> None:
         """After 3 failed attempts, the raised exception has _tool_retries_exhausted = True."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=_make_transient_error())
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -492,7 +486,7 @@ class TestRetryTransientErrors:
     def test_exhausted_retries_original_exception_type(self) -> None:
         """After retries exhausted, the raised exception is the original type, not RetryError."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=_make_timeout_error())
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -508,7 +502,7 @@ class TestNoRetryForNonTransient:
     def test_permanent_error_no_retry(self) -> None:
         """FileNotFoundError (PERMANENT) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=_make_permanent_error())
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -522,7 +516,7 @@ class TestNoRetryForNonTransient:
     def test_auth_error_no_retry(self) -> None:
         """HTTP 401 (AUTH) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=_make_auth_error())
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -536,7 +530,7 @@ class TestNoRetryForNonTransient:
     def test_tool_semantic_error_no_retry(self) -> None:
         """ValueError (TOOL_SEMANTIC) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=_make_tool_semantic_error())
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()
@@ -578,7 +572,7 @@ class TestGuardsRunOnceNotPerRetry:
         def tracking_guard(payload: dict[str, object]) -> None:
             guard_calls.append(payload)
 
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "success"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks, guards=[tracking_guard])
         ctx = MagicMock()
@@ -597,7 +591,7 @@ class TestRetryLogging:
     def test_retry_logs_warning_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
         """WARNING log emitted for each retry attempt."""
         hooks = HookRegistry()
-        mock_ts = _make_mock_toolset()
+        mock_ts = make_mock_toolset()
         mock_ts.call_tool = AsyncMock(side_effect=[_make_transient_error(), "ok"])
         hooked = HookedToolset(wrapped=mock_ts, hooks=hooks)
         ctx = MagicMock()

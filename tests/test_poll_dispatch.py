@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from conftest import MockChannel  # type: ignore[import-untyped]
 
 from owlbear.config import OwlBearSettings
 
@@ -28,29 +29,6 @@ from owlbear.config import OwlBearSettings
 def _run(coro: object) -> object:
     """Run an async coroutine synchronously."""
     return asyncio.run(coro)  # type: ignore[arg-type]
-
-
-class MockChannel:
-    """Minimal ChannelPlugin mock with programmable receive sequence."""
-
-    def __init__(self, messages: list[str | None]) -> None:
-        self._messages = list(messages)
-        self._index = 0
-        self.sent: list[str] = []
-
-    @property
-    def name(self) -> str:
-        return "mock"
-
-    async def send(self, message: str) -> None:
-        self.sent.append(message)
-
-    async def receive(self, *, prompt: str | None = None) -> str | None:  # noqa: ARG002
-        if self._index >= len(self._messages):
-            return None
-        msg = self._messages[self._index]
-        self._index += 1
-        return msg
 
 
 def _make_kanban_list_json(tasks: list[dict[str, str]]) -> str:
