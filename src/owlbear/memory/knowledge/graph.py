@@ -54,6 +54,34 @@ class GraphStore:
             return {}
         return json.loads(raw)  # type: ignore[no-any-return]
 
+    @staticmethod
+    def _entity_from_row(row: tuple[object, ...]) -> Entity:
+        """Deserialize a 9-element entity row into an :class:`Entity`."""
+        return Entity(
+            id=row[0],
+            name=row[1],
+            entity_type=row[2],
+            description=row[3],
+            metadata=GraphStore._load_meta(row[4]),  # type: ignore[arg-type]
+            scope=row[5],
+            document_id=row[6],
+            chunk_id=row[7],
+            importance=row[8] if row[8] is not None else 0.5,
+        )
+
+    @staticmethod
+    def _edge_from_row(row: tuple[object, ...]) -> Edge:
+        """Deserialize a 7-element edge row into an :class:`Edge`."""
+        return Edge(
+            id=row[0],
+            source_id=row[1],
+            target_id=row[2],
+            relation=row[3],
+            weight=row[4],
+            metadata=GraphStore._load_meta(row[5]),  # type: ignore[arg-type]
+            scope=row[6],
+        )
+
     # ── Entity operations ──────────────────────────────────────────────────
 
     def insert_entity(self, entity: Entity) -> None:
@@ -91,17 +119,7 @@ class GraphStore:
         ).fetchone()
         if row is None:
             return None
-        return Entity(
-            id=row[0],
-            name=row[1],
-            entity_type=row[2],
-            description=row[3],
-            metadata=self._load_meta(row[4]),
-            scope=row[5],
-            document_id=row[6],
-            chunk_id=row[7],
-            importance=row[8] if row[8] is not None else 0.5,
-        )
+        return self._entity_from_row(row)
 
     def list_entities(
         self,
@@ -136,20 +154,7 @@ class GraphStore:
             sql += " WHERE " + " AND ".join(clauses)
 
         rows = self._conn.execute(sql, params).fetchall()
-        return [
-            Entity(
-                id=r[0],
-                name=r[1],
-                entity_type=r[2],
-                description=r[3],
-                metadata=self._load_meta(r[4]),
-                scope=r[5],
-                document_id=r[6],
-                chunk_id=r[7],
-                importance=r[8] if r[8] is not None else 0.5,
-            )
-            for r in rows
-        ]
+        return [self._entity_from_row(r) for r in rows]
 
     def list_entities_for_document(
         self,
@@ -175,20 +180,7 @@ class GraphStore:
         )
 
         rows = self._conn.execute(sql, params).fetchall()
-        return [
-            Entity(
-                id=r[0],
-                name=r[1],
-                entity_type=r[2],
-                description=r[3],
-                metadata=self._load_meta(r[4]),
-                scope=r[5],
-                document_id=r[6],
-                chunk_id=r[7],
-                importance=r[8] if r[8] is not None else 0.5,
-            )
-            for r in rows
-        ]
+        return [self._entity_from_row(r) for r in rows]
 
     def delete_entity(self, entity_id: str) -> bool:
         """Delete the entity and cascade-remove its edges.
@@ -242,15 +234,7 @@ class GraphStore:
         ).fetchone()
         if row is None:
             return None
-        return Edge(
-            id=row[0],
-            source_id=row[1],
-            target_id=row[2],
-            relation=row[3],
-            weight=row[4],
-            metadata=self._load_meta(row[5]),
-            scope=row[6],
-        )
+        return self._edge_from_row(row)
 
     def list_edges(
         self,
@@ -284,18 +268,7 @@ class GraphStore:
             sql += " WHERE " + " AND ".join(clauses)
 
         rows = self._conn.execute(sql, params).fetchall()
-        return [
-            Edge(
-                id=r[0],
-                source_id=r[1],
-                target_id=r[2],
-                relation=r[3],
-                weight=r[4],
-                metadata=self._load_meta(r[5]),
-                scope=r[6],
-            )
-            for r in rows
-        ]
+        return [self._edge_from_row(r) for r in rows]
 
     def delete_edge(self, edge_id: str) -> bool:
         """Delete the edge with *edge_id*.
