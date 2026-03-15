@@ -21,7 +21,7 @@ from owlbear.memory.knowledge.graph import GraphStore
 from owlbear.memory.knowledge.graph_builder import GraphBuildResult
 from owlbear.memory.knowledge.ingest import IngestPipeline
 from owlbear.memory.knowledge.intake import IntakeResult
-from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
+from owlbear.memory.knowledge.models import Entity, EntityType
 from owlbear.memory.knowledge.protocol import HybridEmbedding, SparseVector
 from owlbear.memory.knowledge.schema import init_db
 
@@ -128,10 +128,10 @@ def mock_chunker() -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-class TestInterDocBuilderParam:
-    """IngestPipeline accepts optional inter_doc_builder parameter."""
+class TestEnricherParam:
+    """IngestPipeline accepts optional enricher parameter."""
 
-    def test_constructor_accepts_inter_doc_builder(  # noqa: PLR0913
+    def test_constructor_accepts_enricher(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
@@ -140,7 +140,7 @@ class TestInterDocBuilderParam:
         mock_chunker: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """inter_doc_builder param is stored on the pipeline."""
+        """enricher param is stored on the pipeline."""
         mock_inter = MagicMock()
         extractor = MagicMock()
         extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[], edges=[]))
@@ -153,11 +153,11 @@ class TestInterDocBuilderParam:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_inter,
         )
-        assert pipe._inter_doc_builder is mock_inter
+        assert pipe._enricher is mock_inter
 
-    def test_constructor_defaults_inter_doc_builder_none(  # noqa: PLR0913
+    def test_constructor_defaults_enricher_none(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
@@ -166,7 +166,7 @@ class TestInterDocBuilderParam:
         mock_chunker: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """inter_doc_builder defaults to None when not provided."""
+        """enricher defaults to None when not provided."""
         extractor = MagicMock()
         extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[], edges=[]))
 
@@ -179,14 +179,14 @@ class TestInterDocBuilderParam:
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
         )
-        assert pipe._inter_doc_builder is None
+        assert pipe._enricher is None
 
 
 class TestScheduleInterDocEnrichment:
     """_schedule_inter_doc_enrichment mirrors _schedule_graph_enrichment pattern."""
 
     @pytest.mark.anyio
-    async def test_skips_when_builder_is_none(  # noqa: PLR0913
+    async def test_skips_when_enricher_is_none(  # noqa: PLR0913
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore,
@@ -195,7 +195,7 @@ class TestScheduleInterDocEnrichment:
         mock_chunker: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """No inter-doc enrichment when inter_doc_builder is None."""
+        """No inter-doc enrichment when enricher is None."""
         extractor = MagicMock()
         extractor.extract = AsyncMock(
             return_value=ExtractionResult(
@@ -258,7 +258,7 @@ class TestScheduleInterDocEnrichment:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_inter,
         )
 
         # Ingest only 1 document — should skip inter-doc
@@ -308,7 +308,7 @@ class TestScheduleInterDocEnrichment:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_inter,
         )
 
         # Ingest 2 documents so scope doc count >= 2
@@ -329,7 +329,7 @@ class TestScheduleInterDocEnrichment:
         await asyncio.sleep(0.05)
 
         # Should have been called at least once (for the 2nd doc)
-        mock_inter.build.assert_awaited()
+        mock_inter.schedule_inter_doc_enrichment.assert_called()
 
 
 class TestInterDocIntegrationE2E:
@@ -345,7 +345,7 @@ class TestInterDocIntegrationE2E:
         mock_chunker: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Ingest 2 docs with related entities; inter-doc edges have source=inter_doc_inference."""
+        """Ingest 2 docs with related entities; enricher receives schedule calls."""
         call_count = 0
         doc1_entity_ids: list[str] = []
         doc2_entity_ids: list[str] = []
@@ -365,32 +365,7 @@ class TestInterDocIntegrationE2E:
         extractor = MagicMock()
         extractor.extract = AsyncMock(side_effect=make_extraction)
 
-        # We'll create the mock_inter with a side_effect that returns edges
-        # using the real entity IDs captured from extraction.
-        mock_inter = MagicMock()
-
-        async def build_side_effect(
-            *_args: object,
-            scope: str = "global",
-            **_kwargs: object,
-        ) -> GraphBuildResult:
-            # Use actual entity IDs from the extraction to avoid FK violations
-            if doc1_entity_ids and doc2_entity_ids:
-                edge = Edge(
-                    source_id=doc1_entity_ids[0],
-                    target_id=doc2_entity_ids[0],
-                    relation=RelationType.RELATED_TO,
-                    weight=0.4,
-                    metadata={
-                        "source": "inter_doc_inference",
-                        "doc_pair": ["doc1", "doc2"],
-                    },
-                    scope=scope,
-                )
-                return GraphBuildResult(edges_added=1, edges=[edge])
-            return GraphBuildResult()
-
-        mock_inter.build = AsyncMock(side_effect=build_side_effect)
+        mock_enricher = MagicMock()
 
         pipe = _make_pipeline(
             conn=conn,
@@ -400,7 +375,7 @@ class TestInterDocIntegrationE2E:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_enricher,
         )
 
         # Ingest doc 1
@@ -426,16 +401,11 @@ class TestInterDocIntegrationE2E:
         # Wait for background tasks to complete
         await asyncio.sleep(0.1)
 
-        # Verify inter-doc edges in graph store
-        all_edges = graph_store.list_edges()
-        inter_doc_edges = [
-            e for e in all_edges if e.metadata.get("source") == "inter_doc_inference"
-        ]
-
-        assert len(inter_doc_edges) >= 1
-        edge = inter_doc_edges[0]
-        assert edge.metadata["source"] == "inter_doc_inference"
-        assert edge.scope == "global"
+        # Verify enricher received inter-doc enrichment schedule calls
+        mock_enricher.schedule_inter_doc_enrichment.assert_called()
+        # Verify scope passed to enrichment
+        last_call = mock_enricher.schedule_inter_doc_enrichment.call_args
+        assert last_call[0][2] == "global"  # scope argument
 
     @pytest.mark.anyio
     async def test_inter_doc_failure_does_not_crash_ingest(  # noqa: PLR0913
@@ -472,7 +442,7 @@ class TestInterDocIntegrationE2E:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_inter,
         )
 
         # Ingest 2 docs
@@ -531,7 +501,7 @@ class TestInterDocIntegrationE2E:
             entity_extractor=extractor,
             text_chunker=mock_chunker,
             workspace_root=tmp_path,
-            inter_doc_builder=mock_inter,
+            enricher=mock_inter,
         )
 
         await pipe.ingest_text("first text", metadata={"url": "doc1"})
@@ -540,7 +510,7 @@ class TestInterDocIntegrationE2E:
         await asyncio.sleep(0.05)
 
         # Should have been called at least once after 2nd doc
-        mock_inter.build.assert_awaited()
+        mock_inter.schedule_inter_doc_enrichment.assert_called()
 
 
 class TestInterDocConfig:
@@ -561,13 +531,14 @@ class TestInterDocConfig:
         assert settings.inter_doc_graph_building is True
 
 
-class TestBootstrapInterDocBuilder:
-    """Bootstrap: _build_knowledge_toolset instantiates InterDocGraphBuilder when enabled."""
+class TestBootstrapEnricher:
+    """Bootstrap: _build_knowledge_toolset instantiates enricher when enabled."""
 
-    def test_inter_doc_builder_passed_when_enabled(self, tmp_path: object) -> None:
-        """When inter_doc_graph_building=True, IngestPipeline gets an inter_doc_builder."""
+    def test_enricher_passed_when_enabled(self, tmp_path: object) -> None:
+        """When inter_doc_graph_building=True, IngestPipeline gets an enricher."""
         from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
+        mock_model = MagicMock()
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
             patch(
@@ -587,24 +558,26 @@ class TestBootstrapInterDocBuilder:
                 return_value=None,
             ) as mock_init,
         ):
-            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            infra = _build_knowledge_infra(tmp_path, chat_model=mock_model)  # type: ignore[arg-type]
             assert infra is not None
             _build_knowledge_toolset(
                 tmp_path,  # type: ignore[arg-type]
                 infra,
+                chat_model=mock_model,
                 inter_doc_graph_building=True,
             )
 
-        # Verify IngestPipeline was called with inter_doc_builder kwarg
+        # Verify IngestPipeline was called with enricher kwarg
         mock_init.assert_called_once()
         call_kwargs = mock_init.call_args[1]
-        assert "inter_doc_builder" in call_kwargs
-        assert call_kwargs["inter_doc_builder"] is not None
+        assert "enricher" in call_kwargs
+        assert call_kwargs["enricher"] is not None
 
-    def test_inter_doc_builder_not_passed_when_disabled(self, tmp_path: object) -> None:
-        """When inter_doc_graph_building=False (default), no inter_doc_builder."""
+    def test_enricher_not_passed_when_disabled(self, tmp_path: object) -> None:
+        """When inter_doc_graph_building=False (default), no enricher."""
         from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
 
+        mock_model = MagicMock()
         with (
             patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
             patch(
@@ -620,11 +593,11 @@ class TestBootstrapInterDocBuilder:
                 return_value=None,
             ) as mock_init,
         ):
-            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            infra = _build_knowledge_infra(tmp_path, chat_model=mock_model)  # type: ignore[arg-type]
             assert infra is not None
-            _build_knowledge_toolset(tmp_path, infra)  # type: ignore[arg-type]
+            _build_knowledge_toolset(tmp_path, infra, chat_model=mock_model)  # type: ignore[arg-type]
 
         mock_init.assert_called_once()
         call_kwargs = mock_init.call_args[1]
-        # inter_doc_builder should not be in kwargs, or should be None
-        assert call_kwargs.get("inter_doc_builder") is None
+        # enricher should not be in kwargs, or should be None
+        assert call_kwargs.get("enricher") is None
