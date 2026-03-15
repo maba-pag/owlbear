@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 
-SUPPORTED_TYPES = frozenset({"mermaid", "plantuml", "graphviz", "d2", "c4plantuml"})
+SUPPORTED_TYPES = frozenset({"mermaid", "plantuml", "graphviz", "d2", "c4plantuml", "excalidraw"})
 SUPPORTED_FORMATS = frozenset({"svg", "png"})
 
 
@@ -41,6 +41,9 @@ class DiagramService:
         """
         if diagram_type not in SUPPORTED_TYPES:
             msg = f"Unsupported diagram_type: {diagram_type!r}"
+            raise ValueError(msg)
+        if diagram_type == "excalidraw" and output_format != "svg":
+            msg = "excalidraw only supports svg output"
             raise ValueError(msg)
         if output_format not in SUPPORTED_FORMATS:
             msg = f"Unsupported output_format: {output_format!r}"
