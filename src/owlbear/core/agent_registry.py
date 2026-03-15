@@ -185,23 +185,15 @@ class AgentRegistry:
         if self._skill_registry is not None and defn.skills:
             toolsets.append(self._skill_registry)
 
-        agent: Agent[OwlBearDeps, str] = Agent(
-            model,
-            instructions=defn.system_prompt or None,
-            toolsets=toolsets,
-        )
-
-        # Apply role policy for non-builder roles.
+        # Apply role policy for non-builder roles BEFORE constructing Agent.
         role_str = defn.role.lower()
         if role_str != AgentRole.BUILDER:
             policy = _ROLE_POLICIES.get(AgentRole(role_str), BUILDER_POLICY)
             if policy.denied_tools or policy.allowed_tools:
-                # Filter each toolset through the role policy.
-                filtered: list[AbstractToolset] = [apply_role_policy(ts, policy) for ts in toolsets]
-                agent = Agent(
-                    model,
-                    instructions=defn.system_prompt or None,
-                    toolsets=filtered,
-                )
+                toolsets = [apply_role_policy(ts, policy) for ts in toolsets]
 
-        return agent
+        return Agent(
+            model,
+            instructions=defn.system_prompt or None,
+            toolsets=toolsets,
+        )
