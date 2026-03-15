@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from qdrant_client import models as qmodels
 
 from owlbear.memory.knowledge.protocol import HybridEmbedding
+from owlbear.memory.knowledge.qdrant import _PREFETCH_MULTIPLIER
 
 from .harness import build_run, make_latency_tracker, record_latency
 
@@ -203,7 +204,7 @@ def _hybrid_rrf_search(
                     values=emb.sparse.values,
                 ),
                 using="sparse",
-                limit=top_k * 10,
+                limit=top_k * _PREFETCH_MULTIPLIER,
             ),
         )
 
@@ -211,7 +212,7 @@ def _hybrid_rrf_search(
         qmodels.Prefetch(
             query=emb.dense,
             using="dense",
-            limit=top_k * 10,
+            limit=top_k * _PREFETCH_MULTIPLIER,
         ),
     )
 

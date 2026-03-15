@@ -43,6 +43,9 @@ IMPORTANCE_BY_TYPE: dict[EntityType, float] = {
 }
 """Maps entity type values to importance weights for temporal decay."""
 
+_PREFETCH_MULTIPLIER = 10
+"""Over-fetch factor for prefetch stage — 10x candidates gives rescore enough material."""
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -405,7 +408,7 @@ class QdrantVectorStore:
                         values=query.sparse.values,
                     ),
                     using="sparse",
-                    limit=top_k * 10,
+                    limit=top_k * _PREFETCH_MULTIPLIER,
                     filter=query_filter,
                 ),
             )
@@ -415,7 +418,7 @@ class QdrantVectorStore:
             qmodels.Prefetch(
                 query=query.dense,
                 using="dense",
-                limit=top_k * 10,
+                limit=top_k * _PREFETCH_MULTIPLIER,
                 filter=query_filter,
             ),
         )
