@@ -15,12 +15,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from owlbear.tools.browser.html_cache import HtmlCache
 from pydantic import ValidationError
 
 from owlbear.tools.browser.content_extractor import ExtractionResult
 from owlbear.tools.browser.crawl_config import CrawlConfig
 from owlbear.tools.browser.crawler import WebCrawler
+from owlbear.tools.browser.html_cache import HtmlCache
 from owlbear.tools.browser.url_utils import normalize_url
 
 _CRAWLER_MODULE = "owlbear.tools.browser.crawler"
@@ -111,9 +111,7 @@ class TestFromAC_HtmlCacheBasic:  # noqa: N801
 class TestFromAC_HtmlCacheFileNaming:  # noqa: N801
     """Cache files are named by SHA-256(normalize_url(url)) + .html."""
 
-    def test_file_uses_sha256_of_normalized_url(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_file_uses_sha256_of_normalized_url(self, cache: HtmlCache, cache_dir: Path) -> None:
         """The on-disk filename matches SHA-256 hex of the normalized URL."""
         url = "https://example.com/page"
         cache.put(url, "content")
@@ -121,17 +119,13 @@ class TestFromAC_HtmlCacheFileNaming:  # noqa: N801
         expected_name = hashlib.sha256(normalized.encode()).hexdigest() + ".html"
         assert (cache_dir / expected_name).exists()
 
-    def test_urls_that_normalize_identically_share_cache(
-        self, cache: HtmlCache
-    ) -> None:
+    def test_urls_that_normalize_identically_share_cache(self, cache: HtmlCache) -> None:
         """URLs differing only by trailing slash share one cache entry."""
         cache.put("https://example.com/page/", "html_a")
         result = cache.get("https://example.com/page", ttl_seconds=3600)
         assert result == "html_a"
 
-    def test_file_extension_is_html(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_file_extension_is_html(self, cache: HtmlCache, cache_dir: Path) -> None:
         """All cache files have the .html extension."""
         cache.put("https://example.com", "content")
         files = list(cache_dir.glob("*"))
@@ -386,9 +380,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
         """get() returns None for a URL that was never cached."""
         assert cache.get("https://no-such-url.example.com", ttl_seconds=3600) is None
 
-    def test_returns_none_when_expired(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_returns_none_when_expired(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() returns None when file_age > ttl_seconds."""
         url = "https://example.com/old"
         cache.put(url, "old content")
@@ -403,9 +395,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
         result = cache.get(url, ttl_seconds=3600)  # TTL is 1 hour
         assert result is None
 
-    def test_ttl_zero_means_no_expiry(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_ttl_zero_means_no_expiry(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() with ttl_seconds=0 returns cached content regardless of age."""
         url = "https://example.com/eternal"
         cache.put(url, "eternal content")
@@ -420,9 +410,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
         result = cache.get(url, ttl_seconds=0)
         assert result == "eternal content"
 
-    def test_returns_content_just_before_expiry(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_returns_content_just_before_expiry(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() returns content when file_age < ttl_seconds (boundary)."""
         url = "https://example.com/fresh"
         cache.put(url, "fresh content")
@@ -437,9 +425,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
         result = cache.get(url, ttl_seconds=3600)
         assert result == "fresh content"
 
-    def test_returns_none_at_exact_expiry_boundary(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_returns_none_at_exact_expiry_boundary(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() returns None when file_age == ttl_seconds (expired at boundary)."""
         url = "https://example.com/boundary"
         cache.put(url, "boundary content")
@@ -463,9 +449,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
 class TestFromAC_CacheIOFailuresSilent:  # noqa: N801
     """Cache I/O errors are caught and logged, never raised to the caller."""
 
-    def test_get_returns_none_on_read_error(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_get_returns_none_on_read_error(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() returns None when the cache file cannot be read."""
         url = "https://example.com/unreadable"
         cache.put(url, "content")
@@ -497,9 +481,7 @@ class TestFromAC_CacheIOFailuresSilent:  # noqa: N801
         finally:
             read_only_dir.chmod(0o755)
 
-    def test_get_returns_none_on_corrupt_file(
-        self, cache: HtmlCache, cache_dir: Path
-    ) -> None:
+    def test_get_returns_none_on_corrupt_file(self, cache: HtmlCache, cache_dir: Path) -> None:
         """get() returns None if the file exists but read produces an error."""
         url = "https://example.com/corrupt"
         # Write a file with the correct name but via put(), then swap content
@@ -563,9 +545,7 @@ class TestFromAC_WebCrawlerCacheIntegration:  # noqa: N801
         mock_extract.return_value = _DEFAULT_EXTRACTION
 
         crawler = WebCrawler(mock_browser_manager)  # No cache
-        config = CrawlConfig(
-            seed_urls=_SEED, delay_seconds=0, respect_robots=False
-        )
+        config = CrawlConfig(seed_urls=_SEED, delay_seconds=0, respect_robots=False)
         await crawler.crawl(config)
         assert mock_page.goto.call_count == 1
 
