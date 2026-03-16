@@ -6,6 +6,7 @@ import httpx
 
 SUPPORTED_TYPES = frozenset({"mermaid", "plantuml", "graphviz", "d2", "c4plantuml", "excalidraw"})
 SUPPORTED_FORMATS = frozenset({"svg", "png"})
+_SVG_ONLY_TYPES = frozenset({"excalidraw"})
 
 
 class DiagramError(Exception):
@@ -42,11 +43,11 @@ class DiagramService:
         if diagram_type not in SUPPORTED_TYPES:
             msg = f"Unsupported diagram_type: {diagram_type!r}"
             raise ValueError(msg)
-        if diagram_type == "excalidraw" and output_format != "svg":
-            msg = "excalidraw only supports svg output"
-            raise ValueError(msg)
         if output_format not in SUPPORTED_FORMATS:
             msg = f"Unsupported output_format: {output_format!r}"
+            raise ValueError(msg)
+        if diagram_type in _SVG_ONLY_TYPES and output_format != "svg":
+            msg = "excalidraw only supports svg output"
             raise ValueError(msg)
         if not source or not source.strip():
             msg = "source must not be empty"
