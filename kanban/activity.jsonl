@@ -786,3 +786,5 @@
 {"timestamp":"2026-03-16T14:43:25.7378009+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
 {"timestamp":"2026-03-16T14:43:26.9230764+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
 {"timestamp":"2026-03-16T14:43:32.6615872+01:00","action":"move","task_id":815,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-16T14:43:43.8032315+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T14:43:43.8048126+01:00","action":"release","task_id":815,"detail":"auditor"}
