@@ -622,3 +622,167 @@
 {"timestamp":"2026-03-16T05:08:08.4968463+01:00","action":"move","task_id":792,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-16T05:08:13.8687874+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
 {"timestamp":"2026-03-16T05:08:13.870363+01:00","action":"release","task_id":792,"detail":"auditor"}
+{"timestamp":"2026-03-16T05:10:45.3200654+01:00","action":"edit","task_id":831,"detail":"Cover edge-case paths in browser config, ask_user, filesystem, usage (13 lines)"}
+{"timestamp":"2026-03-16T05:10:50.290663+01:00","action":"move","task_id":831,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-16T05:10:54.9522278+01:00","action":"edit","task_id":831,"detail":"Cover edge-case paths in browser config, ask_user, filesystem, usage (13 lines)"}
+{"timestamp":"2026-03-16T05:10:54.9534214+01:00","action":"release","task_id":831,"detail":"auditor"}
+{"timestamp":"2026-03-16T05:11:27.5387861+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:11:27.5403529+01:00","action":"claim","task_id":823,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:11:42.8361518+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:11:42.8382588+01:00","action":"claim","task_id":824,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:11:45.0143047+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T05:11:45.0158693+01:00","action":"claim","task_id":759,"detail":"test-writer"}
+{"timestamp":"2026-03-16T05:14:46.1339447+01:00","action":"move","task_id":813,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-03-16T05:14:48.5945377+01:00","action":"create","task_id":837,"detail":"Close #815 as won't-do per re-export decision"}
+{"timestamp":"2026-03-16T05:14:53.9344541+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:14:53.9365276+01:00","action":"release","task_id":823,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:14:54.5626494+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:14:57.7660196+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:15:00.3122806+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:15:08.1178215+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:15:28.0089472+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:15:28.5704794+01:00","action":"move","task_id":823,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-03-16T05:15:39.2444498+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:15:39.2460534+01:00","action":"release","task_id":824,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:16:08.1821395+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T05:16:52.9979831+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T05:17:59.0014784+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T05:17:59.0030817+01:00","action":"unblock","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T05:18:08.9164257+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T05:18:16.6249904+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T05:18:16.6268134+01:00","action":"release","task_id":759,"detail":"test-writer"}
+{"timestamp":"2026-03-16T05:19:00.3079299+01:00","action":"edit","task_id":826,"detail":"Migrate context_hydration.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:19:00.3100393+01:00","action":"claim","task_id":826,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:19:01.1036612+01:00","action":"edit","task_id":822,"detail":"Implement core __init__.py re-export removal"}
+{"timestamp":"2026-03-16T05:19:01.1049299+01:00","action":"claim","task_id":822,"detail":"researcher"}
+{"timestamp":"2026-03-16T05:19:06.6455596+01:00","action":"edit","task_id":825,"detail":"Migrate bookmark_pipeline.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T05:19:06.647146+01:00","action":"claim","task_id":825,"detail":"researcher"}
+{"timestamp":"2026-03-16T12:14:06.2206609+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T12:14:06.2222464+01:00","action":"claim","task_id":833,"detail":"test-writer"}
+{"timestamp":"2026-03-16T12:14:07.0626865+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-16T12:14:07.0643273+01:00","action":"claim","task_id":517,"detail":"builder"}
+{"timestamp":"2026-03-16T12:14:08.3939533+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T12:14:08.3950144+01:00","action":"claim","task_id":759,"detail":"builder"}
+{"timestamp":"2026-03-16T12:14:14.6047542+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-16T12:14:40.3546329+01:00","action":"edit","task_id":517,"detail":"Reduce ingest.py complexity after pipeline refactor"}
+{"timestamp":"2026-03-16T12:14:40.356239+01:00","action":"release","task_id":517,"detail":"builder"}
+{"timestamp":"2026-03-16T12:16:13.2588073+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T12:16:23.7267325+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T12:16:23.7267325+01:00","action":"release","task_id":833,"detail":"test-writer"}
+{"timestamp":"2026-03-16T12:26:30.4173214+01:00","action":"edit","task_id":562,"detail":"Define named constant for prefetch multiplier in qdrant"}
+{"timestamp":"2026-03-16T12:29:17.1840768+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T12:29:17.1851372+01:00","action":"release","task_id":759,"detail":"builder"}
+{"timestamp":"2026-03-16T12:29:36.6180438+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T12:29:36.6196324+01:00","action":"claim","task_id":759,"detail":"builder"}
+{"timestamp":"2026-03-16T12:29:37.1801616+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T12:29:37.1817755+01:00","action":"release","task_id":759,"detail":"builder"}
+{"timestamp":"2026-03-16T12:30:33.1116633+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-16T12:30:33.113244+01:00","action":"claim","task_id":527,"detail":"architect"}
+{"timestamp":"2026-03-16T12:31:21.6477094+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:31:21.6497079+01:00","action":"claim","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-16T12:31:34.9969183+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T12:31:34.9979695+01:00","action":"claim","task_id":814,"detail":"test-writer"}
+{"timestamp":"2026-03-16T12:32:01.1762762+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T12:32:01.1773245+01:00","action":"claim","task_id":815,"detail":"iron-spray"}
+{"timestamp":"2026-03-16T12:32:04.9149775+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:32:13.4213033+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:32:25.067502+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:32:25.0690902+01:00","action":"release","task_id":813,"detail":"researcher"}
+{"timestamp":"2026-03-16T12:32:36.5461539+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T12:36:00.0444884+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T12:36:00.0460164+01:00","action":"release","task_id":814,"detail":"test-writer"}
+{"timestamp":"2026-03-16T12:36:19.9095108+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T12:36:25.2989724+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T12:36:25.2989724+01:00","action":"release","task_id":815,"detail":"iron-spray"}
+{"timestamp":"2026-03-16T12:36:36.7247417+01:00","action":"create","task_id":838,"detail":"Tests: os.startfile allowlist in CLIChannel.send_file"}
+{"timestamp":"2026-03-16T12:37:07.8649103+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-16T12:37:28.1477018+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-16T12:37:32.203292+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-16T12:37:32.2043314+01:00","action":"release","task_id":527,"detail":"architect"}
+{"timestamp":"2026-03-16T12:38:05.0774471+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:38:05.0774471+01:00","action":"claim","task_id":550,"detail":"architect"}
+{"timestamp":"2026-03-16T12:38:09.6123444+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:38:14.7111132+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T12:38:14.7111132+01:00","action":"claim","task_id":823,"detail":"architect"}
+{"timestamp":"2026-03-16T12:38:16.6590972+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:38:16.660654+01:00","action":"claim","task_id":547,"detail":"architect"}
+{"timestamp":"2026-03-16T12:38:23.4457506+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:38:23.4457506+01:00","action":"claim","task_id":541,"detail":"@architect"}
+{"timestamp":"2026-03-16T12:38:37.3329623+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:39:33.57833+01:00","action":"create","task_id":839,"detail":"Test: knowledge __init__.py public API surface"}
+{"timestamp":"2026-03-16T12:40:18.3415621+01:00","action":"create","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T12:40:51.0397944+01:00","action":"edit","task_id":823,"detail":"Close #813 as won't-do per re-export research"}
+{"timestamp":"2026-03-16T12:40:51.0413668+01:00","action":"release","task_id":823,"detail":"architect"}
+{"timestamp":"2026-03-16T12:40:57.0553035+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:41:16.5847519+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:41:17.4565258+01:00","action":"create","task_id":841,"detail":"Tests for daemon _log_to_journal async (RED)"}
+{"timestamp":"2026-03-16T12:41:35.9336919+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:41:41.7889275+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:41:57.3305522+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:42:04.9739639+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:42:06.9912097+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:42:09.4986766+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:42:13.0385314+01:00","action":"edit","task_id":547,"detail":"Add validators for numeric config fields"}
+{"timestamp":"2026-03-16T12:42:13.0401259+01:00","action":"release","task_id":547,"detail":"architect"}
+{"timestamp":"2026-03-16T12:42:24.2264882+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:42:29.8155818+01:00","action":"edit","task_id":541,"detail":"Make ErrorJournal async-safe for daemon event loop"}
+{"timestamp":"2026-03-16T12:42:29.8155818+01:00","action":"release","task_id":541,"detail":"@architect"}
+{"timestamp":"2026-03-16T12:42:35.2971367+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:43:04.2633981+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:43:26.162797+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:43:30.3595068+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:43:45.0371643+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-16T12:43:45.038763+01:00","action":"release","task_id":550,"detail":"architect"}
+{"timestamp":"2026-03-16T12:44:16.8829716+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T12:44:16.8845555+01:00","action":"claim","task_id":824,"detail":"architect"}
+{"timestamp":"2026-03-16T12:46:55.7281392+01:00","action":"create","task_id":842,"detail":"Update web_search tests to mock extract_content instead of trafilatura"}
+{"timestamp":"2026-03-16T12:47:16.9501714+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T12:48:21.2053589+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T12:48:37.4227695+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T12:48:45.0937796+01:00","action":"edit","task_id":824,"detail":"Migrate web_search.py to use extract_content from content_extractor"}
+{"timestamp":"2026-03-16T12:48:45.0948573+01:00","action":"release","task_id":824,"detail":"architect"}
+{"timestamp":"2026-03-16T12:58:54.5474227+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T12:58:54.5474227+01:00","action":"claim","task_id":814,"detail":"reviewer"}
+{"timestamp":"2026-03-16T12:59:05.0977258+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:59:05.0977258+01:00","action":"claim","task_id":813,"detail":"auditor"}
+{"timestamp":"2026-03-16T12:59:07.6301188+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T12:59:07.6301188+01:00","action":"claim","task_id":759,"detail":"reviewer"}
+{"timestamp":"2026-03-16T12:59:08.4497705+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T12:59:38.302579+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T12:59:38.3056043+01:00","action":"claim","task_id":833,"detail":"builder"}
+{"timestamp":"2026-03-16T13:00:34.12411+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T13:00:34.12411+01:00","action":"release","task_id":833,"detail":"builder"}
+{"timestamp":"2026-03-16T13:00:52.0797773+01:00","action":"edit","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T13:00:52.0834207+01:00","action":"unblock","task_id":833,"detail":"Add excalidraw to DiagramService SUPPORTED_TYPES (Kroki passthrough)"}
+{"timestamp":"2026-03-16T13:13:38.9769932+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T14:26:58.620635+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T14:30:57.0653402+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T14:31:08.4585923+01:00","action":"edit","task_id":814,"detail":"Add re-exports to tools/__init__.py"}
+{"timestamp":"2026-03-16T14:34:03.900786+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T14:34:14.5493297+01:00","action":"move","task_id":813,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-16T14:34:19.1769091+01:00","action":"edit","task_id":813,"detail":"Add re-exports to auth, planning, projects, providers, safety __init__.py"}
+{"timestamp":"2026-03-16T14:36:16.5574334+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T14:36:27.4292365+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T14:36:32.5671568+01:00","action":"edit","task_id":759,"detail":"Implement raw-HTML cache layer for WebCrawler"}
+{"timestamp":"2026-03-16T14:36:32.568191+01:00","action":"release","task_id":759,"detail":"reviewer"}
+{"timestamp":"2026-03-16T14:37:04.5842859+01:00","action":"edit","task_id":838,"detail":"Tests: os.startfile allowlist in CLIChannel.send_file"}
+{"timestamp":"2026-03-16T14:37:04.5842859+01:00","action":"claim","task_id":838,"detail":"test-writer"}
+{"timestamp":"2026-03-16T14:37:07.403426+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T14:37:07.403426+01:00","action":"claim","task_id":840,"detail":"test-writer"}
+{"timestamp":"2026-03-16T14:37:12.0587447+01:00","action":"edit","task_id":562,"detail":"Define named constant for prefetch multiplier in qdrant"}
+{"timestamp":"2026-03-16T14:37:12.0603308+01:00","action":"claim","task_id":562,"detail":"auditor"}
+{"timestamp":"2026-03-16T14:37:28.3935337+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T14:37:28.3935337+01:00","action":"claim","task_id":815,"detail":"auditor"}
+{"timestamp":"2026-03-16T14:42:28.3480486+01:00","action":"edit","task_id":838,"detail":"Tests: os.startfile allowlist in CLIChannel.send_file"}
+{"timestamp":"2026-03-16T14:42:39.2734453+01:00","action":"edit","task_id":838,"detail":"Tests: os.startfile allowlist in CLIChannel.send_file"}
+{"timestamp":"2026-03-16T14:42:44.4731895+01:00","action":"edit","task_id":838,"detail":"Tests: os.startfile allowlist in CLIChannel.send_file"}
+{"timestamp":"2026-03-16T14:42:44.4749436+01:00","action":"release","task_id":838,"detail":"test-writer"}
+{"timestamp":"2026-03-16T14:42:57.3442547+01:00","action":"edit","task_id":562,"detail":"Define named constant for prefetch multiplier in qdrant"}
+{"timestamp":"2026-03-16T14:43:04.3039784+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T14:43:09.5853643+01:00","action":"move","task_id":562,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-16T14:43:14.7629888+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T14:43:14.7629888+01:00","action":"release","task_id":840,"detail":"test-writer"}
+{"timestamp":"2026-03-16T14:43:25.1406834+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T14:43:25.7378009+01:00","action":"edit","task_id":840,"detail":"Tests for numeric config field validators (RED)"}
+{"timestamp":"2026-03-16T14:43:26.9230764+01:00","action":"edit","task_id":815,"detail":"Add re-exports to tools/browser/__init__.py"}
+{"timestamp":"2026-03-16T14:43:32.6615872+01:00","action":"move","task_id":815,"detail":"done -\u003e archived"}
