@@ -1,81 +1,79 @@
-"""Knowledge graph — models, schema, CRUD store, vector storage, and extraction."""
+"""Knowledge graph — models, schema, CRUD store, vector storage, and extraction.
+
+All imports are lazy to avoid a circular-import chain
+(ingest → intake → core.retry → core.errors → tools → core.retry).
+"""
 
 from __future__ import annotations
 
-from owlbear.memory.knowledge.bookmark import Bookmark, BookmarkStore
-from owlbear.memory.knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
-from owlbear.memory.knowledge.bookmark_toolset import BookmarkToolset
-from owlbear.memory.knowledge.chunker import Chunk, TextChunker
-from owlbear.memory.knowledge.consolidation import ConsolidationService
-from owlbear.memory.knowledge.document_store import (
-    DocumentStatus,
-    DocumentStore,
-    compute_content_hash,
-)
-from owlbear.memory.knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
-from owlbear.memory.knowledge.enrichment import GraphEnricher
-from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
-from owlbear.memory.knowledge.extractor import EntityExtractor, ExtractionResult
-from owlbear.memory.knowledge.graph import GraphStore
-from owlbear.memory.knowledge.graph_builder import GraphBuildResult, IntraDocGraphBuilder
-from owlbear.memory.knowledge.ingest import (
-    IngestPipeline,
-    IngestResult,
-)
-from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
-from owlbear.memory.knowledge.models import (
-    Document,
-    Edge,
-    Entity,
-    EntityType,
-    RelationType,
-)
-from owlbear.memory.knowledge.protocol import (
-    Embedding,
-    HybridEmbedding,
-    SparseVector,
-    VectorStoreProtocol,
-)
-from owlbear.memory.knowledge.query_service import KnowledgeQueryService
-from owlbear.memory.knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
-from owlbear.memory.knowledge.schema import init_db
+import importlib
 
 __all__ = [
-    "BgeM3EmbeddingProvider",
-    "Bookmark",
-    "BookmarkPipeline",
-    "BookmarkResult",
     "BookmarkStore",
-    "BookmarkToolset",
-    "Chunk",
-    "ConsolidationService",
     "Document",
     "DocumentStatus",
-    "DocumentStore",
     "Edge",
-    "Embedding",
     "EmbeddingProvider",
     "Entity",
-    "EntityExtractor",
     "EntityType",
-    "EvaluationResult",
-    "ExtractionResult",
-    "GraphAugmentedRetriever",
-    "GraphBuildResult",
-    "GraphEnricher",
     "GraphStore",
-    "HybridEmbedding",
     "IngestPipeline",
     "IngestResult",
-    "InterDocGraphBuilder",
-    "IntraDocGraphBuilder",
     "KnowledgeQueryService",
     "RelationType",
-    "RetrievalResult",
-    "SourceEvaluator",
-    "SparseVector",
-    "TextChunker",
     "VectorStoreProtocol",
-    "compute_content_hash",
     "init_db",
 ]
+
+# Lazy import map: attribute name → (relative submodule, attribute name).
+# Covers all 14 public symbols AND legacy symbols for back-compat.
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    "BgeM3EmbeddingProvider": (".embeddings", "BgeM3EmbeddingProvider"),
+    "Bookmark": (".bookmark", "Bookmark"),
+    "BookmarkPipeline": (".bookmark_pipeline", "BookmarkPipeline"),
+    "BookmarkResult": (".bookmark_pipeline", "BookmarkResult"),
+    "BookmarkStore": (".bookmark", "BookmarkStore"),
+    "BookmarkToolset": (".bookmark_toolset", "BookmarkToolset"),
+    "Chunk": (".chunker", "Chunk"),
+    "ConsolidationService": (".consolidation", "ConsolidationService"),
+    "Document": (".models", "Document"),
+    "DocumentStatus": (".document_store", "DocumentStatus"),
+    "DocumentStore": (".document_store", "DocumentStore"),
+    "Edge": (".models", "Edge"),
+    "Embedding": (".protocol", "Embedding"),
+    "EmbeddingProvider": (".embeddings", "EmbeddingProvider"),
+    "Entity": (".models", "Entity"),
+    "EntityExtractor": (".extractor", "EntityExtractor"),
+    "EntityType": (".models", "EntityType"),
+    "EvaluationResult": (".evaluator", "EvaluationResult"),
+    "ExtractionResult": (".extractor", "ExtractionResult"),
+    "GraphAugmentedRetriever": (".retrieval", "GraphAugmentedRetriever"),
+    "GraphBuildResult": (".graph_builder", "GraphBuildResult"),
+    "GraphEnricher": (".enrichment", "GraphEnricher"),
+    "GraphStore": (".graph", "GraphStore"),
+    "HybridEmbedding": (".protocol", "HybridEmbedding"),
+    "IngestPipeline": (".ingest", "IngestPipeline"),
+    "IngestResult": (".ingest", "IngestResult"),
+    "InterDocGraphBuilder": (".inter_doc_graph_builder", "InterDocGraphBuilder"),
+    "IntraDocGraphBuilder": (".graph_builder", "IntraDocGraphBuilder"),
+    "KnowledgeQueryService": (".query_service", "KnowledgeQueryService"),
+    "RelationType": (".models", "RelationType"),
+    "RetrievalResult": (".retrieval", "RetrievalResult"),
+    "SourceEvaluator": (".evaluator", "SourceEvaluator"),
+    "SparseVector": (".protocol", "SparseVector"),
+    "TextChunker": (".chunker", "TextChunker"),
+    "VectorStoreProtocol": (".protocol", "VectorStoreProtocol"),
+    "compute_content_hash": (".document_store", "compute_content_hash"),
+    "init_db": (".schema", "init_db"),
+}
+
+
+def __getattr__(name: str) -> object:
+    if name in _LAZY_IMPORTS:
+        submodule, attr = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(submodule, __name__)
+        val = getattr(mod, attr)
+        globals()[name] = val  # cache for subsequent access
+        return val
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

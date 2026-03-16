@@ -645,10 +645,13 @@ class TestFromAC_Export:  # noqa: N801
         assert ConsolidationService is not None
 
     def test_in_all(self) -> None:
-        """ConsolidationService must appear in __all__."""
+        """ConsolidationService was removed from __all__ in the public-API trim (#839).
+
+        It remains importable (test_importable_from_package covers that).
+        """
         import owlbear.memory.knowledge as pkg
 
-        assert "ConsolidationService" in pkg.__all__
+        assert "ConsolidationService" not in pkg.__all__
 
 
 # ---------------------------------------------------------------------------
