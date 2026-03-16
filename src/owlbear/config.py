@@ -162,6 +162,7 @@ class OwlBearSettings(BaseSettings):
     # --- Embedding ---
     embedding_idle_timeout: int = Field(
         default=600,
+        ge=0,
         description=(
             "Seconds of inactivity before the embedding model is unloaded from memory. >= 0."
         ),
@@ -184,12 +185,16 @@ class OwlBearSettings(BaseSettings):
     # --- Temporal memory ---
     temporal_decay_rate: float = Field(
         default=0.001,
+        ge=0.0,
+        le=1.0,
         description=(
             "Exponential decay rate for temporal memory scoring. Higher values decay faster. >= 0."
         ),
     )
     temporal_recency_weight: float = Field(
         default=0.1,
+        ge=0.0,
+        le=1.0,
         description="Weight of recency score in temporal memory ranking. 0.0-1.0.",
     )
 
@@ -211,6 +216,7 @@ class OwlBearSettings(BaseSettings):
     )
     approval_timeout: float = Field(
         default=120.0,
+        gt=0.0,
         description="Seconds to wait for user approval before timing out. > 0.",
     )
 

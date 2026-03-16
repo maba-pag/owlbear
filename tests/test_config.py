@@ -471,3 +471,106 @@ class TestFieldDescriptions:
             if not field_info.description:
                 missing.append(name)
         assert not missing, f"Fields missing description: {', '.join(missing)}"
+
+
+# ---------------------------------------------------------------------------
+# Numeric config field validators — task #840 / #547
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TemporalDecayRateValidator:  # noqa: N801
+    """temporal_decay_rate must be validated to the range [0, 1]."""
+
+    def test_temporal_decay_rate_below_zero_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """temporal_decay_rate < 0 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_TEMPORAL_DECAY_RATE", "-0.001")
+        with pytest.raises(ValidationError, match="temporal_decay_rate"):
+            OwlBearSettings()
+
+    def test_temporal_decay_rate_above_one_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """temporal_decay_rate > 1 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_TEMPORAL_DECAY_RATE", "1.001")
+        with pytest.raises(ValidationError, match="temporal_decay_rate"):
+            OwlBearSettings()
+
+    def test_temporal_decay_rate_default_accepted(self, default_settings: OwlBearSettings) -> None:
+        """Default 0.001 is within [0, 1]; validator must be configured on the field."""
+        field = OwlBearSettings.model_fields["temporal_decay_rate"]
+        assert field.metadata, "temporal_decay_rate must have ge/le constraints configured"
+        assert default_settings.temporal_decay_rate == 0.001
+
+
+class TestFromAC_TemporalRecencyWeightValidator:  # noqa: N801
+    """temporal_recency_weight must be validated to the range [0, 1]."""
+
+    def test_temporal_recency_weight_below_zero_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """temporal_recency_weight < 0 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_TEMPORAL_RECENCY_WEIGHT", "-0.001")
+        with pytest.raises(ValidationError, match="temporal_recency_weight"):
+            OwlBearSettings()
+
+    def test_temporal_recency_weight_above_one_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """temporal_recency_weight > 1 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_TEMPORAL_RECENCY_WEIGHT", "1.001")
+        with pytest.raises(ValidationError, match="temporal_recency_weight"):
+            OwlBearSettings()
+
+    def test_temporal_recency_weight_default_accepted(
+        self, default_settings: OwlBearSettings
+    ) -> None:
+        """Default 0.1 is within [0, 1]; validator must be configured on the field."""
+        field = OwlBearSettings.model_fields["temporal_recency_weight"]
+        assert field.metadata, "temporal_recency_weight must have ge/le constraints configured"
+        assert default_settings.temporal_recency_weight == 0.1
+
+
+class TestFromAC_EmbeddingIdleTimeoutValidator:  # noqa: N801
+    """embedding_idle_timeout must be >= 0 (explicitly accepts 0)."""
+
+    def test_embedding_idle_timeout_negative_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """embedding_idle_timeout < 0 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_EMBEDDING_IDLE_TIMEOUT", "-1")
+        with pytest.raises(ValidationError, match="embedding_idle_timeout"):
+            OwlBearSettings()
+
+    def test_embedding_idle_timeout_zero_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """embedding_idle_timeout = 0 (disable idle unloading) must be accepted."""
+        field = OwlBearSettings.model_fields["embedding_idle_timeout"]
+        assert field.metadata, "embedding_idle_timeout must have ge constraint configured"
+        monkeypatch.setenv("OWLBEAR_EMBEDDING_IDLE_TIMEOUT", "0")
+        settings = OwlBearSettings()
+        assert settings.embedding_idle_timeout == 0
+
+    def test_embedding_idle_timeout_default_accepted(
+        self, default_settings: OwlBearSettings
+    ) -> None:
+        """Default 600 is >= 0; validator must be configured on the field."""
+        field = OwlBearSettings.model_fields["embedding_idle_timeout"]
+        assert field.metadata, "embedding_idle_timeout must have ge constraint configured"
+        assert default_settings.embedding_idle_timeout == 600
+
+
+class TestFromAC_ApprovalTimeoutValidator:  # noqa: N801
+    """approval_timeout must be > 0 (strictly positive)."""
+
+    def test_approval_timeout_zero_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """approval_timeout = 0 must raise ValidationError (must be strictly > 0)."""
+        monkeypatch.setenv("OWLBEAR_APPROVAL_TIMEOUT", "0")
+        with pytest.raises(ValidationError, match="approval_timeout"):
+            OwlBearSettings()
+
+    def test_approval_timeout_negative_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """approval_timeout < 0 must raise ValidationError."""
+        monkeypatch.setenv("OWLBEAR_APPROVAL_TIMEOUT", "-1")
+        with pytest.raises(ValidationError, match="approval_timeout"):
+            OwlBearSettings()
+
+    def test_approval_timeout_default_accepted(self, default_settings: OwlBearSettings) -> None:
+        """Default 120.0 is > 0; validator must be configured on the field."""
+        field = OwlBearSettings.model_fields["approval_timeout"]
+        assert field.metadata, "approval_timeout must have gt constraint configured"
+        assert default_settings.approval_timeout == 120.0
