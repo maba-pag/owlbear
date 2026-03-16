@@ -1972,6 +1972,91 @@ class TestBuildKnowledgeSourceToolset:
 
 
 # ---------------------------------------------------------------------------
+# Exception handler coverage  -- AC for task #830
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_KnowledgeToolsetExceptPath:  # noqa: N801
+    """AC: _build_knowledge_toolset returns None and logs warning when internal dep raises."""
+
+    def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
+        from owlbear.bootstrap import _build_knowledge_toolset
+
+        mock_infra = MagicMock()
+        with (
+            patch(
+                "owlbear.tools.knowledge.KnowledgeToolset",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("owlbear.bootstrap.knowledge.logger") as mock_logger,
+        ):
+            result = _build_knowledge_toolset(tmp_path, mock_infra, chat_model="test-model")
+
+        assert result is None
+        mock_logger.warning.assert_called_once()
+        assert "Failed to create KnowledgeToolset" in mock_logger.warning.call_args[0][0]
+
+
+class TestFromAC_BookmarkToolsetExceptPath:  # noqa: N801
+    """AC: _build_bookmark_toolset returns None and logs warning when internal dep raises."""
+
+    def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
+        from owlbear.bootstrap import _build_bookmark_toolset
+
+        mock_infra = MagicMock()
+        with (
+            patch(
+                "owlbear.memory.knowledge.BookmarkStore",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("owlbear.bootstrap.knowledge.logger") as mock_logger,
+        ):
+            result = _build_bookmark_toolset(mock_infra, tmp_path, chat_model="test-model")
+
+        assert result is None
+        mock_logger.warning.assert_called_once()
+        assert "Failed to create BookmarkToolset" in mock_logger.warning.call_args[0][0]
+
+
+class TestFromAC_WireKnowledgeToolsetsOuterExcept:  # noqa: N801
+    """AC: _wire_knowledge_toolsets appends ComponentStatus(loaded=False) when infra raises."""
+
+    def test_infra_raise_appends_error_status(self, tmp_path: Path) -> None:
+        import owlbear.bootstrap as _pkg
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings(approval_policy=[])
+        summary: list[ComponentStatus] = []
+
+        with patch.object(
+            _pkg,
+            "_build_knowledge_infra",
+            side_effect=RuntimeError("infra exploded"),
+        ):
+            result = _wire_knowledge_toolsets(
+                raw=[],
+                settings=settings,
+                workspace=tmp_path,
+                chat_model=None,
+                active_project_id=None,
+                cleanup=[],
+                summary=summary,
+                _pkg=_pkg,
+            )
+
+        # All three return values should be None
+        assert result == (None, None, None)
+
+        # Summary must contain a KnowledgeInfra failure entry
+        infra_statuses = [s for s in summary if s.name == "KnowledgeInfra"]
+        assert len(infra_statuses) == 1
+        status = infra_statuses[0]
+        assert status.loaded is False
+        assert "infra exploded" in status.error
+
+
+# ---------------------------------------------------------------------------
 # Tool alias auto-registration  -- AC for task #488
 # ---------------------------------------------------------------------------
 

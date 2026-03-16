@@ -147,7 +147,8 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
             )
 
         source_ts = _pkg._build_knowledge_source_toolset(  # noqa: SLF001
-            infra, workspace,
+            infra,
+            workspace,
         )
         if source_ts is not None:
             raw.append(source_ts)
