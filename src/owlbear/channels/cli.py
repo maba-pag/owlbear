@@ -84,9 +84,11 @@ class CLIChannel(ChannelPlugin):
         """Deliver a file path to the user.
 
         Prints *path* (and optional *caption*) to the output stream.
-        On Windows, also opens the file in the default viewer via
-        ``os.startfile``.  On other platforms this is a no-op beyond
-        the console output.
+        On Windows, opens the file in the default viewer via
+        ``os.startfile`` only when the extension is in
+        :data:`SAFE_EXTENSIONS`; blocked extensions are logged as a
+        warning.  On other platforms this is a no-op beyond the
+        console output.
         """
         if caption:
             self._output.write(f"[{caption}] {path}\n")
