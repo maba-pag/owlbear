@@ -338,6 +338,111 @@ class TestChannelPluginSendImageDefault:
         assert ch.sent == ["Diagram"]
 
 
+# ---------------------------------------------------------------------------
+# os.startfile allowlist — task #527 / tests task #838
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StartfileAllowlist:  # noqa: N801
+    """CLIChannel.send_file extension allowlist for os.startfile (#527)."""
+
+    def test_safe_extensions_constant_exists(self) -> None:
+        """Module must expose a SAFE_EXTENSIONS frozenset containing .png."""
+        from owlbear.channels.cli import SAFE_EXTENSIONS
+
+        assert isinstance(SAFE_EXTENSIONS, frozenset)
+        assert ".png" in SAFE_EXTENSIONS
+
+    def test_safe_extension_calls_startfile_on_windows(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Safe extension (.png) should open via os.startfile on Windows."""
+        from owlbear.channels.cli import SAFE_EXTENSIONS
+
+        assert ".png" in SAFE_EXTENSIONS
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_file(Path("screenshot.png")))
+        assert len(opened) == 1
+
+    def test_unsafe_extension_does_not_call_startfile(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unsafe extension (.exe) must NOT trigger os.startfile on Windows."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_file(Path("malware.exe")))
+        assert opened == []
+
+    def test_unsafe_extension_prints_path_to_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Blocked unsafe extension must still print path (graceful degradation)."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        path = Path("malware.exe")
+        asyncio.run(channel.send_file(path))
+        assert str(path) in buf.getvalue()
+        assert opened == []  # blocked — this assertion fails in RED phase
+
+    def test_unsafe_extension_logs_warning(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Blocked extension must emit a WARNING that mentions the suffix."""
+        import logging
+
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", lambda _p: None, raising=False)
+        with caplog.at_level(logging.WARNING):
+            asyncio.run(channel.send_file(Path("malware.exe")))
+        assert any(".exe" in r.message for r in caplog.records)
+
+    def test_case_insensitive_png_allowed_exe_blocked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Case is ignored: .PNG is allowed like .png; .EXE is blocked like .exe."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_file(Path("screenshot.PNG")))
+        assert len(opened) == 1, ".PNG should be allowed (case-insensitive)"
+        asyncio.run(channel.send_file(Path("malware.EXE")))
+        assert len(opened) == 1, ".EXE should be blocked (case-insensitive)"
+
+    def test_no_extension_file_is_blocked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A file with no extension must not trigger os.startfile."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_file(Path("Makefile")))
+        assert opened == []
+
+    def test_send_image_inherits_allowlist_guard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """send_image(Path) with unsafe extension must not trigger os.startfile."""
+        buf = StringIO()
+        channel = CLIChannel(output=buf)
+        opened: list[object] = []
+        monkeypatch.setattr("sys.platform", "win32")
+        monkeypatch.setattr("os.startfile", opened.append, raising=False)
+        asyncio.run(channel.send_image(Path("payload.exe"), caption="Img"))
+        assert opened == []
+
+
 class TestCLIChannelOverridesSendFile:
     """CLIChannel.send_file uses its own override, not the default (AC #4)."""
 

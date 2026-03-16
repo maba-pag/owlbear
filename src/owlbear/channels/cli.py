@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,11 @@ from owlbear.channels.base import ChannelPlugin
 
 if TYPE_CHECKING:
     from io import TextIOBase
+
+
+SAFE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"})
+
+logger = logging.getLogger(__name__)
 
 
 class CLIChannel(ChannelPlugin):
@@ -65,7 +71,14 @@ class CLIChannel(ChannelPlugin):
         self._output.flush()
 
         if sys.platform == "win32" and hasattr(os, "startfile"):
-            os.startfile(path)  # noqa: S606
+            suffix = path.suffix.lower()
+            if suffix in SAFE_EXTENSIONS:
+                os.startfile(path)  # noqa: S606
+            else:
+                logger.warning(
+                    "Blocked os.startfile for non-allowlisted extension: %s",
+                    suffix or "<no-extension>",
+                )
 
     async def send_image(
         self,
