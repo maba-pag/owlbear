@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from owlbear.tools.browser.content_extractor import ExtractionResult
 from owlbear.tools.web_search import WebSearchToolset
 
 
@@ -262,8 +263,8 @@ class TestWebRead:
         mock_httpx_client: AsyncMock,
     ) -> None:
         """web_read fetches URL via httpx and extracts content with trafilatura."""
-        with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
-            mock_traf.extract.return_value = "Extracted content from page"
+        with patch("owlbear.tools.web_search.extract_content") as mock_extract:
+            mock_extract.return_value = ExtractionResult(text="Extracted content from page")
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com")
             assert result == "Extracted content from page"
@@ -297,8 +298,8 @@ class TestWebRead:
         self,
     ) -> None:
         """web_read with empty trafilatura extraction returns raw HTML fallback."""
-        with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
-            mock_traf.extract.return_value = None
+        with patch("owlbear.tools.web_search.extract_content") as mock_extract:
+            mock_extract.return_value = ExtractionResult(text="")
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com")
             assert "<html>" in result  # raw HTML returned as fallback
@@ -309,8 +310,8 @@ class TestWebRead:
         mock_httpx_client: AsyncMock,
     ) -> None:
         """httpx.get is called with timeout=30."""
-        with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
-            mock_traf.extract.return_value = "content"
+        with patch("owlbear.tools.web_search.extract_content") as mock_extract:
+            mock_extract.return_value = ExtractionResult(text="content")
             ts = WebSearchToolset()
             await ts._web_read("https://example.com")
             mock_httpx_client.get.assert_called_once_with(
@@ -368,8 +369,8 @@ class TestWebRead:
     @pytest.mark.asyncio
     async def test_web_read_truncates_long_content(self) -> None:
         """Output capped at max_length characters."""
-        with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
-            mock_traf.extract.return_value = "x" * 200
+        with patch("owlbear.tools.web_search.extract_content") as mock_extract:
+            mock_extract.return_value = ExtractionResult(text="x" * 200)
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com", max_length=100)
             assert len(result) == 100
@@ -378,8 +379,8 @@ class TestWebRead:
     @pytest.mark.asyncio
     async def test_web_read_trafilatura_fallback(self) -> None:
         """If trafilatura returns None, return raw text truncated."""
-        with patch("owlbear.tools.web_search.trafilatura") as mock_traf:
-            mock_traf.extract.return_value = None
+        with patch("owlbear.tools.web_search.extract_content") as mock_extract:
+            mock_extract.return_value = ExtractionResult(text="")
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com", max_length=20)
             # Raw HTML from mock: "<html><body><p>Hello world</p></body></html>"
@@ -476,9 +477,9 @@ class TestWebReadRetry:
 
         with (
             patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm),
-            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
         ):
-            mock_traf.extract.return_value = "Recovered text"
+            mock_extract.return_value = ExtractionResult(text="Recovered text")
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com/retry")
 
@@ -527,9 +528,9 @@ class TestWebReadRetry:
 
         with (
             patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm),
-            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
         ):
-            mock_traf.extract.return_value = "content"
+            mock_extract.return_value = ExtractionResult(text="content")
             ts = WebSearchToolset()
             await ts._web_read("https://example.com")
 
@@ -538,3 +539,61 @@ class TestWebReadRetry:
             timeout=30,
             follow_redirects=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# extract_content migration — wrapping semantics  (AC2 + AC3)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExtractContentMigration:  # noqa: N801
+    """AC2 + AC3: wrapping semantics after switching from trafilatura to extract_content."""
+
+    @pytest.mark.usefixtures("mock_httpx_client")
+    @pytest.mark.asyncio
+    async def test_success_path_does_not_double_wrap(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC2: success path uses extract_content().text directly; no re-wrapping."""
+        monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "true")
+        known = "Pre-wrapped content from extract_content"
+        with (
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
+            patch("owlbear.core.content_safety.wrap_untrusted_content") as mock_wrap,
+        ):
+            mock_extract.return_value = ExtractionResult(text=known)
+            ts = WebSearchToolset()
+            result = await ts._web_read("https://example.com")
+        mock_wrap.assert_not_called()
+        assert result == known
+
+    @pytest.mark.asyncio
+    async def test_fallback_path_applies_wrap_untrusted_content(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC3: empty .text from extract_content — wrap_untrusted_content called on raw HTML."""
+        monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "true")
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = "<html><body>raw page</body></html>"
+        resp.raise_for_status = MagicMock()
+        client = AsyncMock()
+        client.get.return_value = resp
+        cm = AsyncMock()
+        cm.__aenter__.return_value = client
+        cm.__aexit__.return_value = False
+
+        with (
+            patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=cm),
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
+            patch("owlbear.core.content_safety.wrap_untrusted_content") as mock_wrap,
+        ):
+            mock_extract.return_value = ExtractionResult(text="")
+            mock_wrap.return_value = "[UNTRUSTED: https://example.com]\nraw page\n[/UNTRUSTED]"
+            ts = WebSearchToolset()
+            result = await ts._web_read("https://example.com")
+
+        mock_wrap.assert_called_once()
+        assert "[UNTRUSTED" in result
