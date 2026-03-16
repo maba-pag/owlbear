@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from owlbear.tools.diagram.service import DiagramError, DiagramService
+from owlbear.tools.diagram.service import SUPPORTED_TYPES, DiagramError, DiagramService
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -20,7 +20,7 @@ from owlbear.tools.diagram.service import DiagramError, DiagramService
 MODULE = "owlbear.tools.diagram.service"
 DEFAULT_URL = "https://kroki.io"
 
-DIAGRAM_TYPES = ("mermaid", "plantuml", "graphviz", "d2", "c4plantuml")
+DIAGRAM_TYPES = ("mermaid", "plantuml", "graphviz", "d2", "c4plantuml", "excalidraw")
 OUTPUT_FORMATS = ("svg", "png")
 
 
@@ -327,6 +327,81 @@ class TestHttpxConfig:
 # ---------------------------------------------------------------------------
 # Package exports — task #620
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ExcalidrawSupport — excalidraw in DiagramService (#836)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExcalidrawSupport:  # noqa: N801
+    """Excalidraw support: SVG generation, PNG rejection, SUPPORTED_TYPES membership."""
+
+    @pytest.mark.asyncio
+    async def test_generate_excalidraw_svg(self) -> None:
+        """generate('excalidraw', ..., 'svg') POSTs to /excalidraw/svg and returns bytes."""
+        svg_bytes = b"<svg>excalidraw</svg>"
+        resp = _make_response(content=svg_bytes)
+        client = _make_client(resp)
+
+        with patch(f"{MODULE}.httpx.AsyncClient", return_value=client):
+            svc = DiagramService()
+            result = await svc.generate("excalidraw", '{"type":"excalidraw","elements":[]}', "svg")
+
+        assert result == svg_bytes
+        client.post.assert_awaited_once()
+        call_args = client.post.call_args
+        assert call_args[0][0] == f"{DEFAULT_URL}/excalidraw/svg"
+
+    @pytest.mark.asyncio
+    async def test_excalidraw_png_raises_value_error(self) -> None:
+        """generate('excalidraw', ..., 'png') raises ValueError mentioning SVG-only."""
+        svc = DiagramService()
+        with pytest.raises(ValueError, match="only supports svg"):
+            await svc.generate(
+                "excalidraw",
+                '{"type":"excalidraw","elements":[]}',
+                "png",
+            )
+
+    def test_excalidraw_in_supported_types(self) -> None:
+        """'excalidraw' must be a member of SUPPORTED_TYPES."""
+        assert "excalidraw" in SUPPORTED_TYPES
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SvgOnlyTypes — _SVG_ONLY_TYPES constant contract (#833)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SvgOnlyTypes:  # noqa: N801
+    """_SVG_ONLY_TYPES module-level constant: existence, type, content, consistency."""
+
+    def test_svg_only_types_constant_exists(self) -> None:
+        """_SVG_ONLY_TYPES must be importable from the service module."""
+        import owlbear.tools.diagram.service as svc
+
+        assert hasattr(svc, "_SVG_ONLY_TYPES"), "_SVG_ONLY_TYPES not found in service module"
+
+    def test_svg_only_types_is_frozenset(self) -> None:
+        """_SVG_ONLY_TYPES must be a frozenset (immutable constant)."""
+        from owlbear.tools.diagram.service import _SVG_ONLY_TYPES
+
+        assert isinstance(_SVG_ONLY_TYPES, frozenset)
+
+    def test_svg_only_types_contains_excalidraw(self) -> None:
+        """'excalidraw' must be in _SVG_ONLY_TYPES."""
+        from owlbear.tools.diagram.service import _SVG_ONLY_TYPES
+
+        assert "excalidraw" in _SVG_ONLY_TYPES
+
+    def test_svg_only_types_subset_of_supported_types(self) -> None:
+        """Every SVG-only type must also be a valid SUPPORTED_TYPES member."""
+        from owlbear.tools.diagram.service import _SVG_ONLY_TYPES
+
+        assert _SVG_ONLY_TYPES <= SUPPORTED_TYPES, (
+            f"SVG-only types not in SUPPORTED_TYPES: {_SVG_ONLY_TYPES - SUPPORTED_TYPES}"
+        )
 
 
 class TestPackageExports:
