@@ -618,3 +618,7 @@
 {"timestamp":"2026-03-16T05:07:02.3415568+01:00","action":"move","task_id":561,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-16T05:07:06.7256227+01:00","action":"edit","task_id":561,"detail":"Apply role policy before Agent construction to avoid double-build"}
 {"timestamp":"2026-03-16T05:07:06.7267999+01:00","action":"release","task_id":561,"detail":"auditor"}
+{"timestamp":"2026-03-16T05:08:04.417806+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-16T05:08:08.4968463+01:00","action":"move","task_id":792,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-16T05:08:13.8687874+01:00","action":"edit","task_id":792,"detail":"Add uint8 scalar quantization to ColBERT multivector config"}
+{"timestamp":"2026-03-16T05:08:13.870363+01:00","action":"release","task_id":792,"detail":"auditor"}
