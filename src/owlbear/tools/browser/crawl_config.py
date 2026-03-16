@@ -25,6 +25,8 @@ class CrawlConfig(BaseModel, frozen=True):
         delay_seconds: Politeness delay between requests in seconds (>= 0).
         respect_robots: Whether to obey ``robots.txt`` directives.
         user_agent: User-Agent string sent with requests.
+        cache_ttl_seconds: HTML cache TTL in seconds (>= 0, default
+            86400 = 24 h).  ``0`` means no expiry.
     """
 
     seed_urls: list[str]

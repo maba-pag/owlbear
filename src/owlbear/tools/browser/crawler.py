@@ -72,6 +72,8 @@ class WebCrawler:
         browser_manager: The BrowserManager instance for page navigation.
         content_guard: Optional content injection guard for scanning
             extracted text.
+        html_cache: Optional raw-HTML cache.  When provided, cached
+            responses are served without browser navigation.
     """
 
     def __init__(
@@ -116,7 +118,8 @@ class WebCrawler:
 
             try:
                 crawl_page, html = await self._fetch_and_extract(
-                    url, cache_ttl_seconds=config.cache_ttl_seconds,
+                    url,
+                    cache_ttl_seconds=config.cache_ttl_seconds,
                 )
             except Exception as exc:  # noqa: BLE001 — per-page errors are captured
                 errors.append(f"{url}: {exc}")
@@ -179,7 +182,10 @@ class WebCrawler:
         return allowed
 
     async def _fetch_and_extract(
-        self, url: str, *, cache_ttl_seconds: int = 86400,
+        self,
+        url: str,
+        *,
+        cache_ttl_seconds: int = 86400,
     ) -> tuple[CrawlPage, str]:
         """Navigate to *url*, fetch HTML, extract content.
 
