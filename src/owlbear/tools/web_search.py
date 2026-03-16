@@ -1,7 +1,7 @@
 """WebSearchToolset — FunctionToolset wrapping web search and page reading.
 
 Provides ``web_search`` and ``web_read`` — internet search via DuckDuckGo
-and page content extraction via httpx + trafilatura.
+and page content extraction via httpx + extract_content.
 
 Usage::
 
@@ -26,6 +26,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.errors import error_to_user_message
 from owlbear.core.retry import TRANSIENT_RETRY
+from owlbear.tools.browser.content_extractor import extract_content
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -36,11 +37,6 @@ try:
 except ImportError:  # pragma: no cover
     DDGS = None  # type: ignore[assignment,misc]
     _RatelimitException = None  # type: ignore[assignment]
-
-try:
-    import trafilatura
-except ImportError:  # pragma: no cover
-    trafilatura = None  # type: ignore[assignment]
 
 __all__ = ["WebSearchToolset"]
 
@@ -210,12 +206,11 @@ class WebSearchToolset(FunctionToolset):
         except httpx.HTTPError as exc:
             return f"Error fetching page: {error_to_user_message(exc)}"
 
-        content = trafilatura.extract(  # type: ignore[union-attr]
-            response.text,
-            output_format="markdown",
-            include_links=True,
-            url=url,
-        )
+        content = extract_content(response.text, url=url).text
+        if content:
+            return content[:max_length]
+
+        # Empty extraction falls back to raw HTML.
         if not content:
             # Fallback: raw HTML text truncated to max_length
             content = response.text[:max_length]
