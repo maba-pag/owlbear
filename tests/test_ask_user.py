@@ -306,3 +306,64 @@ class TestAskUserTimeoutSkip:
 
         result = _run(ts.ask_user("Are you there?"))
         assert result == "(no response)"
+
+
+# ---------------------------------------------------------------------------
+# Retroactive coverage: _receive_option edge paths (#831)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
+    """Cover _receive_option paths: TimeoutError and None from channel."""
+
+    def test_receive_option_timeout_triggers_handle_timeout_abort(self) -> None:
+        """TimeoutError during _receive_option with ABORT raises AskUserTimeoutError."""
+        channel = _make_channel()
+        channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
+        ts = AskUserToolset(
+            channel,
+            timeout_seconds=0.01,
+            timeout_action=TimeoutAction.ABORT,
+        )
+
+        with pytest.raises(AskUserTimeoutError):
+            _run(ts.ask_user("Pick one", options=["a", "b"]))
+
+    def test_receive_option_timeout_triggers_handle_timeout_skip(self) -> None:
+        """TimeoutError during _receive_option with SKIP returns default."""
+        channel = _make_channel()
+        channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
+        ts = AskUserToolset(
+            channel,
+            timeout_seconds=0.01,
+            timeout_action=TimeoutAction.SKIP,
+            default_response="(skipped)",
+        )
+
+        result = _run(ts.ask_user("Pick one", options=["a", "b"]))
+        assert result == "(skipped)"
+
+    def test_receive_option_none_triggers_handle_timeout_abort(self) -> None:
+        """channel.receive() returning None with ABORT raises AskUserTimeoutError."""
+        channel = _make_channel(receive_returns=None)
+        ts = AskUserToolset(
+            channel,
+            timeout_seconds=5.0,
+            timeout_action=TimeoutAction.ABORT,
+        )
+
+        with pytest.raises(AskUserTimeoutError):
+            _run(ts.ask_user("Pick one", options=["a", "b"]))
+
+    def test_receive_option_none_triggers_handle_timeout_skip(self) -> None:
+        """channel.receive() returning None with SKIP returns default."""
+        channel = _make_channel(receive_returns=None)
+        ts = AskUserToolset(
+            channel,
+            timeout_seconds=5.0,
+            timeout_action=TimeoutAction.SKIP,
+            default_response="(no answer)",
+        )
+
+        result = _run(ts.ask_user("Pick one", options=["a", "b"]))
+        assert result == "(no answer)"

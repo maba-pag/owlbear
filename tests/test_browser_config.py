@@ -275,3 +275,15 @@ class TestCDPEndpointUrlparseFailure:
             pytest.raises(ValidationError, match="cdp_endpoint is not a valid URL"),
         ):
             BrowserConfig(cdp_endpoint="http://localhost:9222")
+
+
+# --- Retroactive coverage: unparseable CDP endpoint (#831) ---
+
+
+class TestFromAC_BrowserConfigCdpUnparseable:  # noqa: N801
+    """cdp_endpoint with an unparseable URL path raises ValidationError."""
+
+    def test_cdp_endpoint_unparseable_url_raises_validation_error(self) -> None:
+        """':::not-a-url' has no http scheme — validator rejects it."""
+        with pytest.raises(ValidationError, match="cdp_endpoint"):
+            BrowserConfig(cdp_endpoint=":::not-a-url")

@@ -211,3 +211,37 @@ class TestUsageTrackerSummary:
         summary = tracker.summary(timedelta(hours=1))
         assert summary.total_input_tokens == 100
         assert summary.record_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Retroactive coverage: summary(window=None) returns all records (#831)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_UsageSummaryNoneWindow:  # noqa: N801
+    """summary(window=None) uses load() to get all records regardless of age."""
+
+    def test_summary_none_window_includes_all_records(self, tmp_path: Path) -> None:
+        """Passing window=None returns a summary over every stored record."""
+        p = tmp_path / "usage.jsonl"
+        old = _record(minutes_ago=999, input_tokens=100, output_tokens=50)
+        recent = _record(minutes_ago=1, input_tokens=200, output_tokens=75)
+        _write_jsonl(p, [old, recent])
+        tracker = UsageTracker(p)
+
+        summary = tracker.summary(window=None)
+
+        assert summary.record_count == 2
+        assert summary.total_input_tokens == 300
+        assert summary.total_output_tokens == 125
+        assert summary.total_tokens == 425
+        assert summary.total_requests == 2
+
+    def test_summary_none_window_empty_store(self, tmp_path: Path) -> None:
+        """summary(window=None) on empty store returns zero-valued summary."""
+        tracker = UsageTracker(tmp_path / "empty.jsonl")
+
+        summary = tracker.summary(window=None)
+
+        assert summary.record_count == 0
+        assert summary.total_tokens == 0

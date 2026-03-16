@@ -355,3 +355,83 @@ class TestSearchFiles:
         (root / "a.py").write_text("code", encoding="utf-8")
         result = toolset._search_files("*.py")
         assert result.strip() == "a.py"
+
+
+# ---------------------------------------------------------------------------
+# Retroactive coverage: update_workspace, glob outside root, OSError (#831)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_FileToolsetCoverageGaps:  # noqa: N801
+    """Cover minor edge-case paths in FileToolset."""
+
+    def test_update_workspace_sets_root_to_resolved_path(self, tmp_path: object) -> None:
+        """update_workspace() should store the resolved (absolute) path."""
+        from pathlib import Path
+
+        root = Path(str(tmp_path))
+        sub = root / "a" / "b"
+        sub.mkdir(parents=True)
+        toolset = FileToolset(workspace_root=root)
+
+        # Pass a relative-style path via a child + ".."
+        new_ws = sub / ".."  # a/b/.. == a
+        toolset.update_workspace(new_ws)
+
+        expected = (sub / "..").resolve()
+        assert toolset._root == expected
+        assert toolset._root.is_absolute()
+
+    def test_glob_result_outside_workspace_root_filtered(self, tmp_path: object) -> None:
+        """Glob hits that resolve outside workspace root are silently excluded."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        root = Path(str(tmp_path)) / "workspace"
+        root.mkdir()
+        (root / "inside.txt").write_text("ok", encoding="utf-8")
+        toolset = FileToolset(workspace_root=root)
+
+        # Create a file outside the root
+        outside = Path(str(tmp_path)) / "outside.txt"
+        outside.write_text("bad", encoding="utf-8")
+
+        # Patch glob to return both inside and outside files
+        original_glob = root.glob
+
+        def fake_glob(pattern: str) -> list[Path]:
+            return [*list(original_glob(pattern)), outside]
+
+        with patch.object(type(root), "glob", side_effect=fake_glob):
+            result = toolset._search_files("*.txt")
+
+        # Only the inside file should appear
+        paths = [p for p in result.strip().split("\n") if p]
+        assert "inside.txt" in paths
+        assert "outside.txt" not in paths
+
+    def test_oserror_during_content_regex_read_skipped(
+        self, toolset: FileToolset, tmp_path: object
+    ) -> None:
+        """OSError when reading a file for content-regex match is silently skipped."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        root = Path(str(tmp_path))
+        target = root / "unreadable.py"
+        target.write_text("def hello(): pass", encoding="utf-8")
+
+        # Patch read_text to raise OSError for the target file
+        original_read_text = Path.read_text
+
+        def broken_read_text(self: Path, *args: object, **kwargs: object) -> str:
+            if self.name == "unreadable.py":
+                msg = "disk error"
+                raise OSError(msg)
+            return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+        with patch.object(Path, "read_text", broken_read_text):
+            result = toolset._search_files("*.py", content_regex="def hello")
+
+        # The unreadable file should be skipped, not surfaced
+        assert "unreadable.py" not in result
