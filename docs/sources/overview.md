@@ -2,6 +2,30 @@
 
 External repos and resources studied during OwlBear development.
 
+## Core Re-export Removal Research (Task #812)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Google Python Style Guide §2.2 | <https://google.github.io/styleguide/pyguide.html#22-imports> | CC-BY-4.0 | Import conventions: favors `from x.y import z` over package-level re-exports for applications | `docs/research/core-init-reexport-removal.md` | 2026-03-15 |
+| PEP 8 — Public/Internal Interfaces | <https://peps.python.org/pep-0008/#public-and-internal-interfaces> | PSF | `__all__` defines public API surface; unmentioned names are implementation details | `docs/research/core-init-reexport-removal.md` | 2026-03-15 |
+
+## PydanticAI Re-export Compatibility Validation (Task #813)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI v1.63.0 source (installed) | <https://github.com/pydantic/pydantic-ai> | MIT | Agent.__init__, AbstractToolset, FunctionToolset — no import scanning, no __init_subclass__ registry, all tool discovery is explicit | `docs/research/pydanticai-re-export-compat.md` | 2026-03-15 |
+| PydanticAI Agent docs | <https://ai.pydantic.dev/agents/> | CC-BY-4.0 | Agent construction, toolset registration, dependency injection — all explicit parameters | `docs/research/pydanticai-re-export-compat.md` | 2026-03-15 |
+| PydanticAI Toolsets docs | <https://ai.pydantic.dev/toolsets/> | CC-BY-4.0 | FunctionToolset, WrapperToolset, AbstractToolset — no package scanning, explicit registration only | `docs/research/pydanticai-re-export-compat.md` | 2026-03-15 |
+
+## ColBERT Scalar Quantization Research (Task #434)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Qdrant late-interaction article | <https://qdrant.tech/articles/late-interaction-models/> | Apache-2.0 | Multivector uint8 quantization benchmarks: SciFact/NFCorpus nDCG@10 (<1% delta) | `docs/research/colbert-scalar-quantization.md` | 2026-03-13 |
+| Qdrant scalar quantization article | <https://qdrant.tech/articles/scalar-quantization/> | Apache-2.0 | SQ theory, Arxiv/Gist recall benchmarks, oversampling+rescore patterns | `docs/research/colbert-scalar-quantization.md` | 2026-03-13 |
+| Qdrant quantization guide | <https://qdrant.tech/documentation/guides/quantization/> | Apache-2.0 | ScalarQuantization API, per-vector config, rescore/oversampling params | `docs/research/colbert-scalar-quantization.md` | 2026-03-13 |
+| Qdrant collections docs | <https://qdrant.tech/documentation/concepts/collections/> | Apache-2.0 | Per-vector quantization_config confirmation (v1.1.1+) | `docs/research/colbert-scalar-quantization.md` | 2026-03-13 |
+
 ## SkillRegistry Glob Fix Research (Task #780)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -378,6 +402,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Python docs â€” `asyncio.to_thread` | <https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread> | PSF | stdlib API for offloading blocking I/O to thread pool; confirmed uses `run_in_executor` internally | `docs/research/error-journal-async.md` | 2026-03-07 |
 | aiofiles library (v25.1.0) | <https://github.com/Tinche/aiofiles> | Apache-2.0 | Async file I/O library; confirmed it also uses `run_in_executor` under the hood; evaluated as alternative approach | `docs/research/error-journal-async.md` | 2026-03-07 |
+
+## Init Re-exports Research (Task #549)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python docs — Regular packages | <https://docs.python.org/3/reference/import.html#regular-packages> | PSF | `__init__.py` execution semantics; `from .foo import Bar` binding behavior | `docs/research/init-re-exports.md` | 2026-03-15 |
+| PydanticAI `__init__.py` | <https://github.com/pydantic/pydantic-ai> | MIT | Re-export pattern: eager imports + `__all__` tuple, grouped by source module | `docs/research/init-re-exports.md` | 2026-03-15 |
 
 ## Hardcoded Model Defaults Research (Task #551)
 
@@ -811,7 +842,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | ddgs (deedy5) | <https://github.com/deedy5/ddgs> | MIT | DuckDuckGo metasearch library: `DDGS().text()` API returning `{title, href, body}` dicts, multi-engine fallback, `RatelimitException`, sync-only API wrapped with `asyncio.to_thread()` | `src/owlbear/tools/web_search.py` (`_web_search` tool) | 2026-03-01 |
 | LangChain DuckDuckGoSearchRun | <https://python.langchain.com/docs/integrations/tools/ddg> | MIT | Thin wrapper over `duckduckgo-search`; snippet-concatenation formatting pattern (adapted to numbered markdown list) | `src/owlbear/tools/web_search.py` (result formatting inspiration) | 2026-03-01 |
-| trafilatura | <https://github.com/adbar/trafilatura> | Apache-2.0 | Web content extraction: `extract()` with `output_format="markdown"`, `include_links=True`; fallback-to-raw-HTML pattern | `src/owlbear/tools/web_search.py` (`_web_read` tool) | 2026-03-01 |
+| trafilatura | <https://github.com/adbar/trafilatura> | Apache-2.0 | Web content extraction: `extract()` with `output_format="markdown"`, `include_links=True`; fallback-to-raw-HTML pattern | `src/owlbear/tools/web_search.py` (via `extract_content` from `content_extractor`) | 2026-03-01 |
 
 ## Conversation Router Research (Task #296)
 
