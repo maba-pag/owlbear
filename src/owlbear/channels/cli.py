@@ -14,7 +14,31 @@ if TYPE_CHECKING:
     from io import TextIOBase
 
 
-SAFE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"})
+SAFE_EXTENSIONS = frozenset(
+    {
+        # Images
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".webp",
+        ".bmp",
+        # Text
+        ".txt",
+        ".md",
+        ".json",
+        ".csv",
+        ".log",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".toml",
+        # Documents
+        ".html",
+        ".pdf",
+    }
+)
 
 logger = logging.getLogger(__name__)
 
