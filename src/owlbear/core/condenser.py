@@ -26,6 +26,10 @@ if TYPE_CHECKING:
     from pydantic_ai.messages import ModelMessage
     from pydantic_ai.models import Model
 
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
+
 logger = logging.getLogger(__name__)
 
 _SUMMARY_PROMPT = (
@@ -50,17 +54,21 @@ class SummarizingCondenser:
             selection (the internal agent will raise if actually invoked without one).
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         max_events: int = 120,
         keep_first: int = 4,
         target_size: int | None = None,
         model: str | Model | None = None,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
     ) -> None:
         self._max_events = max_events
         self._keep_first = keep_first
         self._target_size = target_size if target_size is not None else max_events // 2
         self._model = model
+        self._tracker = tracker
+        self._provider = provider
 
     async def __call__(
         self,
@@ -76,7 +84,18 @@ class SummarizingCondenser:
             return messages
 
         head, middle, tail = self._split(messages)
-        summary_text = await self._summarize(middle)
+        summary_result = await self._summarize(middle)
+        summary_text = getattr(summary_result, "output", summary_result)
+
+        if self._tracker is not None:
+            record_agent_usage(
+                tracker=self._tracker,
+                result=summary_result,
+                model=str(self._model or ""),
+                provider=self._provider or "",
+                session_id="background:condenser",
+                operation="condenser",
+            )
 
         summary_msg = ModelRequest(
             parts=[UserPromptPart(content=f"[Condensed Context]\n{summary_text}")],
@@ -160,7 +179,7 @@ class SummarizingCondenser:
 
         return head_end
 
-    async def _summarize(self, middle: list[ModelMessage]) -> str:
+    async def _summarize(self, middle: list[ModelMessage]) -> object:
         """Use an internal PydanticAI agent to summarize the middle segment."""
         # Build a text representation of the middle messages for the LLM
         lines: list[str] = []
@@ -184,5 +203,4 @@ class SummarizingCondenser:
             self._model or "test",
             system_prompt=_SUMMARY_PROMPT,
         )
-        result = await summarizer.run(text_block)
-        return result.output
+        return await summarizer.run(text_block)

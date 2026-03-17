@@ -8,6 +8,7 @@ serialization, append-only JSONL, ``Path``-based constructor.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,8 @@ from owlbear.core.jsonl_store import JsonlStore
 if TYPE_CHECKING:
     from datetime import timedelta
     from pathlib import Path
+
+_logger = logging.getLogger(__name__)
 
 
 class UsageRecord(BaseModel):
@@ -35,6 +38,7 @@ class UsageRecord(BaseModel):
     tool_calls: int = 0
     estimated_cost_usd: float | None = None
     premium_requests: float | None = None
+    operation: str = "turn"
 
     @property
     def total_tokens(self) -> int:
@@ -106,3 +110,63 @@ class UsageTracker(JsonlStore[UsageRecord]):
             record_count=len(records),
             models=models,
         )
+
+
+def record_agent_usage(  # noqa: PLR0913
+    *,
+    tracker: UsageTracker | None,
+    result: object,
+    model: str,
+    provider: str,
+    session_id: str,
+    operation: str = "turn",
+) -> None:
+    """Append a :class:`UsageRecord` from *result* to *tracker*.
+
+    A silent no-op when *tracker* is ``None``.  Cost-enrichment errors are
+    swallowed so callers are never disrupted by pricing-lookup failures.
+    """
+    if tracker is None:
+        return
+
+    try:
+        usage = result.usage()
+
+        estimated_cost: float | None = None
+        premium: float | None = None
+        try:
+            from owlbear.memory.usage_cost import calc_estimated_cost  # noqa: PLC0415
+
+            estimated_cost = calc_estimated_cost(
+                model,
+                provider,
+                usage.input_tokens or 0,
+                usage.output_tokens or 0,
+            )
+            if provider == "copilot":
+                from owlbear.providers.copilot_multipliers import (  # noqa: PLC0415
+                    get_premium_requests,
+                )
+
+                premium = get_premium_requests(model)
+        except Exception:  # noqa: BLE001
+            _logger.warning("Usage enrichment unavailable", exc_info=True)
+
+        record = UsageRecord(
+            timestamp=datetime.now(UTC),
+            session_id=session_id,
+            model=model,
+            provider=provider,
+            input_tokens=usage.input_tokens or 0,
+            output_tokens=usage.output_tokens or 0,
+            cache_read_tokens=usage.cache_read_tokens or 0,
+            cache_write_tokens=usage.cache_write_tokens or 0,
+            requests=usage.requests or 0,
+            tool_calls=usage.tool_calls or 0,
+            estimated_cost_usd=estimated_cost,
+            premium_requests=premium,
+            operation=operation,
+        )
+        tracker.append(record)
+    except Exception:  # noqa: BLE001
+        _logger.warning("Failed to record usage", exc_info=True)

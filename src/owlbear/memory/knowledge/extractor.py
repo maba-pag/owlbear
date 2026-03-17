@@ -13,6 +13,10 @@ from owlbear.memory.knowledge.models import Edge, Entity  # noqa: TC001 — Pyda
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
+
 logger = logging.getLogger(__name__)
 
 EXTRACTION_PROMPT = """\
@@ -61,12 +65,19 @@ class EntityExtractor:
         print(result.entities, result.edges)
     """
 
-    def __init__(self, model: str | Model) -> None:
+    def __init__(
+        self,
+        model: str | Model,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
+    ) -> None:
         self._agent: Agent[None, ExtractionResult] = Agent(
             model,
             output_type=ExtractionResult,
             system_prompt=EXTRACTION_PROMPT,
         )
+        self._tracker = tracker
+        self._provider = provider
 
     async def extract(
         self,
@@ -91,4 +102,13 @@ class EntityExtractor:
             logger.warning("Entity extraction failed for text chunk", exc_info=True)
             return ExtractionResult()
         else:
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._agent.model or ""),
+                    provider=self._provider or "",
+                    session_id="background:entity_extraction",
+                    operation="entity_extraction",
+                )
             return result.output
