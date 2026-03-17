@@ -1274,3 +1274,7 @@
 {"timestamp":"2026-03-17T22:27:54.811762+01:00","action":"edit","task_id":841,"detail":"Tests for daemon _log_to_journal async (RED)"}
 {"timestamp":"2026-03-17T22:40:30.5351216+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
 {"timestamp":"2026-03-17T22:41:04.5054917+01:00","action":"move","task_id":527,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-17T22:44:00.0331639+01:00","action":"edit","task_id":732,"detail":"Research: LLM cost tracking per operation"}
+{"timestamp":"2026-03-17T22:44:07.9220304+01:00","action":"move","task_id":732,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-17T22:44:13.5488572+01:00","action":"edit","task_id":732,"detail":"Research: LLM cost tracking per operation"}
+{"timestamp":"2026-03-17T22:44:13.5504139+01:00","action":"release","task_id":732,"detail":"auditor"}
