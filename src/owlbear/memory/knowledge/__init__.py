@@ -26,44 +26,21 @@ __all__ = [
 ]
 
 # Lazy import map: attribute name → (relative submodule, attribute name).
-# Covers all 14 public symbols AND legacy symbols for back-compat.
+# Covers only the 14 public symbols declared in __all__.
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
-    "BgeM3EmbeddingProvider": (".embeddings", "BgeM3EmbeddingProvider"),
-    "Bookmark": (".bookmark", "Bookmark"),
-    "BookmarkPipeline": (".bookmark_pipeline", "BookmarkPipeline"),
-    "BookmarkResult": (".bookmark_pipeline", "BookmarkResult"),
     "BookmarkStore": (".bookmark", "BookmarkStore"),
-    "BookmarkToolset": (".bookmark_toolset", "BookmarkToolset"),
-    "Chunk": (".chunker", "Chunk"),
-    "ConsolidationService": (".consolidation", "ConsolidationService"),
     "Document": (".models", "Document"),
     "DocumentStatus": (".document_store", "DocumentStatus"),
-    "DocumentStore": (".document_store", "DocumentStore"),
     "Edge": (".models", "Edge"),
-    "Embedding": (".protocol", "Embedding"),
     "EmbeddingProvider": (".embeddings", "EmbeddingProvider"),
     "Entity": (".models", "Entity"),
-    "EntityExtractor": (".extractor", "EntityExtractor"),
     "EntityType": (".models", "EntityType"),
-    "EvaluationResult": (".evaluator", "EvaluationResult"),
-    "ExtractionResult": (".extractor", "ExtractionResult"),
-    "GraphAugmentedRetriever": (".retrieval", "GraphAugmentedRetriever"),
-    "GraphBuildResult": (".graph_builder", "GraphBuildResult"),
-    "GraphEnricher": (".enrichment", "GraphEnricher"),
     "GraphStore": (".graph", "GraphStore"),
-    "HybridEmbedding": (".protocol", "HybridEmbedding"),
     "IngestPipeline": (".ingest", "IngestPipeline"),
     "IngestResult": (".ingest", "IngestResult"),
-    "InterDocGraphBuilder": (".inter_doc_graph_builder", "InterDocGraphBuilder"),
-    "IntraDocGraphBuilder": (".graph_builder", "IntraDocGraphBuilder"),
     "KnowledgeQueryService": (".query_service", "KnowledgeQueryService"),
     "RelationType": (".models", "RelationType"),
-    "RetrievalResult": (".retrieval", "RetrievalResult"),
-    "SourceEvaluator": (".evaluator", "SourceEvaluator"),
-    "SparseVector": (".protocol", "SparseVector"),
-    "TextChunker": (".chunker", "TextChunker"),
     "VectorStoreProtocol": (".protocol", "VectorStoreProtocol"),
-    "compute_content_hash": (".document_store", "compute_content_hash"),
     "init_db": (".schema", "init_db"),
 }
 

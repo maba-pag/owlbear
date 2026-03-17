@@ -639,8 +639,8 @@ class TestFromAC_Export:  # noqa: N801
     """AC: ConsolidationService exported from owlbear.memory.knowledge.__init__."""
 
     def test_importable_from_package(self) -> None:
-        """ConsolidationService must be importable from owlbear.memory.knowledge."""
-        from owlbear.memory.knowledge import ConsolidationService
+        """ConsolidationService must be importable from owlbear.memory.knowledge.consolidation."""
+        from owlbear.memory.knowledge.consolidation import ConsolidationService
 
         assert ConsolidationService is not None
 
