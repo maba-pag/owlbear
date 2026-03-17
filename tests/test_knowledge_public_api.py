@@ -33,9 +33,9 @@ class TestFromAC_KnowledgePublicAPI:  # noqa: N801
     def test_all_is_sequence(self) -> None:
         import owlbear.memory.knowledge
 
-        assert isinstance(
-            owlbear.memory.knowledge.__all__, (tuple, list)
-        ), "__all__ must be tuple or list"
+        assert isinstance(owlbear.memory.knowledge.__all__, (tuple, list)), (
+            "__all__ must be tuple or list"
+        )
 
     def test_all_contains_all_expected_names(self) -> None:
         import owlbear.memory.knowledge
