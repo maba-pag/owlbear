@@ -574,3 +574,66 @@ class TestFromAC_ApprovalTimeoutValidator:  # noqa: N801
         field = OwlBearSettings.model_fields["approval_timeout"]
         assert field.metadata, "approval_timeout must have gt constraint configured"
         assert default_settings.approval_timeout == 120.0
+
+
+# ---------------------------------------------------------------------------
+# Browser nested env config — task #843 (RED tests for #553)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BrowserNestedEnvHeadless:  # noqa: N801
+    """AC1: OWLBEAR_BROWSER__HEADLESS=true must set settings.browser.headless."""
+
+    def test_browser_headless_via_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_BROWSER__HEADLESS=true should populate settings.browser.headless."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__HEADLESS", "true")
+        settings = OwlBearSettings()
+        assert settings.browser.headless is True
+
+    def test_browser_headless_false_via_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_BROWSER__HEADLESS=false should set headless to False."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__HEADLESS", "false")
+        settings = OwlBearSettings()
+        assert settings.browser.headless is False
+
+
+class TestFromAC_BrowserNestedEnvCdpPort:  # noqa: N801
+    """AC2: OWLBEAR_BROWSER__CDP_PORT=9223 must set settings.browser.cdp_port."""
+
+    def test_browser_cdp_port_via_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_BROWSER__CDP_PORT=9223 should populate settings.browser.cdp_port."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__CDP_PORT", "9223")
+        settings = OwlBearSettings()
+        assert settings.browser.cdp_port == 9223
+
+
+class TestFromAC_BrowserNestedEnvPartialUpdate:  # noqa: N801
+    """AC3: Setting one nested field preserves other BrowserConfig defaults."""
+
+    def test_headless_preserves_cdp_port_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Setting headless via env must leave cdp_port at default 9222."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__HEADLESS", "true")
+        settings = OwlBearSettings()
+        assert settings.browser.cdp_port == 9222
+
+    def test_headless_preserves_timeout_ms_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Setting headless via env must leave timeout_ms at default 30_000."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__HEADLESS", "true")
+        settings = OwlBearSettings()
+        assert settings.browser.timeout_ms == 30_000
+
+    def test_cdp_port_preserves_headless_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Setting cdp_port via env must leave headless at default False."""
+        monkeypatch.setenv("OWLBEAR_BROWSER__CDP_PORT", "9223")
+        settings = OwlBearSettings()
+        assert settings.browser.headless is False
+
+
+class TestFromAC_FlatEnvRegressionGuard:  # noqa: N801
+    """AC4: Existing flat OWLBEAR_DEBUG=true still works after nested delimiter is added."""
+
+    def test_flat_debug_env_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_DEBUG=true must still set settings.debug — regression guard."""
+        monkeypatch.setenv("OWLBEAR_DEBUG", "true")
+        settings = OwlBearSettings()
+        assert settings.debug is True
