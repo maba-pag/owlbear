@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+from owlbear.tools.browser.config import BrowserConfig
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -41,7 +43,7 @@ class OwlBearSettings(BaseSettings):
     debug mode.
     """
 
-    model_config = {"env_prefix": "OWLBEAR_"}
+    model_config = {"env_prefix": "OWLBEAR_", "env_nested_delimiter": "__"}
 
     # --- LLM provider ---
     provider: Literal["copilot"] = Field(
@@ -235,6 +237,10 @@ class OwlBearSettings(BaseSettings):
     )
 
     # --- Browser / screenshots ---
+    browser: BrowserConfig = Field(
+        default_factory=BrowserConfig,
+        description="Nested browser configuration (BrowserConfig model).",
+    )
     screenshot_mode: Literal["auto", "manual", "on_error"] = Field(
         default="on_error",
         description="When to capture browser screenshots: 'auto', 'manual', or 'on_error'.",
