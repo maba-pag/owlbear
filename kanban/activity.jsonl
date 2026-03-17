@@ -1222,3 +1222,55 @@
 {"timestamp":"2026-03-17T21:45:46.0124344+01:00","action":"move","task_id":835,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-17T21:45:49.873409+01:00","action":"edit","task_id":835,"detail":"Write failing tests for cookie-persistence profiles (#760)"}
 {"timestamp":"2026-03-17T21:45:49.8755223+01:00","action":"release","task_id":835,"detail":"auditor"}
+{"timestamp":"2026-03-17T21:46:37.2779083+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:46:37.2799437+01:00","action":"claim","task_id":844,"detail":"architect"}
+{"timestamp":"2026-03-17T21:46:43.2428404+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T21:46:43.2449755+01:00","action":"claim","task_id":549,"detail":"architect"}
+{"timestamp":"2026-03-17T21:49:03.8942508+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T21:49:18.2619434+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T21:49:29.4119002+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T21:49:35.2245615+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T21:49:35.226649+01:00","action":"release","task_id":549,"detail":"architect"}
+{"timestamp":"2026-03-17T21:52:20.6159437+01:00","action":"create","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
+{"timestamp":"2026-03-17T21:54:35.1474927+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:55:43.9975366+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:56:08.2450631+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:57:10.8832836+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:57:11.6288648+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-17T21:57:11.6304271+01:00","action":"release","task_id":844,"detail":"architect"}
+{"timestamp":"2026-03-17T21:57:42.2351744+01:00","action":"edit","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
+{"timestamp":"2026-03-17T22:05:39.9611535+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-17T22:05:39.9633471+01:00","action":"claim","task_id":536,"detail":"builder"}
+{"timestamp":"2026-03-17T22:06:13.228073+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T22:06:13.2301982+01:00","action":"claim","task_id":549,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:07:03.0344454+01:00","action":"edit","task_id":732,"detail":"Research: LLM cost tracking per operation"}
+{"timestamp":"2026-03-17T22:07:13.3527605+01:00","action":"edit","task_id":732,"detail":"Research: LLM cost tracking per operation"}
+{"timestamp":"2026-03-17T22:07:31.6705403+01:00","action":"edit","task_id":549,"detail":"Add re-exports to empty __init__.py files"}
+{"timestamp":"2026-03-17T22:07:31.6726411+01:00","action":"release","task_id":549,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:08:11.968386+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-17T22:08:16.3746228+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-17T22:08:16.3783098+01:00","action":"release","task_id":536,"detail":"builder"}
+{"timestamp":"2026-03-17T22:08:37.74163+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-17T22:08:37.7442547+01:00","action":"claim","task_id":550,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:09:14.8738521+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-17T22:09:14.8754077+01:00","action":"unblock","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-17T22:09:23.2181033+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-17T22:09:31.9426697+01:00","action":"edit","task_id":550,"detail":"Trim knowledge __init__.py to 15 or fewer exports"}
+{"timestamp":"2026-03-17T22:09:31.9447318+01:00","action":"release","task_id":550,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:10:00.548045+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-17T22:10:00.5508065+01:00","action":"claim","task_id":733,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:10:12.0672672+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-17T22:10:21.0474524+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-17T22:10:21.0500057+01:00","action":"release","task_id":733,"detail":"test-writer"}
+{"timestamp":"2026-03-17T22:14:32.7922194+01:00","action":"edit","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
+{"timestamp":"2026-03-17T22:14:38.7100742+01:00","action":"edit","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
+{"timestamp":"2026-03-17T22:26:38.8252144+01:00","action":"edit","task_id":732,"detail":"Research: LLM cost tracking per operation"}
+{"timestamp":"2026-03-17T22:26:38.8273723+01:00","action":"claim","task_id":732,"detail":"auditor"}
+{"timestamp":"2026-03-17T22:26:46.084099+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-17T22:26:46.0862003+01:00","action":"claim","task_id":527,"detail":"auditor"}
+{"timestamp":"2026-03-17T22:26:53.4401263+01:00","action":"edit","task_id":536,"detail":"Lazy-singleton OwlBearSettings in cli.py"}
+{"timestamp":"2026-03-17T22:26:53.4411697+01:00","action":"claim","task_id":536,"detail":"reviewer"}
+{"timestamp":"2026-03-17T22:27:46.5171276+01:00","action":"edit","task_id":841,"detail":"Tests for daemon _log_to_journal async (RED)"}
+{"timestamp":"2026-03-17T22:27:54.811762+01:00","action":"edit","task_id":841,"detail":"Tests for daemon _log_to_journal async (RED)"}
+{"timestamp":"2026-03-17T22:40:30.5351216+01:00","action":"edit","task_id":527,"detail":"Restrict os.startfile to safe file types in CLI channel"}
+{"timestamp":"2026-03-17T22:41:04.5054917+01:00","action":"move","task_id":527,"detail":"done -\u003e archived"}
