@@ -33,6 +33,11 @@ class BrowserConfig(BaseModel, frozen=True):
         auto_launch: Whether to auto-launch browser if CDP unavailable.
         content_scan_mode: Content injection scan mode (``'strict'``,
             ``'warn'``, or ``'off'``).  Default ``'warn'``.
+        profile_name: Optional name for a cookie-persistence profile.
+            Must be set together with *profile_dir* or both left ``None``.
+        profile_dir: Optional directory where cookie profile JSON files
+            are stored.  Must be set together with *profile_name* or both
+            left ``None``.
     """
 
     allowed_urls: list[str] = []
