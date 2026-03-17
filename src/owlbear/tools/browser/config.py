@@ -8,6 +8,7 @@ launch options, viewport size, timeout, and URL allow/block lists
 from __future__ import annotations
 
 import re
+from pathlib import Path  # noqa: TC003
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -44,6 +45,8 @@ class BrowserConfig(BaseModel, frozen=True):
     browser_executable: str | None = None
     auto_launch: bool = True
     content_scan_mode: Literal["strict", "warn", "off"] = "warn"
+    profile_name: str | None = None
+    profile_dir: Path | None = None
 
     # --- validators ---
 
@@ -103,5 +106,13 @@ class BrowserConfig(BaseModel, frozen=True):
         w, h = self.viewport
         if w <= 0 or h <= 0:
             msg = "viewport width and height must be positive integers"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _profile_both_or_neither(self) -> BrowserConfig:
+        """profile_name and profile_dir must both be set or both be None."""
+        if (self.profile_name is None) != (self.profile_dir is None):
+            msg = "profile_name and profile_dir must both be set or both be None"
             raise ValueError(msg)
         return self

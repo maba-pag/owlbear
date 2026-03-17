@@ -8,13 +8,18 @@ browser via CDP), creates a page, and tears everything down on exit
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import json
 import logging
+import os
+import tempfile
 from typing import TYPE_CHECKING, Any, Literal, Self
 
 from owlbear.tools.browser.config import BrowserConfig
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from types import TracebackType
 
     from playwright.async_api import Browser, BrowserContext, Page, Playwright
@@ -162,6 +167,7 @@ class BrowserManager:
             await self._enter_launch()
 
         self._page.set_default_timeout(self._config.timeout_ms)
+        await self._restore_cookies()
         return self
 
     async def _enter_cdp(self) -> None:
@@ -204,6 +210,7 @@ class BrowserManager:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        await self._save_cookies()
         if self._is_cdp:
             await self._exit_cdp()
         else:
@@ -243,3 +250,52 @@ class BrowserManager:
                 finally:
                     if self._pw is not None:
                         await self._pw.stop()
+
+    # -- cookie persistence --
+
+    def _cookie_path(self) -> Path | None:
+        """Return the cookie file path, or None if no profile is configured."""
+        if self._config.profile_name is None or self._config.profile_dir is None:
+            return None
+        return self._config.profile_dir / f"{self._config.profile_name}.json"
+
+    async def _restore_cookies(self) -> None:
+        """Restore cookies from profile JSON if it exists."""
+        path = self._cookie_path()
+        if path is None or not path.exists():
+            return
+        try:
+            cookies = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            logger.warning("Failed to load cookie profile %s", path.name)
+            return
+        if self._context is not None:
+            await self._context.add_cookies(cookies)
+            logger.debug("Restored %d cookies from profile %s", len(cookies), path.name)
+
+    async def _save_cookies(self) -> None:
+        """Save cookies to profile JSON using atomic write."""
+        path = self._cookie_path()
+        if path is None or self._context is None:
+            return
+        try:
+            cookies = await self._context.cookies()
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to retrieve cookies for profile %s", path.name)
+            return
+        try:
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(path.parent), suffix=".tmp", prefix=".cookie_"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(cookies, f)
+                os.replace(tmp_path, path)  # noqa: PTH105
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)  # noqa: PTH108
+                raise
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to save cookie profile %s", path.name)
+        else:
+            logger.debug("Saved %d cookies to profile %s", len(cookies), path.name)

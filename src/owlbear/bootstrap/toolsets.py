@@ -7,6 +7,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from owlbear.core.delegation import DelegationToolset
+from owlbear.paths import sandbox_path
 from owlbear.tools.ask_user import AskUserToolset
 from owlbear.tools.browser.config import BrowserConfig
 from owlbear.tools.browser.toolset import BrowserToolset
@@ -288,6 +289,8 @@ def build_toolsets(  # noqa: PLR0913
     raw.append(TerminalToolset(workspace_root=workspace, hooks=hooks))
     raw.append(AskUserToolset(channel))
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
+    profile_dir = sandbox_path(workspace, "browser_profiles")
+    profile_dir.mkdir(parents=True, exist_ok=True)
     browser_toolset = BrowserToolset(config=BrowserConfig())
     raw.append(browser_toolset)
     raw.append(KanbanToolset(kanban_dir=workspace / "kanban", hooks=hooks))
