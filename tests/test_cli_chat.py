@@ -84,7 +84,7 @@ def _patch_and_run(  # noqa: PLR0913
         history=history,
     )
     with (
-        patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+        patch("owlbear.config.OwlBearSettings", s_cls),
         patch("bearclaw.commands.chat.SessionStore", ss_cls),
         patch("bearclaw.commands.chat.bootstrap", boot_fn),
     ):
@@ -221,7 +221,7 @@ class TestChatModelFlag:
     def test_model_flag_calls_update_model(self) -> None:
         s_cls, ss_cls, boot_fn, agent = _make_mocks()
         with (
-            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("owlbear.config.OwlBearSettings", s_cls),
             patch("bearclaw.commands.chat.SessionStore", ss_cls),
             patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):
@@ -266,7 +266,7 @@ class TestBootstrapIntegration:
     def test_bootstrap_called_with_settings_and_cli_channel(self) -> None:
         s_cls, ss_cls, boot_fn, _agent = _make_mocks()
         with (
-            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("owlbear.config.OwlBearSettings", s_cls),
             patch("bearclaw.commands.chat.SessionStore", ss_cls),
             patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):
@@ -282,7 +282,7 @@ class TestBootstrapIntegration:
         """After bootstrap, agent.session must be the user-specified store."""
         s_cls, ss_cls, boot_fn, agent = _make_mocks(session_name="my-sess")
         with (
-            patch("bearclaw.commands.chat.OwlBearSettings", s_cls),
+            patch("owlbear.config.OwlBearSettings", s_cls),
             patch("bearclaw.commands.chat.SessionStore", ss_cls),
             patch("bearclaw.commands.chat.bootstrap", boot_fn),
         ):

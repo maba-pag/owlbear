@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 import typer
 
-from owlbear.config import OwlBearSettings
+from owlbear.config import get_settings
 from owlbear.memory.usage import UsageRecord, UsageTracker
 
 app = typer.Typer(
@@ -22,7 +22,7 @@ app = typer.Typer(
 
 def _get_usage_path() -> Path:
     """Return the usage JSONL path from settings."""
-    return OwlBearSettings().usage_path
+    return get_settings().usage_path
 
 
 def _resolve_usage_window(

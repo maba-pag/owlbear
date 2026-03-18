@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from owlbear.config import OwlBearSettings
+from owlbear.config import get_settings
 from owlbear.process import is_process_alive
 
 app = typer.Typer()
@@ -21,7 +21,7 @@ def _get_config_dir() -> Path:
     """Return the config_dir from settings."""
     from pathlib import Path as _Path  # noqa: PLC0415
 
-    return _Path(OwlBearSettings().config_dir)
+    return _Path(get_settings().config_dir)
 
 
 def _poll_pid_removal(pid_path: Path, *, timeout: float = 5.0) -> bool:
@@ -53,7 +53,7 @@ def run_cmd(
     from owlbear.bootstrap import bootstrap  # noqa: PLC0415
     from owlbear.daemon import PidFile, run_daemon, setup_logging  # noqa: PLC0415
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     config_dir = _Path(settings.config_dir)
 
     # Set up logging
@@ -136,7 +136,7 @@ def _daemon_status(*, detail: bool = False) -> None:
     from rich.panel import Panel  # noqa: PLC0415
     from rich.table import Table  # noqa: PLC0415
 
-    settings = OwlBearSettings()
+    settings = get_settings()
     config_dir = Path(str(settings.config_dir))
     pid_path = config_dir / "owlbear.pid"
 

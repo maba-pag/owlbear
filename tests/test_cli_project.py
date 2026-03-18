@@ -25,7 +25,7 @@ def _mock_settings(tmp_path: Path):
     mock_settings = MagicMock()
     mock_settings.config_dir = tmp_path
     mock_settings.project_root = tmp_path / "project-root"
-    with patch("bearclaw.commands.project.OwlBearSettings", return_value=mock_settings):
+    with patch("owlbear.config.OwlBearSettings", return_value=mock_settings):
         yield tmp_path
 
 

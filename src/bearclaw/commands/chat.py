@@ -12,13 +12,14 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 
 from owlbear.bootstrap import bootstrap
-from owlbear.config import OwlBearSettings
+from owlbear.config import get_settings
 from owlbear.core.errors import error_to_user_message
 from owlbear.memory.session import SessionStore
 from owlbear.tools.github_api import parse_git_remote
 
 if TYPE_CHECKING:
     from owlbear.channels.cli import CLIChannel
+    from owlbear.config import OwlBearSettings
     from owlbear.core.agent import OwlBearAgent
 
 app = typer.Typer()
@@ -115,7 +116,7 @@ async def _chat_async(
     project: str | None = None,
 ) -> None:
     """Run the interactive chat REPL loop."""
-    settings = OwlBearSettings()
+    settings = get_settings()
     model_name = model or settings.chat_model
 
     # Resolve project name → id for session scoping.

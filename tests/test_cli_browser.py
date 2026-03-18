@@ -21,7 +21,7 @@ class TestBrowserStart:
     """Tests for ``bearclaw browser start``."""
 
     @patch("bearclaw.commands.browser.launch_edge_cdp", return_value=12345)
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_start_default_port(
         self, mock_settings: object, mock_launch: object, tmp_path: Path
     ) -> None:
@@ -32,7 +32,7 @@ class TestBrowserStart:
         mock_launch.assert_called_once_with(port=9222)  # type: ignore[union-attr]
 
     @patch("bearclaw.commands.browser.launch_edge_cdp", return_value=12345)
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_start_custom_port(
         self, mock_settings: object, mock_launch: object, tmp_path: Path
     ) -> None:
@@ -43,7 +43,7 @@ class TestBrowserStart:
         mock_launch.assert_called_once_with(port=9333)  # type: ignore[union-attr]
 
     @patch("bearclaw.commands.browser.launch_edge_cdp", return_value=12345)
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_start_writes_pid_file(
         self, mock_settings: object, _mock_launch: object, tmp_path: Path
     ) -> None:
@@ -55,7 +55,7 @@ class TestBrowserStart:
         assert pid_file.read_text() == "12345"
 
     @patch("bearclaw.commands.browser.launch_edge_cdp", return_value=12345)
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_start_outputs_success_message(
         self, mock_settings: object, _mock_launch: object, tmp_path: Path
     ) -> None:
@@ -69,7 +69,7 @@ class TestBrowserStart:
         "bearclaw.commands.browser.launch_edge_cdp",
         side_effect=FileNotFoundError("Microsoft Edge executable not found"),
     )
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_start_exit_1_when_edge_not_found(
         self, mock_settings: object, _mock_launch: object, tmp_path: Path
     ) -> None:
@@ -89,7 +89,7 @@ class TestBrowserStop:
     """Tests for ``bearclaw browser stop``."""
 
     @patch("bearclaw.commands.browser.kill_edge")
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_stop_reads_pid_and_kills(
         self, mock_settings: object, mock_kill: object, tmp_path: Path
     ) -> None:
@@ -101,7 +101,7 @@ class TestBrowserStop:
         mock_kill.assert_called_once_with(12345)  # type: ignore[union-attr]
 
     @patch("bearclaw.commands.browser.kill_edge")
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_stop_removes_pid_file(
         self, mock_settings: object, _mock_kill: object, tmp_path: Path
     ) -> None:
@@ -112,7 +112,7 @@ class TestBrowserStop:
         runner.invoke(app, ["browser", "stop"])
         assert not pid_file.exists()
 
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_stop_exit_1_when_not_running(self, mock_settings: object, tmp_path: Path) -> None:
         """Exit code 1 and error message when no PID file exists."""
         mock_settings.return_value.config_dir = tmp_path  # type: ignore[union-attr]
@@ -121,7 +121,7 @@ class TestBrowserStop:
         assert "not running" in result.output.lower()
 
     @patch("bearclaw.commands.browser.kill_edge")
-    @patch("bearclaw.commands.browser.OwlBearSettings")
+    @patch("owlbear.config.OwlBearSettings")
     def test_stop_outputs_success_message(
         self, mock_settings: object, _mock_kill: object, tmp_path: Path
     ) -> None:

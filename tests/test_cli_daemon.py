@@ -65,7 +65,7 @@ class TestGetConfigDir:
     def test_returns_settings_config_dir(self) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = "/fake/.owlbear"
-        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
+        with patch("owlbear.config.OwlBearSettings", return_value=mock_settings):
             result = _get_config_dir()
         assert result == Path("/fake/.owlbear")
 
@@ -81,7 +81,7 @@ class TestDaemonStop:
     def test_no_pid_file_prints_not_running(self, tmp_path: Path) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
-        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
+        with patch("owlbear.config.OwlBearSettings", return_value=mock_settings):
             _daemon_stop()
         # No PID file → should not crash (prints "not running")
 
@@ -91,7 +91,7 @@ class TestDaemonStop:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("owlbear.config.OwlBearSettings", return_value=mock_settings),
             patch("bearclaw.commands.daemon._poll_pid_removal", return_value=True),
         ):
             _daemon_stop()
@@ -104,7 +104,7 @@ class TestDaemonStop:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("owlbear.config.OwlBearSettings", return_value=mock_settings),
             patch("bearclaw.commands.daemon._poll_pid_removal", return_value=False),
             patch("bearclaw.commands.daemon.os.kill") as mock_kill,
         ):
@@ -125,7 +125,7 @@ class TestDaemonStatus:
     ) -> None:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
-        with patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings):
+        with patch("owlbear.config.OwlBearSettings", return_value=mock_settings):
             _daemon_status()
         captured = capsys.readouterr()
         assert "Stopped" in captured.out
@@ -138,7 +138,7 @@ class TestDaemonStatus:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("owlbear.config.OwlBearSettings", return_value=mock_settings),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
         ):
             _daemon_status()
@@ -154,7 +154,7 @@ class TestDaemonStatus:
         mock_settings = MagicMock()
         mock_settings.config_dir = str(tmp_path)
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings", return_value=mock_settings),
+            patch("owlbear.config.OwlBearSettings", return_value=mock_settings),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
         ):
             _daemon_status()

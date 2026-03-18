@@ -232,7 +232,7 @@ class TestFromAC_CleanupAwaitsAsync:  # noqa: N801
 
         with (  # noqa: SIM117
             patch(
-                "bearclaw.commands.chat.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=make_settings(tmp_path),
             ),
             patch(

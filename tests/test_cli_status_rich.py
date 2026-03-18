@@ -50,7 +50,7 @@ class TestStatusStopped:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         with patch(
-            "bearclaw.commands.daemon.OwlBearSettings",
+            "owlbear.config.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             _daemon_status()
@@ -76,7 +76,7 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -90,7 +90,7 @@ class TestStatusRunning:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -109,7 +109,7 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -128,7 +128,7 @@ class TestStatusRunning:
         os.utime(pid_path, (mtime, mtime))
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -153,7 +153,7 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
@@ -167,7 +167,7 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
@@ -181,7 +181,7 @@ class TestStatusStale:
         pid_path.write_text("99999")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=False),
@@ -205,7 +205,7 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, chat_model="claude-sonnet-4"),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -220,7 +220,7 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, autonomous_mode=True),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -234,7 +234,7 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, heartbeat_enabled=True),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -248,7 +248,7 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id="C12345"),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -263,7 +263,7 @@ class TestStatusDetail:
         pid_path.write_text("42")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path, slack_channel_id=None),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -288,7 +288,7 @@ class TestStatusProject:
         active_path.write_text("my-cool-project", encoding="utf-8")
         with (
             patch(
-                "bearclaw.commands.daemon.OwlBearSettings",
+                "owlbear.config.OwlBearSettings",
                 return_value=_mock_settings(tmp_path),
             ),
             patch("bearclaw.commands.daemon.is_process_alive", return_value=True),
@@ -302,7 +302,7 @@ class TestStatusProject:
     ) -> None:
         # No active_project file → should display "None"
         with patch(
-            "bearclaw.commands.daemon.OwlBearSettings",
+            "owlbear.config.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             _daemon_status()
@@ -320,7 +320,7 @@ class TestStatusCliRunner:
 
     def test_cli_status_exits_zero(self, tmp_path: Path) -> None:
         with patch(
-            "bearclaw.commands.daemon.OwlBearSettings",
+            "owlbear.config.OwlBearSettings",
             return_value=_mock_settings(tmp_path),
         ):
             result = runner.invoke(app, ["status"])
