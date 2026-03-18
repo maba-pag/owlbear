@@ -255,7 +255,7 @@ def configure_otel(otel_endpoint: str) -> None:
     logger.info("OTel configured — exporting to %s", otel_endpoint)
 
 
-def _log_to_journal(  # noqa: PLR0913
+async def _log_to_journal(  # noqa: PLR0913
     journal: ErrorJournal | None,
     *,
     error_type: str,
@@ -269,7 +269,8 @@ def _log_to_journal(  # noqa: PLR0913
     if journal is None:
         return
     try:
-        journal.log(
+        await asyncio.to_thread(
+            journal.log,
             ts=datetime.now(UTC).isoformat(),
             error_type=error_type,
             tool_name="agent.turn",
@@ -308,7 +309,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
         if getattr(exc, "_tool_retries_exhausted", False) or not isinstance(
             exc, httpx.HTTPStatusError
         ):
-            _log_to_journal(
+            await _log_to_journal(
                 error_journal,
                 error_type=category.value,
                 exc=exc,
@@ -347,7 +348,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
                     retry_exc,
                 )
             else:
-                _log_to_journal(
+                await _log_to_journal(
                     error_journal,
                     error_type=category.value,
                     exc=exc,
@@ -357,7 +358,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
                     agent=agent,
                 )
                 return
-        _log_to_journal(
+        await _log_to_journal(
             error_journal,
             error_type=category.value,
             exc=last_exc,
@@ -388,7 +389,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
             agent._openai_client = new_client  # noqa: SLF001
             response = await agent.turn(message)
             await channel.send(response)
-            _log_to_journal(
+            await _log_to_journal(
                 error_journal,
                 error_type=category.value,
                 exc=exc,
@@ -398,7 +399,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
                 agent=agent,
             )
         except Exception as retry_exc:
-            _log_to_journal(
+            await _log_to_journal(
                 error_journal,
                 error_type=category.value,
                 exc=retry_exc,
@@ -414,7 +415,7 @@ async def _recover_from_error(  # noqa: PLR0913, PLR0912, PLR0915, C901
                 logger.exception("Failed to send error to channel (original: %s)", retry_exc)  # noqa: TRY401
 
     else:  # PERMANENT, TOOL_SEMANTIC, or AUTH without settings
-        _log_to_journal(
+        await _log_to_journal(
             error_journal,
             error_type=category.value,
             exc=exc,
