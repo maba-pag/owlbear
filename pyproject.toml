@@ -15,7 +15,7 @@ dependencies = [
   "httpx>=0.28.0",
   "openai>=1.60.0",
   "pydantic>=2.10.0",
-  "pydantic-ai>=0.1.0",
+  "pydantic-ai>=1.0.0,<2.0.0",
   "pydantic-settings>=2.7.0",
   "tenacity>=9.0.0",
   "truststore>=0.10.0",
@@ -27,9 +27,14 @@ bearclaw = "bearclaw.cli:app"
 
 [project.optional-dependencies]
 browser = ["playwright>=1.40.0"]
-crawl = ["trafilatura>=2.0.0"]  # shared with search — intentional duplication, see docs/research/consolidate-trafilatura-extras.md
+crawl = [
+  "trafilatura>=2.0.0",
+] # shared with search — intentional duplication, see docs/research/consolidate-trafilatura-extras.md
 knowledge = ["qdrant-client>=1.13", "FlagEmbedding>=1.3.5"]
-search = ["duckduckgo-search>=7.0", "trafilatura>=2.0.0"]  # shared with crawl — intentional duplication, see docs/research/consolidate-trafilatura-extras.md
+search = [
+  "duckduckgo-search>=7.0",
+  "trafilatura>=2.0.0",
+] # shared with crawl — intentional duplication, see docs/research/consolidate-trafilatura-extras.md
 slack = ["slack_sdk>=3.27.0", "aiohttp>=3.9.0"]
 voice = [
   "moonshine-voice>=0.0.49,<0.1.0",
