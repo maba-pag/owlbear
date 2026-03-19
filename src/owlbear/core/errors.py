@@ -30,8 +30,7 @@ except ImportError:  # openai is an optional dependency
     openai = None  # type: ignore[assignment]
 
 from owlbear.core.circuit_breaker import CircuitOpenError
-from owlbear.core.exceptions import OwlBearError
-from owlbear.tools.browser.safety import BlockedURLError
+from owlbear.core.exceptions import BlockedURLError, OwlBearError
 
 
 class BlockedCommandError(OwlBearError):

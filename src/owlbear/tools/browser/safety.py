@@ -11,7 +11,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from owlbear.core.exceptions import OwlBearError
+from owlbear.core.exceptions import BlockedURLError
 from owlbear.core.hooks import PreToolUseData  # noqa: TC001
 
 if TYPE_CHECKING:
@@ -19,20 +19,6 @@ if TYPE_CHECKING:
     from owlbear.tools.browser.config import BrowserConfig
 
 logger = logging.getLogger(__name__)
-
-
-class BlockedURLError(OwlBearError):
-    """Raised when a navigation URL is denied by the safety guard.
-
-    Attributes:
-        url: The URL that was blocked.
-        pattern: The regex pattern that matched (or ``"<not in allowlist>"``).
-    """
-
-    def __init__(self, url: str, pattern: str) -> None:
-        self.url = url
-        self.pattern = pattern
-        super().__init__(f"URL blocked by pattern {pattern!r}: {url}")
 
 
 class URLSafetyGuard:
