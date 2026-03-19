@@ -58,4 +58,4 @@ a library. Adding re-exports violates KISS, YAGNI, and DRY.
 ## Impact of Deferral
 
 Tasks #812, #813, #815, #822, #823 remain blocked/parked. If no decision is made
-within 30 days, the planner will auto-resolve with the recommended option (A).
+within 5 days, the planner will auto-resolve with the recommended option (A).
