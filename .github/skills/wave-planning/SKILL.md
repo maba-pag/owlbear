@@ -47,8 +47,7 @@ Run before the Board Scan. Check for resolved decision requests:
 Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Select-Object -ExpandProperty FullName
 ```
 
-For each file found, read frontmatter. If `approved: true` (or `status: resolved` in
-legacy files), unblock the task and move the file to `docs/decisions/resolved/`. If
+For each file found, read frontmatter. If `approved: true`, unblock the task and move the file to `docs/decisions/resolved/`. If
 `approved: false` and older than 5 days, auto-resolve with the agent's recommendation.
 
 ### Recipe 1 — Board Scan
@@ -237,14 +236,21 @@ From the gate-passing tasks, build the dispatch list:
 ## Step 3 — Output JSON plan
 
 Produce JSON as the final response. No prose preamble, no narrative, no markdown tables.
-Working notes (gate-check reasoning) stay in your internal reasoning — they do not
-appear in the output.
 
 Format:
 
 ```json
 {"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
 ```
+
+<good example why="Single-line JSON object with `dispatch` and `blocked` fields only. Agent names from mapping.">
+{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"blocked":[]}
+</good example>
+<bad example why="Includes prose and markdown, not a single-line JSON object.">
+```json
+excluded the gate failures, and I’m finalizing the capped 12-task dispatch list now.{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"blocked":[]}
+```
+</bad example>
 
 **Fields:**
 
