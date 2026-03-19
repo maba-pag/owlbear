@@ -7,6 +7,17 @@ description: "TDD RED phase workflow: read AC → search codebase → plan test 
 
 Step-by-step process for the test-writer to produce failing tests from a task's acceptance criteria. This is the RED phase of TDD — all tests must fail when complete.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append summary | `kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n{content}" -t --claim <agent>` |
+| Advance | `kanban\kanban-md.exe edit {id} --status in-progress --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
@@ -21,14 +32,18 @@ Some tasks don't have testable implementation (research, documentation, config).
 you encounter one:
 
 1. Append a brief note to the task body:
+
    ```powershell
    kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder." -t
    ```
+
 2. Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
 3. Return the signal:
+
    ```
    DONE #{id} -> in-progress | non-impl pass-through, no tests needed
    ```
+
 4. **Stop here.** Do not proceed to Step 2.
 
 ## Step 2 — Search codebase

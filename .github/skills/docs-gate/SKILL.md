@@ -7,6 +7,18 @@ description: "Documentation gate checklist: verify and update docs before markin
 
 Step-by-step process for the documentation gate (docs → done).
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append report | `kanban\kanban-md.exe edit {id} -a "## Docs Gate\n{content}" -t --claim <agent>` |
+| Advance (pass) | `kanban\kanban-md.exe edit {id} --status done --release` |
+| Reject to review | `kanban\kanban-md.exe edit {id} --status review --block "reason" --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full task details

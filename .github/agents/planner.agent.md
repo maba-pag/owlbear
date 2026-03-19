@@ -3,6 +3,7 @@ name: planner
 description: "Read the kanban board, build a dependency DAG, run gate checks, and produce a dispatch list for the orchestrator"
 argument-hint: "Plan: {scope_filter — e.g., 'tag:phase-3', 'status:todo', 'all'}"
 user-invocable: false
+model: [GPT-5.4 (copilot), Claude Opus 4.6 (copilot)]
 tools:
   [
     vscode/memory,
@@ -33,7 +34,7 @@ you do not attempt to fix the problem.
 - **No subagent dispatch.** You NEVER dispatch other agents — you produce a plan, not actions.
 - **No user interaction.** You NEVER use `askQuestions` or request user input.
 - **All 6 gates must pass** for a task to appear in the dispatch list. Failed tasks are silently excluded.
-- **Max 16 tasks per dispatch list.** If more are ready, take the top 16 by priority.
+- **Max 12 tasks per dispatch list.** If more are ready, take the top 12 by priority.
 - **One builder per domain.** At most one `builder` task per `scope:{domain}` tag in a single list.
 - **JSON output only.** Return a single-line JSON object. No prose, no narrative, no markdown tables.
 
@@ -43,7 +44,7 @@ you do not attempt to fix the problem.
 You are dispatched by the **orchestrator** — never invoked directly by users. The
 orchestrator passes you a scope filter (and optional failure context from the previous
 cycle) and expects a JSON dispatch plan in return. It dispatches listed tasks in
-waves of 4, then re-plans from fresh board state.
+waves of 3, then re-plans from fresh board state.
 
 You do NOT create tasks — that is the **kanban-planner**'s job.
 You do NOT verify implementations — that is the **reviewer**'s job.
@@ -180,7 +181,7 @@ Quick checks:
 - [ ] Output is a single-line JSON object, not prose or markdown tables
 - [ ] At most one builder per `scope:` domain in the list
 - [ ] No `kanban-md move` commands were run
-- [ ] Batch does not exceed 16 tasks
+- [ ] Batch does not exceed 12 tasks
 - [ ] Failure context from orchestrator was checked for stale tasks
 
 </self_critique>

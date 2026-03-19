@@ -30,10 +30,14 @@ Do NOT create a decision request for:
 
 ```markdown
 ---
+# >> Your action: set approved to true (edit decision/notes first if you disagree)
+approved: false
+decision: "A: Adopt library X"
+notes: ""
+# >> Agent metadata (do not edit)
 task_id: 123
 agent: researcher
 created: 2026-03-13
-status: pending
 urgency: blocking
 decision_type: feature-gate
 ---
@@ -73,31 +77,32 @@ integration effort. The solo-maintainer risk is mitigated by the small API surfa
 
 ## Impact of Deferral
 
-Task #123 is blocked. If no decision is made within 30 days, the planner will
+Task #123 is blocked. If no decision is made within 5 days, the planner will
 auto-resolve with the recommended option (A). No downstream tasks are affected
 until this is unblocked.
-
----
-
-## Resolution
-
-<!-- User fills in below when ready -->
-
-Decision:
-Notes:
-Resolved:
 ```
+
+The agent **pre-fills** `decision:` with the recommended option so the user can accept by only changing `approved: false` → `approved: true`. No `## Resolution` body section is needed.
 
 ## Frontmatter fields
 
-| Field           | Values                                                                          | Required |
-| --------------- | ------------------------------------------------------------------------------- | -------- |
-| `task_id`       | Kanban task ID that is blocked                                                  | Yes      |
-| `agent`         | Agent that created the request                                                  | Yes      |
-| `created`       | ISO date (YYYY-MM-DD)                                                           | Yes      |
-| `status`        | `pending` / `resolved` / `auto-resolved`                                        | Yes      |
-| `urgency`       | `blocking` (task is parked) or `advisory` (agent continued with recommendation) | Yes      |
-| `decision_type` | `feature-gate` / `approach-selection` / `scope-decision` / `priority-call`      | Yes      |
+### User fields (top of frontmatter)
+
+| Field      | Values                                                                   | Set by     |
+| ---------- | ------------------------------------------------------------------------ | ---------- |
+| `approved` | `false` (pending) / `true` (user approved) / `auto` (5-day auto-resolve) | User       |
+| `decision` | Pre-filled with agent recommendation; user edits if they disagree        | Agent/User |
+| `notes`    | Empty string; user may add caveats, conditions, or reasoning             | User       |
+
+### Agent metadata (bottom of frontmatter — user should not edit)
+
+| Field           | Values                                                                          | Set by |
+| --------------- | ------------------------------------------------------------------------------- | ------ |
+| `task_id`       | Kanban task ID that is blocked                                                  | Agent  |
+| `agent`         | Agent that created the request                                                  | Agent  |
+| `created`       | ISO date (YYYY-MM-DD)                                                           | Agent  |
+| `urgency`       | `blocking` (task is parked) or `advisory` (agent continued with recommendation) | Agent  |
+| `decision_type` | `feature-gate` / `approach-selection` / `scope-decision` / `priority-call`      | Agent  |
 
 ## Blocking behavior
 
@@ -109,23 +114,37 @@ After creating the decision request file:
    kanban\kanban-md.exe edit {ID} --block "Decision pending: docs/decisions/pending/{id}-{slug}.md"
    ```
 
-2. **If NO other unblocked tasks exist:** Proceed with the recommended option. Create follow-up tasks. Mark the decision request as `urgency: advisory` and `status: auto-resolved`. Add a note in the Resolution section: "Auto-resolved — no other work available. User can override."
+2. **If NO other unblocked tasks exist:** Proceed with the recommended option. Create follow-up tasks. Mark the decision request as `urgency: advisory` and `approved: auto`.
 
 ## Resolution workflow
 
-**User resolves:**
+**User accepts the recommendation:**
 
 1. Open `docs/decisions/pending/{id}-{slug}.md`
-2. Fill in `Decision:`, `Notes:`, and `Resolved:` fields in the `## Resolution` section
-3. Change `status: pending` → `status: resolved` in frontmatter
-4. Move file to `docs/decisions/resolved/`
+2. Change `approved: false` → `approved: true`
+3. Optionally add `notes:` (caveats, conditions)
 
-**Planner detects resolution:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `status: resolved`. For each:
+That's it. The planner handles the rest.
+
+**User overrides the recommendation:**
+
+1. Open `docs/decisions/pending/{id}-{slug}.md`
+2. Change `decision:` to the preferred option (e.g., `decision: "B: Build custom"`)
+3. Optionally add `notes:` explaining the reasoning
+4. Change `approved: false` → `approved: true`
+
+**Alternatively**, use the CLI: `bearclaw decisions resolve {task_id}` — it prompts for choice, notes, and updates the file automatically.
+
+**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true`. For each:
 
 - Unblock the task: `kanban\kanban-md.exe edit {task_id} --unblock`
 - Move the file to `docs/decisions/resolved/`
 
-**Auto-resolution (30-day timeout):** If a decision stays `pending` for 30+ days, the planner auto-resolves with the agent's recommendation to prevent permanent blockage. The file is updated with `status: auto-resolved` and a note, and the task is unblocked.
+The user never moves files — the planner does this automatically.
+
+**Auto-resolution (5-day timeout):** If a decision stays `approved: false` for 5+ days, the planner auto-resolves with the agent's pre-filled recommendation to prevent permanent blockage. The file is updated with `approved: auto` and the task is unblocked.
+
+> **Legacy files:** Files using the old `status: pending/resolved` format are treated equivalently: `status: resolved` is handled the same as `approved: true`.
 
 ## Integration with existing processes
 

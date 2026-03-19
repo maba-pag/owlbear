@@ -39,6 +39,7 @@ Violations → architect blocks the task until the dependency is inverted or a p
 - The existing `WorkspaceAware` protocol in `tools/protocols.py` is the pattern to follow.
 - Toolsets expose functionality through `FunctionToolset` methods. Internal helpers are private (`_prefixed`).
 - Hook handlers implement the `HookHandler` callable signature from `core/hooks.py`.
+- **Hooks are observational, not blocking.** The `HookRegistry` swallows exceptions from hook callbacks by design. POST_TOOL_USE and other hooks cannot block execution or propagate errors. Blocking operations (content scanning, quality gates, safety checks) must be **direct function calls** in tool wrappers, following the `URLSafetyGuard.check_url()` pattern.
 
 ## Error handling
 

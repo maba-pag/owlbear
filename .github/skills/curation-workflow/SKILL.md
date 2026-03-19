@@ -8,6 +8,15 @@ description: "Knowledge curation workflow: gather recent entries → deduplicate
 Step-by-step process for maintaining institutional memory — deduplicating,
 consolidating, and pruning lessons learned from agent task notes.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task (if dispatched with ID) | `kanban\kanban-md.exe show {id}` |
+| Append report (if dispatched with ID) | `kanban\kanban-md.exe edit {id} -a "## Curation\n{content}" -t` |
+
+Most curator work uses the memory tool, not kanban-md. These commands are only needed when dispatched with a specific curation task ID. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Gather inbox entries
 
 Review unreviewed lessons from the repo memory inbox:
@@ -15,7 +24,7 @@ Review unreviewed lessons from the repo memory inbox:
 1. List inbox: `memory view /memories/repo/inbox/`
 2. Read each file in the inbox
 3. Also check task bodies (`kanban\kanban-md.exe show {id}`) for any inline agent notes
-   that weren’t written to the inbox (legacy pattern)
+   that weren't written to the inbox (legacy pattern)
 4. Filter to the scope specified (all, last N tasks, tag filter)
 5. Collect all entries
 

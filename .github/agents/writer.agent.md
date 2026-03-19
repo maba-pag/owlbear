@@ -3,9 +3,9 @@ name: writer
 description: "Verify and update documentation for completed tasks — docs gate before done"
 argument-hint: "Docs Gate: {task_id_or_scope}"
 user-invocable: false
+model: Claude Sonnet 4.6 (copilot)
 tools:
   [
-    vscode/askQuestions,
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,

@@ -8,6 +8,22 @@ description: "Architecture review workflow: read task + research → analyze cod
 Step-by-step process for reviewing researched tasks, refining acceptance criteria,
 ensuring architectural soundness, and approving tasks for development.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append review | `kanban\kanban-md.exe edit {id} -a "## Architecture Review\n{content}" -t --claim <agent>` |
+| Approve | `kanban\kanban-md.exe edit {id} --status todo --release` |
+| Refine (keep claimed) | `kanban\kanban-md.exe edit {id} --body "{revised AC}" --claim <agent>` |
+| Split (create task) | `kanban\kanban-md.exe create "TITLE" --priority P --tags T --depends-on ID --body "AC"` |
+| Split (create TDD test) | `kanban\kanban-md.exe create "Test: TITLE" --priority P --tags T,test --body "AC"` |
+| Merge (delete redundant) | `kanban\kanban-md.exe delete ID --yes` |
+| Block | `kanban\kanban-md.exe edit {id} --block "reason" --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read task and research
 
 Read the single task dispatched to you:

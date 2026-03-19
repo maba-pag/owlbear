@@ -3,9 +3,9 @@ name: reviewer
 description: "Read-only quality verification — never trusts self-reports"
 argument-hint: "Review: {task_id_or_file_paths}"
 user-invocable: false
+model: GPT-5.3-Codex (copilot)
 tools:
   [
-    vscode/askQuestions,
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
@@ -54,11 +54,14 @@ You are dispatched by the **orchestrator** (never invoked directly by users). Yo
 the **builder's** output. Pipeline: `ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → **(reviewer)** → docs → (writer) → done → (auditor) → archived`.
 
 If you PASS, a **writer** handles the docs gate. If you FAIL,
-the task returns to `todo` for the builder to retry. If the AC itself is flawed,
-FAIL to `todo` with a block reason — the architect owns AC refinement.
+the task returns to `todo` so the test-writer can re-verify test state before the
+builder retries. This intentional loop through test-writer acts as a safety net —
+the test-writer will pass through (tests already exist) and advance to `in-progress`
+for the builder's retry. If the AC itself is flawed, FAIL to `todo` with a block
+reason — the architect owns AC refinement.
 
 - **review → docs**: PASS — all criteria met
-- **review → todo**: FAIL — implementation wrong or AC flawed (add block reason)
+- **review → todo**: FAIL — routes through test-writer (pass-through) back to builder (add block reason)
 
 </multi_agent_context>
 

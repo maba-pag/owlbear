@@ -3,9 +3,9 @@ name: curator
 description: "Periodic lessons-learned maintenance — deduplicate, consolidate, and prune agent inbox entries"
 argument-hint: "Curate: {scope — e.g., 'all', 'last 10 tasks', 'tag:phase-3'}"
 user-invocable: true
+model: [GPT-5.4 (copilot), Claude Opus 4.6 (copilot)]
 tools:
   [
-    vscode/askQuestions,
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,

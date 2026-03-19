@@ -7,6 +7,18 @@ description: "Structured research workflow: clarify scope → gather sources →
 
 Step-by-step process for investigating a topic and producing structured, actionable findings.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append research | `kanban\kanban-md.exe edit {id} -a "## Research\n{content}" -t --claim <agent>` |
+| Create follow-up | `kanban\kanban-md.exe create "TITLE" --priority P --status ideation --tags T` |
+| Advance | `kanban\kanban-md.exe edit {id} --status backlog --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Research checklist
 
 Before a task can leave `ideation`, complete this checklist. Items 1–5 are **mandatory**;
@@ -26,7 +38,7 @@ still exists** — it just doesn't create busywork.
 
 ## Step 0 — Claim
 
-Immediately claim the task by ID (never use `pick` — see **kanban-md skill** → Agent Task Lifecycle Protocol):
+Immediately claim the task by ID (never use `pick` — see kanban-md skill):
 
 ```powershell
 kanban\kanban-md.exe show {id}

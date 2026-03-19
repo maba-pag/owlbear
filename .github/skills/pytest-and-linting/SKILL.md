@@ -10,6 +10,16 @@ Each agent's primary skill covers **what** to test (scoping, AC verification).
 
 ## pytest — run plain, never pipe
 
+For full test suite runs (auditor), use `isBackground=true` + `get_terminal_output` to avoid terminal corruption from long-lived VS Code sessions (stale output, truncation, KeyboardInterrupt from prior runs):
+
+```powershell
+# Background terminal — avoids corruption
+run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", isBackground=true)
+# Then: get_terminal_output(id=...)
+```
+
+For scoped runs (builder, reviewer, test-writer), foreground is fine:
+
 ```powershell
 # Scoped (builder, reviewer, test-writer)
 uv run pytest tests/test_{module}.py -q --tb=short
@@ -83,6 +93,30 @@ Target >= 90% on touched modules.
 - `coverage run --source=...` — incompatible with pytest-cov config
 
 Only bare `--cov` works. It picks up `[tool.coverage.run] source` from `pyproject.toml`.
+
+## Known hang: WMI + logfire pydantic plugin on Windows
+
+CPython 3.12+ calls `_wmi.exec_query()` inside `platform.uname()` on Windows.
+WMI queries have **no timeout** and can block indefinitely when the WMI service
+is degraded (common under heavy parallel load — e.g., orchestration sessions).
+
+logfire registers a pydantic plugin (`logfire.integrations.pydantic`) that calls
+`platform.system()` at import time. Pydantic auto-loads plugins when constructing
+any model, including `pydantic_settings.BaseSettings`. This makes every
+`import pydantic_settings` hang when WMI is slow.
+
+**Mitigation:** `tests/conftest.py` pre-populates the `platform.uname()` cache
+in a daemon thread with a 3-second timeout, falling back to synthetic values from
+`sys.platform` / `os.environ`. This runs before any pydantic imports.
+
+**If pytest hangs despite the fix:** The WMI cache only works within a single
+process. If `uv run pytest` spawns a subprocess or the conftest doesn't load
+(e.g., wrong `testpaths`), the hang can recur. Also check for zombie processes
+from prior runs:
+
+```powershell
+Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force
+```
 
 ## Default flags
 

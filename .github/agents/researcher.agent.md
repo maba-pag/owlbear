@@ -3,9 +3,8 @@ name: researcher
 description: "Thorough research agent that produces structured findings and follow-up kanban tasks"
 argument-hint: "Research: {topic_or_question}"
 user-invocable: false
-tools:
-  [
-    vscode/askQuestions,
+model: [GPT-5.4 (copilot), Claude Opus 4.6 (copilot)]
+tools: [
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
@@ -14,7 +13,7 @@ tools:
     read/terminalLastCommand,
     read/problems,
     read/readFile,
-    "microsoft/markitdown/*",
+    "microsoft/markitdown/*", # requires MarkItDown MCP server
     edit/createDirectory,
     edit/createFile,
     edit/editFiles,

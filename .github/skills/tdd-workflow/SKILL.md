@@ -7,6 +7,18 @@ description: "TDD GREEN phase workflow: read existing tests → verify they fail
 
 Step-by-step process for implementing a kanban task using test-driven development.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append notes | `kanban\kanban-md.exe edit {id} -a "## Builder Notes\n{content}" -t --claim <agent>` |
+| Advance to review | `kanban\kanban-md.exe edit {id} --status review --release` |
+| BLOCK (fundamental) | `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
@@ -21,9 +33,11 @@ Check the task body for `## Test-Writer Notes` containing "Non-implementation ta
 "non-impl pass-through". If found:
 
 1. Append a brief note to the task body:
+
    ```powershell
    kanban\kanban-md.exe edit {id} -a "## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review." -t
    ```
+
 2. Advance + release: `kanban\kanban-md.exe edit {id} --status review --release`
 3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
 4. **Stop here.** Do not proceed to Step 2.
@@ -117,6 +131,14 @@ for the full rules. If coverage measurement fails,
 re-read that section before retrying — do NOT iterate through flag variations.
 
 All must pass. Target ≥ 90% coverage on touched modules.
+
+**Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
+
+```powershell
+Select-String -Path "tests/*.py" -Pattern "old_name"
+```
+
+Verify zero remaining references. Single-file updates cause 10–40 test regressions when other test files still use old names.
 
 ## Step 8 — Advance + release
 

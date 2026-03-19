@@ -7,6 +7,18 @@ description: "Evidence-based code review workflow: run tests → lint → read c
 
 Step-by-step process for reviewing a completed implementation task.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append evidence | `kanban\kanban-md.exe edit {id} -a "## Review Evidence\n{content}" -t --claim <agent>` |
+| PASS (advance) | `kanban\kanban-md.exe edit {id} --status docs --release` |
+| FAIL (reject) | `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read and claim the task
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
@@ -221,6 +233,10 @@ Build an evidence table — every AC line needs specific proof:
 | ... | file path + line, test name, command output | PASS/FAIL |
 
 "It looks fine" is NOT evidence. Cite specific line numbers, test names, or output.
+
+**Verify every citation.** When the builder claims "implemented at line X" or "test Y covers AC Z", read the actual file and confirm. Fabricated or stale line-number references are a recurring failure mode — never trust citations without checking.
+
+**Document tooling gaps.** If coverage measurement, test tooling, or terminal output fails, state the gap explicitly in the review evidence. Never rate high confidence to paper over a verification you could not actually perform.
 
 Additionally, verify that every AC line maps to at least one **specific, meaningful** test.
 General coverage is not enough — if AC says "reject negative numbers", show the exact test

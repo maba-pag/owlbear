@@ -3,9 +3,9 @@ name: builder
 description: "Code implementation from kanban tasks with TDD"
 argument-hint: "Build: {task_id_or_description}"
 user-invocable: false
+model: Claude Sonnet 4.6 (copilot)
 tools:
   [
-    vscode/askQuestions,
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
@@ -44,7 +44,7 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 - **Run pytest + ruff before advancing.** Never mark done without evidence.
 - **No new dependencies without justification** — check `pyproject.toml` first.
-- **Coverage: bare `--cov` only.** See `tdd-workflow` skill, Step 6. Never use `--cov=module.path` or `--cov=src/path`.
+- **Coverage: bare `--cov` only.** See `tdd-workflow` skill, Step 7. Never use `--cov=module.path` or `--cov=src/path`.
 - **Max 2 retries on any command.** If a command fails twice, stop and diagnose — read the error, check skill/instruction files, reassess. Never brute-force 10+ variations of the same command. _(defense-in-depth — source of truth: agent-common.instructions.md)_
 
 </critical_rules>

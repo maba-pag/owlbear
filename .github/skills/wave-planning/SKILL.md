@@ -13,15 +13,15 @@ orchestrator should dispatch in parallel.
 
 The planner assigns agents based on task status:
 
-| Task status   | Dispatch agent | Pipeline action                                         |
-| ------------- | -------------- | ------------------------------------------------------- |
-| `ideation`    | `researcher`   | Research investigation → move to `backlog`              |
-| `backlog`     | `architect`    | Architecture review → move to `todo`                    |
-| `todo`        | `test-writer`  | Write failing tests (RED phase) → move to `in-progress` |
-| `in-progress` | `builder`      | GREEN phase → move to `review`                          |
-| `review`      | `reviewer`     | Quality verification → move to `docs`                   |
-| `docs`        | `writer`       | Documentation gate → move to `done`                     |
-| `done`        | `auditor`      | Exit gate verification → archive                        |
+| Task status   | Dispatch agent | Pipeline action                                          | Non-impl pass-through? |
+| ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
+| `ideation`    | `researcher`   | Research investigation → move to `backlog`               | No                     |
+| `backlog`     | `architect`    | Architecture review → move to `todo`                     | No                     |
+| `todo`        | `test-writer`  | Write failing tests (RED phase) → move to `in-progress`  | Yes — tags `research`, `docs`, `type:config`, `type:docs` |
+| `in-progress` | `builder`      | GREEN phase → move to `review`                           | Yes — if test-writer passed through |
+| `review`      | `reviewer`     | Quality verification → move to `docs`                    | No                     |
+| `docs`        | `writer`       | Documentation gate → move to `done`                      | No                     |
+| `done`        | `auditor`      | Exit gate verification → archive                         | No                     |
 
 **Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`, or
 `type:docs` still flow through the standard pipeline (`todo → test-writer → in-progress
@@ -32,38 +32,118 @@ backlog → todo approval.
 
 ---
 
-## Step 1 — Receive scope
+## Command Recipes
+
+The planner uses exactly these commands. No improvisation — no `rg` on frontmatter, no
+`Get-ChildItem` on task files, no foreach loops over individual `show` calls. All board
+data comes from `kanban-md.exe` commands that respect server-side filtering (claim
+timeout, dependency resolution, block flags).
+
+### Recipe 0 — Decision requests
+
+Run before the Board Scan. Check for resolved decision requests:
+
+```powershell
+Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Select-Object -ExpandProperty FullName
+```
+
+For each file found, read frontmatter. If `approved: true` (or `status: resolved` in
+legacy files), unblock the task and move the file to `docs/decisions/resolved/`. If
+`approved: false` and older than 5 days, auto-resolve with the agent's recommendation.
+
+### Recipe 1 — Board Scan
+
+**One terminal call.** Produces a classified, sorted, gate-checked candidate list in
+~1.3K tokens (tested on an 850-task board, 46 dispatchable candidates).
+
+```powershell
+$pr=@{critical=0;needed=1;important=2;'nice-to-have'=3;someday=4}
+$sr=@{done=0;docs=1;review=2;'in-progress'=3;todo=4;backlog=5;ideation=6}
+$raw = kanban\kanban-md.exe list --json --unblocked --not-blocked --unclaimed `
+  --status ideation,backlog,todo,in-progress,review,docs,done {scope} 2>&1 | Out-String
+$tasks = $raw | ConvertFrom-Json
+if (-not $tasks) { '(empty)'; return }
+$tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
+  $w=@()
+  if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes') {$w+='TW:MISSING'}
+  if ($_.status -in @('todo','in-progress','review','docs','done') -and
+      $_.body -notmatch '(?m)^\s*(-\s|\d+\.\s)') {$w+='AC:MISSING'}
+  $t=if($_.tags){"($($_.tags -join ','))"}else{''}
+  $x=if($w){" [!$($w -join ',')]"}else{''}
+  "#$($_.id) $($_.status)/$($_.priority) $($_.title) $t$x"
+}
+"---"
+"$($tasks.Count) candidates"
+```
+
+**What the `--unblocked --not-blocked --unclaimed` triple does:**
+
+- `--unblocked` → all `depends_on` tasks at terminal status (done or archived). **= Gate 2.**
+- `--not-blocked` → no explicit `--block` flag set. These flags are orthogonal — see
+  kanban-md skill Pitfalls.
+- `--unclaimed` → not claimed, or claim expired per `claim_timeout` in `config.yml`.
+  **= Gate 6.** Never manually inspect `claimed_by`/`claimed_at` timestamps — this
+  flag handles claim expiry server-side.
+
+**What the PowerShell layer adds:**
+
+- Dual-key sort: priority rank (critical first) → pipeline proximity (done first,
+  ideation last). **= Step 5 ordering.**
+- `TW:MISSING` flag: `in-progress` task without `## Test-Writer Notes`. **= Gate 4.**
+- `AC:MISSING` flag: `todo+` task without bullet (`- `) or numbered (`1. `) AC items.
+  **= Gate 5.** Not flagged for ideation/backlog — those tasks don't need AC yet
+  (the researcher/architect adds it).
+- Tags inline for builder domain deconfliction. **= Step 5 deconfliction.**
+
+**What remains for LLM reasoning (no terminal commands needed):**
+
+- Gate 3 (atomicity): scan titles for "and" joining unrelated concerns.
+- Builder domain deconfliction: one builder per `scope:` domain.
+- 12-task dispatch cap: take top entries from the already-sorted list.
+- Stale-task handling: cross-reference orchestrator failure context with output.
+
+**Scope translation** — replace `{scope}` with flags from the orchestrator:
+
+| Orchestrator scope | Substitute for `{scope}` |
+| ------------------ | ------------------------ |
+| `"tag:phase-3"`    | `--tag phase-3`          |
+| `"all"` or omitted | _(nothing — the default `--status` covers all active statuses)_ |
+
+### Recipe 2 — Stale-task body read
+
+**Conditional.** Run only when the orchestrator reports first-stale tasks that need a
+`retry_hint`. Read the last agent note section to extract a ≤120 char summary:
+
+```powershell
+foreach ($id in {stale_ids}) { "===TASK $id==="; kanban\kanban-md.exe show $id; "===END===" }
+```
+
+### Terminal call budget
+
+| Scenario | Calls | Notes |
+| -------- | ----- | ----- |
+| Normal cycle | 1–2 | Recipe 0 + Recipe 1 |
+| With stale tasks | 2–3 | + Recipe 2 for retry_hint extraction |
+| Previous approach | 20+ | Individual `show` calls, foreach loops, `rg` on files |
+
+## Step 1 — Receive scope and scan board
 
 The orchestrator passes a scope filter and optional failure context from the previous
 cycle.
 
 ### Check pending decision requests
 
-Before reading the board, check for resolved decision requests:
+Run **Recipe 0** (Decision requests). Process any resolved requests before scanning.
 
-```powershell
-Get-ChildItem docs/decisions/pending/*.md -ErrorAction SilentlyContinue
-```
+### Board Scan
 
-For each file found, read the frontmatter. If `status: resolved`, unblock the corresponding task:
+Run **Recipe 1** (Board Scan) with the orchestrator's scope filter substituted for
+`{scope}`. This single command produces the full candidate list — sorted by priority
+and pipeline proximity, with gate markers for Gates 2, 4, 5, and 6 already applied.
 
-```powershell
-kanban\kanban-md.exe edit {task_id} --unblock
-```
+If the scan returns `(empty)`, output `{"dispatch":[],"blocked":[]}` and stop.
 
-Then move the file from `docs/decisions/pending/` to `docs/decisions/resolved/`.
-
-If `status: pending` and the file is older than 30 days (check `created` field), auto-resolve with the agent's recommendation: update the file's status to `auto-resolved`, unblock the task, and add a note: "Auto-resolved after 30-day timeout. User can override."
-
-Proceed with normal scope processing after this check.
-
-Apply the filter to `kanban\kanban-md.exe list --compact`. Examples:
-
-- Tag filter: `kanban\kanban-md.exe list --compact --tag phase-3`
-- Status filter: `kanban\kanban-md.exe list --compact --status todo,review`
-- All: `kanban\kanban-md.exe list --compact`
-
-If the scope returns 0 tasks, output an empty JSON plan (`{"dispatch":[],"blocked":[]}`) and stop.
+Use `manage_todo_list` to track progress through the remaining steps.
 
 **Failure context:** If the orchestrator reports tasks that failed in the previous cycle,
 note them. Failures come in two flavors:
@@ -71,14 +151,15 @@ note them. Failures come in two flavors:
 - **Crash failures:** Agent crashed twice. Note the ID — these tasks are dispatched
   normally (the planner does not special-case them beyond awareness).
 - **Stale-retried IDs:** Tasks that were dispatched with a `retry_hint` last cycle but
-  still haven't moved. If a task appears in `stale_retried` AND is still at the same
-  status, it has failed twice — **block it** with reason `STALE — retried with hint, still unchanged`.
+  still haven't moved. If a task appears in `stale_retried` AND is still in the Board
+  Scan output at the same status, it has failed twice — **block it** with reason
+  `STALE — retried with hint, still unchanged`.
 
 **First-stale detection (guided retry):** If a task appears at the same status it was
 dispatched from last cycle (it hasn't moved) and is NOT in the `stale_retried` list from
 the prior cycle, it is first-stale. Instead of blocking it immediately:
 
-1. Read the task body via `kanban\kanban-md.exe show {id}`.
+1. Run **Recipe 2** (Stale-task body read) for the stale task IDs.
 2. Find the **last** agent note section — look for the final occurrence of any of these
    headings: `## Builder Notes`, `## Review Evidence`, `## Test-Writer Notes`,
    `## Audit`, or `## Handoff`.
@@ -90,52 +171,25 @@ The orchestrator tracks which tasks were retried with hints (`stale_retried` IDs
 passes them back next cycle. If the task is still stale after the retry, the planner
 blocks it on the second cycle.
 
-## Step 2 — Read board
+## Step 2 — Apply gates and build dispatch list
 
-For each candidate task from Step 1, run:
+Parse the Board Scan output from Step 1. Each line is a candidate task. The scan has
+already applied Gates 2 and 6 via server-side filters, and flagged Gates 4 and 5 via
+markers. Apply the remaining gates and build the dispatch list.
 
-```
-kanban\kanban-md.exe show {id}
-```
+### Gate checks
 
-Extract from each task: title, status, priority, tags, `depends_on` list, blocked
-state, and acceptance criteria.
-
-Use `manage_todo_list` to track progress through the remaining steps.
-
-**Context budget:** If the scope contains more than 20 tasks, prioritize by: (1) critical
-and needed priority first, (2) tasks closest to `done` in the pipeline (docs > review >
-todo > backlog). Read details for the top 20 only — silently defer the rest to the next
-planning cycle.
-
-## Step 3 — Build DAG
-
-Construct a dependency graph from task metadata:
-
-- **Nodes** = in-scope tasks
-- **Edges** = `depends_on` relationships (directed: dependency → dependent)
-
-Classify each task:
-
-| Classification | Condition                                                                        |
-| -------------- | -------------------------------------------------------------------------------- |
-| **Ready**      | All `depends_on` tasks are in `done` status AND task is not blocked              |
-| **Blocked**    | At least one `depends_on` task is NOT `done`, or task has `--block` set          |
-| **External**   | Has `depends_on` pointing to tasks outside the current scope that are not `done` |
-
-External-blocked tasks go to the BLOCKED section with the out-of-scope dependency noted.
-
-## Step 4 — Gate checks
-
-For each **ready** task (not blocked, not external), run all 6 gate checks. A task must
-pass ALL gates to be dispatched. Any failure → task is silently excluded from the output.
+All tasks in the Board Scan output have already passed Gates 2 and 6. Check the
+remaining gates on each candidate:
 
 **Gate 1 — Status gate:**
 Task status must match a dispatchable status in the agent dispatch mapping above.
-All statuses in the mapping are dispatchable. Tasks in `in-progress` are dispatched to the builder.
+All statuses in the mapping are dispatchable. _(Always passes for Board Scan output
+since the `--status` filter enforces this.)_
 
-**Gate 2 — Dependency gate:**
-ALL tasks in `depends_on` must be in `done` status. No exceptions.
+**Gate 2 — Dependency gate:** ✅ **Handled by Board Scan.**
+The `--unblocked` flag ensures all `depends_on` tasks are at terminal status (done or
+archived). No manual dependency checking needed.
 
 **Gate 3 — Atomicity gate:**
 Title describes a single responsibility. Red flag: the word "and" joining unrelated
@@ -143,37 +197,28 @@ concerns (e.g., "Implement parser and update config"). Related concerns joined b
 are fine (e.g., "Read board and build DAG" — both are planning sub-steps).
 
 **Gate 4 — TDD gate (safety net):**
-For `in-progress` tasks, verify that the task body contains `## Test-Writer Notes`
-(written by the test-writer during RED phase or pass-through). If present → gate passes.
-If absent → something went wrong (task reached `in-progress` without the test-writer
-running). Block the task and flag the anomaly.
+Check the Board Scan output for `[!TW:MISSING]` marker. This appears on `in-progress`
+tasks whose body lacks `## Test-Writer Notes`. If the marker is present → exclude the
+task from dispatch (it reached `in-progress` without proper test-writer processing).
 As a fallback, a linked test task in `done` status also satisfies this gate.
 
-This gate catches tasks that reached `in-progress` without proper test-writer processing
-(e.g., manually moved tasks). Non-implementation tasks will have a pass-through note
-instead of test details — both satisfy this gate. When the pipeline works correctly,
-this gate is redundant — which is by design (belt-and-suspenders).
-
 **Gate 5 — Clarity gate:**
-Task body contains non-empty acceptance criteria with at least one bullet point
-(`- ` or `- [ ]`) describing a verifiable criterion.
-Tasks with empty or missing AC fail this gate.
+Check the Board Scan output for `[!AC:MISSING]` marker. This appears on `todo+` tasks
+whose body lacks bullet (`- `) or numbered (`1. `) acceptance criteria. If the marker
+is present → exclude the task from dispatch.
+This gate does NOT apply to `ideation` or `backlog` tasks — those don't need AC yet
+(the researcher/architect adds it during their pipeline stage).
 
-**Gate 6 — Claim gate (defense-in-depth):**
-If a task is already claimed by an agent (check claim field in `kanban-md show` output),
-skip it from dispatch — it is already being worked on. This prevents double-dispatch
-even if the prior agent hasn't advanced the task yet. Stale claims are handled separately
-by the first-stale / second-stale detection logic.
+**Gate 6 — Claim gate:** ✅ **Handled by Board Scan.**
+The `--unclaimed` flag excludes tasks with active claims. It respects `claim_timeout`
+from `kanban/config.yml` — claims older than the timeout are treated as expired and DO
+appear in the scan. Never manually inspect `claimed_by`/`claimed_at` fields.
 
-## Step 5 — Filter, deconflict, prioritize
+### Filter, deconflict, prioritize
 
 From the gate-passing tasks, build the dispatch list:
 
-1. **Dependency filter:** Only include tasks whose ALL `depends_on` are `done`. Tasks
-   that depend on other gate-passing tasks go to later cycles naturally — the orchestrator
-   will re-plan after this batch completes, and those tasks will then be dispatchable.
-
-2. **Builder domain deconfliction:** At most **one builder task per domain** in a single
+1. **Builder domain deconfliction:** At most **one builder task per domain** in a single
    dispatch list. Builders modify existing code — two builders in the same domain risk
    file conflicts. All other agent types (reviewer, auditor, writer, architect,
    test-writer, researcher) are safe to parallelize within a domain because they either
@@ -182,19 +227,18 @@ From the gate-passing tasks, build the dispatch list:
    Domain is determined by the task's `scope:{domain}` tag (see kanban-planner domain
    table). Tasks without a `scope:` tag are treated as unique domains (no conflict).
 
-3. **Priority ordering:** Sort by: (1) `critical` > `needed` > `important` >
-   `nice-to-have` > `someday`, (2) pipeline proximity — tasks closer to `done` first
-   (docs > review > in-progress > todo > backlog), (3) tasks that unblock the most
-   downstream dependents.
+2. **Priority ordering:** The Board Scan output is already sorted by: (1) priority rank
+   (critical → someday), (2) pipeline proximity (done → ideation). Take tasks in the
+   order they appear.
 
-4. **Batch size cap:** Max 16 tasks per dispatch list. If more qualify, take the top 16
-   by priority. The rest are silently deferred to the next planning cycle.
+3. **Batch size cap:** Max 12 tasks per dispatch list. If more qualify, take the top 12
+   from the sorted list. The rest are silently deferred to the next planning cycle.
 
-## Step 6 — Output JSON plan
+## Step 3 — Output JSON plan
 
 Produce JSON as the final response. No prose preamble, no narrative, no markdown tables.
-Working notes (DAG analysis, gate-check reasoning) stay in your internal reasoning —
-they do not appear in the output.
+Working notes (gate-check reasoning) stay in your internal reasoning — they do not
+appear in the output.
 
 Format:
 
@@ -218,7 +262,7 @@ Format:
 - No fields other than `dispatch` and `blocked`
 - Empty arrays are fine: `{"dispatch":[],"blocked":[]}`
 - Gate names do not appear in the output (gate failures = task not in dispatch, not mentioned at all)
-- If more than 16 tasks pass gates, include only the top 16 by priority
+- If more than 12 tasks pass gates, include only the top 12 by priority
 
 ---
 
@@ -226,15 +270,16 @@ Format:
 
 Before outputting:
 
-- [ ] Scope filter was applied — not reading the entire board unfiltered (unless scope is "all")
-- [ ] Every candidate task was read with `kanban\kanban-md.exe show {id}` (not just list output)
-- [ ] DAG was built — tasks classified as ready, blocked, or external
-- [ ] All 6 gate checks were run on every ready task
-- [ ] No task in `dispatch` failed any gate check
+- [ ] Board Scan (Recipe 1) was used — not individual `show` calls or `rg`/`Get-ChildItem` on task files
+- [ ] Board Scan used triple filter `--unblocked --not-blocked --unclaimed` (claim timeout handled by kanban-md)
+- [ ] Scope filter from orchestrator was substituted into `{scope}` placeholder
+- [ ] No foreach loops over individual `show` calls (batch only via Recipe 2 for stale tasks)
+- [ ] Total terminal calls ≤ 3
+- [ ] All 6 gate checks accounted for (Gates 2+6 by filter, Gates 4+5 by markers, Gates 1+3 by reasoning)
+- [ ] No task with `[!TW:MISSING]` or `[!AC:MISSING]` marker in `dispatch`
 - [ ] At most one builder per `scope:{domain}` in the list
-- [ ] Batch does not exceed 16 tasks
+- [ ] Batch does not exceed 12 tasks
 - [ ] Agent names match the dispatch mapping
-- [ ] `blocked` array includes all tasks with unmet dependencies, blocks, and stale flags
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
 - [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks are blocked
 - [ ] Output is a single-line JSON object with `dispatch` and `blocked` fields only

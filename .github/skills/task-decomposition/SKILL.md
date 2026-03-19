@@ -7,6 +7,22 @@ description: "Task decomposition workflow: read plan → check board → decompo
 
 Step-by-step process for breaking complex features into atomic, test-driven kanban tasks.
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| Board overview | `kanban\kanban-md.exe board --compact` |
+| List existing tasks | `kanban\kanban-md.exe list --compact` |
+| List by status | `kanban\kanban-md.exe list --compact --status S` |
+| List by tag | `kanban\kanban-md.exe list --compact --tag T` |
+| Read parent task | `kanban\kanban-md.exe show {id}` |
+| Append plan to parent | `kanban\kanban-md.exe edit {id} -a "## Planning\n{content}" -t` |
+| OUTPUT (not executed) | `kanban\kanban-md.exe create "P{n}-{nn}: TITLE" --priority P --tags T --depends-on ID --body "AC"` |
+
+**Important:** The kanban-planner outputs `create` commands for user review — it does NOT execute them. Only `list`, `show`, `board`, and `edit` (for appending to a parent task) are executed directly.
+
+See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Read the plan
 
 Read input (free-text, plan doc section, or requirements). Identify phase number,

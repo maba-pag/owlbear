@@ -7,6 +7,20 @@ description: "Exit gate verification workflow: verify AC with evidence → score
 
 Step-by-step process for the exit gate (done → archived).
 
+## kanban-md Commands
+
+| Action | Command |
+|--------|---------|
+| List done tasks | `kanban\kanban-md.exe list --compact --status done` |
+| Read task | `kanban\kanban-md.exe show {id}` |
+| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
+| Append audit | `kanban\kanban-md.exe edit {id} -a "## Audit\n{content}" -t --claim <agent>` |
+| Archive (pass) | `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release` |
+| Reject (fixable) | `kanban\kanban-md.exe edit {id} --status review --block "reason" --release` |
+| Reject (fundamental) | `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release` |
+
+No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
 ## Step 1 — Gather done tasks
 
 ```powershell
@@ -37,6 +51,7 @@ For every AC item on every task, collect concrete evidence:
   **NOTE:** Unlike the reviewer (who scopes tests to task-specific files), the auditor
   intentionally runs the FULL test suite. As 3rd-line defense, the auditor checks for
   cross-task regressions that scoped runs would miss. This is by design.
+
 - **Lint clean:** Run `uv run ruff check src/ tests/` once
 - **AC deviations:** Note differences between AC and implementation
   - Minor deviations (better naming, improved path): acceptable if intent is met
@@ -63,16 +78,29 @@ For every AC item on every task, collect concrete evidence:
 
 Totals: X archived, Y rejected, Z flagged.
 
-## Step 5 — Commit in packages
+## Step 5 — Verify commits and commit leftovers
 
-1. `git status --short` + `git log --oneline -5`
-2. Group files by cohesion:
-   - Feature: source + tests + config → `feat:`
-   - Infra/tooling/deps → `chore:`
-   - Kanban board changes → `chore:`
-   - Docs → `docs:`
-   - Agent definitions + prompts → `docs:`
-3. Stage each package's files, commit with conventional message, next package
+Upstream agents (test-writer, builder, writer) should have committed their deliverables already (see `agent-common.instructions.md` → **Commit discipline**). Your job is to verify and clean up.
+
+### 5a — Verify upstream commits
+
+For each archived task's deliverable files:
+
+```powershell
+git log --oneline -5 -- <deliverable-files>
+```
+
+Confirm the files appear in recent commits. If deliverables are uncommitted, note this as a quality gap in the audit report.
+
+### 5b — Stage and commit leftovers
+
+**VS Code auto-staging trap:** VS Code SCM can auto-stage files from other tasks. Always run `git diff --cached` + `git status --short` before committing. If you see unexpected files, `git reset HEAD` first, then selectively `git add`.
+
+1. `git status --short` — identify uncommitted files
+2. Group by cohesion and commit:
+   - Kanban board changes → `chore: update board state (#id, auditor)`
+   - Any orphaned deliverables → appropriate type with a note about upstream gap
+3. Follow the commit message format in `agent-common.instructions.md` → **Commit discipline**
 4. Do **not** push — the user pushes manually
 
 ## Step 6 — Final summary

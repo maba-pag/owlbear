@@ -3,9 +3,9 @@ name: kanban-planner
 description: "Entry gate for feature decomposition + bulk task creation"
 argument-hint: "Plan: {feature_or_plan_description}"
 user-invocable: true
+model: [GPT-5.4 (copilot), Claude Opus 4.6 (copilot)]
 tools:
   [
-    vscode/askQuestions,
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
