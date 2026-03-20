@@ -107,7 +107,9 @@ class TestBuildHooks:
         assert len(hooks.handlers.get(HookEvent.SUBAGENT_COMPLETE, [])) >= 1
 
     def test_session_start_has_handler(self) -> None:
-        settings = OwlBearSettings()
+        # SESSION_START is populated by LessonsInjectionHook when enabled;
+        # ContextInjectionHook was removed (#772/#858).
+        settings = OwlBearSettings(lessons_injection_enabled=True)
         hooks, _ = build_hooks(settings, workspace_root=None)
         assert len(hooks.handlers.get(HookEvent.SESSION_START, [])) >= 1
 
@@ -2761,3 +2763,108 @@ class TestFromAC_OpenAIClientCleanup:  # noqa: N801
         assert mock_client.close in result.cleanup
         assert result.progress_reporter is not None
         assert result.progress_reporter.stop in result.cleanup
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: ContextInjectionHook removal from build_hooks() (#858 / #772)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
+    """Proves ContextInjectionHook must not be registered by build_hooks().
+
+    Counts SESSION_START handlers by type(handler).__module__ and
+    type(handler).__name__ — no import from owlbear.core.context_hook —
+    so the tests remain valid after src/owlbear/core/context_hook.py is deleted.
+    """
+
+    def _count_context_injection_handlers(self, hooks: HookRegistry) -> int:
+        """Return number of SESSION_START handlers whose type is ContextInjectionHook."""
+        handlers = hooks.handlers.get(HookEvent.SESSION_START, [])
+        return sum(
+            1
+            for h in handlers
+            if type(h).__module__ == "owlbear.core.context_hook"
+            and type(h).__name__ == "ContextInjectionHook"
+        )
+
+    def test_no_context_injection_hook_when_lessons_disabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC2: build_hooks with lessons_injection_enabled=False must not register
+        ContextInjectionHook."""
+        import os
+
+        for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
+            monkeypatch.delenv(var, raising=False)
+
+        settings = OwlBearSettings(lessons_injection_enabled=False)
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        count = self._count_context_injection_handlers(hooks)
+        assert count == 0, (
+            f"ContextInjectionHook must NOT be registered on SESSION_START "
+            f"when lessons_injection_enabled=False, but found {count} instance(s)"
+        )
+
+    def test_no_context_injection_hook_when_lessons_enabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC3: build_hooks with lessons_injection_enabled=True must not register
+        ContextInjectionHook."""
+        import os
+
+        for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
+            monkeypatch.delenv(var, raising=False)
+
+        settings = OwlBearSettings(lessons_injection_enabled=True)
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        count = self._count_context_injection_handlers(hooks)
+        assert count == 0, (
+            f"ContextInjectionHook must NOT be registered on SESSION_START "
+            f"even when lessons_injection_enabled=True, but found {count} instance(s)"
+        )
+
+    def test_no_context_injection_hook_with_workspace_root(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC2/3 boundary: workspace_root does not cause ContextInjectionHook to appear."""
+        import os
+
+        for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
+            monkeypatch.delenv(var, raising=False)
+
+        settings = OwlBearSettings(lessons_injection_enabled=False)
+        hooks, _ = build_hooks(settings, workspace_root=tmp_path)
+        count = self._count_context_injection_handlers(hooks)
+        assert count == 0, (
+            f"ContextInjectionHook must NOT be registered on SESSION_START "
+            f"with workspace_root set, but found {count} instance(s)"
+        )
+
+    def test_session_start_has_no_duplicate_context_injection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC2/3 boundary: exactly zero ContextInjectionHook instances across all
+        SESSION_START handlers."""
+        import os
+
+        for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
+            monkeypatch.delenv(var, raising=False)
+
+        settings = OwlBearSettings(lessons_injection_enabled=True)
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        handlers = hooks.handlers.get(HookEvent.SESSION_START, [])
+        context_handlers = [
+            h
+            for h in handlers
+            if type(h).__module__ == "owlbear.core.context_hook"
+            and type(h).__name__ == "ContextInjectionHook"
+        ]
+        assert context_handlers == [], (
+            f"Expected no ContextInjectionHook handlers, found: {context_handlers}"
+        )

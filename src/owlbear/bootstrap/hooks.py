@@ -6,14 +6,12 @@ import logging
 from typing import TYPE_CHECKING
 
 from owlbear.core.command_guard import CommandSafetyGuard
-from owlbear.core.context_hook import ContextInjectionHook
 from owlbear.core.hooks import HookRegistry
 from owlbear.core.lint_hook import AutoLintHook
 from owlbear.core.notification_hook import ConsoleBellBackend, NotificationHook, WinSoundBackend
 from owlbear.core.observability import EventStore, ObservabilityHook
 from owlbear.core.subagent_hook import SubagentVerificationHook
 from owlbear.core.test_hook import TestVerificationHook
-from owlbear.tools.browser.config import BrowserConfig
 from owlbear.tools.browser.safety import URLSafetyGuard
 
 if TYPE_CHECKING:
@@ -42,11 +40,10 @@ def build_hooks(
     hooks = HookRegistry()
 
     CommandSafetyGuard().register(hooks)
-    URLSafetyGuard(config=BrowserConfig()).register(hooks)
+    URLSafetyGuard(config=settings.browser).register(hooks)
     AutoLintHook().register(hooks)
     SubagentVerificationHook().register(hooks)
     TestVerificationHook().register(hooks)
-    ContextInjectionHook().register(hooks)
 
     if settings.lessons_injection_enabled:
         from owlbear.core.lessons_hook import LessonsInjectionHook  # noqa: PLC0415
