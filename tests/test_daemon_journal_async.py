@@ -17,14 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# isort: off — import order is intentional: owlbear.tools must be imported
-# before owlbear.daemon to break the circular import chain:
-# core.errors -> tools.browser.safety -> tools/__init__ -> github_api ->
-# core.retry -> core.errors (cycle). Pre-seeding tools/__init__ resolves it.
-import owlbear.tools  # noqa: F401
 from owlbear.daemon import _log_to_journal
-
-# isort: on
 
 # ---------------------------------------------------------------------------
 # Helpers
