@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from owlbear.core.delegation import DelegationToolset
 from owlbear.paths import sandbox_path
 from owlbear.tools.ask_user import AskUserToolset
-from owlbear.tools.browser.config import BrowserConfig
 from owlbear.tools.browser.toolset import BrowserToolset
 from owlbear.tools.filesystem import FileToolset
 from owlbear.tools.git_local import GitLocalToolset
@@ -30,7 +29,7 @@ if TYPE_CHECKING:
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
     from owlbear.channels.base import ChannelPlugin
-    from owlbear.config import OwlBearSettings
+    from owlbear.config import BrowserConfig, OwlBearSettings
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.context import ContextManager
     from owlbear.memory.knowledge.consolidation import ConsolidationService
@@ -181,11 +180,12 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
 def _wire_web_search(
     raw: list[AbstractToolset],
     summary: list[ComponentStatus],
+    browser_config: BrowserConfig | None = None,
 ) -> None:
     """Add web search toolset if available."""
     _pkg = sys.modules[__package__]
     try:
-        web_ts = _pkg._build_web_search_toolset()  # noqa: SLF001
+        web_ts = _pkg._build_web_search_toolset(browser_config=browser_config)  # noqa: SLF001
     except Exception as exc:  # noqa: BLE001
         web_ts = None
         summary.append(
@@ -291,7 +291,7 @@ def build_toolsets(  # noqa: PLR0913
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
     profile_dir = sandbox_path(workspace, "browser_profiles")
     profile_dir.mkdir(parents=True, exist_ok=True)
-    browser_toolset = BrowserToolset(config=BrowserConfig())
+    browser_toolset = BrowserToolset(config=settings.browser)
     raw.append(browser_toolset)
     raw.append(KanbanToolset(kanban_dir=workspace / "kanban", hooks=hooks))
 
@@ -343,7 +343,7 @@ def build_toolsets(  # noqa: PLR0913
         _summary,
         _pkg,
     )
-    _wire_web_search(raw, _summary)
+    _wire_web_search(raw, _summary, browser_config=settings.browser)
 
     # Wrap and gate
     wrapped = _wrap_toolsets(raw, settings, hooks, channel)

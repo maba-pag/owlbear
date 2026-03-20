@@ -77,13 +77,13 @@ def _wire_session_memory_hook(
 
 def _build_hydrator(
     workspace: Path,
+    settings: OwlBearSettings,
 ) -> Callable:
     """Build an async hydrator closure for context pre-hydration."""
     from owlbear.core.context_hydration import hydrate as _hydrate_impl  # noqa: PLC0415
-    from owlbear.tools.browser.config import BrowserConfig  # noqa: PLC0415
     from owlbear.tools.browser.safety import URLSafetyGuard  # noqa: PLC0415
 
-    guard = URLSafetyGuard(config=BrowserConfig())
+    guard = URLSafetyGuard(config=settings.browser)
 
     async def _hydrate(body: str) -> object:
         return await _hydrate_impl(body, workspace, url_checker=guard.check_url)
@@ -245,7 +245,7 @@ async def bootstrap(
     if settings.log_startup_summary:
         await channel.send(summary_text)
 
-    hydrator = _build_hydrator(workspace) if settings.prehydration_enabled else None
+    hydrator = _build_hydrator(workspace, settings) if settings.prehydration_enabled else None
 
     return BootstrapResult(
         agent=agent,

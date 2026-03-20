@@ -269,7 +269,7 @@ class TestCDPEndpointUrlparseFailure:
 
         with (
             patch(
-                "owlbear.tools.browser.config.urlparse",
+                "owlbear.config.urlparse",
                 side_effect=ValueError("boom"),
             ),
             pytest.raises(ValidationError, match="cdp_endpoint is not a valid URL"),

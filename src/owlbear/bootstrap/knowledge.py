@@ -323,7 +323,9 @@ def _build_knowledge_source_toolset(
         return None
 
 
-def _build_web_search_toolset() -> AbstractToolset | None:
+def _build_web_search_toolset(
+    browser_config: BrowserConfig | None = None,
+) -> AbstractToolset | None:
     """Create a :class:`WebSearchToolset` if duckduckgo_search is available.
 
     Returns ``None`` when ``duckduckgo_search`` or ``trafilatura`` cannot
@@ -332,7 +334,7 @@ def _build_web_search_toolset() -> AbstractToolset | None:
     try:
         from owlbear.tools.web_search import WebSearchToolset  # noqa: PLC0415
 
-        config = BrowserConfig()
+        config = browser_config or BrowserConfig()
         return WebSearchToolset(
             blocked_urls=config.blocked_urls,
             allowed_urls=config.allowed_urls,
