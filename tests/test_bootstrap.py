@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1302,7 +1302,7 @@ class TestBuildToolsetsProjectScope:
                 tmp_path,
                 mock_infra,
                 project_id="proj-99",
-                chat_model="gpt-4o",
+                chat_model=ANY,  # #556: now a Model instance, not bare string
                 max_tokens=2000,
                 knowledge_graph_expansion=True,
                 inter_doc_graph_building=False,
@@ -1595,7 +1595,7 @@ class TestBuildToolsetsKnowledgeService:
             tmp_path,
             mock_infra,
             project_id=None,
-            chat_model="gpt-4o",
+            chat_model=ANY,  # #556: now a Model instance, not bare string
             max_tokens=5000,
             knowledge_graph_expansion=True,
             inter_doc_graph_building=False,

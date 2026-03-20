@@ -81,10 +81,25 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
     knowledge_service: KnowledgeQueryService | None = None
     ingest_pipeline: IngestPipeline | None = None
     consolidation_svc: ConsolidationService | None = None
+
+    # Resolve to a Model instance so bare-string DeprecationWarnings are not raised.
+    # In production build_toolsets() is always called with a Model from bootstrap(),
+    # so this branch only runs in tests / edge callers that omit chat_model.
+    if isinstance(chat_model, str) or chat_model is None:
+        from pydantic_ai.models.openai import OpenAIChatModel  # noqa: PLC0415
+        from pydantic_ai.providers.openai import OpenAIProvider  # noqa: PLC0415
+
+        resolved_model: Model = OpenAIChatModel(
+            chat_model or settings.chat_model,
+            provider=OpenAIProvider(api_key="placeholder"),
+        )
+    else:
+        resolved_model = chat_model
+
     try:
         infra = _pkg._build_knowledge_infra(  # noqa: SLF001
             workspace,
-            chat_model=chat_model or settings.chat_model,
+            chat_model=resolved_model,
         )
     except Exception as exc:  # noqa: BLE001
         infra = None
@@ -106,7 +121,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
             workspace,
             infra,
             project_id=active_project_id,
-            chat_model=chat_model or settings.chat_model,
+            chat_model=resolved_model,
             max_tokens=settings.knowledge_context_tokens,
             knowledge_graph_expansion=settings.knowledge_graph_expansion,
             inter_doc_graph_building=settings.inter_doc_graph_building,
@@ -131,7 +146,7 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
         bookmark_ts = _pkg._build_bookmark_toolset(  # noqa: SLF001
             infra,
             workspace,
-            chat_model=chat_model or settings.chat_model,
+            chat_model=resolved_model,
         )
         if bookmark_ts is not None:
             raw.append(bookmark_ts)
