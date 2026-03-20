@@ -7,7 +7,6 @@ reach the user.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path, PurePosixPath
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,10 +26,6 @@ from owlbear.core.hooks import HookRegistry
 runner = CliRunner()
 
 
-def _run(coro: object) -> object:
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 # ---------------------------------------------------------------------------
 # daemon.py — 3 channel.send sites
 # ---------------------------------------------------------------------------
@@ -39,7 +34,8 @@ def _run(coro: object) -> object:
 class TestDaemonSanitisesErrors:
     """daemon._recover_from_error wraps exceptions in error_to_user_message."""
 
-    def test_transient_exhausted_sends_sanitized(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_exhausted_sends_sanitized(self, tmp_path: Path) -> None:
         """After transient retries exhausted, channel gets safe message."""
         from owlbear.daemon import run_daemon
 
@@ -49,7 +45,7 @@ class TestDaemonSanitisesErrors:
         agent.turn = AsyncMock(side_effect=exc)
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(run_daemon(channel=channel, agent=agent, config_dir=tmp_path))
+            await (run_daemon(channel=channel, agent=agent, config_dir=tmp_path))
 
         error_msgs = [m for m in channel.sent if m.startswith("Error:")]
         assert error_msgs
@@ -57,7 +53,8 @@ class TestDaemonSanitisesErrors:
         assert "Connection failed" in error_msgs[0]
         assert "connection refused" not in error_msgs[0]
 
-    def test_auth_refresh_failure_sends_sanitized(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_refresh_failure_sends_sanitized(self, tmp_path: Path) -> None:
         """Auth refresh path wraps retry_exc in error_to_user_message."""
         from owlbear.daemon import run_daemon
 
@@ -77,7 +74,7 @@ class TestDaemonSanitisesErrors:
             new_callable=AsyncMock,
             side_effect=RuntimeError("token refresh failed with secret_key=x"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=agent,
@@ -91,7 +88,8 @@ class TestDaemonSanitisesErrors:
         # Sensitive key value must be scrubbed
         assert "secret_key=x" not in error_msgs[0]
 
-    def test_permanent_error_sends_sanitized(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_sends_sanitized(self, tmp_path: Path) -> None:
         """Permanent errors use error_to_user_message, not raw str(exc)."""
         from owlbear.daemon import run_daemon
 
@@ -100,7 +98,7 @@ class TestDaemonSanitisesErrors:
         agent = AsyncMock()
         agent.turn = AsyncMock(side_effect=exc)
 
-        _run(run_daemon(channel=channel, agent=agent, config_dir=tmp_path))
+        await (run_daemon(channel=channel, agent=agent, config_dir=tmp_path))
 
         error_msgs = [m for m in channel.sent if m.startswith("Error:")]
         assert error_msgs
@@ -276,7 +274,8 @@ class TestWebSearchSanitisesErrors:
 class TestDelegationSanitisesErrors:
     """DelegationToolset wraps exc in error_to_user_message."""
 
-    def test_delegation_failure_sanitized(self) -> None:
+    @pytest.mark.asyncio
+    async def test_delegation_failure_sanitized(self) -> None:
         from owlbear.core.delegation import DelegationToolset
 
         inner_agent = MagicMock()
@@ -298,7 +297,7 @@ class TestDelegationSanitisesErrors:
         ctx.usage = MagicMock()
 
         ts = DelegationToolset()
-        result = _run(ts._delegate(ctx, agent_name="builder", task="do it"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="do it"))
 
         parsed = json.loads(result)
         # Token must not appear in the error message

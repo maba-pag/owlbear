@@ -22,11 +22,6 @@ from owlbear.core.subagent_hook import SubagentVerificationHook
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> None:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _payload(
     *,
     task_id: str | int = "42",
@@ -76,36 +71,40 @@ class TestFileExistenceCheck:
     """Hook verifies that created_files actually exist on disk."""
 
     @patch("owlbear.core.subagent_hook.Path.exists")
-    def test_all_files_exist(self, mock_exists: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_all_files_exist(self, mock_exists: MagicMock) -> None:
         mock_exists.return_value = True
         hook = SubagentVerificationHook()
         data = _payload(created_files=["src/foo.py", "src/bar.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["files_ok"] is True
 
     @patch("owlbear.core.subagent_hook.Path.exists")
-    def test_missing_file_sets_files_ok_false(self, mock_exists: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_file_sets_files_ok_false(self, mock_exists: MagicMock) -> None:
         mock_exists.side_effect = [True, False]
         hook = SubagentVerificationHook()
         data = _payload(created_files=["src/exists.py", "src/missing.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["files_ok"] is False
 
     @patch("owlbear.core.subagent_hook.Path.exists")
-    def test_missing_file_noted_in_details(self, mock_exists: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_file_noted_in_details(self, mock_exists: MagicMock) -> None:
         mock_exists.side_effect = [True, False]
         hook = SubagentVerificationHook()
         data = _payload(created_files=["src/exists.py", "src/missing.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert "src/missing.py" in verification["details"]
 
-    def test_empty_created_files_is_ok(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_created_files_is_ok(self) -> None:
         hook = SubagentVerificationHook()
         data = _payload(created_files=[])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["files_ok"] is True
 
@@ -119,7 +118,8 @@ class TestTestExecutionCheck:
     """Hook runs pytest on test_files when provided."""
 
     @patch("owlbear.core.subagent_hook.subprocess.run")
-    def test_tests_pass(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_tests_pass(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -128,12 +128,13 @@ class TestTestExecutionCheck:
         )
         hook = SubagentVerificationHook()
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["tests_ok"] is True
 
     @patch("owlbear.core.subagent_hook.subprocess.run")
-    def test_tests_fail(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_tests_fail(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -142,12 +143,13 @@ class TestTestExecutionCheck:
         )
         hook = SubagentVerificationHook()
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["tests_ok"] is False
 
     @patch("owlbear.core.subagent_hook.subprocess.run")
-    def test_test_failure_noted_in_details(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_test_failure_noted_in_details(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -156,12 +158,13 @@ class TestTestExecutionCheck:
         )
         hook = SubagentVerificationHook()
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert "FAILED" in verification["details"]
 
     @patch("owlbear.core.subagent_hook.subprocess.run")
-    def test_pytest_cmd_default(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_pytest_cmd_default(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -170,13 +173,14 @@ class TestTestExecutionCheck:
         )
         hook = SubagentVerificationHook()
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         call_args = mock_run.call_args[0][0]
         assert call_args[:3] == ["uv", "run", "pytest"]
         assert "tests/test_foo.py" in call_args
 
     @patch("owlbear.core.subagent_hook.subprocess.run")
-    def test_pytest_cmd_custom(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_pytest_cmd_custom(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -185,14 +189,15 @@ class TestTestExecutionCheck:
         )
         hook = SubagentVerificationHook(pytest_cmd=["python", "-m", "pytest"])
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         call_args = mock_run.call_args[0][0]
         assert call_args[:3] == ["python", "-m", "pytest"]
 
-    def test_empty_test_files_is_ok(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_test_files_is_ok(self) -> None:
         hook = SubagentVerificationHook()
         data = _payload(test_files=[])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["tests_ok"] is True
 
@@ -205,29 +210,33 @@ class TestTestExecutionCheck:
 class TestGracefulFailure:
     """Hook never raises — logs warnings instead."""
 
-    def test_missing_keys_does_not_raise(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_keys_does_not_raise(self) -> None:
         hook = SubagentVerificationHook()
-        _run(hook({}))
+        await (hook({}))
         # No exception, no crash
 
     @patch("owlbear.core.subagent_hook.subprocess.run", side_effect=OSError("no pytest"))
-    def test_subprocess_error_does_not_raise(self, _mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_subprocess_error_does_not_raise(self, _mock_run: MagicMock) -> None:
         hook = SubagentVerificationHook()
         data = _payload(test_files=["tests/test_foo.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["tests_ok"] is False
 
     @patch("owlbear.core.subagent_hook.Path.exists", side_effect=OSError("perm denied"))
-    def test_file_check_error_does_not_raise(self, _mock_exists: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_file_check_error_does_not_raise(self, _mock_exists: MagicMock) -> None:
         hook = SubagentVerificationHook()
         data = _payload(created_files=["src/foo.py"])
-        _run(hook(data))
+        await (hook(data))
         verification = data["verification"]
         assert verification["files_ok"] is False
 
     @patch("owlbear.core.subagent_hook.Path.exists")
-    def test_failure_logs_warning(
+    @pytest.mark.asyncio
+    async def test_failure_logs_warning(
         self,
         mock_exists: MagicMock,
         caplog: pytest.LogCaptureFixture,
@@ -236,7 +245,7 @@ class TestGracefulFailure:
         hook = SubagentVerificationHook()
         data = _payload(created_files=["src/missing.py"])
         with caplog.at_level(logging.WARNING):
-            _run(hook(data))
+            await (hook(data))
         assert any("missing" in r.message.lower() for r in caplog.records)
 
 

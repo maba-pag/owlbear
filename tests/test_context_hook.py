@@ -21,11 +21,6 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> None:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _session_data(session_id: str = "test-session") -> dict[str, object]:
     """Build a SESSION_START payload."""
     return {"session_id": session_id}
@@ -99,7 +94,8 @@ class TestContextInjectionHookCall:
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
     @patch("owlbear.core.context_hook.asyncio.to_thread")
-    def test_injects_context_into_data(
+    @pytest.mark.asyncio
+    async def test_injects_context_into_data(
         self,
         mock_to_thread: AsyncMock,
         mock_exec: AsyncMock,
@@ -113,7 +109,7 @@ class TestContextInjectionHookCall:
             instructions_path=Path("fake/instructions.md"),
         )
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert "context" in data
         ctx = data["context"]
@@ -123,7 +119,8 @@ class TestContextInjectionHookCall:
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
     @patch("owlbear.core.context_hook.asyncio.to_thread")
-    def test_kanban_cmd_called_with_correct_args(
+    @pytest.mark.asyncio
+    async def test_kanban_cmd_called_with_correct_args(
         self,
         mock_to_thread: AsyncMock,
         mock_exec: AsyncMock,
@@ -136,7 +133,7 @@ class TestContextInjectionHookCall:
             kanban_cmd=cmd,
         )
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         mock_exec.assert_called_once_with(
             cmd[0],
@@ -157,7 +154,8 @@ class TestContextInjectionHookMissingFile:
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
     @patch("owlbear.core.context_hook.asyncio.to_thread")
-    def test_missing_file_logs_warning(
+    @pytest.mark.asyncio
+    async def test_missing_file_logs_warning(
         self,
         mock_to_thread: AsyncMock,
         mock_exec: AsyncMock,
@@ -171,13 +169,14 @@ class TestContextInjectionHookMissingFile:
         data = _session_data()
 
         with caplog.at_level("WARNING", logger="owlbear.core.context_hook"):
-            _run(hook(data))
+            await (hook(data))
 
         assert any("file.md" in r.message for r in caplog.records)
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
     @patch("owlbear.core.context_hook.asyncio.to_thread")
-    def test_missing_file_sets_empty_instructions(
+    @pytest.mark.asyncio
+    async def test_missing_file_sets_empty_instructions(
         self,
         mock_to_thread: AsyncMock,
         mock_exec: AsyncMock,
@@ -188,7 +187,7 @@ class TestContextInjectionHookMissingFile:
             instructions_path=Path("nonexistent/file.md"),
         )
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["context"]["instructions"] == ""  # type: ignore[index]
 
@@ -203,7 +202,8 @@ class TestContextInjectionHookKanbanFailure:
 
     @patch("owlbear.core.context_hook.asyncio.to_thread")
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
-    def test_kanban_failure_logs_warning(
+    @pytest.mark.asyncio
+    async def test_kanban_failure_logs_warning(
         self,
         mock_exec: AsyncMock,
         mock_to_thread: AsyncMock,
@@ -220,13 +220,14 @@ class TestContextInjectionHookKanbanFailure:
         data = _session_data()
 
         with caplog.at_level("WARNING", logger="owlbear.core.context_hook"):
-            _run(hook(data))
+            await (hook(data))
 
         assert any("kanban" in r.message.lower() for r in caplog.records)
 
     @patch("owlbear.core.context_hook.asyncio.to_thread")
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
-    def test_kanban_failure_sets_empty_summary(
+    @pytest.mark.asyncio
+    async def test_kanban_failure_sets_empty_summary(
         self,
         mock_exec: AsyncMock,
         mock_to_thread: AsyncMock,
@@ -240,13 +241,14 @@ class TestContextInjectionHookKanbanFailure:
             instructions_path=Path("fake.md"),
         )
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["context"]["kanban_summary"] == ""  # type: ignore[index]
 
     @patch("owlbear.core.context_hook.asyncio.to_thread")
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
-    def test_kanban_exception_sets_empty_summary(
+    @pytest.mark.asyncio
+    async def test_kanban_exception_sets_empty_summary(
         self,
         mock_exec: AsyncMock,
         mock_to_thread: AsyncMock,
@@ -257,7 +259,7 @@ class TestContextInjectionHookKanbanFailure:
             instructions_path=Path("fake.md"),
         )
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["context"]["kanban_summary"] == ""  # type: ignore[index]
 
@@ -272,7 +274,8 @@ class TestContextInjectionHookIntegration:
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
     @patch("owlbear.core.context_hook.asyncio.to_thread")
-    def test_emit_session_start_fires_hook(
+    @pytest.mark.asyncio
+    async def test_emit_session_start_fires_hook(
         self,
         mock_to_thread: AsyncMock,
         mock_exec: AsyncMock,
@@ -286,7 +289,7 @@ class TestContextInjectionHookIntegration:
         hook.register(registry)
 
         data = _session_data("s1")
-        _run(registry.emit(HookEvent.SESSION_START, data))
+        await (registry.emit(HookEvent.SESSION_START, data))
 
         ctx = data["context"]
         assert isinstance(ctx, dict)
@@ -294,13 +297,14 @@ class TestContextInjectionHookIntegration:
         assert ctx["kanban_summary"] == "board ctx"
 
     @patch("owlbear.core.context_hook.asyncio.create_subprocess_exec")
-    def test_emit_other_event_does_not_fire(self, mock_exec: AsyncMock) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_other_event_does_not_fire(self, mock_exec: AsyncMock) -> None:
         registry = HookRegistry()
         hook = ContextInjectionHook()
         hook.register(registry)
 
         data: dict[str, object] = {"session_id": "s1"}
-        _run(registry.emit(HookEvent.ON_MESSAGE, data))
+        await (registry.emit(HookEvent.ON_MESSAGE, data))
 
         assert "context" not in data
         mock_exec.assert_not_called()

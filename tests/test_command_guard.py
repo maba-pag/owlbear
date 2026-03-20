@@ -7,7 +7,6 @@ integration, and edge cases.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import pytest
@@ -23,11 +22,6 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> None:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _shell_data(command: str) -> dict[str, object]:
@@ -107,10 +101,11 @@ class TestCommandSafetyGuardBlocking:
             "sudo rm important_file",
         ],
     )
-    def test_blocks_dangerous_command(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_dangerous_command(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
     @pytest.mark.parametrize(
         "cmd",
@@ -127,9 +122,10 @@ class TestCommandSafetyGuardBlocking:
             "mkdir new_dir",
         ],
     )
-    def test_allows_safe_command(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_safe_command(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data(cmd)))  # should NOT raise
+        await (guard(_shell_data(cmd)))  # should NOT raise
 
 
 # ---------------------------------------------------------------------------
@@ -148,10 +144,11 @@ class TestCommandSafetyGuardFileBlocking:
             "/home/user/project/.env",
         ],
     )
-    def test_blocks_env_file_write(self, path: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_env_file_write(self, path: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_file_data(path)))
+            await (guard(_file_data(path)))
 
     @pytest.mark.parametrize(
         "path",
@@ -162,9 +159,10 @@ class TestCommandSafetyGuardFileBlocking:
             "config/settings.toml",
         ],
     )
-    def test_allows_safe_file_paths(self, path: str) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_safe_file_paths(self, path: str) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_file_data(path)))  # should NOT raise
+        await (guard(_file_data(path)))  # should NOT raise
 
 
 # ---------------------------------------------------------------------------
@@ -175,24 +173,28 @@ class TestCommandSafetyGuardFileBlocking:
 class TestCommandSafetyGuardConfigurable:
     """Guard supports custom blocklists."""
 
-    def test_custom_blocked_commands(self) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_blocked_commands(self) -> None:
         guard = CommandSafetyGuard(blocked_commands=[r"drop\s+table"])
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data("drop table users")))
+            await (guard(_shell_data("drop table users")))
 
-    def test_custom_blocked_commands_allows_default_dangerous(self) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_blocked_commands_allows_default_dangerous(self) -> None:
         """When custom patterns replace defaults, old patterns no longer block."""
         guard = CommandSafetyGuard(blocked_commands=[r"drop\s+table"])
-        _run(guard(_shell_data("rm -rf /")))  # no longer blocked
+        await (guard(_shell_data("rm -rf /")))  # no longer blocked
 
-    def test_custom_blocked_file_patterns(self) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_blocked_file_patterns(self) -> None:
         guard = CommandSafetyGuard(blocked_file_patterns=[r"\.secret$"])
         with pytest.raises(BlockedCommandError):
-            _run(guard(_file_data("creds.secret")))
+            await (guard(_file_data("creds.secret")))
 
-    def test_custom_file_patterns_allows_default_blocked(self) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_file_patterns_allows_default_blocked(self) -> None:
         guard = CommandSafetyGuard(blocked_file_patterns=[r"\.secret$"])
-        _run(guard(_file_data(".env")))  # no longer blocked
+        await (guard(_file_data(".env")))  # no longer blocked
 
 
 # ---------------------------------------------------------------------------
@@ -203,41 +205,48 @@ class TestCommandSafetyGuardConfigurable:
 class TestCommandSafetyGuardEdgeCases:
     """Edge cases: missing fields, non-shell tools."""
 
-    def test_non_shell_tool_without_file_path_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_non_shell_tool_without_file_path_ignored(self) -> None:
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "semantic_search", "args": {"query": "rm -rf /"}}
-        _run(guard(data))  # no raise — not a shell or file tool
+        await (guard(data))  # no raise — not a shell or file tool
 
-    def test_missing_args_key_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_args_key_ignored(self) -> None:
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "run_in_terminal"}
-        _run(guard(data))  # no raise
+        await (guard(data))  # no raise
 
-    def test_missing_command_in_args_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_command_in_args_ignored(self) -> None:
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "run_in_terminal", "args": {}}
-        _run(guard(data))  # no raise
+        await (guard(data))  # no raise
 
-    def test_empty_command_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_command_ignored(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("")))  # no raise
+        await (guard(_shell_data("")))  # no raise
 
-    def test_missing_path_in_file_args_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_path_in_file_args_ignored(self) -> None:
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "create_file", "args": {}}
-        _run(guard(data))  # no raise
+        await (guard(data))  # no raise
 
-    def test_args_not_dict_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_args_not_dict_ignored(self) -> None:
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "run_in_terminal", "args": "bad"}
-        _run(guard(data))  # no raise
+        await (guard(data))  # no raise
 
-    def test_file_tool_with_file_path_key(self) -> None:
+    @pytest.mark.asyncio
+    async def test_file_tool_with_file_path_key(self) -> None:
         """Some tools use 'filePath' instead of 'path'."""
         guard = CommandSafetyGuard()
         data: dict[str, object] = {"tool_name": "create_file", "args": {"filePath": ".env"}}
         with pytest.raises(BlockedCommandError):
-            _run(guard(data))
+            await (guard(data))
 
 
 # ---------------------------------------------------------------------------
@@ -248,28 +257,31 @@ class TestCommandSafetyGuardEdgeCases:
 class TestCommandSafetyGuardLogging:
     """All tool invocations are logged at DEBUG; blocked ones at WARNING."""
 
-    def test_logs_all_invocations_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_all_invocations_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:
         guard = CommandSafetyGuard()
         with caplog.at_level(logging.DEBUG, logger="owlbear.core.command_guard"):
-            _run(guard(_shell_data("echo hello")))
+            await (guard(_shell_data("echo hello")))
         assert "run_in_terminal" in caplog.text
 
-    def test_logs_blocked_command_at_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_blocked_command_at_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         guard = CommandSafetyGuard()
         with (
             caplog.at_level(logging.WARNING, logger="owlbear.core.command_guard"),
             pytest.raises(BlockedCommandError),
         ):
-            _run(guard(_shell_data("rm -rf /")))
+            await (guard(_shell_data("rm -rf /")))
         assert "rm -rf /" in caplog.text
 
-    def test_logs_blocked_file_at_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_blocked_file_at_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         guard = CommandSafetyGuard()
         with (
             caplog.at_level(logging.WARNING, logger="owlbear.core.command_guard"),
             pytest.raises(BlockedCommandError),
         ):
-            _run(guard(_file_data(".env")))
+            await (guard(_file_data(".env")))
         assert ".env" in caplog.text
 
 
@@ -288,20 +300,22 @@ class TestCommandSafetyGuardHookIntegration:
         handlers = registry.handlers.get(HookEvent.PRE_TOOL_USE, [])
         assert guard in handlers
 
-    def test_emit_invokes_guard_for_safe_command(self) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_invokes_guard_for_safe_command(self) -> None:
         guard = CommandSafetyGuard()
         registry = HookRegistry()
         guard.register(registry)
-        _run(registry.emit(HookEvent.PRE_TOOL_USE, _shell_data("echo hello")))
+        await (registry.emit(HookEvent.PRE_TOOL_USE, _shell_data("echo hello")))
 
-    def test_emit_blocked_command_swallowed_by_registry(
+    @pytest.mark.asyncio
+    async def test_emit_blocked_command_swallowed_by_registry(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         guard = CommandSafetyGuard()
         registry = HookRegistry()
         guard.register(registry)
         with caplog.at_level(logging.WARNING):
-            _run(
+            await (
                 registry.emit(
                     HookEvent.PRE_TOOL_USE,
                     _shell_data("rm -rf /"),
@@ -328,18 +342,21 @@ class TestExpandedRmPatterns:
             "rm -r -f  /data",
         ],
     )
-    def test_blocks_rm_recursive_force_variants(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_rm_recursive_force_variants(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
-    def test_allows_rm_single_file(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_rm_single_file(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("rm file.txt")))
+        await (guard(_shell_data("rm file.txt")))
 
-    def test_allows_rm_single_flag(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_rm_single_flag(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("rm -r dir/")))
+        await (guard(_shell_data("rm -r dir/")))
 
 
 class TestExpandedGitPushPatterns:
@@ -354,14 +371,16 @@ class TestExpandedGitPushPatterns:
             "git push --force-with-lease origin main",
         ],
     )
-    def test_blocks_force_push_variants(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_force_push_variants(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
-    def test_allows_normal_push(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_normal_push(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("git push origin main")))
+        await (guard(_shell_data("git push origin main")))
 
 
 class TestPythonMPipPattern:
@@ -375,16 +394,18 @@ class TestPythonMPipPattern:
             "python -m pip install -r requirements.txt",
         ],
     )
-    def test_blocks_python_m_pip(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_python_m_pip(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
-    def test_blocks_uv_run_python_m_pip(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_uv_run_python_m_pip(self) -> None:
         """uv run python -m pip still invokes system pip — blocked."""
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data("uv run python -m pip install requests")))
+            await (guard(_shell_data("uv run python -m pip install requests")))
 
 
 class TestRemoveItemPattern:
@@ -398,14 +419,16 @@ class TestRemoveItemPattern:
             "Remove-Item -Recurse -Force -Path C:\\data",
         ],
     )
-    def test_blocks_remove_item_recursive_force(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_remove_item_recursive_force(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
-    def test_allows_remove_item_single_file(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_remove_item_single_file(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("Remove-Item file.txt")))
+        await (guard(_shell_data("Remove-Item file.txt")))
 
 
 class TestAdditionalDangerousCommands:
@@ -428,10 +451,11 @@ class TestAdditionalDangerousCommands:
             "sudo shutdown now",
         ],
     )
-    def test_blocks_dangerous_system_commands(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_dangerous_system_commands(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
 
 class TestGitDestructivePatterns:
@@ -449,13 +473,15 @@ class TestGitDestructivePatterns:
             "git clean -fxd",
         ],
     )
-    def test_blocks_destructive_git_commands(self, cmd: str) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_destructive_git_commands(self, cmd: str) -> None:
         guard = CommandSafetyGuard()
         with pytest.raises(BlockedCommandError):
-            _run(guard(_shell_data(cmd)))
+            await (guard(_shell_data(cmd)))
 
-    def test_allows_normal_git_operations(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_normal_git_operations(self) -> None:
         guard = CommandSafetyGuard()
-        _run(guard(_shell_data("git status")))
-        _run(guard(_shell_data("git checkout main")))
-        _run(guard(_shell_data("git reset HEAD file.txt")))
+        await (guard(_shell_data("git status")))
+        await (guard(_shell_data("git checkout main")))
+        await (guard(_shell_data("git reset HEAD file.txt")))

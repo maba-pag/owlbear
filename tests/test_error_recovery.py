@@ -10,7 +10,6 @@ Task: #364
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -27,11 +26,6 @@ from owlbear.tools.hooked import HookedToolset, _is_transient
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> Any:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _http_status_error(code: int) -> httpx.HTTPStatusError:
@@ -240,7 +234,8 @@ class TestErrorJournalEdgeCases:
 class TestHookedToolsetRetryEdgeCases:
     """Additional retry scenarios for HookedToolset."""
 
-    def test_two_transient_failures_then_success(self) -> None:
+    @pytest.mark.asyncio
+    async def test_two_transient_failures_then_success(self) -> None:
         """Two transient failures followed by success — 3 total attempts."""
         hooks = HookRegistry()
         mock_ts = MagicMock()
@@ -255,11 +250,12 @@ class TestHookedToolsetRetryEdgeCases:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("fetch", {}, ctx, tool))
+        result = await (hooked.call_tool("fetch", {}, ctx, tool))
         assert result == "finally ok"
         assert mock_ts.call_tool.call_count == 3
 
-    def test_post_hook_not_emitted_on_retry_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_post_hook_not_emitted_on_retry_failure(self) -> None:
         """POST_TOOL_USE is NOT emitted when all retries are exhausted."""
         hooks = HookRegistry()
         post_calls: list[dict[str, Any]] = []
@@ -272,11 +268,12 @@ class TestHookedToolsetRetryEdgeCases:
         tool = MagicMock()
 
         with pytest.raises(httpx.ConnectError):
-            _run(hooked.call_tool("fetch", {}, ctx, tool))
+            await (hooked.call_tool("fetch", {}, ctx, tool))
 
         assert len(post_calls) == 0
 
-    def test_pre_hook_emitted_once_even_with_retries(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pre_hook_emitted_once_even_with_retries(self) -> None:
         """PRE_TOOL_USE fires once regardless of retry count."""
         hooks = HookRegistry()
         pre_calls: list[dict[str, Any]] = []
@@ -288,11 +285,12 @@ class TestHookedToolsetRetryEdgeCases:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(hooked.call_tool("fetch", {}, ctx, tool))
+        await (hooked.call_tool("fetch", {}, ctx, tool))
 
         assert len(pre_calls) == 1
 
-    def test_runtime_error_not_retried(self) -> None:
+    @pytest.mark.asyncio
+    async def test_runtime_error_not_retried(self) -> None:
         """RuntimeError (PERMANENT) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
         mock_ts = MagicMock()
@@ -302,7 +300,7 @@ class TestHookedToolsetRetryEdgeCases:
         tool = MagicMock()
 
         with pytest.raises(RuntimeError, match="fatal"):
-            _run(hooked.call_tool("compute", {}, ctx, tool))
+            await (hooked.call_tool("compute", {}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 1
 

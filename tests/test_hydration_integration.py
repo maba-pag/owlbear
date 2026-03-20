@@ -29,11 +29,6 @@ from owlbear.config import OwlBearSettings
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _make_kanban_list_json(tasks: list[dict[str, str]]) -> str:
     return json.dumps(tasks)
 
@@ -118,7 +113,8 @@ class TestFromACPrehydrationConfig:
 class TestFromACPollTickHydratorParam:
     """poll_tick() accepts a hydrator parameter."""
 
-    def test_poll_tick_accepts_hydrator_none(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_accepts_hydrator_none(self) -> None:
         """poll_tick() runs without error when hydrator=None."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -138,9 +134,10 @@ class TestFromACPollTickHydratorParam:
                 hydrator=None,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
-    def test_poll_tick_accepts_hydrator_callable(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_accepts_hydrator_callable(self) -> None:
         """poll_tick() accepts an async callable as hydrator."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -162,7 +159,7 @@ class TestFromACPollTickHydratorParam:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
 
 # ===========================================================================
@@ -173,7 +170,8 @@ class TestFromACPollTickHydratorParam:
 class TestFromACHydratorNewTaskDispatch:
     """Hydrator called during new-task dispatch (step 7) and result appended to prompt."""
 
-    def test_hydrator_called_on_new_task(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_called_on_new_task(self) -> None:
         """When hydrator is provided, it is called for each dispatched new task."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -205,12 +203,13 @@ class TestFromACHydratorNewTaskDispatch:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Hydrator was called at least once
         mock_hydrator.assert_called()
 
-    def test_hydration_content_appended_to_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydration_content_appended_to_prompt(self) -> None:
         """HydrationResult URLs/files content is appended to the builder prompt."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -242,14 +241,15 @@ class TestFromACHydratorNewTaskDispatch:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Builder prompt includes hydrated content
         mock_agent.run.assert_called_once()
         prompt = mock_agent.run.call_args.args[0]
         assert "Doc Title" in prompt or "config content" in prompt
 
-    def test_hydrator_not_called_when_none(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_not_called_when_none(self) -> None:
         """When hydrator=None, no hydration occurs (no AttributeError)."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -277,9 +277,10 @@ class TestFromACHydratorNewTaskDispatch:
             )
 
         # Should not raise — hydrator=None means no hydration
-        _run(run_tick())
+        await (run_tick())
 
-    def test_empty_hydration_result_no_append(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_hydration_result_no_append(self) -> None:
         """When hydration returns empty content, prompt is not bloated."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -310,7 +311,7 @@ class TestFromACHydratorNewTaskDispatch:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         prompt = mock_agent.run.call_args.args[0]
         # Prompt should contain task details but not "Pre-hydrated" marker
@@ -326,7 +327,8 @@ class TestFromACHydratorNewTaskDispatch:
 class TestFromACHydratorRetryDispatch:
     """Hydrator called during retry dispatch (step 3) and result appended to prompt."""
 
-    def test_hydrator_called_on_retry_dispatch(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_called_on_retry_dispatch(self) -> None:
         """When a retried task is due, hydrator is called and content appended."""
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
 
@@ -364,7 +366,7 @@ class TestFromACHydratorRetryDispatch:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Hydrator was called for the retry
         mock_hydrator.assert_called()
@@ -373,7 +375,8 @@ class TestFromACHydratorRetryDispatch:
         prompt = mock_agent.run.call_args.args[0]
         assert "Doc Title" in prompt or "config content" in prompt
 
-    def test_retry_hydrator_receives_task_body(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_hydrator_receives_task_body(self) -> None:
         """Hydrator receives the task body text to extract URLs/paths from."""
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
 
@@ -409,7 +412,7 @@ class TestFromACHydratorRetryDispatch:
                 hydrator=mock_hydrator,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Hydrator was called with the body text (first arg)
         call_args = mock_hydrator.call_args
@@ -417,7 +420,8 @@ class TestFromACHydratorRetryDispatch:
         # First positional arg should contain the task body
         assert body in str(call_args[0])
 
-    def test_retry_no_hydrator_still_works(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_no_hydrator_still_works(self) -> None:
         """Retry dispatch with hydrator=None explicitly still works."""
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
 
@@ -449,7 +453,7 @@ class TestFromACHydratorRetryDispatch:
             )
 
         # Should not raise
-        _run(run_tick())
+        await (run_tick())
 
 
 # ===========================================================================
@@ -469,7 +473,8 @@ class TestFromACPollLoopHydrator:
         sig = inspect.signature(poll_loop)
         assert "hydrator" in sig.parameters
 
-    def test_poll_loop_passes_hydrator_to_poll_tick(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_loop_passes_hydrator_to_poll_tick(self) -> None:
         """poll_loop passes hydrator through to poll_tick."""
         from owlbear.daemon import poll_loop
 
@@ -501,7 +506,7 @@ class TestFromACPollLoopHydrator:
                     hydrator=mock_hydrator,
                 )
 
-        _run(run_poll())
+        await (run_poll())
 
         assert captured_kwargs.get("hydrator") is mock_hydrator
 
@@ -514,7 +519,8 @@ class TestFromACPollLoopHydrator:
 class TestFromACRunDaemonHydrator:
     """run_daemon wires hydrator when provided."""
 
-    def test_run_daemon_passes_hydrator_to_poll_loop(
+    @pytest.mark.asyncio
+    async def test_run_daemon_passes_hydrator_to_poll_loop(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -555,7 +561,7 @@ class TestFromACRunDaemonHydrator:
             patch("owlbear.daemon.poll_loop", new=fake_poll_loop),
             patch("owlbear.daemon.Agent"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=FakeChannel(),
                     agent=mock_agent,
@@ -578,7 +584,8 @@ class TestFromACRunDaemonHydrator:
 class TestFromACBootstrapHydrator:
     """bootstrap() must construct a real hydrator callable when enabled."""
 
-    def test_bootstrap_result_hydrator_none_when_disabled(self) -> None:
+    @pytest.mark.asyncio
+    async def test_bootstrap_result_hydrator_none_when_disabled(self) -> None:
         """bootstrap() sets BootstrapResult.hydrator=None when prehydration_enabled=False."""
 
         async def _run_bootstrap() -> object:
@@ -605,10 +612,11 @@ class TestFromACBootstrapHydrator:
 
                 return await bootstrap(settings, workspace_root=Path("/fake"))
 
-        result = _run(_run_bootstrap())
+        result = await (_run_bootstrap())
         assert result.hydrator is None
 
-    def test_bootstrap_result_hydrator_callable_when_enabled(
+    @pytest.mark.asyncio
+    async def test_bootstrap_result_hydrator_callable_when_enabled(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -639,12 +647,13 @@ class TestFromACBootstrapHydrator:
 
                 return await bootstrap(settings, workspace_root=Path("/fake"))
 
-        result = _run(_run_bootstrap())
+        result = await (_run_bootstrap())
         # Must be a callable, not None
         assert result.hydrator is not None
         assert callable(result.hydrator)
 
-    def test_bootstrap_hydrator_is_awaitable(
+    @pytest.mark.asyncio
+    async def test_bootstrap_hydrator_is_awaitable(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -674,7 +683,7 @@ class TestFromACBootstrapHydrator:
 
                 return await bootstrap(settings, workspace_root=Path("/fake"))
 
-        result = _run(_run_bootstrap())
+        result = await (_run_bootstrap())
         assert result.hydrator is not None
         # Calling the hydrator with a body string should return something awaitable
         import inspect
@@ -684,7 +693,8 @@ class TestFromACBootstrapHydrator:
         # Clean up the coroutine to avoid warnings
         ret.close()
 
-    def test_bootstrap_hydrator_returns_hydration_result(
+    @pytest.mark.asyncio
+    async def test_bootstrap_hydrator_returns_hydration_result(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
@@ -717,13 +727,13 @@ class TestFromACBootstrapHydrator:
 
                 return await bootstrap(settings, workspace_root=tmp_path)
 
-        result = _run(_run_bootstrap())
+        result = await (_run_bootstrap())
         assert result.hydrator is not None
 
         async def _call_hydrator() -> HydrationResult:
             return await result.hydrator("No urls or files here.")
 
-        hydration = _run(_call_hydrator())
+        hydration = await (_call_hydrator())
         assert isinstance(hydration, HydrationResult)
 
 
@@ -782,7 +792,8 @@ class TestFromACCliDaemonHydratorWiring:
 class TestFromACHydratorErrorResilience:
     """Hydrator failures must not crash poll_tick dispatch."""
 
-    def test_hydrator_exception_does_not_block_dispatch(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_exception_does_not_block_dispatch(self) -> None:
         """If hydrator raises, the task is still dispatched (without hydrated context)."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -813,12 +824,13 @@ class TestFromACHydratorErrorResilience:
             )
 
         # Should NOT raise — dispatch proceeds despite hydrator failure
-        _run(run_tick())
+        await (run_tick())
 
         # Task was still dispatched
         mock_agent.run.assert_called_once()
 
-    def test_hydrator_error_on_retry_does_not_block(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_error_on_retry_does_not_block(self) -> None:
         """If hydrator raises during retry dispatch, the retry still proceeds."""
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
 
@@ -852,5 +864,5 @@ class TestFromACHydratorErrorResilience:
             )
 
         # Should NOT raise
-        _run(run_tick())
+        await (run_tick())
         mock_agent.run.assert_called_once()

@@ -29,11 +29,6 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _git_mock(stdout: str, returncode: int = 0) -> MagicMock:
     return MagicMock(stdout=stdout, returncode=returncode)
 
@@ -163,7 +158,8 @@ class TestFromACLintGateError:
 class TestFromACRunLintGateHappy:
     """run_lint_gate returns passing result when ruff reports no issues."""
 
-    def test_lint_pass_returns_passed_true(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_pass_returns_passed_true(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -175,14 +171,15 @@ class TestFromACRunLintGateHappy:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
         assert result.errors == ""
         # Union of uncommitted + last commit .py files: a.py, b.py, c.py
         assert len(result.files_checked) == 3
 
-    def test_files_checked_is_union_of_both_diffs(self) -> None:
+    @pytest.mark.asyncio
+    async def test_files_checked_is_union_of_both_diffs(self) -> None:
         """Changed-files strategy: union of uncommitted + last commit diffs."""
         from owlbear.core.lint_gate import run_lint_gate
 
@@ -193,7 +190,7 @@ class TestFromACRunLintGateHappy:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert sorted(result.files_checked) == ["x.py", "y.py"]
 
@@ -206,7 +203,8 @@ class TestFromACRunLintGateHappy:
 class TestFromACRunLintGateFailure:
     """run_lint_gate returns LintGateResult(passed=False) when ruff fails."""
 
-    def test_ruff_check_failure_returns_passed_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ruff_check_failure_returns_passed_false(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -216,12 +214,13 @@ class TestFromACRunLintGateFailure:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is False
         assert "E501" in result.errors
 
-    def test_ruff_format_failure_returns_passed_false(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ruff_format_failure_returns_passed_false(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -231,12 +230,13 @@ class TestFromACRunLintGateFailure:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is False
         assert "reformatted" in result.errors
 
-    def test_combined_check_and_format_errors(self) -> None:
+    @pytest.mark.asyncio
+    async def test_combined_check_and_format_errors(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -247,7 +247,7 @@ class TestFromACRunLintGateFailure:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is False
         assert "check error" in result.errors
@@ -262,20 +262,22 @@ class TestFromACRunLintGateFailure:
 class TestFromACRunLintGateEmptyChangeset:
     """Empty changeset: if union of changed .py files is empty, return passed."""
 
-    def test_no_changed_files_passes(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_changed_files_passes(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
         router = _make_subprocess_router(git_uncommitted=_git_mock("\n"))
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
         assert result.errors == ""
         assert result.files_checked == []
 
-    def test_only_non_python_files_passes(self) -> None:
+    @pytest.mark.asyncio
+    async def test_only_non_python_files_passes(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -284,7 +286,7 @@ class TestFromACRunLintGateEmptyChangeset:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
         assert result.files_checked == []
@@ -298,7 +300,8 @@ class TestFromACRunLintGateEmptyChangeset:
 class TestFromACRunLintGatePyFilter:
     """Changed-files are filtered to .py extensions only."""
 
-    def test_filters_to_py_only(self) -> None:
+    @pytest.mark.asyncio
+    async def test_filters_to_py_only(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -307,7 +310,7 @@ class TestFromACRunLintGatePyFilter:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert sorted(result.files_checked) == ["a.py", "c.py"]
 
@@ -320,7 +323,8 @@ class TestFromACRunLintGatePyFilter:
 class TestFromACRunLintGateDedup:
     """Files appearing in both diffs are only checked once."""
 
-    def test_deduplicates_across_diffs(self) -> None:
+    @pytest.mark.asyncio
+    async def test_deduplicates_across_diffs(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -330,7 +334,7 @@ class TestFromACRunLintGateDedup:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         # shared.py should appear once, not twice
         assert sorted(result.files_checked) == ["only_a.py", "only_b.py", "shared.py"]
@@ -345,7 +349,8 @@ class TestFromACRunLintGateGracefulDegradation:
     """Graceful degradation: ruff/git binary missing or subprocess timeout
     returns passed=True with warning log. Never blocks pipeline."""
 
-    def test_ruff_binary_missing_degrades_gracefully(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ruff_binary_missing_degrades_gracefully(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -355,11 +360,12 @@ class TestFromACRunLintGateGracefulDegradation:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
 
-    def test_git_binary_missing_degrades_gracefully(self) -> None:
+    @pytest.mark.asyncio
+    async def test_git_binary_missing_degrades_gracefully(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -368,11 +374,12 @@ class TestFromACRunLintGateGracefulDegradation:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
 
-    def test_subprocess_timeout_degrades_gracefully(self) -> None:
+    @pytest.mark.asyncio
+    async def test_subprocess_timeout_degrades_gracefully(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -382,11 +389,12 @@ class TestFromACRunLintGateGracefulDegradation:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
 
-    def test_git_timeout_degrades_gracefully(self) -> None:
+    @pytest.mark.asyncio
+    async def test_git_timeout_degrades_gracefully(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/fake/workspace")
@@ -395,7 +403,7 @@ class TestFromACRunLintGateGracefulDegradation:
         )
 
         with patch("subprocess.run", side_effect=router):
-            result = _run(run_lint_gate(workspace))
+            result = await (run_lint_gate(workspace))
 
         assert result.passed is True
 
@@ -408,7 +416,8 @@ class TestFromACRunLintGateGracefulDegradation:
 class TestFromACRunLintGateCwd:
     """run_lint_gate runs subprocess with cwd=workspace."""
 
-    def test_subprocess_cwd_is_workspace(self) -> None:
+    @pytest.mark.asyncio
+    async def test_subprocess_cwd_is_workspace(self) -> None:
         from owlbear.core.lint_gate import run_lint_gate
 
         workspace = Path("/my/project")
@@ -422,7 +431,7 @@ class TestFromACRunLintGateCwd:
             return _ruff_mock()
 
         with patch("subprocess.run", side_effect=_spy):
-            _run(run_lint_gate(workspace))
+            await (run_lint_gate(workspace))
 
         # All subprocess calls should use cwd=workspace
         assert all(cwd == workspace for cwd in cwd_values)
@@ -436,7 +445,8 @@ class TestFromACRunLintGateCwd:
 class TestFromACReconcileLintPass:
     """After builder success with lint gate enabled, lint pass -> review."""
 
-    def test_lint_pass_moves_to_review(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_pass_moves_to_review(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -463,7 +473,7 @@ class TestFromACReconcileLintPass:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         mock_kanban.kanban_move.assert_any_call("704", "review")
         assert "704" not in state.running
@@ -478,7 +488,8 @@ class TestFromACReconcileLintFail:
     """After builder success, lint FAIL -> raise LintGateError -> existing
     task-level retry mechanism (#625) handles it, including WIP + hooks."""
 
-    def test_lint_fail_does_not_advance_to_review(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_fail_does_not_advance_to_review(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -504,14 +515,15 @@ class TestFromACReconcileLintFail:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         review_calls = [
             c for c in mock_kanban.kanban_move.call_args_list if c.args == ("705", "review")
         ]
         assert len(review_calls) == 0
 
-    def test_lint_fail_stores_lint_errors_in_wip(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_fail_stores_lint_errors_in_wip(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -539,13 +551,14 @@ class TestFromACReconcileLintFail:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         mock_wip.save.assert_called_once()
         summary = mock_wip.save.call_args.kwargs["summary"]
         assert "E501" in summary or "lint" in summary.lower()
 
-    def test_lint_fail_triggers_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_fail_triggers_retry(self) -> None:
         """Lint failure must schedule a retry via the existing mechanism."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
@@ -572,11 +585,12 @@ class TestFromACReconcileLintFail:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         assert "707" in state.retries
 
-    def test_lint_fail_emits_task_complete_failure_hook(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_fail_emits_task_complete_failure_hook(self) -> None:
         """AC says 'raise LintGateError to trigger existing task-level retry
         mechanism (#625)'.  The existing mechanism emits TASK_COMPLETE with
         outcome='failure'.  If lint failure bypasses hook emission, the
@@ -609,7 +623,7 @@ class TestFromACReconcileLintFail:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         # The existing retry mechanism (#625) emits TASK_COMPLETE with failure.
         # If this assertion fails, lint failure is using a separate code path.
@@ -627,7 +641,8 @@ class TestFromACReconcileLintFail:
 class TestFromACReconcileLintRetryExhaustion:
     """When lint gate fails and retries are exhausted, block the task."""
 
-    def test_lint_retry_exhausted_blocks_task(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_retry_exhausted_blocks_task(self) -> None:
         """After max retry attempts for lint failures, task should be blocked
         on kanban and claim released — same as the existing retry mechanism."""
         from owlbear.daemon import (
@@ -667,7 +682,7 @@ class TestFromACReconcileLintRetryExhaustion:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         # Task should be blocked on kanban
         mock_kanban.kanban_edit.assert_called_once()
@@ -686,7 +701,8 @@ class TestFromACReconcileLintRetryExhaustion:
 class TestFromACReconcileLintDisabled:
     """When lint_gate_enabled=False or workspace=None, skip lint gate."""
 
-    def test_disabled_flag_skips_gate(self) -> None:
+    @pytest.mark.asyncio
+    async def test_disabled_flag_skips_gate(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -706,12 +722,13 @@ class TestFromACReconcileLintDisabled:
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         mock_lint.assert_not_called()
         mock_kanban.kanban_move.assert_any_call("710", "review")
 
-    def test_none_workspace_skips_gate(self) -> None:
+    @pytest.mark.asyncio
+    async def test_none_workspace_skips_gate(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -731,12 +748,13 @@ class TestFromACReconcileLintDisabled:
                     workspace=None,
                 )
 
-            _run(go())
+            await (go())
 
         mock_lint.assert_not_called()
         mock_kanban.kanban_move.assert_any_call("711", "review")
 
-    def test_default_params_skip_gate(self) -> None:
+    @pytest.mark.asyncio
+    async def test_default_params_skip_gate(self) -> None:
         """Default lint_gate_enabled=False and workspace=None skip gate."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
@@ -752,7 +770,7 @@ class TestFromACReconcileLintDisabled:
             async def go() -> None:
                 await reconcile_tasks(state=state, kanban=mock_kanban)
 
-            _run(go())
+            await (go())
 
         mock_lint.assert_not_called()
         mock_kanban.kanban_move.assert_any_call("712", "review")
@@ -811,7 +829,8 @@ class TestFromACRunDaemonLintGateWiring:
     """run_daemon() passes lint_gate_enabled=settings.lint_gate_enabled and
     workspace=Path.cwd() to poll_loop when autonomous mode is active."""
 
-    def test_run_daemon_passes_lint_gate_enabled_to_poll_loop(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_run_daemon_passes_lint_gate_enabled_to_poll_loop(self, tmp_path: Path) -> None:
         """AC: In run_daemon(), pass lint_gate_enabled from settings to poll_loop."""
         captured_kwargs: dict[str, object] = {}
 
@@ -844,7 +863,7 @@ class TestFromACRunDaemonLintGateWiring:
         ):
             from owlbear.daemon import run_daemon
 
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -857,7 +876,8 @@ class TestFromACRunDaemonLintGateWiring:
 
         assert captured_kwargs.get("lint_gate_enabled") is True
 
-    def test_run_daemon_passes_workspace_as_path_cwd(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_run_daemon_passes_workspace_as_path_cwd(self, tmp_path: Path) -> None:
         """AC: In run_daemon(), pass workspace=Path.cwd() (the daemon's launch
         directory) when constructing the poll_loop call."""
         captured_kwargs: dict[str, object] = {}
@@ -891,7 +911,7 @@ class TestFromACRunDaemonLintGateWiring:
         ):
             from owlbear.daemon import run_daemon
 
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -907,7 +927,8 @@ class TestFromACRunDaemonLintGateWiring:
         assert isinstance(captured_kwargs["workspace"], Path)
         assert captured_kwargs["workspace"] == Path.cwd()
 
-    def test_run_daemon_forwards_disabled_lint_gate(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_run_daemon_forwards_disabled_lint_gate(self, tmp_path: Path) -> None:
         """When settings.lint_gate_enabled is False, poll_loop gets False."""
         captured_kwargs: dict[str, object] = {}
 
@@ -940,7 +961,7 @@ class TestFromACRunDaemonLintGateWiring:
         ):
             from owlbear.daemon import run_daemon
 
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -963,7 +984,8 @@ class TestFromACPollTickLintGateWiring:
     """poll_tick() threads lint_gate_enabled and workspace through to
     reconcile_tasks(), following the existing parameter-threading pattern."""
 
-    def test_poll_tick_passes_lint_gate_enabled_to_reconcile(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_passes_lint_gate_enabled_to_reconcile(self) -> None:
         from owlbear.daemon import OrchestratorState, poll_tick
 
         state = OrchestratorState()
@@ -983,14 +1005,15 @@ class TestFromACPollTickLintGateWiring:
                     workspace=Path("/my/workspace"),
                 )
 
-            _run(go())
+            await (go())
 
         mock_recon.assert_called_once()
         call_kwargs = mock_recon.call_args.kwargs
         assert call_kwargs["lint_gate_enabled"] is True
         assert call_kwargs["workspace"] == Path("/my/workspace")
 
-    def test_poll_tick_defaults_skip_lint_gate(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_defaults_skip_lint_gate(self) -> None:
         from owlbear.daemon import OrchestratorState, poll_tick
 
         state = OrchestratorState()
@@ -1008,7 +1031,7 @@ class TestFromACPollTickLintGateWiring:
                     shutdown_event=asyncio.Event(),
                 )
 
-            _run(go())
+            await (go())
 
         mock_recon.assert_called_once()
         call_kwargs = mock_recon.call_args.kwargs

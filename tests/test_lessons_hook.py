@@ -9,7 +9,6 @@ conditional bootstrap registration.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from pathlib import Path
@@ -22,11 +21,6 @@ from owlbear.core.lessons_hook import LessonsInjectionHook
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _session_data(session_id: str = "test-session") -> dict[str, object]:
@@ -109,7 +103,8 @@ class TestFromACRegister:
 class TestFromACMtimeSorting:
     """Files are read newest-first by mtime."""
 
-    def test_newest_file_content_appears_first(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_newest_file_content_appears_first(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -118,13 +113,14 @@ class TestFromACMtimeSorting:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         # Newest content should appear before oldest
         assert lessons.index("new-content") < lessons.index("old-content")
 
-    def test_three_files_ordered_by_mtime_desc(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_three_files_ordered_by_mtime_desc(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -134,12 +130,13 @@ class TestFromACMtimeSorting:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert lessons.index("BBB") < lessons.index("CCC") < lessons.index("AAA")
 
-    def test_only_md_files_are_read(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_only_md_files_are_read(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -148,7 +145,7 @@ class TestFromACMtimeSorting:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert "md-content" in lessons
@@ -163,7 +160,8 @@ class TestFromACMtimeSorting:
 class TestFromACTokenBudget:
     """Token budget enforcement using len(text)//4 approximation."""
 
-    def test_single_file_within_budget_fully_included(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_single_file_within_budget_fully_included(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -172,11 +170,12 @@ class TestFromACTokenBudget:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=500)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == "x" * 40  # type: ignore[index]
 
-    def test_budget_exceeded_stops_adding_files(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_stops_adding_files(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -188,14 +187,15 @@ class TestFromACTokenBudget:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=10)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert "A" * 36 in lessons
         # Second file should NOT be fully included since budget is exhausted
         assert len(lessons) // 4 <= 10
 
-    def test_last_file_truncated_at_newline_boundary(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_last_file_truncated_at_newline_boundary(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -210,7 +210,7 @@ class TestFromACTokenBudget:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=20)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         # Total should not exceed budget
@@ -227,7 +227,8 @@ class TestFromACTokenBudget:
                 lines = oldest_content.split("\n", maxsplit=2)
                 assert oldest_portion.endswith(("\n", lines[0], lines[1]))
 
-    def test_zero_budget_produces_empty_string(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_zero_budget_produces_empty_string(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -235,11 +236,12 @@ class TestFromACTokenBudget:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=0)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == ""  # type: ignore[index]
 
-    def test_exact_budget_boundary(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_exact_budget_boundary(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
@@ -248,7 +250,7 @@ class TestFromACTokenBudget:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=100)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert len(lessons) // 4 <= 100
@@ -262,32 +264,36 @@ class TestFromACTokenBudget:
 class TestFromACMissingEmptyDir:
     """Graceful handling of missing or empty lessons directory."""
 
-    def test_missing_directory_returns_empty_string(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_directory_returns_empty_string(self, tmp_path: Path) -> None:
         nonexistent = tmp_path / "does-not-exist"
         hook = LessonsInjectionHook(lessons_dir=nonexistent)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == ""  # type: ignore[index]
 
-    def test_missing_directory_does_not_raise(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_directory_does_not_raise(self, tmp_path: Path) -> None:
         nonexistent = tmp_path / "does-not-exist"
         hook = LessonsInjectionHook(lessons_dir=nonexistent)
         data = _session_data()
         # Should not raise any exception
-        _run(hook(data))
+        await (hook(data))
 
-    def test_empty_directory_returns_empty_string(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_directory_returns_empty_string(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "empty-lessons"
         lessons_dir.mkdir()
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == ""  # type: ignore[index]
 
-    def test_directory_with_only_non_md_files_returns_empty(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_directory_with_only_non_md_files_returns_empty(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
         (lessons_dir / "notes.txt").write_text("content", encoding="utf-8")
@@ -295,7 +301,7 @@ class TestFromACMissingEmptyDir:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == ""  # type: ignore[index]
 
@@ -308,29 +314,32 @@ class TestFromACMissingEmptyDir:
 class TestFromACDataPopulation:
     """data['lessons'] is set with the concatenated lesson text."""
 
-    def test_lessons_key_exists_after_call(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_lessons_key_exists_after_call(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
         _write_md(lessons_dir / "a.md", "content", mtime=1000.0)
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert "lessons" in data
 
-    def test_lessons_key_is_string(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_lessons_key_is_string(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
         _write_md(lessons_dir / "a.md", "content", mtime=1000.0)
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert isinstance(data["lessons"], str)  # type: ignore[index]
 
-    def test_concatenation_includes_all_file_contents(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_concatenation_includes_all_file_contents(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
         _write_md(lessons_dir / "first.md", "alpha", mtime=2000.0)
@@ -338,19 +347,20 @@ class TestFromACDataPopulation:
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert "alpha" in lessons
         assert "bravo" in lessons
 
-    def test_empty_dir_sets_lessons_to_empty_string(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_dir_sets_lessons_to_empty_string(self, tmp_path: Path) -> None:
         lessons_dir = tmp_path / "lessons"
         lessons_dir.mkdir()
 
         hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
         data = _session_data()
-        _run(hook(data))
+        await (hook(data))
 
         assert data["lessons"] == ""  # type: ignore[index]
 
@@ -363,7 +373,8 @@ class TestFromACDataPopulation:
 class TestFromACHookRegistryIntegration:
     """Full integration: register + emit fires the hook and populates data."""
 
-    def test_emit_session_start_fires_hook(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_session_start_fires_hook(self, tmp_path: Path) -> None:
         from owlbear.core.hooks import HookEvent, HookRegistry
 
         lessons_dir = tmp_path / "lessons"
@@ -375,12 +386,13 @@ class TestFromACHookRegistryIntegration:
         hook.register(registry)
 
         data = _session_data()
-        _run(registry.emit(HookEvent.SESSION_START, data))
+        await (registry.emit(HookEvent.SESSION_START, data))
 
         assert "lessons" in data
         assert "lesson-text" in data["lessons"]  # type: ignore[index]
 
-    def test_emit_populates_data_with_budget_enforcement(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_populates_data_with_budget_enforcement(self, tmp_path: Path) -> None:
         from owlbear.core.hooks import HookEvent, HookRegistry
 
         lessons_dir = tmp_path / "lessons"
@@ -393,12 +405,13 @@ class TestFromACHookRegistryIntegration:
         hook.register(registry)
 
         data = _session_data()
-        _run(registry.emit(HookEvent.SESSION_START, data))
+        await (registry.emit(HookEvent.SESSION_START, data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert len(lessons) // 4 <= 5
 
-    def test_multiple_hooks_coexist(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_multiple_hooks_coexist(self, tmp_path: Path) -> None:
         """LessonsInjectionHook doesn't interfere with other SESSION_START hooks."""
         from owlbear.core.hooks import HookEvent, HookRegistry
 
@@ -420,7 +433,7 @@ class TestFromACHookRegistryIntegration:
         hook.register(registry)
 
         data = _session_data()
-        _run(registry.emit(HookEvent.SESSION_START, data))
+        await (registry.emit(HookEvent.SESSION_START, data))
 
         assert len(marker_called) == 1
         assert "lessons" in data
@@ -434,7 +447,8 @@ class TestFromACHookRegistryIntegration:
 class TestFromAC_NeverRaises:  # noqa: N801
     """Error resilience: read errors are logged and produce empty/partial output."""
 
-    def test_unreadable_file_logs_warning_and_continues(
+    @pytest.mark.asyncio
+    async def test_unreadable_file_logs_warning_and_continues(
         self,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
@@ -460,14 +474,15 @@ class TestFromAC_NeverRaises:  # noqa: N801
         with patch.object(Path, "read_text", _patched_read), caplog.at_level(logging.WARNING):
             hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
             data = _session_data()
-            _run(hook(data))
+            await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert "good-content" in lessons
         assert "bad-content" not in lessons
         assert any("warning" in r.levelname.lower() for r in caplog.records)
 
-    def test_read_error_all_files_returns_empty(
+    @pytest.mark.asyncio
+    async def test_read_error_all_files_returns_empty(
         self,
         tmp_path: Path,
     ) -> None:
@@ -486,11 +501,12 @@ class TestFromAC_NeverRaises:  # noqa: N801
         with patch.object(Path, "read_text", _always_fail):
             hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
             data = _session_data()
-            _run(hook(data))  # must NOT raise
+            await (hook(data))  # must NOT raise
 
         assert data["lessons"] == ""  # type: ignore[index]
 
-    def test_unicode_decode_error_logs_and_skips(
+    @pytest.mark.asyncio
+    async def test_unicode_decode_error_logs_and_skips(
         self,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
@@ -518,13 +534,14 @@ class TestFromAC_NeverRaises:  # noqa: N801
         with patch.object(Path, "read_text", _patched_read), caplog.at_level(logging.WARNING):
             hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
             data = _session_data()
-            _run(hook(data))
+            await (hook(data))
 
         lessons: str = data["lessons"]  # type: ignore[index]
         assert "good-data" in lessons
         assert any("warning" in r.levelname.lower() for r in caplog.records)
 
-    def test_stat_error_degrades_gracefully(
+    @pytest.mark.asyncio
+    async def test_stat_error_degrades_gracefully(
         self,
         tmp_path: Path,
     ) -> None:
@@ -546,7 +563,7 @@ class TestFromAC_NeverRaises:  # noqa: N801
         with patch.object(Path, "stat", _broken_stat):
             hook = LessonsInjectionHook(lessons_dir=lessons_dir, max_tokens=5000)
             data = _session_data()
-            _run(hook(data))  # must NOT raise
+            await (hook(data))  # must NOT raise
 
         # Degraded result — either empty or partial, but no crash
         assert isinstance(data["lessons"], str)  # type: ignore[index]

@@ -7,7 +7,6 @@ Task #419: Unit tests for Slack interactive features.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,11 +21,6 @@ from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_slack_channel(
@@ -103,22 +97,24 @@ def _make_gate(
 class TestApprovalGateSlackEnrichment:
     """ApprovalGateToolset sends Block Kit blocks when channel has send_blocks."""
 
-    def test_slack_channel_receives_blocks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_slack_channel_receives_blocks(self) -> None:
         """When channel has send_blocks(), it's called instead of send()."""
         gate, _inner, channel = _make_gate()
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         channel.send_blocks.assert_called_once()
         channel.send.assert_not_called()
 
-    def test_blocks_contain_approve_deny_buttons(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_contain_approve_deny_buttons(self) -> None:
         """Blocks sent to Slack must contain Approve / Deny action buttons."""
         gate, _inner, channel = _make_gate()
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {}, ctx, tool))
+        await (gate.call_tool("git_push", {}, ctx, tool))
 
         blocks = channel.send_blocks.call_args[0][0]
         # Find actions block
@@ -129,12 +125,13 @@ class TestApprovalGateSlackEnrichment:
         assert "approved" in values
         assert "denied" in values
 
-    def test_blocks_include_tool_name_in_description(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_include_tool_name_in_description(self) -> None:
         """Approval block description should mention the tool being gated."""
         gate, _inner, channel = _make_gate()
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         blocks = channel.send_blocks.call_args[0][0]
         # Section block should mention the tool name
@@ -146,12 +143,13 @@ class TestApprovalGateSlackEnrichment:
         combined = " ".join(section_texts)
         assert "git_push" in combined
 
-    def test_text_fallback_passed_to_send_blocks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_text_fallback_passed_to_send_blocks(self) -> None:
         """send_blocks receives a text_fallback string for notifications."""
         gate, _inner, channel = _make_gate()
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         # Second positional arg or keyword arg is text_fallback
         call_args = channel.send_blocks.call_args
@@ -161,12 +159,13 @@ class TestApprovalGateSlackEnrichment:
         assert isinstance(text_fallback, str)
         assert "git_push" in text_fallback
 
-    def test_action_id_prefix_contains_tool_name(self) -> None:
+    @pytest.mark.asyncio
+    async def test_action_id_prefix_contains_tool_name(self) -> None:
         """Approval button action_ids should be prefixed with the tool name."""
         gate, _inner, channel = _make_gate()
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {}, ctx, tool))
+        await (gate.call_tool("git_push", {}, ctx, tool))
 
         blocks = channel.send_blocks.call_args[0][0]
         actions_blocks = [b for b in blocks if b.get("type") == "actions"]
@@ -183,26 +182,28 @@ class TestApprovalGateSlackEnrichment:
 class TestApprovalGateCLIFallback:
     """ApprovalGateToolset falls back to send() when channel lacks send_blocks."""
 
-    def test_cli_channel_gets_prompt_via_send_blocks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cli_channel_gets_prompt_via_send_blocks(self) -> None:
         """CLIChannel receives approval prompt in send_blocks text_fallback."""
         cli_channel = _make_cli_channel(["yes"])
         gate, _inner, _channel = _make_gate(channel=cli_channel)
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         cli_channel.send_blocks.assert_called_once()
         text_fallback: str = cli_channel.send_blocks.call_args[0][1]
         assert "git_push" in text_fallback
         assert "Approve?" in text_fallback
 
-    def test_cli_channel_has_send_blocks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cli_channel_has_send_blocks(self) -> None:
         """CLIChannel inherits send_blocks from ChannelPlugin — gate uses it."""
         cli_channel = _make_cli_channel(["yes"])
         gate, _, _ = _make_gate(channel=cli_channel)
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {}, ctx, tool))
+        await (gate.call_tool("git_push", {}, ctx, tool))
 
         assert hasattr(cli_channel, "send_blocks")
         cli_channel.send_blocks.assert_called_once()
@@ -216,32 +217,35 @@ class TestApprovalGateCLIFallback:
 class TestButtonClickRouting:
     """Button click values ('approved'/'denied') parsed correctly by gate."""
 
-    def test_approved_value_proceeds_with_tool_call(self) -> None:
+    @pytest.mark.asyncio
+    async def test_approved_value_proceeds_with_tool_call(self) -> None:
         """'approved' button value (from Slack interactive) → tool executes."""
         gate, inner, _channel = _make_gate(
             channel=_make_slack_channel(["approved"]),
         )
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {}, ctx, tool))
+        result = await (gate.call_tool("git_push", {}, ctx, tool))
 
         inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_denied_value_skips_tool_call(self) -> None:
+    @pytest.mark.asyncio
+    async def test_denied_value_skips_tool_call(self) -> None:
         """'denied' button value (from Slack interactive) → tool denied."""
         gate, inner, _channel = _make_gate(
             channel=_make_slack_channel(["denied"]),
         )
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {}, ctx, tool))
+        result = await (gate.call_tool("git_push", {}, ctx, tool))
 
         inner.call_tool.assert_not_called()
         assert isinstance(result, str)
         assert "denied" in result.lower()
 
-    def test_approved_hook_records_approval(self) -> None:
+    @pytest.mark.asyncio
+    async def test_approved_hook_records_approval(self) -> None:
         """Hook payload should record 'approved' decision from button click."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -253,13 +257,14 @@ class TestButtonClickRouting:
         )
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {}, ctx, tool))
+        await (gate.call_tool("git_push", {}, ctx, tool))
 
         decisions = [p for p in captured if p.get("approval_decision")]
         assert len(decisions) >= 1
         assert decisions[0]["approval_decision"] == "approved"
 
-    def test_denied_hook_records_denial(self) -> None:
+    @pytest.mark.asyncio
+    async def test_denied_hook_records_denial(self) -> None:
         """Hook payload should record 'denied' decision from button click."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -271,7 +276,7 @@ class TestButtonClickRouting:
         )
         ctx, tool = MagicMock(), MagicMock()
 
-        _run(gate.call_tool("git_push", {}, ctx, tool))
+        await (gate.call_tool("git_push", {}, ctx, tool))
 
         decisions = [p for p in captured if p.get("approval_decision")]
         assert len(decisions) >= 1
@@ -450,26 +455,28 @@ class TestThreadRegistryIntegration:
 class TestFallbackPathsIntegration:
     """Verify the full fallback path: Slack gets blocks, CLI gets text."""
 
-    def test_slack_channel_full_flow(self) -> None:
+    @pytest.mark.asyncio
+    async def test_slack_channel_full_flow(self) -> None:
         """SlackChannel mock: send_blocks called, user approves, tool runs."""
         slack = _make_slack_channel(["approved"])
         gate, inner, _ = _make_gate(channel=slack)
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        result = await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         slack.send_blocks.assert_called_once()
         slack.send.assert_not_called()
         inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_cli_channel_full_flow(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cli_channel_full_flow(self) -> None:
         """CLIChannel mock: send_blocks() called, user approves, tool runs."""
         cli = _make_cli_channel(["yes"])
         gate, inner, _ = _make_gate(channel=cli)
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        result = await (gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         cli.send_blocks.assert_called_once()
         text_fallback = cli.send_blocks.call_args[0][1]
@@ -477,25 +484,27 @@ class TestFallbackPathsIntegration:
         inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_slack_deny_full_flow(self) -> None:
+    @pytest.mark.asyncio
+    async def test_slack_deny_full_flow(self) -> None:
         """SlackChannel: user clicks Deny → tool not called, denial returned."""
         slack = _make_slack_channel(["denied"])
         gate, inner, _ = _make_gate(channel=slack)
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {}, ctx, tool))
+        result = await (gate.call_tool("git_push", {}, ctx, tool))
 
         slack.send_blocks.assert_called_once()
         inner.call_tool.assert_not_called()
         assert "denied" in str(result).lower()
 
-    def test_cli_deny_full_flow(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cli_deny_full_flow(self) -> None:
         """CLIChannel: user types 'no' → tool not called, denial returned."""
         cli = _make_cli_channel(["no"])
         gate, inner, _ = _make_gate(channel=cli)
         ctx, tool = MagicMock(), MagicMock()
 
-        result = _run(gate.call_tool("git_push", {}, ctx, tool))
+        result = await (gate.call_tool("git_push", {}, ctx, tool))
 
         cli.send_blocks.assert_called_once()
         inner.call_tool.assert_not_called()

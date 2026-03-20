@@ -39,11 +39,6 @@ def _make_channel(
     return channel
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 # ---------------------------------------------------------------------------
 # Toolset registration
 # ---------------------------------------------------------------------------
@@ -75,20 +70,22 @@ class TestAskUserToolsetRegistration:
 class TestAskUserFreeText:
     """ask_user with no options sends question via channel and returns response."""
 
-    def test_sends_question_and_returns_response(self) -> None:
+    @pytest.mark.asyncio
+    async def test_sends_question_and_returns_response(self) -> None:
         channel = _make_channel(receive_returns="42")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("What is the answer?"))
+        result = await (ts.ask_user("What is the answer?"))
 
         channel.send.assert_called_once_with("What is the answer?")
         assert result == "42"
 
-    def test_returns_channel_receive_value(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_channel_receive_value(self) -> None:
         channel = _make_channel(receive_returns="some response")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Tell me something"))
+        result = await (ts.ask_user("Tell me something"))
         assert result == "some response"
 
 
@@ -100,20 +97,22 @@ class TestAskUserFreeText:
 class TestAskUserOptionsFormatting:
     """ask_user with options formats a numbered list prompt."""
 
-    def test_formats_numbered_list(self) -> None:
+    @pytest.mark.asyncio
+    async def test_formats_numbered_list(self) -> None:
         channel = _make_channel(receive_returns="1")
         ts = AskUserToolset(channel)
 
-        _run(ts.ask_user("Pick one:", options=["alpha", "beta"]))
+        await (ts.ask_user("Pick one:", options=["alpha", "beta"]))
 
         expected_prompt = "Pick one:\n[1] alpha\n[2] beta\nChoose [1-2]:"
         channel.send.assert_called_once_with(expected_prompt)
 
-    def test_formats_three_options(self) -> None:
+    @pytest.mark.asyncio
+    async def test_formats_three_options(self) -> None:
         channel = _make_channel(receive_returns="2")
         ts = AskUserToolset(channel)
 
-        _run(ts.ask_user("Choose:", options=["a", "b", "c"]))
+        await (ts.ask_user("Choose:", options=["a", "b", "c"]))
 
         expected_prompt = "Choose:\n[1] a\n[2] b\n[3] c\nChoose [1-3]:"
         channel.send.assert_called_once_with(expected_prompt)
@@ -127,18 +126,20 @@ class TestAskUserOptionsFormatting:
 class TestAskUserOptionsByIndex:
     """ask_user with options accepts index input and returns option text."""
 
-    def test_index_1_returns_first_option(self) -> None:
+    @pytest.mark.asyncio
+    async def test_index_1_returns_first_option(self) -> None:
         channel = _make_channel(receive_returns="1")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Pick:", options=["high", "low"]))
+        result = await (ts.ask_user("Pick:", options=["high", "low"]))
         assert result == "high"
 
-    def test_index_2_returns_second_option(self) -> None:
+    @pytest.mark.asyncio
+    async def test_index_2_returns_second_option(self) -> None:
         channel = _make_channel(receive_returns="2")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Pick:", options=["high", "low"]))
+        result = await (ts.ask_user("Pick:", options=["high", "low"]))
         assert result == "low"
 
 
@@ -150,25 +151,28 @@ class TestAskUserOptionsByIndex:
 class TestAskUserOptionsByText:
     """ask_user with options accepts text input (case-insensitive match)."""
 
-    def test_exact_text_match(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exact_text_match(self) -> None:
         channel = _make_channel(receive_returns="high")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Pick:", options=["high", "low"]))
+        result = await (ts.ask_user("Pick:", options=["high", "low"]))
         assert result == "high"
 
-    def test_uppercase_text_match(self) -> None:
+    @pytest.mark.asyncio
+    async def test_uppercase_text_match(self) -> None:
         channel = _make_channel(receive_returns="HIGH")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Pick:", options=["high", "low"]))
+        result = await (ts.ask_user("Pick:", options=["high", "low"]))
         assert result == "high"
 
-    def test_mixed_case_text_match(self) -> None:
+    @pytest.mark.asyncio
+    async def test_mixed_case_text_match(self) -> None:
         channel = _make_channel(receive_returns="Low")
         ts = AskUserToolset(channel)
 
-        result = _run(ts.ask_user("Pick:", options=["high", "low"]))
+        result = await (ts.ask_user("Pick:", options=["high", "low"]))
         assert result == "low"
 
 
@@ -180,20 +184,22 @@ class TestAskUserOptionsByText:
 class TestAskUserInvalidInput:
     """ask_user re-asks on invalid input up to max_retries."""
 
-    def test_reasks_on_invalid_then_accepts_valid(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reasks_on_invalid_then_accepts_valid(self) -> None:
         channel = _make_channel(receive_returns=["invalid", "1"])
         ts = AskUserToolset(channel, max_retries=3)
 
-        result = _run(ts.ask_user("Pick:", options=["alpha", "beta"]))
+        result = await (ts.ask_user("Pick:", options=["alpha", "beta"]))
         assert result == "alpha"
         # send() called twice: initial prompt + re-ask prompt
         assert channel.send.call_count == 2
 
-    def test_reasks_multiple_times(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reasks_multiple_times(self) -> None:
         channel = _make_channel(receive_returns=["bad", "worse", "1"])
         ts = AskUserToolset(channel, max_retries=3)
 
-        result = _run(ts.ask_user("Pick:", options=["alpha", "beta"]))
+        result = await (ts.ask_user("Pick:", options=["alpha", "beta"]))
         assert result == "alpha"
         assert channel.send.call_count == 3
 
@@ -206,7 +212,8 @@ class TestAskUserInvalidInput:
 class TestAskUserRetryExhaustionAbort:
     """Exhausting retries with ABORT raises AskUserTimeoutError."""
 
-    def test_raises_after_max_retries(self) -> None:
+    @pytest.mark.asyncio
+    async def test_raises_after_max_retries(self) -> None:
         channel = _make_channel(receive_returns=["bad", "bad", "bad"])
         ts = AskUserToolset(
             channel,
@@ -215,7 +222,7 @@ class TestAskUserRetryExhaustionAbort:
         )
 
         with pytest.raises(AskUserTimeoutError):
-            _run(ts.ask_user("Pick:", options=["alpha", "beta"]))
+            await (ts.ask_user("Pick:", options=["alpha", "beta"]))
 
     def test_error_is_timeout_error_subclass(self) -> None:
         assert issubclass(AskUserTimeoutError, TimeoutError)
@@ -229,7 +236,8 @@ class TestAskUserRetryExhaustionAbort:
 class TestAskUserRetryExhaustionSkip:
     """Exhausting retries with SKIP returns default_response."""
 
-    def test_returns_default_response(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_default_response(self) -> None:
         channel = _make_channel(receive_returns=["bad", "bad", "bad"])
         ts = AskUserToolset(
             channel,
@@ -238,10 +246,11 @@ class TestAskUserRetryExhaustionSkip:
             default_response="(skipped)",
         )
 
-        result = _run(ts.ask_user("Pick:", options=["alpha", "beta"]))
+        result = await (ts.ask_user("Pick:", options=["alpha", "beta"]))
         assert result == "(skipped)"
 
-    def test_returns_builtin_default(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_builtin_default(self) -> None:
         channel = _make_channel(receive_returns=["bad", "bad", "bad"])
         ts = AskUserToolset(
             channel,
@@ -249,7 +258,7 @@ class TestAskUserRetryExhaustionSkip:
             timeout_action=TimeoutAction.SKIP,
         )
 
-        result = _run(ts.ask_user("Pick:", options=["alpha", "beta"]))
+        result = await (ts.ask_user("Pick:", options=["alpha", "beta"]))
         assert result == "(no response)"
 
 
@@ -261,7 +270,8 @@ class TestAskUserRetryExhaustionSkip:
 class TestAskUserTimeoutAbort:
     """Timeout with ABORT raises AskUserTimeoutError."""
 
-    def test_raises_on_timeout(self) -> None:
+    @pytest.mark.asyncio
+    async def test_raises_on_timeout(self) -> None:
         channel = _make_channel()
         channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
         ts = AskUserToolset(
@@ -271,7 +281,7 @@ class TestAskUserTimeoutAbort:
         )
 
         with pytest.raises(AskUserTimeoutError):
-            _run(ts.ask_user("Are you there?"))
+            await (ts.ask_user("Are you there?"))
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +292,8 @@ class TestAskUserTimeoutAbort:
 class TestAskUserTimeoutSkip:
     """Timeout with SKIP returns default_response."""
 
-    def test_returns_default_on_timeout(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_default_on_timeout(self) -> None:
         channel = _make_channel()
         channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
         ts = AskUserToolset(
@@ -292,10 +303,11 @@ class TestAskUserTimeoutSkip:
             default_response="(timed out)",
         )
 
-        result = _run(ts.ask_user("Are you there?"))
+        result = await (ts.ask_user("Are you there?"))
         assert result == "(timed out)"
 
-    def test_returns_builtin_default_on_timeout(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_builtin_default_on_timeout(self) -> None:
         channel = _make_channel()
         channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
         ts = AskUserToolset(
@@ -304,7 +316,7 @@ class TestAskUserTimeoutSkip:
             timeout_action=TimeoutAction.SKIP,
         )
 
-        result = _run(ts.ask_user("Are you there?"))
+        result = await (ts.ask_user("Are you there?"))
         assert result == "(no response)"
 
 
@@ -316,7 +328,8 @@ class TestAskUserTimeoutSkip:
 class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
     """Cover _receive_option paths: TimeoutError and None from channel."""
 
-    def test_receive_option_timeout_triggers_handle_timeout_abort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_option_timeout_triggers_handle_timeout_abort(self) -> None:
         """TimeoutError during _receive_option with ABORT raises AskUserTimeoutError."""
         channel = _make_channel()
         channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
@@ -327,9 +340,10 @@ class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
         )
 
         with pytest.raises(AskUserTimeoutError):
-            _run(ts.ask_user("Pick one", options=["a", "b"]))
+            await (ts.ask_user("Pick one", options=["a", "b"]))
 
-    def test_receive_option_timeout_triggers_handle_timeout_skip(self) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_option_timeout_triggers_handle_timeout_skip(self) -> None:
         """TimeoutError during _receive_option with SKIP returns default."""
         channel = _make_channel()
         channel.receive = AsyncMock(side_effect=asyncio.TimeoutError)
@@ -340,10 +354,11 @@ class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
             default_response="(skipped)",
         )
 
-        result = _run(ts.ask_user("Pick one", options=["a", "b"]))
+        result = await (ts.ask_user("Pick one", options=["a", "b"]))
         assert result == "(skipped)"
 
-    def test_receive_option_none_triggers_handle_timeout_abort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_option_none_triggers_handle_timeout_abort(self) -> None:
         """channel.receive() returning None with ABORT raises AskUserTimeoutError."""
         channel = _make_channel(receive_returns=None)
         ts = AskUserToolset(
@@ -353,9 +368,10 @@ class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
         )
 
         with pytest.raises(AskUserTimeoutError):
-            _run(ts.ask_user("Pick one", options=["a", "b"]))
+            await (ts.ask_user("Pick one", options=["a", "b"]))
 
-    def test_receive_option_none_triggers_handle_timeout_skip(self) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_option_none_triggers_handle_timeout_skip(self) -> None:
         """channel.receive() returning None with SKIP returns default."""
         channel = _make_channel(receive_returns=None)
         ts = AskUserToolset(
@@ -365,5 +381,5 @@ class TestFromAC_ReceiveOptionEdgePaths:  # noqa: N801
             default_response="(no answer)",
         )
 
-        result = _run(ts.ask_user("Pick one", options=["a", "b"]))
+        result = await (ts.ask_user("Pick one", options=["a", "b"]))
         assert result == "(no answer)"

@@ -7,7 +7,6 @@ configurable command, and logging of results.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -22,11 +21,6 @@ from owlbear.core.test_hook import TestVerificationHook
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CMD = ["uv", "run", "pytest", "tests/", "-m", "not api", "--tb=short", "-q"]
-
-
-def _run(coro: object) -> None:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _session_payload(session_id: str = "test-session-1") -> dict[str, object]:
@@ -67,7 +61,8 @@ class TestTestVerificationHookPassScenario:
     """Hook reports passing tests correctly."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_all_tests_pass(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_all_tests_pass(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -76,7 +71,7 @@ class TestTestVerificationHookPassScenario:
         )
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         mock_run.assert_called_once()
         results = data["test_results"]
         assert results["passed"] == 42
@@ -84,7 +79,8 @@ class TestTestVerificationHookPassScenario:
         assert "42 passed" in results["output"]
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_uses_default_pytest_command(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_uses_default_pytest_command(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -92,12 +88,13 @@ class TestTestVerificationHookPassScenario:
             stderr="",
         )
         hook = TestVerificationHook()
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
         call_args = mock_run.call_args[0][0]
         assert call_args == _DEFAULT_CMD
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_stores_results_on_data_dict(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_stores_results_on_data_dict(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -106,7 +103,7 @@ class TestTestVerificationHookPassScenario:
         )
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         assert "test_results" in data
         assert isinstance(data["test_results"], dict)
         assert "passed" in data["test_results"]
@@ -123,7 +120,8 @@ class TestTestVerificationHookFailScenario:
     """Hook handles test failures gracefully — warn, never raise."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_some_tests_fail(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_some_tests_fail(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -132,13 +130,14 @@ class TestTestVerificationHookFailScenario:
         )
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         results = data["test_results"]
         assert results["passed"] == 39
         assert results["failed"] == 3
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_failure_does_not_raise(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_does_not_raise(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -147,10 +146,11 @@ class TestTestVerificationHookFailScenario:
         )
         hook = TestVerificationHook()
         # Must NOT raise
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_failure_logs_warning(
+    @pytest.mark.asyncio
+    async def test_failure_logs_warning(
         self,
         mock_run: MagicMock,
         caplog: pytest.LogCaptureFixture,
@@ -163,7 +163,7 @@ class TestTestVerificationHookFailScenario:
         )
         hook = TestVerificationHook()
         with caplog.at_level(logging.WARNING, logger="owlbear.core.test_hook"):
-            _run(hook(_session_payload()))
+            await (hook(_session_payload()))
         assert "2 failed" in caplog.text
 
 
@@ -176,25 +176,28 @@ class TestTestVerificationHookTimeout:
     """Hook handles subprocess timeout — warn, never raise."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_timeout_does_not_raise(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_timeout_does_not_raise(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="pytest", timeout=120)
         hook = TestVerificationHook()
         # Must NOT raise
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_timeout_stores_timeout_results(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_timeout_stores_timeout_results(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="pytest", timeout=120)
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         results = data["test_results"]
         assert results["passed"] == 0
         assert results["failed"] == 0
         assert "timeout" in results["output"].lower()
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_timeout_logs_warning(
+    @pytest.mark.asyncio
+    async def test_timeout_logs_warning(
         self,
         mock_run: MagicMock,
         caplog: pytest.LogCaptureFixture,
@@ -202,7 +205,7 @@ class TestTestVerificationHookTimeout:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="pytest", timeout=120)
         hook = TestVerificationHook()
         with caplog.at_level(logging.WARNING, logger="owlbear.core.test_hook"):
-            _run(hook(_session_payload()))
+            await (hook(_session_payload()))
         assert "timeout" in caplog.text.lower()
 
 
@@ -215,24 +218,27 @@ class TestTestVerificationHookSubprocessError:
     """Hook handles subprocess errors — warn, never raise."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_os_error_does_not_raise(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_os_error_does_not_raise(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = OSError("pytest not found")
         hook = TestVerificationHook()
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_os_error_stores_error_results(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_os_error_stores_error_results(self, mock_run: MagicMock) -> None:
         mock_run.side_effect = OSError("pytest not found")
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         results = data["test_results"]
         assert results["passed"] == 0
         assert results["failed"] == 0
         assert "error" in results["output"].lower()
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_os_error_logs_warning(
+    @pytest.mark.asyncio
+    async def test_os_error_logs_warning(
         self,
         mock_run: MagicMock,
         caplog: pytest.LogCaptureFixture,
@@ -240,7 +246,7 @@ class TestTestVerificationHookSubprocessError:
         mock_run.side_effect = OSError("pytest not found")
         hook = TestVerificationHook()
         with caplog.at_level(logging.WARNING, logger="owlbear.core.test_hook"):
-            _run(hook(_session_payload()))
+            await (hook(_session_payload()))
         assert "pytest not found" in caplog.text
 
 
@@ -253,7 +259,8 @@ class TestTestVerificationHookConfigurable:
     """Hook accepts custom pytest command."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_custom_command(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_command(self, mock_run: MagicMock) -> None:
         custom = ["python", "-m", "pytest", "-x"]
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
@@ -262,12 +269,13 @@ class TestTestVerificationHookConfigurable:
             stderr="",
         )
         hook = TestVerificationHook(pytest_cmd=custom)
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
         call_args = mock_run.call_args[0][0]
         assert call_args == custom
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_custom_timeout(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_custom_timeout(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -275,7 +283,7 @@ class TestTestVerificationHookConfigurable:
             stderr="",
         )
         hook = TestVerificationHook(timeout=60)
-        _run(hook(_session_payload()))
+        await (hook(_session_payload()))
         assert mock_run.call_args[1]["timeout"] == 60
 
     def test_default_timeout_is_120(self) -> None:
@@ -292,7 +300,8 @@ class TestTestVerificationHookEdgeCases:
     """Edge cases: unparseable output."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_unparseable_output_defaults_to_zero(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_unparseable_output_defaults_to_zero(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -301,7 +310,7 @@ class TestTestVerificationHookEdgeCases:
         )
         hook = TestVerificationHook()
         data = _session_payload()
-        _run(hook(data))
+        await (hook(data))
         results = data["test_results"]
         assert results["passed"] == 0
         assert results["failed"] == 0
@@ -317,7 +326,8 @@ class TestTestVerificationHookIntegration:
     """Hook fires correctly through HookRegistry.emit."""
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_emit_triggers_test_run(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_triggers_test_run(self, mock_run: MagicMock) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -327,13 +337,14 @@ class TestTestVerificationHookIntegration:
         hook = TestVerificationHook()
         registry = HookRegistry()
         hook.register(registry)
-        _run(registry.emit(HookEvent.SESSION_END, _session_payload()))
+        await (registry.emit(HookEvent.SESSION_END, _session_payload()))
         mock_run.assert_called_once()
 
     @patch("owlbear.core.test_hook.subprocess.run")
-    def test_emit_on_other_event_does_not_trigger(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_on_other_event_does_not_trigger(self, mock_run: MagicMock) -> None:
         hook = TestVerificationHook()
         registry = HookRegistry()
         hook.register(registry)
-        _run(registry.emit(HookEvent.SESSION_START, _session_payload()))
+        await (registry.emit(HookEvent.SESSION_START, _session_payload()))
         mock_run.assert_not_called()

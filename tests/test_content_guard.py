@@ -9,8 +9,6 @@ patterns, and integration with BrowserToolset and WebCrawler.
 # ruff: noqa: N801
 from __future__ import annotations
 
-import asyncio
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,11 +24,6 @@ from owlbear.tools.browser.content_guard import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> Any:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +428,8 @@ class TestFromAC_BrowserToolsetIntegration:
         )
         assert guard_found, "BrowserToolset should construct a ContentInjectionGuard"
 
-    def test_read_text_returns_blocked_prefix_strict(self) -> None:
+    @pytest.mark.asyncio
+    async def test_read_text_returns_blocked_prefix_strict(self) -> None:
         from owlbear.tools.browser.config import BrowserConfig
         from owlbear.tools.browser.toolset import BrowserToolset
 
@@ -452,12 +446,13 @@ class TestFromAC_BrowserToolsetIntegration:
         mock_manager.page = mock_page
         ts._manager = mock_manager
 
-        result = _run(ts._read_text())
+        result = await (ts._read_text())
         assert isinstance(result, str)
         assert result.startswith("BLOCKED:")
         assert "prompt injection" in result.lower()
 
-    def test_read_text_passes_clean_content(self) -> None:
+    @pytest.mark.asyncio
+    async def test_read_text_passes_clean_content(self) -> None:
         from owlbear.tools.browser.config import BrowserConfig
         from owlbear.tools.browser.toolset import BrowserToolset
 
@@ -472,11 +467,12 @@ class TestFromAC_BrowserToolsetIntegration:
         mock_manager.page = mock_page
         ts._manager = mock_manager
 
-        result = _run(ts._read_text())
+        result = await (ts._read_text())
         assert "BLOCKED" not in result
         assert "Normal clean content." in result
 
-    def test_read_text_warn_mode_does_not_block(self) -> None:
+    @pytest.mark.asyncio
+    async def test_read_text_warn_mode_does_not_block(self) -> None:
         from owlbear.tools.browser.config import BrowserConfig
         from owlbear.tools.browser.toolset import BrowserToolset
 
@@ -491,7 +487,7 @@ class TestFromAC_BrowserToolsetIntegration:
         mock_manager.page = mock_page
         ts._manager = mock_manager
 
-        result = _run(ts._read_text())
+        result = await (ts._read_text())
         # Warn mode: content returned, not blocked
         assert "BLOCKED" not in result
 
@@ -520,7 +516,8 @@ class TestFromAC_WebCrawlerIntegration:
         crawler = WebCrawler(mock_manager)
         assert crawler is not None
 
-    def test_crawl_skips_injected_page_strict(self) -> None:
+    @pytest.mark.asyncio
+    async def test_crawl_skips_injected_page_strict(self) -> None:
         from owlbear.tools.browser.crawl_config import CrawlConfig
         from owlbear.tools.browser.crawler import WebCrawler
 
@@ -551,13 +548,14 @@ class TestFromAC_WebCrawlerIntegration:
                 delay_seconds=0,
                 respect_robots=False,
             )
-            result = _run(crawler.crawl(config))
+            result = await (crawler.crawl(config))
 
         # The injected page should be in errors, not in pages
         assert len(result.errors) >= 1
         assert len(result.pages) == 0
 
-    def test_crawl_warn_mode_keeps_page(self) -> None:
+    @pytest.mark.asyncio
+    async def test_crawl_warn_mode_keeps_page(self) -> None:
         from owlbear.tools.browser.crawl_config import CrawlConfig
         from owlbear.tools.browser.crawler import WebCrawler
 
@@ -588,7 +586,7 @@ class TestFromAC_WebCrawlerIntegration:
                 delay_seconds=0,
                 respect_robots=False,
             )
-            result = _run(crawler.crawl(config))
+            result = await (crawler.crawl(config))
 
         # Warn mode: page kept, not blocked
         assert result.total_pages == 1

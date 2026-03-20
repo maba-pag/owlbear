@@ -6,11 +6,11 @@ does not exist yet — all tests are expected to fail with ``ImportError``.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from conftest import make_mock_toolset  # type: ignore[import-untyped]
 
 from owlbear.core.hooks import HookEvent, HookRegistry
@@ -20,11 +20,6 @@ from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_channel(
@@ -93,36 +88,39 @@ def _make_gate(
 class TestApprovalPromptSent:
     """When a gated tool is called, the channel receives an approval prompt."""
 
-    def test_sends_approval_prompt_via_channel(self) -> None:
+    @pytest.mark.asyncio
+    async def test_sends_approval_prompt_via_channel(self) -> None:
         """call_tool for a gated tool must call channel.send_blocks() with a prompt."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         fix.channel.send_blocks.assert_called_once()
         text_fallback: str = fix.channel.send_blocks.call_args[0][1]
         assert "git_push" in text_fallback
 
-    def test_prompt_includes_tool_name(self) -> None:
+    @pytest.mark.asyncio
+    async def test_prompt_includes_tool_name(self) -> None:
         """Approval prompt must mention the tool name being gated."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="delete_file")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("delete_file", {"path": "/important"}, ctx, tool))
+        await (fix.gate.call_tool("delete_file", {"path": "/important"}, ctx, tool))
 
         text_fallback: str = fix.channel.send_blocks.call_args[0][1]
         assert "delete_file" in text_fallback
 
-    def test_send_blocks_text_fallback_includes_cli_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_send_blocks_text_fallback_includes_cli_prompt(self) -> None:
         """send_blocks text_fallback must include tool name and yes/no prompt."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         fix.channel.send_blocks.assert_called_once()
         text_fallback: str = fix.channel.send_blocks.call_args[0][1]
@@ -138,19 +136,21 @@ class TestApprovalPromptSent:
 class TestApprovePath:
     """When user responds 'yes', the wrapped tool executes normally."""
 
-    def test_yes_proceeds_with_tool_call(self) -> None:
+    @pytest.mark.asyncio
+    async def test_yes_proceeds_with_tool_call(self) -> None:
         """channel.receive() returns 'yes' -> inner call_tool is invoked."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         fix.channel.receive = AsyncMock(return_value="yes")
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {"branch": "main"}, ctx, tool))
 
         fix.inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_y_shorthand_also_approves(self) -> None:
+    @pytest.mark.asyncio
+    async def test_y_shorthand_also_approves(self) -> None:
         """A shorthand 'y' response should also approve the tool call."""
         fix = _make_gate(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -159,7 +159,7 @@ class TestApprovePath:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.inner.call_tool.assert_called_once()
         assert result == "tool_result"
@@ -173,7 +173,8 @@ class TestApprovePath:
 class TestDenyPath:
     """When user responds 'no', the tool is not called and denial returned."""
 
-    def test_no_skips_tool_returns_denial(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_skips_tool_returns_denial(self) -> None:
         """channel.receive() returns 'no' -> tool NOT called, returns denial."""
         fix = _make_gate(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -182,13 +183,14 @@ class TestDenyPath:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.inner.call_tool.assert_not_called()
         assert isinstance(result, str)
         assert "denied" in result.lower()
 
-    def test_n_shorthand_also_denies(self) -> None:
+    @pytest.mark.asyncio
+    async def test_n_shorthand_also_denies(self) -> None:
         """A shorthand 'n' response should also deny."""
         fix = _make_gate(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -197,7 +199,7 @@ class TestDenyPath:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.inner.call_tool.assert_not_called()
         assert "denied" in str(result).lower()
@@ -211,7 +213,8 @@ class TestDenyPath:
 class TestTimeoutPath:
     """When channel.receive() returns None (timeout/disconnect), tool is skipped."""
 
-    def test_none_response_returns_cancellation(self) -> None:
+    @pytest.mark.asyncio
+    async def test_none_response_returns_cancellation(self) -> None:
         """receive() -> None means timeout: tool skipped, cancellation message."""
         fix = _make_gate(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -220,7 +223,7 @@ class TestTimeoutPath:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.inner.call_tool.assert_not_called()
         assert isinstance(result, str)
@@ -236,7 +239,8 @@ class TestTimeoutPath:
 class TestPreGrantPath:
     """When the tool is pre-granted in the session, no prompt is sent."""
 
-    def test_pre_granted_skips_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pre_granted_skips_prompt(self) -> None:
         """Pre-granted tool bypasses channel interaction entirely."""
         session = ApprovalSession()
         session.grant("git_push")
@@ -248,7 +252,7 @@ class TestPreGrantPath:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.channel.send.assert_not_called()
         fix.channel.receive.assert_not_called()
@@ -264,7 +268,8 @@ class TestPreGrantPath:
 class TestApproveAllResponse:
     """'approve all {tool}' grants future calls and proceeds immediately."""
 
-    def test_approve_all_grants_and_proceeds(self) -> None:
+    @pytest.mark.asyncio
+    async def test_approve_all_grants_and_proceeds(self) -> None:
         """'approve all git_push' -> session.grant() + inner called."""
         session = ApprovalSession()
         fix = _make_gate(
@@ -275,13 +280,14 @@ class TestApproveAllResponse:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         assert session.is_pre_granted("git_push") is True
         fix.inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_second_call_after_approve_all_skips_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_second_call_after_approve_all_skips_prompt(self) -> None:
         """After 'approve all', subsequent calls skip the approval prompt."""
         session = ApprovalSession()
         fix = _make_gate(
@@ -293,7 +299,7 @@ class TestApproveAllResponse:
         tool = MagicMock()
 
         # First call — goes through approval, grants
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
         assert session.is_pre_granted("git_push") is True
 
         # Reset channel to track second call
@@ -301,7 +307,7 @@ class TestApproveAllResponse:
         fix.channel.receive.reset_mock()
 
         # Second call — pre-granted, no prompt
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
         fix.channel.send.assert_not_called()
         fix.channel.receive.assert_not_called()
         assert fix.inner.call_tool.call_count == 2
@@ -315,26 +321,28 @@ class TestApproveAllResponse:
 class TestToolNotInPolicy:
     """When a tool is not matched by any rule, it runs without approval."""
 
-    def test_ungated_tool_proceeds_directly(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ungated_tool_proceeds_directly(self) -> None:
         """call_tool for a tool NOT in rules skips approval entirely."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("read_file", {"path": "x.py"}, ctx, tool))
+        result = await (fix.gate.call_tool("read_file", {"path": "x.py"}, ctx, tool))
 
         fix.channel.send.assert_not_called()
         fix.channel.receive.assert_not_called()
         fix.inner.call_tool.assert_called_once()
         assert result == "tool_result"
 
-    def test_empty_policy_never_prompts(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_policy_never_prompts(self) -> None:
         """An empty policy means every tool is ungated."""
         fix = _make_gate(rules=[])
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        result = await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.channel.send.assert_not_called()
         fix.inner.call_tool.assert_called_once()
@@ -349,7 +357,8 @@ class TestToolNotInPolicy:
 class TestObservabilityHooks:
     """Approval decisions are emitted as hook events for observability."""
 
-    def test_post_tool_use_hook_includes_approval_data(self) -> None:
+    @pytest.mark.asyncio
+    async def test_post_tool_use_hook_includes_approval_data(self) -> None:
         """POST_TOOL_USE hook payload should include approval_required flag."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -362,7 +371,7 @@ class TestObservabilityHooks:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         assert len(captured) >= 1
         payload = captured[0]
@@ -371,7 +380,8 @@ class TestObservabilityHooks:
         assert "approval_required" in payload
         assert payload["approval_required"] is True
 
-    def test_hook_records_approval_decision(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hook_records_approval_decision(self) -> None:
         """Hook payload should include the approval decision (approved/denied)."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -385,7 +395,7 @@ class TestObservabilityHooks:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         assert len(captured) >= 1
         # At least one payload should indicate the denial
@@ -393,7 +403,8 @@ class TestObservabilityHooks:
         assert len(decisions) >= 1
         assert decisions[0]["approval_decision"] == "denied"
 
-    def test_ungated_tool_hook_shows_no_approval(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ungated_tool_hook_shows_no_approval(self) -> None:
         """For ungated tools, hook should indicate approval was not required."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -406,7 +417,7 @@ class TestObservabilityHooks:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("read_file", {}, ctx, tool))
+        await (fix.gate.call_tool("read_file", {}, ctx, tool))
 
         assert len(captured) >= 1
         payload = captured[0]
@@ -422,24 +433,26 @@ class TestObservabilityHooks:
 class TestChannelInteraction:
     """Verify the channel send/receive protocol during approval."""
 
-    def test_receive_called_after_send_blocks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_called_after_send_blocks(self) -> None:
         """channel.receive() is called after channel.send_blocks() for gated tools."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="git_push")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         fix.channel.send_blocks.assert_called_once()
         fix.channel.receive.assert_called_once()
 
-    def test_args_included_in_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_args_included_in_prompt(self) -> None:
         """The approval prompt text_fallback should include tool name for context."""
         fix = _make_gate(rules=[ApprovalRule(tool_name="run_command")])
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
+        await (fix.gate.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         text_fallback: str = fix.channel.send_blocks.call_args[0][1]
         assert "run_command" in text_fallback
@@ -453,7 +466,8 @@ class TestChannelInteraction:
 class TestApproveAllScopedGrants:
     """'approve all {tool}' creates a GrantRecord with policy defaults."""
 
-    def test_approve_all_creates_grant_with_policy_defaults(self) -> None:
+    @pytest.mark.asyncio
+    async def test_approve_all_creates_grant_with_policy_defaults(self) -> None:
         """Grant created by 'approve all' uses policy.default_grant_ttl/max_uses."""
         policy = ApprovalPolicy(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -471,7 +485,7 @@ class TestApproveAllScopedGrants:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         # Session should have a grant with the policy defaults
         grant = session._grants.get("git_push")
@@ -479,7 +493,8 @@ class TestApproveAllScopedGrants:
         assert grant.ttl == 300.0
         assert grant.remaining_uses == 10
 
-    def test_grant_expires_after_ttl(self) -> None:
+    @pytest.mark.asyncio
+    async def test_grant_expires_after_ttl(self) -> None:
         """After TTL elapses, is_pre_granted returns False."""
         policy = ApprovalPolicy(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -496,7 +511,7 @@ class TestApproveAllScopedGrants:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         # Grant is valid initially
         assert session.is_pre_granted("git_push") is True
@@ -511,7 +526,8 @@ class TestApproveAllScopedGrants:
         with patch("owlbear.safety.policy.monotonic", return_value=grant.granted_at + 61.0):
             assert session.is_pre_granted("git_push") is False
 
-    def test_grant_exhausts_after_max_uses(self) -> None:
+    @pytest.mark.asyncio
+    async def test_grant_exhausts_after_max_uses(self) -> None:
         """After max_uses calls, is_pre_granted returns False."""
         policy = ApprovalPolicy(
             rules=[ApprovalRule(tool_name="git_push")],
@@ -528,7 +544,7 @@ class TestApproveAllScopedGrants:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         # Grant should have been created with max_uses=1
         # Use 1: first pre-grant check — consumes the single use
@@ -545,7 +561,8 @@ class TestApproveAllScopedGrants:
 class TestApproveAllHookMetadata:
     """POST_TOOL_USE hook for 'approved_all' includes ttl and max_uses."""
 
-    def test_hook_includes_grant_metadata(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hook_includes_grant_metadata(self) -> None:
         """Hook payload for approved_all must include grant_ttl and grant_max_uses."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -567,7 +584,7 @@ class TestApproveAllHookMetadata:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(fix.gate.call_tool("git_push", {}, ctx, tool))
+        await (fix.gate.call_tool("git_push", {}, ctx, tool))
 
         approved_all = [p for p in captured if p.get("approval_decision") == "approved_all"]
         assert len(approved_all) == 1

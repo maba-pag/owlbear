@@ -20,11 +20,6 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _make_kanban_list_json(tasks: list[dict[str, str]]) -> str:
     """Build fake kanban-md list --json output, including 'updated' field."""
     return json.dumps(tasks)
@@ -74,7 +69,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: task never attempted is always dispatched -----------------------
 
-    def test_never_attempted_task_is_dispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_never_attempted_task_is_dispatched(self) -> None:
         """A todo task with no last_attempted_at entry must be dispatched."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -104,7 +100,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         assert "100" in state.running
         assert "100" in state.claimed
@@ -113,7 +109,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: task with no new activity since last attempt is skipped ----------
 
-    def test_no_new_activity_since_last_attempt_is_skipped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_new_activity_since_last_attempt_is_skipped(self) -> None:
         """A todo task whose updated timestamp is strictly before
         last_attempted_at[task_id] must NOT be dispatched."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -148,7 +145,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         assert "200" not in state.running
         in_progress_calls = [
@@ -159,7 +156,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: task with new activity since last attempt is dispatched ----------
 
-    def test_new_activity_since_last_attempt_is_dispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_new_activity_since_last_attempt_is_dispatched(self) -> None:
         """A todo task whose updated timestamp is >= last_attempted_at
         must be dispatched (new kanban activity detected)."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -196,14 +194,15 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
             )
 
         before = datetime.now(UTC)
-        _run(go())
+        await (go())
 
         assert "300" in state.running
         assert "300" in state.claimed
         # last_attempted_at must be updated by poll_tick to a NEWER timestamp
         assert state.last_attempted_at["300"] >= before
 
-    def test_equal_timestamp_is_dispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_equal_timestamp_is_dispatched(self) -> None:
         """Boundary: when updated == last_attempted_at, task IS dispatched."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -236,7 +235,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
             )
 
         before = datetime.now(UTC)
-        _run(go())
+        await (go())
 
         assert "301" in state.running
         # Boundary: last_attempted_at must be updated to a NEWER timestamp
@@ -244,7 +243,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: skipped tasks are logged at DEBUG level -------------------------
 
-    def test_skipped_task_logged_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_skipped_task_logged_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:
         """When a task is skipped due to dedup, a DEBUG log message is
         emitted containing the task_id and reason."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -285,7 +285,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
             )
 
         with caplog.at_level(logging.DEBUG, logger="owlbear.daemon"):
-            _run(go())
+            await (go())
 
         debug_messages = [r.message for r in caplog.records if r.levelno == logging.DEBUG]
         assert any("400" in msg for msg in debug_messages), (
@@ -294,7 +294,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: daemon restart (empty state) processes all tasks ----------------
 
-    def test_fresh_state_dispatches_all_tasks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_fresh_state_dispatches_all_tasks(self) -> None:
         """A fresh OrchestratorState (simulating daemon restart) has no
         last_attempted_at entries, so every todo task is dispatched."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -340,14 +341,15 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         assert "500" in state.running
         assert "501" in state.running
 
     # -- AC: last_attempted_at recorded after dispatch -----------------------
 
-    def test_last_attempted_at_recorded_after_dispatch(self) -> None:
+    @pytest.mark.asyncio
+    async def test_last_attempted_at_recorded_after_dispatch(self) -> None:
         """After dispatching a task, poll_tick must record
         last_attempted_at[task_id] with a timestamp close to now."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -379,7 +381,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
             )
 
         before = datetime.now(UTC)
-        _run(go())
+        await (go())
         after = datetime.now(UTC)
 
         assert "600" in state.last_attempted_at
@@ -388,7 +390,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- AC: retry dispatch also records last_attempted_at -------------------
 
-    def test_retry_dispatch_records_last_attempted_at(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_dispatch_records_last_attempted_at(self) -> None:
         """When a task is re-dispatched via the retry path (step 3),
         last_attempted_at[task_id] must also be recorded."""
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
@@ -424,7 +427,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
         after = datetime.now(UTC)
 
         # Task must be in running (dispatched via retry)
@@ -439,7 +442,8 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
 
     # -- Edge: mix of skipped and dispatched in same tick --------------------
 
-    def test_mixed_skip_and_dispatch(self) -> None:
+    @pytest.mark.asyncio
+    async def test_mixed_skip_and_dispatch(self) -> None:
         """When multiple todo tasks exist, only those with no new activity
         are skipped; others are dispatched normally."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -498,7 +502,7 @@ class TestFromAC_BlockedTaskDedup:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         assert "700" not in state.running
         assert "701" in state.running

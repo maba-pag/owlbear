@@ -29,11 +29,6 @@ from owlbear.memory.error_journal import ErrorJournal
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 # ---------------------------------------------------------------------------
 # PidFile context manager
 # ---------------------------------------------------------------------------
@@ -310,7 +305,8 @@ class TestFromAC_RichLogging:  # noqa: N801
 class TestSentinelShutdown:
     """run_daemon exits loop when sentinel file appears."""
 
-    def test_sentinel_stops_loop(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_sentinel_stops_loop(self, tmp_path: Path) -> None:
         """Daemon should exit when config_dir/owlbear.stop exists."""
         sentinel = tmp_path / "owlbear.stop"
 
@@ -332,7 +328,7 @@ class TestSentinelShutdown:
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(return_value="reply")
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -343,7 +339,8 @@ class TestSentinelShutdown:
         # Sentinel file should be cleaned up
         assert not sentinel.exists()
 
-    def test_sentinel_cleaned_up_on_exit(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_sentinel_cleaned_up_on_exit(self, tmp_path: Path) -> None:
         """Sentinel file is removed during shutdown."""
         sentinel = tmp_path / "owlbear.stop"
         sentinel.touch()  # pre-create sentinel so loop exits immediately
@@ -351,7 +348,7 @@ class TestSentinelShutdown:
         channel = MockChannel([])
         mock_agent = AsyncMock()
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -370,7 +367,8 @@ class TestSentinelShutdown:
 class TestRunDaemon:
     """run_daemon creates PID, dispatches messages, shuts down on sentinel."""
 
-    def test_receive_turn_send_cycle(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_receive_turn_send_cycle(self, tmp_path: Path) -> None:
         """Receives message, calls agent.turn(), sends response."""
         messages = ["hello"]
         channel = MockChannel(messages)
@@ -379,7 +377,7 @@ class TestRunDaemon:
         mock_agent.turn = AsyncMock(return_value="world")
 
         # Channel returns "hello", then None (EOF) → loop exits
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -390,13 +388,14 @@ class TestRunDaemon:
         mock_agent.turn.assert_called_once_with("hello")
         assert "world" in channel.sent
 
-    def test_none_receive_exits_loop(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_none_receive_exits_loop(self, tmp_path: Path) -> None:
         """Channel returning None (EOF) should exit the daemon loop."""
         channel = MockChannel([None])
 
         mock_agent = AsyncMock()
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -406,13 +405,14 @@ class TestRunDaemon:
 
         mock_agent.turn.assert_not_called()
 
-    def test_empty_message_skipped(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_message_skipped(self, tmp_path: Path) -> None:
         """Empty strings from channel should be skipped."""
         channel = MockChannel(["", "  ", None])
 
         mock_agent = AsyncMock()
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -422,14 +422,15 @@ class TestRunDaemon:
 
         mock_agent.turn.assert_not_called()
 
-    def test_agent_error_sent_to_channel(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_agent_error_sent_to_channel(self, tmp_path: Path) -> None:
         """If agent.turn() raises, error is sent to channel."""
         channel = MockChannel(["boom", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=RuntimeError("agent broke"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -439,14 +440,15 @@ class TestRunDaemon:
 
         assert any("agent broke" in msg for msg in channel.sent)
 
-    def test_multiple_messages(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_multiple_messages(self, tmp_path: Path) -> None:
         """Daemon processes multiple messages before EOF."""
         channel = MockChannel(["msg1", "msg2", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=["reply1", "reply2"])
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -458,13 +460,14 @@ class TestRunDaemon:
         assert "reply1" in channel.sent
         assert "reply2" in channel.sent
 
-    def test_accepts_settings_param(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_accepts_settings_param(self, tmp_path: Path) -> None:
         """run_daemon accepts an optional settings parameter for token refresh."""
         channel = MockChannel([None])
         mock_agent = AsyncMock()
 
         # Should not raise — settings is an optional kwarg
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -473,13 +476,14 @@ class TestRunDaemon:
             )
         )
 
-    def test_settings_param_defaults_to_none(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_settings_param_defaults_to_none(self, tmp_path: Path) -> None:
         """run_daemon works without settings (backwards compatibility)."""
         channel = MockChannel([None])
         mock_agent = AsyncMock()
 
         # Existing call pattern still works
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -496,7 +500,8 @@ class TestRunDaemon:
 class TestConfigureOtel:
     """run_daemon calls configure_otel when otel_endpoint is provided."""
 
-    def test_otel_endpoint_configures_logfire(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_otel_endpoint_configures_logfire(self, tmp_path: Path) -> None:
         """Passing otel_endpoint triggers configure_otel inside run_daemon."""
         channel = MockChannel([None])
         mock_agent = AsyncMock()
@@ -505,7 +510,7 @@ class TestConfigureOtel:
             patch("owlbear.daemon.logfire.configure") as mock_logfire,
             patch("owlbear.daemon.Agent.instrument_all"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -517,13 +522,14 @@ class TestConfigureOtel:
         mock_logfire.assert_called_once_with(send_to_logfire=False, additional_span_processors=[])
         assert os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") == "http://localhost:4318"
 
-    def test_no_otel_endpoint_skips_configure(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_no_otel_endpoint_skips_configure(self, tmp_path: Path) -> None:
         """Without otel_endpoint, configure_otel is not called."""
         channel = MockChannel([None])
         mock_agent = AsyncMock()
 
         with patch("owlbear.daemon.logfire.configure") as mock_logfire:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -542,14 +548,15 @@ class TestConfigureOtel:
 class TestDaemonStartupHook:
     """DAEMON_STARTUP hook is emitted once with correct payload before receive."""
 
-    def test_emit_called_once_with_correct_event_and_payload(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_called_once_with_correct_event_and_payload(self, tmp_path: Path) -> None:
         """run_daemon emits DAEMON_STARTUP with channel name and config_dir."""
         from owlbear.core.hooks import HookEvent
 
         channel = MockChannel([None])
         mock_agent = AsyncMock()
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -562,7 +569,8 @@ class TestDaemonStartupHook:
             {"channel": "mock", "config_dir": str(tmp_path)},
         )
 
-    def test_emit_occurs_before_first_receive(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_occurs_before_first_receive(self, tmp_path: Path) -> None:
         """DAEMON_STARTUP emit happens before the first channel.receive()."""
         call_order: list[str] = []
 
@@ -582,7 +590,7 @@ class TestDaemonStartupHook:
 
         mock_agent.hooks.emit = AsyncMock(side_effect=tracking_emit)
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -603,7 +611,8 @@ class TestDaemonStartupHook:
 class TestSignalHandler:
     """SIGINT sets shutdown event (same as sentinel check)."""
 
-    def test_signal_handler_sets_shutdown_event(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_signal_handler_sets_shutdown_event(self, tmp_path: Path) -> None:
         """Signal handler installed by run_daemon triggers shutdown."""
 
         call_count = 0
@@ -634,7 +643,7 @@ class TestSignalHandler:
         mock_agent.turn = AsyncMock(return_value="reply")
 
         with patch("owlbear.daemon.signal.signal", side_effect=fake_signal):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -674,7 +683,8 @@ class TestSignalHandler:
 
         mock_loop.call_soon_threadsafe.assert_called_once_with(event.set)
 
-    def test_signal_handlers_restored_after_run(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_signal_handlers_restored_after_run(self, tmp_path: Path) -> None:
         """Signal handlers are restored to their previous values after run_daemon."""
         prev_sigint = signal.getsignal(signal.SIGINT)
         prev_sigterm = signal.getsignal(signal.SIGTERM)
@@ -682,7 +692,7 @@ class TestSignalHandler:
         channel = MockChannel([None])
         mock_agent = AsyncMock()
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -849,7 +859,8 @@ def _make_openai_permission_error() -> openai.PermissionDeniedError:
 class TestCopilotTokenRefresh:
     """run_daemon refreshes Copilot token on auth errors and retries once."""
 
-    def test_auth_error_triggers_refresh_and_retry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_error_triggers_refresh_and_retry(self, tmp_path: Path) -> None:
         """Auth error on first call → refresh token → retry succeeds."""
         channel = MockChannel(["hello", None])
 
@@ -868,7 +879,7 @@ class TestCopilotTokenRefresh:
             new_callable=AsyncMock,
             return_value=mock_client,
         ) as mock_create:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -886,7 +897,8 @@ class TestCopilotTokenRefresh:
         # Successful response sent to channel
         assert "refreshed reply" in channel.sent
 
-    def test_non_auth_error_no_refresh(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_non_auth_error_no_refresh(self, tmp_path: Path) -> None:
         """Non-auth RuntimeError → no refresh attempt, error sent to channel."""
         channel = MockChannel(["boom", None])
 
@@ -897,7 +909,7 @@ class TestCopilotTokenRefresh:
             "owlbear.daemon.create_copilot_client",
             new_callable=AsyncMock,
         ) as mock_create:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -911,7 +923,8 @@ class TestCopilotTokenRefresh:
         # Error sent to channel as before
         assert any("not auth related" in msg for msg in channel.sent)
 
-    def test_refresh_failure_sends_error_to_channel(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_refresh_failure_sends_error_to_channel(self, tmp_path: Path) -> None:
         """If create_copilot_client raises during refresh, error sent to channel."""
         channel = MockChannel(["hello", None])
 
@@ -923,7 +936,7 @@ class TestCopilotTokenRefresh:
             new_callable=AsyncMock,
             side_effect=RuntimeError("no network"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -936,7 +949,8 @@ class TestCopilotTokenRefresh:
         assert any("no network" in msg for msg in channel.sent)
         # Loop continues — channel processes next message (None → exit)
 
-    def test_retry_auth_error_sends_error_to_channel(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_auth_error_sends_error_to_channel(self, tmp_path: Path) -> None:
         """If retry after refresh also fails with auth error, error sent to channel."""
         channel = MockChannel(["hello", None])
 
@@ -952,7 +966,7 @@ class TestCopilotTokenRefresh:
             new_callable=AsyncMock,
             return_value=AsyncMock(),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -966,7 +980,8 @@ class TestCopilotTokenRefresh:
         # Error sent to channel
         assert any("Error:" in msg for msg in channel.sent)
 
-    def test_auth_error_without_settings_skips_refresh(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_error_without_settings_skips_refresh(self, tmp_path: Path) -> None:
         """Auth error with settings=None → no refresh, error sent to channel."""
         channel = MockChannel(["hello", None])
 
@@ -977,7 +992,7 @@ class TestCopilotTokenRefresh:
             "owlbear.daemon.create_copilot_client",
             new_callable=AsyncMock,
         ) as mock_create:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -991,7 +1006,8 @@ class TestCopilotTokenRefresh:
         # Error still sent to channel
         assert any("Error:" in msg for msg in channel.sent)
 
-    def test_auth_refresh_updates_openai_client_attr(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_refresh_updates_openai_client_attr(self, tmp_path: Path) -> None:
         """After auth refresh, agent._openai_client points to the NEW client."""
         channel = MockChannel(["hello", None])
 
@@ -1013,7 +1029,7 @@ class TestCopilotTokenRefresh:
             new_callable=AsyncMock,
             return_value=new_client,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1027,7 +1043,10 @@ class TestCopilotTokenRefresh:
         # agent._openai_client now points to the NEW client, not old
         assert mock_agent._openai_client is new_client
 
-    def test_repeated_auth_refresh_closes_previous_refresh_client(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_repeated_auth_refresh_closes_previous_refresh_client(
+        self, tmp_path: Path
+    ) -> None:
         """Two auth errors → two refreshes; second closes the FIRST refresh's client."""
         # msg1 → auth error → refresh1 → retry succeeds
         # msg2 → auth error → refresh2 (closes refresh1 client) → retry succeeds
@@ -1058,7 +1077,7 @@ class TestCopilotTokenRefresh:
             new_callable=AsyncMock,
             side_effect=[refresh1_client, refresh2_client],
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1085,7 +1104,8 @@ class TestCopilotTokenRefresh:
 class TestClassifiedErrorRecovery:
     """run_daemon uses classify_error() for structured error recovery."""
 
-    def test_transient_error_retries_three_times(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_error_retries_three_times(self, tmp_path: Path) -> None:
         """Model-level transient errors retry up to 3 times; all fail → sends error."""
         channel = MockChannel(["hello", None])
 
@@ -1094,7 +1114,7 @@ class TestClassifiedErrorRecovery:
         mock_agent.turn = AsyncMock(side_effect=exc)
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1109,7 +1129,8 @@ class TestClassifiedErrorRecovery:
         # Error sent to channel after retries exhausted (sanitized)
         assert any("HTTP request failed" in msg for msg in channel.sent)
 
-    def test_transient_error_succeeds_on_second_retry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_error_succeeds_on_second_retry(self, tmp_path: Path) -> None:
         """Model-level transient error on first two attempts, success on third."""
         channel = MockChannel(["hello", None])
 
@@ -1118,7 +1139,7 @@ class TestClassifiedErrorRecovery:
         mock_agent.turn = AsyncMock(side_effect=[exc, exc, "recovered"])
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1130,7 +1151,8 @@ class TestClassifiedErrorRecovery:
         assert mock_agent.turn.call_count == 3
         assert "recovered" in channel.sent
 
-    def test_transient_backoff_uses_jitter(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_backoff_uses_jitter(self, tmp_path: Path) -> None:
         """Backoff delays include jitter — sleep values are not pure powers of 2."""
         channel = MockChannel(["hello", None])
 
@@ -1142,7 +1164,7 @@ class TestClassifiedErrorRecovery:
             patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("owlbear.daemon.random.uniform", return_value=0.42) as mock_jitter,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1159,14 +1181,15 @@ class TestClassifiedErrorRecovery:
         assert sleep_args[1] == pytest.approx(2.42)
         assert sleep_args[2] == pytest.approx(4.42)
 
-    def test_permanent_error_no_retry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_no_retry(self, tmp_path: Path) -> None:
         """Permanent errors are sent to channel immediately — no retry."""
         channel = MockChannel(["hello", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1178,14 +1201,15 @@ class TestClassifiedErrorRecovery:
         mock_agent.turn.assert_called_once()
         assert any("File not found" in msg for msg in channel.sent)
 
-    def test_tool_semantic_error_treated_as_permanent(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_tool_semantic_error_treated_as_permanent(self, tmp_path: Path) -> None:
         """Tool-semantic errors treated same as permanent at daemon level."""
         channel = MockChannel(["hello", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=KeyError("bad_key"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1196,7 +1220,8 @@ class TestClassifiedErrorRecovery:
         mock_agent.turn.assert_called_once()
         assert any("Error:" in msg for msg in channel.sent)
 
-    def test_daemon_continues_after_transient_exhaustion(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_daemon_continues_after_transient_exhaustion(self, tmp_path: Path) -> None:
         """After model-level transient retries exhausted, daemon processes next message."""
         channel = MockChannel(["msg1", "msg2", None])
 
@@ -1206,7 +1231,7 @@ class TestClassifiedErrorRecovery:
         mock_agent.turn = AsyncMock(side_effect=[exc, exc, exc, exc, "reply2"])
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1220,7 +1245,8 @@ class TestClassifiedErrorRecovery:
         assert any("HTTP request failed" in msg for msg in channel.sent)
         assert "reply2" in channel.sent
 
-    def test_classify_error_is_used_not_is_auth_error(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_classify_error_is_used_not_is_auth_error(self, tmp_path: Path) -> None:
         """Verify classify_error is called (not _is_auth_error)."""
         channel = MockChannel(["hello", None])
 
@@ -1239,7 +1265,7 @@ class TestClassifiedErrorRecovery:
             ),
             patch("owlbear.daemon.classify_error", return_value=ErrorCategory.AUTH) as mock_clf,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1250,7 +1276,8 @@ class TestClassifiedErrorRecovery:
 
         mock_clf.assert_called_once_with(exc)
 
-    def test_daemon_never_crashes_from_message_failure(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_daemon_never_crashes_from_message_failure(self, tmp_path: Path) -> None:
         """Daemon loop continues even after unexpected exception types."""
         channel = MockChannel(["bad", "good", None])
 
@@ -1259,7 +1286,7 @@ class TestClassifiedErrorRecovery:
             side_effect=[MemoryError("oom"), "ok"],
         )
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1282,7 +1309,8 @@ class TestChannelSendFailureLogsOriginalError:
     must still be logged via logger.exception() so it is never silently lost.
     """
 
-    def test_transient_exhausted_channel_failure_logs_original(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_exhausted_channel_failure_logs_original(self, tmp_path: Path) -> None:
         """Transient retries exhausted + channel.send raises → original logged."""
         original_exc = httpx.ConnectError("connection refused")
         channel = MockChannel(["hello", None])
@@ -1296,7 +1324,7 @@ class TestChannelSendFailureLogsOriginalError:
             patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock),
             patch("owlbear.daemon.logger") as mock_logger,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1309,7 +1337,8 @@ class TestChannelSendFailureLogsOriginalError:
         original_logged = any("connection refused" in str(call) for call in exc_calls)
         assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
 
-    def test_auth_refresh_failed_channel_failure_logs_original(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_refresh_failed_channel_failure_logs_original(self, tmp_path: Path) -> None:
         """Auth refresh fails + channel.send raises → original refresh error logged."""
         auth_exc = _make_openai_auth_error()
         refresh_exc = RuntimeError("refresh failed")
@@ -1328,7 +1357,7 @@ class TestChannelSendFailureLogsOriginalError:
             ),
             patch("owlbear.daemon.logger") as mock_logger,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1341,7 +1370,8 @@ class TestChannelSendFailureLogsOriginalError:
         original_logged = any("refresh failed" in str(call) for call in exc_calls)
         assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
 
-    def test_permanent_error_channel_failure_logs_original(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_channel_failure_logs_original(self, tmp_path: Path) -> None:
         """Permanent error + channel.send raises → original error logged."""
         original_exc = FileNotFoundError("missing.txt")
         channel = MockChannel(["hello", None])
@@ -1351,7 +1381,7 @@ class TestChannelSendFailureLogsOriginalError:
         mock_agent.turn = AsyncMock(side_effect=original_exc)
 
         with patch("owlbear.daemon.logger") as mock_logger:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1363,14 +1393,15 @@ class TestChannelSendFailureLogsOriginalError:
         original_logged = any("missing.txt" in str(call) for call in exc_calls)
         assert original_logged, f"Original error not found in logger.exception calls: {exc_calls}"
 
-    def test_channel_send_success_still_sends_error(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_channel_send_success_still_sends_error(self, tmp_path: Path) -> None:
         """When channel.send succeeds, the error message is still delivered (AC5)."""
         channel = MockChannel(["hello", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("gone.txt"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1380,7 +1411,8 @@ class TestChannelSendFailureLogsOriginalError:
 
         assert any("File not found" in msg for msg in channel.sent)
 
-    def test_recover_from_error_never_propagates(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_recover_from_error_never_propagates(self, tmp_path: Path) -> None:
         """_recover_from_error never lets an exception escape (AC4)."""
         original_exc = FileNotFoundError("boom")
         channel = MockChannel(["hello", None])
@@ -1391,7 +1423,7 @@ class TestChannelSendFailureLogsOriginalError:
 
         with patch("owlbear.daemon.logger"):
             # Must not raise — the daemon loop should continue
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1411,7 +1443,8 @@ class TestErrorJournalIntegration:
     def _make_journal(self, tmp_path: Path) -> ErrorJournal:
         return ErrorJournal(tmp_path)
 
-    def test_transient_retries_exhausted_logs_entry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_retries_exhausted_logs_entry(self, tmp_path: Path) -> None:
         """All model-level transient retries fail → journal entry resolved=False."""
         journal = self._make_journal(tmp_path)
         channel = MockChannel(["hello", None])
@@ -1423,7 +1456,7 @@ class TestErrorJournalIntegration:
         mock_agent.session.path = Path("sessions/test.jsonl")
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1441,7 +1474,8 @@ class TestErrorJournalIntegration:
         assert entry.tool_name == "agent.turn"
         assert entry.session_id == str(Path("sessions/test.jsonl"))
 
-    def test_transient_retry_succeeds_logs_entry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_transient_retry_succeeds_logs_entry(self, tmp_path: Path) -> None:
         """Model-level transient error then success → journal entry resolved=True."""
         journal = self._make_journal(tmp_path)
         channel = MockChannel(["hello", None])
@@ -1453,7 +1487,7 @@ class TestErrorJournalIntegration:
         mock_agent.session.path = Path("sessions/test.jsonl")
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1469,7 +1503,8 @@ class TestErrorJournalIntegration:
         assert entry.resolved is True
         assert entry.attempt_number == 1
 
-    def test_auth_refresh_succeeds_logs_entry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_refresh_succeeds_logs_entry(self, tmp_path: Path) -> None:
         """Auth error → refresh → success → journal entry resolved=True."""
         journal = self._make_journal(tmp_path)
         channel = MockChannel(["hello", None])
@@ -1487,7 +1522,7 @@ class TestErrorJournalIntegration:
             new_callable=AsyncMock,
             return_value=AsyncMock(),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1504,7 +1539,8 @@ class TestErrorJournalIntegration:
         assert entry.resolved is True
         assert entry.error_type == ErrorCategory.AUTH.value
 
-    def test_auth_refresh_fails_logs_entry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_refresh_fails_logs_entry(self, tmp_path: Path) -> None:
         """Auth error → refresh fails → journal entry resolved=False."""
         journal = self._make_journal(tmp_path)
         channel = MockChannel(["hello", None])
@@ -1519,7 +1555,7 @@ class TestErrorJournalIntegration:
             new_callable=AsyncMock,
             side_effect=RuntimeError("network down"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1535,7 +1571,8 @@ class TestErrorJournalIntegration:
         assert entry.action_taken == "auth_refresh_failed"
         assert entry.resolved is False
 
-    def test_permanent_error_logs_entry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_logs_entry(self, tmp_path: Path) -> None:
         """Permanent error → journal entry resolved=False."""
         journal = self._make_journal(tmp_path)
         channel = MockChannel(["hello", None])
@@ -1545,7 +1582,7 @@ class TestErrorJournalIntegration:
         mock_agent.session = MagicMock()
         mock_agent.session.path = Path("sessions/test.jsonl")
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1561,14 +1598,15 @@ class TestErrorJournalIntegration:
         assert entry.resolved is False
         assert "missing.txt" in entry.exception_message
 
-    def test_no_journal_does_not_crash(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_no_journal_does_not_crash(self, tmp_path: Path) -> None:
         """error_journal=None → no crash (backward compat)."""
         channel = MockChannel(["hello", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1579,7 +1617,8 @@ class TestErrorJournalIntegration:
 
         assert any("File not found" in msg for msg in channel.sent)
 
-    def test_journal_failure_does_not_break_recovery(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_journal_failure_does_not_break_recovery(self, tmp_path: Path) -> None:
         """If journal.log() raises, recovery still works."""
         journal = self._make_journal(tmp_path)
         journal.log = MagicMock(side_effect=OSError("disk full"))  # type: ignore[assignment]
@@ -1590,7 +1629,7 @@ class TestErrorJournalIntegration:
         mock_agent.session = MagicMock()
         mock_agent.session.path = Path("sessions/test.jsonl")
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1616,7 +1655,8 @@ class TestAuthRefreshClosesOldClient:
     so the old httpx.AsyncClient connection pool is released.
     """
 
-    def test_old_client_closed_before_model_update(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_old_client_closed_before_model_update(self, tmp_path: Path) -> None:
         """Auth error → old OpenAI client.close() is called before update_model."""
         channel = MockChannel(["hello", None])
 
@@ -1646,7 +1686,7 @@ class TestAuthRefreshClosesOldClient:
             new_callable=AsyncMock,
             return_value=AsyncMock(),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1662,7 +1702,8 @@ class TestAuthRefreshClosesOldClient:
             f"Expected close before update_model, got: {call_order}"
         )
 
-    def test_old_client_closed_even_when_refresh_fails(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_old_client_closed_even_when_refresh_fails(self, tmp_path: Path) -> None:
         """Even if token refresh fails, the old client should still be closed."""
         channel = MockChannel(["hello", None])
 
@@ -1679,7 +1720,7 @@ class TestAuthRefreshClosesOldClient:
             new_callable=AsyncMock,
             side_effect=RuntimeError("no network"),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1712,7 +1753,8 @@ class TestDaemonRetryReconciliation:
     exhausted and skipping daemon-level retry.
     """
 
-    def test_tool_transient_exhausted_no_daemon_retry(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_tool_transient_exhausted_no_daemon_retry(self, tmp_path: Path) -> None:
         """When a transient error already exhausted tool-level retries, daemon
         must NOT apply its own transient retry loop.
 
@@ -1736,7 +1778,7 @@ class TestDaemonRetryReconciliation:
         exc._tool_retries_exhausted = True
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1752,7 +1794,8 @@ class TestDaemonRetryReconciliation:
         mock_sleep.assert_not_called()
         assert any("Error:" in msg or "Connection" in msg for msg in channel.sent)
 
-    def test_model_level_transient_still_retried_by_daemon(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_model_level_transient_still_retried_by_daemon(self, tmp_path: Path) -> None:
         """Copilot 503 during agent.turn() (model-level) DOES trigger daemon retry.
 
         Model-level transients are NOT from exhausted tool retries — the daemon
@@ -1765,7 +1808,7 @@ class TestDaemonRetryReconciliation:
         mock_agent.turn = AsyncMock(side_effect=[exc, exc, "recovered"])
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1777,7 +1820,8 @@ class TestDaemonRetryReconciliation:
         assert mock_agent.turn.call_count == 3
         assert "recovered" in channel.sent
 
-    def test_no_multiplicative_retries(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_no_multiplicative_retries(self, tmp_path: Path) -> None:
         """Total daemon calls for a tool-exhausted transient must be 1, not 4.
 
         Currently: the daemon sees ``httpx.ConnectError`` (re-raised by
@@ -1791,7 +1835,7 @@ class TestDaemonRetryReconciliation:
         mock_agent.turn = AsyncMock(side_effect=exc)
 
         with patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1805,7 +1849,8 @@ class TestDaemonRetryReconciliation:
             f"(expected 1 after tool-level exhaustion)"
         )
 
-    def test_auth_error_path_unchanged(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_error_path_unchanged(self, tmp_path: Path) -> None:
         """Auth errors still trigger token refresh — unaffected by #512."""
         channel = MockChannel(["hello", None])
 
@@ -1820,7 +1865,7 @@ class TestDaemonRetryReconciliation:
             new_callable=AsyncMock,
             return_value=AsyncMock(),
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1832,14 +1877,15 @@ class TestDaemonRetryReconciliation:
         assert mock_agent.turn.call_count == 2
         assert "refreshed reply" in channel.sent
 
-    def test_permanent_error_path_unchanged(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_path_unchanged(self, tmp_path: Path) -> None:
         """Permanent errors propagate immediately — unaffected by #512."""
         channel = MockChannel(["hello", None])
 
         mock_agent = AsyncMock()
         mock_agent.turn = AsyncMock(side_effect=FileNotFoundError("missing.txt"))
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -1860,7 +1906,8 @@ class TestTransientExhaustedChannelSendFails:
     """When all daemon-level transient retries are exhausted AND channel.send
     fails, the original error must still be logged."""
 
-    def test_model_level_transient_exhausted_channel_send_fails(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_model_level_transient_exhausted_channel_send_fails(self, tmp_path: Path) -> None:
         """HTTPStatusError 503 exhausts all 3 retries, then channel.send raises."""
         exc = _make_httpx_status_error(503)
         channel = MockChannel(["hello", None])
@@ -1874,7 +1921,7 @@ class TestTransientExhaustedChannelSendFails:
             patch("owlbear.daemon.asyncio.sleep", new_callable=AsyncMock),
             patch("owlbear.daemon.logger") as mock_logger,
         ):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,

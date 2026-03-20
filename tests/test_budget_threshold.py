@@ -24,11 +24,6 @@ from owlbear.memory.usage import UsageSummary
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _make_done_task(*, exception: BaseException | None = None) -> MagicMock:
     """Create a mock asyncio.Task that reports done with optional exception."""
     t = MagicMock(spec=asyncio.Task)
@@ -224,7 +219,8 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
     """turn() must call _check_budget() after _record_usage() when
     budget_limit_usd is set, computing pct and emitting/raising accordingly."""
 
-    def test_below_threshold_no_action(self) -> None:
+    @pytest.mark.asyncio
+    async def test_below_threshold_no_action(self) -> None:
         """When cost is 50% of limit, no warning or error."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -234,11 +230,12 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=2.5)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         handler.assert_not_called()
 
-    def test_at_80_pct_emits_warning(self) -> None:
+    @pytest.mark.asyncio
+    async def test_at_80_pct_emits_warning(self) -> None:
         """When cost reaches 80% of limit, BUDGET_WARNING is emitted."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -248,7 +245,7 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=4.0)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        result = _run(_run_turn(agent))
+        result = await (_run_turn(agent))
 
         # Warning emitted but turn continues (non-blocking)
         handler.assert_called_once()
@@ -258,7 +255,8 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         assert payload["limit_usd"] == pytest.approx(5.0)
         assert result == "response text"
 
-    def test_above_80_pct_emits_warning(self) -> None:
+    @pytest.mark.asyncio
+    async def test_above_80_pct_emits_warning(self) -> None:
         """At 90% (above 80% threshold), warning is emitted."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -268,12 +266,13 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=4.5)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        result = _run(_run_turn(agent))
+        result = await (_run_turn(agent))
 
         handler.assert_called_once()
         assert result == "response text"
 
-    def test_at_100_pct_raises_budget_exceeded(self) -> None:
+    @pytest.mark.asyncio
+    async def test_at_100_pct_raises_budget_exceeded(self) -> None:
         """When cost reaches 100% of limit, BudgetExceededError is raised."""
         from owlbear.core.errors import BudgetExceededError
 
@@ -283,9 +282,10 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         agent = _make_agent(hooks=HookRegistry(), tracker=tracker, budget_limit_usd=5.0)
 
         with pytest.raises(BudgetExceededError):
-            _run(_run_turn(agent))
+            await (_run_turn(agent))
 
-    def test_over_100_pct_raises_budget_exceeded(self) -> None:
+    @pytest.mark.asyncio
+    async def test_over_100_pct_raises_budget_exceeded(self) -> None:
         """When cost exceeds 100%, BudgetExceededError is raised."""
         from owlbear.core.errors import BudgetExceededError
 
@@ -295,9 +295,10 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         agent = _make_agent(hooks=HookRegistry(), tracker=tracker, budget_limit_usd=5.0)
 
         with pytest.raises(BudgetExceededError):
-            _run(_run_turn(agent))
+            await (_run_turn(agent))
 
-    def test_usage_recorded_even_at_100_pct(self) -> None:
+    @pytest.mark.asyncio
+    async def test_usage_recorded_even_at_100_pct(self) -> None:
         """Usage is always appended even when budget is exceeded."""
         from owlbear.core.errors import BudgetExceededError
 
@@ -307,7 +308,7 @@ class TestFromAC_TurnBudgetCheck:  # noqa: N801
         agent = _make_agent(hooks=HookRegistry(), tracker=tracker, budget_limit_usd=5.0)
 
         with pytest.raises(BudgetExceededError):
-            _run(_run_turn(agent))
+            await (_run_turn(agent))
 
         # Usage was recorded before the budget check raised
         tracker.append.assert_called_once()
@@ -322,7 +323,8 @@ class TestFromAC_ReconcileBudgetExceeded:  # noqa: N801
     """reconcile_tasks must skip retry logic when exc is BudgetExceededError
     and block the task immediately."""
 
-    def test_budget_exceeded_blocks_immediately_no_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_blocks_immediately_no_retry(self) -> None:
         """BudgetExceededError causes immediate block, no retry scheduling."""
         from owlbear.core.errors import BudgetExceededError
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
@@ -337,7 +339,7 @@ class TestFromAC_ReconcileBudgetExceeded:  # noqa: N801
         )
         state.claimed.add("T1")
 
-        _run(reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5))
+        await (reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5))
 
         # Task is blocked on kanban with a reason mentioning budget
         mock_kanban.kanban_edit.assert_called_once()
@@ -350,7 +352,8 @@ class TestFromAC_ReconcileBudgetExceeded:  # noqa: N801
         # Task released from claimed
         assert "T1" not in state.claimed
 
-    def test_budget_exceeded_first_attempt_no_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_first_attempt_no_retry(self) -> None:
         """Even on first attempt, BudgetExceededError does NOT schedule retry."""
         from owlbear.core.errors import BudgetExceededError
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
@@ -365,7 +368,7 @@ class TestFromAC_ReconcileBudgetExceeded:  # noqa: N801
         )
         state.claimed.add("T2")
 
-        _run(reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5))
+        await (reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5))
 
         # No retry scheduled
         assert "T2" not in state.retries
@@ -381,18 +384,20 @@ class TestFromAC_ReconcileBudgetExceeded:  # noqa: N801
 class TestFromAC_NoBudgetZeroOverhead:  # noqa: N801
     """When budget_limit_usd is None, tracker.summary() must NOT be called."""
 
-    def test_no_summary_call_when_budget_is_none(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_summary_call_when_budget_is_none(self) -> None:
         """With budget=None, turn() should not call tracker.summary()."""
         tracker = MagicMock()
         agent = _make_agent(tracker=tracker)
 
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         # Usage appended, but summary() never called
         tracker.append.assert_called_once()
         tracker.summary.assert_not_called()
 
-    def test_no_warning_when_budget_is_none(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_warning_when_budget_is_none(self) -> None:
         """With budget=None, no BUDGET_WARNING hook is ever emitted."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -401,7 +406,7 @@ class TestFromAC_NoBudgetZeroOverhead:  # noqa: N801
         tracker = MagicMock()
         agent = _make_agent(hooks=hooks, tracker=tracker)
 
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         handler.assert_not_called()
 
@@ -414,7 +419,8 @@ class TestFromAC_NoBudgetZeroOverhead:  # noqa: N801
 class TestFromAC_BudgetBoundaryConditions:  # noqa: N801
     """Boundary conditions around 80% and 100% thresholds."""
 
-    def test_just_below_80_pct_no_warning(self) -> None:
+    @pytest.mark.asyncio
+    async def test_just_below_80_pct_no_warning(self) -> None:
         """At 79.9% no warning should be emitted."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -425,11 +431,12 @@ class TestFromAC_BudgetBoundaryConditions:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=3.995)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         handler.assert_not_called()
 
-    def test_just_below_100_pct_warning_only(self) -> None:
+    @pytest.mark.asyncio
+    async def test_just_below_100_pct_warning_only(self) -> None:
         """At 99.9% warning is emitted but no error raised."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -440,12 +447,13 @@ class TestFromAC_BudgetBoundaryConditions:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=4.995)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        result = _run(_run_turn(agent))
+        result = await (_run_turn(agent))
 
         handler.assert_called_once()
         assert result == "response text"
 
-    def test_total_cost_none_treated_as_zero(self) -> None:
+    @pytest.mark.asyncio
+    async def test_total_cost_none_treated_as_zero(self) -> None:
         """If summary().total_cost_usd is None, treated as 0 (no warning)."""
         hooks = HookRegistry()
         handler = MagicMock()
@@ -455,17 +463,18 @@ class TestFromAC_BudgetBoundaryConditions:  # noqa: N801
         tracker.summary.return_value = UsageSummary(total_cost_usd=None)
 
         agent = _make_agent(hooks=hooks, tracker=tracker, budget_limit_usd=5.0)
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         handler.assert_not_called()
 
-    def test_no_tracker_no_budget_check(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_tracker_no_budget_check(self) -> None:
         """When tracker is None, no budget check even if limit is set."""
         hooks = HookRegistry()
         handler = MagicMock()
         hooks.register(HookEvent.BUDGET_WARNING, handler)
 
         agent = _make_agent(hooks=hooks, tracker=None, budget_limit_usd=5.0)
-        _run(_run_turn(agent))
+        await (_run_turn(agent))
 
         handler.assert_not_called()

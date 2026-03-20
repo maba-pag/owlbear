@@ -7,8 +7,9 @@ registry=None handling.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from owlbear.core.delegation import MAX_DELEGATION_DEPTH, DelegationToolset
 from owlbear.core.deps import OwlBearDeps
@@ -17,11 +18,6 @@ from owlbear.core.hooks import HookRegistry
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_deps(
@@ -122,25 +118,27 @@ class TestMaxDelegationDepth:
 class TestSuccessfulDelegation:
     """delegate_to_agent dispatches to inner agent and returns output."""
 
-    def test_returns_inner_agent_output(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_inner_agent_output(self) -> None:
         inner_agent = _make_agent(output="task completed")
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="do stuff"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="do stuff"))
 
         assert result == "task completed"
 
-    def test_calls_agent_run_with_task(self) -> None:
+    @pytest.mark.asyncio
+    async def test_calls_agent_run_with_task(self) -> None:
         inner_agent = _make_agent(output="ok")
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        _run(ts._delegate(ctx, agent_name="builder", task="build feature X"))
+        await (ts._delegate(ctx, agent_name="builder", task="build feature X"))
 
         inner_agent.run.assert_called_once()
         call_args = inner_agent.run.call_args
@@ -155,7 +153,8 @@ class TestSuccessfulDelegation:
 class TestUsagePassthrough:
     """Usage object is passed through to inner agent via usage= kwarg."""
 
-    def test_passes_ctx_usage_to_inner_agent(self) -> None:
+    @pytest.mark.asyncio
+    async def test_passes_ctx_usage_to_inner_agent(self) -> None:
         usage = MagicMock()
         inner_agent = _make_agent(output="done")
         registry = _make_registry(agents={"builder": inner_agent})
@@ -163,7 +162,7 @@ class TestUsagePassthrough:
         ctx = _make_ctx(deps, usage=usage)
         ts = DelegationToolset()
 
-        _run(ts._delegate(ctx, agent_name="builder", task="do it"))
+        await (ts._delegate(ctx, agent_name="builder", task="do it"))
 
         call_kwargs = inner_agent.run.call_args[1]
         assert call_kwargs["usage"] is usage
@@ -177,27 +176,29 @@ class TestUsagePassthrough:
 class TestDepthIncrement:
     """Delegation increments delegation_depth in inner deps."""
 
-    def test_increments_depth_by_one(self) -> None:
+    @pytest.mark.asyncio
+    async def test_increments_depth_by_one(self) -> None:
         inner_agent = _make_agent(output="ok")
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(depth=2, registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        _run(ts._delegate(ctx, agent_name="builder", task="sub task"))
+        await (ts._delegate(ctx, agent_name="builder", task="sub task"))
 
         call_kwargs = inner_agent.run.call_args[1]
         inner_deps = call_kwargs["deps"]
         assert inner_deps.delegation_depth == 3
 
-    def test_does_not_mutate_original_deps(self) -> None:
+    @pytest.mark.asyncio
+    async def test_does_not_mutate_original_deps(self) -> None:
         inner_agent = _make_agent(output="ok")
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(depth=1, registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        _run(ts._delegate(ctx, agent_name="builder", task="sub task"))
+        await (ts._delegate(ctx, agent_name="builder", task="sub task"))
 
         assert deps.delegation_depth == 1
 
@@ -210,26 +211,28 @@ class TestDepthIncrement:
 class TestAgentNotFound:
     """delegate_to_agent returns error string when agent is not found."""
 
-    def test_returns_error_string(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_error_string(self) -> None:
         registry = _make_registry(agents={"reviewer": _make_agent()})
         deps = _make_deps(registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="do it"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="do it"))
 
         assert isinstance(result, str)
         assert "error" in result.lower()
         assert "builder" in result
 
-    def test_does_not_raise(self) -> None:
+    @pytest.mark.asyncio
+    async def test_does_not_raise(self) -> None:
         registry = _make_registry(agents={})
         deps = _make_deps(registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
         # Should not raise
-        result = _run(ts._delegate(ctx, agent_name="nonexistent", task="x"))
+        result = await (ts._delegate(ctx, agent_name="nonexistent", task="x"))
         assert isinstance(result, str)
 
 
@@ -241,38 +244,41 @@ class TestAgentNotFound:
 class TestMaxDepthExceeded:
     """delegate_to_agent returns error string when max depth is reached."""
 
-    def test_returns_error_at_max_depth(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_error_at_max_depth(self) -> None:
         inner_agent = _make_agent()
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(depth=MAX_DELEGATION_DEPTH, registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="deep"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="deep"))
 
         assert isinstance(result, str)
         assert "error" in result.lower()
         assert "depth" in result.lower()
 
-    def test_inner_agent_not_called(self) -> None:
+    @pytest.mark.asyncio
+    async def test_inner_agent_not_called(self) -> None:
         inner_agent = _make_agent()
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(depth=MAX_DELEGATION_DEPTH, registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        _run(ts._delegate(ctx, agent_name="builder", task="deep"))
+        await (ts._delegate(ctx, agent_name="builder", task="deep"))
 
         inner_agent.run.assert_not_called()
 
-    def test_returns_error_above_max_depth(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_error_above_max_depth(self) -> None:
         inner_agent = _make_agent()
         registry = _make_registry(agents={"builder": inner_agent})
         deps = _make_deps(depth=MAX_DELEGATION_DEPTH + 3, registry=registry)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="deep"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="deep"))
 
         assert "error" in result.lower()
 
@@ -285,7 +291,8 @@ class TestMaxDepthExceeded:
 class TestInnerAgentException:
     """delegate_to_agent catches inner agent exceptions and returns error string."""
 
-    def test_returns_error_string_on_exception(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_error_string_on_exception(self) -> None:
         inner_agent = _make_agent()
         inner_agent.run = AsyncMock(side_effect=RuntimeError("LLM timeout"))
         registry = _make_registry(agents={"builder": inner_agent})
@@ -293,13 +300,14 @@ class TestInnerAgentException:
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="do it"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="do it"))
 
         assert isinstance(result, str)
         assert "error" in result.lower()
         assert "LLM timeout" in result
 
-    def test_does_not_raise(self) -> None:
+    @pytest.mark.asyncio
+    async def test_does_not_raise(self) -> None:
         inner_agent = _make_agent()
         inner_agent.run = AsyncMock(side_effect=ValueError("bad input"))
         registry = _make_registry(agents={"builder": inner_agent})
@@ -308,7 +316,7 @@ class TestInnerAgentException:
         ts = DelegationToolset()
 
         # Should not raise
-        result = _run(ts._delegate(ctx, agent_name="builder", task="x"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="x"))
         assert isinstance(result, str)
 
 
@@ -320,12 +328,13 @@ class TestInnerAgentException:
 class TestRegistryIsNone:
     """delegate_to_agent returns error when agent_registry is None."""
 
-    def test_returns_error_string(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_error_string(self) -> None:
         deps = _make_deps(registry=None)
         ctx = _make_ctx(deps)
         ts = DelegationToolset()
 
-        result = _run(ts._delegate(ctx, agent_name="builder", task="do it"))
+        result = await (ts._delegate(ctx, agent_name="builder", task="do it"))
 
         assert isinstance(result, str)
         assert "error" in result.lower()

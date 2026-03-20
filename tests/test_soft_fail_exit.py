@@ -9,7 +9,6 @@ Tests the contract defined in #763 AC:
 
 from __future__ import annotations
 
-import asyncio
 import sys
 
 import pytest
@@ -21,11 +20,6 @@ from owlbear.tools.terminal import TerminalResult, TerminalToolset, classify_exi
 # ---------------------------------------------------------------------------
 
 PYTHON = sys.executable
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -118,34 +112,38 @@ class TestFromAC_TerminalResultSoftFail:  # noqa: N801
 class TestFromAC_RunCommandSoftFail:  # noqa: N801
     """run_command() sets soft_fail=True for exit-1-with-stdout commands."""
 
-    def test_exit1_with_stdout_sets_soft_fail(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exit1_with_stdout_sets_soft_fail(self) -> None:
         """AC: run_command() sets soft_fail=True for exit-1-with-stdout."""
         ts = TerminalToolset()
         # exit 1 with output → soft_fail=True
-        result: TerminalResult = _run(
+        result: TerminalResult = await (
             ts.run_command(f"{PYTHON} -c \"import sys; print('found'); sys.exit(1)\"")
         )
         assert result.exit_code == 1
         assert result.soft_fail is True
 
-    def test_exit1_no_stdout_no_soft_fail(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exit1_no_stdout_no_soft_fail(self) -> None:
         """exit 1 with no stdout → soft_fail=False."""
         ts = TerminalToolset()
-        result: TerminalResult = _run(ts.run_command(f'{PYTHON} -c "import sys; sys.exit(1)"'))
+        result: TerminalResult = await (ts.run_command(f'{PYTHON} -c "import sys; sys.exit(1)"'))
         assert result.exit_code == 1
         assert result.soft_fail is False
 
-    def test_exit0_no_soft_fail(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exit0_no_soft_fail(self) -> None:
         """Successful command never gets soft_fail."""
         ts = TerminalToolset()
-        result: TerminalResult = _run(ts.run_command("echo hello"))
+        result: TerminalResult = await (ts.run_command("echo hello"))
         assert result.exit_code == 0
         assert result.soft_fail is False
 
-    def test_exit2_no_soft_fail(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exit2_no_soft_fail(self) -> None:
         """Real error (exit 2) does not get soft_fail."""
         ts = TerminalToolset()
-        result: TerminalResult = _run(
+        result: TerminalResult = await (
             ts.run_command(f"{PYTHON} -c \"import sys; print('output'); sys.exit(2)\"")
         )
         assert result.exit_code == 2
@@ -160,24 +158,27 @@ class TestFromAC_RunCommandSoftFail:  # noqa: N801
 class TestFromAC_WrapperSoftFailAnnotation:  # noqa: N801
     """_run_command_wrapper includes '(soft-fail)' when soft_fail is True."""
 
-    def test_soft_fail_annotation_present(self) -> None:
+    @pytest.mark.asyncio
+    async def test_soft_fail_annotation_present(self) -> None:
         """AC: wrapper includes '(soft-fail)' annotation when soft_fail is True."""
         ts = TerminalToolset()
-        output: str = _run(
+        output: str = await (
             ts._run_command_wrapper(f"{PYTHON} -c \"import sys; print('data'); sys.exit(1)\"")
         )
         assert "(soft-fail)" in output
 
-    def test_no_annotation_on_success(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_annotation_on_success(self) -> None:
         """No (soft-fail) annotation for exit 0."""
         ts = TerminalToolset()
-        output: str = _run(ts._run_command_wrapper("echo hello"))
+        output: str = await (ts._run_command_wrapper("echo hello"))
         assert "(soft-fail)" not in output
 
-    def test_no_annotation_on_real_error(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_annotation_on_real_error(self) -> None:
         """No (soft-fail) annotation for exit >= 2."""
         ts = TerminalToolset()
-        output: str = _run(
+        output: str = await (
             ts._run_command_wrapper(f"{PYTHON} -c \"import sys; print('err'); sys.exit(2)\"")
         )
         assert "(soft-fail)" not in output

@@ -7,7 +7,6 @@ missing args, non-navigate tools).
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import pytest
@@ -19,11 +18,6 @@ from owlbear.tools.browser.safety import BlockedURLError, URLSafetyGuard
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> None:
-    """Convenience wrapper around asyncio.run for coroutines."""
-    asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _navigate_data(url: str) -> dict[str, object]:
@@ -61,22 +55,25 @@ class TestBlockedURLError:
 class TestURLSafetyGuardBlocking:
     """Guard blocks URLs matching blocked_urls patterns."""
 
-    def test_blocks_url_matching_blocked_pattern(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_url_matching_blocked_pattern(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*evil\.com.*"])
         guard = URLSafetyGuard(cfg)
         with pytest.raises(BlockedURLError):
-            _run(guard(_navigate_data("https://evil.com/page")))
+            await (guard(_navigate_data("https://evil.com/page")))
 
-    def test_blocks_url_matching_any_blocked_pattern(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_url_matching_any_blocked_pattern(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*evil\.com.*", r".*malware\.org.*"])
         guard = URLSafetyGuard(cfg)
         with pytest.raises(BlockedURLError):
-            _run(guard(_navigate_data("https://malware.org/bad")))
+            await (guard(_navigate_data("https://malware.org/bad")))
 
-    def test_allows_url_not_matching_blocked_pattern(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_url_not_matching_blocked_pattern(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*evil\.com.*"])
         guard = URLSafetyGuard(cfg)
-        _run(guard(_navigate_data("https://example.com")))  # should NOT raise
+        await (guard(_navigate_data("https://example.com")))  # should NOT raise
 
 
 # ---------------------------------------------------------------------------
@@ -87,25 +84,28 @@ class TestURLSafetyGuardBlocking:
 class TestURLSafetyGuardAllowlist:
     """When allowed_urls is non-empty, URL must match at least one."""
 
-    def test_allows_url_matching_allowed_pattern(self) -> None:
+    @pytest.mark.asyncio
+    async def test_allows_url_matching_allowed_pattern(self) -> None:
         cfg = BrowserConfig(allowed_urls=[r"https://example\.com/.*"])
         guard = URLSafetyGuard(cfg)
-        _run(guard(_navigate_data("https://example.com/page")))  # no raise
+        await (guard(_navigate_data("https://example.com/page")))  # no raise
 
-    def test_blocks_url_not_in_allowlist(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocks_url_not_in_allowlist(self) -> None:
         cfg = BrowserConfig(allowed_urls=[r"https://example\.com/.*"])
         guard = URLSafetyGuard(cfg)
         with pytest.raises(BlockedURLError):
-            _run(guard(_navigate_data("https://other.com/page")))
+            await (guard(_navigate_data("https://other.com/page")))
 
-    def test_blocked_takes_precedence_over_allowed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocked_takes_precedence_over_allowed(self) -> None:
         cfg = BrowserConfig(
             allowed_urls=[r"https://example\.com/.*"],
             blocked_urls=[r".*secret.*"],
         )
         guard = URLSafetyGuard(cfg)
         with pytest.raises(BlockedURLError):
-            _run(guard(_navigate_data("https://example.com/secret")))
+            await (guard(_navigate_data("https://example.com/secret")))
 
 
 # ---------------------------------------------------------------------------
@@ -116,33 +116,38 @@ class TestURLSafetyGuardAllowlist:
 class TestURLSafetyGuardEdgeCases:
     """Edge cases: empty config, non-navigate tool, missing url arg."""
 
-    def test_empty_config_allows_everything(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_config_allows_everything(self) -> None:
         cfg = BrowserConfig()  # no allowed/blocked
         guard = URLSafetyGuard(cfg)
-        _run(guard(_navigate_data("https://anything.com")))  # no raise
+        await (guard(_navigate_data("https://anything.com")))  # no raise
 
-    def test_non_navigate_tool_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_non_navigate_tool_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*"])
         guard = URLSafetyGuard(cfg)
         data: dict[str, object] = {"tool_name": "click", "args": {"selector": "#btn"}}
-        _run(guard(data))  # no raise even though pattern blocks everything
+        await (guard(data))  # no raise even though pattern blocks everything
 
-    def test_navigate_without_url_arg_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_navigate_without_url_arg_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*"])
         guard = URLSafetyGuard(cfg)
         data: dict[str, object] = {"tool_name": "browser_navigate", "args": {}}
-        _run(guard(data))  # no raise — no url to check
+        await (guard(data))  # no raise — no url to check
 
-    def test_navigate_with_empty_url_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_navigate_with_empty_url_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".+"])
         guard = URLSafetyGuard(cfg)
-        _run(guard(_navigate_data("")))  # empty string — skip check
+        await (guard(_navigate_data("")))  # empty string — skip check
 
-    def test_missing_args_key_ignored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_args_key_ignored(self) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*"])
         guard = URLSafetyGuard(cfg)
         data: dict[str, object] = {"tool_name": "browser_navigate"}
-        _run(guard(data))  # no raise — no args dict
+        await (guard(data))  # no raise — no args dict
 
 
 
@@ -154,24 +159,26 @@ class TestURLSafetyGuardEdgeCases:
 class TestURLSafetyGuardLogging:
     """Blocked attempts are logged."""
 
-    def test_logs_blocked_url(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_blocked_url(self, caplog: pytest.LogCaptureFixture) -> None:
         cfg = BrowserConfig(blocked_urls=[r".*evil\.com.*"])
         guard = URLSafetyGuard(cfg)
         with (
             caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"),
             pytest.raises(BlockedURLError),
         ):
-            _run(guard(_navigate_data("https://evil.com")))
+            await (guard(_navigate_data("https://evil.com")))
         assert "evil.com" in caplog.text
 
-    def test_logs_url_not_in_allowlist(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_logs_url_not_in_allowlist(self, caplog: pytest.LogCaptureFixture) -> None:
         cfg = BrowserConfig(allowed_urls=[r"https://safe\.com/.*"])
         guard = URLSafetyGuard(cfg)
         with (
             caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"),
             pytest.raises(BlockedURLError),
         ):
-            _run(guard(_navigate_data("https://other.com")))
+            await (guard(_navigate_data("https://other.com")))
         assert "other.com" in caplog.text
 
 
@@ -191,7 +198,8 @@ class TestURLSafetyGuardHookIntegration:
         handlers = registry.handlers.get(HookEvent.PRE_TOOL_USE, [])
         assert guard in handlers
 
-    def test_emit_invokes_guard(self) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_invokes_guard(self) -> None:
         """HookRegistry.emit swallows exceptions, so the guard fires but
         the BlockedURLError is caught by the registry.  Verify the guard
         was actually invoked by checking that a non-blocked URL passes
@@ -202,9 +210,12 @@ class TestURLSafetyGuardHookIntegration:
         registry = HookRegistry()
         guard.register(registry)
         # Allowed URL — emit completes without error.
-        _run(registry.emit(HookEvent.PRE_TOOL_USE, _navigate_data("https://safe.com")))
+        await (registry.emit(HookEvent.PRE_TOOL_USE, _navigate_data("https://safe.com")))
 
-    def test_emit_blocked_url_swallowed_by_registry(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_blocked_url_swallowed_by_registry(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Blocked URL raises inside the guard, but HookRegistry.emit
         swallows the exception and logs it.  Verify the guard's log
         message still appears (it fires before the raise).
@@ -214,7 +225,7 @@ class TestURLSafetyGuardHookIntegration:
         registry = HookRegistry()
         guard.register(registry)
         with caplog.at_level(logging.WARNING):
-            _run(
+            await (
                 registry.emit(
                     HookEvent.PRE_TOOL_USE,
                     _navigate_data("https://evil.com"),
@@ -232,7 +243,8 @@ class TestURLSafetyGuardHookIntegration:
 class TestURLSafetyGuardHookedToolsetIntegration:
     """URLSafetyGuard fires when HookedToolset processes browser_navigate."""
 
-    def test_hooked_toolset_fires_url_guard_on_blocked_url(
+    @pytest.mark.asyncio
+    async def test_hooked_toolset_fires_url_guard_on_blocked_url(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """HookedToolset emits PRE_TOOL_USE which triggers URLSafetyGuard.
@@ -257,11 +269,12 @@ class TestURLSafetyGuardHookedToolsetIntegration:
         tool = MagicMock()
 
         with caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"):
-            _run(hooked.call_tool("browser_navigate", {"url": "https://evil.com"}, ctx, tool))
+            await (hooked.call_tool("browser_navigate", {"url": "https://evil.com"}, ctx, tool))
 
         assert "evil.com" in caplog.text
 
-    def test_hooked_toolset_allows_safe_url(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_hooked_toolset_allows_safe_url(self, caplog: pytest.LogCaptureFixture) -> None:
         """Safe URL passes through URLSafetyGuard without warnings."""
         from unittest.mock import AsyncMock, MagicMock
 
@@ -280,6 +293,6 @@ class TestURLSafetyGuardHookedToolsetIntegration:
         tool = MagicMock()
 
         with caplog.at_level(logging.WARNING, logger="owlbear.tools.browser.safety"):
-            _run(hooked.call_tool("browser_navigate", {"url": "https://safe.com"}, ctx, tool))
+            await (hooked.call_tool("browser_navigate", {"url": "https://safe.com"}, ctx, tool))
 
         assert "safe.com" not in caplog.text

@@ -13,7 +13,6 @@ Tests verify the contract:
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -50,11 +49,6 @@ class _MockChannel:
         return msg
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _make_mock_agent(
     *,
     session_path: Path = Path("sessions/test.jsonl"),
@@ -78,12 +72,13 @@ def _make_mock_agent(
 class TestFromAC_SessionStart:  # noqa: N801
     """SESSION_START hook is emitted by run_daemon with correct payload."""
 
-    def test_session_start_emitted(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_session_start_emitted(self, tmp_path: Path) -> None:
         """run_daemon emits SESSION_START with {session_id, workspace_root}."""
         channel = _MockChannel([None])
         mock_agent = _make_mock_agent(session_path=tmp_path / "session.jsonl")
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -102,7 +97,8 @@ class TestFromAC_SessionStart:  # noqa: N801
         assert payload["session_id"] == str(tmp_path / "session.jsonl")
         assert payload["workspace_root"] == str(tmp_path)
 
-    def test_session_start_after_daemon_startup(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_session_start_after_daemon_startup(self, tmp_path: Path) -> None:
         """SESSION_START is emitted after DAEMON_STARTUP (ordering)."""
         channel = _MockChannel([None])
         emit_order: list[str] = []
@@ -123,7 +119,7 @@ class TestFromAC_SessionStart:  # noqa: N801
             hooks=hooks,
         )
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -147,7 +143,8 @@ class TestFromAC_SessionStart:  # noqa: N801
 class TestFromAC_SessionEnd:  # noqa: N801
     """SESSION_END hook is emitted by run_daemon with correct payload."""
 
-    def test_session_end_emitted_on_normal_exit(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_session_end_emitted_on_normal_exit(self, tmp_path: Path) -> None:
         """run_daemon emits SESSION_END with {session_id, messages} on normal exit."""
         channel = _MockChannel([None])
         mock_agent = _make_mock_agent(
@@ -155,7 +152,7 @@ class TestFromAC_SessionEnd:  # noqa: N801
             session_load_result=["msg1", "msg2"],
         )
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -174,7 +171,8 @@ class TestFromAC_SessionEnd:  # noqa: N801
         assert payload["session_id"] == str(tmp_path / "session.jsonl")
         assert payload["messages"] == ["msg1", "msg2"]
 
-    def test_session_end_emitted_on_exception(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_session_end_emitted_on_exception(self, tmp_path: Path) -> None:
         """SESSION_END is emitted in finally block even when channel_loop raises."""
         channel = _MockChannel([])
 
@@ -191,7 +189,7 @@ class TestFromAC_SessionEnd:  # noqa: N801
 
         # run_daemon may propagate the exception; we only care SESSION_END was emitted
         with pytest.raises((RuntimeError, ExceptionGroup)):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -206,14 +204,15 @@ class TestFromAC_SessionEnd:  # noqa: N801
             "SESSION_END must be emitted even when an exception occurs"
         )
 
-    def test_session_end_empty_session(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_session_end_empty_session(self, tmp_path: Path) -> None:
         """SESSION_END with missing session file falls back to empty messages list."""
         channel = _MockChannel([None])
         mock_agent = _make_mock_agent(session_path=tmp_path / "nonexistent.jsonl")
         # Simulate load() raising because session file doesn't exist
         mock_agent.session.load.side_effect = FileNotFoundError("no session file")
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,
@@ -240,7 +239,8 @@ class TestFromAC_SessionEnd:  # noqa: N801
 class TestFromAC_ContextInjection:  # noqa: N801
     """ContextInjectionHook fires on SESSION_START and populates data['context']."""
 
-    def test_context_injection_hook_fires(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_context_injection_hook_fires(self, tmp_path: Path) -> None:
         """Register ContextInjectionHook, run run_daemon, verify data['context']."""
         from owlbear.core.context_hook import ContextInjectionHook
 
@@ -271,7 +271,7 @@ class TestFromAC_ContextInjection:  # noqa: N801
             hooks=hooks,
         )
 
-        _run(
+        await (
             run_daemon(
                 channel=channel,
                 agent=mock_agent,

@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from conftest import MockChannel  # type: ignore[import-untyped]
 
 from owlbear.core.hooks import HookEvent
@@ -42,11 +43,6 @@ from owlbear.daemon import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_done_task(*, exception: BaseException | None = None, result: object = None) -> MagicMock:
@@ -76,7 +72,8 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
     """When task retries are exhausted and kanban_edit raises, the state must
     still be cleaned up (removed from retries and claimed)."""
 
-    def test_kanban_edit_failure_still_cleans_state(self) -> None:
+    @pytest.mark.asyncio
+    async def test_kanban_edit_failure_still_cleans_state(self) -> None:
         """kanban_edit raises → task still removed from retries & claimed."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -98,13 +95,14 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-        _run(go())
+        await (go())
 
         assert "X1" not in state.running
         assert "X1" not in state.retries
         assert "X1" not in state.claimed
 
-    def test_kanban_edit_failure_logs_warning(self) -> None:
+    @pytest.mark.asyncio
+    async def test_kanban_edit_failure_logs_warning(self) -> None:
         """When kanban_edit fails on exhausted retry, warning is logged."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -126,12 +124,13 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
             async def go() -> None:
                 await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-            _run(go())
+            await (go())
 
         warn_calls = mock_logger.warning.call_args_list
         assert any("Failed to block exhausted task" in str(c) for c in warn_calls)
 
-    def test_retries_exhausted_blocks_task_with_reason(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retries_exhausted_blocks_task_with_reason(self) -> None:
         """When retries exhausted and kanban_edit succeeds, task is blocked
         with a reason string mentioning retry exhaustion."""
         state = OrchestratorState()
@@ -150,7 +149,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-        _run(go())
+        await (go())
 
         mock_kanban.kanban_edit.assert_called_once()
         call_kwargs = mock_kanban.kanban_edit.call_args
@@ -158,7 +157,8 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
         assert "retry" in block_reason.lower() or "exhaust" in block_reason.lower()
         assert "X3" not in state.claimed
 
-    def test_retries_exhausted_boundary_at_max(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retries_exhausted_boundary_at_max(self) -> None:
         """Exactly at max attempts: attempt=2, max_retry_attempts=2 → next
         attempt is 3 > 2, so retries are exhausted."""
         state = OrchestratorState()
@@ -177,7 +177,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=2)
 
-        _run(go())
+        await (go())
 
         # Exhausted → kanban_edit called to block
         mock_kanban.kanban_edit.assert_called_once()
@@ -193,7 +193,8 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
     """Due retries in poll_tick step 3 are popped from state.retries,
     task details re-fetched, prompt built, and a new asyncio.Task spawned."""
 
-    def test_due_retry_dispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_dispatched(self) -> None:
         """A due RetryEntry is consumed and a new task is spawned."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -223,14 +224,15 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         # Retry entry consumed
         assert "R1" not in state.retries
         # New running task spawned
         assert "R1" in state.running
 
-    def test_due_retry_loads_wip_context(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_loads_wip_context(self) -> None:
         """WIP summary is prepended with CONTINUE_FORWARD_PREFIX for retried tasks."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -270,13 +272,15 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 wip_store=mock_wip,
             )
 
-        _run(go())
+        await (go())
+        await asyncio.sleep(0)  # drain tasks spawned by poll_tick
 
         assert len(captured_prompts) == 1
         assert CONTINUE_FORWARD_PREFIX in captured_prompts[0]
         assert "Previous work summary" in captured_prompts[0]
 
-    def test_due_retry_respects_max_concurrent(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_respects_max_concurrent(self) -> None:
         """When all slots are full, due retries are NOT dispatched."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -306,12 +310,13 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         # Retry NOT dispatched — still in retries
         assert "R3" in state.retries
 
-    def test_due_retry_with_shutdown_exits_cleanly(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_with_shutdown_exits_cleanly(self) -> None:
         """When shutdown_event is already set, due retries are skipped."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -337,12 +342,13 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 shutdown_event=shutdown,
             )
 
-        _run(go())
+        await (go())
 
         # Retry NOT dispatched due to shutdown
         assert "R4" not in state.running
 
-    def test_not_yet_due_retry_stays_pending(self) -> None:
+    @pytest.mark.asyncio
+    async def test_not_yet_due_retry_stays_pending(self) -> None:
         """A RetryEntry with future next_due is NOT dispatched."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -366,13 +372,14 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         # Still pending
         assert "R5" in state.retries
         assert "R5" not in state.running
 
-    def test_due_retry_uses_builder_agent(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_uses_builder_agent(self) -> None:
         """Retry dispatch resolves 'builder' from the agent registry."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -402,7 +409,7 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         mock_registry.get.assert_called_with("builder")
 
@@ -416,7 +423,8 @@ class TestFromAC_RunDaemonInflightCancellation:  # noqa: N801
     """When autonomous mode's TaskGroup exits, in-flight tasks spawned by
     poll_loop must be cancelled and awaited with a timeout."""
 
-    def test_inflight_tasks_cancelled_on_exit(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_inflight_tasks_cancelled_on_exit(self, tmp_path: Path) -> None:
         """Tasks in state.running are cancelled when run_daemon's TaskGroup exits."""
         inflight_task: asyncio.Task[None] | None = None
 
@@ -467,12 +475,13 @@ class TestFromAC_RunDaemonInflightCancellation:  # noqa: N801
                     agent_registry=MagicMock(),
                 )
 
-            _run(go())
+            await (go())
 
         assert inflight_task is not None
         assert inflight_task.cancelled()
 
-    def test_no_inflight_tasks_exits_cleanly(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_no_inflight_tasks_exits_cleanly(self, tmp_path: Path) -> None:
         """When no in-flight tasks exist at exit, the finally block is a no-op."""
 
         async def fake_poll_loop(**kwargs: object) -> None:
@@ -515,7 +524,7 @@ class TestFromAC_RunDaemonInflightCancellation:  # noqa: N801
                 )
 
             # Should not raise
-            _run(go())
+            await (go())
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +536,8 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
     """When a task completes successfully but the lint gate detects errors,
     the task should be treated as failed with a LintGateError."""
 
-    def test_lint_gate_failure_converts_to_error(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_gate_failure_converts_to_error(self) -> None:
         """Successful task + failed lint gate → treated as failure (retried or blocked)."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -553,7 +563,7 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         # Task should NOT be moved to review — it failed lint
         mock_kanban.kanban_move.assert_not_called()
@@ -561,7 +571,8 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
         assert "LG1" in state.retries
         assert state.retries["LG1"].attempt == 1
 
-    def test_lint_gate_skipped_when_disabled(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_gate_skipped_when_disabled(self) -> None:
         """When lint_gate_enabled=False, lint gate is not run even if workspace is set."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -582,13 +593,14 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
                     workspace=Path("/fake"),
                 )
 
-            _run(go())
+            await (go())
 
         mock_lint.assert_not_called()
         # Task moved to review normally
         mock_kanban.kanban_move.assert_called_once_with("LG2", "review")
 
-    def test_lint_gate_skipped_when_no_workspace(self) -> None:
+    @pytest.mark.asyncio
+    async def test_lint_gate_skipped_when_no_workspace(self) -> None:
         """When workspace is None, lint gate is not run even if enabled."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -609,7 +621,7 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
                     workspace=None,
                 )
 
-            _run(go())
+            await (go())
 
         mock_lint.assert_not_called()
         mock_kanban.kanban_move.assert_called_once_with("LG3", "review")
@@ -625,7 +637,8 @@ class TestFromAC_ReconcileSuccessPath:  # noqa: N801
     WIP is cleared, task is moved to review, hooks are emitted, and
     the task is removed from claimed."""
 
-    def test_success_clears_wip_and_moves_to_review(self) -> None:
+    @pytest.mark.asyncio
+    async def test_success_clears_wip_and_moves_to_review(self) -> None:
         """Successful task → wip_store.clear called, kanban_move to review."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -640,13 +653,14 @@ class TestFromAC_ReconcileSuccessPath:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(go())
+        await (go())
 
         mock_wip.clear.assert_called_once_with(agent="builder", task_id="S1")
         mock_kanban.kanban_move.assert_called_once_with("S1", "review")
         assert "S1" not in state.claimed
 
-    def test_success_emits_hook(self) -> None:
+    @pytest.mark.asyncio
+    async def test_success_emits_hook(self) -> None:
         """Successful task → hooks.emit called with success outcome."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -661,14 +675,15 @@ class TestFromAC_ReconcileSuccessPath:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
 
-        _run(go())
+        await (go())
 
         mock_hooks.emit.assert_called_once_with(
             HookEvent.TASK_COMPLETE,
             {"task_id": "S2", "outcome": "success"},
         )
 
-    def test_success_without_wip_store(self) -> None:
+    @pytest.mark.asyncio
+    async def test_success_without_wip_store(self) -> None:
         """Successful task with no wip_store → no crash, still moves to review."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -682,7 +697,7 @@ class TestFromAC_ReconcileSuccessPath:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(go())
+        await (go())
 
         mock_kanban.kanban_move.assert_called_once_with("S3", "review")
         assert "S3" not in state.claimed
@@ -697,7 +712,8 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
     """When a task fails, WIP is saved, hooks emit failure, and retry
     is scheduled with exponential backoff."""
 
-    def test_failure_saves_wip_summary(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_saves_wip_summary(self) -> None:
         """Failed task → wip_store.save called with truncated summary."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -713,7 +729,7 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(go())
+        await (go())
 
         mock_wip.save.assert_called_once()
         call_kwargs = mock_wip.save.call_args.kwargs
@@ -721,7 +737,8 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         assert call_kwargs["task_id"] == "F1"
         assert "RuntimeError" in call_kwargs["summary"]
 
-    def test_failure_emits_hook_with_failure_outcome(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_emits_hook_with_failure_outcome(self) -> None:
         """Failed task → hooks.emit called with failure outcome."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -737,14 +754,15 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
 
-        _run(go())
+        await (go())
 
         mock_hooks.emit.assert_called_once_with(
             HookEvent.TASK_COMPLETE,
             {"task_id": "F2", "outcome": "failure"},
         )
 
-    def test_failure_schedules_retry_with_backoff(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_schedules_retry_with_backoff(self) -> None:
         """First failure → retry scheduled with attempt=1 and future next_due."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -760,7 +778,7 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(go())
+        await (go())
 
         assert "F3" in state.retries
         entry = state.retries["F3"]
@@ -770,7 +788,8 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         # First failure keeps task in claimed for retry
         assert "F3" in state.claimed
 
-    def test_failure_increments_retry_attempt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_increments_retry_attempt(self) -> None:
         """Second failure → retry attempt incremented to 2."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -791,7 +810,7 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(go())
+        await (go())
 
         assert state.retries["F4"].attempt == 2
 
@@ -805,7 +824,8 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
     """Stale tasks (running longer than timeout) are cancelled, removed from
     state, blocked on kanban, and alerted via channel."""
 
-    def test_stale_task_cancelled_and_removed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_stale_task_cancelled_and_removed(self) -> None:
         """Task running longer than stale_timeout is cancelled and removed."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -828,7 +848,7 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
                 stale_timeout=300.0,
             )
 
-        _run(go())
+        await (go())
 
         mock_task.cancel.assert_called_once()
         assert "ST1" not in state.running
@@ -836,7 +856,8 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
         mock_kanban.kanban_edit.assert_called_once()
         mock_channel.send.assert_called_once()
 
-    def test_stale_kanban_edit_failure_continues(self) -> None:
+    @pytest.mark.asyncio
+    async def test_stale_kanban_edit_failure_continues(self) -> None:
         """kanban_edit failure on stale task is logged but processing continues."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -860,7 +881,7 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
                 stale_timeout=300.0,
             )
 
-        _run(go())
+        await (go())
 
         # Task still cancelled and removed despite kanban failure
         mock_task.cancel.assert_called_once()
@@ -868,7 +889,8 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
         # Channel send still attempted
         mock_channel.send.assert_called_once()
 
-    def test_stale_channel_send_failure_continues(self) -> None:
+    @pytest.mark.asyncio
+    async def test_stale_channel_send_failure_continues(self) -> None:
         """channel.send failure on stale alert is logged but does not raise."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -893,12 +915,13 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
             )
 
         # Should not raise
-        _run(go())
+        await (go())
 
         mock_task.cancel.assert_called_once()
         assert "ST3" not in state.running
 
-    def test_non_stale_task_not_cancelled(self) -> None:
+    @pytest.mark.asyncio
+    async def test_non_stale_task_not_cancelled(self) -> None:
         """Task within stale_timeout is left running."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -920,7 +943,7 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
                 stale_timeout=300.0,
             )
 
-        _run(go())
+        await (go())
 
         mock_task.cancel.assert_not_called()
         assert "ST4" in state.running
@@ -935,7 +958,8 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
     """Step 7 of poll_tick: fetch todo tasks, filter claimed, sort by
     priority, dispatch up to available slots with WIP context."""
 
-    def test_dispatch_moves_to_in_progress_and_spawns(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dispatch_moves_to_in_progress_and_spawns(self) -> None:
         """A todo task is moved to in-progress and an asyncio task spawned."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -958,13 +982,14 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         mock_kanban.kanban_move.assert_called_with("T1", "in-progress")
         assert "T1" in state.claimed
         assert "T1" in state.running
 
-    def test_dispatch_with_wip_prepends_prefix(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dispatch_with_wip_prepends_prefix(self) -> None:
         """When WIP exists for a todo task, prompt is prepended with CONTINUE_FORWARD_PREFIX."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -997,13 +1022,15 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
                 wip_store=mock_wip,
             )
 
-        _run(go())
+        await (go())
+        await asyncio.sleep(0)  # drain tasks spawned by poll_tick
 
         assert len(captured_prompts) == 1
         assert CONTINUE_FORWARD_PREFIX in captured_prompts[0]
         assert "Previous cycle notes" in captured_prompts[0]
 
-    def test_dispatch_respects_priority_sort(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dispatch_respects_priority_sort(self) -> None:
         """Critical tasks are dispatched before nice-to-have tasks."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1039,13 +1066,14 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         # Critical (P2) dispatched before nice-to-have (P1)
         assert dispatched_ids[0] == "P2"
         assert dispatched_ids[1] == "P1"
 
-    def test_dispatch_filters_already_claimed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dispatch_filters_already_claimed(self) -> None:
         """Claimed tasks are skipped during dispatch."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1072,13 +1100,14 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         # Only C2 dispatched, C1 skipped
         assert "C2" in state.running
         assert "C1" not in state.running
 
-    def test_dispatch_limited_by_available_slots(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dispatch_limited_by_available_slots(self) -> None:
         """When max_concurrent slots are full, no new tasks dispatched."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1102,7 +1131,7 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(go())
+        await (go())
 
         assert "NEW1" not in state.running
 
@@ -1115,7 +1144,8 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
 class TestFromAC_PollLoopExceptionRecovery:  # noqa: N801
     """When poll_tick raises, poll_loop logs the exception and continues."""
 
-    def test_poll_tick_failure_logged_and_continues(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_failure_logged_and_continues(self) -> None:
         """poll_tick raises → logged via logger.exception, loop continues."""
         call_count = 0
 
@@ -1153,7 +1183,7 @@ class TestFromAC_PollLoopExceptionRecovery:  # noqa: N801
                     shutdown_event=shutdown,
                 )
 
-            _run(go())
+            await (go())
 
         assert call_count >= 2  # Loop continued after first failure
 
@@ -1167,7 +1197,8 @@ class TestFromAC_ChannelLoopPaths:  # noqa: N801
     """Exercise channel_loop paths for sentinel detection, empty messages,
     and error recovery."""
 
-    def test_sentinel_file_triggers_shutdown(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_sentinel_file_triggers_shutdown(self, tmp_path: Path) -> None:
         """When sentinel file exists, channel_loop sets shutdown and exits."""
         sentinel = tmp_path / "owlbear.stop"
         sentinel.touch()
@@ -1183,11 +1214,12 @@ class TestFromAC_ChannelLoopPaths:  # noqa: N801
                 mock_agent,
             )
 
-        _run(go())
+        await (go())
 
         assert shutdown.is_set()
 
-    def test_empty_message_skipped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_message_skipped(self) -> None:
         """Empty/whitespace messages are skipped, loop continues."""
         channel = MockChannel(["", "   ", "real message", None])
         mock_agent = AsyncMock()
@@ -1199,12 +1231,13 @@ class TestFromAC_ChannelLoopPaths:  # noqa: N801
         async def go() -> None:
             await channel_loop(shutdown, sentinel, channel, mock_agent)
 
-        _run(go())
+        await (go())
 
         # Only the "real message" should have been processed
         mock_agent.turn.assert_called_once_with("real message")
 
-    def test_error_recovery_on_agent_turn_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_error_recovery_on_agent_turn_failure(self) -> None:
         """When agent.turn raises, _recover_from_error is called."""
         channel = MockChannel(["trigger error", None])
         mock_agent = AsyncMock()
@@ -1223,7 +1256,7 @@ class TestFromAC_ChannelLoopPaths:  # noqa: N801
                     mock_agent,
                 )
 
-            _run(go())
+            await (go())
 
         mock_recover.assert_called_once()
         call_args = mock_recover.call_args
@@ -1239,25 +1272,28 @@ class TestFromAC_ApplyHydration:  # noqa: N801
     """_apply_hydration appends URL/file sections from the hydrator result
     to the prompt string."""
 
-    def test_hydrator_none_returns_prompt_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_none_returns_prompt_unchanged(self) -> None:
         """When hydrator is None, prompt is returned unchanged."""
 
         async def go() -> str:
             return await _apply_hydration(None, "original", "body")
 
-        assert _run(go()) == "original"
+        assert await (go()) == "original"
 
-    def test_empty_body_returns_prompt_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_empty_body_returns_prompt_unchanged(self) -> None:
         """When body is empty, prompt is returned unchanged."""
         hydrator = AsyncMock()
 
         async def go() -> str:
             return await _apply_hydration(hydrator, "original", "")
 
-        assert _run(go()) == "original"
+        assert await (go()) == "original"
         hydrator.assert_not_called()
 
-    def test_hydrator_with_urls_appends_sections(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_with_urls_appends_sections(self) -> None:
         """Hydrator result with URLs → URL sections appended to prompt."""
         result = MagicMock()
         result.urls = {"https://example.com": "Page content"}
@@ -1269,12 +1305,13 @@ class TestFromAC_ApplyHydration:  # noqa: N801
         async def go() -> str:
             return await _apply_hydration(hydrator, "base prompt", "some body")
 
-        output = _run(go())
+        output = await (go())
         assert "## Pre-hydrated Context" in output
         assert "### https://example.com" in output
         assert "Page content" in output
 
-    def test_hydrator_with_files_appends_sections(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_with_files_appends_sections(self) -> None:
         """Hydrator result with files → file sections appended to prompt."""
         result = MagicMock()
         result.urls = {}
@@ -1286,12 +1323,13 @@ class TestFromAC_ApplyHydration:  # noqa: N801
         async def go() -> str:
             return await _apply_hydration(hydrator, "base prompt", "some body")
 
-        output = _run(go())
+        output = await (go())
         assert "## Pre-hydrated Context" in output
         assert "### src/main.py" in output
         assert "def main(): pass" in output
 
-    def test_hydrator_with_urls_and_files(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_with_urls_and_files(self) -> None:
         """Hydrator result with both URLs and files → all sections appended."""
         result = MagicMock()
         result.urls = {"https://docs.example.com": "API docs"}
@@ -1303,11 +1341,12 @@ class TestFromAC_ApplyHydration:  # noqa: N801
         async def go() -> str:
             return await _apply_hydration(hydrator, "prompt", "body text")
 
-        output = _run(go())
+        output = await (go())
         assert "### https://docs.example.com" in output
         assert "### README.md" in output
 
-    def test_hydrator_failure_returns_prompt_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_failure_returns_prompt_unchanged(self) -> None:
         """When hydrator raises, prompt is returned unchanged."""
 
         async def failing_hydrator(body: str) -> object:  # noqa: ARG001
@@ -1317,9 +1356,10 @@ class TestFromAC_ApplyHydration:  # noqa: N801
         async def go() -> str:
             return await _apply_hydration(failing_hydrator, "original", "body")
 
-        assert _run(go()) == "original"
+        assert await (go()) == "original"
 
-    def test_hydrator_empty_result_no_sections(self) -> None:
+    @pytest.mark.asyncio
+    async def test_hydrator_empty_result_no_sections(self) -> None:
         """When hydrator result has no urls/files, prompt unchanged."""
         result = MagicMock()
         result.urls = {}
@@ -1331,7 +1371,7 @@ class TestFromAC_ApplyHydration:  # noqa: N801
         async def go() -> str:
             return await _apply_hydration(hydrator, "original", "body")
 
-        assert _run(go()) == "original"
+        assert await (go()) == "original"
 
 
 # ---------------------------------------------------------------------------
@@ -1342,7 +1382,8 @@ class TestFromAC_ApplyHydration:  # noqa: N801
 class TestFromAC_PollTickWithChannel:  # noqa: N801
     """When channel is passed to poll_tick, detect_stale_tasks is called."""
 
-    def test_poll_tick_calls_detect_stale_when_channel_provided(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_calls_detect_stale_when_channel_provided(self) -> None:
         """poll_tick invokes detect_stale_tasks when channel is not None."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1366,11 +1407,12 @@ class TestFromAC_PollTickWithChannel:  # noqa: N801
                     channel=mock_channel,
                 )
 
-            _run(go())
+            await (go())
 
         mock_stale.assert_called_once()
 
-    def test_poll_tick_skips_stale_when_no_channel(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_skips_stale_when_no_channel(self) -> None:
         """poll_tick does NOT call detect_stale_tasks when channel is None."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1393,7 +1435,7 @@ class TestFromAC_PollTickWithChannel:  # noqa: N801
                     channel=None,
                 )
 
-            _run(go())
+            await (go())
 
         mock_stale.assert_not_called()
 
@@ -1406,7 +1448,8 @@ class TestFromAC_PollTickWithChannel:  # noqa: N801
 class TestFromAC_PollTickShutdownDuringDispatch:  # noqa: N801
     """When shutdown_event is set during step 7 dispatch, loop exits early."""
 
-    def test_shutdown_during_dispatch_exits(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_during_dispatch_exits(self) -> None:
         """shutdown mid-dispatch aborts further task processing."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1443,12 +1486,13 @@ class TestFromAC_PollTickShutdownDuringDispatch:  # noqa: N801
                 shutdown_event=shutdown,
             )
 
-        _run(go())
+        await (go())
 
         # Second task should not be dispatched due to shutdown
         assert "SD2" not in state.running
 
-    def test_shutdown_after_kanban_list_exits(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_after_kanban_list_exits(self) -> None:
         """shutdown_event set during kanban_list call → exits before dispatch."""
         state = OrchestratorState()
         mock_kanban = AsyncMock()
@@ -1470,7 +1514,7 @@ class TestFromAC_PollTickShutdownDuringDispatch:  # noqa: N801
                 shutdown_event=shutdown,
             )
 
-        _run(go())
+        await (go())
 
         assert "X" not in state.running
 
@@ -1484,7 +1528,8 @@ class TestFromAC_RunDaemonSessionLoadCoroutine:  # noqa: N801
     """When session.load() returns a coroutine (async store), run_daemon's
     finally block awaits it."""
 
-    def test_async_session_load_awaited(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_async_session_load_awaited(self, tmp_path: Path) -> None:
         """session.load returns coroutine → awaited correctly."""
         channel = MockChannel([None])
         mock_agent = AsyncMock()
@@ -1509,7 +1554,7 @@ class TestFromAC_RunDaemonSessionLoadCoroutine:  # noqa: N801
                 settings=settings,
             )
 
-        _run(go())
+        await (go())
 
         # SESSION_END emitted with the awaited messages
         emit_calls = mock_agent.hooks.emit.call_args_list

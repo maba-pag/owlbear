@@ -26,11 +26,6 @@ from owlbear.config import OwlBearSettings
 # ---------------------------------------------------------------------------
 
 
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
-
-
 def _make_kanban_list_json(tasks: list[dict[str, str]]) -> str:
     """Build fake kanban-md list --json output."""
     return json.dumps(tasks)
@@ -207,7 +202,8 @@ class TestDualCoroutineLifecycle:
     def test_poll_loop_import(self) -> None:
         from owlbear.daemon import poll_loop  # noqa: F401
 
-    def test_both_run_in_task_group(self) -> None:
+    @pytest.mark.asyncio
+    async def test_both_run_in_task_group(self) -> None:
         """When autonomous_mode=True, both loops start in a TaskGroup."""
         from owlbear.daemon import channel_loop, poll_loop  # noqa: F401
 
@@ -230,7 +226,7 @@ class TestDualCoroutineLifecycle:
                 tg.create_task(wrapped_channel())
                 tg.create_task(wrapped_poll())
 
-        _run(run_both())
+        await (run_both())
 
         assert state_holder["channel_ran"]
         assert state_holder["poll_ran"]
@@ -244,7 +240,8 @@ class TestDualCoroutineLifecycle:
 class TestAutonomousModeDisabled:
     """When autonomous_mode=False, only channel_loop runs."""
 
-    def test_poll_loop_not_started(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_loop_not_started(self) -> None:
         """run_daemon with autonomous_mode=False should not spawn poll_loop."""
         from owlbear.daemon import run_daemon
 
@@ -263,7 +260,7 @@ class TestAutonomousModeDisabled:
             settings.heartbeat_enabled = False
             settings.heartbeat_interval = 1800
             settings.heartbeat_active_hours = (8, 22)
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -283,7 +280,8 @@ class TestAutonomousModeDisabled:
 class TestPollTickSequence:
     """Each poll tick: reconcile → fetch todo → sort priority → dispatch."""
 
-    def test_tick_calls_in_order(self) -> None:
+    @pytest.mark.asyncio
+    async def test_tick_calls_in_order(self) -> None:
         """A single poll tick calls reconcile, then fetches todo, sorts, dispatches."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -313,12 +311,13 @@ class TestPollTickSequence:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Should have fetched todo list
         mock_kanban.kanban_list.assert_called()
 
-    def test_critical_dispatched_before_nice_to_have(self) -> None:
+    @pytest.mark.asyncio
+    async def test_critical_dispatched_before_nice_to_have(self) -> None:
         """Tasks sorted: critical > needed > important > nice-to-have > someday."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -359,7 +358,7 @@ class TestPollTickSequence:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Critical task dispatched first
         assert dispatched_ids[0] == "21"
@@ -373,7 +372,8 @@ class TestPollTickSequence:
 class TestDispatch:
     """Dispatch moves task to in-progress and spawns via AgentRegistry.get('builder')."""
 
-    def test_task_moved_to_in_progress(self) -> None:
+    @pytest.mark.asyncio
+    async def test_task_moved_to_in_progress(self) -> None:
         from owlbear.daemon import OrchestratorState, poll_tick
 
         state = OrchestratorState()
@@ -398,7 +398,7 @@ class TestDispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Verify kanban_move called with in-progress
         move_calls = [
@@ -407,7 +407,8 @@ class TestDispatch:
         assert len(move_calls) >= 1
         assert move_calls[0].args[0] == "30"
 
-    def test_builder_agent_resolved(self) -> None:
+    @pytest.mark.asyncio
+    async def test_builder_agent_resolved(self) -> None:
         """AgentRegistry.get('builder') is used to dispatch."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -433,11 +434,12 @@ class TestDispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         mock_registry.get.assert_called_with("builder")
 
-    def test_claimed_set_updated(self) -> None:
+    @pytest.mark.asyncio
+    async def test_claimed_set_updated(self) -> None:
         """Dispatched task ID added to state.claimed."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -463,7 +465,7 @@ class TestDispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         assert "32" in state.claimed
 
@@ -476,7 +478,8 @@ class TestDispatch:
 class TestCompletedTaskMovedToReview:
     """When a dispatched task completes successfully, it moves to review."""
 
-    def test_success_moves_to_review(self) -> None:
+    @pytest.mark.asyncio
+    async def test_success_moves_to_review(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -496,7 +499,7 @@ class TestCompletedTaskMovedToReview:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # Task should be moved to review
         mock_kanban.kanban_move.assert_any_call("40", "review")
@@ -512,7 +515,8 @@ class TestCompletedTaskMovedToReview:
 class TestFailedDispatchFreesSlot:
     """Failed dispatch frees the slot — error logged, task NOT moved to review."""
 
-    def test_exception_frees_slot(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exception_frees_slot(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -531,7 +535,7 @@ class TestFailedDispatchFreesSlot:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # Task removed from running (slot freed)
         assert "50" not in state.running
@@ -541,7 +545,8 @@ class TestFailedDispatchFreesSlot:
         ]
         assert len(review_calls) == 0
 
-    def test_exception_removes_from_claimed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exception_removes_from_claimed(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -558,7 +563,7 @@ class TestFailedDispatchFreesSlot:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # With retry (#625): first failure keeps task in claimed for retry
         assert "51" in state.claimed
@@ -573,7 +578,8 @@ class TestFailedDispatchFreesSlot:
 class TestShutdownDuringPollTick:
     """Setting shutdown_event during a poll tick causes clean exit."""
 
-    def test_shutdown_event_exits_poll_loop(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_event_exits_poll_loop(self) -> None:
         from owlbear.daemon import OrchestratorState, poll_loop
 
         state = OrchestratorState()
@@ -597,12 +603,13 @@ class TestShutdownDuringPollTick:
             )
 
         # Should complete without hanging
-        _run(run_poll())
+        await (run_poll())
 
         # No kanban calls — exited before first tick
         mock_kanban.kanban_list.assert_not_called()
 
-    def test_shutdown_mid_tick_stops_dispatch(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_mid_tick_stops_dispatch(self) -> None:
         """If shutdown is set while fetching tasks, no dispatch occurs."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -630,7 +637,7 @@ class TestShutdownDuringPollTick:
                 shutdown_event=shutdown_event,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Should not dispatch — shutdown was set
         mock_kanban.kanban_move.assert_not_called()
@@ -644,7 +651,8 @@ class TestShutdownDuringPollTick:
 class TestMaxConcurrentTasksCap:
     """No dispatch when all slots are occupied."""
 
-    def test_no_dispatch_when_full(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_dispatch_when_full(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, poll_tick
 
         state = OrchestratorState()
@@ -670,7 +678,7 @@ class TestMaxConcurrentTasksCap:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # No move to in-progress — slots full
         in_progress_calls = [
@@ -680,7 +688,8 @@ class TestMaxConcurrentTasksCap:
         ]
         assert len(in_progress_calls) == 0
 
-    def test_partial_slots_dispatch_limited(self) -> None:
+    @pytest.mark.asyncio
+    async def test_partial_slots_dispatch_limited(self) -> None:
         """With 1 of 2 slots used, only 1 task dispatched even if 3 available."""
         from owlbear.daemon import OrchestratorState, RunningTask, poll_tick
 
@@ -716,7 +725,7 @@ class TestMaxConcurrentTasksCap:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Only 1 task dispatched (1 free slot from max 2)
         in_progress_calls = [
@@ -726,7 +735,8 @@ class TestMaxConcurrentTasksCap:
         ]
         assert len(in_progress_calls) == 1
 
-    def test_already_claimed_tasks_skipped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_already_claimed_tasks_skipped(self) -> None:
         """Tasks already in claimed set are not re-dispatched."""
         from owlbear.daemon import OrchestratorState, RunningTask, poll_tick
 
@@ -762,7 +772,7 @@ class TestMaxConcurrentTasksCap:
                 shutdown_event=asyncio.Event(),
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Only task 91 dispatched, not 90
         in_progress_calls = [
@@ -783,7 +793,8 @@ class TestMaxConcurrentTasksCap:
 class TestRunDaemonPassesKanbanAndRegistry:
     """run_daemon() must accept and forward kanban_toolset and agent_registry."""
 
-    def test_autonomous_passes_deps_to_poll_loop(self) -> None:
+    @pytest.mark.asyncio
+    async def test_autonomous_passes_deps_to_poll_loop(self) -> None:
         """When autonomous_mode=True, kanban_toolset and agent_registry reach poll_loop."""
         from owlbear.daemon import run_daemon
 
@@ -807,7 +818,7 @@ class TestRunDaemonPassesKanbanAndRegistry:
         settings.lint_gate_enabled = False
 
         with patch("owlbear.daemon.poll_loop", new=fake_poll_loop):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -821,7 +832,8 @@ class TestRunDaemonPassesKanbanAndRegistry:
         assert captured_kwargs["kanban"] is mock_kanban
         assert captured_kwargs["agent_registry"] is mock_registry
 
-    def test_autonomous_skips_poll_when_deps_missing(self) -> None:
+    @pytest.mark.asyncio
+    async def test_autonomous_skips_poll_when_deps_missing(self) -> None:
         """autonomous_mode=True but no kanban/registry → falls back to channel_loop only."""
         from owlbear.daemon import run_daemon
 
@@ -841,7 +853,7 @@ class TestRunDaemonPassesKanbanAndRegistry:
         settings.heartbeat_active_hours = (8, 22)
 
         with patch("owlbear.daemon.poll_loop", new=fake_poll_loop):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -862,7 +874,8 @@ class TestRunDaemonPassesKanbanAndRegistry:
 class TestInFlightTaskCancellation:
     """After shutdown, in-flight tasks in state.running must be cancelled."""
 
-    def test_shutdown_cancels_running_tasks(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_cancels_running_tasks(self) -> None:
         """Tasks spawned by poll_loop are cancelled when run_daemon exits."""
         from owlbear.daemon import RunningTask, run_daemon
 
@@ -897,7 +910,7 @@ class TestInFlightTaskCancellation:
         settings.lint_gate_enabled = False
 
         with patch("owlbear.daemon.poll_loop", new=fake_poll_loop):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -920,7 +933,8 @@ class TestInFlightTaskCancellation:
 class TestWipInjection:
     """WipStore integration with poll_tick dispatch prompt."""
 
-    def test_poll_tick_loads_wip_and_prepends_to_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_loads_wip_and_prepends_to_prompt(self) -> None:
         """When WipStore.load returns a summary, the builder prompt contains
         CONTINUE FORWARD directive and WIP text prepended to the task prompt."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -955,7 +969,7 @@ class TestWipInjection:
                 wip_store=mock_wip,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Builder.run() was called
         mock_agent.run.assert_called_once()
@@ -965,7 +979,8 @@ class TestWipInjection:
         assert "Previous cycle made progress on step 2" in prompt
         assert "CONTINUE FORWARD" in prompt
 
-    def test_poll_tick_no_wip_clean_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_tick_no_wip_clean_prompt(self) -> None:
         """When WipStore.load returns None, prompt does NOT contain
         CONTINUE FORWARD directive."""
         from owlbear.daemon import OrchestratorState, poll_tick
@@ -999,7 +1014,7 @@ class TestWipInjection:
                 wip_store=mock_wip,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         mock_agent.run.assert_called_once()
         prompt = mock_agent.run.call_args.args[0]
@@ -1013,7 +1028,8 @@ class TestWipInjection:
 class TestWipReconciliation:
     """WipStore integration with reconcile_tasks."""
 
-    def test_reconcile_saves_wip_on_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reconcile_saves_wip_on_failure(self) -> None:
         """When a task FAILS, wip_store.save() is called with the exception
         message as next-cycle context (real Task.result() re-raises)."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
@@ -1035,7 +1051,7 @@ class TestWipReconciliation:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # wip_store.save called with exception text as summary
         mock_wip.save.assert_called_once()
@@ -1044,7 +1060,8 @@ class TestWipReconciliation:
         assert "RuntimeError" in call_kwargs["summary"]
         assert "transient failure" in call_kwargs["summary"]
 
-    def test_reconcile_clears_wip_on_success(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reconcile_clears_wip_on_success(self) -> None:
         """When a task completes successfully, wip_store.clear() is called
         (no more cycles needed)."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
@@ -1067,7 +1084,7 @@ class TestWipReconciliation:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # Success → clear WIP (task done, no more cycles)
         mock_wip.clear.assert_called_once()
@@ -1078,7 +1095,8 @@ class TestWipReconciliation:
         # save should NOT be called on success
         mock_wip.save.assert_not_called()
 
-    def test_reconcile_saves_wip_on_any_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_reconcile_saves_wip_on_any_failure(self) -> None:
         """Any failure saves exception context for next cycle — there is no
         permanent-vs-transient distinction at this level."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
@@ -1100,7 +1118,7 @@ class TestWipReconciliation:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # With retry (#625): first failure keeps task in claimed for retry
         assert "130" in state.claimed
@@ -1109,7 +1127,8 @@ class TestWipReconciliation:
         mock_wip.save.assert_called_once()
         assert "permanent failure" in mock_wip.save.call_args.kwargs["summary"]
 
-    def test_auto_save_truncates_output(self) -> None:
+    @pytest.mark.asyncio
+    async def test_auto_save_truncates_output(self) -> None:
         """When exception message exceeds 500 chars, WIP summary is truncated to 500."""
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
@@ -1132,7 +1151,7 @@ class TestWipReconciliation:
         async def run_reconcile() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        _run(run_reconcile())
+        await (run_reconcile())
 
         # save called with truncated summary
         mock_wip.save.assert_called_once()
@@ -1149,7 +1168,8 @@ class TestWipReconciliation:
 class TestTaskCompleteEmitSuccess:
     """reconcile_tasks emits TASK_COMPLETE with outcome='success' on success."""
 
-    def test_emit_called_on_success(self) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_called_on_success(self) -> None:
         from owlbear.core.hooks import HookEvent, HookRegistry
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
@@ -1173,7 +1193,7 @@ class TestTaskCompleteEmitSuccess:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=hooks)
 
-        _run(run())
+        await (run())
 
         assert len(captured) == 1
         payload = captured[0]
@@ -1184,7 +1204,8 @@ class TestTaskCompleteEmitSuccess:
 class TestTaskCompleteEmitFailure:
     """reconcile_tasks emits TASK_COMPLETE with outcome='failure' on exception."""
 
-    def test_emit_called_on_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_emit_called_on_failure(self) -> None:
         from owlbear.core.hooks import HookEvent, HookRegistry
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
@@ -1206,7 +1227,7 @@ class TestTaskCompleteEmitFailure:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=hooks)
 
-        _run(run())
+        await (run())
 
         assert len(captured) == 1
         payload = captured[0]
@@ -1217,7 +1238,8 @@ class TestTaskCompleteEmitFailure:
 class TestTaskCompleteHooksNone:
     """hooks=None does not raise — graceful no-op."""
 
-    def test_no_hooks_no_error(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_hooks_no_error(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -1236,7 +1258,7 @@ class TestTaskCompleteHooksNone:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=None)
 
         # Should not raise
-        _run(run())
+        await (run())
 
         assert "202" not in state.running
         assert "202" not in state.claimed
@@ -1251,7 +1273,8 @@ class TestPollLoopBodyExecutes:
     """poll_loop must actually enter the while-loop, call poll_tick, sleep,
     and then exit on shutdown."""
 
-    def test_poll_loop_runs_one_tick_then_shuts_down(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_loop_runs_one_tick_then_shuts_down(self) -> None:
         """poll_loop enters loop body, calls poll_tick, then shuts down."""
         from owlbear.daemon import OrchestratorState, poll_loop
 
@@ -1282,11 +1305,12 @@ class TestPollLoopBodyExecutes:
                     shutdown_event=shutdown_event,
                 )
 
-        _run(run_poll())
+        await (run_poll())
 
         assert tick_count == 1
 
-    def test_poll_loop_logs_poll_tick_exception(self) -> None:
+    @pytest.mark.asyncio
+    async def test_poll_loop_logs_poll_tick_exception(self) -> None:
         """When poll_tick raises, poll_loop logs and continues."""
         from owlbear.daemon import OrchestratorState, poll_loop
 
@@ -1318,7 +1342,7 @@ class TestPollLoopBodyExecutes:
                     shutdown_event=shutdown_event,
                 )
 
-        _run(run_poll())
+        await (run_poll())
 
         # poll_tick was called at least twice: first fails, second sets shutdown
         assert call_count == 2
@@ -1332,7 +1356,8 @@ class TestPollLoopBodyExecutes:
 class TestPollTickShutdownDuringDispatch:
     """When shutdown_event is set mid-dispatch, remaining tasks are skipped."""
 
-    def test_shutdown_during_dispatch_skips_remaining(self) -> None:
+    @pytest.mark.asyncio
+    async def test_shutdown_during_dispatch_skips_remaining(self) -> None:
         """With 2 todo tasks, after dispatching the 1st, shutdown stops the 2nd."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -1370,7 +1395,7 @@ class TestPollTickShutdownDuringDispatch:
                 shutdown_event=shutdown_event,
             )
 
-        _run(run_tick())
+        await (run_tick())
 
         # Only the first task should have been moved
         assert mock_kanban.kanban_move.call_count == 1
@@ -1412,7 +1437,8 @@ class TestStaleTaskTimeoutConfig:
 class TestDetectStaleTasks:
     """detect_stale_tasks: cancel, clean state, kanban_edit(block=...), channel.send."""
 
-    def test_stale_task_cancelled_at_exact_boundary(self) -> None:
+    @pytest.mark.asyncio
+    async def test_stale_task_cancelled_at_exact_boundary(self) -> None:
         """Task started exactly stale_timeout seconds ago → detected as stale."""
         from datetime import timedelta
 
@@ -1445,7 +1471,7 @@ class TestDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
         # Task was cancelled
         dummy_task.cancel.assert_called_once()
@@ -1460,7 +1486,8 @@ class TestDetectStaleTasks:
         # Channel alert sent
         channel.send.assert_called_once()
 
-    def test_not_stale_just_before_boundary(self) -> None:
+    @pytest.mark.asyncio
+    async def test_not_stale_just_before_boundary(self) -> None:
         """Task started 299s ago (timeout=300) → NOT stale."""
         from datetime import timedelta
 
@@ -1490,14 +1517,15 @@ class TestDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
         # Task should NOT be cancelled
         dummy_task.cancel.assert_not_called()
         assert "101" in state.running
         assert "101" in state.claimed
 
-    def test_cancel_and_state_cleaned(self) -> None:
+    @pytest.mark.asyncio
+    async def test_cancel_and_state_cleaned(self) -> None:
         """Verify cancel called, state cleaned, kanban_edit block reason, channel.send."""
         from datetime import timedelta
 
@@ -1529,7 +1557,7 @@ class TestDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
         # (1) cancel
         dummy_task.cancel.assert_called_once()
@@ -1545,7 +1573,8 @@ class TestDetectStaleTasks:
         alert_msg = channel.send.call_args[0][0]
         assert "200" in alert_msg
 
-    def test_kanban_edit_failure_does_not_block_remaining(self) -> None:
+    @pytest.mark.asyncio
+    async def test_kanban_edit_failure_does_not_block_remaining(self) -> None:
         """kanban_edit fails for task A but task B is still processed."""
         from datetime import timedelta
 
@@ -1583,7 +1612,7 @@ class TestDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
         # Both tasks cancelled and removed
         task_a.cancel.assert_called_once()
@@ -1593,7 +1622,8 @@ class TestDetectStaleTasks:
         assert "A" not in state.claimed
         assert "B" not in state.claimed
 
-    def test_channel_send_failure_does_not_block_remaining(self) -> None:
+    @pytest.mark.asyncio
+    async def test_channel_send_failure_does_not_block_remaining(self) -> None:
         """channel.send fails for task A but task B is still processed."""
         from datetime import timedelta
 
@@ -1631,7 +1661,7 @@ class TestDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
         # Both processed despite channel failure
         task_a.cancel.assert_called_once()
@@ -1647,7 +1677,8 @@ class TestDetectStaleTasks:
 class TestPollTickCallsDetectStaleTasks:
     """poll_tick calls detect_stale_tasks after reconcile and before fetch/dispatch."""
 
-    def test_detect_stale_tasks_called_in_poll_tick(self) -> None:
+    @pytest.mark.asyncio
+    async def test_detect_stale_tasks_called_in_poll_tick(self) -> None:
         """detect_stale_tasks is called with correct args after reconcile."""
         from owlbear.daemon import OrchestratorState, poll_tick
 
@@ -1676,7 +1707,7 @@ class TestPollTickCallsDetectStaleTasks:
                     stale_timeout=300.0,
                 )
 
-        _run(run())
+        await (run())
 
 
 # ---------------------------------------------------------------------------
@@ -1687,7 +1718,8 @@ class TestPollTickCallsDetectStaleTasks:
 class TestPollLoopPassesChannel:
     """poll_loop accepts channel kwarg, passes it to poll_tick."""
 
-    def test_channel_threaded_to_poll_tick(self) -> None:
+    @pytest.mark.asyncio
+    async def test_channel_threaded_to_poll_tick(self) -> None:
         from owlbear.daemon import OrchestratorState, poll_loop
 
         state = OrchestratorState()
@@ -1717,7 +1749,7 @@ class TestPollLoopPassesChannel:
                     channel=channel,
                 )
 
-        _run(run_poll())
+        await (run_poll())
 
         assert captured_kwargs["channel"] is channel
         assert captured_kwargs["stale_timeout"] == 300.0
@@ -1731,7 +1763,8 @@ class TestPollLoopPassesChannel:
 class TestRunDaemonPassesChannelToPollLoop:
     """run_daemon threads channel through to poll_loop in autonomous mode."""
 
-    def test_channel_reaches_poll_loop(self) -> None:
+    @pytest.mark.asyncio
+    async def test_channel_reaches_poll_loop(self) -> None:
         from owlbear.daemon import run_daemon
 
         channel = MockChannel([None])
@@ -1754,7 +1787,7 @@ class TestRunDaemonPassesChannelToPollLoop:
         settings.lint_gate_enabled = False
 
         with patch("owlbear.daemon.poll_loop", new=fake_poll_loop):
-            _run(
+            await (
                 run_daemon(
                     channel=channel,
                     agent=mock_agent,
@@ -1860,7 +1893,8 @@ class TestRetryConfig:
 class TestReconcileSchedulesRetry:
     """Failed task creates RetryEntry in state.retries with attempt=1."""
 
-    def test_failed_task_creates_retry_entry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failed_task_creates_retry_entry(self) -> None:
         from owlbear.daemon import OrchestratorState, RetryEntry, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -1877,7 +1911,7 @@ class TestReconcileSchedulesRetry:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run())
+        await (run())
 
         # RetryEntry created in state.retries
         assert "200" in state.retries
@@ -1887,7 +1921,8 @@ class TestReconcileSchedulesRetry:
         assert entry.attempt == 1
         assert "agent crashed" in entry.last_error
 
-    def test_failed_task_stays_in_claimed(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failed_task_stays_in_claimed(self) -> None:
         from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
 
         state = OrchestratorState()
@@ -1904,12 +1939,13 @@ class TestReconcileSchedulesRetry:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run())
+        await (run())
 
         # Task stays in claimed (retry pending, don't release)
         assert "201" in state.claimed
 
-    def test_retry_entry_has_correct_next_due(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_entry_has_correct_next_due(self) -> None:
         """next_due = now + base * 2**(attempt-1) = now + 10s for attempt=1."""
         from datetime import timedelta
 
@@ -1931,7 +1967,7 @@ class TestReconcileSchedulesRetry:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run())
+        await (run())
 
         after = datetime.now(UTC)
         entry = state.retries["202"]
@@ -1948,7 +1984,8 @@ class TestReconcileSchedulesRetry:
 class TestReconcileIncrementsRetry:
     """Second failure increments attempt to 2, doubles delay."""
 
-    def test_second_failure_increments_attempt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_second_failure_increments_attempt(self) -> None:
         from datetime import timedelta
 
         from owlbear.daemon import (
@@ -1981,7 +2018,7 @@ class TestReconcileIncrementsRetry:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run())
+        await (run())
 
         after = datetime.now(UTC)
         entry = state.retries["300"]
@@ -2038,7 +2075,8 @@ class TestBackoffFormula:
 class TestRetryExhaustion:
     """When attempt > max_attempts, block task on kanban and remove from retries + claimed."""
 
-    def test_exhausted_blocks_and_removes(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exhausted_blocks_and_removes(self) -> None:
         from datetime import timedelta
 
         from owlbear.daemon import (
@@ -2074,7 +2112,7 @@ class TestRetryExhaustion:
         async def run() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        _run(run())
+        await (run())
 
         # kanban_edit called with block reason
         mock_kanban.kanban_edit.assert_called_once()
@@ -2096,7 +2134,8 @@ class TestRetryExhaustion:
 class TestRetryDispatch:
     """poll_tick re-dispatches retry entries where next_due <= now."""
 
-    def test_due_retry_redispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_due_retry_redispatched(self) -> None:
         from datetime import timedelta
 
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
@@ -2134,7 +2173,7 @@ class TestRetryDispatch:
                 shutdown_event=shutdown,
             )
 
-        _run(run())
+        await (run())
 
         # Retry entry removed from retries
         assert "500" not in state.retries
@@ -2150,7 +2189,8 @@ class TestRetryDispatch:
 class TestRetryNotDueYet:
     """poll_tick skips retry entries where next_due > now."""
 
-    def test_future_retry_not_dispatched(self) -> None:
+    @pytest.mark.asyncio
+    async def test_future_retry_not_dispatched(self) -> None:
         from datetime import timedelta
 
         from owlbear.daemon import OrchestratorState, RetryEntry, poll_tick
@@ -2178,7 +2218,7 @@ class TestRetryNotDueYet:
                 shutdown_event=shutdown,
             )
 
-        _run(run())
+        await (run())
 
         # Retry entry still in retries (not dispatched)
         assert "600" in state.retries
@@ -2194,7 +2234,8 @@ class TestRetryNotDueYet:
 class TestRetryDispatchUsesWip:
     """Re-dispatched retry loads WIP context into prompt via wip_store.load()."""
 
-    def test_wip_loaded_into_retry_prompt(self) -> None:
+    @pytest.mark.asyncio
+    async def test_wip_loaded_into_retry_prompt(self) -> None:
         from datetime import timedelta
 
         from owlbear.daemon import CONTINUE_FORWARD_PREFIX, OrchestratorState, RetryEntry, poll_tick
@@ -2242,7 +2283,8 @@ class TestRetryDispatchUsesWip:
                 wip_store=mock_wip,
             )
 
-        _run(run())
+        await (run())
+        await asyncio.sleep(0)  # drain tasks spawned by poll_tick
 
         # wip_store.load was called for the retry task
         mock_wip.load.assert_any_call(agent="builder", task_id="700")

@@ -8,7 +8,6 @@ for transient errors.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -24,11 +23,6 @@ from owlbear.tools.hooked import HookedToolset
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(coro: object) -> object:
-    """Run an async coroutine synchronously."""
-    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_hooked(
@@ -51,7 +45,8 @@ def _make_hooked(
 class TestPreToolUseHook:
     """PRE_TOOL_USE hook fires before tool execution with correct data."""
 
-    def test_pre_hook_fires_with_tool_name_and_args(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pre_hook_fires_with_tool_name_and_args(self) -> None:
         """PRE_TOOL_USE receives {'tool_name': name, 'args': tool_args}."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -61,13 +56,14 @@ class TestPreToolUseHook:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(hooked.call_tool("greet", {"name": "World"}, ctx, tool))
+        await (hooked.call_tool("greet", {"name": "World"}, ctx, tool))
 
         assert len(captured) == 1
         assert captured[0]["tool_name"] == "greet"
         assert captured[0]["args"] == {"name": "World"}
 
-    def test_pre_hook_fires_before_execution(self) -> None:
+    @pytest.mark.asyncio
+    async def test_pre_hook_fires_before_execution(self) -> None:
         """PRE_TOOL_USE fires before the wrapped call_tool runs."""
         hooks = HookRegistry()
         order: list[str] = []
@@ -85,7 +81,7 @@ class TestPreToolUseHook:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(hooked.call_tool("double", {"x": 5}, ctx, tool))
+        await (hooked.call_tool("double", {"x": 5}, ctx, tool))
         assert order == ["pre", "tool"]
 
 
@@ -97,7 +93,8 @@ class TestPreToolUseHook:
 class TestPostToolUseHook:
     """POST_TOOL_USE hook fires after tool execution with correct data."""
 
-    def test_post_hook_fires_with_tool_name_and_result(self) -> None:
+    @pytest.mark.asyncio
+    async def test_post_hook_fires_with_tool_name_and_result(self) -> None:
         """POST_TOOL_USE receives {'tool_name': name, 'result': result}."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -107,14 +104,15 @@ class TestPostToolUseHook:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("greet", {"name": "World"}, ctx, tool))
+        result = await (hooked.call_tool("greet", {"name": "World"}, ctx, tool))
 
         assert len(captured) == 1
         assert captured[0]["tool_name"] == "greet"
         assert captured[0]["result"] == "Hello!"
         assert result == "Hello!"
 
-    def test_post_hook_fires_after_execution(self) -> None:
+    @pytest.mark.asyncio
+    async def test_post_hook_fires_after_execution(self) -> None:
         """POST_TOOL_USE fires after the wrapped call_tool runs."""
         hooks = HookRegistry()
         order: list[str] = []
@@ -132,7 +130,7 @@ class TestPostToolUseHook:
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(hooked.call_tool("double", {"x": 5}, ctx, tool))
+        await (hooked.call_tool("double", {"x": 5}, ctx, tool))
         assert order == ["tool", "post"]
 
 
@@ -144,7 +142,8 @@ class TestPostToolUseHook:
 class TestHookExceptionIsolation:
     """Exceptions in hooks do not prevent tool execution."""
 
-    def test_failing_pre_hook_does_not_block_tool(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failing_pre_hook_does_not_block_tool(self) -> None:
         """A raising PRE_TOOL_USE handler still allows the tool to run."""
         hooks = HookRegistry()
 
@@ -159,11 +158,12 @@ class TestHookExceptionIsolation:
         tool = MagicMock()
 
         # Should not raise
-        result = _run(hooked.call_tool("greet", {"name": "Test"}, ctx, tool))
+        result = await (hooked.call_tool("greet", {"name": "Test"}, ctx, tool))
         assert result == "Hello, Test!"
         mock_ts.call_tool.assert_called_once()
 
-    def test_failing_post_hook_does_not_swallow_result(self) -> None:
+    @pytest.mark.asyncio
+    async def test_failing_post_hook_does_not_swallow_result(self) -> None:
         """A raising POST_TOOL_USE handler still returns the tool result."""
         hooks = HookRegistry()
 
@@ -177,7 +177,7 @@ class TestHookExceptionIsolation:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("greet", {"name": "Safe"}, ctx, tool))
+        result = await (hooked.call_tool("greet", {"name": "Safe"}, ctx, tool))
         assert result == "Hello, Safe!"
 
 
@@ -189,22 +189,24 @@ class TestHookExceptionIsolation:
 class TestWrappedBehaviorPreservation:
     """HookedToolset preserves the behavior of the wrapped toolset."""
 
-    def test_tool_returns_correct_result(self) -> None:
+    @pytest.mark.asyncio
+    async def test_tool_returns_correct_result(self) -> None:
         """Wrapped toolset tool still returns the expected value."""
         hooked, _ = _make_hooked(return_value="Hello, Alice!")
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("greet", {"name": "Alice"}, ctx, tool))
+        result = await (hooked.call_tool("greet", {"name": "Alice"}, ctx, tool))
         assert result == "Hello, Alice!"
 
-    def test_call_tool_delegates_to_wrapped(self) -> None:
+    @pytest.mark.asyncio
+    async def test_call_tool_delegates_to_wrapped(self) -> None:
         """call_tool passes name, args, ctx, and tool to the wrapped toolset."""
         hooked, mock_ts = _make_hooked()
         ctx = MagicMock()
         tool = MagicMock()
 
-        _run(hooked.call_tool("greet", {"name": "Bob"}, ctx, tool))
+        await (hooked.call_tool("greet", {"name": "Bob"}, ctx, tool))
 
         mock_ts.call_tool.assert_called_once_with("greet", {"name": "Bob"}, ctx, tool)
 
@@ -224,7 +226,8 @@ class TestWrappedBehaviorPreservation:
 class TestGuardBlocksDangerousCommands:
     """HookedToolset with guards blocks dangerous commands before tool execution."""
 
-    def test_guard_blocks_dangerous_command_returns_error_string(self) -> None:
+    @pytest.mark.asyncio
+    async def test_guard_blocks_dangerous_command_returns_error_string(self) -> None:
         """When CommandSafetyGuard raises BlockedCommandError, call_tool returns error string."""
         hooks = HookRegistry()
         guard = CommandSafetyGuard()
@@ -233,7 +236,7 @@ class TestGuardBlocksDangerousCommands:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
+        result = await (
             hooked.call_tool(
                 "run_command",
                 {"command": "rm -rf /"},
@@ -248,7 +251,8 @@ class TestGuardBlocksDangerousCommands:
         # Tool should NOT have been called
         mock_ts.call_tool.assert_not_called()
 
-    def test_guard_allows_safe_command(self) -> None:
+    @pytest.mark.asyncio
+    async def test_guard_allows_safe_command(self) -> None:
         """Safe commands pass through guards and execute normally."""
         hooks = HookRegistry()
         guard = CommandSafetyGuard()
@@ -257,7 +261,7 @@ class TestGuardBlocksDangerousCommands:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
+        result = await (
             hooked.call_tool(
                 "run_command",
                 {"command": "echo hello"},
@@ -269,7 +273,8 @@ class TestGuardBlocksDangerousCommands:
         assert result == "echo output"
         mock_ts.call_tool.assert_called_once()
 
-    def test_guard_blocks_file_write_to_env(self) -> None:
+    @pytest.mark.asyncio
+    async def test_guard_blocks_file_write_to_env(self) -> None:
         """Guard blocks .env file writes and returns error string."""
         hooks = HookRegistry()
         guard = CommandSafetyGuard()
@@ -278,7 +283,7 @@ class TestGuardBlocksDangerousCommands:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(
+        result = await (
             hooked.call_tool(
                 "create_file",
                 {"path": ".env"},
@@ -291,13 +296,14 @@ class TestGuardBlocksDangerousCommands:
         assert "BLOCKED" in result or "blocked" in result.lower()
         mock_ts.call_tool.assert_not_called()
 
-    def test_no_guards_default(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_guards_default(self) -> None:
         """HookedToolset without guards behaves as before."""
         hooked, mock_ts = _make_hooked(return_value="ok")
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
+        result = await (hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         # Without guards, dangerous commands go through (hooks swallow the error)
         assert result == "ok"
@@ -307,7 +313,8 @@ class TestGuardBlocksDangerousCommands:
 class TestGuardObservabilityHooksStillSwallow:
     """Other hooks (observability, notification) still swallow their exceptions."""
 
-    def test_observability_hook_exception_swallowed_with_guard(self) -> None:
+    @pytest.mark.asyncio
+    async def test_observability_hook_exception_swallowed_with_guard(self) -> None:
         """A failing observability hook does not block execution with guards."""
         hooks = HookRegistry()
 
@@ -324,12 +331,13 @@ class TestGuardObservabilityHooksStillSwallow:
         tool = MagicMock()
 
         # Safe command — observability hook raises but gets swallowed by emit()
-        result = _run(hooked.call_tool("run_command", {"command": "echo hello"}, ctx, tool))
+        result = await (hooked.call_tool("run_command", {"command": "echo hello"}, ctx, tool))
 
         assert result == "success"
         mock_ts.call_tool.assert_called_once()
 
-    def test_guard_blocks_even_when_observability_hook_present(self) -> None:
+    @pytest.mark.asyncio
+    async def test_guard_blocks_even_when_observability_hook_present(self) -> None:
         """Guard still blocks dangerous commands even with other hooks registered."""
         hooks = HookRegistry()
         captured: list[dict[str, Any]] = []
@@ -341,7 +349,7 @@ class TestGuardObservabilityHooksStillSwallow:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
+        result = await (hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result or "blocked" in result.lower()
@@ -353,7 +361,8 @@ class TestGuardObservabilityHooksStillSwallow:
 class TestGuardWithAsyncCallable:
     """Guards work with async callables (CommandSafetyGuard.__call__ is async)."""
 
-    def test_async_guard_blocks_command(self) -> None:
+    @pytest.mark.asyncio
+    async def test_async_guard_blocks_command(self) -> None:
         """An async guard callable that raises BlockedCommandError blocks the tool."""
         guard = CommandSafetyGuard()
 
@@ -363,7 +372,7 @@ class TestGuardWithAsyncCallable:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
+        result = await (hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result or "blocked" in result.lower()
@@ -412,7 +421,8 @@ def _make_tool_semantic_error() -> ValueError:
 class TestRetryTransientErrors:
     """call_tool() retries when classify_error returns TRANSIENT."""
 
-    def test_retries_on_transient_then_succeeds(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retries_on_transient_then_succeeds(self) -> None:
         """Tool fails once with transient error, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -421,12 +431,13 @@ class TestRetryTransientErrors:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("fetch", {"url": "http://example.com"}, ctx, tool))
+        result = await (hooked.call_tool("fetch", {"url": "http://example.com"}, ctx, tool))
 
         assert result == "success"
         assert mock_ts.call_tool.call_count == 2
 
-    def test_retries_on_timeout_then_succeeds(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retries_on_timeout_then_succeeds(self) -> None:
         """Tool fails with timeout, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -435,12 +446,13 @@ class TestRetryTransientErrors:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("read_page", {}, ctx, tool))
+        result = await (hooked.call_tool("read_page", {}, ctx, tool))
 
         assert result == "ok"
         assert mock_ts.call_tool.call_count == 2
 
-    def test_retries_on_http_429_then_succeeds(self) -> None:
+    @pytest.mark.asyncio
+    async def test_retries_on_http_429_then_succeeds(self) -> None:
         """Tool fails with 429 rate limit, then succeeds on retry."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -449,12 +461,13 @@ class TestRetryTransientErrors:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("query", {}, ctx, tool))
+        result = await (hooked.call_tool("query", {}, ctx, tool))
 
         assert result == "done"
         assert mock_ts.call_tool.call_count == 2
 
-    def test_max_3_attempts_then_propagates(self) -> None:
+    @pytest.mark.asyncio
+    async def test_max_3_attempts_then_propagates(self) -> None:
         """After 3 transient failures, the original exception propagates."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -465,11 +478,12 @@ class TestRetryTransientErrors:
         tool = MagicMock()
 
         with pytest.raises(httpx.ConnectError):
-            _run(hooked.call_tool("fetch", {}, ctx, tool))
+            await (hooked.call_tool("fetch", {}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 3
 
-    def test_exhausted_retries_marks_tool_retries_exhausted(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_marks_tool_retries_exhausted(self) -> None:
         """After 3 failed attempts, the raised exception has _tool_retries_exhausted = True."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -479,11 +493,12 @@ class TestRetryTransientErrors:
         tool = MagicMock()
 
         with pytest.raises(httpx.ConnectError) as exc_info:
-            _run(hooked.call_tool("fetch", {}, ctx, tool))
+            await (hooked.call_tool("fetch", {}, ctx, tool))
 
         assert getattr(exc_info.value, "_tool_retries_exhausted", False) is True
 
-    def test_exhausted_retries_original_exception_type(self) -> None:
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_original_exception_type(self) -> None:
         """After retries exhausted, the raised exception is the original type, not RetryError."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -493,13 +508,14 @@ class TestRetryTransientErrors:
         tool = MagicMock()
 
         with pytest.raises(httpx.ReadTimeout):
-            _run(hooked.call_tool("read_page", {}, ctx, tool))
+            await (hooked.call_tool("read_page", {}, ctx, tool))
 
 
 class TestNoRetryForNonTransient:
     """PERMANENT, AUTH, and TOOL_SEMANTIC errors propagate immediately."""
 
-    def test_permanent_error_no_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_permanent_error_no_retry(self) -> None:
         """FileNotFoundError (PERMANENT) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -509,11 +525,12 @@ class TestNoRetryForNonTransient:
         tool = MagicMock()
 
         with pytest.raises(FileNotFoundError):
-            _run(hooked.call_tool("read_file", {"path": "/nope"}, ctx, tool))
+            await (hooked.call_tool("read_file", {"path": "/nope"}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 1
 
-    def test_auth_error_no_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_auth_error_no_retry(self) -> None:
         """HTTP 401 (AUTH) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -523,11 +540,12 @@ class TestNoRetryForNonTransient:
         tool = MagicMock()
 
         with pytest.raises(httpx.HTTPStatusError):
-            _run(hooked.call_tool("query", {}, ctx, tool))
+            await (hooked.call_tool("query", {}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 1
 
-    def test_tool_semantic_error_no_retry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_tool_semantic_error_no_retry(self) -> None:
         """ValueError (TOOL_SEMANTIC) propagates immediately — 1 attempt."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -537,7 +555,7 @@ class TestNoRetryForNonTransient:
         tool = MagicMock()
 
         with pytest.raises(ValueError, match="invalid argument"):
-            _run(hooked.call_tool("compute", {"x": -1}, ctx, tool))
+            await (hooked.call_tool("compute", {"x": -1}, ctx, tool))
 
         assert mock_ts.call_tool.call_count == 1
 
@@ -545,7 +563,8 @@ class TestNoRetryForNonTransient:
 class TestBlockedCommandNotRetried:
     """BlockedCommandError still returns BLOCKED string, never retried."""
 
-    def test_blocked_returns_string_not_retried(self) -> None:
+    @pytest.mark.asyncio
+    async def test_blocked_returns_string_not_retried(self) -> None:
         """BlockedCommandError from guard returns 'BLOCKED: ...' — no retry."""
         hooks = HookRegistry()
         guard = CommandSafetyGuard()
@@ -554,7 +573,7 @@ class TestBlockedCommandNotRetried:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
+        result = await (hooked.call_tool("run_command", {"command": "rm -rf /"}, ctx, tool))
 
         assert isinstance(result, str)
         assert "BLOCKED" in result
@@ -564,7 +583,8 @@ class TestBlockedCommandNotRetried:
 class TestGuardsRunOnceNotPerRetry:
     """Guards run once before the retry loop, not on every retry attempt."""
 
-    def test_guard_called_once_even_with_retries(self) -> None:
+    @pytest.mark.asyncio
+    async def test_guard_called_once_even_with_retries(self) -> None:
         """Guard is called once, even if the tool retries multiple times."""
         hooks = HookRegistry()
         guard_calls: list[dict[str, object]] = []
@@ -578,7 +598,7 @@ class TestGuardsRunOnceNotPerRetry:
         ctx = MagicMock()
         tool = MagicMock()
 
-        result = _run(hooked.call_tool("fetch", {"url": "http://x"}, ctx, tool))
+        result = await (hooked.call_tool("fetch", {"url": "http://x"}, ctx, tool))
 
         assert result == "success"
         assert len(guard_calls) == 1  # Guard ran exactly once
@@ -588,7 +608,8 @@ class TestGuardsRunOnceNotPerRetry:
 class TestRetryLogging:
     """Each retry is logged at WARNING with tool name, attempt, and error."""
 
-    def test_retry_logs_warning_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_retry_logs_warning_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
         """WARNING log emitted for each retry attempt."""
         hooks = HookRegistry()
         mock_ts = make_mock_toolset()
@@ -598,7 +619,7 @@ class TestRetryLogging:
         tool = MagicMock()
 
         with caplog.at_level(logging.WARNING, logger="owlbear.tools.hooked"):
-            _run(hooked.call_tool("web_fetch", {}, ctx, tool))
+            await (hooked.call_tool("web_fetch", {}, ctx, tool))
 
         retry_warnings = [
             r
@@ -610,7 +631,8 @@ class TestRetryLogging:
         msg = retry_warnings[0].message
         assert "web_fetch" in msg
 
-    def test_no_retry_log_on_success(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_no_retry_log_on_success(self, caplog: pytest.LogCaptureFixture) -> None:
         """No retry WARNING when tool succeeds on first attempt."""
         hooks = HookRegistry()
         hooked, _ = _make_hooked(return_value="ok", hooks=hooks)
@@ -618,7 +640,7 @@ class TestRetryLogging:
         tool = MagicMock()
 
         with caplog.at_level(logging.WARNING, logger="owlbear.tools.hooked"):
-            _run(hooked.call_tool("greet", {}, ctx, tool))
+            await (hooked.call_tool("greet", {}, ctx, tool))
 
         retry_warnings = [
             r
