@@ -1500,7 +1500,7 @@ class TestBootstrapScreenshotIntegration:
 
     @pytest.mark.asyncio
     async def test_bootstrap_includes_visual_feedback(self, tmp_path: Path) -> None:
-        """bootstrap result includes VisualFeedbackToolset in agent toolsets."""
+        """Bootstrap result includes VisualFeedbackToolset in agent toolsets."""
         from owlbear.bootstrap import bootstrap
 
         mock_model = MagicMock()
@@ -1610,7 +1610,7 @@ class TestBootstrapKnowledgeServiceWiring:
 
     @pytest.mark.asyncio
     async def test_knowledge_service_passed_to_agent(self, tmp_path: Path) -> None:
-        """bootstrap passes knowledge_service to OwlBearAgent constructor."""
+        """Bootstrap passes knowledge_service to OwlBearAgent constructor."""
         from owlbear.bootstrap import bootstrap
 
         mock_model = MagicMock()
@@ -1911,9 +1911,7 @@ class TestBuildKnowledgeSourceToolset:
     """Tests for _build_knowledge_source_toolset helper (AC#6-#8)."""
 
     def test_toolset_included_when_infra_available(self, tmp_path: Path) -> None:
-        """AC#6: build_toolsets output includes KnowledgeSourceToolset when
-        knowledge infra is available (mock Qdrant + BGE-M3 + EntityExtractor).
-        """
+        """AC#6: build_toolsets includes KnowledgeSourceToolset when infra is available."""
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
@@ -1939,9 +1937,7 @@ class TestBuildKnowledgeSourceToolset:
         assert "KnowledgeSourceToolset" in type_names
 
     def test_toolset_omitted_when_infra_none(self, tmp_path: Path) -> None:
-        """AC#7: build_toolsets omits KnowledgeSourceToolset when
-        _build_knowledge_infra returns None.
-        """
+        """AC#7: Omits KnowledgeSourceToolset when _build_knowledge_infra returns None."""
         settings = OwlBearSettings(approval_policy=[])
         hooks = HookRegistry()
         channel = MagicMock(spec=ChannelPlugin)
@@ -1953,9 +1949,7 @@ class TestBuildKnowledgeSourceToolset:
         assert "KnowledgeSourceToolset" not in type_names
 
     def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
-        """AC#8: _build_knowledge_source_toolset returns None and logs WARNING
-        when constructor raises.
-        """
+        """AC#8: Returns None and logs WARNING when constructor raises."""
         from owlbear.bootstrap import _build_knowledge_source_toolset
 
         mock_infra = MagicMock()
@@ -2792,8 +2786,7 @@ class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC2: build_hooks with lessons_injection_enabled=False must not register
-        ContextInjectionHook."""
+        """AC2: Must not register ContextInjectionHook when lessons_injection_enabled=False."""
         import os
 
         for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
@@ -2811,8 +2804,7 @@ class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC3: build_hooks with lessons_injection_enabled=True must not register
-        ContextInjectionHook."""
+        """AC3: Must not register ContextInjectionHook when lessons_injection_enabled=True."""
         import os
 
         for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
@@ -2849,8 +2841,7 @@ class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC2/3 boundary: exactly zero ContextInjectionHook instances across all
-        SESSION_START handlers."""
+        """AC2/3 boundary: Zero ContextInjectionHook instances in SESSION_START handlers."""
         import os
 
         for var in [k for k in os.environ if k.startswith("OWLBEAR_")]:
@@ -2867,4 +2858,116 @@ class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
         ]
         assert context_handlers == [], (
             f"Expected no ContextInjectionHook handlers, found: {context_handlers}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BuildToolsetsNoBareModelDeprecation (#861)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BuildToolsetsNoBareModelDeprecation:  # noqa: N801
+    """RED gate for #556: build_toolsets() must not pass a bare string model.
+
+    The ``chat_model or settings.chat_model`` fallback in
+    ``src/owlbear/bootstrap/toolsets.py`` currently resolves to a raw string
+    (e.g. ``'gpt-4o'``) when no explicit model is provided.  PydanticAI issues
+    a ``DeprecationWarning`` for bare model strings, which becomes an error
+    under ``-W error::DeprecationWarning``.
+
+    These tests assert that each inner call receives a
+    ``pydantic_ai.models.Model`` instance instead of a bare string.  They all
+    FAIL before #556 is implemented.
+
+    Run in isolation with ``-W error::DeprecationWarning`` targeting this class.
+    """
+
+    def test_knowledge_infra_receives_model_not_bare_string(self, tmp_path: Path) -> None:
+        """_build_knowledge_infra must receive a Model, not a bare string."""
+        from pydantic_ai.models import Model
+
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        captured: list[object] = []
+
+        def spy_infra(_workspace: Path, chat_model: object) -> None:
+            captured.append(chat_model)
+
+        with patch("owlbear.bootstrap._build_knowledge_infra", side_effect=spy_infra):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        assert len(captured) == 1
+        assert isinstance(captured[0], Model), (
+            f"chat_model or settings.chat_model passed bare string {captured[0]!r} "
+            "to _build_knowledge_infra — fix expected in #556"
+        )
+
+    def test_knowledge_toolset_receives_model_not_bare_string(self, tmp_path: Path) -> None:
+        """_build_knowledge_toolset must receive a Model, not a bare string."""
+        from pydantic_ai.models import Model
+
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        mock_infra = MagicMock()
+        captured: list[object] = []
+
+        def spy_toolset(
+            _workspace: Path,
+            _infra: object,
+            _project_id: object = None,
+            *,
+            chat_model: object,
+            **_kwargs: object,
+        ) -> None:
+            captured.append(chat_model)
+
+        with (
+            patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+            patch(
+                "owlbear.bootstrap._build_knowledge_toolset",
+                side_effect=spy_toolset,
+            ),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        assert len(captured) == 1
+        assert isinstance(captured[0], Model), (
+            f"chat_model or settings.chat_model passed bare string {captured[0]!r} "
+            "to _build_knowledge_toolset — fix expected in #556"
+        )
+
+    def test_bookmark_toolset_receives_model_not_bare_string(self, tmp_path: Path) -> None:
+        """_build_bookmark_toolset must receive a Model, not a bare string."""
+        from pydantic_ai.models import Model
+
+        settings = OwlBearSettings(approval_policy=[])
+        hooks = HookRegistry()
+        channel = MagicMock(spec=ChannelPlugin)
+        mock_infra = MagicMock()
+        captured: list[object] = []
+
+        def spy_bookmark(
+            _infra: object,
+            _workspace: Path,
+            chat_model: object,
+            **_kwargs: object,
+        ) -> None:
+            captured.append(chat_model)
+
+        with (
+            patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+            patch("owlbear.bootstrap._build_knowledge_toolset", return_value=None),
+            patch(
+                "owlbear.bootstrap._build_bookmark_toolset",
+                side_effect=spy_bookmark,
+            ),
+        ):
+            build_toolsets(settings, tmp_path, hooks, channel)
+
+        assert len(captured) == 1
+        assert isinstance(captured[0], Model), (
+            f"chat_model or settings.chat_model passed bare string {captured[0]!r} "
+            "to _build_bookmark_toolset — fix expected in #556"
         )

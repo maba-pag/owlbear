@@ -655,3 +655,64 @@ class TestBootstrapRetrieverWiring:
         assert call_kwargs.kwargs.get("knowledge_graph_expansion") is False or (
             len(call_kwargs.args) > 2 and call_kwargs.args[2] is False
         )
+
+
+# ---------------------------------------------------------------------------
+# RED gate for #556 — bare-model deprecation in expansion wiring path
+# ---------------------------------------------------------------------------
+
+
+def test_build_toolsets_expansion_path_no_bare_model_deprecation(
+    tmp_path: Path,
+) -> None:
+    """Expansion wiring: _build_knowledge_toolset must receive a Model, not a bare string.
+
+    Exercises the knowledge-graph expansion path through ``build_toolsets()``
+    with ``knowledge_graph_expansion=True``.  Before #556, the
+    ``chat_model or settings.chat_model`` fallback in
+    ``src/owlbear/bootstrap/toolsets.py`` passes the default ``'gpt-4o'``
+    string, which PydanticAI issues a ``DeprecationWarning`` for.
+
+    FAILS before #556.  Run in isolation with
+    ``-W error::DeprecationWarning`` targeting this test node.
+    """
+    from pydantic_ai.models import Model
+
+    from owlbear.bootstrap import build_toolsets
+    from owlbear.channels.base import ChannelPlugin
+    from owlbear.config import OwlBearSettings
+    from owlbear.core.hooks import HookRegistry
+
+    settings = OwlBearSettings(
+        knowledge_graph_expansion=True,
+        approval_policy=[],
+    )
+    hooks = HookRegistry()
+    channel = MagicMock(spec=ChannelPlugin)
+    mock_infra = MagicMock()
+    captured: list[object] = []
+
+    def spy_toolset(
+        _workspace: Path,
+        _infra: object,
+        _project_id: object = None,
+        *,
+        chat_model: object,
+        **_kwargs: object,
+    ) -> None:
+        captured.append(chat_model)
+
+    with (
+        patch("owlbear.bootstrap._build_knowledge_infra", return_value=mock_infra),
+        patch(
+            "owlbear.bootstrap._build_knowledge_toolset",
+            side_effect=spy_toolset,
+        ),
+    ):
+        build_toolsets(settings, tmp_path, hooks, channel)
+
+    assert len(captured) == 1
+    assert isinstance(captured[0], Model), (
+        f"Expansion path: chat_model or settings.chat_model passed bare string "
+        f"{captured[0]!r} to _build_knowledge_toolset — fix expected in #556"
+    )
