@@ -26,8 +26,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 import httpx
-import logfire
 from pydantic_ai import Agent
+
+try:
+    import logfire
+except ImportError:  # logfire is an optional dependency
+    logfire = None  # type: ignore[assignment]
 from rich.console import Console
 from rich.logging import RichHandler
 
@@ -249,7 +253,15 @@ def configure_otel(otel_endpoint: str) -> None:
     ----------
     otel_endpoint:
         The OTLP endpoint URL (e.g. ``http://localhost:4318``).
+
+    Raises
+    ------
+    RuntimeError
+        When ``logfire`` is not installed.
     """
+    if logfire is None:
+        msg = "logfire is required for OTel configuration but is not installed"
+        raise RuntimeError(msg)
     os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = otel_endpoint
     logfire.configure(send_to_logfire=False, additional_span_processors=[])
     logger.info("OTel configured — exporting to %s", otel_endpoint)
