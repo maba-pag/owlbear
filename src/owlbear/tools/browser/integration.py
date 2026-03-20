@@ -10,6 +10,8 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import asyncio
+
     from owlbear.memory.knowledge.ingest import IngestPipeline, IngestResult
     from owlbear.tools.browser.crawl_config import CrawlConfig
     from owlbear.tools.browser.crawler import WebCrawler
@@ -21,6 +23,8 @@ async def crawl_and_ingest(
     crawler: WebCrawler,
     pipeline: IngestPipeline,
     config: CrawlConfig,
+    *,
+    cancel: asyncio.Event | None = None,
 ) -> list[IngestResult]:
     """Crawl URLs and ingest each page through the knowledge pipeline.
 
@@ -32,6 +36,9 @@ async def crawl_and_ingest(
         A :class:`~owlbear.memory.knowledge.ingest.IngestPipeline` instance.
     config:
         Crawl configuration (seed URLs, limits, etc.).
+    cancel:
+        Optional :class:`asyncio.Event`.  When set, the loop stops before
+        ingesting the next page.
 
     Returns:
     -------
@@ -43,6 +50,8 @@ async def crawl_and_ingest(
     results: list[IngestResult] = []
 
     for page in crawl_result.pages:
+        if cancel is not None and cancel.is_set():
+            break
         metadata = {
             "url": page.url,
             "title": page.title,

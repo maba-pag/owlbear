@@ -20,6 +20,7 @@ from owlbear.memory.knowledge.bookmark import Bookmark
 from owlbear.memory.knowledge.evaluator import EvaluationResult  # noqa: TC001 — Pydantic runtime
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Awaitable, Callable
 
     from owlbear.memory.knowledge.bookmark import BookmarkStore
@@ -87,12 +88,14 @@ class BookmarkPipeline:
 
     # -- public API ----------------------------------------------------------
 
-    async def process(
+    async def process(  # noqa: PLR0911
         self,
         url: str,
         reason: str | None = None,
         scope: str = "global",
         project_context: dict[str, Any] | None = None,
+        *,
+        cancel: asyncio.Event | None = None,
     ) -> BookmarkResult:
         """Run the full bookmark pipeline for *url*.
 
@@ -111,6 +114,10 @@ class BookmarkPipeline:
                 skipped_reason="Already bookmarked in this scope",
             )
 
+        # Check cancel before extract
+        if cancel is not None and cancel.is_set():
+            return BookmarkResult(url=url)
+
         # 2. Extract content
         try:
             content = await self._web_read(url)
@@ -121,8 +128,16 @@ class BookmarkPipeline:
                 skipped_reason=f"Failed to extract content from {url}",
             )
 
+        # Check cancel before evaluate
+        if cancel is not None and cancel.is_set():
+            return BookmarkResult(url=url)
+
         # 3. Evaluate relevance
         evaluation = await self._evaluator.evaluate(content or "", project_context)
+
+        # Check cancel before ingest
+        if cancel is not None and cancel.is_set():
+            return BookmarkResult(url=url, evaluation=evaluation)
 
         # 4. Conditionally ingest
         ingested = False
@@ -140,6 +155,10 @@ class BookmarkPipeline:
             ingested = not result.skipped
             if ingested:
                 document_id = result.document_id
+
+        # Check cancel before store
+        if cancel is not None and cancel.is_set():
+            return BookmarkResult(url=url, evaluation=evaluation, ingested=ingested)
 
         # 5. Create bookmark
         now = datetime.now(tz=UTC).isoformat()

@@ -19,6 +19,8 @@ from owlbear.memory.knowledge.models import SourceType
 from owlbear.paths import sandbox_path
 
 if TYPE_CHECKING:
+    import asyncio
+
     from owlbear.memory.knowledge.ingest import IngestPipeline, IngestResult
     from owlbear.memory.knowledge.models import KnowledgeSource
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
@@ -114,7 +116,12 @@ class RefreshOrchestrator:
         self._update_source_record(source, result)
         return result
 
-    async def refresh_all(self, scope: str | None = None) -> list[RefreshResult]:
+    async def refresh_all(
+        self,
+        scope: str | None = None,
+        *,
+        cancel: asyncio.Event | None = None,
+    ) -> list[RefreshResult]:
         """Refresh all enabled sources, ordered by priority descending.
 
         Parameters
@@ -122,10 +129,15 @@ class RefreshOrchestrator:
         scope:
             Optional scope filter passed to
             :meth:`KnowledgeSourceStore.list_enabled`.
+        cancel:
+            Optional :class:`asyncio.Event`.  When set, the loop stops
+            before starting the next source.
         """
         sources = self._store.list_enabled(scope)
         results: list[RefreshResult] = []
         for src in sources:
+            if cancel is not None and cancel.is_set():
+                break
             result = await self.refresh(src)
             results.append(result)
         return results
@@ -198,7 +210,13 @@ class RefreshOrchestrator:
 
     # -- helpers -------------------------------------------------------------
 
-    async def _ingest_items(self, source_id: str, items: list[str]) -> RefreshResult:
+    async def _ingest_items(
+        self,
+        source_id: str,
+        items: list[str],
+        *,
+        cancel: asyncio.Event | None = None,
+    ) -> RefreshResult:
         """Ingest a list of URLs or file paths, collecting per-item results."""
         refreshed = 0
         skipped = 0
@@ -206,6 +224,8 @@ class RefreshOrchestrator:
         errors: list[str] = []
 
         for item in items:
+            if cancel is not None and cancel.is_set():
+                break
             try:
                 result: IngestResult = await self._pipeline.ingest(item)
                 if result.skipped:

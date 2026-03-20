@@ -77,6 +77,8 @@ class RetrospectiveHook:
         model: PydanticAI model for the retrospective agent.
         ingest_pipeline: Knowledge graph ingest pipeline.
         kanban_root: Path to the kanban directory (contains ``activity.jsonl``).
+        shutdown_event: Optional daemon shutdown event.  When set, the
+            per-operation cancel signal passed to ``ingest_text`` is also set.
     """
 
     def __init__(
@@ -84,10 +86,12 @@ class RetrospectiveHook:
         model: Model,
         ingest_pipeline: IngestPipeline,
         kanban_root: Path,
+        shutdown_event: asyncio.Event | None = None,
     ) -> None:
         self._ingest_pipeline = ingest_pipeline
         self._kanban_root = kanban_root
         self._model = model
+        self._shutdown_event = shutdown_event
         self._agent: Agent[None, RetroFindings] | None = None
 
     def _get_agent(self) -> Agent[None, RetroFindings]:
@@ -187,6 +191,9 @@ class RetrospectiveHook:
 
     async def _run_retrospective(self, task_id: str) -> None:
         """Run the retrospective agent and ingest findings."""
+        cancel = asyncio.Event()
+        if self._shutdown_event is not None and self._shutdown_event.is_set():
+            cancel.set()
         try:
             agent = self._get_agent()
             result = await agent.run(f"Generate a retrospective for completed task #{task_id}.")
@@ -194,7 +201,7 @@ class RetrospectiveHook:
 
             text = self._format_findings(task_id, findings)
             metadata = {"source_type": "retrospective", "task_id": task_id}
-            await self._ingest_pipeline.ingest_text(text, metadata)
+            await self._ingest_pipeline.ingest_text(text, metadata, cancel=cancel)
         except Exception:
             logger.exception("Retrospective failed for task %s", task_id)
 

@@ -185,6 +185,7 @@ class IngestPipeline:
         metadata: dict[str, Any] | None = None,
         *,
         scope: str = "global",
+        cancel: asyncio.Event | None = None,
     ) -> IngestResult:
         """Ingest raw text through the full pipeline.
 
@@ -236,7 +237,7 @@ class IngestPipeline:
                 source=intake_result.source,
                 metadata={**intake_result.metadata, **metadata},
             )
-        return await self._ingest_from_intake(intake_result, scope=scope)
+        return await self._ingest_from_intake(intake_result, scope=scope, cancel=cancel)
 
     # -- Private helpers -----------------------------------------------------
 
@@ -245,6 +246,7 @@ class IngestPipeline:
         intake_result: IntakeResult,
         *,
         scope: str = "global",
+        cancel: asyncio.Event | None = None,
     ) -> IngestResult:
         """Run the pipeline from an already-resolved IntakeResult."""
         document_id = uuid4().hex
@@ -259,9 +261,11 @@ class IngestPipeline:
 
             embed_result, extract_result = await asyncio.gather(
                 self._run_embed(chunks),
-                self._run_extract(chunks),
+                self._run_extract(chunks, cancel=cancel),
                 return_exceptions=True,
             )
+            if isinstance(extract_result, asyncio.CancelledError):
+                raise extract_result  # noqa: TRY301
 
             entity_count, edge_count, status = self._process_results(
                 document_id,
@@ -324,10 +328,17 @@ class IngestPipeline:
         dense_vecs = await loop.run_in_executor(None, self._embedder.embed, texts)
         return [HybridEmbedding(dense=v) for v in dense_vecs]
 
-    async def _run_extract(self, chunks: list[Chunk]) -> list[ExtractionResult]:
+    async def _run_extract(
+        self,
+        chunks: list[Chunk],
+        *,
+        cancel: asyncio.Event | None = None,
+    ) -> list[ExtractionResult]:
         """Run entity extraction per chunk (LLM I/O-bound)."""
         results = []
         for chunk in chunks:
+            if cancel is not None and cancel.is_set():
+                break
             r = await self._extractor.extract(chunk.text, chunk.metadata)
             results.append(r)
         return results
