@@ -35,7 +35,7 @@ class NotificationBackend(Protocol):
 
 
 class ConsoleBellBackend:
-    """Writes the terminal bell character (``\\a``) to stdout."""
+    r"""Writes the terminal bell character (``\a``) to stdout."""
 
     @property
     def name(self) -> str:
@@ -43,7 +43,7 @@ class ConsoleBellBackend:
         return "bell"
 
     async def notify(self, message: str, event: HookEvent) -> bool:  # noqa: ARG002
-        """Write ``\\a`` to stdout and flush."""
+        r"""Write ``\a`` to stdout and flush."""
         sys.stdout.write("\a")
         sys.stdout.flush()
         return True

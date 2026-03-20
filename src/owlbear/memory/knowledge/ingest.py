@@ -127,7 +127,7 @@ class IngestPipeline:
         scope:
             Visibility scope for the ingested data (default ``'global'``).
 
-        Returns
+        Returns:
         -------
         IngestResult
             Summary with document_id, counts, and final status.
@@ -200,7 +200,7 @@ class IngestPipeline:
             Optional metadata dict (e.g. ``{"url": ..., "source_type": "crawl"}``).
             Merged into the :class:`IntakeResult` metadata.
 
-        Returns
+        Returns:
         -------
         IngestResult
             Summary with document_id, counts, and final status.

@@ -33,7 +33,7 @@ async def crawl_and_ingest(
     config:
         Crawl configuration (seed URLs, limits, etc.).
 
-    Returns
+    Returns:
     -------
     list[IngestResult]
         One result per successfully ingested page.  Pages that fail during

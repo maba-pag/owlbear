@@ -273,7 +273,7 @@ def build_toolsets(  # noqa: PLR0913
 ]:
     """Build all toolsets, wrapping non-delegation ones in :class:`HookedToolset`.
 
-    Returns
+    Returns:
     -------
     tuple
         Toolset list, optional knowledge service, optional ingest pipeline,

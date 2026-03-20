@@ -14,7 +14,7 @@ wrapper that guards every HTTP call with a circuit breaker.
 classified as ``PERMANENT`` by :func:`owlbear.core.errors.classify_error`
 so daemon-level retry does not fire.
 
-See ``docs/circuit-breaker-research.md`` for design rationale.
+See ``docs/circuit-breaker.md`` for design rationale.
 """
 
 from __future__ import annotations
@@ -122,8 +122,7 @@ _TRANSIENT_STATUS_CODES: frozenset[int] = frozenset({429, 502, 503, 504})
 
 
 class CircuitBreakerTransport(httpx.AsyncBaseTransport):
-    """``httpx.AsyncBaseTransport`` that wraps an inner transport with
-    circuit-breaker protection.
+    """``httpx.AsyncBaseTransport`` that wraps an inner transport with circuit-breaker protection.
 
     Args:
         inner: The transport to delegate to when the circuit is closed.

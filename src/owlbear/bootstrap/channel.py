@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 def create_channel(settings: OwlBearSettings, channel_name: str) -> ChannelPlugin:
     """Dispatch to the correct channel adapter.
 
-    Raises
+    Raises:
     ------
     ValueError
         If *channel_name* is not recognized.

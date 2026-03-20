@@ -111,7 +111,7 @@ class SourceEvaluator:
             Dict with ``name``, ``description``, ``goals`` keys.
             When ``None``, returns a neutral score (0.5) without calling the LLM.
 
-        Returns
+        Returns:
         -------
         EvaluationResult
             Structured evaluation with score, tags, summary, and ingest flag.

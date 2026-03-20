@@ -62,7 +62,7 @@ def compute_content_hash(content: str) -> str:
         before hashing so that cosmetic differences (e.g. trailing
         newlines in HTTP responses) do not produce false positives.
 
-    Returns
+    Returns:
     -------
     str
         64-character lowercase hex digest.
@@ -135,7 +135,7 @@ class DocumentStore:
     ) -> tuple[bool, str | None]:
         """Check whether *content* differs from the previously-ingested version.
 
-        Returns
+        Returns:
         -------
         tuple[bool, str | None]
             ``(changed, existing_document_id)``.

@@ -164,7 +164,7 @@ class SlackChannel(ChannelPlugin):
         thread_ts:
             Optional thread timestamp to reply in a thread.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *blocks* is empty.

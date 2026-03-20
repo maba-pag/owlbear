@@ -1,4 +1,4 @@
-"""WebSearchToolset — FunctionToolset wrapping web search and page reading.
+r"""WebSearchToolset — FunctionToolset wrapping web search and page reading.
 
 Provides ``web_search`` and ``web_read`` — internet search via DuckDuckGo
 and page content extraction via httpx + extract_content.

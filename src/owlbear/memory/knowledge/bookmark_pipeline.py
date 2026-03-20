@@ -96,7 +96,7 @@ class BookmarkPipeline:
     ) -> BookmarkResult:
         """Run the full bookmark pipeline for *url*.
 
-        Returns
+        Returns:
         -------
         BookmarkResult
             Contains the stored bookmark, evaluation, ingestion flag, and

@@ -68,7 +68,7 @@ class TextChunker:
             Arbitrary metadata propagated to every :class:`Chunk`.  The
             keys ``start_char`` and ``end_char`` are added automatically.
 
-        Returns
+        Returns:
         -------
         list[Chunk]
             An empty list when *text* is empty or whitespace-only.

@@ -32,7 +32,7 @@ def build_hooks(
 ) -> tuple[HookRegistry, ProgressReporter | None]:
     """Create a :class:`HookRegistry` with all standard hooks registered.
 
-    Returns
+    Returns:
     -------
     tuple[HookRegistry, ProgressReporter | None]
         Fully-wired hook registry and optional progress reporter.

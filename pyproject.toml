@@ -63,7 +63,7 @@ src = ["src"]
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D",      # pydocstyle — we use Google-style docstrings, not enforced by ruff
+  "D1",     # missing docstring rules — not yet enforced
   "COM812", # trailing comma — conflicts with formatter
   "ISC001", # implicit string concatenation — conflicts with formatter
   "S101",   # assert used — needed in tests
@@ -86,6 +86,9 @@ ignore = [
   "T201", # print is the primary output mechanism for benchmarks
   "S311", # pseudo-random is fine for benchmark vector generation
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "double"

@@ -336,7 +336,7 @@ class GraphStore:
         scopes:
             Optional scope filter passed through to :meth:`list_edges`.
 
-        Returns
+        Returns:
         -------
         list[tuple[Entity, Edge]]:
             Each tuple is ``(neighbor_entity, connecting_edge)``.

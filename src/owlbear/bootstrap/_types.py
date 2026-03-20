@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class ComponentStatus:
     """Status of a single bootstrap component.
 
-    Attributes
+    Attributes:
     ----------
     name:
         Human-readable component name (e.g. ``"KnowledgeToolset"``).
@@ -44,7 +44,7 @@ class ComponentStatus:
 class StartupSummary:
     """Aggregated bootstrap startup summary.
 
-    Attributes
+    Attributes:
     ----------
     components:
         Status entries for each bootstrap component.
@@ -93,7 +93,7 @@ class StartupSummary:
 class BootstrapResult:
     """Everything produced by :func:`bootstrap`.
 
-    Attributes
+    Attributes:
     ----------
     startup_summary:
         :class:`StartupSummary` collected during bootstrap, or ``None``

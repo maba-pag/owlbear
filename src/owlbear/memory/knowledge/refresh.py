@@ -95,7 +95,7 @@ class RefreshOrchestrator:
         Dispatches to the appropriate handler based on
         :attr:`source.source_type`.
 
-        Raises
+        Raises:
         ------
         ValueError
             If *source* is disabled.

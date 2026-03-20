@@ -187,7 +187,7 @@ def setup_logging(log_file: Path) -> logging.Logger:
     log_file:
         Path to the log file (e.g. ``config_dir / "owlbear.log"``).
 
-    Returns
+    Returns:
     -------
     logging.Logger
         The root logger, configured with both handlers.
@@ -254,7 +254,7 @@ def configure_otel(otel_endpoint: str) -> None:
     otel_endpoint:
         The OTLP endpoint URL (e.g. ``http://localhost:4318``).
 
-    Raises
+    Raises:
     ------
     RuntimeError
         When ``logfire`` is not installed.
@@ -686,8 +686,10 @@ async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
     workspace: Path | None = None,
     hydrator: Callable | None = None,
 ) -> None:
-    """Single poll tick: reconcile → detect stale → retry dispatch
-    → fetch todo → dedup → sort → dispatch.
+    """Execute one poll tick: plan and dispatch todo tasks.
+
+    Sequence: reconcile → detect stale → retry dispatch → fetch todo →
+    dedup → sort → dispatch.
 
     When *wip_store* is provided, loads any existing WIP summary for each
     dispatched task and prepends :data:`CONTINUE_FORWARD_PREFIX` to the

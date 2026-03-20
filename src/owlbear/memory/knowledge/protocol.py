@@ -16,7 +16,7 @@ from pydantic import BaseModel
 class SparseVector(BaseModel):
     """Sparse vector representation (matches Qdrant SparseVector shape).
 
-    Attributes
+    Attributes:
     ----------
     indices:
         Non-zero dimension indices.
@@ -31,7 +31,7 @@ class SparseVector(BaseModel):
 class HybridEmbedding(BaseModel):
     """Multi-representation embedding for hybrid search.
 
-    Attributes
+    Attributes:
     ----------
     dense:
         Dense float vector (always present).

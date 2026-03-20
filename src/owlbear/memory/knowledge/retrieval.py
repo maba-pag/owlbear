@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class RetrievalResult(BaseModel):
     """Immutable result from :meth:`GraphAugmentedRetriever.retrieve`.
 
-    Attributes
+    Attributes:
     ----------
     chunks:
         Vector search hits as ``(id, score)`` pairs, highest score first.
@@ -132,7 +132,7 @@ class GraphAugmentedRetriever:
         scopes:
             Optional scope filter forwarded to vector store and graph store.
 
-        Returns
+        Returns:
         -------
         RetrievalResult:
             Vector chunks, formatted expansion text, and entity count.
