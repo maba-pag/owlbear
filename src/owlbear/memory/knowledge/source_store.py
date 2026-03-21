@@ -59,6 +59,11 @@ class KnowledgeSourceStore:
             updated_at=row[10],  # type: ignore[arg-type]
         )
 
+    _SELECT_COLS = (
+        "id, name, source_type, config, scope, enabled, priority, "
+        "last_refreshed_at, last_error, created_at, updated_at"
+    )
+
     # -- CRUD ----------------------------------------------------------------
 
     def create(self, source: KnowledgeSource) -> None:
@@ -99,9 +104,7 @@ class KnowledgeSourceStore:
             return None
         return self._row_to_model(row)
 
-    def get_by_name(
-        self, name: str, scope: str = "global"
-    ) -> KnowledgeSource | None:
+    def get_by_name(self, name: str, scope: str = "global") -> KnowledgeSource | None:
         """Return the source matching *name* + *scope*, or ``None``."""
         row = self._conn.execute(
             "SELECT id, name, source_type, config, scope, enabled, priority,"
