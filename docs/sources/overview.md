@@ -31,6 +31,18 @@ External repos and resources studied during OwlBear development.
 | pytest marker docs | <https://docs.pytest.org/en/stable/example/markers.html> | MIT | Registered custom markers and `-m` selection for opt-in benchmark execution | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 | Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | TextUnit provenance and merge-by-title-and-type extraction semantics for stable gold-key design | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 
+
+## EntityExtractor Benchmark Corpus Research (Task #911)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG inputs docs | <https://microsoft.github.io/graphrag/index/inputs/> | MIT | Stable document ids, JSON or text input schema, and metadata carriage as prior art for checked-in corpus records | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+| Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | TextUnit provenance and merge-by-title-and-type semantics for stable gold entity identity | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+| spaCy data formats docs | <https://spacy.io/api/data-formats> | MIT | Text-plus-annotation corpus structures for checked-in evaluation data | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+| spaCy `Scorer` docs | <https://spacy.io/api/scorer> | MIT | Exact-match and per-type evaluation conventions for entity scoring | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+| PydanticAI testing docs | <https://ai.pydantic.dev/testing/> | MIT | `TestModel`, `FunctionModel`, and `ALLOW_MODEL_REQUESTS=False` as prior art for model-free tests | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+| pytest marker docs | <https://docs.pytest.org/en/stable/example/markers.html> | MIT | Registered markers and `-m` selection for keeping live benchmark execution opt-in | `docs/research/entity-extractor-benchmark-corpus-gold-schema.md` | 2026-03-21 |
+
 ## EntityExtractor Gleaning Prototype Research (Task #907)
 
 | Source | URL | License | What we studied | Where Used | Date |
