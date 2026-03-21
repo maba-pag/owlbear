@@ -64,7 +64,7 @@ class _FakeTimer:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_Constructor:  # noqa: N801
+class TestFromAC_Constructor:
     """Constructor accepts kanban_cmd, ttl_seconds, and timer (AC line 7)."""
 
     def test_default_kanban_cmd_is_full_list_command(self) -> None:
@@ -100,7 +100,7 @@ class TestFromAC_Constructor:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_GetContextHappyPath:  # noqa: N801
+class TestFromAC_GetContextHappyPath:
     """get_context() spawns the subprocess and returns decoded stdout (AC lines 1-3)."""
 
     @pytest.mark.asyncio
@@ -139,7 +139,7 @@ class TestFromAC_GetContextHappyPath:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TTLCache:  # noqa: N801
+class TestFromAC_TTLCache:
     """Caching: warm cache avoids subprocess; expiry and invalidation force refresh."""
 
     @pytest.mark.asyncio
@@ -209,7 +209,7 @@ class TestFromAC_TTLCache:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_GracefulDegradation:  # noqa: N801
+class TestFromAC_GracefulDegradation:
     """OSError and non-zero exit return '' and log WARNING — no propagation (AC lines 8-9)."""
 
     @pytest.mark.asyncio
