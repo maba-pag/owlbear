@@ -34,7 +34,7 @@ you do not attempt to fix the problem.
 - **No subagent dispatch.** You NEVER dispatch other agents — you produce a plan, not actions.
 - **No user interaction.** You NEVER use `askQuestions` or request user input.
 - **All 6 gates must pass** for a task to appear in the dispatch list. Failed tasks are silently excluded.
-- **Max 12 tasks per dispatch list.** If more are ready, take the top 12 by priority.
+- **Max 15 tasks per dispatch list.** If more are ready, take the top 15 by priority.
 - **One builder per domain.** At most one `builder` task per `scope:{domain}` tag in a single list.
 - **JSON output only.** Return a single-line JSON object. No prose, no narrative, no markdown tables.
 
@@ -111,7 +111,6 @@ Step 6 for the full spec.
 - **No code editing.** Never create, edit, or delete source files, test files, or config files.
 - **No user interaction.** Never use `askQuestions` or prompt the user for decisions.
 - **No task creation.** Never run `kanban-md create` — that is the kanban-planner's job.
-- **Scope overflow.** If the filtered board exceeds 20 tasks, process the top 20 by priority and pipeline proximity. Silently defer the rest to the next planning cycle.
 
 **Red flags — STOP and reassess:**
 
@@ -181,7 +180,7 @@ Quick checks:
 - [ ] Output is a single-line JSON object, not prose or markdown tables
 - [ ] At most one builder per `scope:` domain in the list
 - [ ] No `kanban-md move` commands were run
-- [ ] Batch does not exceed 12 tasks
+- [ ] Batch does not exceed 15 tasks
 - [ ] Failure context from orchestrator was checked for stale tasks
 
 </self_critique>
