@@ -13,6 +13,8 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from bearclaw.commands import _cli_error
+
 app = typer.Typer()
 
 _KANBAN_BIN = Path("kanban/kanban-md.exe")
@@ -27,30 +29,29 @@ def _read_status_order() -> list[str]:
     return [s["name"] for s in config.get("statuses", [])]
 
 
-def _get_tasks() -> list[dict[str, Any]]:
-    """Invoke ``kanban-md list --json`` and return parsed task list."""
-    result = subprocess.run(  # noqa: S603
-        [str(_KANBAN_BIN), "list", "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return []
-    return json.loads(result.stdout)  # type: ignore[return-value]
+def _run_kanban(stage: str, args: list[str]) -> list[dict[str, Any]]:
+    """Invoke a kanban-md subcommand and return the parsed JSON output.
 
+    Calls ``_cli_error`` (NoReturn) on any failure so callers never see
+    exceptions from this function.
 
-def _get_log_entries() -> list[dict[str, Any]]:
-    """Invoke ``kanban-md log --action move --json`` and return parsed entries."""
-    result = subprocess.run(  # noqa: S603
-        [str(_KANBAN_BIN), "log", "--action", "move", "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return []
-    return json.loads(result.stdout)  # type: ignore[return-value]
+    Args:
+        stage: Human-readable stage name used in error messages
+               (e.g. ``"task-list"`` or ``"move-log"``).
+        args:  Full argument list including the binary path.
+    """
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, check=False)  # noqa: S603
+    except FileNotFoundError:
+        _cli_error("kanban-md not found — is the binary installed?")
+
+    if result.returncode != 0:
+        _cli_error(f"kanban-md {stage} command failed (exit {result.returncode})")
+
+    try:
+        return json.loads(result.stdout) if result.stdout.strip() else []  # type: ignore[return-value]
+    except json.JSONDecodeError as exc:
+        _cli_error(f"kanban-md {stage} returned invalid JSON: {exc}")
 
 
 def _assignee_display(task: dict[str, Any]) -> str:
@@ -93,14 +94,14 @@ def _age_in_status(task: dict[str, Any], log_entries: list[dict[str, Any]]) -> s
 @app.command()
 def board() -> None:
     """Display the kanban board grouped by status."""
-    tasks = _get_tasks()
+    tasks = _run_kanban("task-list", [str(_KANBAN_BIN), "list", "--json"])
 
     if not tasks:
         typer.echo("No tasks on the board.")
         return
 
     status_order = _read_status_order()
-    log_entries = _get_log_entries()
+    log_entries = _run_kanban("move-log", [str(_KANBAN_BIN), "log", "--action", "move", "--json"])
 
     by_status: dict[str, list[dict[str, Any]]] = {}
     for task in tasks:
