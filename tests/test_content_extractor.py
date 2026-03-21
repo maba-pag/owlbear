@@ -54,25 +54,42 @@ class TestExtractionResult:
 
 
 # ---------------------------------------------------------------------------
-# extract_content() tests — trafilatura fully mocked
+# extract_content() tests — post-#875 extract_markdown delegation seam
 # ---------------------------------------------------------------------------
 
 
-class TestExtractContent:
-    """extract_content() delegates to trafilatura and returns ExtractionResult."""
+class TestFromAC_ExtractMarkdownDelegation:
+    """After #875, extract_content() delegates text extraction to extract_markdown.
+
+    Failure contract (pre-#875 / RED):
+        Patching owlbear.tools.browser.content_extractor.extract_markdown raises
+        AttributeError because that name is not yet imported in the module.  All
+        tests in this class therefore error before #875 is implemented.
+
+    AC coverage:
+        AC2 — success path, one delegation call, metadata fields preserved
+        AC3 — default-url and provided-url forwarding
+        AC4 — empty helper output and local extract_metadata failure
+        AC5 — no direct trafilatura.extract assertion in any test
+    """
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_happy_path(self, mock_traf):
-        """Returns ExtractionResult with extracted text and metadata."""
-        mock_traf.extract.return_value = "# Extracted Markdown"
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_success_path_delegates_to_extract_markdown(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """extract_content() delegates text extraction and preserves metadata fields."""
+        mock_extract_md.return_value = "# Extracted Markdown"
         mock_meta = MagicMock()
         mock_meta.title = "Page Title"
         mock_meta.author = "Jane Doe"
         mock_meta.date = "2026-02-27"
         mock_traf.extract_metadata.return_value = mock_meta
 
-        result = extract_content("<html><body>Hello</body></html>")
+        html = "<html><body>Hello</body></html>"
+        result = extract_content(html, url="https://example.com/page")
 
+        mock_extract_md.assert_called_once_with(html, url="https://example.com/page")
         assert type(result).__name__ == "ExtractionResult"
         assert result.text == "# Extracted Markdown"
         assert result.title == "Page Title"
@@ -80,34 +97,66 @@ class TestExtractContent:
         assert result.date == "2026-02-27"
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_calls_extract_with_markdown_format(self, mock_traf):
-        """Calls trafilatura.extract with output_format='markdown'."""
-        mock_traf.extract.return_value = "text"
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_exactly_one_delegation_call(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """extract_content() calls extract_markdown exactly once per invocation."""
+        mock_extract_md.return_value = "text"
+        mock_traf.extract_metadata.return_value = None
+
+        extract_content("<html><body>x</body></html>", url="https://example.com")
+
+        assert mock_extract_md.call_count == 1
+
+    @patch("owlbear.tools.browser.content_extractor.trafilatura")
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_no_direct_trafilatura_extract_called(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """extract_markdown delegation replaces direct trafilatura.extract calls."""
+        mock_extract_md.return_value = "text"
+        mock_traf.extract_metadata.return_value = None
+
+        extract_content("<html></html>")
+
+        mock_traf.extract.assert_not_called()
+
+    @patch("owlbear.tools.browser.content_extractor.trafilatura")
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_default_url_calls_extract_markdown_with_none(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """When no URL is provided, extract_markdown is called with url=None."""
+        mock_extract_md.return_value = "text"
         mock_traf.extract_metadata.return_value = None
 
         html = "<html><body>content</body></html>"
         extract_content(html)
 
-        mock_traf.extract.assert_called_once()
-        call_kwargs = mock_traf.extract.call_args
-        assert call_kwargs.kwargs.get("output_format") == "markdown"
-        assert call_kwargs.kwargs.get("include_links") is True
+        mock_extract_md.assert_called_once_with(html, url=None)
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_passes_url_to_trafilatura(self, mock_traf):
-        """Passes url parameter to trafilatura for link resolution."""
-        mock_traf.extract.return_value = "text"
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_provided_url_forwarded_unchanged(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """Provided URL is forwarded unchanged to extract_markdown."""
+        mock_extract_md.return_value = "text"
         mock_traf.extract_metadata.return_value = None
 
-        extract_content("<html></html>", url="https://example.com/page")
+        url = "https://example.com/article?q=test#section"
+        extract_content("<html></html>", url=url)
 
-        call_kwargs = mock_traf.extract.call_args
-        assert call_kwargs.kwargs.get("url") == "https://example.com/page"
+        mock_extract_md.assert_called_once_with("<html></html>", url=url)
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_extract_returns_none_gives_empty_text(self, mock_traf):
-        """Returns ExtractionResult with text='' when extract returns None."""
-        mock_traf.extract.return_value = None
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_empty_helper_output_gives_empty_text(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """Empty string from extract_markdown results in ExtractionResult.text=''."""
+        mock_extract_md.return_value = ""
         mock_traf.extract_metadata.return_value = None
 
         result = extract_content("<html></html>")
@@ -115,34 +164,45 @@ class TestExtractContent:
         assert result.text == ""
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_extract_metadata_returns_none(self, mock_traf):
-        """Handles None from extract_metadata gracefully."""
-        mock_traf.extract.return_value = "some text"
-        mock_traf.extract_metadata.return_value = None
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_local_extract_metadata_failure_graceful(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """If extract_metadata raises locally, result carries text but empty metadata."""
+        mock_extract_md.return_value = "good text"
+        mock_traf.extract_metadata.side_effect = Exception("metadata fail")
 
         result = extract_content("<html></html>")
 
-        assert result.text == "some text"
+        assert result.text == "good text"
         assert result.title is None
         assert result.author is None
         assert result.date is None
         assert result.metadata == {}
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_no_exception_on_extraction_failure(self, mock_traf):
-        """Does not raise on trafilatura failure — returns empty result."""
-        mock_traf.extract.side_effect = Exception("parsing failed")
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_extract_metadata_none_gives_empty_metadata(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """None from extract_metadata leaves metadata={} and all fields None."""
+        mock_extract_md.return_value = "text"
         mock_traf.extract_metadata.return_value = None
 
         result = extract_content("<html></html>")
 
-        assert result.text == ""
         assert result.title is None
+        assert result.author is None
+        assert result.date is None
+        assert result.metadata == {}
 
     @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_metadata_dict_populated(self, mock_traf):
-        """Metadata dict contains title, author, date from extract_metadata."""
-        mock_traf.extract.return_value = "body"
+    @patch("owlbear.tools.browser.content_extractor.extract_markdown")
+    def test_metadata_fields_preserved_in_result(
+        self, mock_extract_md: MagicMock, mock_traf: MagicMock
+    ) -> None:
+        """ExtractionResult.metadata dict contains title, author, date from extract_metadata."""
+        mock_extract_md.return_value = "body"
         mock_meta = MagicMock()
         mock_meta.title = "T"
         mock_meta.author = "A"
@@ -151,30 +211,6 @@ class TestExtractContent:
 
         result = extract_content("<html></html>")
 
-        assert "title" in result.metadata
-        assert "author" in result.metadata
-        assert "date" in result.metadata
-        assert result.metadata["title"] == "T"
-
-    @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_url_defaults_to_none(self, mock_traf):
-        """url parameter defaults to None when not provided."""
-        mock_traf.extract.return_value = "text"
-        mock_traf.extract_metadata.return_value = None
-
-        extract_content("<html></html>")
-
-        call_kwargs = mock_traf.extract.call_args
-        assert call_kwargs.kwargs.get("url") is None
-
-    @patch("owlbear.tools.browser.content_extractor.trafilatura")
-    def test_metadata_extraction_failure_graceful(self, mock_traf):
-        """If extract_metadata raises, still returns result with text."""
-        mock_traf.extract.return_value = "good text"
-        mock_traf.extract_metadata.side_effect = Exception("metadata fail")
-
-        result = extract_content("<html></html>")
-
-        assert result.text == "good text"
-        assert result.title is None
-        assert result.metadata == {}
+        assert result.metadata.get("title") == "T"
+        assert result.metadata.get("author") == "A"
+        assert result.metadata.get("date") == "D"

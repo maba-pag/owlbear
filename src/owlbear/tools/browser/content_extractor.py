@@ -15,6 +15,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from owlbear.web_extract import extract_markdown
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -72,16 +74,7 @@ def extract_content(html: str, url: str | None = None) -> ExtractionResult:
         raise ImportError(msg)
 
     # --- Extract text -------------------------------------------------------
-    try:
-        text = trafilatura.extract(
-            html,
-            output_format="markdown",
-            include_links=True,
-            url=url,
-        )
-    except Exception:  # noqa: BLE001 — trafilatura can raise anything
-        logger.debug("trafilatura.extract failed", exc_info=True)
-        text = None
+    text = extract_markdown(html, url=url)
 
     # --- Extract metadata ---------------------------------------------------
     title: str | None = None
