@@ -50,7 +50,7 @@ class _KnowledgeInfra:
 
 def _build_knowledge_infra(
     workspace: Path,
-    chat_model: str | Model,
+    chat_model: str | Model | None = None,
 ) -> _KnowledgeInfra | None:
     """Create shared knowledge infrastructure objects once.
 
@@ -62,9 +62,9 @@ def _build_knowledge_infra(
 
         from owlbear.memory.knowledge import (  # noqa: PLC0415
             GraphStore,
-            TextChunker,
             init_db,
         )
+        from owlbear.memory.knowledge.chunker import TextChunker  # noqa: PLC0415
         from owlbear.memory.knowledge.embeddings import (  # noqa: PLC0415
             BgeM3EmbeddingProvider,
         )
@@ -102,7 +102,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     infra: _KnowledgeInfra,
     project_id: str | None = None,
     *,
-    chat_model: str | Model,
+    chat_model: str | Model | None = None,
     max_tokens: int = 2000,
     knowledge_graph_expansion: bool = True,
     inter_doc_graph_building: bool = False,

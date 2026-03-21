@@ -72,7 +72,7 @@ def _seed_chunks(
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateReads:  # noqa: N801
+class TestFromAC_ConsolidateReads:
     """AC: consolidate() reads unconsolidated chunks (consolidated=0) from DB."""
 
     @pytest.mark.asyncio
@@ -109,7 +109,7 @@ class TestFromAC_ConsolidateReads:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateStoresInsight:  # noqa: N801
+class TestFromAC_ConsolidateStoresInsight:
     """AC: consolidate() stores insight row in consolidations table with source_ids JSON array."""
 
     @pytest.mark.asyncio
@@ -162,7 +162,7 @@ class TestFromAC_ConsolidateStoresInsight:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateMarksChunks:  # noqa: N801
+class TestFromAC_ConsolidateMarksChunks:
     """AC: consolidate() marks source chunks consolidated=1."""
 
     @pytest.mark.asyncio
@@ -199,7 +199,7 @@ class TestFromAC_ConsolidateMarksChunks:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateReturnsCount:  # noqa: N801
+class TestFromAC_ConsolidateReturnsCount:
     """AC: consolidate() returns count of insights created."""
 
     @pytest.mark.asyncio
@@ -230,7 +230,7 @@ class TestFromAC_ConsolidateReturnsCount:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateBatchSize:  # noqa: N801
+class TestFromAC_ConsolidateBatchSize:
     """AC: consolidate() batch_size parameter limits chunk selection."""
 
     @pytest.mark.asyncio
@@ -285,7 +285,7 @@ class TestFromAC_ConsolidateBatchSize:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidateEmpty:  # noqa: N801
+class TestFromAC_ConsolidateEmpty:
     """AC: consolidate() with no unconsolidated chunks returns 0."""
 
     @pytest.mark.asyncio
@@ -324,7 +324,7 @@ class TestFromAC_ConsolidateEmpty:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SchedulePeriodic:  # noqa: N801
+class TestFromAC_SchedulePeriodic:
     """AC: schedule_periodic() calls consolidate() on interval (mock asyncio.sleep)."""
 
     @pytest.mark.asyncio
@@ -380,7 +380,7 @@ class TestFromAC_SchedulePeriodic:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LLMFailure:  # noqa: N801
+class TestFromAC_LLMFailure:
     """AC: LLM failure during consolidation is logged, does not crash the loop."""
 
     @pytest.mark.asyncio
@@ -436,7 +436,7 @@ class TestFromAC_LLMFailure:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_Constructor:  # noqa: N801
+class TestFromAC_Constructor:
     """AC: Constructor takes (conn, graph_store, model)."""
 
     def test_constructor_accepts_required_args(self) -> None:
@@ -457,7 +457,7 @@ class TestFromAC_Constructor:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConfigConsolidationEnabled:  # noqa: N801
+class TestFromAC_ConfigConsolidationEnabled:
     """AC: consolidation_enabled: bool = False added to OwlBearSettings."""
 
     def test_default_is_false(self, default_settings: object) -> None:
@@ -489,7 +489,7 @@ class TestFromAC_ConfigConsolidationEnabled:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConfigConsolidationInterval:  # noqa: N801
+class TestFromAC_ConfigConsolidationInterval:
     """AC: consolidation_interval: int = 1800 added to OwlBearSettings."""
 
     def test_default_is_1800(self, default_settings: object) -> None:
@@ -520,7 +520,7 @@ class TestFromAC_ConfigConsolidationInterval:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapWiring:  # noqa: N801
+class TestFromAC_BootstrapWiring:
     """AC: Bootstrap constructs ConsolidationService in _build_knowledge_toolset when enabled."""
 
     def test_accepts_consolidation_enabled_kwarg(self, tmp_path: object) -> None:
@@ -635,7 +635,7 @@ class TestFromAC_BootstrapWiring:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_Export:  # noqa: N801
+class TestFromAC_Export:
     """AC: ConsolidationService exported from owlbear.memory.knowledge.__init__."""
 
     def test_importable_from_package(self) -> None:
@@ -659,7 +659,7 @@ class TestFromAC_Export:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_WireSurfacesConsolidation:  # noqa: N801
+class TestFromAC_WireSurfacesConsolidation:
     """AC7: _wire_knowledge_toolsets must surface ConsolidationService (not discard it)."""
 
     def test_returns_3_tuple(self, tmp_path: object) -> None:
@@ -793,7 +793,7 @@ class TestFromAC_WireSurfacesConsolidation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BuildToolsetsReturnsConsolidation:  # noqa: N801
+class TestFromAC_BuildToolsetsReturnsConsolidation:
     """AC7: build_toolsets must include ConsolidationService in its return value."""
 
     def test_returns_4_tuple(self, tmp_path: object) -> None:
@@ -897,7 +897,7 @@ class TestFromAC_BuildToolsetsReturnsConsolidation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DaemonStartsConsolidationTimer:  # noqa: N801
+class TestFromAC_DaemonStartsConsolidationTimer:
     """AC7: Daemon starts schedule_periodic when ConsolidationService is provided."""
 
     @pytest.mark.asyncio
@@ -999,3 +999,101 @@ class TestFromAC_DaemonStartsConsolidationTimer:  # noqa: N801
             assert call_kwargs.kwargs.get("interval") == 900
         else:
             assert call_kwargs.args[0] == 900
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — exception paths and optional branches in bootstrap
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-added tests covering exception paths in _build_knowledge_infra.
+
+    Covers _build_knowledge_infra and _build_knowledge_toolset exception paths
+    that are exercised by the wiring changes introduced in task #789.
+    """
+
+    def test_build_knowledge_infra_returns_none_on_failure(
+        self, tmp_path: object
+    ) -> None:
+        """_build_knowledge_infra returns None instead of raising when setup fails."""
+        import sqlite3 as _sqlite3
+
+        from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+        with patch.object(_sqlite3, "connect", side_effect=RuntimeError("DB error")):
+            result = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+
+        assert result is None
+
+    def test_build_knowledge_toolset_returns_none_on_failure(
+        self, tmp_path: object
+    ) -> None:
+        """_build_knowledge_toolset returns None instead of raising when setup fails."""
+        from owlbear.bootstrap.knowledge import (
+            _build_knowledge_infra,
+            _build_knowledge_toolset,
+        )
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+        ):
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+
+            with patch(
+                "owlbear.memory.knowledge.document_store.DocumentStore.__init__",
+                side_effect=RuntimeError("Store init failed"),
+            ):
+                result = _build_knowledge_toolset(
+                    tmp_path,  # type: ignore[arg-type]
+                    infra,
+                )
+
+        assert result is None
+
+    def test_build_knowledge_toolset_inter_doc_graph_building(
+        self, tmp_path: object
+    ) -> None:
+        """_build_knowledge_toolset with inter_doc_graph_building=True covers enricher path."""
+        from owlbear.bootstrap.knowledge import (
+            _build_knowledge_infra,
+            _build_knowledge_toolset,
+        )
+
+        with (
+            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
+            patch(
+                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
+                autospec=True,
+            ),
+            patch(
+                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.inter_doc_graph_builder.InterDocGraphBuilder.__init__",
+                return_value=None,
+            ),
+            patch(
+                "owlbear.memory.knowledge.enrichment.GraphEnricher.__init__",
+                return_value=None,
+            ),
+        ):
+            infra = _build_knowledge_infra(tmp_path)  # type: ignore[arg-type]
+            assert infra is not None
+            result = _build_knowledge_toolset(
+                tmp_path,  # type: ignore[arg-type]
+                infra,
+                inter_doc_graph_building=True,
+            )
+
+        assert result is not None
