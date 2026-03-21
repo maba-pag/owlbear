@@ -47,9 +47,14 @@ kanban\kanban-md.exe edit {id} --claim <agent>
 
 ## Step 1 — Clarify scope
 
-Understand exactly what's being asked:
+**Fail fast on invalid inputs before starting any research:**
 
-- If ambiguous: use `askQuestions` (what aspects? what decision? what constraints?)
+- If the task title matches `TEMP-*` (e.g., `TEMP-planner-test`), this is a planner artifact, not a valid research input. Refuse dispatch via the blocked or handoff path. Point to the owning task or `docs/research/planner-temp-task-hygiene.md`. Do NOT ask questions or invent scope.
+- If the task body is empty or lacks scoped content (no AC, no context), refuse dispatch for the same reason. Missing body content alone is sufficient — do not treat it as ambiguity to resolve by asking questions.
+
+If the task has scoped content but needs clarification:
+
+- Use `askQuestions` (what aspects? what decision? what constraints?)
 - Read `copilot-instructions.md` for tech stack and principles
 
 ## Step 2 — Gather sources

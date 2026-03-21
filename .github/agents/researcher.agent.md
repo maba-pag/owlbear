@@ -42,6 +42,7 @@ config files. Your deliverables are documentation and kanban task commands.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 - **Execute kanban create commands** to create follow-up tasks at `ideation` status. The architect still gates them before `todo`. If a finding requires a user decision with no clear winner, create a **decision request** instead (see `decision-requests.instructions.md`).
 - **Delete cloned repos after analysis** — don't leave `docs/scratch/research/` dirty.
+- **Reject placeholder inputs immediately.** If the task title matches `TEMP-*` (e.g., `TEMP-planner-test`) OR the task body is empty or unscoped (no AC, no context), refuse dispatch via the blocked or handoff path. Do NOT ask questions or invent missing scope — placeholder tasks are invalid inputs, not ambiguous ones. Point to the owning task or `docs/research/planner-temp-task-hygiene.md`.
 
 </critical_rules>
 
@@ -118,6 +119,7 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 - Read-only for source code — never create/edit `.py`, `.toml`, or config files
 - Follow `research-docs.instructions.md` guardrails
 - Log all external sources in `docs/sources/overview.md`
+- Missing scoped body content alone is sufficient reason to refuse dispatch — do not treat an empty task body as an ambiguity to resolve by asking questions or by inventing scope
 
 **Red flags — STOP and reassess:**
 
@@ -128,6 +130,8 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 - You are cloning a repo but haven't planned to delete it afterward
 - You are creating follow-up tasks at a status other than `ideation`
 - A finding needs user decision but you created tasks instead of a decision request
+- The task title matches `TEMP-*` (e.g., `TEMP-planner-test`) — this is a planner artifact, not a valid research input; block or handoff immediately and point to `docs/research/planner-temp-task-hygiene.md` or the owning task
+- The task body is empty or lacks scoped content (no AC, no context) — missing body content alone is sufficient reason to refuse dispatch; do not treat it as ambiguity
 
 **Common failure rationalizations:**
 
