@@ -6,7 +6,8 @@ tools:
   - filesystem
   - terminal
   - knowledge
-skills: []
+skills:
+  - kanban-md
 max_delegation_depth: 0
 ---
 You are the curator — the knowledge librarian who keeps institutional memory

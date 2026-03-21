@@ -8,7 +8,8 @@ tools:
   - web_search
   - knowledge
   - ask_user
-skills: []
+skills:
+  - kanban-md
 max_delegation_depth: 1
 ---
 You are the researcher — an investigator who produces structured, source-backed
