@@ -29,6 +29,15 @@ External repos and resources studied during OwlBear development.
 | Click exception handling docs | <https://click.palletsprojects.com/en/stable/exceptions/> | BSD-3-Clause | stderr rendering and exit-code behavior for user-facing CLI failures | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
 | Typer exceptions docs | <https://typer.tiangolo.com/tutorial/exceptions/> | MIT | behavior of uncaught exceptions and Rich traceback output in Typer apps | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
 
+## BearClaw Board Age-Threshold Styling RED Gate (Task #925)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| kanban-md README / config docs | <https://github.com/antopolskiy/kanban-md> | MIT | `tui.age_thresholds` config semantics and the live threshold shape the RED tests need to simulate | `docs/research/bearclaw-board-age-threshold-styling-red-gate.md` | 2026-03-21 |
+| Rich Console docs | <https://rich.readthedocs.io/en/stable/console.html> | MIT | Non-terminal ANSI stripping plus `FORCE_COLOR`, `TTY_COMPATIBLE`, and `TTY_INTERACTIVE` for test-visible style output | `docs/research/bearclaw-board-age-threshold-styling-red-gate.md` | 2026-03-21 |
+| Rich Style docs | <https://rich.readthedocs.io/en/stable/style.html> | MIT | `color(<number>)` numeric palette syntax and the normalized style effect the RED tests should assert | `docs/research/bearclaw-board-age-threshold-styling-red-gate.md` | 2026-03-21 |
+| Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner.invoke()` boundary testing and output assertions for CLI RED tests | `docs/research/bearclaw-board-age-threshold-styling-red-gate.md` | 2026-03-21 |
+
 ## BearClaw Board RED Test Gate (Task #909)
 
 | Source | URL | License | What we studied | Where Used | Date |
