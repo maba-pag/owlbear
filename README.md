@@ -15,6 +15,11 @@ and operates as a standalone daemon process.
 - **[uv](https://docs.astral.sh/uv/)** package manager
 - **Windows** is the primary development OS; Linux and macOS are expected to work but untested
 
+> **Browser automation** is designed for corporate Windows laptops. It attaches to an
+> existing Edge session over CDP rather than launching a new browser, so it requires no
+> admin rights, no browser extensions, and no separate unmanaged browser install.
+> See [docs/research/browser-automation.md](docs/research/browser-automation.md) for details.
+
 ## Quick Start
 
 ```bash
