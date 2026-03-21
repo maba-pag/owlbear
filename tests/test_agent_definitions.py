@@ -54,7 +54,7 @@ EXPECTED_AGENTS: dict[str, dict] = {
         "description": "Investigates topics and produces structured findings",
         "role": "builder",
         "tools": ["filesystem", "browser", "web_search", "knowledge", "ask_user"],
-        "skills": [],
+        "skills": ["kanban-md"],
         "max_delegation_depth": 1,
     },
     "architect": {
@@ -89,7 +89,7 @@ EXPECTED_AGENTS: dict[str, dict] = {
         "description": "Periodic knowledge graph maintenance and deduplication",
         "role": "builder",
         "tools": ["filesystem", "terminal", "knowledge"],
-        "skills": [],
+        "skills": ["kanban-md"],
         "max_delegation_depth": 0,
     },
 }
