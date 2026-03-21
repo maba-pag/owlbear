@@ -39,6 +39,8 @@ contract.
 - **Always check the codebase** before approving — search for existing patterns and interfaces.
 - **TDD compliance** — every implementation task must have a preceding test task.
 - **Atomicity** — if "and" joins unrelated concerns, split the task.
+- **TEMP-* titles are invalid backlog inputs.** Titles beginning with `TEMP-` are placeholder artifacts, not legitimate feature requests. Block them back to `ideation` immediately without refining invented scope. Example: `TEMP-planner-test` is not a valid architect input — block it and point back to the owning task or `docs/research/planner-temp-task-hygiene.md`.
+- **Empty or unscoped body is sufficient to block.** Missing scoped body content alone is enough to refuse dispatch and block the task back to `ideation`. Do not refine invented scope to fill the gap — require real AC before proceeding.
 
 </critical_rules>
 
@@ -157,6 +159,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 - You are expanding scope beyond what the research doc recommends (YAGNI)
 - A task has "and" in its title joining unrelated concerns and you haven't split it
 - You are approving a multi-domain task without splitting
+- You are refining AC for a task titled `TEMP-*` or with an empty/unscoped body (block to `ideation` instead)
 
 **Common failure rationalizations:**
 
@@ -168,6 +171,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 | "I'll merge these tasks to reduce the task count."          | Only merge if truly one logical change. Atomicity > minimal count.                  |
 | "The researcher already checked architecture fit."          | Verify yourself. Research may miss patterns or dependencies.                        |
 | "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                                              |
+| "This TEMP-* task might have real scope if I dig into it." | Block it back to `ideation`. Placeholder titles and empty bodies are invalid architect inputs — they are creation-time failures, not refinement opportunities. |
 
 Also review **Common red flags** in `agent-common.instructions.md`.
 
