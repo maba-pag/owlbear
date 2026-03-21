@@ -1,9 +1,12 @@
-"""Tests for tools/__init__.py re-exports (task #814)."""
+"""Tests for tools/__init__.py re-exports (task #814, #878)."""
 
 from __future__ import annotations
 
+import subprocess
+import sys
 
-class TestFromAC_ToolsReExports:  # noqa: N801
+
+class TestFromAC_ToolsReExports:
     """Every symbol listed in the AC must be importable from owlbear.tools."""
 
     def test_import_ask_user_toolset(self) -> None:
@@ -57,7 +60,7 @@ class TestFromAC_ToolsReExports:  # noqa: N801
         assert callable(unwrap)
 
 
-class TestFromAC_ToolsReExportIdentity:  # noqa: N801
+class TestFromAC_ToolsReExportIdentity:
     """Each re-export must resolve to the canonical class/function."""
 
     def test_ask_user_toolset_identity(self) -> None:
@@ -121,21 +124,23 @@ class TestFromAC_ToolsReExportIdentity:  # noqa: N801
         assert unwrap is original
 
 
-class TestFromAC_ToolsAllTuple:  # noqa: N801
+class TestFromAC_ToolsAllTuple:
     """__all__ must be defined and contain exactly the 10 AC symbols."""
 
-    EXPECTED_NAMES: frozenset[str] = frozenset({
-        "AskUserToolset",
-        "FileToolset",
-        "GitLocalToolset",
-        "GitHubToolset",
-        "KanbanToolset",
-        "TerminalToolset",
-        "HookedToolset",
-        "MCPServerRegistry",
-        "find_toolset",
-        "unwrap",
-    })
+    EXPECTED_NAMES: frozenset[str] = frozenset(
+        {
+            "AskUserToolset",
+            "FileToolset",
+            "GitLocalToolset",
+            "GitHubToolset",
+            "KanbanToolset",
+            "TerminalToolset",
+            "HookedToolset",
+            "MCPServerRegistry",
+            "find_toolset",
+            "unwrap",
+        }
+    )
 
     def test_all_is_defined(self) -> None:
         import owlbear.tools
@@ -162,7 +167,7 @@ class TestFromAC_ToolsAllTuple:  # noqa: N801
         assert not extra, f"Unexpected entries in __all__: {extra}"
 
 
-class TestFromAC_NoCircularImport:  # noqa: N801
+class TestFromAC_NoCircularImport:
     """Importing owlbear.tools must not trigger a circular import."""
 
     def test_import_owlbear_tools_exposes_all_symbols(self) -> None:
@@ -187,3 +192,35 @@ class TestFromAC_NoCircularImport:  # noqa: N801
             "unwrap",
         ):
             assert hasattr(mod, name), f"{name} not accessible via 'import owlbear.tools'"
+
+
+class TestFromAC_ToolsImportSideEffect:
+    """A bare ``import owlbear.tools`` must not pull sub-module side-effects (#878).
+
+    On the current tree this class produces a FAILING test because
+    ``src/owlbear/tools/__init__.py`` eagerly imports ``owlbear.tools.github_api``
+    (which transitively loads ``owlbear.core.retry``).  The builder's GREEN task
+    (#879) must implement lazy exports so this test passes.
+    """
+
+    def test_bare_import_does_not_load_github_api_or_retry(self) -> None:
+        """Fresh subprocess: bare import owlbear.tools must not load github_api or core.retry."""
+        result = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; import owlbear.tools; "
+                    "assert 'owlbear.tools.github_api' not in sys.modules, "
+                    "'owlbear.tools.github_api eagerly loaded by bare import'; "
+                    "assert 'owlbear.core.retry' not in sys.modules, "
+                    "'owlbear.core.retry eagerly loaded by bare import'"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            f"Bare import of owlbear.tools loaded unexpected modules:\n{result.stderr}"
+        )
