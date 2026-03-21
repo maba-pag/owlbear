@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Planner Temp Task Hygiene (Task #855)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and validation in structured issue forms; precedent for rejecting underspecified work items at intake | `docs/research/planner-temp-task-hygiene.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | Disabling blank issues and steering contributors into templates/forms instead of free-form placeholders | `docs/research/planner-temp-task-hygiene.md` | 2026-03-21 |
+
 ## Core Re-export Removal Research (Task #812)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -842,7 +849,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | ddgs (deedy5) | <https://github.com/deedy5/ddgs> | MIT | DuckDuckGo metasearch library: `DDGS().text()` API returning `{title, href, body}` dicts, multi-engine fallback, `RatelimitException`, sync-only API wrapped with `asyncio.to_thread()` | `src/owlbear/tools/web_search.py` (`_web_search` tool) | 2026-03-01 |
 | LangChain DuckDuckGoSearchRun | <https://python.langchain.com/docs/integrations/tools/ddg> | MIT | Thin wrapper over `duckduckgo-search`; snippet-concatenation formatting pattern (adapted to numbered markdown list) | `src/owlbear/tools/web_search.py` (result formatting inspiration) | 2026-03-01 |
-| trafilatura | <https://github.com/adbar/trafilatura> | Apache-2.0 | Web content extraction: `extract()` with `output_format="markdown"`, `include_links=True`; fallback-to-raw-HTML pattern | `src/owlbear/tools/web_search.py` (via `extract_content` from `content_extractor`) | 2026-03-01 |
+| trafilatura | <https://github.com/adbar/trafilatura> | Apache-2.0 | Web content extraction: `extract()` with `output_format="markdown"`, `include_links=True`; fallback-to-raw-HTML pattern | `src/owlbear/tools/web_search.py` (via `extract_content` from `content_extractor`); `src/owlbear/web_extract.py` (`extract_markdown` leaf helper) | 2026-03-01 |
 
 ## Conversation Router Research (Task #296)
 
@@ -1553,3 +1560,29 @@ External repos and resources studied during OwlBear development.
 | PEP 8 - Public/Internal Interfaces | <https://peps.python.org/pep-0008/#public-and-internal-interfaces> | PSF | `__all__` defines the supported public API surface and imported names remain implementation details | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
 | Scientific Python SPEC 1 - Lazy Loading of Submodules | <https://scientific-python.org/specs/spec-0001/> | BSD | Lazy loading is valid but should not be applied indiscriminately; small package roots should avoid extra machinery | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
 | `lazy-loader` project docs | <https://github.com/scientific-python/lazy_loader> | BSD | Helper-based lazy loading adds dependency and stub-management overhead; informed the decision to keep OwlBear's small package-root surfaces inline | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
+
+## owlbear.tools `dir()` Parity Follow-up (Task #883)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python data model docs | <https://docs.python.org/3/reference/datamodel.html#customizing-module-attribute-access> | PSF | Canonical module-level `__dir__` semantics for dynamic package-root attributes | `docs/research/tools-root-lazy-exports-dir-parity.md` | 2026-03-21 |
+| PEP 562 - Module `__getattr__` and `__dir__` | <https://peps.python.org/pep-0562/> | PSF | Standard lazy module-attribute pattern; PEP example uses a curated `__dir__` export list | `docs/research/tools-root-lazy-exports-dir-parity.md` | 2026-03-21 |
+| Scientific Python SPEC 1 - Lazy Loading of Submodules | <https://scientific-python.org/specs/spec-0001/> | BSD | Lazy loading should preserve interactive exploration as well as import performance | `docs/research/tools-root-lazy-exports-dir-parity.md` | 2026-03-21 |
+| `lazy-loader` implementation/docs | <https://github.com/scientific-python/lazy-loader/blob/main/src/lazy_loader/__init__.py> | BSD | Helper returns the curated `__all__` surface from `__dir__`, supporting a minimal export-only `__dir__` design | `docs/research/tools-root-lazy-exports-dir-parity.md` | 2026-03-21 |
+
+## content_extractor Delegation RED Coverage (Task #881)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `unittest.mock` docs | <https://docs.python.org/3/library/unittest.mock.html#where-to-patch> | PSF | Canonical "patch where the object is looked up" rule for delegation-focused tests | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
+| pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | Fixture-scoped patching semantics and narrow consumer-site replacement patterns | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
+| trafilatura Python usage docs | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | Apache-2.0 | Public raw extract contract for markdown output, link inclusion, URL forwarding, and metadata extraction | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
+| trafilatura GitHub repo | <https://github.com/adbar/trafilatura> | Apache-2.0 | Confirmed project license and the helper-boundary API surface already covered in `tests/test_web_extract.py` | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
+
+## Context Hydration URL Forwarding RED Coverage (Task #876)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `unittest.mock` docs | <https://docs.python.org/3/library/unittest.mock.html#where-to-patch> | PSF | Canonical "patch where the object is looked up" rule for caller-level helper forwarding tests | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
+| pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | Fixture-scoped consumer-site patching guidance for narrow helper seams | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
+| trafilatura Python usage docs | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | Apache-2.0 | Public reason for forwarding `url=` alongside HTML input at the caller boundary | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
