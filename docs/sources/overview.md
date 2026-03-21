@@ -1537,3 +1537,19 @@ External repos and resources studied during OwlBear development.
 | Python data model docs | <https://docs.python.org/3/reference/datamodel.html> | PSF | Module-level `__getattr__` and `__dir__` hooks — the supported extension points for lazy package-root attribute access | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
 | PEP 562 — Module `__getattr__` and `__dir__` | <https://peps.python.org/pep-0562/> | PSF | Established that `from pkg import Name` is compatible with module-level `__getattr__`; informed the decision to keep API-preservation tests behaviour-focused rather than implementation-focused | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
 | Scientific Python SPEC 1 — Lazy Loading of Submodules | <https://scientific-python.org/specs/spec-0001/> | BSD | Lazy-export pattern reference; informed the decision to keep the RED task narrowly scoped without over-specifying non-essential ergonomics | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
+
+## owlbear.tools Lazy-Export GREEN Implementation (Task #879)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| `lazy-loader` project docs | <https://github.com/scientific-python/lazy_loader> | BSD | Helper-based lazy loading is viable but introduces a runtime dependency and optional type-stub packaging concerns; confirmed that an inline `__getattr__` map is the right fit for a 10-name surface with no new dependencies | `docs/research/tools-root-lazy-exports-implementation.md` | 2026-03-20 |
+
+## Package-Root Lazy-Export Architecture Note (Task #882)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python data model docs | <https://docs.python.org/3/reference/datamodel.html#customizing-module-attribute-access> | PSF | Canonical module-level `__getattr__` and `__dir__` semantics for package-root lazy exports | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
+| PEP 562 - Module `__getattr__` and `__dir__` | <https://peps.python.org/pep-0562/> | PSF | Standard lazy module-attribute pattern; supports cached access after first lookup and compatibility with `from pkg import Name` | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
+| PEP 8 - Public/Internal Interfaces | <https://peps.python.org/pep-0008/#public-and-internal-interfaces> | PSF | `__all__` defines the supported public API surface and imported names remain implementation details | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
+| Scientific Python SPEC 1 - Lazy Loading of Submodules | <https://scientific-python.org/specs/spec-0001/> | BSD | Lazy loading is valid but should not be applied indiscriminately; small package roots should avoid extra machinery | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
+| `lazy-loader` project docs | <https://github.com/scientific-python/lazy_loader> | BSD | Helper-based lazy loading adds dependency and stub-management overhead; informed the decision to keep OwlBear's small package-root surfaces inline | `docs/research/package-root-lazy-export-pattern.md` | 2026-03-21 |
