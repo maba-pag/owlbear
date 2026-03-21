@@ -37,6 +37,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
 }
 
 
+def __dir__() -> list[str]:
+    return list(__all__)
+
+
 def __getattr__(name: str) -> object:
     if name in _LAZY_IMPORTS:
         submodule, attr = _LAZY_IMPORTS[name]
