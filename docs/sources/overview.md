@@ -11,6 +11,24 @@ External repos and resources studied during OwlBear development.
 | Typer Commands docs | <https://typer.tiangolo.com/tutorial/commands/> | MIT | Dedicated command registration conventions for a `board` command module | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
 | Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner` invocation and output assertions for command tests | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
 
+## BearClaw Board Implementation Gate (Task #910)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| kanban-md README / command docs | <https://github.com/antopolskiy/kanban-md> | MIT | `list --json`, `log --action move --json`, board auto-discovery, and config semantics for the implementation seam | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
+| Rich Tables docs | <https://rich.readthedocs.io/en/stable/tables.html> | MIT | Table sections, column styling, and explicit empty-table behavior for grouped board output | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
+| Typer Add Typer docs | <https://typer.tiangolo.com/tutorial/subcommands/add-typer/> | MIT | `app.add_typer()` composition for wiring a dedicated board command module into the root CLI | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
+| Python `datetime` docs | <https://docs.python.org/3/library/datetime.html> | PSF | `datetime.fromisoformat()` support for ISO 8601 timestamps with UTC offsets from kanban JSON and move logs | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
+
+## BearClaw Board RED Test Gate (Task #909)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| kanban-md README / command docs | <https://github.com/antopolskiy/kanban-md> | MIT | `list --json`, `log --json`, `--action move`, and output flags for the mocked board-command test seam | `docs/research/bearclaw-board-command-red-gate.md` | 2026-03-21 |
+| Rich Tables docs | <https://rich.readthedocs.io/en/stable/tables.html> | MIT | Stable table assertions, sections, and empty-table fallback guidance for CLI tests | `docs/research/bearclaw-board-command-red-gate.md` | 2026-03-21 |
+| Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner` invocation and output assertions for RED-phase command tests | `docs/research/bearclaw-board-command-red-gate.md` | 2026-03-21 |
+| Typer Add Typer docs | <https://typer.tiangolo.com/tutorial/subcommands/add-typer/> | MIT | Typer app composition and command exposure through `add_typer()` | `docs/research/bearclaw-board-command-red-gate.md` | 2026-03-21 |
+
 ## EntityExtractor Gleaning Benchmark Research (Task #891)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -30,7 +48,6 @@ External repos and resources studied during OwlBear development.
 | spaCy `Scorer` docs | <https://spacy.io/api/scorer> | MIT | `ents_r` and `ents_per_type` conventions as prior art for overall and per-type entity reporting | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 | pytest marker docs | <https://docs.pytest.org/en/stable/example/markers.html> | MIT | Registered custom markers and `-m` selection for opt-in benchmark execution | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 | Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | TextUnit provenance and merge-by-title-and-type extraction semantics for stable gold-key design | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
-
 
 ## EntityExtractor Benchmark Corpus Research (Task #911)
 
