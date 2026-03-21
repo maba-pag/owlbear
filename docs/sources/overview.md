@@ -31,6 +31,15 @@ External repos and resources studied during OwlBear development.
 | pytest marker docs | <https://docs.pytest.org/en/stable/example/markers.html> | MIT | Registered custom markers and `-m` selection for opt-in benchmark execution | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 | Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | TextUnit provenance and merge-by-title-and-type extraction semantics for stable gold-key design | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
 
+## EntityExtractor Gleaning Prototype Research (Task #907)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG config docs | <https://microsoft.github.io/graphrag/config/yaml/> | MIT | `extract_graph.max_gleanings`, optional glean cycles, and model metrics hooks as prior art for a default-off multi-pass seam with benchmark-visible cost data | `docs/research/entity-extractor-gleaning-prototype.md` | 2026-03-21 |
+| Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | Merge-by-title-and-type graph extraction semantics and post-extraction consolidation behavior for stable dedup keys | `docs/research/entity-extractor-gleaning-prototype.md` | 2026-03-21 |
+| Microsoft GraphRAG manual prompt tuning docs | <https://microsoft.github.io/graphrag/prompt_tuning/manual_prompt_tuning/> | MIT | Extraction prompts as overrideable seams, supporting a dedicated missed-entities follow-up prompt | `docs/research/entity-extractor-gleaning-prototype.md` | 2026-03-21 |
+| EdgeQuake README | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Optional glean stage, 15-25% recall claim, and normalization after gleaning as prior art for a two-pass benchmark prototype | `docs/research/entity-extractor-gleaning-prototype.md` | 2026-03-21 |
+
 ## EntityExtractor Gleaning Evaluation Research (Task #908)
 
 | Source | URL | License | What we studied | Where Used | Date |
