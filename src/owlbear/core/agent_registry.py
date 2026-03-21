@@ -126,6 +126,19 @@ class AgentRegistry:
         self._cache[name] = agent
         return agent
 
+    def register(self, defn: AgentDefinition) -> None:
+        """Programmatically register an agent definition.
+
+        Stores *defn* under ``defn.name`` and evicts any cached
+        :class:`Agent` instance for that name so that the next
+        :meth:`get` call builds a fresh instance from the new definition.
+
+        Args:
+            defn: The :class:`AgentDefinition` to register.
+        """
+        self._definitions[defn.name] = defn
+        self._cache.pop(defn.name, None)
+
     def list_agents(self) -> list[AgentDefinition]:
         """Return all scanned agent definitions."""
         return list(self._definitions.values())
