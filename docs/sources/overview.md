@@ -20,6 +20,15 @@ External repos and resources studied during OwlBear development.
 | Typer Add Typer docs | <https://typer.tiangolo.com/tutorial/subcommands/add-typer/> | MIT | `app.add_typer()` composition for wiring a dedicated board command module into the root CLI | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
 | Python `datetime` docs | <https://docs.python.org/3/library/datetime.html> | PSF | `datetime.fromisoformat()` support for ISO 8601 timestamps with UTC offsets from kanban JSON and move logs | `docs/research/bearclaw-board-command-implementation-gate.md` | 2026-03-21 |
 
+## BearClaw Board Failure-Handling Gate (Task #920)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `subprocess` docs | <https://docs.python.org/3/library/subprocess.html> | PSF | `run(..., check=False, capture_output=True, text=True)` behavior plus `OSError` and return-code handling for missing executables and child failures | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
+| Python `json` docs | <https://docs.python.org/3/library/json.html> | PSF | `JSONDecodeError` failure semantics and parse-location details for malformed JSON payloads | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
+| Click exception handling docs | <https://click.palletsprojects.com/en/stable/exceptions/> | BSD-3-Clause | stderr rendering and exit-code behavior for user-facing CLI failures | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
+| Typer exceptions docs | <https://typer.tiangolo.com/tutorial/exceptions/> | MIT | behavior of uncaught exceptions and Rich traceback output in Typer apps | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
+
 ## BearClaw Board RED Test Gate (Task #909)
 
 | Source | URL | License | What we studied | Where Used | Date |
