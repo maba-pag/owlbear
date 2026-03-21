@@ -15,6 +15,7 @@ from typer.core import TyperGroup
 
 import owlbear
 from bearclaw.commands.auth import app as auth_app
+from bearclaw.commands.board import app as board_app
 from bearclaw.commands.browser import app as browser_app
 from bearclaw.commands.chat import app as chat_app
 from bearclaw.commands.daemon import app as daemon_app
@@ -52,6 +53,7 @@ app.add_typer(voice_app)
 app.add_typer(knowledge_source_app)
 
 # Top-level commands (unnamed → promoted to root)
+app.add_typer(board_app)
 app.add_typer(chat_app)
 app.add_typer(daemon_app)
 
