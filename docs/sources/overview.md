@@ -2,12 +2,94 @@
 
 External repos and resources studied during OwlBear development.
 
+## BearClaw Board Command Research (Task #905)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| kanban-md README / command docs | <https://github.com/antopolskiy/kanban-md> | MIT | `board`, `list --json`, `log --json`, `assignee`, `claimed_by`, and global output flags for scripting a board view | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
+| Rich Tables docs | <https://rich.readthedocs.io/en/stable/tables.html> | MIT | Table sections, column configuration, and empty-table handling for a grouped terminal board | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
+| Typer Commands docs | <https://typer.tiangolo.com/tutorial/commands/> | MIT | Dedicated command registration conventions for a `board` command module | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
+| Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner` invocation and output assertions for command tests | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
+
+## EntityExtractor Gleaning Benchmark Research (Task #891)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| EdgeQuake README | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Optional glean step, 15-25% recall claim, and benchmark-first algorithm outline | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+| Microsoft GraphRAG config docs | <https://microsoft.github.io/graphrag/config/yaml/> | MIT | `extract_graph.max_gleanings` and `extract_claims.max_gleanings`, plus model metrics hooks as prior art for multi-pass extraction and cost visibility | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+| Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | Text-unit provenance and merge-by-title or type extraction flow | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+| Microsoft GraphRAG manual prompt tuning docs | <https://microsoft.github.io/graphrag/prompt_tuning/manual_prompt_tuning/> | MIT | Extraction prompt as a separable tuning seam for a default-off prototype | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+| scikit-learn `recall_score` docs | <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html> | BSD-3-Clause | Recall definition and averaging choices for gold-vs-pred entity evaluation | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+| spaCy `Scorer` docs | <https://spacy.io/api/scorer> | MIT | Gold annotation scoring conventions and per-type PRF framing | `docs/research/entity-extractor-gleaning-benchmark.md` | 2026-03-21 |
+
+## EntityExtractor Recall Harness Research (Task #906)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| scikit-learn `recall_score` docs | <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html> | BSD-3-Clause | Exact recall definition plus `micro`, `macro`, and per-label reporting options to mirror in a custom scorer | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
+| spaCy `Scorer` docs | <https://spacy.io/api/scorer> | MIT | `ents_r` and `ents_per_type` conventions as prior art for overall and per-type entity reporting | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
+| pytest marker docs | <https://docs.pytest.org/en/stable/example/markers.html> | MIT | Registered custom markers and `-m` selection for opt-in benchmark execution | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
+| Microsoft GraphRAG dataflow docs | <https://microsoft.github.io/graphrag/index/default_dataflow/> | MIT | TextUnit provenance and merge-by-title-and-type extraction semantics for stable gold-key design | `docs/research/entity-extractor-code-corpus-recall-harness.md` | 2026-03-21 |
+
+## EntityExtractor Gleaning Evaluation Research (Task #908)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| EdgeQuake README | <https://github.com/raphaelmansuy/edgequake> | Apache-2.0 | Optional glean step and benchmark-driven rollout posture for multi-pass extraction | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+| Microsoft GraphRAG config docs | <https://microsoft.github.io/graphrag/config/yaml/> | MIT | `max_gleanings` as a configurable extraction knob instead of a forced default | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+| scikit-learn `recall_score` docs | <https://scikit-learn.org/stable/modules/generated/sklearn.metrics.recall_score.html> | BSD-3-Clause | Micro recall and per-label recall definitions for the benchmark gate | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+| spaCy `Scorer` docs | <https://spacy.io/api/scorer> | MIT | Per-type PRF reporting conventions for extraction evaluation | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+| PydanticAI agents docs | <https://ai.pydantic.dev/agents/> | MIT | Run-result usage access for token and request accounting | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+| Python `time` docs | <https://docs.python.org/3/library/time.html> | PSF | `time.perf_counter()` guidance for high-resolution elapsed-time measurement | `docs/research/entity-extractor-gleaning-evaluation-plan.md` | 2026-03-21 |
+
 ## Planner Temp Task Hygiene (Task #855)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and validation in structured issue forms; precedent for rejecting underspecified work items at intake | `docs/research/planner-temp-task-hygiene.md` | 2026-03-21 |
 | GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | Disabling blank issues and steering contributors into templates/forms instead of free-form placeholders | `docs/research/planner-temp-task-hygiene.md` | 2026-03-21 |
+
+## Planner Placeholder Guardrails (Task #899)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields, defaults, and validation as intake-time controls against placeholder work items | `docs/research/planner-placeholder-guardrails.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | `blank_issues_enabled: false` as prior art for refusing blank work items before they enter the queue | `docs/research/planner-placeholder-guardrails.md` | 2026-03-21 |
+| Atlassian Support - Configure advanced work item workflows | <https://support.atlassian.com/jira-cloud-administration/docs/configure-advanced-issue-workflows/> | N/A (docs) | Validators block invalid transition input before work items advance; precedent for stop/refine behavior instead of downstream cleanup | `docs/research/planner-placeholder-guardrails.md` | 2026-03-21 |
+
+## Placeholder Task Rejection Guidance (Task #900)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and field-level validation in issue forms; precedent for refusing underspecified work items instead of inferring missing scope | `docs/research/placeholder-task-rejection-guidance.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | `blank_issues_enabled: false` and structured template chooser configuration; precedent for disabling blank intake paths | `docs/research/placeholder-task-rejection-guidance.md` | 2026-03-21 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/user/project/description_templates/> | CC-BY-SA-4.0 | Standardized issue and work-item description templates; precedent for requiring scoped bodies instead of empty placeholders | `docs/research/placeholder-task-rejection-guidance.md` | 2026-03-21 |
+
+## Architect Placeholder Rejection Rules (Task #902)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and validations in structured issue forms; prior art for refusing underspecified work items instead of refining invented scope | `docs/research/architect-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | `blank_issues_enabled: false` as explicit prior art for disabling blank intake paths | `docs/research/architect-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| Atlassian Support - Configure advanced work item workflows | <https://support.atlassian.com/jira-cloud-administration/docs/configure-advanced-issue-workflows/> | N/A (docs) | Validators check transition input before the transition is performed and failed validators stop the work item from progressing | `docs/research/architect-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/user/project/description_templates/> | CC-BY-SA-4.0 | Description templates and defaults as prior art for requiring scoped work-item bodies instead of empty placeholders | `docs/research/architect-placeholder-task-rejection-rules.md` | 2026-03-21 |
+
+## Planner Agent Placeholder Rejection Rules (Task #903)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and validation as intake-time controls; prior art for treating placeholder titles and blank bodies as invalid input | `docs/research/planner-agent-placeholder-rejection-rules.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | `blank_issues_enabled: false` as prior art for refusing blank intake paths instead of letting placeholders through | `docs/research/planner-agent-placeholder-rejection-rules.md` | 2026-03-21 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/user/project/description_templates/> | CC-BY-SA-4.0 | Standardized scoped work-item descriptions through reusable templates and defaults rather than empty bodies | `docs/research/planner-agent-placeholder-rejection-rules.md` | 2026-03-21 |
+
+## Researcher Placeholder-Task Rejection Rules (Task #901)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | N/A (docs) | Required fields and validations as prior art for rejecting placeholder or underspecified work before research begins | `docs/research/researcher-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates for your repository | <https://docs.github.com/en/enterprise-cloud@latest/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | N/A (docs) | `blank_issues_enabled: false` as precedent for refusing blank intake paths instead of clarifying them downstream | `docs/research/researcher-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/user/project/description_templates/> | CC-BY-SA-4.0 | Standardized scoped work-item descriptions and defaults rather than empty task bodies | `docs/research/researcher-placeholder-task-rejection-rules.md` | 2026-03-21 |
+| Atlassian Support - Configure advanced work item workflows | <https://support.atlassian.com/jira-cloud-administration/docs/configure-advanced-issue-workflows/> | N/A (docs) | Workflow validators as prior art for blocking invalid transition input before a work item advances | `docs/research/researcher-placeholder-task-rejection-rules.md` | 2026-03-21 |
 
 ## Core Re-export Removal Research (Task #812)
 
