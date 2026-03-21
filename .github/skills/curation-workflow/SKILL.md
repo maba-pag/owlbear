@@ -61,11 +61,19 @@ Based on assessment:
 | MEDIUM (actionable but single occurrence) | Keep in inbox for next curation cycle                      |
 | LOW (vaguely useful but not actionable)   | Delete from inbox                                          |
 | NOISE (obvious, generic, or empty)        | Delete from inbox                                          |
-| CONFLICT (contradicts existing rule)      | Flag for user review — do NOT auto-resolve                 |
+| CONFLICT (contradicts existing rule)      | Create a **decision request** — do NOT auto-resolve        |
+| UNCERTAIN (needs user opinion, not data)  | Create a **decision request** — do NOT keep for next cycle |
 
 For HIGH findings: identify which file to change (instruction, skill, or agent) and
 propose the specific edit. Write the proposal to the curation report. After user
 approval, make the change and delete the inbox entry.
+
+For CONFLICT / UNCERTAIN findings: create a decision request file in
+`docs/decisions/pending/` following the `decision-requests` skill. Present the
+conflicting entries or the uncertain finding as options, include your confidence
+scores, and pre-fill the recommended disposition. If a curation task ID exists,
+block it with a reference to the decision file. The planner will unblock it once
+the user resolves the decision.
 
 For deletions: `memory delete /memories/repo/inbox/{filename}`
 
