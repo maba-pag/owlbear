@@ -56,6 +56,7 @@ thing being built is the thing being tested.
 
 - **Max 20 tasks per invocation.** Split larger plans into multiple calls.
 - **Every task needs AC** in `--body` describing what "done" looks like.
+- **Never emit placeholder tasks.** Reject any planned task where the title starts with `TEMP-` (e.g., `TEMP-planner-test`) or the body is empty after frontmatter or contains only placeholder text with no concrete scope or acceptance criteria. When either placeholder condition is hit, **refine the task or stop** — do not emit a `kanban-md create` command and do not leave a placeholder board artifact.
 
 </critical_rules>
 
@@ -128,6 +129,8 @@ DONE | {N} tasks planned
 - An implementation task has no preceding test task in the batch
 - Sequence numbers collide with existing tasks
 - A task body is empty or contains only "implement this"
+- A task title starts with `TEMP-` (e.g., `TEMP-planner-test`) — stop and refine before emitting
+- A task body contains only placeholder text with no concrete scope or AC (e.g., a body that says nothing more than "implement this feature") — stop and refine before emitting
 - You're creating more than 20 tasks without splitting
 - A research task has no AC requiring follow-up kanban task creation
 - You referenced a dependency by title pattern instead of task ID
