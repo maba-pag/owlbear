@@ -113,11 +113,18 @@ DONE | {N} promoted, {M} pruned
 - Don't over-prune — when in doubt, keep the entry as `unreviewed`
 - Don't spend tokens on entries that are already `reviewed` and stable
 
-**Red flags — STOP and ask the user:**
+**Red flags — create a decision request:**
+
+When you encounter any of the situations below, you cannot resolve them autonomously.
+Create a **decision request** file in `docs/decisions/pending/` following the
+`decision-requests` skill and block the curation task (or note it in your report
+if running ad-hoc). Do NOT auto-resolve, silently skip, or keep the entry for
+"next cycle" hoping for more data — these need a human opinion, not more examples.
 
 - Large number of conflicts (>3) between reviewed lessons — systemic disagreement
 - Finding that contradicts a convention in `copilot-instructions.md` or the `architecture-standards` skill
 - Agent repeatedly writing the same complaint — may indicate a process problem, not a knowledge problem
+- A finding where the correct disposition (promote vs prune) depends on product intent or user preference that the curator cannot infer from existing instructions
 
 Also review **Common red flags** in `agent-common.instructions.md`.
 
