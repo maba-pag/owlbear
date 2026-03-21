@@ -459,6 +459,46 @@ Each `build_*` helper is independently testable. Conditional subsystems (knowled
 | Agent definitions | Markdown + YAML frontmatter | Human-readable, parsed by AgentDefinition model |
 | Role policies | BUILDER/VALIDATOR with FilteredToolset | Validator denied write_file, create_file |
 
+### Package-root lazy exports
+
+OwlBear defaults to **direct imports or eager re-exports** for ordinary package roots.
+A cached module-level `__getattr__` import map (`_LAZY_IMPORTS` + `__getattr__` caching
+into `globals()`) is allowed only when a deliberate public package root has at least one
+of:
+
+- **Measured eager-import side effects** — the cost of importing the submodule eagerly
+  is visible (slow startup, heavy transitive pull).
+- **Optional-dependency pressure** — a symbol's submodule has an optional install that
+  must not be imported until the symbol is accessed.
+- **Import-cycle pressure** — a circular dependency cannot be broken by restructuring
+  alone, and lazy importing is the least-invasive escape hatch.
+
+**`__all__` is the supported public contract.** It is always explicit and limited to the
+intended public surface. The lazy import map and `__getattr__` are implementation details:
+private machinery that consumers must never depend on directly.
+
+**Lazy-loader (the third-party package) is out of scope** for OwlBear's current small
+fixed public surfaces. `owlbear.tools` (10 names) and `owlbear.memory.knowledge`
+(14 names) use an inline `importlib`-based map, which is lower cost than adding
+`lazy-loader` and its stub or packaging overhead.
+
+**`__dir__` is optional ergonomics** — not required alongside `__getattr__`. The two
+existing examples omit it by design; it can be added in a later targeted task if
+interactive-shell discoverability becomes a practical need.
+
+**Lazy exports must not be used to hide illegal dependency edges.** If a circular import
+only disappears by deferring it to access time, that is a layering problem — fix the
+layering first, then apply lazy imports only if import-cycle pressure remains.
+
+Current repo examples:
+
+- `src/owlbear/tools/__init__.py` — 10 public toolset symbols deferred to avoid eager
+  loading of heavy submodules (e.g. `owlbear.tools.github_api` pulls
+  `owlbear.core.retry`).
+- `src/owlbear/memory/knowledge/__init__.py` — 14 public knowledge-graph symbols
+  deferred to break a circular-import chain
+  (`ingest → intake → core.retry → core.errors → tools → core.retry`).
+
 ## 9. Nanobot Influence
 
 OwlBear draws architectural patterns from [nanobot](https://github.com/HKUDS/nanobot) (MIT, ~15K LOC, very active — PRs to #1325+). Key differences:
