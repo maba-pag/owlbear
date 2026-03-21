@@ -1528,3 +1528,12 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | mksglu/claude-context-mode v1.0.18 | <https://github.com/mksglu/claude-context-mode> | Elastic-2.0 | Sandbox execution, FTS5 knowledge base, smart truncation (line-boundary snapping), session event capture/snapshot, exit classification, progressive throttling | `docs/research/claude-context-mode.md` | 2026-03-12 |
+
+## owlbear.tools Lazy-Export RED Coverage (Task #878)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python import system docs | <https://docs.python.org/3/reference/import.html> | PSF | Package `__init__.py` execution model; explains why bare `import owlbear.tools` runs all package-root imports and why a clean subprocess is needed to verify side effects | `docs/research/tools-root-lazy-exports-red-coverage.md`, `tests/test_tools_init_reexports.py` | 2026-03-20 |
+| Python data model docs | <https://docs.python.org/3/reference/datamodel.html> | PSF | Module-level `__getattr__` and `__dir__` hooks — the supported extension points for lazy package-root attribute access | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
+| PEP 562 — Module `__getattr__` and `__dir__` | <https://peps.python.org/pep-0562/> | PSF | Established that `from pkg import Name` is compatible with module-level `__getattr__`; informed the decision to keep API-preservation tests behaviour-focused rather than implementation-focused | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
+| Scientific Python SPEC 1 — Lazy Loading of Submodules | <https://scientific-python.org/specs/spec-0001/> | BSD | Lazy-export pattern reference; informed the decision to keep the RED task narrowly scoped without over-specifying non-essential ergonomics | `docs/research/tools-root-lazy-exports-red-coverage.md` | 2026-03-20 |
