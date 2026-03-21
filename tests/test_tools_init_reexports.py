@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
 
 class TestFromAC_ToolsReExports:
     """Every symbol listed in the AC must be importable from owlbear.tools."""
@@ -224,3 +226,22 @@ class TestFromAC_ToolsImportSideEffect:
         assert result.returncode == 0, (
             f"Bare import of owlbear.tools loaded unexpected modules:\n{result.stderr}"
         )
+
+
+class TestBuilderDiscovered:
+    """Edge-case coverage found during GREEN implementation."""
+
+    def test_getattr_unsupported_name_raises_attribute_error(self) -> None:
+        """__getattr__ for an unknown name must raise AttributeError, not widen the API."""
+        import owlbear.tools
+
+        with pytest.raises(AttributeError):
+            _ = owlbear.tools._nonexistent_symbol  # type: ignore[attr-defined]
+
+    def test_cached_lookup_returns_same_object(self) -> None:
+        """Second access must return the cached object (no double import)."""
+        import owlbear.tools
+
+        first = owlbear.tools.KanbanToolset
+        second = owlbear.tools.KanbanToolset
+        assert first is second
