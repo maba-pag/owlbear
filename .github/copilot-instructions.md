@@ -82,7 +82,12 @@ For CLI commands, workflows, and cheatsheets, see the `kanban-md` skill. The sec
 
 ### Task lifecycle
 
-Pipeline statuses: `ideation` → `backlog` → `todo` → `in-progress` → `review` → `docs` → `done`.
+Full pipeline with agent ownership:
+
+```
+ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
+```
+
 Each agent's `.agent.md` defines its gate ownership, exit criteria, and rejection paths.
 See `agent-common.instructions.md` → **Task coordination** for claiming and handoff workflow.
 

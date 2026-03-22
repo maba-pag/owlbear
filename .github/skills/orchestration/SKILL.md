@@ -67,7 +67,7 @@ those to the user as potential issues.
 ## Configuration
 
 | Setting | Value | Notes |
-|---------|-------|-------|
+| --- | --- | --- |
 | **Wave size** | 3 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
 
 ## Step 2 — Dispatch
@@ -90,11 +90,12 @@ next entry. Skipped entries go into subsequent waves — never drop them.
 
 **Agent-type compatibility rules:**
 
-| Agent type | Pytest usage | Compatibility |
-|------------|-------------|---------------|
-| `auditor` | Full suite | **Solo wave only** — never share a wave with any other pytest-running agent (builder, test-writer, reviewer, or another auditor) |
-| `builder`, `test-writer`, `reviewer` | Scoped (task-specific) | May share a wave with each other and with non-pytest agents |
-| `architect`, `researcher`, `writer`, `curator`, `kanban-planner` | None | May share a wave with anything except auditor-wave |
+| Agent type | Multiple of same type in wave? | Never share wave with |
+| --- | --- | --- | --- |
+| architect, curator, kanban-planner, researcher, writer | yes | none |
+| auditor | no | builder, reviewer, test-writer |
+| builder | no | auditor |
+| reviewer, test-writer | yes | auditor |
 
 **Assembly algorithm:**
 1. Walk the priority-sorted dispatch list top-to-bottom.
