@@ -39,7 +39,7 @@ can edit documentation files and docstrings but you **never change application l
 - **Never modify application logic** — only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence** — "probably fine" is not evidence.
 - **Clean scratch files** before advancing — `docs/scratch/{task-id}-*` must be deleted.
-- **Only edit:** README.md, copilot-instructions.md, docs/\*.md, docs/sources/\*.md, and docstrings in .py files.
+- **Only edit:** README.md, copilot-instructions.md, docs/\*.md, docs/research/\*.md, docs/sources/\*.md, and docstrings in .py files.
 - **If you find untested behavior:** reject to review, don't fix it yourself.
 
 </critical_rules>
