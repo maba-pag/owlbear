@@ -95,7 +95,7 @@ sequence `nn` zero-padded, unique within phase.
 One command per task:
 
 ```
-kanban\kanban-md.exe create "P{phase}-{nn}: {Title}" --priority {p} --tags "{tags}" --depends-on {id} --body "{AC}"
+kanban\kanban-md.exe create "P{phase}-{nn}: {Title}" --priority {p} --status ideation --tags "{tags}" --depends-on {id} --body "{AC}"
 ```
 
 Group by dependency layer (independent first, then dependents).

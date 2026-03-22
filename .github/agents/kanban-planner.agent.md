@@ -148,28 +148,28 @@ Tests depend on implementation — this is backwards. Test task must come first.
 
 # Feature: "Add diagram generation" spans tools + cli + docs
 
-kanban\kanban-md.exe create "P5-01: Test DiagramService" --priority critical --tags "phase-5,scope:tools,test" --body "Pytest cases for DiagramService: render mermaid, handle errors, timeout."
-kanban\kanban-md.exe create "P5-02: Implement DiagramService" --priority critical --tags "phase-5,scope:tools" --depends-on P5-01 --body "DiagramService in tools/diagram/service.py. Must pass P5-01 tests."
-kanban\kanban-md.exe create "P5-03: Test bearclaw diagram CLI" --priority needed --tags "phase-5,scope:cli,test" --depends-on P5-02 --body "Pytest cases for bearclaw diagram subcommand."
-kanban\kanban-md.exe create "P5-04: Implement bearclaw diagram CLI" --priority needed --tags "phase-5,scope:cli" --depends-on P5-03 --body "Typer command in bearclaw/. Must pass P5-03 tests."
-kanban\kanban-md.exe create "P5-05: Document diagram generation" --priority important --tags "phase-5,scope:docs" --depends-on P5-04 --body "Update README with diagram usage. Update copilot-instructions.md if needed."
+kanban\kanban-md.exe create "P5-01: Test DiagramService" --priority critical --status ideation --tags "phase-5,scope:tools,test" --body "Pytest cases for DiagramService: render mermaid, handle errors, timeout."
+kanban\kanban-md.exe create "P5-02: Implement DiagramService" --priority critical --status ideation --tags "phase-5,scope:tools" --depends-on P5-01 --body "DiagramService in tools/diagram/service.py. Must pass P5-01 tests."
+kanban\kanban-md.exe create "P5-03: Test bearclaw diagram CLI" --priority needed --status ideation --tags "phase-5,scope:cli,test" --depends-on P5-02 --body "Pytest cases for bearclaw diagram subcommand."
+kanban\kanban-md.exe create "P5-04: Implement bearclaw diagram CLI" --priority needed --status ideation --tags "phase-5,scope:cli" --depends-on P5-03 --body "Typer command in bearclaw/. Must pass P5-03 tests."
+kanban\kanban-md.exe create "P5-05: Document diagram generation" --priority important --status ideation --tags "phase-5,scope:docs" --depends-on P5-04 --body "Update README with diagram usage. Update copilot-instructions.md if needed."
 </good_example>
 
 <good_example why="Atomic TDD pair with correct dependency direction">
 
 # Layer 1: Tests (no internal dependencies)
 
-kanban\kanban-md.exe create "P2-01: Test entity models" --priority critical --tags "phase-2,model,test" --body "Pytest cases for Entity validation: required fields, types, edge cases."
-kanban\kanban-md.exe create "P2-03: Test relationship models" --priority critical --tags "phase-2,model,test" --body "Pytest cases for Relationship validation: source/target, weight bounds."
+kanban\kanban-md.exe create "P2-01: Test entity models" --priority critical --status ideation --tags "phase-2,model,test" --body "Pytest cases for Entity validation: required fields, types, edge cases."
+kanban\kanban-md.exe create "P2-03: Test relationship models" --priority critical --status ideation --tags "phase-2,model,test" --body "Pytest cases for Relationship validation: source/target, weight bounds."
 
 # Layer 2: Implementations (depend on tests)
 
-kanban\kanban-md.exe create "P2-02: Implement entity models" --priority critical --tags "phase-2,model" --depends-on P2-01 --body "Entity Pydantic model. Must pass P2-01 tests."
-kanban\kanban-md.exe create "P2-04: Implement relationship models" --priority critical --tags "phase-2,model" --depends-on P2-03 --body "Relationship model. Must pass P2-03 tests."
+kanban\kanban-md.exe create "P2-02: Implement entity models" --priority critical --status ideation --tags "phase-2,model" --depends-on P2-01 --body "Entity Pydantic model. Must pass P2-01 tests."
+kanban\kanban-md.exe create "P2-04: Implement relationship models" --priority critical --status ideation --tags "phase-2,model" --depends-on P2-03 --body "Relationship model. Must pass P2-03 tests."
 
 # Layer 3: Integration
 
-kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --tags "phase-2,model,test" --depends-on P2-02,P2-04 --body "Integration test: create entities and relationships together."
+kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --status ideation --tags "phase-2,model,test" --depends-on P2-02,P2-04 --body "Integration test: create entities and relationships together."
 </good_example>
 
 </examples>
