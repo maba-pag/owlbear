@@ -8,6 +8,11 @@ description: LLM-guided project scoping and definition workflow. Turns a vague i
 > **Agent status:** User-invocable skill — not dispatched by the orchestrator
 > pipeline. Invoked directly by the user in VS Code chat for ad-hoc project scoping.
 
+> **Tool note:** This skill uses `ask_user` (PydanticAI runtime tool) for interactive
+> refinement. In VS Code agent mode, use `askQuestions` instead. Both are appropriate
+> for iterative project scoping — do not use decision requests for this frequent
+> back-and-forth.
+
 Structured workflow for turning a user's idea into an actionable project
 definition. This skill is user-invocable for ad-hoc project scoping —
 producing a `ProjectDefinition` that can be decomposed into kanban tasks.
@@ -71,7 +76,7 @@ should be populated when information is available.
 | kind        | `Literal["functional", "non-functional"]`| Required            | Whether it describes behaviour or a quality attr |
 | priority    | `str`                                    | Optional            | Defaults to "important" if omitted               |
 
-## Example ask_user Interaction
+## Example Interaction
 
 When multiple valid approaches exist, present them as numbered options with
 confidence scores so the user can make an informed choice:
