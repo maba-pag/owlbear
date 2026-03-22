@@ -203,7 +203,9 @@ Content that does not directly help the agent perform its task is noise.
 
 ## Output format
 
-Produce your analysis in this structure:
+The initial analysis uses this structure (saved to `/memories/session/plan.md`).
+The actual implementation decisions happen per-finding during the Finding Presentation
+Protocol — this plan is the starting point, not the final word.
 
 ```
 ## FINDINGS
@@ -257,7 +259,55 @@ For each step:
 1. **Read ALL files first.** Do not start forming conclusions until you've read every
    agent, skill, and instruction file. Use subagents for parallel reading if needed.
 2. **Save your plan.** Write findings + remediation plan to `/memories/session/plan.md`.
-3. **Ask before implementing.** Present the plan to the user. Wait for approval.
+3. **Present findings for approval.** Walk through each finding using the Finding
+   Presentation Protocol below. Do NOT batch-present — present one at a time.
 4. **Implement phase by phase.** Complete all steps in Phase 1 before Phase 2.
-5. **Verify after each phase.** Run the relevant verification checks.
-6. **Gap check at the end.** Re-read the FINDINGS CHECKLIST and verify every item.
+5. **Commit after each fix.** After implementing a fix, stage the changed files and
+   commit with format: `chore: audit {ID} — {one-line description}`. Do not push.
+6. **Verify after each fix.** Run a quick grep/read check to confirm the edit took
+   effect. Report the verification result before moving to the next finding.
+7. **Checkpoint after each phase.** Update `/memories/session/plan.md` with completed
+   items and current state, so the audit can resume if the conversation is interrupted.
+8. **Gap check at the end.** Re-read the FINDINGS CHECKLIST and verify every item.
+
+## Finding presentation protocol
+
+For EACH finding, present it in this structure before implementing:
+
+### 1. Facts
+
+State what was found — the specific text, file, line number. No interpretation yet.
+
+### 2. Options
+
+Present ALL viable options, always including "Do nothing." For each option:
+
+| Option | Description | Pros | Cons / Risks |
+|--------|-------------|------|-------------|
+| A (do nothing) | Leave as-is | No churn | {specific risk of inaction} |
+| B | {description} | {pros} | {cons} |
+| C (if applicable) | {description} | {pros} | {cons} |
+
+### 3. Recommendation
+
+State your recommendation with a confidence score (`.0`–`1.0`):
+
+> **Recommendation:** Option B (`.85`) — {one-line rationale}
+
+If a recognized best practice applies, cite it:
+
+> **Best practice:** {source or principle} — {how it applies}
+
+### 4. Ask for approval
+
+Use `askQuestions` to present the options and collect the user's choice. Include a
+free-text field so the user can provide feedback or propose a different approach.
+
+If the user provides feedback that changes the approach, revise the plan for that
+finding and re-present before implementing.
+
+### Presentation pacing
+
+Present ONE finding at a time. After the user approves and you implement + commit +
+verify, move to the next finding. This keeps each decision focused and allows the
+user to steer the audit incrementally.
