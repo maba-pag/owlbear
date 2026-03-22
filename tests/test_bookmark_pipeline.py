@@ -6,6 +6,7 @@ SourceEvaluator, IngestPipeline, BookmarkStore) are mocked.
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import sqlite3
 import sys
@@ -698,3 +699,131 @@ class TestDefaultWebReadFetch:
             result = await _default_web_read("https://example.com/empty")
 
         assert result is None
+
+
+# ===========================================================================
+# cancel= parameter — cooperative cancellation seam (task #880)
+# ===========================================================================
+
+
+class TestFromAC_BookmarkCancellation:
+    """cancel= checks at each stage boundary; earlier-stage state is preserved on exit."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_extract_leaves_evaluation_and_bookmark_unset(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Cancel signal pre-set on entry to process() → no web_read, evaluation, or bookmark."""
+        cancel = asyncio.Event()
+        cancel.set()
+
+        mock_web_read = AsyncMock(return_value=SAMPLE_CONTENT)
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate = AsyncMock(return_value=_high_score_result())
+
+        bp = BookmarkPipeline(
+            bookmark_store=BookmarkStore(conn),
+            evaluator=mock_evaluator,
+            ingest_pipeline=AsyncMock(),
+            web_read_fn=mock_web_read,
+        )
+
+        result = await bp.process(SAMPLE_URL, cancel=cancel)
+
+        assert result.evaluation is None
+        assert result.bookmark is None
+        mock_web_read.assert_not_awaited()
+        mock_evaluator.evaluate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_evaluate_leaves_evaluation_and_bookmark_unset(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Cancel fires during web_read (before evaluate is called) → no evaluation or bookmark."""
+        cancel = asyncio.Event()
+
+        async def web_read_and_cancel(_url: str) -> str:
+            cancel.set()  # fires between extract and evaluate
+            return SAMPLE_CONTENT
+
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate = AsyncMock(return_value=_high_score_result())
+
+        bp = BookmarkPipeline(
+            bookmark_store=BookmarkStore(conn),
+            evaluator=mock_evaluator,
+            ingest_pipeline=AsyncMock(),
+            web_read_fn=web_read_and_cancel,
+        )
+
+        result = await bp.process(SAMPLE_URL, cancel=cancel)
+
+        assert result.evaluation is None
+        assert result.bookmark is None
+        mock_evaluator.evaluate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_ingest_preserves_evaluation_and_skips_ingest_and_store(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Cancel fires after evaluate → evaluation is preserved; ingest and store are skipped."""
+        cancel = asyncio.Event()
+
+        async def evaluate_and_cancel(_content: str, _context: object) -> EvaluationResult:
+            cancel.set()  # fires between evaluate and ingest
+            return _high_score_result()
+
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate = evaluate_and_cancel
+
+        mock_ingest = MagicMock()
+        mock_ingest.ingest_text = AsyncMock(return_value=_mock_ingest_result())
+
+        bp = BookmarkPipeline(
+            bookmark_store=BookmarkStore(conn),
+            evaluator=mock_evaluator,
+            ingest_pipeline=mock_ingest,
+            web_read_fn=AsyncMock(return_value=SAMPLE_CONTENT),
+        )
+
+        result = await bp.process(SAMPLE_URL, cancel=cancel)
+
+        assert result.evaluation is not None
+        assert result.evaluation.relevance_score == 0.85
+        assert result.ingested is False
+        assert result.bookmark is None
+        mock_ingest.ingest_text.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cancel_before_store_leaves_bookmark_unset_preserving_earlier_stage_state(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        """Cancel fires after ingest → earlier-stage state preserved; bookmark is None."""
+        cancel = asyncio.Event()
+
+        async def ingest_and_cancel(*_args: object, **_kwargs: object) -> IngestResult:
+            cancel.set()  # fires between ingest and store
+            return _mock_ingest_result()
+
+        mock_evaluator = MagicMock()
+        mock_evaluator.evaluate = AsyncMock(return_value=_high_score_result())
+
+        mock_ingest = MagicMock()
+        mock_ingest.ingest_text = ingest_and_cancel
+
+        bp = BookmarkPipeline(
+            bookmark_store=BookmarkStore(conn),
+            evaluator=mock_evaluator,
+            ingest_pipeline=mock_ingest,
+            web_read_fn=AsyncMock(return_value=SAMPLE_CONTENT),
+        )
+
+        result = await bp.process(SAMPLE_URL, cancel=cancel)
+
+        assert result.evaluation is not None
+        assert result.ingested is True  # ingest completed before cancel check for store
+        assert result.bookmark is None

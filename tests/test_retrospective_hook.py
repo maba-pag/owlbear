@@ -928,3 +928,65 @@ class TestIngestTextError:
 
         mock_logger.exception.assert_called_once()
         hook._agent.run.assert_called_once()
+
+
+# ===========================================================================
+# cancel= parameter — cooperative cancellation seam (task #880)
+# ===========================================================================
+
+
+class TestFromAC_RetrospectiveHookCancellation:
+    """hook composes a per-operation cancel signal with daemon shutdown for ingest_text."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_hook_passes_cancel_kwarg_to_ingest_text_composed_with_shutdown(
+        self, tmp_path: Path
+    ) -> None:
+        """_run_retrospective calls ingest_text with a cancel= signal linked to daemon shutdown."""
+        shutdown_event = asyncio.Event()
+        mock_ingest = AsyncMock()
+
+        # This constructor call fails TypeError on current HEAD (shutdown_event not accepted)
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            shutdown_event=shutdown_event,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        await hook._run_retrospective("42")
+
+        mock_ingest.ingest_text.assert_called_once()
+        call_kwargs = mock_ingest.ingest_text.call_args.kwargs
+        assert "cancel" in call_kwargs, "ingest_text must receive a cancel= signal"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cancel_signal_is_set_when_daemon_shutdown_fires(self, tmp_path: Path) -> None:
+        """The cancel= passed to ingest_text is set when the daemon shutdown event fires."""
+        shutdown_event = asyncio.Event()
+        captured: dict[str, object] = {}
+
+        async def capture_cancel(*_args: object, **kwargs: object) -> object:
+            captured["cancel"] = kwargs.get("cancel")
+            return MagicMock()
+
+        mock_ingest = AsyncMock()
+        mock_ingest.ingest_text = capture_cancel
+
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            shutdown_event=shutdown_event,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        shutdown_event.set()
+        await hook._run_retrospective("42")
+
+        cancel_signal = captured.get("cancel")
+        assert cancel_signal is not None, "cancel signal must be passed to ingest_text"
+        assert cancel_signal.is_set(), "cancel signal must be set when daemon shutdown fires"

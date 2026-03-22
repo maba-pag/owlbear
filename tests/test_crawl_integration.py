@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock
 
@@ -211,3 +212,75 @@ class TestCrawlAndIngestMocking:
         await crawl_and_ingest(crawler, pipeline, _CONFIG)
 
         pipeline.ingest_text.assert_awaited_once()
+
+
+# ===========================================================================
+# cancel= parameter — cooperative cancellation seam (task #880)
+# ===========================================================================
+
+
+class TestFromAC_CrawlCancellation:
+    """cancel= signal stops crawl_and_ingest at page-ingest boundaries."""
+
+    @pytest.mark.asyncio
+    async def test_stops_before_next_page_when_cancel_is_set_between_page_ingests(
+        self,
+    ) -> None:
+        """crawl_and_ingest(cancel=) does not ingest the next page once cancel is set."""
+        cancel = asyncio.Event()
+        crawler = _mock_crawler([_PAGE_A, _PAGE_B])
+        pipeline = MagicMock()
+
+        async def ingest_and_cancel(*_args: object, **_kwargs: object) -> IngestResult:
+            cancel.set()
+            return _RESULT_A
+
+        pipeline.ingest_text = AsyncMock(side_effect=ingest_and_cancel)
+
+        results = await crawl_and_ingest(crawler, pipeline, _CONFIG, cancel=cancel)
+
+        assert len(results) == 1
+        assert results[0] is _RESULT_A
+        assert pipeline.ingest_text.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_only_ingest_results_produced_before_cancellation(
+        self,
+    ) -> None:
+        """Only IngestResult values from pages processed before cancel are returned."""
+        cancel = asyncio.Event()
+        page_c = CrawlPage(url="https://example.com/c", content="Page C", title="Page C")
+        result_c = IngestResult(
+            document_id="ccc", chunk_count=1, entity_count=0, edge_count=0, status="indexed"
+        )
+        crawler = _mock_crawler([_PAGE_A, _PAGE_B, page_c])
+        pipeline = MagicMock()
+        call_count = 0
+
+        async def ingest_with_cancel(*_args: object, **_kwargs: object) -> IngestResult:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:  # 2 of 3 pages
+                cancel.set()
+            return [_RESULT_A, _RESULT_B, result_c][call_count - 1]
+
+        pipeline.ingest_text = AsyncMock(side_effect=ingest_with_cancel)
+
+        results = await crawl_and_ingest(crawler, pipeline, _CONFIG, cancel=cancel)
+
+        assert len(results) == 2
+        assert results[0] is _RESULT_A
+        assert results[1] is _RESULT_B
+
+    @pytest.mark.asyncio
+    async def test_cancel_set_before_first_page_returns_empty_list(self) -> None:
+        """If cancel is already set on entry, no pages are ingested."""
+        cancel = asyncio.Event()
+        cancel.set()
+        crawler = _mock_crawler([_PAGE_A, _PAGE_B])
+        pipeline = _mock_pipeline([_RESULT_A, _RESULT_B])
+
+        results = await crawl_and_ingest(crawler, pipeline, _CONFIG, cancel=cancel)
+
+        assert results == []
+        pipeline.ingest_text.assert_not_awaited()

@@ -2056,3 +2056,96 @@ class TestBgConcurrencySemaphore:
         await asyncio.gather(*tasks)
 
         assert max_concurrent <= 2
+
+
+# ===========================================================================
+# cancel= parameter — cooperative cancellation seam (task #880)
+# ===========================================================================
+
+
+def _minimal_cancel_pipeline(
+    extractor: MagicMock | None = None,
+    chunker: MagicMock | None = None,
+) -> IngestPipeline:
+    """IngestPipeline with all-mock deps suitable for cancel contract tests."""
+    store = MagicMock()
+    store.check_content_changed.return_value = (True, None)
+    store.embedding_provider = MagicMock(spec=["embed"])
+    store.embedding_provider.embed.return_value = []
+    return IngestPipeline(
+        store=store,
+        entity_extractor=extractor or MagicMock(),
+        text_chunker=chunker or MagicMock(),
+        workspace_root=Path("/tmp"),  # noqa: S108
+    )
+
+
+class TestFromAC_IngestCancellation:
+    """cancel= stops _run_extract at chunk boundaries; CancelledError propagates."""
+
+    @pytest.mark.asyncio
+    async def test_run_extract_stops_before_next_chunk_when_cancel_is_set_between_calls(
+        self,
+    ) -> None:
+        """_run_extract(chunks, cancel=) does not process the next chunk once cancel fires."""
+        cancel = asyncio.Event()
+        calls: list[str] = []
+
+        async def tracking_extract(text: str, _metadata: dict) -> ExtractionResult:
+            calls.append(text)
+            cancel.set()  # fires after first extraction; second chunk should not run
+            return ExtractionResult(entities=[], edges=[])
+
+        extractor = MagicMock()
+        extractor.extract = tracking_extract
+
+        pipeline = _minimal_cancel_pipeline(extractor=extractor)
+        chunks = [Chunk(text=f"c{i}", index=i, metadata={}) for i in range(3)]
+
+        result = await pipeline._run_extract(chunks, cancel=cancel)
+
+        assert len(result) == 1
+        assert len(calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_from_extractor_propagates_through_ingest_text(
+        self,
+    ) -> None:
+        """asyncio.CancelledError raised by the extractor propagates out of ingest_text."""
+        extractor = MagicMock()
+        extractor.extract = AsyncMock(side_effect=asyncio.CancelledError())
+
+        chunker = MagicMock()
+        chunker.chunk.return_value = [Chunk(text="chunk 0", index=0, metadata={})]
+
+        pipeline = _minimal_cancel_pipeline(extractor=extractor, chunker=chunker)
+
+        with pytest.raises(asyncio.CancelledError):
+            await pipeline.ingest_text("some text", cancel=asyncio.Event())
+
+    @pytest.mark.asyncio
+    async def test_ingest_text_threads_cancel_into_extraction_stopping_at_chunk_boundary(
+        self,
+    ) -> None:
+        """cancel= threaded from ingest_text into _run_extract stops extraction after one chunk."""
+        cancel = asyncio.Event()
+        extract_calls: list[str] = []
+
+        async def tracking_extract(text: str, _metadata: dict) -> ExtractionResult:
+            extract_calls.append(text)
+            cancel.set()  # fires after first chunk — second should not run
+            return ExtractionResult(entities=[], edges=[])
+
+        extractor = MagicMock()
+        extractor.extract = tracking_extract
+
+        chunker = MagicMock()
+        chunker.chunk.return_value = [
+            Chunk(text=f"chunk {i}", index=i, metadata={}) for i in range(3)
+        ]
+
+        pipeline = _minimal_cancel_pipeline(extractor=extractor, chunker=chunker)
+
+        await pipeline.ingest_text("some text", cancel=cancel)
+
+        assert len(extract_calls) == 1

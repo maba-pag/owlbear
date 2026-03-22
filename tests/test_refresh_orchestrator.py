@@ -5,6 +5,7 @@ TDD red-phase for task #430 / implementation #384.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -647,3 +648,114 @@ class TestFileGlobSandboxing:
         assert "good" in call_arg
         assert result.refreshed == 1
         assert result.failed == 1  # bad.md outside workspace
+
+
+# ===========================================================================
+# cancel= parameter — cooperative cancellation seam (task #880)
+# ===========================================================================
+
+
+class TestFromAC_RefreshCancellation:
+    """cancel= signal stops refresh_all and _ingest_items at iteration boundaries."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_all_stops_before_next_source_when_cancel_set_between_iterations(
+        self,
+    ) -> None:
+        """refresh_all(cancel=) does not start the next source once cancel is set."""
+        cancel = asyncio.Event()
+        src_a = _make_source(source_id="src-a", config={"urls": ["https://a.com"]})
+        src_b = _make_source(source_id="src-b", config={"urls": ["https://b.com"]})
+        store = MagicMock()
+        store.list_enabled.return_value = [src_a, src_b]
+        store.update = MagicMock()
+        pipeline = MagicMock()
+
+        async def ingest_and_cancel(_url: str) -> IngestResult:
+            cancel.set()  # set after first item — next source should not start
+            return _ok_result()
+
+        pipeline.ingest = AsyncMock(side_effect=ingest_and_cancel)
+        orch = _make_orchestrator(store=store, pipeline=pipeline)
+
+        results = await orch.refresh_all(cancel=cancel)
+
+        assert len(results) == 1
+        assert results[0].source_id == "src-a"
+        assert pipeline.ingest.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_all_returns_only_results_produced_before_cancellation(
+        self,
+    ) -> None:
+        """refresh_all partial result list reflects only sources completed before cancel."""
+        cancel = asyncio.Event()
+        sources = [
+            _make_source(source_id=f"s{i}", config={"urls": [f"https://{i}.com"]}) for i in range(3)
+        ]
+        store = MagicMock()
+        store.list_enabled.return_value = sources
+        store.update = MagicMock()
+
+        call_count = 0
+        pipeline = MagicMock()
+
+        async def counted_ingest(_url: str) -> IngestResult:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:  # 2 of 3 sources
+                cancel.set()
+            return _ok_result()
+
+        pipeline.ingest = AsyncMock(side_effect=counted_ingest)
+        orch = _make_orchestrator(store=store, pipeline=pipeline)
+
+        results = await orch.refresh_all(cancel=cancel)
+
+        # Two sources completed; cancel set at end of second, third not started
+        assert len(results) == 2
+
+    @pytest.mark.asyncio
+    async def test_ingest_items_stops_before_next_item_when_cancel_set_between_iterations(
+        self,
+    ) -> None:
+        """_ingest_items(cancel=) does not start the next item once cancel is set."""
+        cancel = asyncio.Event()
+        pipeline = MagicMock()
+
+        async def ingest_and_cancel(_item: str) -> IngestResult:
+            cancel.set()
+            return _ok_result()
+
+        pipeline.ingest = AsyncMock(side_effect=ingest_and_cancel)
+        orch = _make_orchestrator(pipeline=pipeline)
+
+        result = await orch._ingest_items("src-x", ["item-0", "item-1", "item-2"], cancel=cancel)
+
+        assert pipeline.ingest.await_count == 1
+        assert result.refreshed == 1
+
+    @pytest.mark.asyncio
+    async def test_ingest_items_result_counts_only_work_completed_before_cancel(
+        self,
+    ) -> None:
+        """_ingest_items RefreshResult counts only items processed before cancel fires."""
+        cancel = asyncio.Event()
+        pipeline = MagicMock()
+        seen: list[str] = []
+
+        async def tracking_ingest(item: str) -> IngestResult:
+            seen.append(item)
+            if len(seen) == 1:
+                cancel.set()
+            return _ok_result()
+
+        pipeline.ingest = AsyncMock(side_effect=tracking_ingest)
+        orch = _make_orchestrator(pipeline=pipeline)
+
+        result = await orch._ingest_items("src-z", ["item-0", "item-1", "item-2"], cancel=cancel)
+
+        assert len(seen) == 1
+        assert result.refreshed == 1
+        assert result.skipped == 0
+        assert result.failed == 0
