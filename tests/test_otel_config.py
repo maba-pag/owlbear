@@ -263,32 +263,34 @@ class TestLogfireConfigureAtStartup:
 class TestFromAC_LogfireOptionalImport:
     """owlbear.daemon loads when logfire is absent; configure_otel raises RuntimeError."""
 
-    def _reload_without_logfire(self) -> types.ModuleType:
-        """Reload owlbear.daemon with logfire absent from sys.modules."""
+    def _import_without_logfire(self) -> types.ModuleType:
+        """Fresh-import owlbear.daemon with logfire absent from sys.modules.
+
+        Removes owlbear.daemon from sys.modules first so that the module-level
+        ``try: import logfire`` guard runs from scratch rather than via reload.
+        """
         import importlib
         import sys
 
-        import owlbear.daemon as mod
-
         with patch.dict(sys.modules, {"logfire": None}):
-            importlib.reload(mod)
-        return mod
+            sys.modules.pop("owlbear.daemon", None)
+            return importlib.import_module("owlbear.daemon")
 
     def teardown_method(self) -> None:
         """Restore owlbear.daemon to normal (logfire available)."""
         import importlib
+        import sys
 
-        import owlbear.daemon as mod
-
-        importlib.reload(mod)
+        sys.modules.pop("owlbear.daemon", None)
+        importlib.import_module("owlbear.daemon")
 
     def test_daemon_import_succeeds_without_logfire(self) -> None:
         """Daemon module loads without error when logfire is absent; logfire attr is None."""
-        mod = self._reload_without_logfire()
+        mod = self._import_without_logfire()
         assert mod.logfire is None
 
     def test_configure_otel_raises_runtime_error_without_logfire(self) -> None:
         """configure_otel raises RuntimeError mentioning logfire when logfire is absent."""
-        mod = self._reload_without_logfire()
+        mod = self._import_without_logfire()
         with pytest.raises(RuntimeError, match="logfire"):
             mod.configure_otel("http://localhost:4318")
