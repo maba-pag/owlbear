@@ -48,6 +48,7 @@ bearclaw project new NAME [--template T]   # scaffold a new project from templat
 bearclaw project list [--all]              # list projects (--all includes archived)
 bearclaw project switch NAME               # switch active project
 bearclaw project archive NAME              # archive a project
+bearclaw board                             # display kanban board grouped by status
 bearclaw status [--detail]                  # show daemon status (--detail for config info)
 bearclaw chat [--project NAME]             # interactive REPL (--project scopes sessions)
 bearclaw knowledge-source add --name N --type TYPE [opts]  # register a knowledge source
