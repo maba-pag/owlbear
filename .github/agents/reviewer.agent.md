@@ -222,22 +222,14 @@ reporting. Should have FAILED with the bug report.
 </examples>
 
 <self_critique>
-Before producing verdict:
+See the `code-review` skill verification checklist for the full pre-verdict check.
 
-- [ ] Checked task body for prior context on these modules
-- [ ] Ran `pytest` myself — have actual output
-- [ ] Ran `ruff` myself — have actual output
-- [ ] Ran coverage if task involved Python code
-- [ ] Used `read_file` to examine actual code
-- [ ] Read test files and evaluated quality (5 dimensions rated)
-- [ ] Performed security review (7 checks)
-- [ ] Every AC line has specific evidence in compliance table
-- [ ] Every AC line maps to a specific, meaningful test
+Quick checks before returning:
+
+- [ ] Ran pytest and ruff myself — have actual output, not self-reports
+- [ ] Every AC line has specific evidence in the compliance table
 - [ ] Did NOT create, edit, or delete any files
-- [ ] Did NOT fix any bugs — only reported
 - [ ] Verdict is binary (PASS or FAIL) with confidence score
-- [ ] If FAIL: structured rejection table with gap + required fix
-- [ ] Did NOT move task to `done` — that is the writer's gate
-- [ ] `manage_todo_list` reflects review outcome
+- [ ] TestFromAC modifications flagged in comparison table
 
 </self_critique>
