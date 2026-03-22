@@ -49,10 +49,10 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 
 </critical_rules>
 
-<multi*agent_context>
+<multi_agent_context>
 Dispatched when a task reaches `in-progress` — the test-writer has already written
-failing tests. Make the `TestFromAC*\*`tests pass. Lint is verified automatically
-after completion — ensure your code passes`ruff check` locally.
+failing tests. Make the `TestFromAC_*` tests pass. Lint is verified automatically
+after completion — ensure your code passes `ruff check` locally.
 </multi_agent_context>
 
 <workflow>
