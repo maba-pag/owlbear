@@ -44,7 +44,7 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from pydantic_ai._run_context import RunContext
+    from pydantic_ai import RunContext
     from pydantic_ai.toolsets.abstract import ToolsetTool
 
 __all__ = ["HookedToolset"]

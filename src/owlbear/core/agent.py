@@ -21,9 +21,10 @@ from owlbear.core.deps import OwlBearDeps
 from owlbear.core.hooks import HookEvent, HookRegistry
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Awaitable, Callable, Sequence
 
-    from pydantic_ai._agent_graph import HistoryProcessor
+    from pydantic_ai import RunContext
+    from pydantic_ai.messages import ModelMessage
     from pydantic_ai.models import Model
     from pydantic_ai.toolsets.abstract import AbstractToolset
 
@@ -35,6 +36,16 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
     from owlbear.memory.usage import UsageTracker
+
+    HistoryProcessor = (
+        Callable[[Sequence[ModelMessage]], Sequence[ModelMessage]]
+        | Callable[[RunContext[OwlBearDeps], Sequence[ModelMessage]], Sequence[ModelMessage]]
+        | Callable[[Sequence[ModelMessage]], Awaitable[Sequence[ModelMessage]]]
+        | Callable[
+            [RunContext[OwlBearDeps], Sequence[ModelMessage]],
+            Awaitable[Sequence[ModelMessage]],
+        ]
+    )
 
 logger = logging.getLogger(__name__)
 

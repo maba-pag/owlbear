@@ -33,7 +33,7 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.safety.policy import ApprovalPolicy, ApprovalSession
 
 if TYPE_CHECKING:
-    from pydantic_ai._run_context import RunContext
+    from pydantic_ai import RunContext
     from pydantic_ai.toolsets.abstract import ToolsetTool
 
     from owlbear.channels.base import ChannelPlugin
