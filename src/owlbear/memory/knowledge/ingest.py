@@ -200,6 +200,9 @@ class IngestPipeline:
         metadata:
             Optional metadata dict (e.g. ``{"url": ..., "source_type": "crawl"}``).
             Merged into the :class:`IntakeResult` metadata.
+        cancel:
+            Optional :class:`asyncio.Event`.  When set, extraction stops
+            before the next chunk (cooperative cancellation).
 
         Returns:
         -------

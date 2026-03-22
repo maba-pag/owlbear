@@ -2,6 +2,41 @@
 
 External repos and resources studied during OwlBear development.
 
+## Impeccable Design Skill Research (Task #929)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Enhanced frontend-design skill structure, seven reference files, anti-pattern catalog, and NOTICE-based attribution model | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+| Impeccable website | <https://impeccable.style> | N/A | Public positioning of anti-pattern examples, command taxonomy, and provider support including VS Code Copilot | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+| Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design skill that Impeccable extends | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skills vs custom instructions, progressive loading, and resource-backed skill structure for OwlBear adoption planning | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+
+## Frontend-Design Skill Implementation Gate (Task #934)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Raw `frontend-design` skill structure, reference-pack layout, and NOTICE-based attribution model to adapt rather than copy | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+| Impeccable website | <https://impeccable.style> | N/A | Public command taxonomy and reference-pack framing used to bound what #934 should exclude | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+| Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design wording and design-direction guidance beneath the adapted OwlBear skill | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skill folder structure, default invocation behavior, and relative resource guidance for OwlBear packaging | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+
+## Frontend-Design Skill RED Test Gate (Task #941)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Required skill directory layout, frontmatter contract, progressive loading, and co-located resource-file model that the RED tests should target | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+| Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Minimal `frontend-design` package precedent used to avoid over-asserting optional files beyond `SKILL.md` | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+| pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Reference-pack skill precedent used to justify asserting the seven required `references/*.md` files in the RED contract | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+
+## Impeccable Command Pattern Research (Task #930)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | `source/skills/*`, generated `.agents/.claude` outputs, build sync, `teach-impeccable`, and the audit-normalize-polish command pipeline | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
+| Impeccable website | <https://impeccable.style> | N/A | Public command taxonomy, staged workflow categories, supported-tool matrix, and changelog entries for the unified skills architecture | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
+| Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline shared-skill precedent used to separate Impeccable's reusable knowledge layer from its added command layer | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | `user-invocable`, `argument-hint`, slash-command behavior, progressive loading, and skill-vs-prompt tradeoffs for OwlBear adoption | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
+
 ## BearClaw Board Command Research (Task #905)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -28,6 +63,34 @@ External repos and resources studied during OwlBear development.
 | Python `json` docs | <https://docs.python.org/3/library/json.html> | PSF | `JSONDecodeError` failure semantics and parse-location details for malformed JSON payloads | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
 | Click exception handling docs | <https://click.palletsprojects.com/en/stable/exceptions/> | BSD-3-Clause | stderr rendering and exit-code behavior for user-facing CLI failures | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
 | Typer exceptions docs | <https://typer.tiangolo.com/tutorial/exceptions/> | MIT | behavior of uncaught exceptions and Rich traceback output in Typer apps | `docs/research/bearclaw-board-command-failure-handling.md` | 2026-03-21 |
+
+## BearClaw Board Failure-Test RED Gate (Task #924)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `subprocess` docs | <https://docs.python.org/3/library/subprocess.html> | PSF | Missing-executable `OSError`, `run(..., check=False, capture_output=True, text=True)`, and return-code handling for staged CLI failure tests | `docs/research/bearclaw-board-command-failure-tests-red-gate.md` | 2026-03-21 |
+| Python `json` docs | <https://docs.python.org/3/library/json.html> | PSF | `JSONDecodeError` semantics for malformed task-list and move-log payload assertions | `docs/research/bearclaw-board-command-failure-tests-red-gate.md` | 2026-03-21 |
+| Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner` invocation plus stdout or stderr assertions for command-level RED tests | `docs/research/bearclaw-board-command-failure-tests-red-gate.md` | 2026-03-21 |
+| Click exception handling docs | <https://click.palletsprojects.com/en/stable/exceptions/> | BSD-3-Clause | stderr rendering and exit-code behavior that the RED tests should preserve through `_cli_error` | `docs/research/bearclaw-board-command-failure-tests-red-gate.md` | 2026-03-21 |
+| Typer exceptions docs | <https://typer.tiangolo.com/tutorial/exceptions/> | MIT | Uncaught exception behavior and Rich traceback output as the failure mode to avoid for routine board CLI errors | `docs/research/bearclaw-board-command-failure-tests-red-gate.md` | 2026-03-21 |
+
+## BearClaw Board Kanban JSON Fixture Helpers (Task #923)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest fixtures reference | <https://docs.pytest.org/en/stable/reference/fixtures.html> | MIT | `conftest.py` fixture availability across multiple files and why a board-only helper should not become a global test helper yet | `docs/research/bearclaw-board-kanban-json-fixtures.md` | 2026-03-22 |
+| pytest how-to fixtures | <https://docs.pytest.org/en/stable/how-to/fixtures.html> | MIT | factory-style fixture and helper patterns for reusable test arrangement data | `docs/research/bearclaw-board-kanban-json-fixtures.md` | 2026-03-22 |
+| Python `json` docs | <https://docs.python.org/3/library/json.html> | PSF | `json.dumps()` semantics for generating paired task-list and move-log JSON payload strings from Python structures | `docs/research/bearclaw-board-kanban-json-fixtures.md` | 2026-03-22 |
+| Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | keeping board assertions at the `CliRunner` boundary while refactoring only test-arrangement helpers | `docs/research/bearclaw-board-kanban-json-fixtures.md` | 2026-03-22 |
+
+## BearClaw Board Age-Threshold Styling (Task #921)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| kanban-md README / config docs | <https://github.com/antopolskiy/kanban-md> | MIT | `tui.age_thresholds` as the supported TUI age color threshold config seam | `docs/research/bearclaw-board-age-threshold-styling.md` | 2026-03-21 |
+| Rich Tables docs | <https://rich.readthedocs.io/en/stable/tables.html> | MIT | `Table.add_row()` renderables, column-vs-row styling scope, and section behavior for grouped output | `docs/research/bearclaw-board-age-threshold-styling.md` | 2026-03-21 |
+| Rich Style docs | <https://rich.readthedocs.io/en/stable/style.html> | MIT | `color(<number>)` numeric color syntax and `Style.parse()` validation for config-driven styles | `docs/research/bearclaw-board-age-threshold-styling.md` | 2026-03-21 |
+| PyYAML docs | <https://pyyaml.org/wiki/PyYAMLDocumentation> | MIT | `safe_load()` and `YAMLError` behavior for defensive YAML config parsing | `docs/research/bearclaw-board-age-threshold-styling.md` | 2026-03-21 |
 
 ## BearClaw Board Age-Threshold Styling RED Gate (Task #925)
 
@@ -1291,6 +1354,16 @@ External repos and resources studied during OwlBear development.
 | AWS Builders' Library â€” Timeouts, retries, and backoff with jitter | <https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/> | N/A | Single-point-in-stack retry principle, multiplicative retry anti-pattern, jitter strategy | `docs/research/daemon-retry-reconciliation.md` | 2026-03-06 |
 | Microsoft Azure â€” Retry Pattern | <https://learn.microsoft.com/en-us/azure/architecture/patterns/retry> | N/A (docs) | Layered retry guidance: lower-level should fail fast, higher-level owns policy; idempotency considerations | `docs/research/daemon-retry-reconciliation.md` | 2026-03-06 |
 
+## BearClaw CLI Subprocess Result Helper (Task #926)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `subprocess` docs | <https://docs.python.org/3/library/subprocess.html> | PSF | `CompletedProcess` return contract and the missing-binary `OSError` behavior from `subprocess.run()` | `docs/research/bearclaw-cli-subprocess-result-helper.md` | 2026-03-21 |
+| pytest fixtures docs | <https://docs.pytest.org/en/stable/how-to/fixtures.html> | MIT | Shared helper and factory-fixture patterns for `conftest.py`-hosted test utilities | `docs/research/bearclaw-cli-subprocess-result-helper.md` | 2026-03-21 |
+| Python `unittest.mock` docs | <https://docs.python.org/3/library/unittest.mock.html> | PSF | `spec` and `side_effect` trade-offs plus lookup-site patching guidance for subprocess seams | `docs/research/bearclaw-cli-subprocess-result-helper.md` | 2026-03-21 |
+| Typer testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | CLI-boundary testing with `CliRunner` so helper extraction does not bypass public command behavior | `docs/research/bearclaw-cli-subprocess-result-helper.md` | 2026-03-21 |
+| `pytest-subprocess` docs | <https://pytest-subprocess.readthedocs.io/en/latest/> | MIT | Plugin alternative evaluation for subprocess fakes versus a smaller local helper | `docs/research/bearclaw-cli-subprocess-result-helper.md` | 2026-03-21 |
+
 ## Claude Code Tips Research (Task #596)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -1724,3 +1797,28 @@ External repos and resources studied during OwlBear development.
 | Python `unittest.mock` docs | <https://docs.python.org/3/library/unittest.mock.html#where-to-patch> | PSF | Canonical "patch where the object is looked up" rule for caller-level helper forwarding tests | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
 | pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | Fixture-scoped consumer-site patching guidance for narrow helper seams | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
 | trafilatura Python usage docs | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | Apache-2.0 | Public reason for forwarding `url=` alongside HTML input at the caller boundary | `docs/research/context-hydration-url-forwarding-red-task.md` | 2026-03-21 |
+
+## Planner Placeholder-Task Rejection Rules (Task #903)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | CC BY 4.0 | Structured intake uses required fields and validation; hard rejection rules belong at input time rather than as soft prose | `.github/agents/kanban-planner.agent.md` | 2026-03-21 |
+| GitHub Docs - Configuring issue templates | <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | CC BY 4.0 | `blank_issues_enabled: false` is prior art for disabling blank intake paths instead of letting placeholders through | `.github/agents/kanban-planner.agent.md` | 2026-03-21 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/ee/user/project/description_templates.html> | CC BY-SA 4.0 | Mature work trackers standardize scoped descriptions with templates or defaults rather than accepting empty work-item bodies | `.github/agents/kanban-planner.agent.md` | 2026-03-21 |
+
+## Planner Skill Placeholder Validation (Task #904)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Docs - Syntax for issue forms | <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms> | CC BY 4.0 | Required fields and validation as intake-time controls; prior art for fail-fast placeholder checks in the decomposition workflow | `.github/skills/task-decomposition/SKILL.md` | 2026-03-22 |
+| GitHub Docs - Configuring issue templates | <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository> | CC BY 4.0 | `blank_issues_enabled: false` as prior art for refusing blank intake paths instead of letting placeholder tasks reach the board | `.github/skills/task-decomposition/SKILL.md` | 2026-03-22 |
+| Atlassian Support - Configure advanced work item workflows | <https://support.atlassian.com/jira-cloud-administration/docs/configure-advanced-issue-workflows/> | N/A (docs) | Validators check transition input before the transition is performed and block invalid work-item progress | `.github/skills/task-decomposition/SKILL.md` | 2026-03-22 |
+| GitLab Docs - Description templates | <https://docs.gitlab.com/ee/user/project/description_templates.html> | CC BY-SA 4.0 | Structured templates and defaults as prior art for requiring scoped task bodies instead of empty placeholders | `.github/skills/task-decomposition/SKILL.md` | 2026-03-22 |
+
+## Operation-Scoped Cancellation Signal for Knowledge Pipelines (Task #880 / #870)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python asyncio task-cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF | `Task.cancel()` injects `CancelledError`; caught cancellation must be re-raised — informs the `_run_extract` re-raise pattern | `src/owlbear/memory/knowledge/ingest.py` (`_ingest_from_intake`) | 2026-03-20 |
+| AnyIO cancellation docs | <https://anyio.readthedocs.io/en/stable/cancellation.html> | MIT | Level-cancellation and cancel-scope model studied and rejected; OwlBear uses asyncio cooperative polling instead | `docs/research/operation-scoped-cancellation-signal.md` | 2026-03-20 |
+| .NET cancellation-token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC BY 4.0 | One token per cancelable operation, poll at work boundaries, linked parent/child cancellation — direct prior art for the `cancel: asyncio.Event` seam | `src/owlbear/memory/knowledge/refresh.py`, `ingest.py`, `bookmark_pipeline.py`, `src/owlbear/tools/browser/integration.py`, `src/owlbear/core/retrospective_hook.py` | 2026-03-20 |

@@ -99,6 +99,22 @@ class BookmarkPipeline:
     ) -> BookmarkResult:
         """Run the full bookmark pipeline for *url*.
 
+        Parameters
+        ----------
+        url:
+            The URL to bookmark and ingest.
+        reason:
+            Optional human-readable reason for bookmarking.
+        scope:
+            Knowledge-graph scope for the ingested content.
+        project_context:
+            Optional project metadata passed to the evaluator.
+        cancel:
+            Optional :class:`asyncio.Event`.  When set, the pipeline
+            exits cooperatively before the next stage (extract, evaluate,
+            ingest, or store).  Earlier-stage results are preserved in
+            the returned :class:`BookmarkResult`.
+
         Returns:
         -------
         BookmarkResult
