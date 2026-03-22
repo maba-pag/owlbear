@@ -1,7 +1,6 @@
 ---
 name: kanban-md
 description: "Claiming protocol and pitfalls reference for kanban-md. Per-agent command recipes live in each agent's skill file."
-user-invocable: false
 ---
 
 # kanban-md
