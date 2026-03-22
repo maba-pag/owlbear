@@ -129,12 +129,7 @@ Return **only** the signal line — no other text after it.
 
 | Rationalization                                  | Correct Response                                                       |
 | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| "I know this works, I don't need to test it."    | Verify the test-writer's tests fail, then make them pass.              |
 | "I'll just tweak TestFromAC to match my design." | Never modify TestFromAC classes. BLOCK if the interface is infeasible. |
-| "This refactor is small, I'll include it."       | Unrelated changes go in a separate task. Surgical diffs.               |
-| "The existing tests cover this well enough."     | If AC has new behavior, it needs new tests.                            |
-| "Coverage doesn't matter for this small change." | ≥ 90% on touched modules. Run coverage.                                |
-| "Let me try a different flag variation."         | Stop. Read the error. Check the skill file. Max 2 retries.             |
 
 </boundaries>
 

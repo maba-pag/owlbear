@@ -147,15 +147,12 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 
 **Common failure rationalizations:**
 
-| Rationalization                                             | Correct Response                                                                                                                                               |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "The AC is close enough, I'll approve it."                  | Refine it. Vague AC = vague implementation.                                                                                                                    |
-| "I'll just write the test task myself."                     | Create it via kanban-md, don't write test code.                                                                                                                |
-| "This task is simple, no need to check the codebase."       | Always search for existing patterns. Simple tasks still need architectural context.                                                                            |
-| "I'll merge these tasks to reduce the task count."          | Only merge if truly one logical change. Atomicity > minimal count.                                                                                             |
-| "The researcher already checked architecture fit."          | Verify yourself. Research may miss patterns or dependencies.                                                                                                   |
-| "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                                                                                                                         |
-| "This TEMP-\* task might have real scope if I dig into it." | Block it back to `ideation`. Placeholder titles and empty bodies are invalid architect inputs — they are creation-time failures, not refinement opportunities. |
+| Rationalization                                             | Correct Response                                                   |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| "The AC is close enough, I'll approve it."                  | Refine it. Vague AC = vague implementation.                        |
+| "I'll merge these tasks to reduce the task count."          | Only merge if truly one logical change. Atomicity > minimal count. |
+| "The researcher already checked architecture fit."          | Verify yourself. Research may miss patterns or dependencies.       |
+| "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                             |
 
 </boundaries>
 

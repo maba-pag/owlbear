@@ -127,9 +127,7 @@ Use `kanban\kanban-md.exe edit {id} --status review --release`.
 | -------------------------------------------- | ------------------------------------------------------------------ |
 | "The docstrings are probably fine."          | Read the code. Check each public class/function.                   |
 | "sources.md doesn't need updating for this." | Did the task use external patterns? Check the AC and research doc. |
-| "I'll just fix this small bug I noticed."    | NEVER change logic. Report it as a new issue.                      |
 | "No one reads copilot-instructions.md."      | Every agent reads it. Keep it accurate.                            |
-| "The scratch files might be useful later."   | Delete them. They are ephemeral by definition.                     |
 
 </boundaries>
 

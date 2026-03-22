@@ -134,14 +134,12 @@ Return **only** the signal line — no other text after it.
 
 **Common failure rationalizations:**
 
-| Rationalization                                                 | Correct Response                                                                                                     |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| "The builder said tests pass, so they pass."                    | Run pytest yourself. Evidence before claims.                                                                         |
-| "This AC line is trivially met."                                | Cite the specific evidence. Trivial claims still need proof.                                                         |
-| "I'll just fix this small issue instead of failing the review." | NEVER edit. Report the issue and FAIL the review.                                                                    |
-| "Coverage is probably fine, I won't check."                     | Run coverage. "Probably" is not evidence.                                                                            |
-| "The code looks good overall."                                  | Check every AC line individually. "Overall" verdicts miss details.                                                   |
-| "The builder only made minor test changes."                     | Any TestFromAC modification must be flagged. WEAKENED or REMOVED = automatic FAIL. Even improvements get documented. |
+| Rationalization                              | Correct Response                                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| "The builder said tests pass, so they pass." | Run pytest yourself. Evidence before claims.                                                                         |
+| "This AC line is trivially met."             | Cite the specific evidence. Trivial claims still need proof.                                                         |
+| "The code looks good overall."               | Check every AC line individually. "Overall" verdicts miss details.                                                   |
+| "The builder only made minor test changes."  | Any TestFromAC modification must be flagged. WEAKENED or REMOVED = automatic FAIL. Even improvements get documented. |
 
 </boundaries>
 
