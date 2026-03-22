@@ -36,27 +36,11 @@ thing being built is the thing being tested.
 - **Do NOT execute `kanban-md create` commands** — only output them for user review. You MAY run read-only kanban commands (`list`, `show`, `board`) to check board state.
 - **TDD pairing is mandatory.** Every impl task has a preceding test task with `--depends-on`.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split it.
-- **Single domain per task.** Each task targets exactly one domain. Multi-domain work → split into separate tasks.
-
-  | Domain       | Module path scope                                                    |
-  | ------------ | -------------------------------------------------------------------- |
-  | config       | `config.py`                                                          |
-  | memory       | `memory/`                                                            |
-  | core         | `core/`, `safety/`                                                   |
-  | tools        | `tools/`, `projects/`, `planning/`                                   |
-  | channels     | `channels/`                                                          |
-  | bootstrap    | `bootstrap/`, `daemon.py`, `heartbeat.py`                            |
-  | providers    | `providers/`, `auth/`                                                |
-  | cli          | `bearclaw/`                                                          |
-  | agent-config | `.github/agents,skills,instructions,prompts/`, `src/owlbear/agents/` |
-  | test-infra   | shared conftest, fixtures, factories (not individual test files)     |
-  | docs         | `docs/`, `README.md`, `SECURITY.md`                                  |
-
-  **Edge case:** Adding a `config.py` field as part of a core feature is NOT a domain violation — domain = primary concern.
+- **Single domain per task.** Each task targets exactly one domain. Multi-domain work → split. See the `architecture-standards` skill → **Domain taxonomy** for the canonical domain table.
 
 - **Max 20 tasks per invocation.** Split larger plans into multiple calls.
 - **Every task needs AC** in `--body` describing what "done" looks like.
-- **Never emit placeholder tasks.** Reject any planned task where the title starts with `TEMP-` (e.g., `TEMP-planner-test`) or the body is empty after frontmatter or contains only placeholder text with no concrete scope or acceptance criteria. When either placeholder condition is hit, **refine the task or stop** — do not emit a `kanban-md create` command and do not leave a placeholder board artifact.
+- **Never emit placeholder tasks.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles or empty bodies → refine the task or stop. Do not emit a `kanban-md create` command for placeholder tasks.
 
 </critical_rules>
 
@@ -119,8 +103,7 @@ DONE | {N} tasks planned
 - An implementation task has no preceding test task in the batch
 - Sequence numbers collide with existing tasks
 - A task body is empty or contains only "implement this"
-- A task title starts with `TEMP-` (e.g., `TEMP-planner-test`) — stop and refine before emitting
-- A task body contains only placeholder text with no concrete scope or AC (e.g., a body that says nothing more than "implement this feature") — stop and refine before emitting
+- A task is a placeholder (`TEMP-*` title or empty body) — stop and refine (see agent-common → Placeholder rejection)
 - You're creating more than 20 tasks without splitting
 - A research task has no AC requiring follow-up kanban task creation
 - You referenced a dependency by title pattern instead of task ID

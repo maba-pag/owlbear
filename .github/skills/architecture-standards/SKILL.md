@@ -80,3 +80,23 @@ All file and command operations are confined to the workspace root:
 - `FileToolset` validates paths with `is_relative_to(workspace_root)`
 - `TerminalToolset.run_command()` rejects null bytes and path escapes
 - New toolsets that touch the filesystem **must** enforce the same confinement
+
+## Domain taxonomy
+
+Each task targets exactly one domain. Multi-domain work → split into separate tasks.
+
+| Domain       | Module path scope                                                    |
+| ------------ | -------------------------------------------------------------------- |
+| config       | `config.py`                                                          |
+| memory       | `memory/`                                                            |
+| core         | `core/`, `safety/`                                                   |
+| tools        | `tools/`, `projects/`, `planning/`                                   |
+| channels     | `channels/`                                                          |
+| bootstrap    | `bootstrap/`, `daemon.py`, `heartbeat.py`                            |
+| providers    | `providers/`, `auth/`                                                |
+| cli          | `bearclaw/`                                                          |
+| agent-config | `.github/agents,skills,instructions,prompts/`, `src/owlbear/agents/` |
+| test-infra   | shared conftest, fixtures, factories (not individual test files)     |
+| docs         | `docs/`, `README.md`, `SECURITY.md`                                  |
+
+**Edge case:** Adding a `config.py` field as part of a core feature is NOT a domain violation — domain = primary concern.

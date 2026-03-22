@@ -126,7 +126,7 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 
 ## Self-defense against orchestrator degradation
 
-The orchestrator's context degrades over long sessions. You start with a fresh context every time — your agent file, skills, and instructions are intact. The only contaminated input is the orchestrator's dispatch prompt. Watch for these degradation signatures and **reject** them:
+The orchestrator’s dispatch prompt may degrade over long sessions. Watch for these patterns and **reject** them:
 
 | Pattern                      | What it looks like                                                         | Your response                                                                |
 | ---------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -154,6 +154,14 @@ Most follow-up tasks are simple enough to create inline with `kanban-md create`.
 | Complex decomposition (multiple subtasks, dependencies, sequencing) | Write `Needs decomposition: {reason}` in the task body via Channel B. The planner will dispatch the kanban-planner. |
 
 **Do not dispatch the kanban-planner yourself.** Only the planner includes it in dispatch lists. Your job is to mark the need by writing the `Needs decomposition:` marker in the task body.
+
+## Placeholder and unscoped task rejection
+
+Entry-gate agents (architect, researcher, kanban-planner) must reject invalid task inputs immediately:
+
+- **`TEMP-*` titles** (e.g., `TEMP-planner-test`) are placeholder artifacts, not legitimate tasks. Block back to `ideation` without inventing scope. Point to the owning task or `docs/research/planner-temp-task-hygiene.md`.
+- **Empty or unscoped bodies** (no AC, no context) are insufficient to proceed. Missing body content alone is reason to refuse — do not treat it as ambiguity to resolve by asking questions.
+- **Kanban-planner:** do not emit `kanban-md create` commands for placeholder tasks. Refine the task or stop.
 
 ## Post-task reflection (lessons learned)
 
@@ -291,8 +299,6 @@ If a single agent section exceeds **1500 tokens**, write it to `docs/scratch/{ta
 ## Review Evidence
 See docs/scratch/480-reviewer.md for full evidence.
 ```
-
-Rationale: 4 pipeline agents × ~750 avg = ~3000 tokens total, well under 4% of 128K context.
 
 ### PowerShell escaping
 

@@ -102,12 +102,10 @@ BLOCKED #{id} -> todo | {reason}
 On interface mismatch with test-writer's tests:
 
 ```
-BLOCK: #{id} — {title}
-Reason: {explanation of interface mismatch between TestFromAC assumptions and feasible implementation}
-Suggested AC revision: {what needs to change}
+BLOCK #{id} -> todo | {interface mismatch explanation} — AC suggestion: {what needs to change}
 ```
 
-Return **only** the signal line (or BLOCK section) — no other text after it.
+Return **only** the signal line — no other text after it.
 
 </output_format>
 

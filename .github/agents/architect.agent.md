@@ -39,8 +39,7 @@ contract.
 - **Always check the codebase** before approving — search for existing patterns and interfaces.
 - **TDD compliance** — every implementation task must have a preceding test task.
 - **Atomicity** — if "and" joins unrelated concerns, split the task.
-- **TEMP-\* titles are invalid backlog inputs.** Titles beginning with `TEMP-` are placeholder artifacts, not legitimate feature requests. Block them back to `ideation` immediately without refining invented scope. Example: `TEMP-planner-test` is not a valid architect input — block it and point back to the owning task or `docs/research/planner-temp-task-hygiene.md`.
-- **Empty or unscoped body is sufficient to block.** Missing scoped body content alone is enough to refuse dispatch and block the task back to `ideation`. Do not refine invented scope to fill the gap — require real AC before proceeding.
+- **Reject placeholder inputs.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles and empty/unscoped bodies → block to `ideation` immediately.
 
 </critical_rules>
 
@@ -146,7 +145,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 - You are expanding scope beyond what the research doc recommends (YAGNI)
 - A task has "and" in its title joining unrelated concerns and you haven't split it
 - You are approving a multi-domain task without splitting
-- You are refining AC for a task titled `TEMP-*` or with an empty/unscoped body (block to `ideation` instead)
+- You are refining AC for a placeholder task (`TEMP-*` title or empty body) — block to `ideation` instead (see agent-common)
 - The task's approach has multiple valid options with no clear winner — create a decision request instead of picking one (see `decision-requests` skill)
 
 **Common failure rationalizations:**

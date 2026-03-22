@@ -23,8 +23,9 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
 3. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, or `type:docs`). If so, go to **Step 1a — Pass-through**.
-4. Identify referenced source files, modules, and interfaces in the AC
-5. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
+4. Check if this is a **retry cycle** (task body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
+5. Identify referenced source files, modules, and interfaces in the AC
+6. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
 
 ### Step 1a — Pass-through for non-implementation tasks
 
@@ -45,6 +46,37 @@ you encounter one:
    ```
 
 4. **Stop here.** Do not proceed to Step 2.
+
+### Step 1b — Retry-cycle handling
+
+If the task body already contains **both** `## Test-Writer Notes` and `## Review Evidence`,
+this is a retry cycle (reviewer FAILed the task back to `todo`). Do NOT re-run the
+normal RED phase — the existing tests are valid artifacts from the prior cycle.
+
+1. Read the `## Review Evidence` section to understand **why** the reviewer failed it.
+2. **If the reviewer cites missing tests** (MISSING in coverage table, untested paths
+   in implementation-aware analysis):
+   - Write NEW failing tests addressing those specific gaps.
+   - Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class
+     for a distinct AC concern).
+   - Do NOT remove or modify existing passing tests — they are correct from the prior cycle.
+   - Run pytest to verify: old tests PASS, new tests FAIL.
+   - Append an update to the task body:
+
+     ```powershell
+     kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes (retry)\n- Retry reason: reviewer cited missing tests\n- Added: {N} new failing tests for: {gap summary}\n- Preserved: {M} existing tests (all PASS)" -t
+     ```
+
+3. **If the reviewer cites code quality, weak tests, or security** (not missing tests):
+   pass through without changes — the builder will address the findings. Append:
+
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes (retry)\n- Retry reason: reviewer FAIL was about {code quality / weak tests / security}, not missing tests.\n- Existing tests preserved. Builder will address reviewer findings." -t
+   ```
+
+4. Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
+5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
+6. **Stop here.** Do not proceed to Step 2.
 
 ## Step 2 — Search codebase
 

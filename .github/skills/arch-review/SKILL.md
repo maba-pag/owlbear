@@ -32,7 +32,7 @@ Read the single task dispatched to you:
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
 3. If task references a research doc (`docs/research/{slug}.md`), read it
 4. Note each AC line for evaluation
-5. **Reject placeholder inputs.** If the task title begins with `TEMP-` or the body is empty or lacks any scoped context and acceptance criteria, do not proceed to Step 2. Empty or unscoped body content alone is sufficient reason to refuse dispatch. Block back to `ideation` (see Step 4) and add a note pointing to the owning task or `docs/research/planner-temp-task-hygiene.md` instead of inventing scope.
+5. **Reject placeholder inputs.** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), do not proceed to Step 2. Block back to `ideation` (see Step 4). See agent-common → **Placeholder and unscoped task rejection**.
 
 Initialize `manage_todo_list` with steps to complete.
 
@@ -66,8 +66,8 @@ and general architectural principles:
    toolset wrapping, config via pydantic-settings)?
 8. **Security surface** — does the task introduce new system boundaries (user input,
    external APIs, file I/O)? If so, AC must include input validation requirements.
-9. **Single domain** — does this task target exactly one domain (see canonical list in
-   kanban-planner.agent.md)? Multi-domain → split. Edge case: an ancillary `config.py`
+9. **Single domain** — does this task target exactly one domain (see `architecture-standards`
+   skill → **Domain taxonomy**)? Multi-domain → split. Edge case: an ancillary `config.py`
    field addition for a feature is NOT a domain violation — domain = primary concern.
 10. **Failure Mode Map** — if the task introduces or modifies codepaths with potential
     failure modes, fill in the template below. Skip for docs/config-only tasks.
@@ -86,9 +86,7 @@ and general architectural principles:
 | **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
 | **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --block "reason" --release`            |
 
-> **Placeholder and unscoped-body block path:** If the task title begins with `TEMP-` or the body is empty or lacks scoped context, use the Block path and set status back to `ideation`:
-> `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release`
-> Missing scoped body content is not a refinement opportunity — it is an entry-condition failure. Do not invent AC. State what specific content (context, acceptance criteria) is missing before re-dispatch is valid. Example rejection note: *Placeholder task rejected: `TEMP-planner-test` / missing scoped body content is not valid architect input. See the owning task or `docs/research/planner-temp-task-hygiene.md`.*
+> **Placeholder block path:** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), use the Block path: `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release`. See agent-common → **Placeholder and unscoped task rejection**.
 
 ## Step 5 — Produce report
 

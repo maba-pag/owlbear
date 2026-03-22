@@ -41,7 +41,7 @@ Note: highest existing ID, existing dependencies, current phase landscape.
 ## Step 3 — Decompose into atomic tasks
 
 - **Single responsibility:** one module, one function, one config per task
-- **Domain scoping:** classify each task against the domain table (see agent critical_rules). If a task touches modules from two domains, split it so each task has exactly one primary domain.
+- **Domain scoping:** classify each task against the domain table (see `architecture-standards` skill → **Domain taxonomy**). If a task touches modules from two domains, split it so each task has exactly one primary domain.
 - **Testable:** clear pass/fail criterion
 - **Small:** ≤ 2 hours of focused work
 - **TDD pairs:** test task before implementation task

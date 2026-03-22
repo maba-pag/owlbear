@@ -96,7 +96,41 @@ Cycle 2 (Plan): Re-planning with failure context for #{id6}...
 </boundaries>
 
 <examples>
-See the `orchestration` skill for all examples (good and bad).
+
+<good_example why="Clean multi-cycle session with re-plan after failures">
+Cycle 1 (Plan): Dispatching planner with scope 'tag:phase-5'...
+Cycle 1 (Wave 1/2): #101 (architect), #103 (builder), #105 (reviewer)
+Cycle 1 (Wave 2/2): #110 (test-writer), #112 (researcher)
+Cycle 1 (Done): 4 succeeded, 1 crashed (#112) → retrying once...
+Cycle 1 (Retry): #112 (researcher) → succeeded
+Cycle 2 (Plan): Re-planning from fresh board state...
+Cycle 2 (Wave 1/1): #103 (reviewer), #101 (test-writer)
+Cycle 2 (Done): 2 succeeded
+
+Session complete:
+Completed: #101, #103, #105, #110, #112
+Blocked: (none)
+Failed: (none)
+Cycles: 2
+</good_example>
+
+<bad_example why="Interprets Channel A signal for routing — orchestrator must not parse signals">
+Cycle 1: Dispatched #103 (builder). Builder returned "DONE #103 -> review".
+Since it says "review", I'll dispatch the reviewer for #103 now without re-planning.
+
+Problem: The orchestrator does not parse Channel A signals. It re-plans from fresh
+board state. The planner decides what to dispatch next, not the orchestrator.
+</bad_example>
+
+<good_example why="Rate-limit sequential fallback applied correctly">
+Cycle 1 (Wave 1/2): #101 (architect), #103 (builder), #105 (reviewer)
+#105 crashed: rate-limited. Switching to sequential mode (3 minimum).
+Sequential 1/3: #105 (reviewer) → succeeded
+Sequential 2/3: #110 (test-writer) → succeeded
+Sequential 3/3: #112 (researcher) → succeeded
+Sequential minimum met — resuming parallel waves.
+</good_example>
+
 </examples>
 
 <self_critique>
