@@ -68,7 +68,7 @@ those to the user as potential issues.
 
 | Setting | Value | Notes |
 | --- | --- | --- |
-| **Wave size** | 3 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
+| **Wave size** | 4 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
 
 ## Step 2 — Dispatch
 
