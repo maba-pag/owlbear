@@ -67,6 +67,26 @@ Build explicit graph:
 - **Priority:** count dependents (critical ≥ 3, needed 1–2, important otherwise)
 - **Tags:** always `phase-{n}` + `scope:{domain}` from the domain table + at least one category tag
 
+## Step 5a — Validate planned tasks (fail-fast)
+
+Before emitting any `kanban-md create` command, validate every planned task against
+the canonical placeholder-task rule in `.github/agents/kanban-planner.agent.md`.
+
+**Reject if any of the following are true:**
+
+- **Title starts with `TEMP-`** (e.g., `TEMP-planner-test`) — these are placeholder
+  artifacts, not legitimate tasks.
+- **Body is empty after frontmatter** or lacks scoped task content and concrete
+  acceptance criteria.
+
+**If a planned task fails validation:** refine the task title and body, or stop
+and report the issue — do NOT emit a `kanban-md create` command for a placeholder
+task, and do NOT leave a placeholder artifact on the board.
+
+> Policy source: `.github/agents/kanban-planner.agent.md` contains the canonical
+> placeholder-task rule. This step mirrors it procedurally — policy is defined
+> there, not here.
+
 ## Step 6 — Generate commands
 
 **Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan,
@@ -102,3 +122,4 @@ Before submitting:
 - [ ] Mermaid diagram matches command list
 - [ ] Total ≤ 20 tasks
 - [ ] AC describes "done", not "how"
+- [ ] No placeholder task commands emitted — titles do not start with `TEMP-` and no body is empty or unscoped
