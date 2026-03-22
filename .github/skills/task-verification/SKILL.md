@@ -11,7 +11,7 @@ Step-by-step process for the exit gate (done → archived).
 
 | Action | Command |
 |--------|---------|
-| List done tasks | `kanban\kanban-md.exe list --compact --status done` |
+
 | Read task | `kanban\kanban-md.exe show {id}` |
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append audit | `kanban\kanban-md.exe edit {id} -a "## Audit\n{content}" -t --claim <agent>` |
@@ -21,13 +21,9 @@ Step-by-step process for the exit gate (done → archived).
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 
-## Step 1 — Gather done tasks
+## Step 1 — Read and claim the task
 
-```powershell
-kanban\kanban-md.exe list --compact --status done
-```
-
-For each task, read full AC and claim it:
+Read the dispatched task and claim it:
 
 ```powershell
 kanban\kanban-md.exe show {id}
@@ -68,7 +64,7 @@ Evaluate whether the **architect** did its job well. The reviewer checks test-wr
 and builder quality; the auditor checks architect quality. This is the only place in
 the pipeline where the architect's work is evaluated.
 
-For each task in the batch:
+For the task:
 
 1. **AC specificity:** Were the AC lines specific enough to verify? Flag vague AC that
    "passed" because the tests and implementation were equally vague (e.g., AC says
@@ -87,7 +83,7 @@ For each task in the batch:
    - **2** — AC was vague enough that the implementation may not match intent
    - **1** — AC was essentially useless or misleading
 
-Low scores (≤ 2) on multiple tasks from the same batch = flag as a curator lesson
+Low scores (≤ 2) = flag as a curator lesson
 (write to `/memories/repo/inbox/`). Systemic AC quality issues indicate the architect
 needs calibration.
 
@@ -111,8 +107,7 @@ Thresholds from agent-common → **Confidence thresholds** (single source of tru
 
 | ID | Title | Evidence summary | Confidence | Action |
 |----|-------|-----------------|------------|--------|
-
-Totals: X archived, Y rejected, Z flagged.
+| {id} | {title} | {summary} | {score} | {archived/rejected} |
 
 ## Step 5 — Verify commits and commit leftovers
 
@@ -132,7 +127,7 @@ Confirm the files appear in recent commits. If deliverables are uncommitted, not
 
 **VS Code auto-staging trap:** VS Code SCM can auto-stage files from other tasks. Always run `git diff --cached` + `git status --short` before committing. If you see unexpected files, `git reset HEAD` first, then selectively `git add`.
 
-1. `git status --short` — identify uncommitted files
+1. `git status --short` — identify uncommitted files related to this task
 2. Group by cohesion and commit:
    - Kanban board changes → `chore: update board state (#id, auditor)`
    - Any orphaned deliverables → appropriate type with a note about upstream gap
