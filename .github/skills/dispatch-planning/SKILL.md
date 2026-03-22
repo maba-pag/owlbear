@@ -84,6 +84,7 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
   if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes') {$w+='TW:MISSING'}
   if ($_.status -in @('todo','in-progress','review','docs','done') -and
       $_.body -notmatch '(?m)^\s*(-\s|\d+\.\s)') {$w+='AC:MISSING'}
+  if ($_.body -match 'Needs decomposition:') {$w+='DECOMP'}
   $t=if($_.tags){"($($_.tags -join ','))"}else{''}
   $x=if($w){" [!$($w -join ',')]"}else{''}
   "#$($_.id) $($_.status)/$($_.priority) $($_.title) $t$x"
@@ -114,6 +115,7 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 **What remains for LLM reasoning (no terminal commands needed):**
 
 - Gate 3 (atomicity): scan titles for "and" joining unrelated concerns.
+- DECOMP routing: tasks flagged `[!DECOMP]` dispatch to `kanban-planner` regardless of status.
 - 15-task dispatch cap: take top entries from the already-sorted list.
 - Stale-task handling: cross-reference orchestrator failure context with output.
 
