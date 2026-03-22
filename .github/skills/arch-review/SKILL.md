@@ -45,7 +45,7 @@ Initialize `manage_todo_list` with steps to complete.
 5. Check the task body for prior context — architecture notes, research pointers,
    reviewer feedback from previous cycles.
 
-<!-- DEACTIVATED: knowledge graph not yet available in VS Code agents.
+<!-- DEACTIVATED for VS Code agents: knowledge graph (query_knowledge) not yet available.
 Original: Query the knowledge graph for past failures via `query_knowledge`.
 See kanban board for KG research task. -->
 
