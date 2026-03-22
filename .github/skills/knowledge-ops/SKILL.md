@@ -5,6 +5,10 @@ description: Query, ingest, and manage the knowledge base (graph + vector store)
 
 # knowledge-ops
 
+> **Agent status:** Utility skill — not dispatched by the orchestrator pipeline.
+> Available to any agent or VS Code chat participant that needs knowledge-base
+> operations.
+
 Operate the hybrid knowledge base (SQLite graph + Qdrant vectors).
 
 ## Rules

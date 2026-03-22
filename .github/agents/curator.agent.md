@@ -65,9 +65,10 @@ Low-signal noise wastes their context window and degrades decisions.
 <workflow>
 Follow the `curation-workflow` skill for the step-by-step process.
 
-Summary: Read inbox at `/memories/repo/inbox/` → deduplicate by meaning
-→ assess signal (HIGH/MEDIUM/LOW/NOISE/CONFLICT) → propose instruction/skill changes
-for HIGH, delete NOISE/LOW, keep MEDIUM for next cycle → report statistics.
+Summary: Read inbox at `/memories/repo/inbox/` (and scan `/memories/repo/` parent for
+misplaced entries) → deduplicate by meaning → assess signal
+(HIGH/MEDIUM/LOW/NOISE/CONFLICT) → propose instruction/skill changes for HIGH, delete
+NOISE/LOW, keep MEDIUM for next cycle → report statistics.
 
 </workflow>
 

@@ -5,6 +5,9 @@ description: "Development analytics retrospective: gather git metrics, session d
 
 # Retro — Development Analytics
 
+> **Agent status:** User-invocable skill — not dispatched by the orchestrator
+> pipeline. Invoked directly by the user in VS Code chat for sprint reports.
+
 Generate a structured development retrospective from git history and kanban data.
 Produces a markdown report with commit metrics, contributor breakdown, session
 analysis, commit type distribution, and kanban task correlation.

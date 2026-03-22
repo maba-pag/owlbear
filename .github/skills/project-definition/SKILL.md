@@ -5,6 +5,9 @@ description: LLM-guided project scoping and definition workflow. Turns a vague i
 
 # Project Definition Workflow
 
+> **Agent status:** User-invocable skill — not dispatched by the orchestrator
+> pipeline. Invoked directly by the user in VS Code chat for ad-hoc project scoping.
+
 Structured workflow for turning a user's idea into an actionable project
 definition. This skill is user-invocable for ad-hoc project scoping —
 producing a `ProjectDefinition` that can be decomposed into kanban tasks.
