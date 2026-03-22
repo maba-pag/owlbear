@@ -59,9 +59,6 @@ Follow the `task-decomposition` skill for the step-by-step process.
 
 <output_format>
 
-**Two-channel protocol** (see agent-common.instructions.md for full rules).
-Write body FIRST, then return ONLY the signal.
-
 ### Channel B — Task body (write first, when parent task ID exists)
 
 When dispatched with a parent task ID, append the planning breakdown to that task:

@@ -59,9 +59,6 @@ Follow the `docs-gate` skill for the step-by-step documentation gate checklist.
 
 <output_format>
 
-**Two-channel protocol** (see agent-common.instructions.md for full rules).
-Write Channel B first, then return only Channel A.
-
 ### Channel B — Task body (write before returning)
 
 Append a `## Docs Gate` section to the task body:

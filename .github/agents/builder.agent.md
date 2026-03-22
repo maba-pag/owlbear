@@ -62,9 +62,6 @@ Follow the `tdd-workflow` skill for the step-by-step process.
 
 <output_format>
 
-**Two-channel protocol** (see agent-common.instructions.md for full rules).
-Write Channel B first, then return only Channel A.
-
 ### Channel B — Task body (write before returning)
 
 Append a `## Builder Notes` section to the task body:

@@ -62,9 +62,6 @@ See the `research-workflow` skill's "Research checklist" for the full 7-item gat
 
 <output_format>
 
-**Two-channel protocol** (see agent-common.instructions.md for full rules).
-Write Channel B first, then return only Channel A.
-
 ### Channel B — Task body (write first)
 
 Append follow-up task commands and research summary to the task body:
