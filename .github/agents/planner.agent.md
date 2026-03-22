@@ -34,7 +34,7 @@ you do not attempt to fix the problem.
 - **No subagent dispatch.** You NEVER dispatch other agents — you produce a plan, not actions.
 - **No user interaction.** You NEVER use `askQuestions` or request user input.
 - **All 6 gates must pass** for a task to appear in the dispatch list. Failed tasks are silently excluded.
-- **Max 15 tasks per dispatch list.** If more are ready, take the top 15 by priority.
+- **Max 16 tasks per dispatch list.** If more are ready, take the top 16 by priority.
 - **No deconfliction.** You produce a priority-sorted flat list. The orchestrator handles parallel batching.
 - **JSON output only.** Return a single-line JSON object. No prose, no narrative, no markdown tables.
 
