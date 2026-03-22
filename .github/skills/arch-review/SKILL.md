@@ -16,13 +16,22 @@ ensuring architectural soundness, and approving tasks for development.
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append review | `kanban\kanban-md.exe edit {id} -a "## Architecture Review\n{content}" -t --claim <agent>` |
 | Approve | `kanban\kanban-md.exe edit {id} --status todo --release` |
-| Refine (keep claimed) | `kanban\kanban-md.exe edit {id} --body "{revised AC}" --claim <agent>` |
+| Refine (keep claimed) | See temp-file pattern below |
 | Split (create task) | `kanban\kanban-md.exe create "TITLE" --priority P --tags T --depends-on ID --body "AC"` |
 | Split (create TDD test) | `kanban\kanban-md.exe create "Test: TITLE" --priority P --tags T,test --body "AC"` |
 | Merge (delete redundant) | `kanban\kanban-md.exe delete ID --yes` |
 | Block | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+
+**Refine (AC rewrite) pattern:** `--body` writes literal `\n` instead of newlines. Always use the temp-file pattern for multi-line AC:
+
+```powershell
+[IO.File]::WriteAllText("docs/scratch/$id-ac.tmp", $revisedAc, [Text.UTF8Encoding]::new($false))
+$body = Get-Content "docs/scratch/$id-ac.tmp" -Raw
+kanban\kanban-md.exe edit $id --body $body --claim <agent>
+Remove-Item "docs/scratch/$id-ac.tmp"
+```
 
 ## Step 1 — Read task and research
 
@@ -81,7 +90,7 @@ and general architectural principles:
 | Verdict     | When                              | Action                                                                  |
 | ----------- | --------------------------------- | ----------------------------------------------------------------------- |
 | **Approve** | AC precise, architecture sound    | `kanban\kanban-md.exe edit {id} --status todo --release`               |
-| **Refine**  | Good concept, AC needs tightening | `kanban\kanban-md.exe edit {id} --body "..." --claim <agent>` (keep)   |
+| **Refine**  | Good concept, AC needs tightening | Use temp-file pattern (see command table above) to rewrite `--body` |
 | **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original, then `--release`   |
 | **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
 | **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
