@@ -128,7 +128,7 @@ kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |
 <boundaries>
 
 - Only process tasks in `done` status
-- Always add block reasons to rejections
+- Always record rejection reasons in Channel B (task body). Use `--block` only for backlog rejections per critical rules.
 - Flag ambiguous cases for user decision instead of guessing
 
 **Research task verification:** When auditing a task tagged `research`, verify:
@@ -138,13 +138,13 @@ kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |
 3. Follow-up tasks link back to the research doc (task body references `docs/research/{slug}.md`)
 4. If none of the above, **reject to review** — the follow-up task creation step was missed
 
-**Red flags — stop and ask the user:**
+**Red flags — create a decision request (see `decision-requests` skill):**
 
 - Confidence < .80 on multiple tasks (systemic quality issue)
-- Uncommitted work that doesn't map to any done task
+- Uncommitted work that doesn’t map to any done task
 - Merge conflicts that prevent committing
 - Tasks in `done` with no implementation evidence at all
-- Multiple tasks in the batch have AC quality score ≤ 2 (systemic architect issue)
+- The task has AC quality score ≤ 2 (create a follow-up task for architect calibration)
 
 **Common failure rationalizations:**
 
