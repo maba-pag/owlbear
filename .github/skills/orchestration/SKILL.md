@@ -75,8 +75,8 @@ those to the user as potential issues.
 Dispatch the `dispatch` array in **parallel waves** (wave size defined in Configuration
 above). Take tasks in the order the planner provided (priority order). For each wave:
 
-1. Issue up to **wave-size** `runSubagent` calls in a **single parallel tool-call
-   block** — one task per call.
+1. Issue up to **wave-size** `runSubagent` calls in
+   a **single parallel tool-call block** — one task per call.
 2. Wait for all calls in the wave to complete.
 3. Handle errors — including rate-limit detection (see below).
 4. Move to the next wave (remaining tasks, up to wave-size each).
@@ -106,10 +106,11 @@ next entry. Skipped entries go into subsequent waves — never drop them.
 3. For each restricted wave, look at its empty slots. Pull forward any **flexible** tasks from later in the priority list that are compatible. Prefer tasks already assigned to later waves that could move up without violating compatibility rules.
 4. For unrestricted waves, fill to wave-size in priority order as normal.
 5. Only after the full draft is complete, review it: "Could any wave be eliminated by merging its tasks forward into spare slots of an earlier wave?" If yes, revise.
+6. If a wave contains exactly one non-auditor task, drop the wave and leave the task for the next cycle, unless it is the only remaining wave.
 
 **Phase 2 — Execute the plan:**
 
-6. Dispatch waves in order as drafted. No further reordering.
+7. Dispatch waves in order as drafted. No further reordering.
 
 In most cases this is a few seconds of mental work, not multiple tool calls — it is a
 thinking step, not an action step. The goal is: **minimum wave count, all tasks dispatched,
