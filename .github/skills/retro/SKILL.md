@@ -25,8 +25,8 @@ Set these in PowerShell before proceeding:
 ```powershell
 $since = "7 days ago"
 # $until = "2026-03-13"  # optional, omit for "until now"
-$dateArgs = "--since=`"$since`""
-if ($until) { $dateArgs += " --until=`"$until`"" }
+$gitDateArgs = @("--since=`"$since`"")
+if ($until) { $gitDateArgs += "--until=`"$until`"" }
 ```
 
 ## Step 1 — Gather raw git data
@@ -35,19 +35,19 @@ Run these 5 git commands to collect raw data. They can run in parallel (independ
 
 ```powershell
 # 1. Commits with LOC stats
-git log --format="%H|%aN|%ai|%s" --shortstat $dateArgs
+git log --format="%H|%aN|%ai|%s" --shortstat @gitDateArgs
 
 # 2. Per-file LOC (numstat) for test vs prod split
-git log --format="COMMIT:%H|%aN" --numstat $dateArgs
+git log --format="COMMIT:%H|%aN" --numstat @gitDateArgs
 
 # 3. Timestamps for session detection
-git log --format="%at|%aN|%s" $dateArgs
+git log --format="%at|%aN|%s" @gitDateArgs
 
 # 4. File change frequency (hotspots)
-git log --format="" --name-only $dateArgs
+git log --format="" --name-only @gitDateArgs
 
 # 5. Per-author commit counts
-git shortlog -sn --no-merges $dateArgs
+git shortlog -sn --no-merges @gitDateArgs
 ```
 
 Parse each command's output and hold in memory for the next steps.
@@ -168,6 +168,7 @@ Report as percentages:
 Read the kanban activity log to correlate task completions with the time window:
 
 ```powershell
+$sinceDate = Get-Date $since
 Get-Content kanban/activity.jsonl |
     ConvertFrom-Json |
     Where-Object { $_.action -match "moved|status" -and $_.timestamp -ge $sinceDate }
