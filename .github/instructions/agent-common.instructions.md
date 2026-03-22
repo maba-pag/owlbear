@@ -7,10 +7,6 @@ description: "Cross-agent rules that apply to all OwlBear agents"
 
 All agents inherit project conventions from `copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
 
-> **Loading note:** `applyTo: "**"` ensures these rules load regardless of which files
-> the agent touches (src/, tests/, etc.). Previously scoped to `.github/agents/**`,
-> which risked not loading when agents worked exclusively on source files.
-
 ## Task discipline
 
 - **ONE task per invocation.** Never work on multiple kanban tasks in a single session. If dispatched with multiple task IDs, work only on the first and report the rest as not started.
