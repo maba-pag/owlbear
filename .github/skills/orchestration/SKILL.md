@@ -97,15 +97,53 @@ next entry. Skipped entries go into subsequent waves — never drop them.
 | builder | no | auditor |
 | reviewer, test-writer | yes | auditor |
 
-**Assembly algorithm:**
-1. Walk the priority-sorted dispatch list top-to-bottom.
-2. For each entry, check if it fits the current wave (compatibility + wave-size).
-3. If it fits, add it. If not, skip it for a later wave.
-4. When the current wave is full or no more entries fit, close it and start the next.
-5. Repeat until all entries are assigned to waves.
+**Assembly algorithm — two-phase, minimize wave count:**
 
-In most cases, simple re-ordering within a priority tier is enough to fill waves
-cleanly. If it doesn't work out, use smaller waves rather than dropping tasks.
+**Phase 1 — Draft the wave plan on paper before dispatching anything:**
+
+1. Write out a provisional wave plan for all tasks at once. Do not dispatch yet.
+2. Identify every **restricted-slot** task (auditor with its "no test-writer/builder/reviewer" rule). Mark these — they constrain their entire wave.
+3. For each restricted wave, look at its empty slots. Pull forward any **flexible** tasks from later in the priority list that are compatible. Prefer tasks already assigned to later waves that could move up without violating compatibility rules.
+4. For unrestricted waves, fill to wave-size in priority order as normal.
+5. Only after the full draft is complete, review it: "Could any wave be eliminated by merging its tasks forward into spare slots of an earlier wave?" If yes, revise.
+
+**Phase 2 — Execute the plan:**
+
+6. Dispatch waves in order as drafted. No further reordering.
+
+In most cases this is a few seconds of mental work, not multiple tool calls — it is a
+thinking step, not an action step. The goal is: **minimum wave count, all tasks dispatched,
+no compatibility violations.**
+
+#### Worked example — greedy failure vs. two-phase fix
+
+**Input (priority order):** #941 (writer), #862 (test-writer), #780 (test-writer), #786 (reviewer), #775 (reviewer), #854 (test-writer), #853 (test-writer), #868 (test-writer), #880 (test-writer), #910 (test-writer), #728 (test-writer), #733 (test-writer), #556 (test-writer), #722 (auditor), #901 (auditor)
+
+**Greedy (bad) — 7 waves:**
+```
+Wave 1: #941 (writer), #862 (test-writer), #780 (test-writer)   ← writer grabbed early
+Wave 2: #786 (reviewer), #775 (reviewer), #854 (test-writer)
+Wave 3: #853 (test-writer), #868 (test-writer), #880 (test-writer)
+Wave 4: #910 (test-writer), #728 (test-writer), #733 (test-writer)
+Wave 5: #556 (test-writer)                                       ← writer already consumed, wave underloaded
+Wave 6: #722 (auditor)                                           ← writer could have shared here
+Wave 7: #901 (auditor)
+```
+
+**Two-phase (good) — 6 waves:**
+```
+Phase 1 draft: note auditor slots at waves 5 and 6.
+  Wave 5 has 2 spare slots — fill with #941 (writer, compatible) and one more.
+  But #941 is flexible and compatible with auditor; move it here instead of Wave 1.
+
+Wave 1: #862 (test-writer), #780 (test-writer), #556 (test-writer)   ← #556 pulled forward
+Wave 2: #786 (reviewer), #775 (reviewer), #854 (test-writer)
+Wave 3: #853 (test-writer), #868 (test-writer), #880 (test-writer)
+Wave 4: #910 (test-writer), #728 (test-writer), #733 (test-writer)
+Wave 5: #722 (auditor), #941 (writer)                                 ← writer deferred to fill auditor wave
+Wave 6: #901 (auditor)
+```
+Result: same 15 tasks, 1 fewer wave, no compatibility violations.
 
 After all waves from this plan complete, proceed to Step 3.
 
