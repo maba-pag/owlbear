@@ -25,7 +25,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from owlbear.bootstrap import BootstrapResult, bootstrap
 from owlbear.config import OwlBearSettings
 from owlbear.core.agent_registry import AgentRegistry
-from owlbear.core.roles import VALIDATOR_POLICY, AgentRole
+from owlbear.core.roles import VALIDATOR_POLICY
 
 # Block real LLM requests — FunctionModel is exempt.
 pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
@@ -136,8 +136,10 @@ class TestToolResolution:
         bootstrapped: BootstrapResult,
         agent_name: str,
     ) -> None:
-        """get() must complete without KeyError — every tool name in the
-        definition was resolved by the alias-backed tool resolver."""
+        """get() must complete without KeyError.
+
+        Every tool name in the definition was resolved by the alias-backed tool resolver.
+        """
         registry = _get_registry(bootstrapped)
         agent = registry.get(agent_name)
         assert agent is not None
@@ -225,13 +227,13 @@ class TestSkillsIntegration:
     """AC-4: Agents declaring skills get SkillRegistry in toolsets."""
 
     @pytest.mark.asyncio
-    async def test_researcher_declares_no_skills(
+    async def test_researcher_declares_kanban_md_skill(
         self,
         bootstrapped: BootstrapResult,
     ) -> None:
-        """researcher has skills: [] — must not get SkillRegistry."""
+        """Researcher declares kanban-md skill (added in task #775)."""
         registry = _get_registry(bootstrapped)
-        assert registry.definitions["researcher"].skills == []
+        assert registry.definitions["researcher"].skills == ["kanban-md"]
 
     @pytest.mark.asyncio
     async def test_skill_registry_provided_when_skills_dir_exists(
@@ -275,8 +277,8 @@ class TestSkillsIntegration:
 
         # Builder declares skills → SkillRegistry should be wired.
         assert len(registry.definitions["builder"].skills) > 0
-        # Researcher has skills: [] → SkillRegistry NOT applied.
-        assert registry.definitions["researcher"].skills == []
+        # Researcher also declares skills now (kanban-md added in task #775).
+        assert len(registry.definitions["researcher"].skills) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -287,13 +289,12 @@ class TestSkillsIntegration:
 class TestRolePolicies:
     """AC-5: Validator-role agents get filtered toolsets; builders retain full access."""
 
-    VALIDATOR_AGENTS: ClassVar[list[str]] = ["reviewer", "architect", "auditor"]
+    VALIDATOR_AGENTS: ClassVar[list[str]] = ["reviewer", "architect", "auditor", "writer"]
     BUILDER_AGENTS: ClassVar[list[str]] = [
         "orchestrator",
         "kanban-planner",
         "builder",
         "researcher",
-        "writer",
         "curator",
     ]
 
@@ -306,7 +307,7 @@ class TestRolePolicies:
     ) -> None:
         registry = _get_registry(bootstrapped)
         defn = registry.definitions[agent_name]
-        assert AgentRole(defn.role) is AgentRole.VALIDATOR
+        assert defn.role == "validator"
 
     @pytest.mark.parametrize("agent_name", BUILDER_AGENTS)
     @pytest.mark.asyncio
@@ -317,7 +318,7 @@ class TestRolePolicies:
     ) -> None:
         registry = _get_registry(bootstrapped)
         defn = registry.definitions[agent_name]
-        assert AgentRole(defn.role) is AgentRole.BUILDER
+        assert defn.role == "builder"
 
     @pytest.mark.parametrize("agent_name", VALIDATOR_AGENTS)
     @pytest.mark.asyncio
@@ -332,8 +333,9 @@ class TestRolePolicies:
         assert isinstance(agent, Agent)
 
         defn = registry.definitions[agent_name]
-        assert AgentRole(defn.role) is AgentRole.VALIDATOR
-        assert VALIDATOR_POLICY.denied_tools, "VALIDATOR_POLICY should deny tools"
+        assert defn.role == "validator"
+        # VALIDATOR_POLICY uses an allow-list model (allowed_tools non-empty).
+        assert VALIDATOR_POLICY.allowed_tools
 
     @pytest.mark.parametrize("agent_name", BUILDER_AGENTS)
     @pytest.mark.asyncio
