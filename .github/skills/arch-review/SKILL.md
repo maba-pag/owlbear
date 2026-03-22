@@ -20,7 +20,7 @@ ensuring architectural soundness, and approving tasks for development.
 | Split (create task) | `kanban\kanban-md.exe create "TITLE" --priority P --tags T --depends-on ID --body "AC"` |
 | Split (create TDD test) | `kanban\kanban-md.exe create "Test: TITLE" --priority P --tags T,test --body "AC"` |
 | Merge (delete redundant) | `kanban\kanban-md.exe delete ID --yes` |
-| Block | `kanban\kanban-md.exe edit {id} --block "reason" --release` |
+| Block | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 
@@ -84,7 +84,7 @@ and general architectural principles:
 | **Refine**  | Good concept, AC needs tightening | `kanban\kanban-md.exe edit {id} --body "..." --claim <agent>` (keep)   |
 | **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original, then `--release`   |
 | **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
-| **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --block "reason" --release`            |
+| **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
 
 > **Placeholder block path:** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), use the Block path: `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release`. See agent-common → **Placeholder and unscoped task rejection**.
 
