@@ -72,6 +72,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
+  "N801",    # TestFromAC_* class naming convention required by test-writer workflow
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
   "S106",    # hardcoded password in function args — test fixtures

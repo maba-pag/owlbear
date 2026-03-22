@@ -295,7 +295,7 @@ def subdir_skills_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
-class TestFromAC_SubdirGlob:  # noqa: N801
+class TestFromAC_SubdirGlob:
     """AC1: _scan() uses glob('*/SKILL.md') — discovers subdir layout only."""
 
     def test_scan_discovers_subdir_skill_md(self, subdir_skills_dir: Path) -> None:
@@ -349,7 +349,7 @@ class TestFromAC_SubdirGlob:  # noqa: N801
         assert "deep" not in registry.skills
 
 
-class TestFromAC_DocstringsUpdated:  # noqa: N801
+class TestFromAC_DocstringsUpdated:
     """AC2: Class and _scan docstrings reference subdirectory layout."""
 
     def test_class_docstring_references_subdirectory(self) -> None:
@@ -365,18 +365,18 @@ class TestFromAC_DocstringsUpdated:  # noqa: N801
         assert "SKILL.md" in docstring, "_scan docstring should reference SKILL.md pattern"
 
 
-class TestFromAC_RealSkillsDiscovery:  # noqa: N801
-    """AC5: list_skills discovers 18 skills from real .github/skills dir."""
+class TestFromAC_RealSkillsDiscovery:
+    """AC5: list_skills discovers 20 skills from real .github/skills dir."""
 
     @pytest.mark.skipif(
         not _REAL_SKILLS_DIR.is_dir(),
         reason="Real skills directory not found",
     )
-    def test_discovers_18_real_skills(self) -> None:
-        """SkillRegistry finds exactly 19 skills in .github/skills."""
+    def test_discovers_20_real_skills(self) -> None:
+        """SkillRegistry finds exactly 20 skills in .github/skills."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 19, (
-            f"Expected 19 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
+        assert len(registry.skills) == 20, (
+            f"Expected 20 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
         )
 
     @pytest.mark.skipif(
@@ -386,7 +386,7 @@ class TestFromAC_RealSkillsDiscovery:  # noqa: N801
     def test_real_skills_have_nonempty_names(self) -> None:
         """Every discovered real skill has a non-empty name and description."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 19, "Must discover 19 skills first"
+        assert len(registry.skills) == 20, "Must discover 20 skills first"
         for name, meta in registry.skills.items():
             assert name, "Skill name must be non-empty"
             assert meta.description, f"Skill '{name}' has empty description"
@@ -395,10 +395,10 @@ class TestFromAC_RealSkillsDiscovery:  # noqa: N801
         not _REAL_SKILLS_DIR.is_dir(),
         reason="Real skills directory not found",
     )
-    def test_list_skills_includes_all_19(self) -> None:
-        """list_skills output mentions all 19 skill names."""
+    def test_list_skills_includes_all_20(self) -> None:
+        """list_skills output mentions all 20 skill names."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 19, "Must discover 19 skills first"
+        assert len(registry.skills) == 20, "Must discover 20 skills first"
         output = registry.list_skills()
         for name in registry.skills:
             assert name in output, f"Skill '{name}' missing from list_skills output"
