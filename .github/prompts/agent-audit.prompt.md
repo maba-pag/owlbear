@@ -33,12 +33,12 @@ What's my role? What can I touch? How do I communicate?"
 
 - `<persona>` — 3-5 sentences defining role, expertise, and attitude
 - `<critical_rules>` — 3-7 non-negotiable rules SPECIFIC to this agent (not duplicated from shared instructions)
-- `<multi_agent_context>` — pipeline position (with canonical pipeline string, own position bolded), predecessor/successor relationships
+- optional, only if beneficial: `<multi_agent_context>` — pipeline position, predecessor/successor relationships
 - `<workflow>` — "Follow the `{skill-name}` skill." + 1-line summary. NOT the procedure itself.
 - `<output_format>` — Channel A signal format and Channel B body structure. Agent-specific formats only — the protocol itself is in agent-common.
 - `<boundaries>` — Agent-SPECIFIC red flags. Common red flags live in agent-common.
 - `<examples>` — 2-3 complete good/bad examples showing realistic signal output
-- `<self_critique>` — Reference to skill checklist + 3-5 quick agent-specific checks. NOT a verbatim copy of the skill checklist.
+- `<self_critique>` — Reference to skill checklist + 3-5 quick agent-specific checks. NOT a verbatim copy of the skill checklist. (not for orchestrator)
 
 **Must NOT contain:**
 
@@ -99,17 +99,16 @@ of truth AND inline in agents for quick reference.
 ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
 ```
 
-Every agent file that mentions the pipeline must use this exact string (with its own
-position bolded).
-
 **Agent-status ownership:** Each pipeline agent gates exactly one status transition.
 Verify that: (a) every dispatchable status has an assigned agent, (b) no two agents
 move the same transition, (c) non-pipeline agents (orchestrator, planner, curator,
 kanban-planner) never run `kanban-md move`.
 
-**Non-implementation exceptions:** Some task types (research, docs, config) skip the
-test-writer. Verify the dispatch mapping explicitly encodes these exceptions in a table
-(not just inline prose).
+**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`, or
+`type:docs` still flow through the full pipeline. The test-writer and builder recognize
+these tags and pass through without writing tests or code (see tdd-red skill Step 1a,
+tdd-workflow skill Step 1a). Verify the dispatch mapping documents this pass-through
+behavior in its table.
 
 ## The orchestrator's role
 
@@ -122,8 +121,6 @@ The orchestrator is a mechanical dispatch loop. It:
 **Orchestrator does NOT:** run kanban commands, read task bodies, parse Channel A
 signals for routing, or make quality judgments.
 
-**Orchestrator tools:** only `[agent, vscode/askQuestions, vscode/memory, todo]`.
-
 ## Two-channel communication protocol
 
 Defined in agent-common.instructions.md:
@@ -131,23 +128,6 @@ Defined in agent-common.instructions.md:
 - **Channel A (routing signal):** Max 2 lines returned to caller. Diagnostic only.
 - **Channel B (task body):** Rich context appended to kanban task. Downstream agents
   read this. Orchestrator never reads this.
-
-## Rejection blocking convention
-
-Routine rejections (reviewer FAIL, writer reject-to-review, auditor reject-to-review)
-use simple status movement (`--status {target} --release`) without `--block`. The task
-auto-redispatches on the planner's next cycle. Rejection details live in the Channel B
-task body (Review Evidence, Docs Gate, Audit sections).
-
-`--block` is reserved for situations that require human intervention before redispatch:
-
-- **Auditor → backlog**: fundamental quality issue needing redesign
-- **Architect → ideation**: AC needs rework
-- **Handoff**: waiting on user decision or external action
-- **Decision requests**: blocked pending async user decision
-- **Stale tasks**: blocked for triage
-
-Verify that no routine rejection command uses `--block`.
 
 ## Defense-in-depth model
 
@@ -172,7 +152,7 @@ Analyze every file for these categories of issues:
 
 - Agent has wrong tools for its role (orchestrator with terminal, planner with agent tool)
 - Missing dispatch paths (task gets stuck because no agent picks it up)
-- Non-implementation tasks have no explicit dispatch exception in the mapping table
+- Non-implementation task pass-through not documented in dispatch mapping table
 - Double-moves (two agents move the same transition)
 - Signals that don't match what the receiving agent expects
 - References to tools not available in VS Code agent mode
@@ -195,7 +175,6 @@ Analyze every file for these categories of issues:
 
 ### 4. Consistency checks
 
-- Pipeline string differs between agents
 - Confidence thresholds differ between agent and agent-common
 - kanban-md path inconsistencies (`kanban\kanban-md.exe` is canonical)
 - Dispatch mapping table vs narrative text disagree
@@ -208,6 +187,19 @@ Analyze every file for these categories of issues:
 - Skill exists but no agent references it (orphan skill)
 - Agent references a skill that doesn't exist (broken reference)
 - Missing required sections in agent files (persona, critical_rules, examples, etc.)
+
+### 6. Low signal-to-noise ratio
+
+Every token in an agent/skill/instruction file competes for context window space.
+Content that does not directly help the agent perform its task is noise.
+
+- Rationale or justification for rules the agent must simply follow (the "why" behind
+  a rule has no operational value)
+- Prose that restates information already present in another section or file
+- Filler phrases that add no decision-making value
+- Verbose phrasing where a terse equivalent carries the same meaning
+- Background context useful for human documentation but not for task execution (e.g.,
+  explaining why a compatibility rule exists when the agent only needs the rule itself)
 
 ## Output format
 
@@ -231,6 +223,9 @@ For each: What's inconsistent, where, what the canonical version should be.
 ### Structural (S1, S2, ...)
 For each: What's structurally wrong, what the target structure should be.
 
+### SNR Issues (N1, N2, ...)
+For each: What's noisy, which file and section, suggested terse replacement or deletion.
+
 ## FINDINGS CHECKLIST
 - [ ] **{ID}** {one-line description of what "fixed" looks like}
 
@@ -240,6 +235,7 @@ For each: What's structurally wrong, what the target structure should be.
 ### Phase 2: Design Contradiction Resolution (D*)
 ### Phase 3: Content Placement & Consistency Fixes (P*, I*)
 ### Phase 4: Structural Improvements (S*)
+### Phase 5: SNR Reduction (N*)
 
 For each step:
 - What: one-sentence description
@@ -253,6 +249,7 @@ For each step:
 3. Grep for orphaned references (removed agents, deprecated tools)
 4. Verify all agent self-critiques reference skills (not duplicate them)
 5. Re-verify every finding in the checklist
+6. Spot-check 3 files for low-SNR content (rationale prose, restated rules, filler)
 ```
 
 ## Process instructions
