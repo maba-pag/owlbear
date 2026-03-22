@@ -16,7 +16,7 @@ Step-by-step process for the exit gate (done → archived).
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append audit | `kanban\kanban-md.exe edit {id} -a "## Audit\n{content}" -t --claim <agent>` |
 | Archive (pass) | `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release` |
-| Reject (fixable) | `kanban\kanban-md.exe edit {id} --status review --block "reason" --release` |
+| Reject (fixable) | `kanban\kanban-md.exe edit {id} --status review --release` |
 | Reject (fundamental) | `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
@@ -36,12 +36,9 @@ kanban\kanban-md.exe edit {id} --claim <agent>
 
 ## Step 2 — Verify each task
 
-The auditor is the 3rd line of defense. The reviewer (2nd line) already verified
-individual code quality, test quality, and test-writer coverage in detail. The auditor
-focuses on what only it can see: **cross-task integration** and **architect quality**.
-
-Trust the reviewer's verdict on builder/test-writer work — two out of three agents
-producing bad work simultaneously is unlikely. Spot-check rather than re-verify:
+As 3rd-line defense (see agent-common → **Defense-in-depth**), the auditor focuses on
+**cross-task integration** and **architect quality**. Trust the reviewer's code-level
+verdict and spot-check rather than re-verify:
 
 - **Read reviewer evidence:** Check the `## Review Evidence` section in the task body.
   If the reviewer produced a detailed evidence table with PASS verdict, accept its
@@ -49,9 +46,7 @@ producing bad work simultaneously is unlikely. Spot-check rather than re-verify:
 - **File exists:** `read_file` — quick sanity check that deliverables exist
 - **Code matches AC (spot-check):** Verify 1–2 key AC items rather than every line.
   The reviewer already mapped every AC item to evidence.
-- **Tests pass (FULL suite):** Run the full suite plain (see the `pytest-and-linting`
-  skill, read it with `read_file` if not already loaded, for piping rules and the
-  Python fallback):
+- **Tests pass (FULL suite):** Run the full suite plain (see `pytest-and-linting` skill):
 
   ```powershell
   uv run pytest tests/ -m "not api" -q --tb=short
@@ -98,6 +93,8 @@ needs calibration.
 
 ## Step 3 — Score and decide
 
+Thresholds from agent-common → **Confidence thresholds** (single source of truth):
+
 | Score | Meaning | Action |
 |-------|---------|--------|
 | `1.0` | Every AC verified, no deviations | Archive |
@@ -107,7 +104,7 @@ needs calibration.
 | `< .85` | Incomplete or unverifiable | Reject to backlog |
 
 - **≥ .95:** `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release`
-- **< .95 fixable:** `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`
+- **< .95 fixable:** `kanban\kanban-md.exe edit {id} --status review --release`
 - **< .95 fundamental:** `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release`
 
 ## Step 4 — Audit report

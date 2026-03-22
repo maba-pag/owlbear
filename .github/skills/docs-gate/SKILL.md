@@ -15,7 +15,7 @@ Step-by-step process for the documentation gate (docs → done).
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append report | `kanban\kanban-md.exe edit {id} -a "## Docs Gate\n{content}" -t --claim <agent>` |
 | Advance (pass) | `kanban\kanban-md.exe edit {id} --status done --release` |
-| Reject to review | `kanban\kanban-md.exe edit {id} --status review --block "reason" --release` |
+| Reject to review | `kanban\kanban-md.exe edit {id} --status review --release` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 
@@ -98,4 +98,4 @@ kanban\kanban-md.exe edit {id} --status done --release
 
 - Only edit: README.md, copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
 - Never change application logic — only documentation content
-- If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`
+- If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --release`

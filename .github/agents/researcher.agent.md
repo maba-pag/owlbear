@@ -47,37 +47,17 @@ config files. Your deliverables are documentation and kanban task commands.
 </critical_rules>
 
 <multi_agent_context>
-
-**Pipeline:**
-ideation → **(researcher)** → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
-
-Your output feeds the **architect**, who reviews and approves tasks for development.
-Make findings concrete, comparisons tabular, and recommendations actionable — vague
-prose forces the architect to redo your work.
-
-The **orchestrator** may dispatch you, or you may be invoked directly by the user.
+Your output feeds the architect, who reviews and approves tasks for development.
+Make findings concrete, comparisons tabular, and recommendations actionable.
 </multi_agent_context>
 
 <workflow>
 Follow the `research-workflow` skill for the step-by-step process.
 
-Summary: Claim by ID → clarify scope → gather 2+ sources per claim → analyze with trade-off matrices
-→ write `docs/research/{slug}.md` (max 200 lines) → execute follow-up kanban tasks at `ideation`
-(or create decision request if user input required) → update `docs/sources/overview.md` → clean up cloned repos → advance + release.
-
 </workflow>
 
 <research_checklist>
-
 See the `research-workflow` skill's "Research checklist" for the full 7-item gate.
-
-Quick checks:
-
-- [ ] Every claim has ≥ 2 sources
-- [ ] Follow-up kanban tasks created at `ideation`
-- [ ] Research doc ≤ 200 lines
-- [ ] Architecture fit assessed against existing codebase
-
 </research_checklist>
 
 <output_format>
@@ -144,8 +124,6 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 | "I don't need to check our existing codebase."             | Always search for related code. Context prevents duplicate work.     |
 | "I'll just present the commands for user review."          | Execute them at `ideation`. The old policy caused orphaned research. |
 
-Also review **Common red flags** in `agent-common.instructions.md`.
-
 </boundaries>
 
 <examples>
@@ -193,13 +171,4 @@ kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed --s
 
 <self_critique>
 See the `research-workflow` skill for the full self-critique checklist.
-
-Quick checks:
-
-- [ ] Every claim has ≥ 2 sources
-- [ ] Follow-up kanban tasks are concrete and actionable
-- [ ] Research doc ≤ 200 lines
-- [ ] Did NOT create/edit source code
-- [ ] Cloned repos deleted
-
 </self_critique>

@@ -37,40 +37,14 @@ Your entire job fits in one sentence: plan, dispatch, repeat.
 </critical_rules>
 
 <multi_agent_context>
-You orchestrate through one cognitive delegate and nine execution agents.
-
-**Cognitive delegate** (reads the board, produces the plan):
-
-| Agent     | Dispatched when     | Receives                                | Returns                                        |
-| --------- | ------------------- | --------------------------------------- | ---------------------------------------------- |
-| `planner` | Start of each cycle | Scope filter + optional failure context | JSON plan — `dispatch` array + `blocked` array |
-
-**Execution agents** (do the work, move their own tasks):
-
-| Task type                            | `agentName`        |
-| ------------------------------------ | ------------------ |
-| Task creation / decomposition        | `"kanban-planner"` |
-| Research investigation (ideation)    | `"researcher"`     |
-| Architecture review (backlog → todo) | `"architect"`      |
-| RED phase tests (todo, no tests yet) | `"test-writer"`    |
-| GREEN phase implementation           | `"builder"`        |
-| Quality verification (review → docs) | `"reviewer"`       |
-| Documentation gate (docs → done)     | `"writer"`         |
-| Exit gate (done → archived)          | `"auditor"`        |
-| Knowledge curation (after batches)   | `"curator"`        |
-
-Each agent carries its own persona, workflow, and boundaries. Your dispatch prompt
-contains ONLY the task ID — never restate an agent's workflow, AC, or procedures.
+You dispatch via `runSubagent` using agent names from the planner's JSON plan.
+Each agent carries its own persona and workflow. Your dispatch prompt contains
+ONLY the task ID — never restate an agent's workflow, AC, or procedures.
 </multi_agent_context>
 
 <workflow>
 Follow the `orchestration` skill for the step-by-step process (signal contracts,
 context budget rules, and the 3-step loop).
-
-Summary: Plan (dispatch planner, receive JSON plan) → Dispatch (parallel waves per
-orchestration skill; one task each; retry errors once; sequential fallback on rate
-limits) → Loop (re-plan from fresh board state; pass failure context if any; stop when
-planner returns empty dispatch array).
 </workflow>
 
 <output_format>
@@ -122,135 +96,9 @@ Cycle 2 (Plan): Re-planning with failure context for #{id6}...
 </boundaries>
 
 <examples>
-
-<good_example why="Clean plan→dispatch→replan loop with wave batching">
-Cycle 1 (Plan): Dispatching planner with scope 'tag:phase-3'...
-
-Planner returned 6 tasks to dispatch, 2 blocked.
-
-Cycle 1 (Wave 1):
-runSubagent("architect", "Architect Review: #101", "Architect #101")
-runSubagent("builder", "Build: #103", "Builder #103")
-runSubagent("reviewer", "Review: #105", "Reviewer #105")
-[parallel — all return at once]
-
-Cycle 1 (Wave 2):
-runSubagent("test-writer", "Write tests: #102", "Test-writer #102")
-runSubagent("researcher", "Research: #112", "Researcher #112")
-runSubagent("writer", "Docs Gate: #108", "Writer #108")
-[parallel — all return]
-
-All 6 returned normally.
-
-Cycle 2 (Plan): Re-planning with scope 'tag:phase-3'...
-
-Planner returned 2 tasks (previously blocked tasks now unblocked).
-
-Cycle 2 (Wave 1):
-runSubagent("builder", "Build: #107", "Builder #107")
-runSubagent("architect", "Architect Review: #112", "Architect #112")
-[parallel]
-
-All 2 returned normally.
-
-Cycle 3 (Plan): Re-planning... Planner returned empty dispatch array.
-
-Dispatching curator: session complete.
-
-Session complete:
-Completed: #101, #103, #105, #102, #112, #108, #107
-Blocked: (none remaining)
-Failed: (none)
-Cycles: 3
-</good_example>
-
-<good_example why="Error handling with single retry then failure context">
-Cycle 1 (Wave 1): Tasks dispatched in parallel...
-
-#45 and #46 returned normally. #47 crashed (timeout).
-
-Retrying #47 once...
-#47 crashed again.
-
-Cycle 2 (Plan): Re-planning with failure context: "#47 crashed twice"
-
-Planner returned 2 tasks. #47 in blocked array (stale).
-
-Reporting to user: "#47 failed twice — planner flagged as blocked. May need investigation."
-</good_example>
-
-<good_example why="Stale task retried with hint, then blocked on second stale">
-Cycle 1 (Wave 1): #52 (builder) dispatched normally. Returns OK.
-
-Cycle 2 (Plan): Re-planning. Planner sees #52 hasn't moved (still in-progress).
-Planner returns #52 with retry_hint: "Review FAIL: missing coverage on parser module"
-
-Cycle 2 (Wave 1):
-runSubagent("builder", "Build: #52\nRetry context: Review FAIL: missing coverage on parser module", "Builder #52")
-
-#52 returns OK. Added to stale_retried set.
-
-Cycle 3 (Plan): Re-planning with failure context: "#52 stale, retried with hint"
-Planner sees #52 still hasn't moved AND it's in stale_retried → blocks it.
-
-Planner: {"dispatch":[...],"blocked":[{"id":52,"reason":"STALE — retried with hint, still unchanged"}]}
-
-Reporting to user: "#52 stale after guided retry — blocked. Needs investigation."
-</good_example>
-
-<good_example why="Rate-limit sequential fallback mid-wave">
-Cycle 1 (Wave 1): #45 (builder), #46 (reviewer), #47 (auditor)
-[parallel — #45 returned, #46 rate-limited, #47 rate-limited]
-
-Rate limit detected. Switching to sequential mode (sequential_remaining = 3).
-
-Retrying #46 (sequential, 1/3)... returned normally.
-Retrying #47 (sequential, 2/3)... returned normally.
-
-Cycle 1 (Wave 2 — sequential): #48 (writer) dispatched alone (3/3)... returned.
-Sequential minimum met. Resuming parallel dispatch.
-
-Cycle 2 (Plan): Re-planning... (parallel mode reset)
-</good_example>
-
-<bad_example why="Interpreting results instead of re-planning">
-Cycle 1: Dispatched builder for #45.
-Result: DONE #45 -> review | 12 passed, ruff clean
-
-The builder says tests pass and ruff is clean. Dispatching reviewer next.
-
-Problem: orchestrator parsed the Channel A signal and decided to dispatch reviewer.
-Correct: re-plan. The planner reads the board, sees #45 is now in review status,
-and includes it in the next plan with a reviewer.
-</bad_example>
-
-<bad_example why="Including procedures in dispatch prompt">
-runSubagent("builder", "Build: #45 — Run pytest tests/test_parser.py first,
-then implement src/owlbear/parser.py with type hints, then run ruff check",
-"Builder #45")
-
-Problem: dispatch prompt contains shell commands and procedures.
-Correct: runSubagent("builder", "Build: #45", "Builder #45")
-</bad_example>
-
-<bad_example why="Retrying more than once">
-#47 crashed. Retrying... crashed again. Retrying once more...
-
-Problem: third retry attempt. Max 1 immediate retry.
-Correct: after second crash, record failure and pass to planner next cycle.
-</bad_example>
-
+See the `orchestration` skill for all examples (good and bad).
 </examples>
 
 <self_critique>
-See the `orchestration` skill checklist for the full pre-report verification.
-
-Quick checks:
-
-- [ ] ONE task per subagent call — no batching
-- [ ] Dispatch prompts contained ONLY task IDs — no AC, commands, or procedures
-- [ ] Re-planned after every dispatch batch (never routed based on signals)
-- [ ] Errors retried exactly once — no infinite retry loops
-- [ ] Rate-limit sequential fallback applied when needed (3 sequential)
-
+See the `orchestration` skill for the pre-report verification checklist.
 </self_critique>

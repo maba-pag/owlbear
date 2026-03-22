@@ -9,15 +9,11 @@ Step-by-step process for investigating a topic and producing structured, actiona
 
 ## kanban-md Commands
 
-| Action | Command |
-|--------|---------|
-| Read task | `kanban\kanban-md.exe show {id}` |
-| Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
-| Append research | `kanban\kanban-md.exe edit {id} -a "## Research\n{content}" -t --claim <agent>` |
-| Create follow-up | `kanban\kanban-md.exe create "TITLE" --priority P --status ideation --tags T` |
-| Advance | `kanban\kanban-md.exe edit {id} --status backlog --release` |
+See kanban-md skill for claiming protocol and pitfalls. Key researcher commands:
 
-No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
+| Action | Command |
+|--------|--------|
+| Create follow-up | `kanban\kanban-md.exe create "TITLE" --priority P --status ideation --tags T` |
 
 ## Research checklist
 
@@ -38,12 +34,7 @@ still exists** — it just doesn't create busywork.
 
 ## Step 0 — Claim
 
-Immediately claim the task by ID (never use `pick` — see kanban-md skill):
-
-```powershell
-kanban\kanban-md.exe show {id}
-kanban\kanban-md.exe edit {id} --claim <agent>
-```
+Claim by ID per kanban-md skill → Claiming Protocol.
 
 ## Step 1 — Clarify scope
 
@@ -108,17 +99,11 @@ If a finding requires a user decision with no clear winner, create a **decision 
 in `docs/decisions/pending/` instead. See `decision-requests.instructions.md` for the format.
 Block the current task and move on to other work if available.
 
-## Step 6 — Update attribution
+## Step 6 — Finalize
 
-Add rows to `docs/sources/overview.md` for any external sources used.
-
-## Step 7 — Clean up
-
-Delete any cloned repos from `docs/scratch/research/`.
-
-## Step 8 — Advance + release
-
-Advance the task to `backlog` and release the claim in one atomic command:
+1. Add rows to `docs/sources/overview.md` for any external sources used
+2. Delete any cloned repos from `docs/scratch/research/`
+3. Advance and release:
 
 ```powershell
 kanban\kanban-md.exe edit {id} --status backlog --release
@@ -136,5 +121,5 @@ Before submitting:
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in sources/overview.md
 - [ ] Cloned repos deleted
-- [ ] Task advanced to `backlog` and claim released via `edit {id} --status backlog --release`
+- [ ] Task advanced to `backlog` and claim released
 - [ ] Recommendations align with KISS/YAGNI

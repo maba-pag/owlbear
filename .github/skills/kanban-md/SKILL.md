@@ -11,30 +11,18 @@ Each task is a `.md` file in `kanban/tasks/`.
 
 ## Claiming Protocol
 
-Every agent follows three phases — no task edits or code changes without a claim.
+See agent-common → **Task coordination** for the full three-phase claiming lifecycle
+(claim → maintain → advance+release), dispatched vs self-selected rules, and crash safety.
 
-**Phase 1 — Claim** (start of work):
-
-```powershell
-kanban\kanban-md.exe show {id}
-kanban\kanban-md.exe edit {id} --claim <agent>
-```
-
-**Phase 2 — Maintain** (during work — renew claim on every append):
+Key commands:
 
 ```powershell
-kanban\kanban-md.exe edit {id} -a "## Section\ncontent" -t --claim <agent>
+kanban\kanban-md.exe edit {id} --claim <agent>     # Phase 1: claim
+kanban\kanban-md.exe edit {id} -a "..." -t --claim <agent>  # Phase 2: maintain
+kanban\kanban-md.exe edit {id} --status <next> --release     # Phase 3: advance
 ```
 
-**Phase 3 — Advance + release** (end of work — atomic status change):
-
-```powershell
-kanban\kanban-md.exe edit {id} --status <next-status> --release
-```
-
-**Dispatch rule:** When given a task ID by the orchestrator, always claim by ID (`edit {id} --claim`). Never use `pick` — it grabs the highest-priority unclaimed task, which may not be yours.
-
-**Cross-task boundaries:** You may `show` any task and `create` new tasks. You must NOT move, edit, claim, or release tasks outside your dispatched assignment.
+**Dispatch rule:** Always claim by ID. Never use `pick` — it grabs the highest-priority unclaimed task, which may not be yours.
 
 ## Command Synopsis
 
@@ -60,4 +48,3 @@ Use `--compact` on `list`, `board`, `metrics`, `log`. Use `--json` only when pip
 - **`--body` writes literal `\n`** instead of newlines. For multi-line content, write to a temp file and pass via `Get-Content -Raw`.
 - **`--depends-on` is create-only.** Use `--add-dep`/`--remove-dep` on `edit`. `--depends-on` on `edit` silently fails.
 - **Always `--yes` on delete.** Without it, the command hangs waiting for stdin.
-- **Claim by ID, never `pick`**, when dispatched with a task ID. `pick` causes race conditions in parallel dispatch.

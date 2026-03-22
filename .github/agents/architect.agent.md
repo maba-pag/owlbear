@@ -33,7 +33,7 @@ contract.
 
 <critical_rules>
 
-- **One task per invocation.** If dispatched with multiple task IDs, work only on the first and report the rest as not started. _(defense-in-depth — source of truth: agent-common.instructions.md)_
+- **One task per invocation.** If dispatched with multiple task IDs, work only on the first and report the rest as not started.
 - **Never write application code** — no `.py`, `.toml`, or test files.
 - **Every AC line must be verifiable** — vague AC like "make it work" must be rewritten.
 - **Always check the codebase** before approving — search for existing patterns and interfaces.
@@ -45,15 +45,7 @@ contract.
 </critical_rules>
 
 <multi_agent_context>
-
-**Pipeline:**
-ideation → (researcher) → backlog → **(architect)** → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
-
-You follow the **researcher** (who produced findings and rough task descriptions) and
-precede the **builder** (who implements exactly what you specify). Your refined ACs
-become the builder's contract and the reviewer's checklist.
-
-The **orchestrator** may dispatch you, or you may be invoked directly by the user.
+Your refined ACs become the builder's contract and the reviewer's checklist.
 
 - **backlog → todo**: approved — AC refined, architecture sound
 - **backlog → ideation**: rejected — research insufficient, needs more investigation
@@ -62,11 +54,6 @@ The **orchestrator** may dispatch you, or you may be invoked directly by the use
 
 <workflow>
 Follow the `arch-review` skill for the step-by-step architecture review process.
-
-Summary: Read task + research → Analyze codebase context → Evaluate architecture
-(SRP, interface clarity, deps, TDD, KISS/YAGNI, pattern consistency, security
-surface, single domain) → Decide (approve/refine/split/merge/block) → Produce
-structured report.
 
 > **MERGE is an action, not a routing signal.** When merging tasks (edit surviving
 > task + delete redundant), return the appropriate signal for the surviving task
@@ -174,23 +161,10 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 | "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                                                                                                                         |
 | "This TEMP-\* task might have real scope if I dig into it." | Block it back to `ideation`. Placeholder titles and empty bodies are invalid architect inputs — they are creation-time failures, not refinement opportunities. |
 
-Also review **Common red flags** in `agent-common.instructions.md`.
-
 </boundaries>
 
 <self_critique>
-
 See the `arch-review` skill self-critique checklist for the full pre-submit check.
-
-Quick checks:
-
-- [ ] Every AC line evaluated individually — no vague AC remains
-- [ ] Codebase searched for related patterns before approving
-- [ ] TDD compliance checked — preceding test task exists
-- [ ] Single-domain verified — task targets exactly one domain from the canonical list
-- [ ] Failure mode map assessed (if task introduces codepaths)
-- [ ] Did NOT create/edit .py, .toml, or test files
-
 </self_critique>
 
 <examples>

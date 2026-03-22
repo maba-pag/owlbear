@@ -43,6 +43,6 @@ If no other unblocked tasks are available on the board, proceed with the recomme
 
 ## Common failure mode
 
-Writing the doc, closing the kanban task, and moving on — without ever creating the follow-up tasks the doc recommends. This leaves actionable findings stranded in prose that nobody reads. **Don't do this.**
-
-Historically, instructions said "present commands for user review — do NOT execute." When agents run 6–12 hours unsupervised, the user never sees those commands. The policy is now: **execute the commands yourself**.
+Closing the kanban task without executing follow-up task creation commands. **Always
+create all recommended follow-up tasks at `ideation` status before closing.** The
+architect still gates them before `todo`.

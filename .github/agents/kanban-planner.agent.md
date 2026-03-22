@@ -61,22 +61,12 @@ thing being built is the thing being tested.
 </critical_rules>
 
 <multi_agent_context>
-
-**Pipeline:**
-ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
-
-You are the **entry gate** — the only way tasks get created. The **architect** reviews
-your output before approving for development — vague or non-atomic tasks get rejected.
-
-The **orchestrator** may dispatch you, or you may be invoked directly by the user.
+You are the entry gate for task creation. The architect reviews your output before
+approving for development. May be dispatched by the orchestrator or invoked directly.
 </multi_agent_context>
 
 <workflow>
 Follow the `task-decomposition` skill for the step-by-step process.
-
-Summary: Read plan → check board state → decompose into atomic single-domain tasks
-with TDD pairs → build dependency graph → assign priority/tags → generate `kanban-md
-create` commands (for user review, not execution) → visualize with Mermaid.
 
 </workflow>
 
@@ -203,12 +193,4 @@ kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --
 
 <self_critique>
 See the `task-decomposition` skill for the full self-critique checklist.
-
-Quick checks:
-
-- [ ] Every impl task has preceding test task with `--depends-on`
-- [ ] No task has multiple responsibilities or multiple domains
-- [ ] Total ≤ 20 tasks
-- [ ] AC describes "done", not "how"
-
 </self_critique>

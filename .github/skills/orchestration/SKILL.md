@@ -22,30 +22,15 @@ The orchestrator maintains constant-size context:
 
 ## Signal contracts
 
-### Planner → Orchestrator: JSON dispatch plan
+See agent-common → **Inter-agent communication protocol** for the full Channel A/B spec.
 
-```json
-{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
-```
+**Planner → Orchestrator:** JSON with `dispatch` array (extract `(id, agent)` tuples,
+priority-sorted) and `blocked` array (informational — report but don't act). If
+`dispatch` is empty, report blocked tasks and stop.
 
-Parse rules:
-
-- `dispatch` array: extract `(id, agent)` tuples. Priority-sorted by the planner.
-- `blocked` array: informational — report to user but do not act on them.
-- If `dispatch` is empty, report blocked tasks and stop.
-
-### Subagent → Orchestrator: Channel A signal (diagnostic)
-
-```
-{VERDICT} #{id} -> {target_status} | {one-line evidence}
-```
-
-This is a **diagnostic convention** for transparency and logging. The orchestrator does
-NOT parse this for routing decisions. The only thing you check: did the subagent return
-normally (any response = success) or error out (crash/timeout = failure)?
-
-Subagents move their own tasks on the board. The planner reads the board next cycle and
-sees the updated state.
+**Subagent → Orchestrator:** Channel A diagnostic line. You do NOT parse this for
+routing. Only check: did the agent return normally (success) or crash (failure)?
+Subagents move their own tasks; the planner reads the board next cycle.
 
 ## Step 1 — Plan
 

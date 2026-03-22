@@ -1,6 +1,5 @@
 ---
 description: "Comprehensive audit of the OwlBear agent ecosystem. It encodes the taxonomy, structural expectations, and verification criteria refined over multiple audit iterations"
-agent: "Plan"
 ---
 
 # Agent Ecosystem Audit & Remediation
@@ -133,6 +132,23 @@ Defined in agent-common.instructions.md:
 - **Channel B (task body):** Rich context appended to kanban task. Downstream agents
   read this. Orchestrator never reads this.
 
+## Rejection blocking convention
+
+Routine rejections (reviewer FAIL, writer reject-to-review, auditor reject-to-review)
+use simple status movement (`--status {target} --release`) without `--block`. The task
+auto-redispatches on the planner's next cycle. Rejection details live in the Channel B
+task body (Review Evidence, Docs Gate, Audit sections).
+
+`--block` is reserved for situations that require human intervention before redispatch:
+
+- **Auditor → backlog**: fundamental quality issue needing redesign
+- **Architect → ideation**: AC needs rework
+- **Handoff**: waiting on user decision or external action
+- **Decision requests**: blocked pending async user decision
+- **Stale tasks**: blocked for triage
+
+Verify that no routine rejection command uses `--block`.
+
 ## Defense-in-depth model
 
 Three lines of defense (documented in agent-common):
@@ -184,6 +200,8 @@ Analyze every file for these categories of issues:
 - kanban-md path inconsistencies (`kanban\kanban-md.exe` is canonical)
 - Dispatch mapping table vs narrative text disagree
 - Channel A signal format in agent doesn't match the per-agent table in agent-common
+- `--block` used in routine rejection commands (reviewer FAIL, writer reject, auditor
+  reject-to-review) — these should use simple status movement only
 
 ### 5. Structural issues
 

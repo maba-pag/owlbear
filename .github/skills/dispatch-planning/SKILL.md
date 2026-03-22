@@ -1,9 +1,9 @@
 ---
-name: wave-planning
-description: "Wave planning workflow: read board → build DAG → gate checks → produce JSON dispatch plan. Used by the planner agent."
+name: dispatch-planning
+description: "Dispatch planning workflow: read board → build DAG → gate checks → produce JSON dispatch plan. Used by the planner agent."
 ---
 
-# Wave Planning
+# Dispatch Planning
 
 Step-by-step process for producing a dispatch list from a kanban board. The planner
 reads the board, classifies tasks, checks gates, and outputs a flat list of tasks the
@@ -241,8 +241,8 @@ From the gate-passing tasks, build the dispatch list:
    from the sorted list. The rest are silently deferred to the next planning cycle.
 
 **No deconfliction needed.** The planner produces a priority-sorted flat list. The
-orchestrator handles wave assembly and agent-type compatibility when batching tasks
-into parallel waves — the planner does not need to know about waves or wave sizes.
+orchestrator handles parallel batching and agent-type compatibility when grouping tasks
+into concurrent dispatches — the planner does not need to know about batching strategy.
 
 ## Step 3 — Output JSON plan
 

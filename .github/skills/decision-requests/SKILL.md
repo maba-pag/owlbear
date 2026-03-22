@@ -158,5 +158,5 @@ The user never moves files — the planner does this automatically.
 
 - **Researchers:** After completing research, if findings require a user decision (feature-gate, architectural direction), create a decision request instead of follow-up tasks. See `research-workflow` skill Step 5.
 - **Architects:** If an architecture review reveals a decision that needs user input, create a decision request and block the task.
-- **Planner:** Checks `docs/decisions/pending/` at Step 1 of each wave planning cycle.
+- **Planner:** Checks `docs/decisions/pending/` at Step 1 of each planning cycle.
 - **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process.

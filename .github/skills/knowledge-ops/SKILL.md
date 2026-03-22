@@ -5,6 +5,10 @@ description: Query, ingest, and manage the knowledge base (graph + vector store)
 
 # knowledge-ops
 
+> **VS Code agent note:** This skill documents OwlBear PydanticAI runtime tools
+> (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset) not available in
+> VS Code Copilot agent mode. Use VS Code search tools for codebase queries instead.
+
 > **Agent status:** Utility skill — not dispatched by the orchestrator pipeline.
 > Available to any agent or VS Code chat participant that needs knowledge-base
 > operations.

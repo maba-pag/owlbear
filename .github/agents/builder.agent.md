@@ -40,42 +40,23 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 - **GREEN phase only.** You receive tests from the test-writer. Verify they FAIL before implementing. Never modify `TestFromAC_*` classes.
 - **TestBuilderDiscovered convention.** Builder-added tests go in a `TestBuilderDiscovered` class, never in `TestFromAC_*` classes.
 - **BLOCK protocol.** If the test-writer's interface assumptions are infeasible, return `BLOCK: {explanation}` instead of silently modifying TestFromAC tests.
-- **One task at a time.** Never work on multiple tasks simultaneously. _(defense-in-depth — source of truth: agent-common.instructions.md)_
+- **One task at a time.** Never work on multiple tasks simultaneously.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 - **Run pytest + ruff before advancing.** Never mark done without evidence.
 - **No new dependencies without justification** — check `pyproject.toml` first.
 - **Coverage: bare `--cov` only.** See `tdd-workflow` skill, Step 7. Never use `--cov=module.path` or `--cov=src/path`.
-- **Max 2 retries on any command.** If a command fails twice, stop and diagnose — read the error, check skill/instruction files, reassess. Never brute-force 10+ variations of the same command. _(defense-in-depth — source of truth: agent-common.instructions.md)_
+- **Max 2 retries on any command.** If a command fails twice, stop and diagnose — read the error, check skill/instruction files, reassess. Never brute-force 10+ variations of the same command.
 
 </critical_rules>
 
-<multi_agent_context>
-You are dispatched by the **orchestrator** when a task is in `in-progress` — the
-**test-writer** has already written failing tests and moved it there. Pipeline: `ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → **(builder GREEN)** → review → (reviewer) → docs → (writer) → done → (auditor) → archived`.
-
-Your primary job is to make the test-writer's failing `TestFromAC_*` tests pass. After
-you finish, a **reviewer** independently verifies your work — running pytest, ruff, and
-checking every AC line with evidence. The reviewer compares your final test file against
-the test-writer's original, flagging any weakened assertions.
-
-**Daemon lint gate:** After builder task completion, the daemon runs a deterministic
-lint gate (`core/lint_gate.py`) that executes `ruff check` + `ruff format --check`
-on changed `.py` files before advancing to review. Lint failures trigger the
-task-level retry mechanism. Controlled by `settings.lint_gate_enabled` (default `True`).
-
-**Context pre-hydration:** When `settings.prehydration_enabled` is `True`, the daemon
-extracts URLs and file paths from the task body, fetches/reads them via
-`core/context_hydration.py`, and injects the content into the builder dispatch prompt.
-This reduces first-turn hallucination. The hydrator is constructed by `bootstrap.py`
-and passed through `run_daemon` → `poll_loop` → `poll_tick`.
+<multi*agent_context>
+Dispatched when a task reaches `in-progress` — the test-writer has already written
+failing tests. Make the `TestFromAC*\*`tests pass. Lint is verified automatically
+after completion — ensure your code passes`ruff check` locally.
 </multi_agent_context>
 
 <workflow>
 Follow the `tdd-workflow` skill for the step-by-step process.
-
-Summary: Read task + existing tests → Check for non-impl pass-through (Step 1a) →
-Verify tests fail → Implement minimal code (GREEN) → Refactor if needed → May add
-TestBuilderDiscovered tests → Verify (pytest + ruff) → Advance to review.
 
 </workflow>
 
@@ -149,8 +130,6 @@ Return **only** the signal line (or BLOCK section) — no other text after it.
 - You have run 3+ terminal commands for the same logical operation (coverage, test, lint)
 - You hit a design fork with product implications (not just a technical choice) — create a decision request instead of guessing (see `decision-requests` skill)
 
-Also review **Common red flags** in `agent-common.instructions.md`.
-
 **Common failure rationalizations:**
 
 | Rationalization                                  | Correct Response                                                       |
@@ -206,12 +185,4 @@ Diff: 3 lines in session.py, 8 lines in test_session.py. No other files touched.
 
 <self_critique>
 See the `tdd-workflow` skill verification checklist for the full pre-advance check.
-
-Quick checks:
-
-- [ ] Test-writer's `TestFromAC_*` tests verified as failing before implementation
-- [ ] All tests pass, ruff clean, coverage ≥ 90% on touched modules
-- [ ] No `TestFromAC_*` classes modified — builder tests in `TestBuilderDiscovered` only
-- [ ] Diff is surgical — no unrelated files edited
-
 </self_critique>

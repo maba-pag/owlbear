@@ -15,7 +15,7 @@ Step-by-step process for reviewing a completed implementation task.
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append evidence | `kanban\kanban-md.exe edit {id} -a "## Review Evidence\n{content}" -t --claim <agent>` |
 | PASS (advance) | `kanban\kanban-md.exe edit {id} --status docs --release` |
-| FAIL (reject) | `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release` |
+| FAIL (reject) | `kanban\kanban-md.exe edit {id} --status todo --release` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 
@@ -29,21 +29,11 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 Do NOT rely on what the builder reported. Run yourself.
 
-**IMPORTANT — always scope test runs.** The full suite has hundreds of tests and will
-time out. Always target the specific test file(s) relevant to the task under review.
-
-**Always use terminal pytest** — do NOT use the `runTests` tool. It funnels through a
-single VS Code execution queue and deadlocks when multiple agents run in parallel.
+**Always use terminal pytest** (never `runTests` — it deadlocks with parallel agents).
+Scope to task-specific files to avoid timeouts:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
-```
-
-For verbose output or specific test names:
-
-```powershell
-uv run pytest tests/test_{module}.py -v --tb=short
-uv run pytest tests/test_{module}.py -k "test_name" -q --tb=short
 ```
 
 Record: passed/failed counts, any failures, any warnings.
@@ -299,6 +289,8 @@ that supplies a negative number and asserts on the rejection.
 
 ## Step 8 — Produce verdict
 
+Confidence threshold: ≥ .90 = PASS (see agent-common → **Confidence thresholds**).
+
 **PASS** (all Pass 1 criteria met, no CRITICAL findings):
 
 - `kanban\kanban-md.exe edit {id} --status docs --release`
@@ -307,7 +299,7 @@ that supplies a negative number and asserts on the rejection.
 **FAIL** (any Pass 1 criterion unmet):
 
 - List every failing criterion with evidence
-- `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release`
+- `kanban\kanban-md.exe edit {id} --status todo --release`
 
 Pass 2 informational findings are included in the review body but do not affect the verdict.
 

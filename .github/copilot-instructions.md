@@ -90,6 +90,8 @@ Research gate (ideation → backlog): see researcher agent for the full checklis
 
 **Blocked tasks:** Use `kanban-md edit ID --block "reason"` on any task in any status. Filter with `kanban-md list --blocked`. Do not use a separate status for blocked state.
 
+**Blocking convention:** Routine gate rejections (reviewer FAIL, writer reject, auditor reject-to-review) use simple status movement without `--block` — the task auto-redispatches. Reserve `--block` for fundamental rejections (auditor → backlog), architect gates, handoff, and decision requests. See `agent-common.instructions.md` → **Blocking convention**.
+
 ### Dependency tracking
 
 Use `depends_on` in task frontmatter + kanban-md flags (`--blocked`, `--not-blocked`) to track blocked tasks. Do **not** use status columns to encode dependency state.

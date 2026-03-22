@@ -66,6 +66,18 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 
 If in doubt, create the decision request — the cost of an unnecessary request is far lower than the cost of guessing wrong on a product decision.
 
+### Blocking convention
+
+Routine gate rejections use simple status movement and claim release — **no `--block`**. The task re-enters the pipeline automatically on the planner's next cycle. Rejection details live in the Channel B task body (Review Evidence, Docs Gate, Audit sections).
+
+Use `--block` **only** for situations requiring human intervention before redispatch:
+
+- Fundamental rejection (auditor → backlog) — needs redesign
+- Architect gates (task → ideation) — AC needs rework
+- Handoff — waiting on user decision or external action
+- Decision requests — blocked pending async user decision
+- Stale tasks — blocked for triage
+
 ## Commit discipline
 
 Pipeline agents that produce deliverables (source code, tests, documentation) must commit their changes before handing off to the next stage. Kanban board files (`kanban/tasks/*.md`) are metadata — they stay uncommitted and get batched by the auditor.
@@ -216,10 +228,8 @@ The pipeline uses three lines of defense:
 Each line defends against the upstream agents' failures:
 
 - 1st line: detailed, function-level verification of own work
-- 2nd line: verifies test-writer wrote adequate tests from AC, verifies builder's code quality and security, checks for implementation-introduced test gaps the AC didn't anticipate
-- 3rd line: runs full test suite for cross-task regressions, evaluates architect's AC quality, spot-checks AC completion (trusts reviewer's detailed code-level evidence)
-
-The auditor intentionally runs unscoped tests because that's its PURPOSE — catching what scoped runs miss. This is not a bug. The auditor trusts the reviewer's code-level verdict and focuses on integration and architect quality instead of re-verifying every AC line.
+- 2nd line: verifies test-writer wrote adequate tests from AC, verifies builder's code quality and security
+- 3rd line: runs full test suite for cross-task regressions, evaluates architect's AC quality, spot-checks AC completion
 
 ## Confidence thresholds
 
