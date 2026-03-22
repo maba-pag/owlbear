@@ -115,35 +115,20 @@ In most cases this is a few seconds of mental work, not multiple tool calls — 
 thinking step, not an action step. The goal is: **minimum wave count, all tasks dispatched,
 no compatibility violations.**
 
-#### Worked example — greedy failure vs. two-phase fix
+#### Worked example
 
-**Input (priority order):** #941 (writer), #862 (test-writer), #780 (test-writer), #786 (reviewer), #775 (reviewer), #854 (test-writer), #853 (test-writer), #868 (test-writer), #880 (test-writer), #910 (test-writer), #728 (test-writer), #733 (test-writer), #556 (test-writer), #722 (auditor), #901 (auditor)
+**Input (priority order):** #941 (writer), #862 (test-writer), #780 (test-writer), #786 (reviewer), #775 (reviewer), #854 (test-writer), #853 (test-writer), #868 (test-writer), #880 (test-writer), #556 (test-writer), #722 (auditor), #901 (auditor)
 
-**Greedy (bad) — 7 waves:**
+**Two-phase result — 6 waves:**
 ```
-Wave 1: #941 (writer), #862 (test-writer), #780 (test-writer)   ← writer grabbed early
-Wave 2: #786 (reviewer), #775 (reviewer), #854 (test-writer)
-Wave 3: #853 (test-writer), #868 (test-writer), #880 (test-writer)
-Wave 4: #910 (test-writer), #728 (test-writer), #733 (test-writer)
-Wave 5: #556 (test-writer)                                       ← writer already consumed, wave underloaded
-Wave 6: #722 (auditor)                                           ← writer could have shared here
-Wave 7: #901 (auditor)
-```
-
-**Two-phase (good) — 6 waves:**
-```
-Phase 1 draft: note auditor slots at waves 5 and 6.
-  Wave 5 has 2 spare slots — fill with #941 (writer, compatible) and one more.
-  But #941 is flexible and compatible with auditor; move it here instead of Wave 1.
-
 Wave 1: #862 (test-writer), #780 (test-writer), #556 (test-writer)   ← #556 pulled forward
 Wave 2: #786 (reviewer), #775 (reviewer), #854 (test-writer)
 Wave 3: #853 (test-writer), #868 (test-writer), #880 (test-writer)
-Wave 4: #910 (test-writer), #728 (test-writer), #733 (test-writer)
-Wave 5: #722 (auditor), #941 (writer)                                 ← writer deferred to fill auditor wave
-Wave 6: #901 (auditor)
+Wave 4: #722 (auditor), #941 (writer)                                 ← writer deferred to fill auditor wave
+Wave 5: #901 (auditor)
 ```
-Result: same 15 tasks, 1 fewer wave, no compatibility violations.
+
+Key moves: #556 pulled forward to fill Wave 1 (freeing later waves); #941 (writer) deferred from priority position to fill the auditor's restricted wave. A naive greedy approach would produce 6 waves instead of 5.
 
 After all waves from this plan complete, proceed to Step 3.
 
