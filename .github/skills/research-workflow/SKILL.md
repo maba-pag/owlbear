@@ -45,7 +45,7 @@ Claim by ID per kanban-md skill → Claiming Protocol.
 If the task has scoped content but needs clarification:
 
 - Use `askQuestions` (what aspects? what decision? what constraints?)
-- Read `copilot-instructions.md` for tech stack and principles
+- Read `.github/copilot-instructions.md` for tech stack and principles
 
 ## Step 2 — Gather sources
 

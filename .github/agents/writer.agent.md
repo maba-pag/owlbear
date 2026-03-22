@@ -39,7 +39,7 @@ can edit documentation files and docstrings but you **never change application l
 - **Never modify application logic** — only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence** — "probably fine" is not evidence.
 - **Clean scratch files** before advancing — `docs/scratch/{task-id}-*` must be deleted.
-- **Only edit:** README.md, copilot-instructions.md, docs/\*.md, docs/research/\*.md, docs/sources/\*.md, and docstrings in .py files.
+- **Only edit:** README.md, .github/copilot-instructions.md, docs/\*.md, docs/research/\*.md, docs/sources/\*.md, and docstrings in .py files.
 - **If you find untested behavior:** reject to review, don't fix it yourself.
 
 </critical_rules>
@@ -123,11 +123,11 @@ Use `kanban\kanban-md.exe edit {id} --status review --release`.
 
 **Common failure rationalizations:**
 
-| Rationalization                              | Correct Response                                                   |
-| -------------------------------------------- | ------------------------------------------------------------------ |
-| "The docstrings are probably fine."          | Read the code. Check each public class/function.                   |
-| "sources.md doesn't need updating for this." | Did the task use external patterns? Check the AC and research doc. |
-| "No one reads copilot-instructions.md."      | Every agent reads it. Keep it accurate.                            |
+| Rationalization                                 | Correct Response                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| "The docstrings are probably fine."             | Read the code. Check each public class/function.                   |
+| "sources.md doesn't need updating for this."    | Did the task use external patterns? Check the AC and research doc. |
+| "No one reads .github/copilot-instructions.md." | Every agent reads it. Keep it accurate.                            |
 
 </boundaries>
 
@@ -154,17 +154,17 @@ are within scope.
 
 ### Docs-Gate Checklist
 
-| #   | Check                   | Applies? | Status  | Evidence                                   |
-| --- | ----------------------- | -------- | ------- | ------------------------------------------ |
-| 1   | copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack             |
-| 2   | Docstrings complete     | Yes      | Updated | Added to EmbeddingStore, store(), search() |
-| 3   | sources/overview.md     | Yes      | Updated | Added sqlite-vec attribution               |
-| 4   | README.md               | No       | N/A     | No CLI changes                             |
-| 5   | Research doc linked     | Yes      | Pass    | docs/research/vector-store.md linked       |
+| #   | Check                           | Applies? | Status  | Evidence                                   |
+| --- | ------------------------------- | -------- | ------- | ------------------------------------------ |
+| 1   | .github/copilot-instructions.md | Yes      | Updated | Added embeddings to tech stack             |
+| 2   | Docstrings complete             | Yes      | Updated | Added to EmbeddingStore, store(), search() |
+| 3   | sources/overview.md             | Yes      | Updated | Added sqlite-vec attribution               |
+| 4   | README.md                       | No       | N/A     | No CLI changes                             |
+| 5   | Research doc linked             | Yes      | Pass    | docs/research/vector-store.md linked       |
 
 ### Files Updated
 
-- copilot-instructions.md, embeddings.py (docstrings), sources/overview.md
+- .github/copilot-instructions.md, embeddings.py (docstrings), sources/overview.md
 
 ### Scratch Files Cleaned
 
@@ -180,13 +180,13 @@ are within scope.
 
 ### Docs-Gate Checklist
 
-| #   | Check                   | Applies? | Status | Evidence                           |
-| --- | ----------------------- | -------- | ------ | ---------------------------------- |
-| 1   | copilot-instructions.md | No       | N/A    | Bug fix, no behavior change        |
-| 2   | Docstrings              | No       | N/A    | 3 lines changed, docstring present |
-| 3   | sources/overview.md     | No       | N/A    | No external patterns               |
-| 4   | README.md               | No       | N/A    | No CLI changes                     |
-| 5   | Research doc            | No       | N/A    | No research phase                  |
+| #   | Check                           | Applies? | Status | Evidence                           |
+| --- | ------------------------------- | -------- | ------ | ---------------------------------- |
+| 1   | .github/copilot-instructions.md | No       | N/A    | Bug fix, no behavior change        |
+| 2   | Docstrings                      | No       | N/A    | 3 lines changed, docstring present |
+| 3   | sources/overview.md             | No       | N/A    | No external patterns               |
+| 4   | README.md                       | No       | N/A    | No CLI changes                     |
+| 5   | Research doc                    | No       | N/A    | No research phase                  |
 
 **No docs impact.** Bug fix with no documentation implications.
 

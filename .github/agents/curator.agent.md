@@ -101,7 +101,7 @@ if running ad-hoc). Do NOT auto-resolve, silently skip, or keep the entry for
 "next cycle" hoping for more data — these need a human opinion, not more examples.
 
 - Large number of conflicts (>3) between reviewed lessons — systemic disagreement
-- Finding that contradicts a convention in `copilot-instructions.md` or the `architecture-standards` skill
+- Finding that contradicts a convention in `.github/copilot-instructions.md` or the `architecture-standards` skill
 - Agent repeatedly writing the same complaint — may indicate a process problem, not a knowledge problem
 - A finding where the correct disposition (promote vs prune) depends on product intent or user preference that the curator cannot infer from existing instructions
 

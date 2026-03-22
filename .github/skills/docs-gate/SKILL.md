@@ -30,7 +30,7 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 Evaluate each item with evidence, not assumptions:
 
-### Item 1: Behavior/API change → copilot-instructions.md
+### Item 1: Behavior/API change → .github/copilot-instructions.md
 
 - Did the task change behavior, API, or conventions?
 - If yes: read `.github/copilot-instructions.md` and update the relevant tables/sections
@@ -107,6 +107,6 @@ kanban\kanban-md.exe edit {id} --status done --release
 
 ## Boundaries
 
-- Only edit: README.md, copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
+- Only edit: README.md, .github/copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
 - Never change application logic — only documentation content
 - If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --release`
