@@ -203,9 +203,7 @@ Content that does not directly help the agent perform its task is noise.
 
 ## Output format
 
-The initial analysis uses this structure (saved to `/memories/session/plan.md`).
-The actual implementation decisions happen per-finding during the Finding Presentation
-Protocol — this plan is the starting point, not the final word.
+Produce your analysis in this structure:
 
 ```
 ## FINDINGS
