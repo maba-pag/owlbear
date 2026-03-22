@@ -106,7 +106,7 @@ next entry. Skipped entries go into subsequent waves — never drop them.
 3. For each restricted wave, look at its empty slots. Pull forward any **flexible** tasks from later in the priority list that are compatible. Prefer tasks already assigned to later waves that could move up without violating compatibility rules.
 4. For unrestricted waves, fill to wave-size in priority order as normal.
 5. Only after the full draft is complete, review it: "Could any wave be eliminated by merging its tasks forward into spare slots of an earlier wave?" If yes, revise.
-6. If a wave contains exactly one non-auditor task, drop the wave and leave the task for the next cycle, unless it is the only remaining wave.
+6. If a wave contains exactly one non-auditor task, drop it unless it is the only wave.
 
 **Phase 2 — Execute the plan:**
 
