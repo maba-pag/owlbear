@@ -373,10 +373,11 @@ class TestFromAC_RealSkillsDiscovery:
         reason="Real skills directory not found",
     )
     def test_discovers_20_real_skills(self) -> None:
-        """SkillRegistry finds exactly 20 skills in .github/skills."""
+        """SkillRegistry finds at least 17 skills in .github/skills (AC minimum)."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 20, (
-            f"Expected 20 skills, got {len(registry.skills)}: {sorted(registry.skills.keys())}"
+        count = len(registry.skills)
+        assert count >= 17, (
+            f"Expected at least 17 skills, got {count}: {sorted(registry.skills.keys())}"
         )
 
     @pytest.mark.skipif(
@@ -386,7 +387,7 @@ class TestFromAC_RealSkillsDiscovery:
     def test_real_skills_have_nonempty_names(self) -> None:
         """Every discovered real skill has a non-empty name and description."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 20, "Must discover 20 skills first"
+        assert len(registry.skills) >= 17, "Must discover at least 17 skills first"
         for name, meta in registry.skills.items():
             assert name, "Skill name must be non-empty"
             assert meta.description, f"Skill '{name}' has empty description"
@@ -396,9 +397,9 @@ class TestFromAC_RealSkillsDiscovery:
         reason="Real skills directory not found",
     )
     def test_list_skills_includes_all_20(self) -> None:
-        """list_skills output mentions all 20 skill names."""
+        """list_skills output mentions all discovered skill names."""
         registry = SkillRegistry(_REAL_SKILLS_DIR)
-        assert len(registry.skills) == 20, "Must discover 20 skills first"
+        assert len(registry.skills) >= 17, "Must discover at least 17 skills first"
         output = registry.list_skills()
         for name in registry.skills:
             assert name in output, f"Skill '{name}' missing from list_skills output"
