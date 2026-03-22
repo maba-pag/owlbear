@@ -116,7 +116,9 @@ def _scaffold_python_uv(project_dir: Path, name: str) -> None:
     # Source package: src/{pkg_name}/__init__.py
     src_pkg = project_dir / "src" / pkg_name
     src_pkg.mkdir(parents=True)
-    (src_pkg / "__init__.py").write_text(f'"""Top-level package for {name}."""\n', encoding="utf-8")
+    (src_pkg / "__init__.py").write_text(
+        f'"""Top-level package for {name}."""\n', encoding="utf-8"
+    )
 
     # Test directory
     tests_dir = project_dir / "tests"
@@ -160,7 +162,9 @@ def _scaffold_python_pip(project_dir: Path, name: str) -> None:
     # Source package: src/{pkg_name}/__init__.py
     src_pkg = project_dir / "src" / pkg_name
     src_pkg.mkdir(parents=True)
-    (src_pkg / "__init__.py").write_text(f'"""Top-level package for {name}."""\n', encoding="utf-8")
+    (src_pkg / "__init__.py").write_text(
+        f'"""Top-level package for {name}."""\n', encoding="utf-8"
+    )
 
     # Test directory: tests/__init__.py
     tests_dir = project_dir / "tests"
@@ -177,7 +181,9 @@ def _scaffold_node(project_dir: Path, name: str) -> None:
     # Append node-specific gitignore entries
     gitignore_path = project_dir / ".gitignore"
     existing = gitignore_path.read_text(encoding="utf-8")
-    gitignore_path.write_text(existing + _GITIGNORE_NODE_EXTRA, encoding="utf-8")
+    gitignore_path.write_text(
+        existing + _GITIGNORE_NODE_EXTRA, encoding="utf-8"
+    )
 
     # package.json
     package = {

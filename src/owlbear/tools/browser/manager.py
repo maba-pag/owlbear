@@ -284,7 +284,9 @@ class BrowserManager:
             logger.warning("Failed to retrieve cookies for profile %s", path.name)
             return
         try:
-            fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp", prefix=".cookie_")
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(path.parent), suffix=".tmp", prefix=".cookie_"
+            )
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     json.dump(cookies, f)

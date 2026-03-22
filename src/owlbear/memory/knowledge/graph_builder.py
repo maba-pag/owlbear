@@ -162,7 +162,10 @@ class IntraDocGraphBuilder:
         """Build a user prompt listing entities for the LLM."""
         lines = [
             f"Entities ({len(entities)}):",
-            *(f"- [{e.id}] {e.name} ({e.entity_type}): {e.description}" for e in entities),
+            *(
+                f"- [{e.id}] {e.name} ({e.entity_type}): {e.description}"
+                for e in entities
+            ),
         ]
         return "\n".join(lines)
 

@@ -204,7 +204,9 @@ class InterDocGraphBuilder:
                 return True
 
         edges = self._graph_store.list_edges(source_id=entity_b, target_id=entity_a)
-        return any(edge.metadata.get("source") == "inter_doc_inference" for edge in edges)
+        return any(
+            edge.metadata.get("source") == "inter_doc_inference" for edge in edges
+        )
 
     @staticmethod
     def _batch_pairs(
