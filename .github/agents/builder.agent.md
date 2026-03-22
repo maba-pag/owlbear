@@ -147,6 +147,7 @@ Return **only** the signal line (or BLOCK section) — no other text after it.
 - The task AC is vague or empty — flag it and stop, don't invent AC
 - Tests pass but you didn't see them fail first (TDD red phase skipped)
 - You have run 3+ terminal commands for the same logical operation (coverage, test, lint)
+- You hit a design fork with product implications (not just a technical choice) — create a decision request instead of guessing (see `decision-requests` skill)
 
 Also review **Common red flags** in `agent-common.instructions.md`.
 

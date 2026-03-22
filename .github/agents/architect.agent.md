@@ -160,6 +160,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 - A task has "and" in its title joining unrelated concerns and you haven't split it
 - You are approving a multi-domain task without splitting
 - You are refining AC for a task titled `TEMP-*` or with an empty/unscoped body (block to `ideation` instead)
+- The task's approach has multiple valid options with no clear winner — create a decision request instead of picking one (see `decision-requests` skill)
 
 **Common failure rationalizations:**
 

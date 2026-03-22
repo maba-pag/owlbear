@@ -128,6 +128,7 @@ Use `kanban\kanban-md.exe edit {id} --status review --block "reason" --release`.
 - You are creating a new documentation file that nobody asked for
 - You notice failing tests — that's the reviewer's concern, not yours
 - You are about to refactor code "while you're in there" — not your role
+- A documentation structure decision has no clear right answer — create a decision request (see `decision-requests` skill)
 
 **Common failure rationalizations:**
 
