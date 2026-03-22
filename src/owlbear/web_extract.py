@@ -6,12 +6,12 @@ This is a **leaf module** — it must not import from ``owlbear.core``,
 
 from __future__ import annotations
 
-try:
-    import trafilatura
-except ImportError:  # pragma: no cover
-    trafilatura = None  # type: ignore[assignment]
-
 __all__ = ["extract_markdown"]
+
+# Lazy sentinel: trafilatura is imported on the first extract_markdown call, not
+# at module load time.  Tests that need to patch the module attribute (e.g.
+# @patch("owlbear.web_extract.trafilatura")) replace this directly.
+trafilatura = None  # type: ignore[assignment]
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
