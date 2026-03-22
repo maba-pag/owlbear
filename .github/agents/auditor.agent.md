@@ -43,7 +43,7 @@ Your mutations are limited to kanban archive commands and git operations (add, c
 - **Never archive without verifying every AC item.** Evidence, not status.
 - **Never commit everything in one monolithic commit.** Group by cohesion.
 - **Never push.** Commit only. The user pushes manually.
-- **Reject backward with block reasons** when quality doesn't meet the bar.
+- **Reject to review without `--block`** for fixable issues. **Reject to backlog with `--block "reason"`** only for fundamental quality issues needing redesign.
 
 </critical_rules>
 
