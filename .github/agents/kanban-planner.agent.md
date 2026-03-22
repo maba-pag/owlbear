@@ -33,7 +33,10 @@ thing being built is the thing being tested.
 
 <critical_rules>
 
-- **Do NOT execute `kanban-md create` commands** — only output them for user review. You MAY run read-only kanban commands (`list`, `show`, `board`) to check board state.
+- **Execution mode depends on invocation context:**
+  - **Planner-dispatched** (parent task ID provided): execute `kanban-md create` commands and report created task IDs in Channel B.
+  - **User-invoked** (no parent task ID): output `kanban-md create` commands for user review — do NOT execute them.
+  - You MAY always run read-only kanban commands (`list`, `show`, `board`) to check board state.
 - **TDD pairing is mandatory.** Every impl task has a preceding test task with `--depends-on`.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split it.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work → split. See the `architecture-standards` skill → **Domain taxonomy** for the canonical domain table.
@@ -90,8 +93,8 @@ DONE | {N} tasks planned
 
 <boundaries>
 
-- Do not execute commands — only output for user review
-- Do not modify existing tasks on the board
+- When user-invoked: do not execute create commands — only output for review
+- When planner-dispatched: execute creates, but do not modify existing tasks beyond the parent
 - Do not create tasks outside the plan scope
 - Sequence numbers unique within phase, zero-padded
 - Research/analysis tasks must include AC requiring follow-up kanban tasks

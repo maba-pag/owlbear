@@ -43,9 +43,10 @@ Some agents are dispatched by condition rather than status:
 contains the marker `Needs decomposition:` (typically set by the architect during
 review, or by any agent that encounters a task too complex for a single
 `kanban-md create`), include it in the dispatch list with `"agent": "kanban-planner"`.
-The kanban-planner reads the task, produces a decomposition plan, and returns. The
-task itself is not moved — the kanban-planner creates child tasks and the parent may
-be closed or split depending on the plan.
+The kanban-planner reads the task, produces a decomposition plan, executes the
+`kanban-md create` commands (autonomous mode when planner-dispatched), and returns.
+The task itself is not moved — the kanban-planner creates child tasks at `ideation`
+and the parent may be closed or split depending on the plan.
 
 ---
 

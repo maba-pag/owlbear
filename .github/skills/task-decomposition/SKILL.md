@@ -17,9 +17,9 @@ Step-by-step process for breaking complex features into atomic, test-driven kanb
 | List by tag | `kanban\kanban-md.exe list --compact --tag T` |
 | Read parent task | `kanban\kanban-md.exe show {id}` |
 | Append plan to parent | `kanban\kanban-md.exe edit {id} -a "## Planning\n{content}" -t` |
-| OUTPUT (not executed) | `kanban\kanban-md.exe create "P{n}-{nn}: TITLE" --priority P --tags T --depends-on ID --body "AC"` |
+| Create task | `kanban\kanban-md.exe create "P{n}-{nn}: TITLE" --priority P --tags T --depends-on ID --body "AC"` |
 
-**Important:** The kanban-planner outputs `create` commands for user review — it does NOT execute them. Only `list`, `show`, `board`, and `edit` (for appending to a parent task) are executed directly.
+**Execution mode:** When **planner-dispatched** (parent task ID provided), execute `create` commands directly and report created IDs. When **user-invoked**, output `create` commands for review — do NOT execute them. Read-only commands (`list`, `show`, `board`) and `edit` (for appending to a parent task) are always executed directly.
 
 See kanban-md skill for claiming protocol and pitfalls.
 
@@ -79,6 +79,10 @@ kanban\kanban-md.exe create "P{phase}-{nn}: {Title}" --priority {p} --tags "{tag
 ```
 
 Group by dependency layer (independent first, then dependents).
+
+**Execution:** If planner-dispatched (parent task ID), execute each command and record
+the created task IDs for Channel B. If user-invoked, output the commands for review
+without executing.
 
 ## Step 7 — Visualize dependencies
 
