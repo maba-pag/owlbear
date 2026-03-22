@@ -30,6 +30,23 @@ tests (see tdd-red skill, Step 1a). This keeps the dispatch table simple and avo
 special-case routing. The architect is responsible for tagging tasks correctly during
 backlog → todo approval.
 
+### Non-status-triggered agents
+
+Some agents are dispatched by condition rather than status:
+
+| Agent            | Trigger condition                                                              | Dispatched by   |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------- |
+| `kanban-planner` | Task body contains "Needs decomposition" (set by architect or any agent), OR orchestrator user explicitly requests it | Planner includes in dispatch list |
+| `curator`        | End of orchestration session (tasks reached `done`)                            | Orchestrator directly (not via planner) |
+
+**Kanban-planner dispatch:** When the planner's Board Scan finds a task whose body
+contains the marker `Needs decomposition:` (typically set by the architect during
+review, or by any agent that encounters a task too complex for a single
+`kanban-md create`), include it in the dispatch list with `"agent": "kanban-planner"`.
+The kanban-planner reads the task, produces a decomposition plan, and returns. The
+task itself is not moved — the kanban-planner creates child tasks and the parent may
+be closed or split depending on the plan.
+
 ---
 
 ## Command Recipes
@@ -92,12 +109,11 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 - `AC:MISSING` flag: `todo+` task without bullet (`- `) or numbered (`1. `) AC items.
   **= Gate 5.** Not flagged for ideation/backlog — those tasks don't need AC yet
   (the researcher/architect adds it).
-- Tags inline for builder domain deconfliction. **= Step 5 deconfliction.**
+- Tags inline for scope/category context.
 
 **What remains for LLM reasoning (no terminal commands needed):**
 
 - Gate 3 (atomicity): scan titles for "and" joining unrelated concerns.
-- Builder domain deconfliction: one builder per `scope:` domain.
 - 15-task dispatch cap: take top entries from the already-sorted list.
 - Stale-task handling: cross-reference orchestrator failure context with output.
 
@@ -213,25 +229,20 @@ The `--unclaimed` flag excludes tasks with active claims. It respects `claim_tim
 from `kanban/config.yml` — claims older than the timeout are treated as expired and DO
 appear in the scan. Never manually inspect `claimed_by`/`claimed_at` fields.
 
-### Filter, deconflict, prioritize
+### Filter and prioritize
 
 From the gate-passing tasks, build the dispatch list:
 
-1. **Builder domain deconfliction:** At most **one builder task per domain** in a single
-   dispatch list. Builders modify existing code — two builders in the same domain risk
-   file conflicts. All other agent types (reviewer, auditor, writer, architect,
-   test-writer, researcher) are safe to parallelize within a domain because they either
-   read only or create new files.
-
-   Domain is determined by the task's `scope:{domain}` tag (see kanban-planner domain
-   table). Tasks without a `scope:` tag are treated as unique domains (no conflict).
-
-2. **Priority ordering:** The Board Scan output is already sorted by: (1) priority rank
+1. **Priority ordering:** The Board Scan output is already sorted by: (1) priority rank
    (critical → someday), (2) pipeline proximity (done → ideation). Take tasks in the
    order they appear.
 
-3. **Batch size cap:** Max 15 tasks per dispatch list. If more qualify, take the top 15
+2. **Batch size cap:** Max 15 tasks per dispatch list. If more qualify, take the top 15
    from the sorted list. The rest are silently deferred to the next planning cycle.
+
+**No deconfliction needed.** The planner produces a priority-sorted flat list. The
+orchestrator handles wave assembly and agent-type compatibility when batching tasks
+into parallel waves — the planner does not need to know about waves or wave sizes.
 
 ## Step 3 — Output JSON plan
 
@@ -283,7 +294,6 @@ Before outputting:
 - [ ] Total terminal calls ≤ 3
 - [ ] All 6 gate checks accounted for (Gates 2+6 by filter, Gates 4+5 by markers, Gates 1+3 by reasoning)
 - [ ] No task with `[!TW:MISSING]` or `[!AC:MISSING]` marker in `dispatch`
-- [ ] At most one builder per `scope:{domain}` in the list
 - [ ] Batch does not exceed 15 tasks
 - [ ] Agent names match the dispatch mapping
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs

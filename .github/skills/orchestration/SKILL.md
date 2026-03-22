@@ -79,16 +79,47 @@ tasks to the user and stop.
 If `blocked` mentions stale tasks (dispatched last cycle but unchanged), report
 those to the user as potential issues.
 
+## Configuration
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| **Wave size** | 3 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
+
 ## Step 2 — Dispatch
 
-Dispatch the `dispatch` array in **waves of 3**. Take tasks in the order the planner
-provided (priority order). For each wave:
+Dispatch the `dispatch` array in **parallel waves** (wave size defined in Configuration
+above). Take tasks in the order the planner provided (priority order). For each wave:
 
-1. Issue up to 3 `runSubagent` calls in a **single parallel tool-call block** —
-   one task per call.
+1. Issue up to **wave-size** `runSubagent` calls in a **single parallel tool-call
+   block** — one task per call.
 2. Wait for all calls in the wave to complete.
 3. Handle errors — including rate-limit detection (see below).
-4. Move to the next wave of 3 (or fewer if remaining tasks < 3).
+4. Move to the next wave (remaining tasks, up to wave-size each).
+
+### Wave assembly
+
+The planner provides a priority-sorted flat list. You assemble it into waves using
+agent-type compatibility. Walk the list top-to-bottom, filling each wave up to
+wave-size. If an entry is incompatible with the current wave, skip it and try the
+next entry. Skipped entries go into subsequent waves — never drop them.
+
+**Agent-type compatibility rules:**
+
+| Agent type | Pytest usage | Compatibility |
+|------------|-------------|---------------|
+| `auditor` | Full suite | **Solo wave only** — never share a wave with any other pytest-running agent (builder, test-writer, reviewer, or another auditor) |
+| `builder`, `test-writer`, `reviewer` | Scoped (task-specific) | May share a wave with each other and with non-pytest agents |
+| `architect`, `researcher`, `writer`, `curator`, `kanban-planner` | None | May share a wave with anything except auditor-wave |
+
+**Assembly algorithm:**
+1. Walk the priority-sorted dispatch list top-to-bottom.
+2. For each entry, check if it fits the current wave (compatibility + wave-size).
+3. If it fits, add it. If not, skip it for a later wave.
+4. When the current wave is full or no more entries fit, close it and start the next.
+5. Repeat until all entries are assigned to waves.
+
+In most cases, simple re-ordering within a priority tier is enough to fill waves
+cleanly. If it doesn't work out, use smaller waves rather than dropping tasks.
 
 After all waves from this plan complete, proceed to Step 3.
 
@@ -127,7 +158,7 @@ This is the sole exception to the ID-only dispatch rule. The hint is a single li
 (≤120 chars) summarizing the prior failure — it gives the agent targeted context
 without restating AC or procedures.
 
-Example — 5 tasks across 2 waves:
+Example — 5 tasks dispatched in parallel waves:
 
 Wave 1:
 ```
@@ -143,6 +174,10 @@ runSubagent("test-writer", "Write tests: #110", "Test-writer #110")
 runSubagent("researcher", "Research: #112", "Researcher #112")
 ```
 [parallel — both return]
+
+Note: the auditor runs the full test suite, so it goes in a solo wave (or with
+non-pytest agents like architect, writer, researcher) — never alongside builder,
+test-writer, or reviewer.
 
 **Error handling:** If a subagent errors (crash, timeout, no response):
 
@@ -182,7 +217,8 @@ Before reporting session complete:
 
 - [ ] Planner was dispatched with the user's scope filter (not a hardcoded filter)
 - [ ] Every task in `dispatch` was dispatched (none silently dropped)
-- [ ] Waves of at most 3 parallel calls each (unless in sequential mode)
+- [ ] Waves respect wave-size limit from Configuration (unless in sequential mode)
+- [ ] Wave assembly uses agent-type compatibility rules (auditor solo, scoped runners may share)
 - [ ] ONE task per subagent call — no batching multiple tasks into one call
 - [ ] Dispatch prompts contained ONLY task IDs — except `retry_hint` lines for stale retries
 - [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)

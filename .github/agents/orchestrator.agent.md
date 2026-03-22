@@ -67,10 +67,10 @@ contains ONLY the task ID — never restate an agent's workflow, AC, or procedur
 Follow the `orchestration` skill for the step-by-step process (signal contracts,
 context budget rules, and the 3-step loop).
 
-Summary: Plan (dispatch planner, receive JSON plan) → Dispatch (waves of 3 parallel
-subagent calls, one task each; retry errors once; sequential fallback on rate limits) →
-Loop (re-plan from fresh board state; pass failure context if any; stop when planner
-returns empty dispatch array).
+Summary: Plan (dispatch planner, receive JSON plan) → Dispatch (parallel waves per
+orchestration skill; one task each; retry errors once; sequential fallback on rate
+limits) → Loop (re-plan from fresh board state; pass failure context if any; stop when
+planner returns empty dispatch array).
 </workflow>
 
 <output_format>
@@ -113,11 +113,11 @@ Cycle 2 (Plan): Re-planning with failure context for #{id6}...
 
 **Common failure rationalizations:**
 
-| Rationalization                                        | Correct Response                                              |
-| ------------------------------------------------------ | ------------------------------------------------------------- |
-| "The builder clearly succeeded, let me skip re-plan."  | Re-plan. The planner reads the board and decides what's next. |
-| "I'll dispatch these one at a time to be safe."        | Dispatch in waves of 3 unless in sequential fallback mode.    |
-| "This agent crashed, let me try a different approach." | Retry once. If it crashes again, pass to planner next cycle.  |
+| Rationalization                                        | Correct Response                                               |
+| ------------------------------------------------------ | -------------------------------------------------------------- |
+| "The builder clearly succeeded, let me skip re-plan."  | Re-plan. The planner reads the board and decides what's next.  |
+| "I'll dispatch these one at a time to be safe."        | Dispatch in parallel waves unless in sequential fallback mode. |
+| "This agent crashed, let me try a different approach." | Retry once. If it crashes again, pass to planner next cycle.   |
 
 </boundaries>
 
@@ -128,44 +128,44 @@ Cycle 1 (Plan): Dispatching planner with scope 'tag:phase-3'...
 
 Planner returned 6 tasks to dispatch, 2 blocked.
 
-Cycle 1 (Wave 1/2):
+Cycle 1 (Wave 1):
 runSubagent("architect", "Architect Review: #101", "Architect #101")
 runSubagent("builder", "Build: #103", "Builder #103")
 runSubagent("reviewer", "Review: #105", "Reviewer #105")
 [parallel — all return at once]
 
-Cycle 1 (Wave 2/2):
+Cycle 1 (Wave 2):
 runSubagent("test-writer", "Write tests: #102", "Test-writer #102")
 runSubagent("researcher", "Research: #112", "Researcher #112")
-[parallel — both return]
+runSubagent("writer", "Docs Gate: #108", "Writer #108")
+[parallel — all return]
 
-All 5 returned normally.
+All 6 returned normally.
 
 Cycle 2 (Plan): Re-planning with scope 'tag:phase-3'...
 
-Planner returned 3 tasks (previously blocked tasks now unblocked).
+Planner returned 2 tasks (previously blocked tasks now unblocked).
 
-Cycle 2 (Wave 1/1):
-runSubagent("writer", "Docs Gate: #105", "Writer #105")
+Cycle 2 (Wave 1):
 runSubagent("builder", "Build: #107", "Builder #107")
 runSubagent("architect", "Architect Review: #112", "Architect #112")
 [parallel]
 
-All 3 returned normally.
+All 2 returned normally.
 
 Cycle 3 (Plan): Re-planning... Planner returned empty dispatch array.
 
 Dispatching curator: session complete.
 
 Session complete:
-Completed: #101, #103, #105, #102, #112, #107
+Completed: #101, #103, #105, #102, #112, #108, #107
 Blocked: (none remaining)
 Failed: (none)
 Cycles: 3
 </good_example>
 
 <good_example why="Error handling with single retry then failure context">
-Cycle 1 (Wave 1/1): 3 tasks dispatched...
+Cycle 1 (Wave 1): Tasks dispatched in parallel...
 
 #45 and #46 returned normally. #47 crashed (timeout).
 
@@ -180,12 +180,12 @@ Reporting to user: "#47 failed twice — planner flagged as blocked. May need in
 </good_example>
 
 <good_example why="Stale task retried with hint, then blocked on second stale">
-Cycle 1 (Wave 1/1): #52 (builder) dispatched normally. Returns OK.
+Cycle 1 (Wave 1): #52 (builder) dispatched normally. Returns OK.
 
 Cycle 2 (Plan): Re-planning. Planner sees #52 hasn't moved (still in-progress).
 Planner returns #52 with retry_hint: "Review FAIL: missing coverage on parser module"
 
-Cycle 2 (Wave 1/1):
+Cycle 2 (Wave 1):
 runSubagent("builder", "Build: #52\nRetry context: Review FAIL: missing coverage on parser module", "Builder #52")
 
 #52 returns OK. Added to stale_retried set.
@@ -199,7 +199,7 @@ Reporting to user: "#52 stale after guided retry — blocked. Needs investigatio
 </good_example>
 
 <good_example why="Rate-limit sequential fallback mid-wave">
-Cycle 1 (Wave 1/2): #45 (builder), #46 (reviewer), #47 (auditor)
+Cycle 1 (Wave 1): #45 (builder), #46 (reviewer), #47 (auditor)
 [parallel — #45 returned, #46 rate-limited, #47 rate-limited]
 
 Rate limit detected. Switching to sequential mode (sequential_remaining = 3).
@@ -207,7 +207,7 @@ Rate limit detected. Switching to sequential mode (sequential_remaining = 3).
 Retrying #46 (sequential, 1/3)... returned normally.
 Retrying #47 (sequential, 2/3)... returned normally.
 
-Cycle 1 (Wave 2/2 — sequential): #48 (writer) dispatched alone (3/3)... returned.
+Cycle 1 (Wave 2 — sequential): #48 (writer) dispatched alone (3/3)... returned.
 Sequential minimum met. Resuming parallel dispatch.
 
 Cycle 2 (Plan): Re-planning... (parallel mode reset)
