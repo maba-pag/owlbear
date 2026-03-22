@@ -532,3 +532,43 @@ class TestFromAC_BoardFailurePaths:
         assert "kanban-md" in result.output
         assert "json" in result.output.lower()
         assert "log" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-added tests covering AC2 subprocess call-count requirements.
+
+    AC2: invoke kanban-md list --json exactly once AND kanban-md log --action
+    move --json exactly once; when no tasks are returned the log call must be
+    skipped entirely.
+    """
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_subprocess_called_exactly_twice_when_tasks_present(
+        self, mock_run: MagicMock
+    ) -> None:
+        """With tasks: subprocess.run is invoked exactly twice — once for list, once for log."""
+        mock_run.side_effect = _subproc([_task()], [])
+        runner.invoke(app, ["board"])
+        assert mock_run.call_count == 2
+        first_args = mock_run.call_args_list[0][0][0]
+        second_args = mock_run.call_args_list[1][0][0]
+        assert "list" in first_args
+        assert "--json" in first_args
+        assert "log" in second_args
+        assert "--action" in second_args
+        assert "move" in second_args
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_subprocess_called_exactly_once_when_no_tasks(self, mock_run: MagicMock) -> None:
+        """Empty board: only list --json is called; log subprocess call is skipped."""
+        mock_run.side_effect = _subproc([], [])
+        runner.invoke(app, ["board"])
+        assert mock_run.call_count == 1
+        first_args = mock_run.call_args_list[0][0][0]
+        assert "list" in first_args
+        assert "--json" in first_args
