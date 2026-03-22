@@ -50,7 +50,21 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
-**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. See `decision-requests.instructions.md` for the format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`.github/skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+
+**Per-role triggers — when to create a decision request:**
+
+| Agent      | Trigger                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| Researcher | Finding recommends a feature or direction the user hasn't approved                                  |
+| Architect  | AC has multiple valid approaches with no clear winner; scope decision affects downstream tasks      |
+| Builder    | Implementation hits a design fork with product implications (not just a technical choice)           |
+| Reviewer   | Quality concern is preference-based, not objectively wrong; the correct standard is ambiguous       |
+| Writer     | Documentation structure decision has no clear right answer                                          |
+| Curator    | Conflicting findings between reviewed lessons; finding where disposition depends on user preference |
+| Any agent  | Scope or priority decision that affects multiple downstream tasks                                   |
+
+If in doubt, create the decision request — the cost of an unnecessary request is far lower than the cost of guessing wrong on a product decision.
 
 ## Commit discipline
 
@@ -118,6 +132,17 @@ When rejecting, be explicit: state what you were asked to do, which rule it viol
 2. **Single-responsibility.** One concern per task; list the affected files so the architect can assess scope.
 3. **Target backlog.** Non-planner agents always create follow-up tasks at `backlog` status so the architect gate applies. **Exception:** the researcher creates follow-up tasks at `ideation` to ensure they pass through the full pipeline (researcher validates → architect reviews). Only the kanban-planner and researcher may create tasks at `ideation`.
 
+### Subtask creation vs. kanban-planner dispatch
+
+Most follow-up tasks are simple enough to create inline with `kanban-md create`. Use the kanban-planner only for **complex decomposition** — when a parent task must be broken into multiple interdependent subtasks with dependency chains.
+
+| Situation                                                           | Action                                                                                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Simple follow-up (1 task, clear AC)                                 | Create directly with `kanban-md create` at `backlog` (or `ideation` for researchers)                                |
+| Complex decomposition (multiple subtasks, dependencies, sequencing) | Write `Needs decomposition: {reason}` in the task body via Channel B. The planner will dispatch the kanban-planner. |
+
+**Do not dispatch the kanban-planner yourself.** Only the planner includes it in dispatch lists. Your job is to mark the need by writing the `Needs decomposition:` marker in the task body.
+
 ## Post-task reflection (lessons learned)
 
 Before completing your work (before the final kanban status move), every agent writes a brief lessons-learned entry. These go to a repo memory inbox for curator triage.
@@ -163,6 +188,7 @@ These apply to ALL agents:
 - You are trusting another agent's self-report without your own evidence
 - You are about to produce output without running tests/lint yourself (when applicable)
 - You are about to skip a step because "it's obvious"
+- You hit a decision point with multiple valid options but are about to proceed without user input — create a decision request (see defer-to-user triggers above)
 
 ## Terminal discipline
 
@@ -181,19 +207,19 @@ correct commands and PS 5.1 piping pitfalls.
 
 The pipeline uses three lines of defense:
 
-| Line | Agents               | Scope                   | Philosophy                                                                        |
-| ---- | -------------------- | ----------------------- | --------------------------------------------------------------------------------- |
-| 1st  | Test-writer, Builder | Own work                | "Did I do it right?" — focused on the specific implementation                     |
-| 2nd  | Reviewer             | Single task quality     | "Did they do it right?" — adversarial quality check of one task                   |
-| 3rd  | Auditor              | Cross-task, big picture | "Does everything still work together?" — runs full test suite, checks regressions |
+| Line | Agents               | Scope                         | Defends against                                                                      |
+| ---- | -------------------- | ----------------------------- | ------------------------------------------------------------------------------------ |
+| 1st  | Test-writer, Builder | Own work                      | "Did I do it right?" — focused on the specific implementation                        |
+| 2nd  | Reviewer             | Test-writer + Builder quality | "Did THEY do it right?" — adversarial check of test coverage, code quality, security |
+| 3rd  | Auditor              | Architect + Full integration  | "Was the design right? Does everything still work?" — full suite, architect quality  |
 
-Each line assumes prior lines did their job. Later lines step back further:
+Each line defends against the upstream agents' failures:
 
-- 1st line: detailed, function-level verification
-- 2nd line: task-level, checks tests are adequate, not just passing
-- 3rd line: system-level, full suite, cross-task regressions, commit integrity
+- 1st line: detailed, function-level verification of own work
+- 2nd line: verifies test-writer wrote adequate tests from AC, verifies builder's code quality and security, checks for implementation-introduced test gaps the AC didn't anticipate
+- 3rd line: runs full test suite for cross-task regressions, evaluates architect's AC quality, spot-checks AC completion (trusts reviewer's detailed code-level evidence)
 
-The auditor intentionally runs unscoped tests because that's its PURPOSE — catching what scoped runs miss. This is not a bug.
+The auditor intentionally runs unscoped tests because that's its PURPOSE — catching what scoped runs miss. This is not a bug. The auditor trusts the reviewer's code-level verdict and focuses on integration and architect quality instead of re-verifying every AC line.
 
 ## Confidence thresholds
 

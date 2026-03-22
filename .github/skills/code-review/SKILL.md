@@ -69,6 +69,35 @@ Verify touched modules have ≥ 90% coverage.
 
 Any finding in Pass 1 = automatic FAIL verdict. These are non-negotiable.
 
+### 5.0 Test-writer audit — AC-to-test coverage
+
+Before evaluating the builder's work, verify the test-writer did its job correctly.
+The test-writer wrote tests from the AC before the builder implemented — did it cover
+everything?
+
+1. Read every AC line from the task body.
+2. For each AC line, find the corresponding `TestFromAC_*` test(s).
+3. For each mapped test, ask: **would this test fail if the AC were violated?** A test
+   that asserts `result is not None` for an AC line saying "return sorted results" does
+   NOT adequately cover the AC.
+4. Flag **MISSING** (AC line with no test at all) and **LAX** (test exists but wouldn't
+   catch a subtle violation of the AC).
+
+**Produce a test-writer coverage table:**
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| "Reject negative amounts" | `TestFromAC_Transfer::test_negative_raises` | Yes — asserts `ValueError` | COVERED |
+| "Return sorted results" | _(none)_ | — | **MISSING** |
+| "Cache expires after TTL" | `TestFromAC_Cache::test_expiry` | No — only checks key exists | **LAX** |
+
+**Any MISSING = FAIL.** Return to `todo` so the test-writer can fill the gap.
+**Any LAX = note in review, does not auto-FAIL** (the builder may have added
+compensating tests in `TestBuilderDiscovered`). If no compensating test exists,
+escalate to FAIL.
+
+> **Conditional:** Skip this step when no `TestFromAC_*` classes exist (older tasks).
+
 ### 5.1 Security review
 
 Check the changed code for common security vulnerabilities. This is not an exhaustive
@@ -175,6 +204,32 @@ Check the changed code for data integrity risks:
 
 Any data safety issue found = FAIL.
 
+### 5.5 Implementation-aware test gap analysis
+
+Go beyond the AC. The builder's implementation may introduce complexity that the AC
+didn't anticipate and the test-writer couldn't have known about. Read the builder's
+actual code and ask: **given what was built, what tests are missing?**
+
+1. **Read the implementation.** Identify branches, error-handling paths, retry logic,
+   state machines, configuration-dependent behavior, and edge cases that the code
+   actually handles.
+2. **Compare to test coverage.** For each significant code path, check whether a test
+   exercises it. Focus on paths that would silently produce wrong results if broken
+   (not paths that would crash obviously).
+3. **Check for untested defensive code.** If the builder added input validation,
+   fallback logic, or error recovery, verify there are tests that trigger those paths.
+4. **Flag gaps.** Any implementation complexity without corresponding test coverage is
+   a potential gap.
+
+**This is a CRITICAL check:** If the implementation has significant untested paths
+(retry logic with no failure test, validation code with no invalid-input test,
+branching logic where only the happy path is tested), FAIL the review. The builder
+must add `TestBuilderDiscovered` tests to cover these paths.
+
+**This is NOT about style preferences.** Only flag genuinely untested behavioral paths
+that could mask bugs. Don't flag missing tests for trivial getters or obvious
+pass-through code.
+
 ## Step 6 — Pass 2: INFORMATIONAL checks
 
 Findings in Pass 2 are noted in the review but do NOT block a PASS verdict.
@@ -272,6 +327,11 @@ Pass 2 informational findings are included in the review body but do not affect 
 - {module}: {X}%
 
 ### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage (if TestFromAC classes exist)
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| {AC line} | {TestFromAC_Class::method or "none"} | {Yes/No — reasoning} | COVERED / MISSING / LAX |
+
 #### Security Review
 - {findings or "No security issues found"}
 
@@ -291,6 +351,9 @@ Pass 2 informational findings are included in the review body but do not affect 
 
 #### Data Safety
 - {findings or "No data safety issues found"}
+
+#### Implementation-Aware Test Gaps
+- {untested code paths found, or "No significant untested paths"}
 
 ### Pass 2 — INFORMATIONAL
 - {code reading notes}

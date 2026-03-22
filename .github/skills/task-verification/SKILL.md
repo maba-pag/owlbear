@@ -36,13 +36,22 @@ kanban\kanban-md.exe edit {id} --claim <agent>
 
 ## Step 2 — Verify each task
 
-For every AC item on every task, collect concrete evidence:
+The auditor is the 3rd line of defense. The reviewer (2nd line) already verified
+individual code quality, test quality, and test-writer coverage in detail. The auditor
+focuses on what only it can see: **cross-task integration** and **architect quality**.
 
-- **File exists:** `read_file` — verify the file, don't assume
-- **Code matches AC:** grep or read for specific classes, functions, signatures
-- **Tests pass:** Run the full suite plain (see the `pytest-and-linting` skill,
-  read it with `read_file` if not already loaded,
-  for piping rules and the Python fallback):
+Trust the reviewer's verdict on builder/test-writer work — two out of three agents
+producing bad work simultaneously is unlikely. Spot-check rather than re-verify:
+
+- **Read reviewer evidence:** Check the `## Review Evidence` section in the task body.
+  If the reviewer produced a detailed evidence table with PASS verdict, accept its
+  code-level findings. If the section is missing or thin, escalate confidence penalty.
+- **File exists:** `read_file` — quick sanity check that deliverables exist
+- **Code matches AC (spot-check):** Verify 1–2 key AC items rather than every line.
+  The reviewer already mapped every AC item to evidence.
+- **Tests pass (FULL suite):** Run the full suite plain (see the `pytest-and-linting`
+  skill, read it with `read_file` if not already loaded, for piping rules and the
+  Python fallback):
 
   ```powershell
   uv run pytest tests/ -m "not api" -q --tb=short
@@ -50,12 +59,42 @@ For every AC item on every task, collect concrete evidence:
 
   **NOTE:** Unlike the reviewer (who scopes tests to task-specific files), the auditor
   intentionally runs the FULL test suite. As 3rd-line defense, the auditor checks for
-  cross-task regressions that scoped runs would miss. This is by design.
+  cross-task regressions that scoped runs would miss. This is by design and is the
+  auditor's primary unique value.
 
 - **Lint clean:** Run `uv run ruff check src/ tests/` once
-- **AC deviations:** Note differences between AC and implementation
-  - Minor deviations (better naming, improved path): acceptable if intent is met
-  - Major deviations (missing functionality, incomplete features): not acceptable
+- **AC deviations (major only):** Flag missing functionality or incomplete features.
+  Minor deviations (better naming, improved path) that the reviewer already accepted
+  are fine.
+
+## Step 2.5 — Architect quality audit
+
+Evaluate whether the **architect** did its job well. The reviewer checks test-writer
+and builder quality; the auditor checks architect quality. This is the only place in
+the pipeline where the architect's work is evaluated.
+
+For each task in the batch:
+
+1. **AC specificity:** Were the AC lines specific enough to verify? Flag vague AC that
+   "passed" because the tests and implementation were equally vague (e.g., AC says
+   "handle errors gracefully" with no measurable criterion).
+2. **Edge case coverage:** Did the AC miss obvious edge cases that the builder or
+   reviewer had to improvise around? Check builder notes and reviewer evidence for
+   signs of AC gaps (e.g., builder added `TestBuilderDiscovered` tests for scenarios
+   the AC should have specified, or reviewer flagged MISSING in its test-writer audit).
+3. **Design direction:** If the architect left design notes in the task body, did they
+   lead the builder in a productive direction? Or did the builder need to deviate
+   significantly from the architect's suggested approach?
+4. **AC quality score:** Rate 1–5:
+   - **5** — AC was specific, complete, and led to a clean implementation
+   - **4** — AC was adequate, minor gaps filled by builder/reviewer
+   - **3** — AC had notable gaps requiring significant builder improvisation
+   - **2** — AC was vague enough that the implementation may not match intent
+   - **1** — AC was essentially useless or misleading
+
+Low scores (≤ 2) on multiple tasks from the same batch = flag as a curator lesson
+(write to `/memories/repo/inbox/`). Systemic AC quality issues indicate the architect
+needs calibration.
 
 ## Step 3 — Score and decide
 
