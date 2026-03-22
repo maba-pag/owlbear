@@ -45,7 +45,7 @@ to keep the user in the loop and avoid building on assumptions.
 
 5. **Iterate with user** — Ask the user to review the proposed definition.
    Incorporate feedback, resolve open questions, and refine until the user
-   approves. Use `ask_user` for each feedback round.
+   approves. Use `askQuestions` for each feedback round.
 
 6. **Finalize** — Lock the approved definition. Write it as a markdown
    document to the workspace (via `create_file`). The definition is
