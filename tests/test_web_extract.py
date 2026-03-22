@@ -8,9 +8,11 @@ context_hydration) — those are tracked in #875, #825, and #873.
 from __future__ import annotations
 
 import builtins
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from owlbear.web_extract import extract_markdown
 
 # ===========================================================================
@@ -188,3 +190,173 @@ class TestFromAC_ExtractMarkdownMissingDependency:
             with pytest.raises(ImportError) as exc_info:
                 extract_markdown("<html></html>")
             assert "uv" in str(exc_info.value).lower()
+
+
+# ===========================================================================
+# AC2 — Lazy-import timing: trafilatura must not be imported at module load
+# ===========================================================================
+
+
+class TestFromAC_ExtractMarkdownLazyImport:
+    """AC2 — trafilatura must be lazy-imported on first extract_markdown call, not at module load.
+
+    Uses importlib.reload() to force full module code re-execution and
+    builtins.__import__ tracking (combined with sys.modules removal to defeat
+    the sys.modules cache hit that would otherwise suppress the __import__ call
+    when trafilatura is already loaded).
+    """
+
+    def test_module_load_does_not_call_import_for_trafilatura(self) -> None:
+        """Re-executing owlbear.web_extract module code must not call __import__ for trafilatura.
+
+        The test forces a fresh module execution via importlib.reload() with
+        trafilatura absent from sys.modules, then asserts that no trafilatura
+        __import__ call occurred during that re-execution.  The current
+        implementation has an eager ``try: import trafilatura`` at module scope
+        (lines 9-12 of web_extract.py) so this test is expected to fail RED
+        until the implementation is corrected.
+        """
+        import importlib
+        import sys
+
+        import owlbear.web_extract as we_mod
+
+        traf_calls: list[str] = []
+        _orig = builtins.__import__
+
+        def _tracker(name: str, *args: object, **kwargs: object) -> object:
+            if name == "trafilatura":
+                traf_calls.append(name)
+            return _orig(name, *args, **kwargs)
+
+        # Remove trafilatura from sys.modules so any module-level `import trafilatura`
+        # cannot resolve via the cache and must call builtins.__import__.
+        saved_traf = sys.modules.pop("trafilatura", None)
+        try:
+            with patch("builtins.__import__", side_effect=_tracker):
+                importlib.reload(we_mod)
+
+            assert traf_calls == [], (
+                "owlbear.web_extract module code called __import__('trafilatura') at load time. "
+                "AC2 requires trafilatura to be lazy-imported only when extract_markdown is "
+                f"called.  Recorded import attempts: {traf_calls}"
+            )
+        finally:
+            if saved_traf is not None:
+                sys.modules["trafilatura"] = saved_traf
+            # Restore the module-level trafilatura attribute to a consistent state.
+            we_mod.trafilatura = saved_traf  # type: ignore[assignment]
+
+    def test_first_trafilatura_import_attempt_is_inside_extract_markdown(self) -> None:
+        """After a clean module load, the first __import__('trafilatura') call
+        is in extract_markdown.
+
+        Verifies the two-phase lazy contract described in AC2:
+          Phase 1 — module reload: zero trafilatura import attempts.
+          Phase 2 — extract_markdown call: at least one trafilatura import attempt.
+
+        Phase 1 is expected to fail RED against the current implementation.
+        """
+        import importlib
+        import sys
+
+        import owlbear.web_extract as we_mod
+
+        traf_calls_load: list[str] = []
+        traf_calls_call: list[str] = []
+        _orig = builtins.__import__
+
+        def _tracker_load(name: str, *args: object, **kwargs: object) -> object:
+            if name == "trafilatura":
+                traf_calls_load.append(name)
+            return _orig(name, *args, **kwargs)
+
+        def _tracker_call(name: str, *args: object, **kwargs: object) -> object:
+            if name == "trafilatura":
+                traf_calls_call.append(name)
+            return _orig(name, *args, **kwargs)
+
+        saved_traf = sys.modules.pop("trafilatura", None)
+        try:
+            # Phase 1: reload module — expect NO trafilatura import.
+            with patch("builtins.__import__", side_effect=_tracker_load):
+                importlib.reload(we_mod)
+
+            assert traf_calls_load == [], (
+                "Module load imported trafilatura eagerly — lazy import contract violated. "
+                f"Recorded: {traf_calls_load}"
+            )
+
+            # Phase 2: first extract_markdown call — expect trafilatura import attempt.
+            with (
+                patch("builtins.__import__", side_effect=_tracker_call),
+                contextlib.suppress(ImportError),
+            ):
+                we_mod.extract_markdown("<html><body>test</body></html>")
+
+            assert traf_calls_call != [], (
+                "extract_markdown did not call __import__('trafilatura'). "
+                "AC2 requires the first trafilatura import attempt to occur on the first "
+                "extract_markdown call, not at module load time."
+            )
+        finally:
+            if saved_traf is not None:
+                sys.modules["trafilatura"] = saved_traf
+            we_mod.trafilatura = saved_traf  # type: ignore[assignment]
+
+
+# ===========================================================================
+# AC1 — Import boundary: web_extract is a leaf module with no higher-layer imports
+# ===========================================================================
+
+
+class TestFromAC_ImportBoundary:
+    """AC1 — web_extract.py must never import from owlbear higher-layer packages.
+
+    Static regression guard: if a forbidden import is added to web_extract.py
+    this test fails immediately, protecting the leaf-module contract.
+    """
+
+    def test_web_extract_has_no_forbidden_owlbear_layer_imports(self) -> None:
+        """web_extract.py must not import owlbear.core, .tools, .memory, .agents, or .config."""
+        import ast
+        from pathlib import Path
+
+        source_path = (
+            Path(__file__).parent.parent / "src" / "owlbear" / "web_extract.py"
+        )
+        tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+        forbidden_prefixes = (
+            "owlbear.core",
+            "owlbear.tools",
+            "owlbear.memory",
+            "owlbear.agents",
+            "owlbear.config",
+        )
+        nodes = list(ast.walk(tree))
+        violations: list[str] = [
+            f"from {node.module} import ..."
+            for node in nodes
+            if isinstance(node, ast.ImportFrom)
+            and node.module
+            and any(
+                node.module == prefix or node.module.startswith(prefix + ".")
+                for prefix in forbidden_prefixes
+            )
+        ]
+        violations += [
+            f"import {alias.name}"
+            for node in nodes
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if any(
+                alias.name == prefix or alias.name.startswith(prefix + ".")
+                for prefix in forbidden_prefixes
+            )
+        ]
+
+        assert violations == [], (
+            f"web_extract.py has forbidden higher-layer imports: {violations}. "
+            "AC1 requires web_extract to be a leaf module with no owlbear internal imports."
+        )
