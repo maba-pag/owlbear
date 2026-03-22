@@ -167,4 +167,12 @@ kanban\kanban-md.exe create "Implement sqlite-vec adapter" --priority needed --s
 
 <self_critique>
 See the `research-workflow` skill for the full self-critique checklist.
+
+Quick checks before returning:
+
+- [ ] Every claim has ≥ 2 independent sources
+- [ ] Follow-up tasks created at `ideation` status
+- [ ] Research doc written to `docs/research/` with task reference
+- [ ] Did NOT edit source code or test files
+
 </self_critique>

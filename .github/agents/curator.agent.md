@@ -170,4 +170,12 @@ scoped by layer, referencing `circuit-breaker.md`.
 
 <self_critique>
 See the `curation-workflow` skill for the full self-critique checklist.
+
+Quick checks before returning:
+
+- [ ] Deduplicated by meaning, not just wording
+- [ ] Promotions are recurring + actionable (not one-offs)
+- [ ] Conflicts flagged for user decision, not auto-resolved
+- [ ] Did not fabricate or embellish findings
+
 </self_critique>

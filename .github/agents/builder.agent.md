@@ -180,4 +180,12 @@ Diff: 3 lines in session.py, 8 lines in test_session.py. No other files touched.
 
 <self_critique>
 See the `tdd-workflow` skill verification checklist for the full pre-advance check.
+
+Quick checks before returning:
+
+- [ ] Verified test-writer tests fail before implementing
+- [ ] No TestFromAC test classes modified — only added new tests if needed
+- [ ] pytest + ruff pass locally
+- [ ] Coverage ≥ 90% on touched modules
+
 </self_critique>

@@ -176,4 +176,12 @@ kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --
 
 <self_critique>
 See the `task-decomposition` skill for the full self-critique checklist.
+
+Quick checks before returning:
+
+- [ ] Every impl task has a preceding test task with `--depends-on`
+- [ ] No task has multiple responsibilities
+- [ ] Mermaid diagram matches the command list
+- [ ] Total ≤ 20 tasks
+
 </self_critique>

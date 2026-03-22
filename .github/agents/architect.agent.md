@@ -161,6 +161,15 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 
 <self_critique>
 See the `arch-review` skill self-critique checklist for the full pre-submit check.
+
+Quick checks before returning:
+
+- [ ] Searched codebase for related patterns before deciding
+- [ ] No vague AC remains — each line is testable pass/fail
+- [ ] TDD compliance verified — every impl task has a preceding test task
+- [ ] Did NOT create/edit .py, .toml, or test files
+- [ ] Single-domain verified — task targets exactly one domain
+
 </self_critique>
 
 <examples>

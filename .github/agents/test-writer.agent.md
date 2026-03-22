@@ -188,4 +188,12 @@ Signal: DONE #73 -> in-progress | non-impl pass-through, no tests needed
 
 <self_critique>
 See the `tdd-red` skill verification checklist for the full pre-completion check.
+
+Quick checks before returning:
+
+- [ ] All tests actually fail (not error) when run against current code
+- [ ] No implementation code written — only test files
+- [ ] TestFromAC naming convention followed for all AC-derived tests
+- [ ] Each AC line has at least one corresponding test
+
 </self_critique>

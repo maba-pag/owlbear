@@ -143,4 +143,12 @@ The orchestrator cannot parse prose or tables. Output a single-line JSON object.
 
 <self_critique>
 See the `dispatch-planning` skill for the pre-output verification checklist.
+
+Quick checks before returning:
+
+- [ ] Board Scan used (not individual show calls)
+- [ ] All 6 gates accounted for in candidate filtering
+- [ ] Output is single-line JSON — no prose or markdown
+- [ ] No kanban-md move commands run (read-only, except Recipe 0)
+
 </self_critique>
