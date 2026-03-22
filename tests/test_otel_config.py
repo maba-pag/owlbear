@@ -6,6 +6,7 @@ Covers tasks #230 (tests), #216 (instrument_all), #218 (otel_endpoint config).
 from __future__ import annotations
 
 import os
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -252,3 +253,42 @@ class TestLogfireConfigureAtStartup:
             )
 
         assert call_order.index("configure") < call_order.index("instrument_all")
+
+
+# ---------------------------------------------------------------------------
+# Task #535 — optional logfire import + configure_otel guard
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_LogfireOptionalImport:
+    """owlbear.daemon loads when logfire is absent; configure_otel raises RuntimeError."""
+
+    def _reload_without_logfire(self) -> types.ModuleType:
+        """Reload owlbear.daemon with logfire absent from sys.modules."""
+        import importlib
+        import sys
+
+        import owlbear.daemon as mod
+
+        with patch.dict(sys.modules, {"logfire": None}):
+            importlib.reload(mod)
+        return mod
+
+    def teardown_method(self) -> None:
+        """Restore owlbear.daemon to normal (logfire available)."""
+        import importlib
+
+        import owlbear.daemon as mod
+
+        importlib.reload(mod)
+
+    def test_daemon_import_succeeds_without_logfire(self) -> None:
+        """Daemon module loads without error when logfire is absent; logfire attr is None."""
+        mod = self._reload_without_logfire()
+        assert mod.logfire is None
+
+    def test_configure_otel_raises_runtime_error_without_logfire(self) -> None:
+        """configure_otel raises RuntimeError mentioning logfire when logfire is absent."""
+        mod = self._reload_without_logfire()
+        with pytest.raises(RuntimeError, match="logfire"):
+            mod.configure_otel("http://localhost:4318")
