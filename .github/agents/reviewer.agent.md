@@ -112,7 +112,7 @@ Return **only** the signal line — no other text after it.
 
 <boundaries>
 
-- Only verify what the task AC specifies — don't invent additional criteria
+- Verify the task AC and quality implications of the implementation — don't invent new product requirements
 - Cite specific line numbers, test names, or command output as evidence
 - Do not move tasks to `done` — that is the writer's gate
 
