@@ -140,7 +140,18 @@ Select-String -Path "tests/*.py" -Pattern "old_name"
 
 Verify zero remaining references. Single-file updates cause 10–40 test regressions when other test files still use old names.
 
-## Step 8 — Advance + release
+## Step 8 — Commit deliverables
+
+Stage and commit source code and any builder-discovered tests:
+
+```powershell
+git add src/owlbear/{module}.py tests/test_{module}.py
+git commit -m "feat: implement {feature} (#{id}, builder)"
+```
+
+Verify only task-related files are staged (`git diff --cached --name-only`). Do not commit unrelated files.
+
+## Step 9 — Advance + release
 
 Advance the task to `review` and release the claim in one atomic command:
 
@@ -161,3 +172,4 @@ kanban\kanban-md.exe edit {id} --status review --release
 - [ ] Diff is surgical — smallest change that achieves the AC
 - [ ] `from __future__ import annotations` on new files
 - [ ] Type hints on all signatures, docstrings on public API
+- [ ] Deliverables committed (`git commit`) before advancing

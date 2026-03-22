@@ -67,7 +67,18 @@ Evaluate each item with evidence, not assumptions:
 - Look for `docs/scratch/{task-id}-*` files
 - Delete any that exist
 
-## Step 4 — Advance + release
+## Step 4 — Commit documentation changes
+
+If you updated any files in Step 2, stage and commit them:
+
+```powershell
+git add {updated_files}
+git commit -m "docs: update docs for {feature} (#{id}, writer)"
+```
+
+Verify only documentation files are staged (`git diff --cached --name-only`). Skip this step if no files were updated.
+
+## Step 5 — Advance + release
 
 Advance the task to `done` and release the claim in one atomic command:
 

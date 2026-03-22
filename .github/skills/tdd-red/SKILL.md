@@ -153,7 +153,18 @@ kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes
 - ruff: clean" -t
 ```
 
-## Step 7 — Advance + release
+## Step 7 — Commit test files
+
+Stage and commit the test file(s) you created:
+
+```powershell
+git add tests/test_{module}.py
+git commit -m "test: add failing tests for {feature} (#{id}, test-writer)"
+```
+
+Verify only test files are staged (`git diff --cached --name-only`). Do not commit source or config files.
+
+## Step 8 — Advance + release
 
 Advance the task to `in-progress` and release the claim in one atomic command:
 
@@ -172,4 +183,5 @@ kanban\kanban-md.exe edit {id} --status in-progress --release
 - [ ] No source files created or edited
 - [ ] `from __future__ import annotations` on new files
 - [ ] Summary appended to task body
+- [ ] Test files committed (`git commit`) before advancing
 - [ ] Task advanced to `in-progress` and claim released via `edit {id} --status in-progress --release`
