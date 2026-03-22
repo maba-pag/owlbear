@@ -42,7 +42,7 @@ config files. Your deliverables are documentation and kanban task commands.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 - **Execute kanban create commands** to create follow-up tasks at `ideation` status. The architect still gates them before `todo`. If a finding requires a user decision with no clear winner, create a **decision request** instead (see `decision-requests.instructions.md`).
 - **Delete cloned repos after analysis** — don't leave `docs/scratch/research/` dirty.
-- **Reject placeholder inputs.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles and empty/unscoped bodies → block or handoff immediately.
+- **Reject placeholder inputs.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles and empty/unscoped bodies → block or handoff immediately. Example: `TEMP-planner-test` is a placeholder — do not invent scope; see the owning task or `docs/research/planner-temp-task-hygiene.md`.
 
 </critical_rules>
 

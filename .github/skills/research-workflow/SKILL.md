@@ -40,7 +40,7 @@ Claim by ID per kanban-md skill → Claiming Protocol.
 
 **Fail fast on invalid inputs before starting any research:**
 
-- If the task is a placeholder (`TEMP-*` title or empty/unscoped body), refuse dispatch immediately. See agent-common → **Placeholder and unscoped task rejection**.
+- If the task is a placeholder (`TEMP-*` title or empty/unscoped body), refuse dispatch immediately. See agent-common → **Placeholder and unscoped task rejection**. Example: a task titled `TEMP-planner-test` with no scoped body must be blocked or handed off — it must not be clarified by question or have scope invented for it. See `docs/research/planner-temp-task-hygiene.md`.
 
 If the task has scoped content but needs clarification:
 
