@@ -31,7 +31,7 @@ If the research doc recommends zero follow-up tasks, that's a red flag — expli
 
 ### When a finding requires a user decision
 
-If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See `decision-requests.instructions.md` for the format and workflow.
+If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See the `decision-requests` skill (`.github/skills/decision-requests/SKILL.md`) for the format and workflow.
 
 Block the current task with a reference to the decision request:
 
@@ -39,7 +39,7 @@ Block the current task with a reference to the decision request:
 kanban\kanban-md.exe edit {ID} --block "Decision pending: docs/decisions/pending/{id}-{slug}.md"
 ```
 
-If no other unblocked tasks are available on the board, proceed with the recommended option, mark the decision as `auto-resolved`, and create the follow-up tasks. The user can override later.
+If no other unblocked tasks are available on the board, create the decision request, proceed with the recommended option, create the follow-up tasks, and mark the request `urgency: advisory` with `approved: auto`. The user can override later.
 
 ## Common failure mode
 

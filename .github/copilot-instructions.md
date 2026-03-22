@@ -119,7 +119,7 @@ Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,
 
 ### Research tasks
 
-Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see `decision-requests.instructions.md`).
+Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see the `decision-requests` skill at `.github/skills/decision-requests/SKILL.md`).
 It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
 
 ## Directory structure
