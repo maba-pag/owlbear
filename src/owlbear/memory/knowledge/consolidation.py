@@ -14,8 +14,12 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from pydantic_ai import Agent
+
 if TYPE_CHECKING:
     import sqlite3
+
+    from pydantic_ai.models import Model
 
     from owlbear.memory.knowledge.graph import GraphStore
 
@@ -39,11 +43,18 @@ class ConsolidationService:
         self,
         conn: sqlite3.Connection,
         graph_store: GraphStore | None,
-        model: str,
+        model: str | Model,
     ) -> None:
         self._conn = conn
         self._graph_store = graph_store
         self._model = model
+        self._agent: Agent[None, str] = Agent(
+            model,
+            system_prompt=(
+                "Synthesize one concise cross-document insight from the provided chunks. "
+                "Return plain text only."
+            ),
+        )
 
     # -- Public API ----------------------------------------------------------
 
@@ -91,7 +102,7 @@ class ConsolidationService:
                 await self.consolidate()
             except asyncio.CancelledError:
                 raise
-            except Exception:  # noqa: BLE001  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 logger.warning("Consolidation loop error; will retry next cycle", exc_info=True)
             await asyncio.sleep(interval)
 
@@ -102,5 +113,6 @@ class ConsolidationService:
 
         This is a separate method so tests can patch it easily.
         """
-        # Placeholder — real implementation will call the configured model.
-        return "Consolidated insight from " + str(len(contents)) + " chunks."
+        prompt = "\n\n".join(f"Chunk {idx + 1}: {content}" for idx, content in enumerate(contents))
+        result = await self._agent.run(prompt)
+        return result.output
