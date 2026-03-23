@@ -343,7 +343,7 @@ class TestChannelPluginSendImageDefault:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_StartfileAllowlist:  # noqa: N801
+class TestFromAC_StartfileAllowlist:
     """CLIChannel.send_file extension allowlist for os.startfile (#527)."""
 
     def test_safe_extensions_constant_exists(self) -> None:

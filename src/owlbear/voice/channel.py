@@ -18,6 +18,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from owlbear.channels.base import ChannelPlugin
 from owlbear.voice.stt import STTEngine
 from owlbear.voice.tts import TTSEngine
 
@@ -44,7 +45,7 @@ except ImportError:  # pragma: no cover
     sd = None  # type: ignore[assignment]
 
 
-class VoiceChannel:
+class VoiceChannel(ChannelPlugin):
     """ChannelPlugin that uses microphone input and speaker output.
 
     Supports two modes:
