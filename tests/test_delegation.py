@@ -575,6 +575,32 @@ class TestFromAC_DispatchContextFormatter:
         instructions, _ = format_dispatch_context(ctx)
         assert isinstance(instructions, str)
 
+    def test_task_status_in_instructions_when_populated(self) -> None:
+        """task_status value appears in formatted instructions when set."""
+        from owlbear.core.delegation import (  # type: ignore[attr-defined]
+            DispatchContext,
+            format_dispatch_context,
+        )
+
+        ctx = DispatchContext(
+            workspace_root="/project", channel_name="slack", task_status="in-progress"
+        )
+        instructions, _ = format_dispatch_context(ctx)
+        assert "in-progress" in instructions
+
+    def test_task_status_in_metadata_when_populated(self) -> None:
+        """task_status appears in metadata dict with key 'task_status' when set."""
+        from owlbear.core.delegation import (  # type: ignore[attr-defined]
+            DispatchContext,
+            format_dispatch_context,
+        )
+
+        ctx = DispatchContext(
+            workspace_root="/project", channel_name="slack", task_status="review"
+        )
+        _, metadata = format_dispatch_context(ctx)
+        assert metadata.get("task_status") == "review"
+
 
 # ---------------------------------------------------------------------------
 # Absent task fields omitted
@@ -630,3 +656,37 @@ class TestFromAC_AbsentTaskFieldsOmitted:
         ctx = DispatchContext(workspace_root="/project", channel_name="slack", task_id="42")
         instructions, _ = format_dispatch_context(ctx)
         assert "task_title" not in instructions.lower()
+
+    def test_workspace_root_not_in_metadata_keys(self) -> None:
+        """workspace_root is not included as a metadata key — it belongs in instructions only."""
+        from owlbear.core.delegation import (  # type: ignore[attr-defined]
+            DispatchContext,
+            format_dispatch_context,
+        )
+
+        ctx = DispatchContext(
+            workspace_root="/project",
+            channel_name="slack",
+            task_id="42",
+            task_title="My Task",
+            task_status="todo",
+        )
+        _, metadata = format_dispatch_context(ctx)
+        assert "workspace_root" not in metadata
+
+    def test_channel_name_not_in_metadata_keys(self) -> None:
+        """channel_name is not included as a metadata key — it belongs in instructions only."""
+        from owlbear.core.delegation import (  # type: ignore[attr-defined]
+            DispatchContext,
+            format_dispatch_context,
+        )
+
+        ctx = DispatchContext(
+            workspace_root="/project",
+            channel_name="slack",
+            task_id="42",
+            task_title="My Task",
+            task_status="todo",
+        )
+        _, metadata = format_dispatch_context(ctx)
+        assert "channel_name" not in metadata
