@@ -52,6 +52,10 @@ class SummarizingCondenser:
         target_size: Desired output length. Defaults to ``max_events // 2``.
         model: PydanticAI model for the summarization call.  ``None`` defers model
             selection (the internal agent will raise if actually invoked without one).
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-condensation usage via ``operation='condenser'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(  # noqa: PLR0913

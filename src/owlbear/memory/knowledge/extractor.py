@@ -63,6 +63,13 @@ class EntityExtractor:
         extractor = EntityExtractor(model="openai:gpt-4o")
         result = await extractor.extract("def hello(): ...")
         print(result.entities, result.edges)
+
+    Args:
+        model: PydanticAI model string or :class:`~pydantic_ai.models.Model` instance.
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-extraction usage via ``operation='entity_extraction'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(
