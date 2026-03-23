@@ -91,22 +91,28 @@ def _build_hydrator(
     return _hydrate
 
 
-def _wire_post_model_hooks(
+def _wire_post_model_hooks(  # noqa: PLR0913
     settings: OwlBearSettings,
     model: Model,
     workspace: Path,
     hooks: HookRegistry,
     ingest_pipeline: object | None,
+    cleanup: list | None = None,
 ) -> None:
     """Register hooks that depend on the model being available."""
     if ingest_pipeline is not None:
+        from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor  # noqa: PLC0415
         from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
 
+        supervisor = HookWorkerSupervisor()
         RetrospectiveHook(
             model=model,
             ingest_pipeline=ingest_pipeline,
             kanban_root=workspace / "kanban",
+            supervisor=supervisor,
         ).register(hooks)
+        if cleanup is not None:
+            cleanup.append(supervisor.shutdown)
 
     if settings.session_memory_enabled:
         _wire_session_memory_hook(model, workspace, hooks)
@@ -165,7 +171,7 @@ async def bootstrap(
         summary=component_statuses,
     )
 
-    _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline)
+    _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline, cleanup=cleanup)
 
     session_path = (
         settings.config_dir / "projects" / active_project.id / "sessions" / "session.jsonl"

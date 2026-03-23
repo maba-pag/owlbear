@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from pydantic_ai.models import Model
 
+    from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.knowledge.ingest import IngestPipeline
 
@@ -87,11 +88,13 @@ class RetrospectiveHook:
         ingest_pipeline: IngestPipeline,
         kanban_root: Path,
         shutdown_event: asyncio.Event | None = None,
+        supervisor: HookWorkerSupervisor | None = None,
     ) -> None:
         self._ingest_pipeline = ingest_pipeline
         self._kanban_root = kanban_root
         self._model = model
         self._shutdown_event = shutdown_event
+        self._supervisor = supervisor
         self._agent: Agent[None, RetroFindings] | None = None
 
     def _get_agent(self) -> Agent[None, RetroFindings]:
@@ -127,7 +130,10 @@ class RetrospectiveHook:
             if _PRIORITY_ORDER.index(priority) < _PRIORITY_ORDER.index("needed"):
                 return
 
-        asyncio.create_task(self._run_retrospective(task_id))  # noqa: RUF006
+        if self._supervisor is not None:
+            self._supervisor.schedule(self._run_retrospective(task_id))
+        else:
+            asyncio.create_task(self._run_retrospective(task_id))  # noqa: RUF006
 
     # -- Registration --------------------------------------------------------
 
