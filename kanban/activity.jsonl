@@ -4311,3 +4311,9 @@
 {"timestamp":"2026-03-23T02:17:14.9473813+01:00","action":"move","task_id":846,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-23T02:17:19.3585068+01:00","action":"edit","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
 {"timestamp":"2026-03-23T02:17:19.3622381+01:00","action":"release","task_id":846,"detail":"auditor"}
+{"timestamp":"2026-03-23T02:18:00.8645199+01:00","action":"edit","task_id":846,"detail":"Tests for UsageTracker secondary wiring (RED)"}
+{"timestamp":"2026-03-23T02:18:25.8320266+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-23T02:18:25.8335666+01:00","action":"claim","task_id":728,"detail":"auditor"}
+{"timestamp":"2026-03-23T02:36:42.2077386+01:00","action":"move","task_id":728,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T02:36:46.9497939+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-23T02:36:46.9529423+01:00","action":"release","task_id":728,"detail":"auditor"}
