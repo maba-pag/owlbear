@@ -24,6 +24,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from conftest import MockChannel  # type: ignore[import-untyped]
 
+from owlbear.core.delegation import DispatchContext
+from owlbear.core.deps import OwlBearDeps
 from owlbear.core.hooks import HookEvent
 from owlbear.core.lint_gate import LintGateResult
 from owlbear.daemon import (
@@ -68,7 +70,7 @@ def _make_kanban_show_json(
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
+class TestFromAC_ReconcileRetryExhaustedKanbanFailure:
     """When task retries are exhausted and kanban_edit raises, the state must
     still be cleaned up (removed from retries and claimed)."""
 
@@ -189,7 +191,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
+class TestFromAC_PollTickRetryRedispatch:
     """Due retries in poll_tick step 3 are popped from state.retries,
     task details re-fetched, prompt built, and a new asyncio.Task spawned."""
 
@@ -419,7 +421,7 @@ class TestFromAC_PollTickRetryRedispatch:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RunDaemonInflightCancellation:  # noqa: N801
+class TestFromAC_RunDaemonInflightCancellation:
     """When autonomous mode's TaskGroup exits, in-flight tasks spawned by
     poll_loop must be cancelled and awaited with a timeout."""
 
@@ -532,7 +534,7 @@ class TestFromAC_RunDaemonInflightCancellation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ReconcileLintGate:  # noqa: N801
+class TestFromAC_ReconcileLintGate:
     """When a task completes successfully but the lint gate detects errors,
     the task should be treated as failed with a LintGateError."""
 
@@ -632,7 +634,7 @@ class TestFromAC_ReconcileLintGate:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ReconcileSuccessPath:  # noqa: N801
+class TestFromAC_ReconcileSuccessPath:
     """When a task completes successfully (no exception, lint passes),
     WIP is cleared, task is moved to review, hooks are emitted, and
     the task is removed from claimed."""
@@ -708,7 +710,7 @@ class TestFromAC_ReconcileSuccessPath:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
+class TestFromAC_ReconcileFailureSideEffects:
     """When a task fails, WIP is saved, hooks emit failure, and retry
     is scheduled with exponential backoff."""
 
@@ -820,7 +822,7 @@ class TestFromAC_ReconcileFailureSideEffects:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DetectStaleTasks:  # noqa: N801
+class TestFromAC_DetectStaleTasks:
     """Stale tasks (running longer than timeout) are cancelled, removed from
     state, blocked on kanban, and alerted via channel."""
 
@@ -954,7 +956,7 @@ class TestFromAC_DetectStaleTasks:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
+class TestFromAC_PollTickDispatchNewTasks:
     """Step 7 of poll_tick: fetch todo tasks, filter claimed, sort by
     priority, dispatch up to available slots with WIP context."""
 
@@ -1141,7 +1143,7 @@ class TestFromAC_PollTickDispatchNewTasks:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PollLoopExceptionRecovery:  # noqa: N801
+class TestFromAC_PollLoopExceptionRecovery:
     """When poll_tick raises, poll_loop logs the exception and continues."""
 
     @pytest.mark.asyncio
@@ -1193,7 +1195,7 @@ class TestFromAC_PollLoopExceptionRecovery:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ChannelLoopPaths:  # noqa: N801
+class TestFromAC_ChannelLoopPaths:
     """Exercise channel_loop paths for sentinel detection, empty messages,
     and error recovery."""
 
@@ -1268,7 +1270,7 @@ class TestFromAC_ChannelLoopPaths:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ApplyHydration:  # noqa: N801
+class TestFromAC_ApplyHydration:
     """_apply_hydration appends URL/file sections from the hydrator result
     to the prompt string."""
 
@@ -1379,7 +1381,7 @@ class TestFromAC_ApplyHydration:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PollTickWithChannel:  # noqa: N801
+class TestFromAC_PollTickWithChannel:
     """When channel is passed to poll_tick, detect_stale_tasks is called."""
 
     @pytest.mark.asyncio
@@ -1445,7 +1447,7 @@ class TestFromAC_PollTickWithChannel:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PollTickShutdownDuringDispatch:  # noqa: N801
+class TestFromAC_PollTickShutdownDuringDispatch:
     """When shutdown_event is set during step 7 dispatch, loop exits early."""
 
     @pytest.mark.asyncio
@@ -1524,7 +1526,7 @@ class TestFromAC_PollTickShutdownDuringDispatch:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RunDaemonSessionLoadCoroutine:  # noqa: N801
+class TestFromAC_RunDaemonSessionLoadCoroutine:
     """When session.load() returns a coroutine (async store), run_daemon's
     finally block awaits it."""
 
@@ -1562,3 +1564,589 @@ class TestFromAC_RunDaemonSessionLoadCoroutine:  # noqa: N801
         assert len(session_end_calls) == 1
         payload = session_end_calls[0][0][1]
         assert payload["messages"] == ["msg1", "msg2"]
+
+
+# ---------------------------------------------------------------------------
+# poll_tick: retry branch (step 3) — dispatch context reuse
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PollTickRetryDispatchContext:
+    """builder.run() must receive instructions= and deps= (with DispatchContext)
+    in the retry re-dispatch branch (poll_tick step 3).
+
+    All tests fail today: poll_tick dispatches builder.run(prompt) with
+    no instructions= or deps= kwargs.  (#961 makes them pass.)
+    """
+
+    @staticmethod
+    def _setup() -> tuple[OrchestratorState, AsyncMock, MagicMock, AsyncMock]:
+        """Configure state with one due retry entry and matching mocks."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+
+        state.retries["RDC1"] = RetryEntry(
+            task_id="RDC1",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior failure",
+        )
+        state.claimed.add("RDC1")
+
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "RDC1", "Retry title", "Retry task body text"
+        )
+        mock_kanban.kanban_list.return_value = json.dumps([])
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        return state, mock_kanban, mock_registry, mock_agent
+
+    @pytest.mark.asyncio
+    async def test_builder_run_receives_instructions_kwarg(self, tmp_path: Path) -> None:
+        """builder.run() receives instructions= kwarg in retry dispatch branch."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "instructions" in call[1], (
+            "builder.run() must receive instructions= kwarg produced by format_dispatch_context()"
+        )
+
+    @pytest.mark.asyncio
+    async def test_builder_run_receives_deps_kwarg(self, tmp_path: Path) -> None:
+        """builder.run() receives deps= (OwlBearDeps) kwarg in retry branch."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], (
+            "builder.run() must receive deps= kwarg containing OwlBearDeps"
+        )
+
+    @pytest.mark.asyncio
+    async def test_deps_has_dispatch_context_populated(self, tmp_path: Path) -> None:
+        """deps.dispatch_context is a DispatchContext instance in retry branch."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        deps_obj = call[1]["deps"]
+        assert isinstance(deps_obj, OwlBearDeps), f"deps must be OwlBearDeps, got {type(deps_obj)}"
+        assert deps_obj.dispatch_context is not None, "dispatch_context must be populated"
+        assert isinstance(deps_obj.dispatch_context, DispatchContext), (
+            f"dispatch_context must be DispatchContext, got {type(deps_obj.dispatch_context)}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_workspace_root_matches_param(self, tmp_path: Path) -> None:
+        """dispatch_context.workspace_root equals str(workspace) in retry branch."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.workspace_root == str(tmp_path), (
+            f"workspace_root should be '{tmp_path!s}', got {ctx.workspace_root!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_id_matches_retry_entry(self, tmp_path: Path) -> None:
+        """dispatch_context.task_id equals the retry entry's task ID."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.task_id == "RDC1", f"task_id must be 'RDC1', got {ctx.task_id!r}"
+
+    @pytest.mark.asyncio
+    async def test_task_body_stays_in_prompt_not_migrated_to_instructions(
+        self, tmp_path: Path
+    ) -> None:
+        """Task body stays in positional prompt; it must not appear in instructions=."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        prompt_arg = call[0][0]
+        assert "Retry task body text" in prompt_arg, "task body must remain in positional prompt"
+        assert "instructions" in call[1], (
+            "instructions= must be present for the migration check to be meaningful"
+        )
+        assert "Retry task body text" not in call[1]["instructions"], (
+            "task body must NOT migrate into instructions="
+        )
+
+    @pytest.mark.asyncio
+    async def test_wip_summary_stays_in_prompt_alongside_instructions_kwarg(
+        self, tmp_path: Path
+    ) -> None:
+        """WIP summary stays in positional prompt and instructions= is also present."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        mock_wip = MagicMock()
+
+        state.retries["RDC3"] = RetryEntry(
+            task_id="RDC3",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior error",
+        )
+        state.claimed.add("RDC3")
+
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json("RDC3", "WIP task", "Body")
+        mock_kanban.kanban_list.return_value = json.dumps([])
+        mock_wip.load.return_value = "Prior cycle WIP notes"
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+                wip_store=mock_wip,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        prompt_arg = call[0][0]
+        assert CONTINUE_FORWARD_PREFIX in prompt_arg, "WIP prefix must remain in positional prompt"
+        assert "Prior cycle WIP notes" in prompt_arg, "WIP text must remain in positional prompt"
+        assert "instructions" in call[1], (
+            "instructions= kwarg must also be present alongside WIP-bearing prompt"
+        )
+
+
+# ---------------------------------------------------------------------------
+# poll_tick: fresh-dispatch branch (step 7) — dispatch context reuse
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PollTickFreshDispatchContext:
+    """builder.run() must receive instructions= and deps= (with DispatchContext)
+    in the fresh-dispatch branch (poll_tick step 7).
+
+    All tests fail today: poll_tick dispatches builder.run(prompt) with
+    no instructions= or deps= kwargs.  (#961 makes them pass.)
+    """
+
+    @staticmethod
+    def _make_todo_task(tid: str = "FDC1", title: str = "Fresh task") -> dict[str, str]:
+        """Return a minimal todo-task dict for kanban_list responses."""
+        return {"id": tid, "title": title, "status": "todo", "priority": "important"}
+
+    @pytest.mark.asyncio
+    async def test_builder_run_receives_instructions_kwarg(self, tmp_path: Path) -> None:
+        """builder.run() receives instructions= kwarg in fresh-dispatch branch."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Fresh task body"
+        )
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "instructions" in call[1], (
+            "builder.run() must receive instructions= kwarg from format_dispatch_context()"
+        )
+
+    @pytest.mark.asyncio
+    async def test_builder_run_receives_deps_kwarg(self, tmp_path: Path) -> None:
+        """builder.run() receives deps= (OwlBearDeps) kwarg in fresh-dispatch branch."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Fresh task body"
+        )
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], (
+            "builder.run() must receive deps= kwarg containing OwlBearDeps"
+        )
+
+    @pytest.mark.asyncio
+    async def test_deps_has_dispatch_context_populated(self, tmp_path: Path) -> None:
+        """deps.dispatch_context is a DispatchContext instance in fresh-dispatch branch."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Fresh task body"
+        )
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        deps_obj = call[1]["deps"]
+        assert isinstance(deps_obj, OwlBearDeps), f"deps must be OwlBearDeps, got {type(deps_obj)}"
+        assert deps_obj.dispatch_context is not None, "dispatch_context must be populated"
+        assert isinstance(deps_obj.dispatch_context, DispatchContext), (
+            f"dispatch_context must be DispatchContext, got {type(deps_obj.dispatch_context)}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_workspace_root_matches_param(self, tmp_path: Path) -> None:
+        """dispatch_context.workspace_root equals str(workspace) in fresh-dispatch branch."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Fresh task body"
+        )
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.workspace_root == str(tmp_path), (
+            f"workspace_root should be '{tmp_path!s}', got {ctx.workspace_root!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_id_matches_dispatched_task(self, tmp_path: Path) -> None:
+        """dispatch_context.task_id equals the dispatched todo task's ID."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task("FDC2")])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json("FDC2", "Task title", "Body")
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.task_id == "FDC2", f"task_id must be 'FDC2', got {ctx.task_id!r}"
+
+    @pytest.mark.asyncio
+    async def test_task_body_stays_in_prompt_not_migrated_to_instructions(
+        self, tmp_path: Path
+    ) -> None:
+        """Task body stays in positional prompt; it must not appear in instructions=."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        task_body = "Fresh dispatch task body content"
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", task_body
+        )
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        prompt_arg = call[0][0]
+        assert task_body in prompt_arg, "task body must remain in positional prompt"
+        assert "instructions" in call[1], (
+            "instructions= must be present for the migration check to be meaningful"
+        )
+        assert task_body not in call[1]["instructions"], (
+            "task body must NOT migrate into instructions="
+        )
+
+    @pytest.mark.asyncio
+    async def test_hydrated_content_stays_in_prompt_alongside_instructions_kwarg(
+        self, tmp_path: Path
+    ) -> None:
+        """Pre-hydrated content stays in positional prompt; instructions= is also present."""
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Body with refs"
+        )
+
+        hydrated_result = MagicMock()
+        hydrated_result.urls = {"https://example.com/page": "HydratedPageContent"}
+        hydrated_result.files = {}
+
+        async def fake_hydrator(body: str) -> object:  # noqa: ARG001
+            return hydrated_result
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+                hydrator=fake_hydrator,
+            )
+
+        await (go())
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        prompt_arg = call[0][0]
+        assert "HydratedPageContent" in prompt_arg, (
+            "hydrated content must remain in positional prompt"
+        )
+        assert "instructions" in call[1], (
+            "instructions= must be present for the migration check to be meaningful"
+        )
+        assert "HydratedPageContent" not in call[1]["instructions"], (
+            "hydrated content must NOT migrate into instructions="
+        )
