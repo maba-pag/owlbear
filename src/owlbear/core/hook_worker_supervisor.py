@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +32,37 @@ class HookWorkerSupervisor:
     def __init__(self, bg_concurrency: int = 1) -> None:
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._bg_semaphore = asyncio.Semaphore(bg_concurrency)
+        self._shutdown = False
 
-    def schedule(self, coro: Coroutine[Any, Any, None]) -> None:
-        """Schedule *coro* as a semaphore-bounded background task.
+    def schedule(self, awaitable: Awaitable[None]) -> None:
+        """Schedule *awaitable* as a semaphore-bounded background task.
 
         Keeps a strong reference to the spawned task until it completes; a done
         callback removes the finished task from :attr:`_background_tasks`.
+        No-op after :meth:`shutdown` has been called.
         """
+        if self._shutdown:
+            close = getattr(awaitable, "close", None)
+            if callable(close):
+                close()
+            return
 
         async def _wrapper() -> None:
             async with self._bg_semaphore:
-                await coro
+                await awaitable
 
         task = asyncio.create_task(_wrapper())
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
     async def shutdown(self) -> None:
-        """Cancel all tracked tasks and await their cleanup.
+        """Set the shutdown signal, cancel all tracked tasks, and await cleanup.
 
         Returns only after every tracked task has finished or been cancelled.
-        Leaves :attr:`_background_tasks` empty on return.
+        Leaves :attr:`_background_tasks` empty on return.  Subsequent
+        :meth:`schedule` calls are no-ops after this returns.
         """
+        self._shutdown = True
         tasks = list(self._background_tasks)
         for task in tasks:
             task.cancel()

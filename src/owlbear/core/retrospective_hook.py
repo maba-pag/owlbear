@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
@@ -20,6 +20,7 @@ from pydantic_ai import Agent
 from owlbear.core.hooks import TaskCompleteData  # noqa: TC001
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine, Generator
     from pathlib import Path
 
     from pydantic_ai.models import Model
@@ -51,6 +52,28 @@ _RETRO_SYSTEM_PROMPT = (
     "structured findings: what worked, what failed, error patterns observed, "
     "and reusable patterns discovered."
 )
+
+
+class _LazyCoroutine:
+    """Create the coroutine only when first awaited by the supervisor.
+
+    Tests inject a mock supervisor that only asserts ``schedule()`` calls. With
+    eager coroutine creation this leaves an unawaited coroutine warning; a lazy
+    awaitable keeps the same production behavior without leaking coroutines.
+    """
+
+    def __init__(self, factory: Callable[[], Coroutine[Any, Any, None]]) -> None:
+        self._factory = factory
+        self._coro: Coroutine[Any, Any, None] | None = None
+
+    def __await__(self) -> Generator[Any, None, None]:
+        if self._coro is None:
+            self._coro = self._factory()
+        return self._coro.__await__()
+
+    def close(self) -> None:
+        if self._coro is not None:
+            self._coro.close()
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +161,7 @@ class RetrospectiveHook:
                 return
 
         if self._supervisor is not None:
-            self._supervisor.schedule(self._run_retrospective(task_id))
+            self._supervisor.schedule(_LazyCoroutine(lambda: self._run_retrospective(task_id)))
         else:
             asyncio.create_task(self._run_retrospective(task_id))  # noqa: RUF006
 
