@@ -477,7 +477,7 @@ class TestFieldDescriptions:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TemporalDecayRateValidator:  # noqa: N801
+class TestFromAC_TemporalDecayRateValidator:
     """temporal_decay_rate must be validated to the range [0, 1]."""
 
     def test_temporal_decay_rate_below_zero_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -499,7 +499,7 @@ class TestFromAC_TemporalDecayRateValidator:  # noqa: N801
         assert default_settings.temporal_decay_rate == 0.001
 
 
-class TestFromAC_TemporalRecencyWeightValidator:  # noqa: N801
+class TestFromAC_TemporalRecencyWeightValidator:
     """temporal_recency_weight must be validated to the range [0, 1]."""
 
     def test_temporal_recency_weight_below_zero_raises(
@@ -527,7 +527,7 @@ class TestFromAC_TemporalRecencyWeightValidator:  # noqa: N801
         assert default_settings.temporal_recency_weight == 0.1
 
 
-class TestFromAC_EmbeddingIdleTimeoutValidator:  # noqa: N801
+class TestFromAC_EmbeddingIdleTimeoutValidator:
     """embedding_idle_timeout must be >= 0 (explicitly accepts 0)."""
 
     def test_embedding_idle_timeout_negative_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -553,7 +553,7 @@ class TestFromAC_EmbeddingIdleTimeoutValidator:  # noqa: N801
         assert default_settings.embedding_idle_timeout == 600
 
 
-class TestFromAC_ApprovalTimeoutValidator:  # noqa: N801
+class TestFromAC_ApprovalTimeoutValidator:
     """approval_timeout must be > 0 (strictly positive)."""
 
     def test_approval_timeout_zero_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -580,7 +580,7 @@ class TestFromAC_ApprovalTimeoutValidator:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BrowserNestedEnvHeadless:  # noqa: N801
+class TestFromAC_BrowserNestedEnvHeadless:
     """AC1: OWLBEAR_BROWSER__HEADLESS=true must set settings.browser.headless."""
 
     def test_browser_headless_via_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -596,7 +596,7 @@ class TestFromAC_BrowserNestedEnvHeadless:  # noqa: N801
         assert settings.browser.headless is False
 
 
-class TestFromAC_BrowserNestedEnvCdpPort:  # noqa: N801
+class TestFromAC_BrowserNestedEnvCdpPort:
     """AC2: OWLBEAR_BROWSER__CDP_PORT=9223 must set settings.browser.cdp_port."""
 
     def test_browser_cdp_port_via_nested_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -606,7 +606,7 @@ class TestFromAC_BrowserNestedEnvCdpPort:  # noqa: N801
         assert settings.browser.cdp_port == 9223
 
 
-class TestFromAC_BrowserNestedEnvPartialUpdate:  # noqa: N801
+class TestFromAC_BrowserNestedEnvPartialUpdate:
     """AC3: Setting one nested field preserves other BrowserConfig defaults."""
 
     def test_headless_preserves_cdp_port_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -628,7 +628,7 @@ class TestFromAC_BrowserNestedEnvPartialUpdate:  # noqa: N801
         assert settings.browser.headless is False
 
 
-class TestFromAC_FlatEnvRegressionGuard:  # noqa: N801
+class TestFromAC_FlatEnvRegressionGuard:
     """AC4: Existing flat OWLBEAR_DEBUG=true still works after nested delimiter is added."""
 
     def test_flat_debug_env_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -712,6 +712,146 @@ class TestFromAC_QuestionPendingDefaultCleanup:
         assert not missing, (
             f"Default notification_events contains events never emitted in src/owlbear: "
             f"{sorted(missing)!r}.  Live emitted events: {sorted(emitted_attrs)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# #969 — HookReaction config leaf boundary and schema ownership
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConfigLeafHookReactionSchema:
+    """AC: config.py must be a leaf module with no owlbear imports;
+    HookReactionRule and hook_reaction action schema types must be declared
+    in config.py; OwlBearSettings must parse hook_reactions into config-owned
+    models while preserving rule and action order.
+
+    Written for task #969. All tests FAIL until #955 moves HookReactionRule
+    from hook_reaction_router.py into config.py.
+    """
+
+    # -- error: leaf invariant -----------------------------------------------
+
+    def test_config_source_has_no_owlbear_imports(self) -> None:
+        """Source inspection: config.py must import nothing from any owlbear.* module.
+
+        This enforces the config-leaf invariant from architecture-standards.
+        Currently FAILS because config.py line 20 imports HookReactionRule
+        from owlbear.core.hook_reaction_router.
+        """
+        import ast
+
+        config_path = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "config.py"
+        tree = ast.parse(config_path.read_text(encoding="utf-8"), filename=str(config_path))
+
+        owlbear_imports: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module and node.module.startswith("owlbear"):
+                    owlbear_imports.append(
+                        f"line {node.lineno}: from {node.module} import ..."
+                    )
+            elif isinstance(node, ast.Import):
+                owlbear_imports.extend(
+                    f"line {node.lineno}: import {alias.name}"
+                    for alias in node.names
+                    if alias.name.startswith("owlbear")
+                )
+
+        assert not owlbear_imports, (
+            "config.py must not import any owlbear module (config leaf invariant). "
+            f"Found forbidden imports: {owlbear_imports}"
+        )
+
+    # -- boundary: schema ownership ------------------------------------------
+
+    def test_hook_reaction_rule_class_defined_in_config_source(self) -> None:
+        """Source inspection: HookReactionRule must be a ClassDef in config.py.
+
+        Currently FAILS because HookReactionRule is only imported into config.py
+        (re-exported from owlbear.core.hook_reaction_router), not defined there.
+        """
+        import ast
+
+        config_path = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "config.py"
+        tree = ast.parse(config_path.read_text(encoding="utf-8"), filename=str(config_path))
+
+        defined_classes = {
+            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+        }
+        assert "HookReactionRule" in defined_classes, (
+            "HookReactionRule must be declared as a class in src/owlbear/config.py, "
+            f"but only these classes are defined there: {sorted(defined_classes)}"
+        )
+
+    def test_hook_reaction_rule_module_attribute_is_owlbear_config(self) -> None:
+        """HookReactionRule imported from owlbear.config must be owned by owlbear.config.
+
+        __module__ == 'owlbear.config' proves the class body lives in config.py,
+        not in a core/ module that config.py merely re-exports.
+        Currently FAILS: HookReactionRule.__module__ == 'owlbear.core.hook_reaction_router'.
+        """
+        from owlbear.config import HookReactionRule
+
+        assert HookReactionRule.__module__ == "owlbear.config", (
+            f"Expected HookReactionRule to be defined in owlbear.config, "
+            f"but __module__ == {HookReactionRule.__module__!r}"
+        )
+
+    # -- happy: parse behaviour ----------------------------------------------
+
+    def test_settings_parses_hook_reactions_preserving_rule_order(self) -> None:
+        """OwlBearSettings parses hook_reactions into config-owned models and
+        preserves the order of rules exactly as declared.
+
+        Currently FAILS because the parsed rule type's __module__ is
+        'owlbear.core.hook_reaction_router', not 'owlbear.config'.
+        """
+        settings = OwlBearSettings(
+            hook_reactions=[
+                {"events": ["task_complete"], "actions": ["notify"]},
+                {"events": ["on_error"], "actions": ["escalate"]},
+            ]
+        )
+
+        assert len(settings.hook_reactions) == 2, "Both rules must be parsed"
+        assert settings.hook_reactions[0].events == ["task_complete"], (
+            "First rule order must be preserved"
+        )
+        assert settings.hook_reactions[1].events == ["on_error"], (
+            "Second rule order must be preserved"
+        )
+        for rule in settings.hook_reactions:
+            assert type(rule).__module__ == "owlbear.config", (
+                f"Parsed rules must be config-owned models, "
+                f"got {type(rule)} with __module__={type(rule).__module__!r}"
+            )
+
+    # -- boundary: action order within single rule ---------------------------
+
+    def test_settings_parses_hook_reactions_preserving_action_order_within_rule(
+        self,
+    ) -> None:
+        """OwlBearSettings preserves declared action order within a single rule.
+
+        Actions must execute in the declared sequence (escalate before notify),
+        not sorted or reordered in any way.
+        Currently FAILS because the parsed rule type's __module__ is
+        'owlbear.core.hook_reaction_router', not 'owlbear.config'.
+        """
+        settings = OwlBearSettings(
+            hook_reactions=[
+                {"events": ["on_error"], "actions": ["escalate", "notify"]},
+            ]
+        )
+
+        assert len(settings.hook_reactions) == 1
+        assert settings.hook_reactions[0].actions == ["escalate", "notify"], (
+            "Action order within a rule must match the declared sequence"
+        )
+        rule = settings.hook_reactions[0]
+        assert type(rule).__module__ == "owlbear.config", (
+            f"Parsed rule must be a config-owned model, got {type(rule).__module__!r}"
         )
 
 

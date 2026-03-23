@@ -11,8 +11,8 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from owlbear.core.hook_reaction_router import HookReactionRouter, HookReactionRule
 
+from owlbear.core.hook_reaction_router import HookReactionRouter, HookReactionRule
 from owlbear.core.hooks import HookEvent, HookRegistry
 
 # ---------------------------------------------------------------------------
@@ -511,3 +511,101 @@ class TestFromAC_HookReactionRouterErrorHandling:
         await hooks.emit(HookEvent.TASK_COMPLETE, {"task_id": "t1", "outcome": "ok"})
 
         mock_retry.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# #969 — Router consumes config-owned HookReactionRule (no duplicate schema)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RouterConsumesConfigOwnedRules:
+    """AC: HookReactionRouter must consume config-owned HookReactionRule objects
+    from owlbear.config and must not define a duplicate HookReactionRule class
+    in hook_reaction_router.py.
+
+    Written for task #969. All tests FAIL until #955 moves HookReactionRule
+    from hook_reaction_router.py into config.py.
+    """
+
+    # -- error: no duplicate class definition in router source ---------------
+
+    def test_hook_reaction_rule_not_class_defined_in_router_source(self) -> None:
+        """Source inspection: hook_reaction_router.py must not contain a ClassDef
+        named HookReactionRule.
+
+        Currently FAILS because HookReactionRule is defined as a class directly
+        in hook_reaction_router.py instead of being imported from owlbear.config.
+        """
+        import ast
+        from pathlib import Path
+
+        router_path = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "owlbear"
+            / "core"
+            / "hook_reaction_router.py"
+        )
+        tree = ast.parse(router_path.read_text(encoding="utf-8"), filename=str(router_path))
+
+        router_class_defs = {
+            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+        }
+        assert "HookReactionRule" not in router_class_defs, (
+            "HookReactionRule must not be defined as a class in hook_reaction_router.py. "
+            "Its definition belongs exclusively in owlbear.config (config-leaf rule). "
+            f"Classes defined in router: {sorted(router_class_defs)}"
+        )
+
+    # -- boundary: rule type is config-owned ---------------------------------
+
+    def test_hook_reaction_rule_referenced_by_router_is_config_owned(self) -> None:
+        """HookReactionRule exported from hook_reaction_router must be config-owned.
+
+        After the fix, hook_reaction_router.py imports HookReactionRule from
+        owlbear.config, so __module__ must equal 'owlbear.config'.
+        Currently FAILS: __module__ == 'owlbear.core.hook_reaction_router'.
+        """
+        from owlbear.core.hook_reaction_router import HookReactionRule as RouterRule
+
+        assert RouterRule.__module__ == "owlbear.config", (
+            f"HookReactionRule referenced by HookReactionRouter must be owned by "
+            f"owlbear.config, but __module__ == {RouterRule.__module__!r}. "
+            "Move the HookReactionRule class definition from hook_reaction_router.py "
+            "to config.py."
+        )
+
+    # -- happy: router works end-to-end with config-owned rule ---------------
+
+    @pytest.mark.asyncio
+    async def test_router_registers_and_dispatches_with_config_owned_rule(self) -> None:
+        """HookReactionRouter registers and dispatches using a config-owned rule.
+
+        This asserts the full path: config-owned HookReactionRule → HookReactionRouter
+        → registered handler → executor called on emit.
+        Currently FAILS at the __module__ assertion before reaching the dispatch check.
+        """
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        # Ownership guard — fails fast with a clear message if rule is not config-owned.
+        assert ConfigRule.__module__ == "owlbear.config", (
+            f"HookReactionRule must be owned by owlbear.config, "
+            f"got {ConfigRule.__module__!r}"
+        )
+
+        notify_mock = AsyncMock()
+        rule = ConfigRule(events=["task_complete"], actions=["notify"])
+        router = HookReactionRouter(
+            rules=[rule],
+            executors={
+                "notify": notify_mock,
+                "retry": AsyncMock(),
+                "escalate": AsyncMock(),
+            },
+        )
+        hooks = HookRegistry()
+        router.register(hooks)
+
+        await hooks.emit(HookEvent.TASK_COMPLETE, {"task_id": "t1"})
+
+        notify_mock.assert_called_once()
