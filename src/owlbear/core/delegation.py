@@ -44,7 +44,10 @@ MAX_DELEGATION_DEPTH: int = 5
 
 @dataclasses.dataclass(frozen=True)
 class DispatchContext:
-    """Runtime context forwarded to child agents during delegation.
+    """Immutable runtime context forwarded to child agents during delegation.
+
+    Instances are frozen (read-only after construction); mutation raises
+    :exc:`dataclasses.FrozenInstanceError`.
 
     Attributes:
         workspace_root: Absolute path to the active workspace.
