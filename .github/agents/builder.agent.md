@@ -3,7 +3,7 @@ name: builder
 description: "Code implementation from kanban tasks with TDD"
 argument-hint: "Build: {task_id_or_description}"
 user-invocable: false
-model: Claude Sonnet 4.6 (copilot)
+model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [
     vscode/memory,
@@ -49,10 +49,10 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 
 </critical_rules>
 
-<multi_agent_context>
+<multi*agent_context>
 Dispatched when a task reaches `in-progress` — the test-writer has already written
-failing tests. Make the `TestFromAC_*` tests pass. Lint is verified automatically
-after completion — ensure your code passes `ruff check` locally.
+failing tests. Make the `TestFromAC*\*`tests pass. Lint is verified automatically
+after completion — ensure your code passes`ruff check` locally.
 </multi_agent_context>
 
 <workflow>

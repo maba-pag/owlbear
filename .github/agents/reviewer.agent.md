@@ -3,7 +3,7 @@ name: reviewer
 description: "Read-only quality verification — never trusts self-reports"
 argument-hint: "Review: {task_id_or_file_paths}"
 user-invocable: false
-model: GPT-5.3-Codex (copilot)
+model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [
     vscode/memory,

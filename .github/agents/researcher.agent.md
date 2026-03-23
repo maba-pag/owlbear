@@ -3,7 +3,7 @@ name: researcher
 description: "Thorough research agent that produces structured findings and follow-up kanban tasks"
 argument-hint: "Research: {topic_or_question}"
 user-invocable: false
-model: [GPT-5.4 (copilot), Claude Opus 4.6 (copilot)]
+model: Claude Opus 4.6 (copilot)
 tools: [
     vscode/memory,
     execute/getTerminalOutput,
