@@ -562,3 +562,274 @@ class TestBuilderDiscovered:
         first_args = mock_run.call_args_list[0][0][0]
         assert "list" in first_args
         assert "--json" in first_args
+
+
+# ---------------------------------------------------------------------------
+# Helpers for AC #925 — age-threshold styling
+# ---------------------------------------------------------------------------
+import contextlib  # noqa: E402
+import datetime as _dt  # noqa: E402
+import pathlib  # noqa: E402
+import tempfile  # noqa: E402
+
+
+def _now_minus_hours(hours: float) -> str:
+    """Return an ISO-8601 UTC timestamp *hours* before the current moment."""
+    return (_dt.datetime.now(tz=_dt.UTC) - _dt.timedelta(hours=hours)).isoformat()
+
+
+def _age_subproc(hours_ago: float):
+    """Subprocess side-effect: task entered in-progress *hours_ago* hours ago."""
+    task = _task(task_id=1, title="Threshold task", status="in-progress")
+    log = [
+        _move(
+            task_id=1,
+            from_status="todo",
+            to_status="in-progress",
+            timestamp=_now_minus_hours(hours_ago),
+        )
+    ]
+    return _subproc([task], log)
+
+
+# Env that forces Rich to emit ANSI sequences through a non-TTY CliRunner.
+_ANSI_ENV = {"FORCE_COLOR": "1", "TTY_COMPATIBLE": "1", "TTY_INTERACTIVE": "0"}
+
+# Minimal valid config with three testable threshold tiers.
+_THRESHOLD_CONFIG_YAML = """\
+statuses:
+  - name: in-progress
+tui:
+  age_thresholds:
+    - after: 0s
+      color: "242"
+    - after: 1h
+      color: "34"
+    - after: 24h
+      color: "226"
+"""
+
+
+@contextlib.contextmanager
+def _with_config(content: str | None):  # type: ignore[return]
+    """Patch _KANBAN_CONFIG to a temp file holding *content*.
+
+    If *content* is ``None`` the path points to a non-existent file so that
+    reading it raises ``FileNotFoundError``.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        if content is None:
+            cfg = pathlib.Path(td) / "absent" / "config.yml"
+        else:
+            cfg = pathlib.Path(td) / "config.yml"
+            cfg.write_text(content, encoding="utf-8")
+        with patch("bearclaw.commands.board._KANBAN_CONFIG", cfg):
+            yield
+
+
+# ---------------------------------------------------------------------------
+# AC #3 and #4 — threshold styling contract (task #925)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgeThresholdStyling:
+    """AC #3/#4 (task #925): Age cell ANSI styling driven by tui.age_thresholds config.
+
+    All tests assert that specific ANSI color sequences appear in board output
+    when the task age crosses a configured threshold.  Every test FAILS on
+    current HEAD until ``#921`` lands because ``board.py`` does not yet apply
+    Age cell styling.
+    """
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_age_above_1h_threshold_emits_34_tier_ansi_color(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Age 3 h crosses the 1 h threshold → 38;5;34 ANSI sequence in Age cell."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_age_above_24h_threshold_emits_226_tier_ansi_color(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Age 36 h crosses the 24 h threshold → 38;5;226 ANSI sequence in Age cell."""
+        mock_run.side_effect = _age_subproc(36.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;226" in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_base_zero_second_tier_color_242_applied_for_fresh_task(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Age 30 min is above 0 s, below 1 h → base tier color 242 → 38;5;242 in output."""
+        mock_run.side_effect = _age_subproc(0.5)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;242" in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_numeric_color_string_becomes_38_5_n_ansi_not_raw_config_string(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Config color "34" maps to 38;5;34 ANSI (Rich color(34)), not a literal "34" token."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        # Must normalise "34" → color(34) → 38;5;34 escape, not embed the raw string "34".
+        assert "38;5;34" in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_boundary_same_displayed_age_text_different_ansi(
+        self, mock_run: MagicMock
+    ) -> None:
+        """AC #3: 30 min and 3 h both render '0d' Age text but receive different tier colors.
+
+        Raw age duration drives threshold selection, not the rounded display text.
+        The 30-min task stays in the base tier (color 242); the 3-h task enters
+        the 1 h tier (color 34).  This test verifies the contrast.
+        """
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            mock_run.side_effect = _age_subproc(0.5)
+            result_below = runner.invoke(app, ["board"], env=_ANSI_ENV)
+            mock_run.side_effect = _age_subproc(3.0)
+            result_above = runner.invoke(app, ["board"], env=_ANSI_ENV)
+
+        # Both fall within the current calendar day so the display text is identical.
+        assert "0d" in result_below.output
+        assert "0d" in result_above.output
+        # Base-tier task must NOT show the 1 h tier color.
+        assert "38;5;34" not in result_below.output
+        # 1 h tier task MUST show color 34 — FAILS on current HEAD.
+        assert "38;5;34" in result_above.output
+
+
+# ---------------------------------------------------------------------------
+# AC #5 — fallback contract (task #925)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgeThresholdFallback:
+    """AC #5 (task #925): missing or invalid threshold config must not break the board.
+
+    Each test verifies the fallback contract: exit 0 + plain Age text.
+    Contrast tests also establish the positive baseline (valid config → ANSI)
+    so that the test fails on current HEAD (no styling exists yet) while
+    simultaneously documenting that the fallback produces no unexpected ANSI.
+    """
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_missing_config_file_exits_zero_with_plain_age_text(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Missing kanban/config.yml → board exits 0 with plain Age, no crash.
+
+        Currently FAILS because ``_read_status_order`` raises ``FileNotFoundError``
+        when the path does not exist.
+        """
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(None):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "0d" in result.output
+        assert "38;5;34" not in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_malformed_yaml_config_exits_zero_with_plain_age_text(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Malformed YAML in config → board exits 0 with plain Age, no crash.
+
+        Currently FAILS because ``yaml.safe_load`` raises ``YAMLError`` which
+        propagates unhandled from ``_read_status_order``.
+        """
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config("{ invalid yaml :"):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "0d" in result.output
+        assert "38;5;34" not in result.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_tui_section_absent_plain_age_contrast_valid_config_has_ansi(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Absent tui section → plain Age; valid config → styled Age (RED: baseline fails)."""
+        # Baseline: valid thresholds emit styled output (FAILS on current HEAD).
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        # Fallback: absent tui section → no threshold ANSI, board still exits 0.
+        _no_tui = "statuses:\n  - name: in-progress\n"
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_no_tui):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "38;5;34" not in result_fallback.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_age_thresholds_not_a_list_plain_age_contrast_valid_config_has_ansi(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Non-list age_thresholds → plain Age fallback; valid config → styled Age."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = "statuses:\n  - name: in-progress\ntui:\n  age_thresholds: not_a_list\n"
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "38;5;34" not in result_fallback.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_invalid_duration_plain_age_contrast_valid_config_has_ansi(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Invalid threshold duration → plain Age fallback; valid config → styled Age."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = (
+            "statuses:\n  - name: in-progress\n"
+            'tui:\n  age_thresholds:\n    - after: not_a_duration\n      color: "34"\n'
+        )
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "38;5;34" not in result_fallback.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_invalid_color_value_plain_age_contrast_valid_config_has_ansi(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Invalid threshold color value → plain Age fallback; valid config → styled Age."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = (
+            "statuses:\n  - name: in-progress\n"
+            "tui:\n  age_thresholds:\n"
+            '    - after: 1h\n      color: "absolutelynotavalidrichcolor"\n'
+        )
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "38;5;34" not in result_fallback.output
