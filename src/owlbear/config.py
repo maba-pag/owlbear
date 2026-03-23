@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+from owlbear.core.hook_reaction_router import HookReactionRule  # noqa: TC001
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -253,6 +255,10 @@ class OwlBearSettings(BaseSettings):
     notification_backends: list[str] = Field(
         default=["bell", "sound"],
         description="Notification delivery backends in priority order.",
+    )
+    hook_reactions: list[HookReactionRule] = Field(
+        default=[],
+        description="Ordered list of hook reaction rules (events, match, actions).",
     )
 
     # --- GitHub ---

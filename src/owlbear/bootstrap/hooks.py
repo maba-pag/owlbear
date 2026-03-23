@@ -55,6 +55,16 @@ def build_hooks(
         notification_events=settings.notification_events,
     ).register(hooks)
 
+    if settings.hook_reactions:
+        from owlbear.core.hook_reaction_router import HookReactionRouter  # noqa: PLC0415
+
+        async def _noop(_data: object) -> None: ...
+
+        HookReactionRouter(
+            rules=settings.hook_reactions,
+            executors={"notify": _noop, "retry": _noop, "escalate": _noop},
+        ).register(hooks)
+
     if workspace_root is not None:
         event_path = workspace_root / ".owlbear" / "events.jsonl"
         ObservabilityHook(store=EventStore(event_path)).register(hooks)
