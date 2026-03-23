@@ -1,7 +1,7 @@
 """Hook reaction router — event-driven policy executor for OwlBear.
 
-Provides :class:`HookReactionRule` (Pydantic schema) and
-:class:`HookReactionRouter` (registration + matching + dispatch).
+Provides :class:`HookReactionRouter` (registration + matching + dispatch);
+re-exports :class:`~owlbear.config.HookReactionRule` from ``owlbear.config``.
 
 Design notes
 ------------
