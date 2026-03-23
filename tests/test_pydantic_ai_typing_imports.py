@@ -67,6 +67,43 @@ def _type_checking_body(tree: ast.Module) -> list[ast.stmt]:
     return []
 
 
+def _flatten_bitunion(node: ast.AST) -> list[ast.AST]:
+    """Flatten a BinOp(BitOr) union tree into a flat list of member types."""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _flatten_bitunion(node.left) + _flatten_bitunion(node.right)
+    return [node]
+
+
+def _callable_first_arg_names(node: ast.AST) -> set[str]:
+    """Return Name ids from the first argument of a Callable[...] subscript."""
+    if not (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "Callable"
+    ):
+        return set()
+    slice_node = node.slice
+    if isinstance(slice_node, ast.Tuple) and len(slice_node.elts) >= 2:
+        args = slice_node.elts[0]
+        if isinstance(args, ast.List) and args.elts:
+            return {n.id for n in ast.walk(args.elts[0]) if isinstance(n, ast.Name)}
+    return set()
+
+
+def _callable_return_names(node: ast.AST) -> set[str]:
+    """Return Name ids from the return-type position of a Callable[...] subscript."""
+    if not (
+        isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "Callable"
+    ):
+        return set()
+    slice_node = node.slice
+    if isinstance(slice_node, ast.Tuple) and len(slice_node.elts) >= 2:
+        return {n.id for n in ast.walk(slice_node.elts[1]) if isinstance(n, ast.Name)}
+    return set()
+
+
 # ---------------------------------------------------------------------------
 # AC1 — no private pydantic_ai imports in the three target files
 # ---------------------------------------------------------------------------
@@ -201,47 +238,97 @@ class TestFromAC_AgentHistoryProcessorAlias:
             f"found names: {sorted(alias_names)}"
         )
 
+    def test_agent_historyprocessor_alias_enforces_all_four_callable_shapes(self) -> None:
+        """HistoryProcessor alias union must provide all four callable shape variants.
+
+        Checks cardinality and structure for each required shape:
+        - sync + without-context
+        - sync + with-context (RunContext as first callable arg)
+        - async + without-context (Awaitable/Coroutine in return type)
+        - async + with-context (RunContext first arg, Awaitable/Coroutine in return)
+
+        Identifier presence alone (verified by the companion method) is insufficient;
+        a partial alias omitting any of the four shapes must fail this test.
+        """
+        tree = _parse(_AGENT_PY)
+        tc_body = _type_checking_body(tree)
+        assert tc_body, "No TYPE_CHECKING block found in agent.py"
+
+        _type_alias_cls = getattr(ast, "TypeAlias", None)
+        hp_value: ast.AST | None = None
+
+        for stmt in tc_body:
+            if isinstance(stmt, ast.Assign):
+                if any(
+                    isinstance(t, ast.Name) and t.id == "HistoryProcessor"
+                    for t in stmt.targets
+                ):
+                    hp_value = stmt.value
+                    break
+            elif isinstance(stmt, ast.AnnAssign):
+                if isinstance(stmt.target, ast.Name) and stmt.target.id == "HistoryProcessor":
+                    hp_value = stmt.value
+                    break
+            elif (
+                _type_alias_cls is not None
+                and isinstance(stmt, _type_alias_cls)  # type: ignore[arg-type]
+                and isinstance(getattr(stmt, "name", None), ast.Name)
+                and stmt.name.id == "HistoryProcessor"  # type: ignore[union-attr]
+            ):
+                hp_value = getattr(stmt, "value", None)
+                break
+
+        assert hp_value is not None, "No HistoryProcessor alias found in TYPE_CHECKING block"
+
+        variants = _flatten_bitunion(hp_value)
+        assert len(variants) >= 4, (
+            f"HistoryProcessor must have >=4 union variants (sync/async x "
+            f"with/without-context); found {len(variants)}"
+        )
+
+        _async_markers = {"Awaitable", "Coroutine"}
+        sync_nocontext = [
+            v for v in variants
+            if not (_callable_return_names(v) & _async_markers)
+            and "RunContext" not in _callable_first_arg_names(v)
+        ]
+        sync_context = [
+            v for v in variants
+            if not (_callable_return_names(v) & _async_markers)
+            and "RunContext" in _callable_first_arg_names(v)
+        ]
+        async_nocontext = [
+            v for v in variants
+            if (_callable_return_names(v) & _async_markers)
+            and "RunContext" not in _callable_first_arg_names(v)
+        ]
+        async_context = [
+            v for v in variants
+            if (_callable_return_names(v) & _async_markers)
+            and "RunContext" in _callable_first_arg_names(v)
+        ]
+
+        assert sync_nocontext, (
+            "Missing sync+without-context variant in HistoryProcessor: "
+            "Callable[[Sequence[ModelMessage]], Sequence[ModelMessage]]"
+        )
+        assert sync_context, (
+            "Missing sync+with-context variant in HistoryProcessor: "
+            "Callable[[RunContext[...], Sequence[ModelMessage]], Sequence[ModelMessage]]"
+        )
+        assert async_nocontext, (
+            "Missing async+without-context variant in HistoryProcessor: "
+            "Callable[[Sequence[ModelMessage]], Awaitable[Sequence[ModelMessage]]]"
+        )
+        assert async_context, (
+            "Missing async+with-context variant in HistoryProcessor: "
+            "Callable[[RunContext[...], Sequence[ModelMessage]], Awaitable[...]]"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Builder-discovered — union-structure coverage for the alias contract
 # ---------------------------------------------------------------------------
-
-
-def _flatten_bitunion(node: ast.AST) -> list[ast.AST]:
-    """Flatten a BinOp(BitOr) union tree into a flat list of member types."""
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
-        return _flatten_bitunion(node.left) + _flatten_bitunion(node.right)
-    return [node]
-
-
-def _callable_first_arg_names(node: ast.AST) -> set[str]:
-    """Return Name ids from the first argument of a Callable[...] subscript."""
-    if not (
-        isinstance(node, ast.Subscript)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "Callable"
-    ):
-        return set()
-    slice_node = node.slice
-    if isinstance(slice_node, ast.Tuple) and len(slice_node.elts) >= 2:
-        args = slice_node.elts[0]
-        if isinstance(args, ast.List) and args.elts:
-            return {n.id for n in ast.walk(args.elts[0]) if isinstance(n, ast.Name)}
-    return set()
-
-
-def _callable_return_names(node: ast.AST) -> set[str]:
-    """Return Name ids from the return-type position of a Callable[...] subscript."""
-    if not (
-        isinstance(node, ast.Subscript)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "Callable"
-    ):
-        return set()
-    slice_node = node.slice
-    if isinstance(slice_node, ast.Tuple) and len(slice_node.elts) >= 2:
-        return {n.id for n in ast.walk(slice_node.elts[1]) if isinstance(n, ast.Name)}
-    return set()
 
 
 class TestBuilderDiscovered:
@@ -312,3 +399,56 @@ class TestBuilderDiscovered:
         assert async_nocontext, "Missing async+without-context variant in HistoryProcessor union"
         assert sync_context, "Missing sync+with-context variant in HistoryProcessor union"
         assert sync_nocontext, "Missing sync+without-context variant in HistoryProcessor union"
+
+    def test_historyprocessor_all_union_variants_are_callable_subscripts(self) -> None:
+        """Every union member in HistoryProcessor must be a Callable[...] subscript.
+
+        Closes the mutation gap where non-Callable nodes (e.g. bare None or a Name)
+        would be silently classified as sync_nocontext by the shape-checking logic
+        (helpers return empty sets for non-Callable nodes, so both _is_async and
+        _is_with_context return False).  A pure existence check on the four shape
+        buckets cannot catch that regression; this test can.
+        """
+        tree = _parse(_AGENT_PY)
+        tc_body = _type_checking_body(tree)
+        assert tc_body, "No TYPE_CHECKING block found in agent.py"
+
+        _type_alias_cls = getattr(ast, "TypeAlias", None)
+        hp_value: ast.AST | None = None
+
+        for stmt in tc_body:
+            if isinstance(stmt, ast.Assign):
+                if any(
+                    isinstance(t, ast.Name) and t.id == "HistoryProcessor" for t in stmt.targets
+                ):
+                    hp_value = stmt.value
+                    break
+            elif isinstance(stmt, ast.AnnAssign):
+                if isinstance(stmt.target, ast.Name) and stmt.target.id == "HistoryProcessor":
+                    hp_value = stmt.value
+                    break
+            elif (
+                _type_alias_cls is not None
+                and isinstance(stmt, _type_alias_cls)  # type: ignore[arg-type]
+                and isinstance(getattr(stmt, "name", None), ast.Name)
+                and stmt.name.id == "HistoryProcessor"  # type: ignore[union-attr]
+            ):
+                hp_value = getattr(stmt, "value", None)
+                break
+
+        assert hp_value is not None, "No HistoryProcessor alias found in TYPE_CHECKING block"
+
+        variants = _flatten_bitunion(hp_value)
+
+        def _is_callable_subscript(v: ast.AST) -> bool:
+            return (
+                isinstance(v, ast.Subscript)
+                and isinstance(v.value, ast.Name)
+                and v.value.id == "Callable"
+            )
+
+        non_callable = [ast.dump(v) for v in variants if not _is_callable_subscript(v)]
+        assert not non_callable, (
+            "All HistoryProcessor union variants must be Callable[...] subscripts; "
+            "non-callable members found:\n" + "\n".join(non_callable)
+        )
