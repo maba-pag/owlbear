@@ -4324,3 +4324,377 @@
 {"timestamp":"2026-03-23T02:43:46.8271343+01:00","action":"move","task_id":781,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-23T02:43:51.1764393+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
 {"timestamp":"2026-03-23T02:43:51.180117+01:00","action":"release","task_id":781,"detail":"auditor"}
+{"timestamp":"2026-03-23T02:44:10.60552+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-23T02:44:56.4542649+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T02:44:56.4601081+01:00","action":"claim","task_id":854,"detail":"test-writer"}
+{"timestamp":"2026-03-23T02:45:07.7741761+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T02:45:07.7774599+01:00","action":"claim","task_id":862,"detail":"writer"}
+{"timestamp":"2026-03-23T02:45:18.3986506+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T02:45:18.4016706+01:00","action":"claim","task_id":780,"detail":"writer"}
+{"timestamp":"2026-03-23T02:45:35.9388716+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T02:45:44.7411904+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T02:45:44.7448319+01:00","action":"claim","task_id":920,"detail":"builder-agent"}
+{"timestamp":"2026-03-23T02:46:58.512221+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T02:47:06.0770887+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T02:47:06.0805417+01:00","action":"release","task_id":780,"detail":"writer"}
+{"timestamp":"2026-03-23T02:47:06.1055853+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T02:47:10.0642703+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T02:47:10.0679096+01:00","action":"release","task_id":920,"detail":"builder-agent"}
+{"timestamp":"2026-03-23T02:47:14.6348727+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T02:47:14.6385555+01:00","action":"release","task_id":862,"detail":"writer"}
+{"timestamp":"2026-03-23T02:47:33.0241078+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T02:49:53.1756162+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T02:49:56.8511383+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T02:49:56.8553744+01:00","action":"release","task_id":854,"detail":"test-writer"}
+{"timestamp":"2026-03-23T02:50:29.2454092+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T02:50:29.2490934+01:00","action":"claim","task_id":934,"detail":"builder-934"}
+{"timestamp":"2026-03-23T02:50:30.1737655+01:00","action":"edit","task_id":950,"detail":"Implement config-driven HookEvent reaction routing with retry and escalation"}
+{"timestamp":"2026-03-23T02:50:30.1779564+01:00","action":"claim","task_id":950,"detail":"researcher"}
+{"timestamp":"2026-03-23T02:50:31.0432989+01:00","action":"edit","task_id":949,"detail":"Design hook-triggered background worker pilot for audit map testgaps and document flows"}
+{"timestamp":"2026-03-23T02:50:31.0471482+01:00","action":"claim","task_id":949,"detail":"researcher"}
+{"timestamp":"2026-03-23T02:50:36.4135732+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T02:50:36.4166933+01:00","action":"claim","task_id":947,"detail":"architect"}
+{"timestamp":"2026-03-23T02:51:54.1741415+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T02:52:02.6019692+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T02:52:03.3407592+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T02:52:03.3438995+01:00","action":"release","task_id":934,"detail":"builder-934"}
+{"timestamp":"2026-03-23T02:55:12.9061689+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T02:55:12.9119873+01:00","action":"release","task_id":947,"detail":"architect"}
+{"timestamp":"2026-03-23T02:55:48.4040193+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T02:55:48.4080933+01:00","action":"claim","task_id":947,"detail":"architect"}
+{"timestamp":"2026-03-23T02:55:49.1267321+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T02:55:49.1309438+01:00","action":"release","task_id":947,"detail":"architect"}
+{"timestamp":"2026-03-23T03:01:24.9298815+01:00","action":"edit","task_id":950,"detail":"Implement config-driven HookEvent reaction routing with retry and escalation"}
+{"timestamp":"2026-03-23T03:01:24.9343151+01:00","action":"release","task_id":950,"detail":"researcher"}
+{"timestamp":"2026-03-23T03:10:43.4781482+01:00","action":"create","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T03:10:52.6700847+01:00","action":"create","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-23T03:13:49.7479098+01:00","action":"edit","task_id":949,"detail":"Design hook-triggered background worker pilot for audit map testgaps and document flows"}
+{"timestamp":"2026-03-23T03:13:57.5166217+01:00","action":"edit","task_id":949,"detail":"Design hook-triggered background worker pilot for audit map testgaps and document flows"}
+{"timestamp":"2026-03-23T03:14:00.5450141+01:00","action":"edit","task_id":949,"detail":"Design hook-triggered background worker pilot for audit map testgaps and document flows"}
+{"timestamp":"2026-03-23T03:14:00.5481326+01:00","action":"release","task_id":949,"detail":"researcher"}
+{"timestamp":"2026-03-23T03:22:41.9496691+01:00","action":"create","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T03:22:48.5758369+01:00","action":"create","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-23T03:22:49.353569+01:00","action":"create","task_id":957,"detail":"Route HookReaction notification and escalation actions through existing executors"}
+{"timestamp":"2026-03-23T03:24:41.6813261+01:00","action":"edit","task_id":950,"detail":"Implement config-driven HookEvent reaction routing with retry and escalation"}
+{"timestamp":"2026-03-23T03:24:42.2312598+01:00","action":"move","task_id":950,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-23T03:24:42.7949464+01:00","action":"edit","task_id":950,"detail":"Implement config-driven HookEvent reaction routing with retry and escalation"}
+{"timestamp":"2026-03-23T03:26:03.3965797+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T03:26:03.3993954+01:00","action":"claim","task_id":951,"detail":"mast-vine"}
+{"timestamp":"2026-03-23T03:26:11.8874744+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T03:26:11.8905099+01:00","action":"claim","task_id":733,"detail":"builder"}
+{"timestamp":"2026-03-23T03:26:21.1078367+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T03:26:21.1108873+01:00","action":"claim","task_id":853,"detail":"reviewer"}
+{"timestamp":"2026-03-23T03:28:55.7691021+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T03:29:06.8755446+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T03:29:11.3753605+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T03:29:11.3785584+01:00","action":"release","task_id":733,"detail":"builder"}
+{"timestamp":"2026-03-23T03:31:20.959481+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T03:31:26.0639381+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T03:31:26.0665405+01:00","action":"release","task_id":853,"detail":"reviewer"}
+{"timestamp":"2026-03-23T03:43:39.2599219+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T03:43:39.2624892+01:00","action":"release","task_id":951,"detail":"mast-vine"}
+{"timestamp":"2026-03-23T03:43:51.9008338+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T03:43:52.4845449+01:00","action":"move","task_id":951,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-23T03:47:18.9839844+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:47:18.9867346+01:00","action":"claim","task_id":862,"detail":"auditor"}
+{"timestamp":"2026-03-23T03:52:58.284996+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:53:02.5721219+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:53:05.8886882+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:53:10.9341908+01:00","action":"move","task_id":862,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T03:53:15.1797959+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:53:15.1834985+01:00","action":"release","task_id":862,"detail":"auditor"}
+{"timestamp":"2026-03-23T03:53:30.6415471+01:00","action":"edit","task_id":862,"detail":"Enable ruff D rules with Google convention (ignore D1xx)"}
+{"timestamp":"2026-03-23T03:54:11.449598+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T03:54:11.4521654+01:00","action":"claim","task_id":780,"detail":"auditor"}
+{"timestamp":"2026-03-23T04:00:56.2484097+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T04:01:00.672623+01:00","action":"move","task_id":780,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T04:01:05.5692628+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T04:01:05.5746304+01:00","action":"release","task_id":780,"detail":"auditor"}
+{"timestamp":"2026-03-23T04:01:21.5008076+01:00","action":"edit","task_id":780,"detail":"Fix SkillRegistry glob to scan subdirectory SKILL.md files"}
+{"timestamp":"2026-03-23T04:02:08.569168+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T04:02:08.5733953+01:00","action":"claim","task_id":947,"detail":"test-writer"}
+{"timestamp":"2026-03-23T04:02:17.2814934+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T04:02:21.7886279+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T04:02:21.7912391+01:00","action":"release","task_id":947,"detail":"test-writer"}
+{"timestamp":"2026-03-23T04:02:27.8783271+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:02:27.8817063+01:00","action":"claim","task_id":920,"detail":"reviewer"}
+{"timestamp":"2026-03-23T04:02:58.1674323+01:00","action":"edit","task_id":950,"detail":"Implement config-driven HookEvent reaction routing with retry and escalation"}
+{"timestamp":"2026-03-23T04:02:58.1711037+01:00","action":"claim","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:04:38.3787068+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:04:38.3825708+01:00","action":"claim","task_id":854,"detail":"builder"}
+{"timestamp":"2026-03-23T04:06:26.5263495+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:06:34.9553772+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:06:39.5242983+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:06:39.5273663+01:00","action":"release","task_id":854,"detail":"builder"}
+{"timestamp":"2026-03-23T04:07:59.289096+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:08:00.5957379+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:08:00.601313+01:00","action":"release","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:09:09.7827285+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:09:09.7876143+01:00","action":"claim","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:09:10.7517294+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:09:10.7549246+01:00","action":"release","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:09:33.9095332+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:09:36.7850783+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:09:36.7893857+01:00","action":"release","task_id":920,"detail":"reviewer"}
+{"timestamp":"2026-03-23T04:10:39.2152409+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:10:39.2183754+01:00","action":"claim","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:10:39.877909+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:10:40.5095037+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:10:40.5122352+01:00","action":"release","task_id":950,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:11:54.7573681+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T04:11:54.7613215+01:00","action":"claim","task_id":868,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:11:59.9844495+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:11:59.9876334+01:00","action":"claim","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:12:07.2933611+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T04:12:07.297025+01:00","action":"claim","task_id":951,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:13:10.5522948+01:00","action":"edit","task_id":949,"detail":"Design hook-triggered background worker pilot for audit map testgaps and document flows"}
+{"timestamp":"2026-03-23T04:13:10.5559487+01:00","action":"claim","task_id":949,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:13:52.5480855+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T04:14:00.9387369+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T04:14:05.6159728+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T04:14:05.6193467+01:00","action":"release","task_id":868,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:14:58.1076044+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T04:14:59.5688711+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T04:15:00.3390091+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T04:15:00.3427578+01:00","action":"release","task_id":949,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:15:53.023668+01:00","action":"create","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T04:15:53.7525238+01:00","action":"create","task_id":959,"detail":"Implement dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T04:15:54.4732208+01:00","action":"create","task_id":960,"detail":"Test daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-23T04:15:55.3067629+01:00","action":"create","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-23T04:16:01.1002413+01:00","action":"create","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T04:16:01.8477216+01:00","action":"create","task_id":963,"detail":"Deduplicate notify delivery between NotificationHook and HookReactionRouter"}
+{"timestamp":"2026-03-23T04:17:19.1138529+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T04:17:19.8142164+01:00","action":"edit","task_id":951,"detail":"Inject runtime task and workspace context into dispatched agent prompts"}
+{"timestamp":"2026-03-23T04:17:19.8184986+01:00","action":"block","task_id":951,"detail":"Split into #958, #959, #960, #961 - work tracked there"}
+{"timestamp":"2026-03-23T04:17:19.8224011+01:00","action":"release","task_id":951,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:18:21.5686598+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:18:21.5724115+01:00","action":"release","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:19:22.6639597+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:19:22.6665708+01:00","action":"claim","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:19:23.8566586+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:19:23.8613586+01:00","action":"release","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:20:04.9232577+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:20:04.9264467+01:00","action":"claim","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:20:05.5464619+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:20:06.1265009+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:20:06.1296297+01:00","action":"release","task_id":955,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:21:36.3897109+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T04:21:36.39288+01:00","action":"claim","task_id":934,"detail":"vivid-linen"}
+{"timestamp":"2026-03-23T04:21:37.4909736+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T04:21:37.4952553+01:00","action":"claim","task_id":953,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:21:46.411507+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:21:46.4152311+01:00","action":"claim","task_id":853,"detail":"writer-owl"}
+{"timestamp":"2026-03-23T04:22:00.4484312+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T04:22:00.4555654+01:00","action":"claim","task_id":556,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:23:29.2804367+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:23:32.951761+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:23:32.9549095+01:00","action":"release","task_id":853,"detail":"writer-owl"}
+{"timestamp":"2026-03-23T04:26:01.8908809+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T04:26:06.1399814+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T04:26:06.144429+01:00","action":"release","task_id":556,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:26:24.754122+01:00","action":"create","task_id":964,"detail":"Keep TASK_COMPLETE retrospective scheduling non-blocking before background handoff"}
+{"timestamp":"2026-03-23T04:27:12.5864297+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T04:27:38.9950159+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T04:27:39.8396797+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T04:27:39.8423874+01:00","action":"release","task_id":953,"detail":"cove-eagle"}
+{"timestamp":"2026-03-23T04:28:57.9298998+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T04:28:57.9330312+01:00","action":"release","task_id":934,"detail":"vivid-linen"}
+{"timestamp":"2026-03-23T04:29:57.2330688+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T04:29:57.2373315+01:00","action":"claim","task_id":934,"detail":"vivid-linen"}
+{"timestamp":"2026-03-23T04:29:57.9255527+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T04:29:57.9288413+01:00","action":"release","task_id":934,"detail":"vivid-linen"}
+{"timestamp":"2026-03-23T04:31:34.3400908+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T04:31:34.3438025+01:00","action":"claim","task_id":775,"detail":"builder-775"}
+{"timestamp":"2026-03-23T04:31:54.1499389+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T04:31:54.1542429+01:00","action":"claim","task_id":733,"detail":"solar-wave"}
+{"timestamp":"2026-03-23T04:33:36.3387165+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T04:33:45.2223946+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T04:33:45.8590779+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T04:33:45.8616991+01:00","action":"release","task_id":775,"detail":"builder-775"}
+{"timestamp":"2026-03-23T04:37:48.6105813+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T04:38:10.7526129+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T04:38:10.756277+01:00","action":"release","task_id":733,"detail":"solar-wave"}
+{"timestamp":"2026-03-23T04:41:26.2476047+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:41:26.2512337+01:00","action":"claim","task_id":853,"detail":"plume-dale"}
+{"timestamp":"2026-03-23T04:48:49.3835533+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:48:53.9909524+01:00","action":"move","task_id":853,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T04:48:54.6753631+01:00","action":"edit","task_id":853,"detail":"Tests for optional logfire import in daemon (#535)"}
+{"timestamp":"2026-03-23T04:48:54.6801932+01:00","action":"release","task_id":853,"detail":"plume-dale"}
+{"timestamp":"2026-03-23T04:49:35.0045631+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T04:49:35.007836+01:00","action":"claim","task_id":947,"detail":"ghost-dune"}
+{"timestamp":"2026-03-23T04:49:45.8973875+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:49:45.9019718+01:00","action":"claim","task_id":920,"detail":"grove-hail"}
+{"timestamp":"2026-03-23T04:50:08.8820686+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:50:08.8852125+01:00","action":"claim","task_id":950,"detail":"maple-blaze"}
+{"timestamp":"2026-03-23T04:50:21.5856077+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:50:27.1675021+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T04:50:27.1706639+01:00","action":"release","task_id":950,"detail":"maple-blaze"}
+{"timestamp":"2026-03-23T04:50:57.2433858+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:50:57.2475986+01:00","action":"claim","task_id":854,"detail":"flora-heath"}
+{"timestamp":"2026-03-23T04:51:18.260562+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:51:32.5119717+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:51:42.6495704+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T04:51:42.6527606+01:00","action":"release","task_id":920,"detail":"grove-hail"}
+{"timestamp":"2026-03-23T04:57:46.8978126+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:58:27.2114788+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T04:58:27.2167688+01:00","action":"release","task_id":854,"detail":"flora-heath"}
+{"timestamp":"2026-03-23T04:59:40.4799553+01:00","action":"edit","task_id":955,"detail":"Define HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T04:59:40.4846742+01:00","action":"claim","task_id":955,"detail":"helm-fawn"}
+{"timestamp":"2026-03-23T04:59:42.1222429+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T04:59:42.1259508+01:00","action":"claim","task_id":949,"detail":"echo-lotus"}
+{"timestamp":"2026-03-23T05:00:18.7876193+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:00:33.1021209+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:00:33.8513464+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:00:33.8539211+01:00","action":"release","task_id":949,"detail":"echo-lotus"}
+{"timestamp":"2026-03-23T05:02:51.1838074+01:00","action":"create","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T05:03:14.3383637+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T05:03:14.3415059+01:00","action":"claim","task_id":521,"detail":"falcon-falcon"}
+{"timestamp":"2026-03-23T05:03:37.0700321+01:00","action":"edit","task_id":955,"detail":"Implement HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T05:04:20.3485866+01:00","action":"edit","task_id":955,"detail":"Implement HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T05:04:21.1540541+01:00","action":"edit","task_id":955,"detail":"Implement HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T05:04:21.1571656+01:00","action":"release","task_id":955,"detail":"helm-fawn"}
+{"timestamp":"2026-03-23T05:06:28.383875+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T05:06:33.5623514+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T05:06:33.5666849+01:00","action":"release","task_id":521,"detail":"falcon-falcon"}
+{"timestamp":"2026-03-23T05:08:15.2073319+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T05:08:15.2099912+01:00","action":"claim","task_id":953,"detail":"dale-warp"}
+{"timestamp":"2026-03-23T05:08:28.2765176+01:00","action":"create","task_id":966,"detail":"Test: Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T05:09:39.0263359+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T05:10:04.3628383+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T05:10:24.1772296+01:00","action":"edit","task_id":953,"detail":"Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T05:10:24.1803297+01:00","action":"release","task_id":953,"detail":"dale-warp"}
+{"timestamp":"2026-03-23T05:10:58.0453086+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:10:58.0483392+01:00","action":"claim","task_id":962,"detail":"dove-spoke"}
+{"timestamp":"2026-03-23T05:11:02.4730525+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:11:02.4763931+01:00","action":"claim","task_id":733,"detail":"writer-agent"}
+{"timestamp":"2026-03-23T05:11:10.2183131+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T05:11:10.2220297+01:00","action":"claim","task_id":958,"detail":"lake-spur"}
+{"timestamp":"2026-03-23T05:11:48.7574314+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T05:11:48.7605736+01:00","action":"claim","task_id":556,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-23T05:13:41.7412124+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T05:13:56.0102074+01:00","action":"create","task_id":967,"detail":"Emit QUESTION_PENDING from AskUserToolset and ApprovalGateToolset"}
+{"timestamp":"2026-03-23T05:14:09.0766018+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T05:14:12.5847484+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T05:14:12.5890692+01:00","action":"release","task_id":958,"detail":"lake-spur"}
+{"timestamp":"2026-03-23T05:17:32.447033+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:17:32.4516838+01:00","action":"release","task_id":962,"detail":"dove-spoke"}
+{"timestamp":"2026-03-23T05:20:25.8296817+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T05:20:28.9854253+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T05:20:28.9891039+01:00","action":"release","task_id":556,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-23T05:24:04.6917494+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:24:13.9314116+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:24:14.5989275+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:24:14.6017529+01:00","action":"release","task_id":733,"detail":"writer-agent"}
+{"timestamp":"2026-03-23T05:25:08.2933591+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T05:25:08.2964736+01:00","action":"claim","task_id":868,"detail":"reviewer"}
+{"timestamp":"2026-03-23T05:25:11.266501+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T05:25:11.2708759+01:00","action":"claim","task_id":775,"detail":"reviewer-775"}
+{"timestamp":"2026-03-23T05:25:14.0517684+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T05:25:14.0632255+01:00","action":"claim","task_id":934,"detail":"test-writer-934"}
+{"timestamp":"2026-03-23T05:28:39.4345584+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T05:28:51.2239635+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T05:28:51.2277034+01:00","action":"release","task_id":868,"detail":"reviewer"}
+{"timestamp":"2026-03-23T05:29:24.8771673+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T05:29:29.1146727+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T05:29:29.1189022+01:00","action":"release","task_id":775,"detail":"reviewer-775"}
+{"timestamp":"2026-03-23T05:32:57.808133+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T05:33:07.1721217+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T05:33:12.1078281+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T05:33:12.1116527+01:00","action":"release","task_id":934,"detail":"test-writer-934"}
+{"timestamp":"2026-03-23T05:36:42.8250789+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T05:36:42.8285817+01:00","action":"claim","task_id":920,"detail":"auditor"}
+{"timestamp":"2026-03-23T05:46:17.1590549+01:00","action":"move","task_id":920,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T05:46:21.8512328+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T05:46:21.8543522+01:00","action":"release","task_id":920,"detail":"auditor"}
+{"timestamp":"2026-03-23T05:46:44.3988326+01:00","action":"edit","task_id":920,"detail":"Harden bearclaw board command failures and JSON parsing"}
+{"timestamp":"2026-03-23T05:47:21.8667893+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:47:21.8716159+01:00","action":"claim","task_id":733,"detail":"auditor"}
+{"timestamp":"2026-03-23T05:52:25.7803846+01:00","action":"move","task_id":733,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T05:52:30.0380003+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:52:30.0421254+01:00","action":"release","task_id":733,"detail":"auditor"}
+{"timestamp":"2026-03-23T05:52:55.1042376+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:52:59.2490854+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:53:05.4905663+01:00","action":"edit","task_id":733,"detail":"Research: Cooperative pipeline cancellation via asyncio.Event"}
+{"timestamp":"2026-03-23T05:53:45.8706066+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:53:45.8748576+01:00","action":"claim","task_id":962,"detail":"architect"}
+{"timestamp":"2026-03-23T05:53:58.9607795+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:53:58.9656179+01:00","action":"claim","task_id":949,"detail":"builder"}
+{"timestamp":"2026-03-23T05:54:09.0592539+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:54:13.8792899+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:54:21.4036463+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T05:54:21.4079467+01:00","action":"release","task_id":949,"detail":"builder"}
+{"timestamp":"2026-03-23T05:56:03.0380098+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T05:56:03.0427964+01:00","action":"claim","task_id":854,"detail":"test-writer-3"}
+{"timestamp":"2026-03-23T05:57:20.1251447+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T05:57:20.1299053+01:00","action":"claim","task_id":958,"detail":"test-writer"}
+{"timestamp":"2026-03-23T05:57:31.9188287+01:00","action":"create","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T05:57:52.7348159+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:57:53.4135517+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:58:29.0305905+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T05:58:30.4395401+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:58:46.3949796+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:58:47.0692021+01:00","action":"edit","task_id":962,"detail":"Remove dead question_pending default hook configuration"}
+{"timestamp":"2026-03-23T05:58:47.0723312+01:00","action":"release","task_id":962,"detail":"architect"}
+{"timestamp":"2026-03-23T06:00:12.7413431+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T06:00:17.6668246+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T06:00:17.6710064+01:00","action":"release","task_id":854,"detail":"test-writer-3"}
+{"timestamp":"2026-03-23T06:01:33.8653795+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T06:01:38.6752705+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T06:01:38.6800425+01:00","action":"release","task_id":958,"detail":"test-writer"}
+{"timestamp":"2026-03-23T06:02:14.6078464+01:00","action":"edit","task_id":966,"detail":"Test: Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T06:02:14.6115464+01:00","action":"claim","task_id":966,"detail":"architect"}
+{"timestamp":"2026-03-23T06:02:18.3738663+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T06:02:18.3790143+01:00","action":"claim","task_id":950,"detail":"builder"}
+{"timestamp":"2026-03-23T06:02:30.727588+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:02:30.7306848+01:00","action":"claim","task_id":868,"detail":"writer"}
+{"timestamp":"2026-03-23T06:02:42.7658919+01:00","action":"edit","task_id":950,"detail":"Archive redundant HookEvent reaction routing umbrella task"}
+{"timestamp":"2026-03-23T06:02:47.5819443+01:00","action":"move","task_id":950,"detail":"in-progress -\u003e archived"}
+{"timestamp":"2026-03-23T06:03:01.2664285+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:03:01.2711785+01:00","action":"claim","task_id":965,"detail":"architect-gpt-5.4"}
+{"timestamp":"2026-03-23T06:03:30.7472157+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:03:48.5109879+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:03:48.5164004+01:00","action":"release","task_id":868,"detail":"writer"}
+{"timestamp":"2026-03-23T06:05:13.9448439+01:00","action":"edit","task_id":966,"detail":"Test: Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T06:06:10.5840877+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:07:49.2702459+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:08:08.005272+01:00","action":"edit","task_id":966,"detail":"Test: Add tracked background worker supervision for hook-triggered daemon tasks"}
+{"timestamp":"2026-03-23T06:08:37.4115334+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:09:06.1913563+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:09:06.1950463+01:00","action":"release","task_id":965,"detail":"architect-gpt-5.4"}
+{"timestamp":"2026-03-23T06:09:59.4935852+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-23T06:09:59.4968993+01:00","action":"claim","task_id":789,"detail":"test-writer-789"}
+{"timestamp":"2026-03-23T06:10:08.8615581+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T06:10:08.8652554+01:00","action":"claim","task_id":934,"detail":"builder-claude"}
+{"timestamp":"2026-03-23T06:10:15.7848098+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T06:10:15.7885004+01:00","action":"claim","task_id":521,"detail":"reviewer-gpt-5.3"}
+{"timestamp":"2026-03-23T06:10:19.2519063+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:10:19.2550503+01:00","action":"claim","task_id":775,"detail":"writer-copilot"}
+{"timestamp":"2026-03-23T06:10:58.2492872+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:11:04.0152668+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:11:04.0189537+01:00","action":"release","task_id":775,"detail":"writer-copilot"}
+{"timestamp":"2026-03-23T06:13:37.2406539+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-23T06:13:46.0173732+01:00","action":"edit","task_id":789,"detail":"Tests for ConsolidationService (TDD RED)"}
+{"timestamp":"2026-03-23T06:13:46.0210593+01:00","action":"release","task_id":789,"detail":"test-writer-789"}
+{"timestamp":"2026-03-23T06:14:08.5658034+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T06:14:12.2593835+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T06:14:12.2639013+01:00","action":"release","task_id":521,"detail":"reviewer-gpt-5.3"}
+{"timestamp":"2026-03-23T06:14:36.1927218+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T06:14:40.287352+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T06:14:40.2910172+01:00","action":"release","task_id":934,"detail":"builder-claude"}
+{"timestamp":"2026-03-23T06:15:58.9272133+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T06:15:58.9314324+01:00","action":"claim","task_id":556,"detail":"test-writer-gpt"}
+{"timestamp":"2026-03-23T06:16:58.4492476+01:00","action":"edit","task_id":926,"detail":"Create reusable subprocess result helpers for BearClaw CLI tests"}
+{"timestamp":"2026-03-23T06:16:58.453148+01:00","action":"claim","task_id":926,"detail":"test-writer-gpt5"}
+{"timestamp":"2026-03-23T06:17:12.932161+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T06:17:17.1341853+01:00","action":"edit","task_id":556,"detail":"Fix PydanticAI deprecation warnings in tests"}
+{"timestamp":"2026-03-23T06:17:17.1367651+01:00","action":"release","task_id":556,"detail":"test-writer-gpt"}
+{"timestamp":"2026-03-23T06:23:01.7482237+01:00","action":"edit","task_id":926,"detail":"Create reusable subprocess result helpers for BearClaw CLI tests"}
+{"timestamp":"2026-03-23T06:23:07.8514697+01:00","action":"edit","task_id":926,"detail":"Create reusable subprocess result helpers for BearClaw CLI tests"}
+{"timestamp":"2026-03-23T06:23:07.8547844+01:00","action":"release","task_id":926,"detail":"test-writer-gpt5"}
+{"timestamp":"2026-03-23T06:26:08.3101177+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:26:08.3134582+01:00","action":"claim","task_id":868,"detail":"auditor-claude-opus-4.6"}
+{"timestamp":"2026-03-23T06:41:38.0694973+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:41:43.2733023+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:41:47.7474913+01:00","action":"move","task_id":868,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T06:41:52.3050368+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:41:52.3081524+01:00","action":"release","task_id":868,"detail":"auditor-claude-opus-4.6"}
