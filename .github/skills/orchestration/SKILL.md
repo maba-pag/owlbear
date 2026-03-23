@@ -68,7 +68,7 @@ those to the user as potential issues.
 
 | Setting | Value | Notes |
 | --- | --- | --- |
-| **Wave size** | 4 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
+| **Wave size** | 5 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
 
 ## Step 2 — Dispatch
 
@@ -89,70 +89,53 @@ no compatibility violations.**
 
 **Agent-type compatibility rules:**
 
-| Agent type | Never share wave with | Rationale |
-| --- | --- | --- |
-| auditor | all other agents, other auditors | Runs the full test suite — compute-heavy and long-running; any concurrent agent would interfere or be starved of resources |
-| builder | auditor, other builders | Builders modify source files; concurrent builders risk conflicting edits to the same files and git staging collisions |
-| all other agents (e.g. architect, curator, kanban-planner, researcher, reviewer, test-writer, writer) | auditor | Flexible — no resource conflicts. May run tests, but scoped to their own task. |
+| Agent type | Category | May share wave with | Never with |
+| --- | --- | --- | --- |
+| auditor | restricted | light flex | builders, heavy flex, other auditors |
+| builder | restricted | light flex, heavy flex | auditors, other builders |
+| researcher, writer, architect, kanban-planner, curator | light flex | any | — |
+| reviewer, test-writer | heavy flex | builders, other flex | auditors |
 
-**Definitions:**
+**Safety criterion:** light flex agents never modify source/test files and never run the test suite → cannot interfere with the auditor's full-suite run.
 
-- **Restricted task:** auditor (must be solo) or builder (max 1 per wave). These constrain wave structure.
-- **Flexible task:** everything else. Can share waves freely with each other.
+**Assembly algorithm — four-bucket, minimize wave count:**
 
-**Assembly algorithm — two-phase, minimize wave count:**
+**Phase 1 — Draft the wave plan before dispatching:**
 
-**Phase 1 — Draft the wave plan on paper before dispatching anything:**
-
-1. Separate the dispatch list into three buckets: **auditors**, **builders**, and **flexible** tasks. Keep priority order within each bucket.
-2. **Auditor waves.** Create one solo wave per auditor. No other tasks may share these waves.
-3. **Builder waves.** Create one wave per builder (1 builder each). Fill the remaining slots (up to wave-size) with flexible tasks, taken in priority order from the flexible bucket.
-4. **Overflow waves.** If flexible tasks remain after filling all builder waves, create new unrestricted waves (up to wave-size each) in priority order.
-5. **Drop rule.** Walk the draft. Any wave that contains exactly one task and that task is **not** an auditor → drop the entire wave from the plan. The task is deferred to the next planning cycle. **Exception:** if dropping would eliminate all waves, keep the last one.
-
-"Dropping" means the task is not planned and not dispatched this cycle. It will reappear in the next Board Scan and be scheduled then.
+1. Separate into four buckets: **auditors**, **builders**, **light flex** (researcher, writer, architect, kanban-planner, curator), **heavy flex** (reviewer, test-writer). Keep priority order within each.
+2. **Auditor waves.** One auditor per wave. Fill remaining slots (up to wave-size) with light flex, priority order.
+3. **Builder waves.** One builder per wave. Fill remaining slots with light flex first (if any remain), then heavy flex, priority order.
+4. **Overflow waves.** Remaining light + heavy flex → new waves (up to wave-size), priority order.
+5. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all waves, keep the last.
 
 **Phase 2 — Execute the plan:**
 
 6. Dispatch waves in order as drafted. No further reordering.
 
-In most cases this is a few seconds of mental work, not multiple tool calls — it is a
-thinking step, not an action step.
-
 #### Worked example
 
 **Input (priority order):** #862 (reviewer), #780 (reviewer), #854 (reviewer), #920 (test-writer), #947 (researcher), #910 (auditor), #788 (writer), #846 (writer), #781 (writer), #728 (writer), #853 (builder), #934 (builder), #521 (builder), #556 (builder), #733 (builder), #775 (builder)
 
-Buckets: auditors = [#910], builders = [#853, #934, #521, #556, #733, #775], flexible = [#862, #780, #854, #920, #947, #788, #846, #781, #728]
+Buckets: auditors=[#910], builders=[#853,#934,#521,#556,#733,#775], light=[#947,#788,#846,#781,#728], heavy=[#862,#780,#854,#920]
 
-Step 2 — auditor wave:
+Step 2 — auditor waves (fill with light):
 ```
-Wave 1: #910 (auditor)                                                ← solo
+Wave 1: #910 (auditor), #947 (researcher), #788 (writer), #846 (writer), #781 (writer)  ← 1+4 light (full)
 ```
+Light remaining: [#728]
 
-Step 3 — builder waves, filled with flexible tasks (9 flexible agents, 6 builders):
+Step 3 — builder waves (fill with remaining light, then heavy):
 ```
-Wave 2: #853 (builder), #862 (reviewer), #780 (reviewer), #854 (reviewer)   ← 1 builder + 3 flexible
-Wave 3: #934 (builder), #920 (test-writer), #947 (researcher), #788 (writer) ← 1 builder + 3 flexible
-Wave 4: #521 (builder), #846 (writer), #781 (writer), #728 (writer)          ← 1 builder + 3 flexible (all 9 flexible placed)
-Wave 5: #556 (builder)                                                       ← solo builder, no flexible left
-Wave 6: #733 (builder)                                                       ← solo builder
-Wave 7: #775 (builder)                                                       ← solo builder
+Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer), #854 (reviewer)  ← 1+1 light+3 heavy (full)
+Wave 3: #934 (builder), #920 (test-writer)                                                 ← 1+1 heavy
+Wave 4–7: #521, #556, #733, #775 (builders)                                                ← solo each
 ```
 
-Step 4 — no flexible tasks remain, skip.
+Step 4 — overflow: nothing remaining.
 
-Step 5 — drop rule: Waves 5, 6, 7 each contain exactly one non-auditor task → **drop all three.** (Waves 1–4 survive, so the exception does not apply.)
+Step 5 — drop rule: Waves 4–7 solo non-auditor → **dropped.** Wave 3 has 2 tasks → kept.
 
-**Final plan — 4 waves:**
-```
-Wave 1: #910 (auditor)                                                ← solo
-Wave 2: #853 (builder), #862 (reviewer), #780 (reviewer), #854 (reviewer)
-Wave 3: #934 (builder), #920 (test-writer), #947 (researcher), #788 (writer)
-Wave 4: #521 (builder), #846 (writer), #781 (writer), #728 (writer)
-```
-
-4 waves, 13 tasks dispatched. 3 builders (#556, #733, #775) deferred to next cycle. A naive priority-first greedy approach would have produced 8+ waves.
+**Final plan — 3 waves, 12 tasks.** 4 builders deferred. Compare old algorithm: 4 waves (auditor ran solo).
 
 After all waves from this plan complete, proceed to Step 3.
 
@@ -208,9 +191,9 @@ runSubagent("researcher", "Research: #112", "Researcher #112")
 ```
 [parallel — both return]
 
-Note: the auditor always runs in a **solo wave** — no other agents may share it.
-The auditor runs the full test suite, which is compute-heavy and long-running;
-any concurrent agent would interfere or be starved of resources.
+Note: auditors share waves only with **light flex** agents (researcher, writer,
+architect, kanban-planner, curator) — never with builders, heavy flex (reviewer,
+test-writer), or other auditors. See wave assembly rules above.
 
 **Error handling:** If a subagent errors (crash, timeout, no response):
 
@@ -251,7 +234,7 @@ Before reporting session complete:
 - [ ] Planner was dispatched with the user's scope filter (not a hardcoded filter)
 - [ ] Every task in `dispatch` was dispatched (none silently dropped)
 - [ ] Waves respect wave-size limit from Configuration (unless in sequential mode)
-- [ ] Wave assembly uses agent-type compatibility rules (auditor solo, max 1 builder per wave, flexible agents fill builder waves)
+- [ ] Wave assembly uses agent-type compatibility rules (auditor + light flex only, max 1 builder per wave, heavy flex excluded from auditor waves)
 - [ ] ONE task per subagent call — no batching multiple tasks into one call
 - [ ] Dispatch prompts contained ONLY task IDs — except `retry_hint` lines for stale retries
 - [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)

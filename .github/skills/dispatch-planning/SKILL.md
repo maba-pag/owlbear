@@ -117,7 +117,7 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 
 - Gate 3 (atomicity): scan titles for "and" joining unrelated concerns.
 - DECOMP routing: tasks flagged `[!DECOMP]` dispatch to `kanban-planner` regardless of status.
-- 16-task dispatch cap: take top entries from the already-sorted list.
+- 20-task dispatch cap: take top entries from the already-sorted list.
 - Stale-task handling: cross-reference orchestrator failure context with output.
 
 **Scope translation** — replace `{scope}` with flags from the orchestrator:
@@ -240,7 +240,7 @@ From the gate-passing tasks, build the dispatch list:
    (critical → someday), (2) pipeline proximity (done → ideation). Take tasks in the
    order they appear.
 
-2. **Batch size cap:** Max 16 tasks per dispatch list. If more qualify, take the top 16
+2. **Batch size cap:** Max 20 tasks per dispatch list. If more qualify, take the top 20
    from the sorted list. The rest are silently deferred to the next planning cycle.
 
 **No deconfliction needed.** The planner produces a priority-sorted flat list. The
@@ -262,7 +262,7 @@ Format:
 </good example>
 <bad example why="Includes prose and markdown, not a single-line JSON object.">
 ```json
-excluded the gate failures, and I’m finalizing the capped 16-task dispatch list now.{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"blocked":[]}
+excluded the gate failures, and I’m finalizing the capped 20-task dispatch list now.{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},...,{"id":853,"agent":"architect"}],"blocked":[]}
 ```
 </bad example>
 
@@ -282,7 +282,7 @@ excluded the gate failures, and I’m finalizing the capped 16-task dispatch lis
 - No fields other than `dispatch` and `blocked`
 - Empty arrays are fine: `{"dispatch":[],"blocked":[]}`
 - Gate names do not appear in the output (gate failures = task not in dispatch, not mentioned at all)
-- If more than 16 tasks pass gates, include only the top 16 by priority
+- If more than 20 tasks pass gates, include only the top 20 by priority
 
 ---
 
@@ -297,7 +297,7 @@ Before outputting:
 - [ ] Total terminal calls ≤ 3
 - [ ] All 6 gate checks accounted for (Gates 2+6 by filter, Gates 4+5 by markers, Gates 1+3 by reasoning)
 - [ ] No task with `[!TW:MISSING]` or `[!AC:MISSING]` marker in `dispatch`
-- [ ] Batch does not exceed 16 tasks
+- [ ] Batch does not exceed 20 tasks
 - [ ] Agent names match the dispatch mapping
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
 - [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks are blocked
