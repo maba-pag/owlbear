@@ -263,7 +263,7 @@ Event-driven system for cross-cutting concerns. 9 event types:
 | `ON_ERROR` | On exception | _(none yet)_ |
 | `SUBAGENT_COMPLETE` | After sub-agent finishes | SubagentVerificationHook |
 | `TASK_COMPLETE` | After kanban task done | `reconcile_tasks` (daemon.py) |
-| `QUESTION_PENDING` | User question queued | NotificationHook |
+| `QUESTION_PENDING` | User question queued | _(reserved — not currently emitted)_ |
 
 ### 4.3 Toolsets (PydanticAI FunctionToolset-based)
 
