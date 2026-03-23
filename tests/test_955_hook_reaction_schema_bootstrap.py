@@ -39,11 +39,7 @@ from owlbear.core.hooks import HookEvent, HookRegistry
 # ---------------------------------------------------------------------------
 
 _ROUTER_SOURCE_PATH: Path = (
-    Path(__file__).resolve().parent.parent
-    / "src"
-    / "owlbear"
-    / "core"
-    / "hook_reaction_router.py"
+    Path(__file__).resolve().parent.parent / "src" / "owlbear" / "core" / "hook_reaction_router.py"
 )
 
 
@@ -76,48 +72,36 @@ class TestFromAC_955_RouterModuleIsolation:
     def test_router_does_not_import_daemon_module(self) -> None:
         """hook_reaction_router.py must not import owlbear.daemon or its submodules."""
         imports = _router_imports()
-        daemon_imports = [
-            (line, mod) for line, mod in imports if "daemon" in mod
-        ]
+        daemon_imports = [(line, mod) for line, mod in imports if "daemon" in mod]
         assert not daemon_imports, (
-            "hook_reaction_router.py must not import daemon modules. "
-            f"Found: {daemon_imports}"
+            f"hook_reaction_router.py must not import daemon modules. Found: {daemon_imports}"
         )
 
     def test_router_does_not_import_loop_detection(self) -> None:
         """hook_reaction_router.py must not import loop_detection."""
         imports = _router_imports()
-        bad = [
-            (line, mod) for line, mod in imports if "loop_detection" in mod
-        ]
-        assert not bad, (
-            "hook_reaction_router.py must not import loop_detection. "
-            f"Found: {bad}"
-        )
+        bad = [(line, mod) for line, mod in imports if "loop_detection" in mod]
+        assert not bad, f"hook_reaction_router.py must not import loop_detection. Found: {bad}"
 
     def test_router_does_not_import_channel_modules(self) -> None:
         """hook_reaction_router.py must not import owlbear.channels.*."""
         imports = _router_imports()
         bad = [
-            (line, mod) for line, mod in imports
+            (line, mod)
+            for line, mod in imports
             if mod.startswith("owlbear.channels") or mod == "owlbear.channels"
         ]
-        assert not bad, (
-            "hook_reaction_router.py must not import channel modules. "
-            f"Found: {bad}"
-        )
+        assert not bad, f"hook_reaction_router.py must not import channel modules. Found: {bad}"
 
     def test_router_does_not_import_bootstrap_code(self) -> None:
         """hook_reaction_router.py must not import owlbear.bootstrap.*."""
         imports = _router_imports()
         bad = [
-            (line, mod) for line, mod in imports
+            (line, mod)
+            for line, mod in imports
             if mod.startswith("owlbear.bootstrap") or mod == "owlbear.bootstrap"
         ]
-        assert not bad, (
-            "hook_reaction_router.py must not import bootstrap code. "
-            f"Found: {bad}"
-        )
+        assert not bad, f"hook_reaction_router.py must not import bootstrap code. Found: {bad}"
 
     def test_router_runtime_imports_limited_to_owlbear_config_and_hooks(self) -> None:
         """Runtime (non-TYPE_CHECKING) owlbear imports must be owlbear.config or owlbear.core.hooks.
@@ -134,11 +118,8 @@ class TestFromAC_955_RouterModuleIsolation:
         for node in ast.walk(tree):
             if isinstance(node, ast.If):
                 test = node.test
-                if (
-                    isinstance(test, ast.Name) and test.id == "TYPE_CHECKING"
-                ) or (
-                    isinstance(test, ast.Attribute)
-                    and test.attr == "TYPE_CHECKING"
+                if (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+                    isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
                 ):
                     for child in ast.walk(node):
                         if hasattr(child, "lineno"):
@@ -383,9 +364,7 @@ class TestFromAC_955_ExecutorMissingFromMap:
 
         # No WARNING should be emitted for a missing-but-expected noop executor
         reaction_records = [
-            r
-            for r in caplog.records
-            if r.name == "owlbear.core.hook_reaction_router"
+            r for r in caplog.records if r.name == "owlbear.core.hook_reaction_router"
         ]
         assert not reaction_records, (
             f"Expected no log records for missing executor, got: {reaction_records}"
@@ -459,3 +438,112 @@ class TestFromAC_955_HookReactionRuleCanonicalImport:
         rule = settings.hook_reactions[0]
         assert isinstance(rule, ConfigRule)
         assert type(rule).__module__ == "owlbear.config"
+
+
+# ---------------------------------------------------------------------------
+# AC line 2 (retry gap) — scalar-only match: non-scalar types beyond dict/list
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_955_ScalarMatchBoundary:
+    """_scalar_match_values must reject ALL non-scalar types, not only dict and list.
+
+    The reviewer found that the implementation only calls
+    ``isinstance(val, (dict, list))`` which silently accepts tuple, frozenset,
+    set, and arbitrary objects.  AC line 2 says "scalar (not a dict or list)"
+    but the intent — and the AC contract — is that only Python scalar primitives
+    (str, int, float, bool, None) are valid match values.
+
+    These tests are added in the retry cycle after the reviewer's HIGH-severity
+    finding.  They must FAIL until the implementation is extended to reject all
+    non-scalar container and arbitrary-object values.
+    """
+
+    def test_rejects_tuple_match_value(self) -> None:
+        """A tuple match value must be rejected with ValidationError."""
+        from pydantic import ValidationError
+
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        with pytest.raises(ValidationError, match="non-scalar"):
+            ConfigRule(
+                events=["task_complete"],
+                actions=["notify"],
+                match={"key": (1, 2)},
+            )
+
+    def test_rejects_frozenset_match_value(self) -> None:
+        """A frozenset match value must be rejected with ValidationError."""
+        from pydantic import ValidationError
+
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        with pytest.raises(ValidationError, match="non-scalar"):
+            ConfigRule(
+                events=["task_complete"],
+                actions=["notify"],
+                match={"key": frozenset({"a", "b"})},
+            )
+
+    def test_rejects_set_match_value(self) -> None:
+        """A set match value must be rejected with ValidationError."""
+        from pydantic import ValidationError
+
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        with pytest.raises(ValidationError, match="non-scalar"):
+            ConfigRule(
+                events=["task_complete"],
+                actions=["notify"],
+                match={"key": {"a", "b"}},
+            )
+
+    def test_rejects_custom_object_match_value(self) -> None:
+        """An arbitrary object match value must be rejected with ValidationError."""
+        from pydantic import ValidationError
+
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        class _Obj:
+            pass
+
+        with pytest.raises(ValidationError, match="non-scalar"):
+            ConfigRule(
+                events=["task_complete"],
+                actions=["notify"],
+                match={"key": _Obj()},
+            )
+
+    def test_scalar_int_match_value_accepted(self) -> None:
+        """An int match value (scalar) must be accepted."""
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        rule = ConfigRule(events=["task_complete"], actions=["notify"], match={"priority": 1})
+        assert rule.match == {"priority": 1}
+
+    def test_scalar_str_match_value_accepted(self) -> None:
+        """A str match value (scalar) must be accepted."""
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        rule = ConfigRule(
+            events=["task_complete"], actions=["notify"], match={"outcome": "success"}
+        )
+        assert rule.match == {"outcome": "success"}
+
+    def test_scalar_none_match_value_accepted(self) -> None:
+        """A None match value (scalar) must be accepted."""
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        rule = ConfigRule(
+            events=["task_complete"], actions=["notify"], match={"tag": None}
+        )
+        assert rule.match == {"tag": None}
+
+    def test_scalar_bool_match_value_accepted(self) -> None:
+        """A bool match value (scalar) must be accepted."""
+        from owlbear.config import HookReactionRule as ConfigRule
+
+        rule = ConfigRule(
+            events=["task_complete"], actions=["notify"], match={"urgent": True}
+        )
+        assert rule.match == {"urgent": True}
