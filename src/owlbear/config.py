@@ -14,16 +14,76 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, SecretStr, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings
-
-from owlbear.core.hook_reaction_router import HookReactionRule  # noqa: TC001
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
 _MAX_PORT = 65535
+_ALLOWED_ACTIONS: frozenset[str] = frozenset({"notify", "retry", "escalate"})
+
+
+class HookReactionRule(BaseModel):
+    """Schema for a single hook reaction rule.
+
+    Attributes:
+        events:  Non-empty list of event-name strings (e.g. ``"task_complete"``).
+        actions: Ordered, non-empty list of action kinds — must be a subset of
+                 ``{"notify", "retry", "escalate"}``.
+        match:   Optional shallow equality predicate.  Each value must be a
+                 scalar (not a ``dict`` or ``list``).  All pairs must match the
+                 emitted payload for the rule to fire.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    events: list[str]
+    actions: list[str]
+    match: dict[str, Any] | None = None
+
+    @field_validator("events")
+    @classmethod
+    def _non_empty_events(cls, v: list[str]) -> list[str]:
+        if not v:
+            msg = "events must be non-empty"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("actions")
+    @classmethod
+    def _valid_actions(cls, v: list[str]) -> list[str]:
+        if not v:
+            msg = "actions must be non-empty"
+            raise ValueError(msg)
+        unknown = set(v) - _ALLOWED_ACTIONS
+        if unknown:
+            msg = f"Unknown action kinds: {sorted(unknown)}. Allowed: {sorted(_ALLOWED_ACTIONS)}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("match")
+    @classmethod
+    def _scalar_match_values(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is None:
+            return v
+        for key, val in v.items():
+            if isinstance(val, (dict, list)):
+                msg = (
+                    f"match values must be scalars; "
+                    f"key {key!r} has a non-scalar value ({type(val).__name__})"
+                )
+                raise ValueError(msg)  # noqa: TRY004 — must be ValueError for Pydantic ValidationError wrapping
+        return v
 
 
 class BrowserConfig(BaseModel, frozen=True):
