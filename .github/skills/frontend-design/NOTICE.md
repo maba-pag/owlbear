@@ -11,7 +11,7 @@ design guidance. The original sources are:
 OwlBear's adaptation:
 - Rewrote all reference content in OwlBear's voice.
 - Split the anti-pattern catalog into two tiers (universal blockers vs. taste heuristics) following recommendations in `docs/research/impeccable-design-skills.md`.
-- Replaced Impeccable-specific IDE command references (`.impeccable.md`, `/teach-impeccable`) with upfront design-context questions.
+- Replaced Impeccable-specific IDE command references and provider slash-commands with upfront design-context questions (target audience, use cases, brand tone).
 - Used OwlBear's `references/` directory naming convention rather than Impeccable's `reference/`.
 - Kept the seven reference topics (typography, color-and-contrast, spatial-design, motion-design, interaction-design, responsive-design, ux-writing) as the structure is the clearest known organisation for this domain.
 
