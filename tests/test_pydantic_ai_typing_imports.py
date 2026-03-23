@@ -260,8 +260,7 @@ class TestFromAC_AgentHistoryProcessorAlias:
         for stmt in tc_body:
             if isinstance(stmt, ast.Assign):
                 if any(
-                    isinstance(t, ast.Name) and t.id == "HistoryProcessor"
-                    for t in stmt.targets
+                    isinstance(t, ast.Name) and t.id == "HistoryProcessor" for t in stmt.targets
                 ):
                     hp_value = stmt.value
                     break
@@ -288,22 +287,26 @@ class TestFromAC_AgentHistoryProcessorAlias:
 
         _async_markers = {"Awaitable", "Coroutine"}
         sync_nocontext = [
-            v for v in variants
+            v
+            for v in variants
             if not (_callable_return_names(v) & _async_markers)
             and "RunContext" not in _callable_first_arg_names(v)
         ]
         sync_context = [
-            v for v in variants
+            v
+            for v in variants
             if not (_callable_return_names(v) & _async_markers)
             and "RunContext" in _callable_first_arg_names(v)
         ]
         async_nocontext = [
-            v for v in variants
+            v
+            for v in variants
             if (_callable_return_names(v) & _async_markers)
             and "RunContext" not in _callable_first_arg_names(v)
         ]
         async_context = [
-            v for v in variants
+            v
+            for v in variants
             if (_callable_return_names(v) & _async_markers)
             and "RunContext" in _callable_first_arg_names(v)
         ]
@@ -323,6 +326,60 @@ class TestFromAC_AgentHistoryProcessorAlias:
         assert async_context, (
             "Missing async+with-context variant in HistoryProcessor: "
             "Callable[[RunContext[...], Sequence[ModelMessage]], Awaitable[...]]"
+        )
+
+    def test_each_callable_variant_references_model_message(self) -> None:
+        """Every HistoryProcessor union variant must reference ModelMessage in its own types.
+
+        The global name-presence check in
+        test_agent_historyprocessor_alias_supports_public_sync_async_shapes
+        is insufficient: if one variant replaces ModelMessage with a different
+        payload type, the global set still contains ModelMessage from the other
+        variants and the check passes.
+
+        This test closes that mutation gap by asserting ModelMessage is present
+        in each individual variant's AST subtree.
+        """
+        tree = _parse(_AGENT_PY)
+        tc_body = _type_checking_body(tree)
+        assert tc_body, "No TYPE_CHECKING block found in agent.py"
+
+        _type_alias_cls = getattr(ast, "TypeAlias", None)
+        hp_value: ast.AST | None = None
+
+        for stmt in tc_body:
+            if isinstance(stmt, ast.Assign):
+                if any(
+                    isinstance(t, ast.Name) and t.id == "HistoryProcessor" for t in stmt.targets
+                ):
+                    hp_value = stmt.value
+                    break
+            elif isinstance(stmt, ast.AnnAssign):
+                if isinstance(stmt.target, ast.Name) and stmt.target.id == "HistoryProcessor":
+                    hp_value = stmt.value
+                    break
+            elif (
+                _type_alias_cls is not None
+                and isinstance(stmt, _type_alias_cls)  # type: ignore[arg-type]
+                and isinstance(getattr(stmt, "name", None), ast.Name)
+                and stmt.name.id == "HistoryProcessor"  # type: ignore[union-attr]
+            ):
+                hp_value = getattr(stmt, "value", None)
+                break
+
+        assert hp_value is not None, "No HistoryProcessor alias found in TYPE_CHECKING block"
+
+        variants = _flatten_bitunion(hp_value)
+        missing: list[str] = []
+        for i, v in enumerate(variants):
+            variant_names = _all_name_ids(v)
+            if "ModelMessage" not in variant_names:
+                missing.append(f"Variant {i} lacks ModelMessage: {ast.dump(v)}")
+
+        assert not missing, (
+            "Every HistoryProcessor union variant must reference ModelMessage "
+            "(global alias inspection is insufficient — each Callable must carry "
+            "ModelMessage in its own arg or return types):\n" + "\n".join(missing)
         )
 
 
