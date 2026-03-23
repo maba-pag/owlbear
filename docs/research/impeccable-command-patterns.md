@@ -33,7 +33,7 @@ duplicate config trees?" [S1, S2, S4, S5, S6]
 | User commands as `SKILL.md` files | Impeccable's unified skills architecture since v1.1.0 [S2]; skills are slash commands and auto-loadable in VS Code [S4] | Mixed. OwlBear prompt files already cover repeatable slash commands without enlarging `SkillRegistry` scope or `tests/test_skills.py` churn [S5, S6] | **Adapt as `.prompt.md`, not default `SKILL.md`** |
 | Multi-provider root sync | Build generates `dist/*` and then syncs `.agents/.claude/.cursor/.codex/.gemini/.kiro/.opencode/.pi` back into the repo root [S1, S2] | Poor. OwlBear ships one VS Code repo, and it has already hit definition drift across prompt/config trees [S5, S6] | **Reject** |
 | Interactive onboarding + persisted context | `/teach-impeccable` scans the repo, asks only missing questions, writes `.impeccable.md`, and can append to provider config [S1, S2] | Good flow, wrong storage target. OwlBear already explored deterministic pre-hydration in #703, but not interactive design onboarding [S5, S6] | **Adapt flow, not file target** |
-| `audit -> normalize -> polish` staged workflow | Explicit pipeline in README and website examples [S1, S2] | High. It mirrors OwlBear's audit/build/gate mindset while staying user-facing [S5] | **Pilot** |
+| `audit -> normalize -> polish` staged workflow | Explicit pipeline in README and website examples [S1, S2] | High. It mirrors OwlBear's audit/build/gate mindset while staying user-facing [S5] | **Adapt (pilot first)** |
 
 ### 3.2 Command Map
 
