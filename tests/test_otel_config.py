@@ -294,3 +294,98 @@ class TestFromAC_LogfireOptionalImport:
         mod = self._import_without_logfire()
         with pytest.raises(RuntimeError, match="logfire"):
             mod.configure_otel("http://localhost:4318")
+
+
+# ---------------------------------------------------------------------------
+# Task #535 — configure_otel() happy path (AC line 4)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConfigureOtelHappyPath:
+    """configure_otel() happy path: env var set, logfire.configure called correctly."""
+
+    def test_configure_otel_sets_otel_exporter_endpoint_var(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """configure_otel sets OTEL_EXPORTER_OTLP_ENDPOINT to the supplied URL."""
+        import owlbear.daemon as daemon_mod
+
+        mock_logfire = MagicMock()
+        monkeypatch.setattr(daemon_mod, "logfire", mock_logfire)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+
+        daemon_mod.configure_otel("http://localhost:4318")
+
+        assert os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") == "http://localhost:4318"
+
+    def test_configure_otel_calls_logfire_configure_with_exact_kwargs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """configure_otel calls logfire.configure with send_to_logfire=False, no span processors."""
+        import owlbear.daemon as daemon_mod
+
+        mock_logfire = MagicMock()
+        monkeypatch.setattr(daemon_mod, "logfire", mock_logfire)
+
+        daemon_mod.configure_otel("http://localhost:4318")
+
+        mock_logfire.configure.assert_called_once_with(
+            send_to_logfire=False,
+            additional_span_processors=[],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Task #535 — no otel_endpoint → configure_otel not invoked (AC line 5)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_NoEndpointBehavior:
+    """Daemon startup without otel_endpoint does not invoke configure_otel."""
+
+    @pytest.mark.asyncio
+    async def test_run_daemon_does_not_set_otel_env_without_endpoint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When run_daemon is called without otel_endpoint, OTEL env var is not written."""
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+
+        channel = MagicMock()
+        channel.name = "mock"
+        channel.receive = AsyncMock(return_value=None)
+        channel.send = AsyncMock()
+
+        agent = MagicMock()
+        agent.turn = AsyncMock(return_value="ok")
+        agent.hooks.emit = AsyncMock()
+
+        with patch("owlbear.daemon.Agent"):
+            from owlbear.daemon import run_daemon
+
+            await run_daemon(channel=channel, agent=agent, config_dir=tmp_path)
+
+        assert os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") is None
+
+
+# ---------------------------------------------------------------------------
+# Task #535 — scope constraint (AC line 6)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ScopeConstraint:
+    """Scope stays within daemon.py; OwlBearSettings gains no new OTel config fields."""
+
+    def test_no_unexpected_otel_logfire_config_fields_in_settings(self) -> None:
+        """OwlBearSettings has exactly the expected OTel-related config fields."""
+        from owlbear.config import OwlBearSettings
+
+        otel_fields = sorted(
+            name
+            for name in OwlBearSettings.model_fields
+            if "otel" in name.lower() or "logfire" in name.lower()
+        )
+        assert otel_fields == ["otel_endpoint"]
