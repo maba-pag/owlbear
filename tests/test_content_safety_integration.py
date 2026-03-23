@@ -458,6 +458,246 @@ class TestFromAC_FetchUrlExtractMarkdownSeam:
         # Seam assertion: helper forwarded html body and url= (fails pre-#873)
         mock_extract_md.assert_called_once_with(html_body, url=target_url)
         # Wrapping assertion: raw helper output still passes through wrap_untrusted_content
-        assert _OPEN_TAG in result, (
-            "wrapping must be applied to extract_markdown return value"
+        assert _OPEN_TAG in result, "wrapping must be applied to extract_markdown return value"
+
+
+# ===========================================================================
+# AC #867: bookmark_pipeline contrast — extract_markdown seam (RED for #825)
+# ===========================================================================
+
+
+class TestFromAC_BookmarkExtractMarkdownContrast:
+    """Bookmark side patches owlbear.memory.knowledge.bookmark_pipeline.extract_markdown.
+
+    After #825, _default_web_read() imports and calls extract_markdown rather than
+    importing trafilatura directly.  These tests use the new module-local seam for
+    the bookmark side while fetch_url() continues to use sys.modules[trafilatura],
+    proving the mixed-seam architecture is correct and the bookmark path stays raw.
+
+    Tests FAIL against current HEAD because bookmark_pipeline.py does not yet
+    import extract_markdown (AttributeError at patch teardown — intended seam
+    mismatch, not a syntax error).
+    """
+
+    @pytest.mark.asyncio
+    async def test_bookmark_side_uses_extract_markdown_seam_and_returns_raw(
+        self,
+    ) -> None:
+        """bookmark side patches extract_markdown; result is raw (no wrap tag).
+
+        Contrast invariant: fetch_url() wraps output while _default_web_read()
+        returns raw Markdown.  The bookmark mock returns Markdown with link
+        syntax so the raw-vs-wrapped contrast is unambiguous.
+        """
+        from owlbear.core.context_hydration import fetch_url
+        from owlbear.memory.knowledge.bookmark_pipeline import _default_web_read
+
+        # --- fetch_url side: still uses sys.modules[trafilatura] seam ----------
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract.return_value = "Article text"
+
+        mock_resp = MagicMock()
+        mock_resp.text = "<html><body>Content</body></html>"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+        ):
+            fetch_result = await fetch_url("https://example.com/article")
+
+        assert _OPEN_TAG in fetch_result, (
+            "fetch_url must wrap — contrast baseline for bookmark exclusion"
         )
+
+        # --- bookmark side: patches module-local extract_markdown (after #825) --
+        # NOTE: patch() raises AttributeError on current HEAD because
+        # bookmark_pipeline.py does not yet import extract_markdown.
+        # This is the intended seam-mismatch failure for the RED phase.
+        raw_markdown = "[Python docs](https://docs.python.org)"
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value=raw_markdown,
+            ),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            bookmark_result = await _default_web_read("https://example.com/bookmark")
+
+        assert bookmark_result is not None
+        assert _OPEN_TAG not in bookmark_result, (
+            "bookmark_pipeline._default_web_read must NOT wrap — "
+            "content goes to knowledge graph, not LLM context"
+        )
+        assert bookmark_result == raw_markdown
+
+
+# ===========================================================================
+# AC #869: fetch_url() wrap-seam — module-local extract_markdown (replaces sys.modules)
+# ===========================================================================
+
+
+class TestFromAC_FetchUrlWrapsByExtractMarkdown:
+    """fetch_url() wrapping tests using module-local extract_markdown seam.
+
+    Replaces the 5 fetch_url-related sys.modules["trafilatura"] patches in:
+    - TestFromACFetchUrlWrapping::test_wraps_return_value
+    - TestFromACFetchUrlWrapping::test_wraps_with_source_url_attribute
+    - TestFromACFetchUrlWrapping::test_skips_wrapping_when_disabled
+    - TestFromACBookmarkPipelineExcluded::test_default_web_read_does_not_wrap_while_fetch_url_does
+    - TestFromAC_FetchUrlExtractMarkdownSeam::test_fetch_url_forwards_to_helper_and_wraps_output
+
+    Patches owlbear.core.context_hydration.extract_markdown directly (no sys.modules).
+    Raw markdown from the helper mock passes through fetch_url's wrap_untrusted_content.
+    No create=True: fails with AttributeError against pre-#873 code where the import
+    does not exist in context_hydration.py — that AttributeError is the intended RED failure.
+    """
+
+    @pytest.fixture
+    def _mock_http(self) -> AsyncMock:
+        """Minimal httpx mock returning simple HTML."""
+        response = MagicMock()
+        response.text = "<html><body>content</body></html>"
+        response.raise_for_status = MagicMock()
+        client = AsyncMock()
+        client.get = AsyncMock(return_value=response)
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        return client
+
+    @pytest.mark.asyncio
+    async def test_wraps_raw_extract_markdown_output(self, _mock_http: AsyncMock) -> None:
+        """fetch_url() wraps the raw string returned by extract_markdown.
+
+        Replaces TestFromACFetchUrlWrapping::test_wraps_return_value.
+        No sys.modules: mock is the module-local seam the caller uses.
+        Raw helper return → wrap_untrusted_content applied → _OPEN_TAG in result.
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Fetched article content"
+            result = await fetch_url("https://example.com/article")
+
+        assert _OPEN_TAG in result, "fetch_url must wrap extract_markdown output"
+        assert _CLOSE_TAG in result
+        assert "Fetched article content" in result
+
+    @pytest.mark.asyncio
+    async def test_wrap_tag_includes_source_url_attribute(self, _mock_http: AsyncMock) -> None:
+        """fetch_url() open wrap tag includes url= attribute with the fetched URL.
+
+        Replaces TestFromACFetchUrlWrapping::test_wraps_with_source_url_attribute.
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        url = "https://example.com/doc"
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Some content"
+            result = await fetch_url(url)
+
+        assert f'url="{url}"' in result
+
+    @pytest.mark.asyncio
+    async def test_wrapping_disabled_returns_raw_extract_markdown(
+        self, _mock_http: AsyncMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When wrap_web_content=False, fetch_url() returns raw helper output.
+
+        Replaces TestFromACFetchUrlWrapping::test_skips_wrapping_when_disabled.
+        Verifies BOTH states using module-local seam: wrapped by default, raw when disabled.
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        # Step 1: verify wrapping IS applied with module-local seam
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Raw content"
+            result_default = await fetch_url("https://example.com/page")
+
+        assert _OPEN_TAG in result_default, "wrapping must be applied by default"
+
+        # Step 2: wrapping skipped when disabled
+        monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "false")
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Raw content"
+            result_disabled = await fetch_url("https://example.com/page")
+
+        assert _OPEN_TAG not in result_disabled, "wrapping must be skipped when disabled"
+
+    @pytest.mark.asyncio
+    async def test_fetch_url_wraps_while_bookmark_does_not_contrast(
+        self, _mock_http: AsyncMock
+    ) -> None:
+        """fetch_url() wraps; bookmark_pipeline._default_web_read() stays raw.
+
+        Replaces TestFromACBookmarkPipelineExcluded contrast test.
+        The fetch_url side uses module-local extract_markdown mock (no sys.modules).
+        The bookmark side uses sys.modules trafilatura (bookmark_pipeline still uses
+        trafilatura directly until #825 is implemented).
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        # fetch_url side: module-local extract_markdown mock
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Article text"
+            fetch_result = await fetch_url("https://example.com/article")
+
+        assert _OPEN_TAG in fetch_result, "fetch_url must wrap — contrast baseline"
+        assert "Article text" in fetch_result
+
+        # bookmark side: _default_web_read must not wrap
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract.return_value = "Article text"
+
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+        ):
+            from owlbear.memory.knowledge.bookmark_pipeline import _default_web_read
+
+            bookmark_result = await _default_web_read("https://example.com/bookmark")
+
+        assert bookmark_result is not None
+        assert _OPEN_TAG not in bookmark_result, "bookmark path must not wrap"
+
+    @pytest.mark.asyncio
+    async def test_none_from_extract_markdown_not_wrapped(self, _mock_http: AsyncMock) -> None:
+        """When extract_markdown returns None, fetch_url() returns empty string.
+
+        Replaces the combined sys.modules + extract_markdown test in
+        TestFromAC_FetchUrlExtractMarkdownSeam, but without the sys.modules layer.
+        None from helper → or "" guard in fetch_url → result is empty, not wrapped.
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        with (
+            patch("httpx.AsyncClient", return_value=_mock_http),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = None
+            result = await fetch_url("https://example.com/empty")
+
+        assert result == ""
+        assert _OPEN_TAG not in result

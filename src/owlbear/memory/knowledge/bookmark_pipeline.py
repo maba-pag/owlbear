@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear.memory.knowledge.bookmark import Bookmark
 from owlbear.memory.knowledge.evaluator import EvaluationResult  # noqa: TC001 — Pydantic runtime
+from owlbear.web_extract import extract_markdown
 
 if TYPE_CHECKING:
     import asyncio
@@ -206,21 +207,12 @@ class BookmarkPipeline:
 
 
 async def _default_web_read(url: str) -> str | None:
-    """Fetch *url* with httpx and extract text with trafilatura.
+    """Fetch *url* with httpx and extract markdown via :func:`owlbear.web_extract.extract_markdown`.
 
     This is the fallback used when no ``web_read_fn`` is provided to
     :class:`BookmarkPipeline`.  Retries transient HTTP errors.
     """
     import httpx  # noqa: PLC0415
-
-    try:
-        import trafilatura  # noqa: PLC0415
-    except ImportError:
-        msg = (
-            "trafilatura is required for _default_web_read. "
-            "Install it with: uv pip install 'owlbear[search]'"
-        )
-        raise ImportError(msg) from None
 
     from owlbear.core.retry import TRANSIENT_RETRY  # noqa: PLC0415
 
@@ -232,4 +224,4 @@ async def _default_web_read(url: str) -> str | None:
         return resp
 
     resp = await _fetch(url)
-    return trafilatura.extract(resp.text)
+    return extract_markdown(resp.text)

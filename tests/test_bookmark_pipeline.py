@@ -576,11 +576,23 @@ class TestBookmarkPipelineEdgeCases:
 
 
 class TestDefaultWebReadImportGuard:
-    """_default_web_read raises ImportError with install hint when trafilatura missing."""
+    """_default_web_read raises ImportError with install hint when trafilatura missing.
+
+    After #867, the ImportError is raised by extract_markdown (called after the
+    HTTP fetch), so these tests include an HTTP mock to reach that call site.
+    """
 
     @pytest.mark.asyncio
     async def test_raises_import_error_when_trafilatura_unavailable(self) -> None:
         """Calling _default_web_read without trafilatura raises ImportError."""
+        mock_resp = MagicMock()
+        mock_resp.text = "<html/>"
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
         _real_import = builtins.__import__
 
         def _deny_trafilatura(name: str, *args: object, **kwargs: object) -> object:
@@ -590,6 +602,8 @@ class TestDefaultWebReadImportGuard:
             return _real_import(name, *args, **kwargs)
 
         with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
             patch("builtins.__import__", side_effect=_deny_trafilatura),
             pytest.raises(ImportError, match=r"uv pip install 'owlbear\[search\]'"),
         ):
@@ -598,6 +612,14 @@ class TestDefaultWebReadImportGuard:
     @pytest.mark.asyncio
     async def test_error_message_contains_install_command(self) -> None:
         """The ImportError message includes the exact install command."""
+        mock_resp = MagicMock()
+        mock_resp.text = "<html/>"
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
         _real_import = builtins.__import__
 
         def _deny_trafilatura(name: str, *args: object, **kwargs: object) -> object:
@@ -606,7 +628,11 @@ class TestDefaultWebReadImportGuard:
                 raise ModuleNotFoundError(msg)
             return _real_import(name, *args, **kwargs)
 
-        with patch("builtins.__import__", side_effect=_deny_trafilatura):
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+            patch("builtins.__import__", side_effect=_deny_trafilatura),
+        ):
             with pytest.raises(ImportError) as exc_info:
                 await _default_web_read("https://example.com")
             assert "uv pip install 'owlbear[search]'" in str(exc_info.value)
@@ -645,7 +671,6 @@ class TestDefaultWebReadFetch:
         assert result == "Python async patterns"
         mock_client.get.assert_awaited_once_with("https://example.com/article")
         mock_resp.raise_for_status.assert_called_once()
-        mock_trafilatura.extract.assert_called_once_with(mock_resp.text)
 
     @pytest.mark.asyncio
     async def test_http_error_propagates(self) -> None:
@@ -678,7 +703,7 @@ class TestDefaultWebReadFetch:
 
     @pytest.mark.asyncio
     async def test_extract_returns_none(self) -> None:
-        """When trafilatura.extract returns None, function returns None."""
+        """When trafilatura.extract returns None, function returns empty string."""
         mock_resp = MagicMock()
         mock_resp.text = ""
         mock_resp.raise_for_status = MagicMock()
@@ -694,6 +719,107 @@ class TestDefaultWebReadFetch:
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
             patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            result = await _default_web_read("https://example.com/empty")
+
+        assert result == ""
+
+
+# ===========================================================================
+# _default_web_read — extract_markdown seam (task #867, RED for #825)
+# ===========================================================================
+
+
+class TestFromAC_DefaultWebReadExtractMarkdownSeam:
+    """_default_web_read() uses module-local extract_markdown after #825 rewire.
+
+    These tests patch owlbear.memory.knowledge.bookmark_pipeline.extract_markdown.
+    They FAIL against current HEAD because bookmark_pipeline.py still imports
+    trafilatura directly; they pass once #825 migrates the implementation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_happy_path_returns_raw_markdown_with_link_syntax(self) -> None:
+        """HTTP GET + extract_markdown returns raw Markdown unchanged, with link syntax."""
+        mock_resp = MagicMock()
+        mock_resp.text = (
+            "<html><body><p>Python async patterns with "
+            "<a href='https://docs.python.org'>docs</a></p></body></html>"
+        )
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        raw_markdown = "Python async patterns with [docs](https://docs.python.org)"
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value=raw_markdown,
+            ) as mock_extract,
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            result = await _default_web_read("https://example.com/article")
+
+        assert result == raw_markdown, "_default_web_read must return raw extract_markdown output"
+        mock_extract.assert_called_once_with(mock_resp.text)
+        mock_client.get.assert_awaited_once_with("https://example.com/article")
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_http_error_propagates_before_extract(self) -> None:
+        """HTTPStatusError from raise_for_status propagates; extract_markdown is never called."""
+        import httpx
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError(
+                "Internal Server Error",
+                request=httpx.Request("GET", "https://example.com/fail"),
+                response=httpx.Response(500),
+            ),
+        )
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+            ) as mock_extract,
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+            pytest.raises(httpx.HTTPStatusError),
+        ):
+            await _default_web_read("https://example.com/fail")
+
+        mock_extract.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extract_markdown_returns_none_passes_through(self) -> None:
+        """When extract_markdown returns None, _default_web_read returns None."""
+        mock_resp = MagicMock()
+        mock_resp.text = ""
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value=None,
+            ),
             patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
         ):
             result = await _default_web_read("https://example.com/empty")
