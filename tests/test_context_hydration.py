@@ -155,12 +155,12 @@ class TestFromACFetchUrl:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract = MagicMock(return_value="Hello world")
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Hello world",
+            ),
         ):
             result = await fetch_url("https://example.com/page", url_checker=None)
 
@@ -244,12 +244,12 @@ class TestFromACFetchUrl:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract = MagicMock(return_value="Allowed content")
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Allowed content",
+            ),
         ):
             result = await fetch_url(
                 "https://safe.example.com",
@@ -577,15 +577,10 @@ class TestFromAC_FetchUrlExtractMarkdownForwarding:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = None  # pre-#873 code path
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
             patch(
                 "owlbear.core.context_hydration.extract_markdown",
-                create=True,
             ) as mock_extract_md,
         ):
             mock_extract_md.return_value = "## Article\n\nArticle text"
@@ -614,15 +609,10 @@ class TestFromAC_FetchUrlExtractMarkdownForwarding:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = "unrelated trafilatura output"
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
             patch(
                 "owlbear.core.context_hydration.extract_markdown",
-                create=True,
             ) as mock_extract_md,
         ):
             mock_extract_md.return_value = distinctive_marker
@@ -748,3 +738,150 @@ class TestFromAC_FetchUrlExtractMarkdownForwarding:
 
         total = sum(len(v) for v in result.urls.values())
         assert total <= 100
+
+
+# ===========================================================================
+# AC #869: fetch_url() — module-local extract_markdown seam (replaces sys.modules)
+# ===========================================================================
+
+
+class TestFromAC_ExtractMarkdownSeam:
+    """fetch_url() uses module-local extract_markdown seam instead of sys.modules.
+
+    Replaces the 4 direct sys.modules["trafilatura"] patches in fetch_url tests:
+    - TestFromACFetchUrl::test_successful_fetch_returns_content
+    - TestFromACFetchUrl::test_url_checker_allows_url
+    - TestFromAC_FetchUrlExtractMarkdownForwarding::
+      test_forwards_html_body_and_url_to_extract_markdown
+    - TestFromAC_FetchUrlExtractMarkdownForwarding::
+      test_helper_return_propagates_to_fetch_url_result
+
+    Patches owlbear.core.context_hydration.extract_markdown directly.
+    No create=True: if the import is missing the test fails with AttributeError (RED).
+    No sys.modules override: mocks the seam the caller actually uses.
+    All tests FAIL against pre-#873 code (extract_markdown not yet imported into
+    context_hydration.py). Pass once #873/#876 adds the import.
+    """
+
+    @pytest.mark.asyncio
+    async def test_successful_fetch_routes_through_module_local_helper(self) -> None:
+        """fetch_url() calls extract_markdown and the return appears in result.
+
+        Replaces test_successful_fetch_returns_content: patches module-local seam
+        instead of sys.modules["trafilatura"].
+        Fails pre-#873: extract_markdown is not an attribute of the module.
+        """
+        html_body = "<html><body><p>Hello world</p></body></html>"
+        url = "https://example.com/page"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Hello world"
+            result = await fetch_url(url, url_checker=None)
+
+        mock_extract_md.assert_called_once_with(html_body, url=url)
+        assert "Hello world" in result
+
+    @pytest.mark.asyncio
+    async def test_extract_markdown_return_propagates_to_caller(self) -> None:
+        """fetch_url() result contains exactly the string returned by extract_markdown.
+
+        Replaces test_helper_return_propagates_to_fetch_url_result: no sys.modules.
+        Uses a distinctive marker to confirm the mock return value is not bypassed.
+        Fails pre-#873: the module-local name does not exist for patching.
+        """
+        html_body = "<html><body>notable</body></html>"
+        url = "https://example.com/notable"
+        distinctive_marker = "MARKER_869_EXTRACT_MARKDOWN_RETURN"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = distinctive_marker
+            result = await fetch_url(url, url_checker=None)
+
+        assert distinctive_marker in result
+
+    @pytest.mark.asyncio
+    async def test_url_checker_allows_then_extract_markdown_called(self) -> None:
+        """When url_checker allows a URL, extract_markdown is called for the HTML body.
+
+        Replaces test_url_checker_allows_url: no sys.modules, patches module-local seam.
+        Verifies the checker is invoked AND extract_markdown receives the fetched HTML.
+        """
+        calls: list[str] = []
+
+        def allowing_checker(url: str) -> None:
+            calls.append(url)
+
+        html_body = "<html><body>Allowed content</body></html>"
+        url = "https://safe.example.com"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "Allowed content"
+            result = await fetch_url(url, url_checker=allowing_checker)
+
+        assert calls == [url]
+        mock_extract_md.assert_called_once_with(html_body, url=url)
+        assert "Allowed content" in result
+
+    @pytest.mark.asyncio
+    async def test_none_from_extract_markdown_yields_empty_string(self) -> None:
+        """When extract_markdown returns None, fetch_url() returns empty string.
+
+        Replaces the None-return edge case in TestFromAC_FetchUrlExtractMarkdownForwarding
+        but without sys.modules patching. Raw None from helper → empty result.
+        """
+        html_body = "<html><body>invisible</body></html>"
+        url = "https://example.com/invisible"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear.core.context_hydration.extract_markdown") as mock_extract_md,
+        ):
+            mock_extract_md.return_value = None
+            result = await fetch_url(url, url_checker=None)
+
+        assert result == ""

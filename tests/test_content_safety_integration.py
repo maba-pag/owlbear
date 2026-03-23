@@ -262,12 +262,12 @@ class TestFromACFetchUrlWrapping:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = "Fetched article content"
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Fetched article content",
+            ),
         ):
             result = await fetch_url("https://example.com/article")
 
@@ -289,13 +289,13 @@ class TestFromACFetchUrlWrapping:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = "Some content"
-
         url = "https://example.com/doc"
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Some content",
+            ),
         ):
             result = await fetch_url(url)
 
@@ -318,13 +318,13 @@ class TestFromACFetchUrlWrapping:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = "Hydrated content"
-
         # Step 1: verify wrapping IS applied by default (fails in RED)
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Hydrated content",
+            ),
         ):
             result_default = await fetch_url("https://example.com/page")
         assert _OPEN_TAG in result_default, "wrapping must work by default first"
@@ -333,7 +333,10 @@ class TestFromACFetchUrlWrapping:
         monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "false")
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Hydrated content",
+            ),
         ):
             result_disabled = await fetch_url("https://example.com/page")
         assert _OPEN_TAG not in result_disabled, "wrapping must be skipped when disabled"
@@ -376,7 +379,10 @@ class TestFromACBookmarkPipelineExcluded:
         # fetch_url MUST wrap (contrast baseline — fails in RED)
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                return_value="Article text",
+            ),
         ):
             fetch_result = await fetch_url("https://example.com/article")
         assert _OPEN_TAG in fetch_result, (
@@ -441,15 +447,10 @@ class TestFromAC_FetchUrlExtractMarkdownSeam:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract.return_value = None  # pre-#873 fallback
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
             patch(
                 "owlbear.core.context_hydration.extract_markdown",
-                create=True,
             ) as mock_extract_md,
         ):
             mock_extract_md.return_value = "extracted news article"
