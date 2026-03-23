@@ -89,17 +89,16 @@ no compatibility violations.**
 
 **Agent-type compatibility rules:**
 
-| Agent type | Multiple of same type in wave? | Never share wave with | Rationale |
-| --- | --- | --- | --- |
-| architect, curator, kanban-planner, researcher, writer | yes | auditor | Flexible — no resource conflicts |
-| auditor | solo wave only | all other agents | Runs the full test suite — compute-heavy and long-running; any concurrent agent would interfere or be starved of resources |
-| builder | no | auditor, other builders | Builders modify source files; concurrent builders risk conflicting edits to the same files and git staging collisions |
-| reviewer, test-writer | yes | auditor | May run tests, but scoped to their own task |
+| Agent type | Never share wave with | Rationale |
+| --- | --- | --- |
+| auditor | all other agents, other auditors | Runs the full test suite — compute-heavy and long-running; any concurrent agent would interfere or be starved of resources |
+| builder | auditor, other builders | Builders modify source files; concurrent builders risk conflicting edits to the same files and git staging collisions |
+| all other agents (e.g. architect, curator, kanban-planner, researcher, reviewer, test-writer, writer) | auditor | Flexible — no resource conflicts. May run tests, but scoped to their own task. |
 
 **Definitions:**
 
 - **Restricted task:** auditor (must be solo) or builder (max 1 per wave). These constrain wave structure.
-- **Flexible task:** everything else (architect, curator, kanban-planner, researcher, writer, reviewer, test-writer). Can share waves freely with each other.
+- **Flexible task:** everything else. Can share waves freely with each other.
 
 **Assembly algorithm — two-phase, minimize wave count:**
 
@@ -109,7 +108,7 @@ no compatibility violations.**
 2. **Auditor waves.** Create one solo wave per auditor. No other tasks may share these waves.
 3. **Builder waves.** Create one wave per builder (1 builder each). Fill the remaining slots (up to wave-size) with flexible tasks, taken in priority order from the flexible bucket.
 4. **Overflow waves.** If flexible tasks remain after filling all builder waves, create new unrestricted waves (up to wave-size each) in priority order.
-5. **Drop rule.** Walk the draft. Any wave that contains exactly one task and that task is **not** an auditor → drop the entire wave from the plan. The task is deferred to the next planning cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the last one.
+5. **Drop rule.** Walk the draft. Any wave that contains exactly one task and that task is **not** an auditor → drop the entire wave from the plan. The task is deferred to the next planning cycle. **Exception:** if dropping would eliminate all waves, keep the last one.
 
 "Dropping" means the task is not planned and not dispatched this cycle. It will reappear in the next Board Scan and be scheduled then.
 
@@ -120,23 +119,7 @@ no compatibility violations.**
 In most cases this is a few seconds of mental work, not multiple tool calls — it is a
 thinking step, not an action step.
 
-#### Worked example 1 — auditor-heavy
-
-**Input (priority order):** #941 (writer), #862 (test-writer), #780 (test-writer), #786 (reviewer), #775 (reviewer), #854 (test-writer), #853 (test-writer), #868 (test-writer), #880 (test-writer), #556 (test-writer), #722 (auditor), #901 (auditor)
-
-Buckets: auditors = [#722, #901], builders = [], flexible = [#941, #862, #780, #786, #775, #854, #853, #868, #880, #556]
-
-```
-Wave 1: #722 (auditor)                                                ← solo
-Wave 2: #901 (auditor)                                                ← solo
-Wave 3: #941 (writer), #862 (test-writer), #780 (test-writer), #786 (reviewer)  ← overflow
-Wave 4: #775 (reviewer), #854 (test-writer), #853 (test-writer), #868 (test-writer)
-Wave 5: #880 (test-writer), #556 (test-writer)
-```
-
-5 waves. No builders, so steps 3 and 5 are no-ops.
-
-#### Worked example 2 — builder-heavy (the common case)
+#### Worked example
 
 **Input (priority order):** #862 (reviewer), #780 (reviewer), #854 (reviewer), #920 (test-writer), #947 (researcher), #910 (auditor), #788 (writer), #846 (writer), #781 (writer), #728 (writer), #853 (builder), #934 (builder), #521 (builder), #556 (builder), #733 (builder), #775 (builder)
 
