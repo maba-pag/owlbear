@@ -548,9 +548,7 @@ class TestFromAC_RouterConsumesConfigOwnedRules:
         )
         tree = ast.parse(router_path.read_text(encoding="utf-8"), filename=str(router_path))
 
-        router_class_defs = {
-            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
-        }
+        router_class_defs = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
         assert "HookReactionRule" not in router_class_defs, (
             "HookReactionRule must not be defined as a class in hook_reaction_router.py. "
             "Its definition belongs exclusively in owlbear.config (config-leaf rule). "
@@ -589,8 +587,7 @@ class TestFromAC_RouterConsumesConfigOwnedRules:
 
         # Ownership guard — fails fast with a clear message if rule is not config-owned.
         assert ConfigRule.__module__ == "owlbear.config", (
-            f"HookReactionRule must be owned by owlbear.config, "
-            f"got {ConfigRule.__module__!r}"
+            f"HookReactionRule must be owned by owlbear.config, got {ConfigRule.__module__!r}"
         )
 
         notify_mock = AsyncMock()

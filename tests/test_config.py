@@ -748,9 +748,7 @@ class TestFromAC_ConfigLeafHookReactionSchema:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 if node.module and node.module.startswith("owlbear"):
-                    owlbear_imports.append(
-                        f"line {node.lineno}: from {node.module} import ..."
-                    )
+                    owlbear_imports.append(f"line {node.lineno}: from {node.module} import ...")
             elif isinstance(node, ast.Import):
                 owlbear_imports.extend(
                     f"line {node.lineno}: import {alias.name}"
@@ -776,9 +774,7 @@ class TestFromAC_ConfigLeafHookReactionSchema:
         config_path = Path(__file__).resolve().parent.parent / "src" / "owlbear" / "config.py"
         tree = ast.parse(config_path.read_text(encoding="utf-8"), filename=str(config_path))
 
-        defined_classes = {
-            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
-        }
+        defined_classes = {node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
         assert "HookReactionRule" in defined_classes, (
             "HookReactionRule must be declared as a class in src/owlbear/config.py, "
             f"but only these classes are defined there: {sorted(defined_classes)}"
