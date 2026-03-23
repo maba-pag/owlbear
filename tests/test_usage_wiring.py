@@ -1,12 +1,20 @@
-"""Tests for UsageTracker secondary wiring — TDD RED phase (#846).
+"""Tests for UsageTracker secondary wiring — TDD RED phase (#846 + #844).
 
-AC coverage:
+AC coverage (from #846):
 1. UsageRecord.operation field (default 'turn', backward compat)
 2. record_agent_usage() creates correct UsageRecord and appends to tracker
 3. record_agent_usage() is a no-op when tracker is None
 4. record_agent_usage() enriches estimated_cost_usd and premium_requests
 5. SummarizingCondenser records UsageRecord with operation='condenser'
 6. EntityExtractor records UsageRecord with operation='entity_extraction'
+
+AC coverage (from #844):
+3. Constructor params for RetrospectiveHook, ProjectDefinitionExtractor,
+   SourceEvaluator, IntraDocGraphBuilder, InterDocGraphBuilder
+4. Operation values for all secondary call sites
+5. SessionMemoryHook bootstrap closure captures tracker
+6. Bootstrap functions accept and pass tracker to all secondary components
+7. OwlBearAgent._record_usage explicitly passes operation='turn'
 """
 
 from __future__ import annotations
@@ -455,3 +463,853 @@ class TestFromAC_EntityExtractorUsageWiring:
 
         await extractor.extract("")
         assert tracker.load() == []
+
+
+# ===========================================================================
+# AC3 & AC4 — RetrospectiveHook records usage
+# ===========================================================================
+
+
+class TestFromAC_RetrospectiveHookWiring:
+    """AC3-4: RetrospectiveHook accepts tracker/provider and records operation='retrospective'."""
+
+    def test_constructor_accepts_tracker_and_provider(self, tmp_path: Path) -> None:
+        """RetrospectiveHook constructor accepts tracker and provider params."""
+        from owlbear.core.retrospective_hook import RetrospectiveHook
+
+        tracker = _make_tracker(tmp_path)
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=MagicMock(),
+            kanban_root=tmp_path,
+            tracker=tracker,
+            provider="copilot",
+        )
+        assert hook is not None
+
+    @pytest.mark.asyncio
+    async def test_records_operation_retrospective(self, tmp_path: Path) -> None:
+        """After _run_retrospective, tracker receives a record with operation='retrospective'."""
+        from owlbear.core.retrospective_hook import RetroFindings, RetrospectiveHook
+
+        tracker = _make_tracker(tmp_path)
+        mock_ingest = MagicMock()
+        mock_ingest.ingest_text = AsyncMock()
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = RetroFindings(
+            what_worked=[],
+            what_failed=[],
+            error_patterns=[],
+            reusable_patterns=[],
+        )
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(return_value=mock_run_result)
+
+        with patch.object(hook, "_get_agent", return_value=mock_agent):
+            await hook._run_retrospective("42")
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "retrospective"
+
+    @pytest.mark.asyncio
+    async def test_no_record_when_no_tracker(self, tmp_path: Path) -> None:
+        """No record_agent_usage call when retrospective hook has tracker=None."""
+        from owlbear.core.retrospective_hook import RetroFindings, RetrospectiveHook
+
+        mock_ingest = MagicMock()
+        mock_ingest.ingest_text = AsyncMock()
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            tracker=None,
+        )
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = RetroFindings(
+            what_worked=[],
+            what_failed=[],
+            error_patterns=[],
+            reusable_patterns=[],
+        )
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(return_value=mock_run_result)
+
+        with (
+            patch.object(hook, "_get_agent", return_value=mock_agent),
+            patch("owlbear.core.retrospective_hook.record_agent_usage") as mock_record,
+        ):
+            await hook._run_retrospective("42")
+            mock_record.assert_not_called()
+
+
+# ===========================================================================
+# AC3 & AC4 — ProjectDefinitionExtractor records usage
+# ===========================================================================
+
+
+class TestFromAC_ProjectDefinitionExtractorWiring:
+    """AC3-4: ProjectDefinitionExtractor accepts tracker/provider.
+
+    Verifies constructor params and operation='project_extraction' recording.
+    """
+
+    def test_constructor_accepts_tracker_and_provider(self, tmp_path: Path) -> None:
+        """ProjectDefinitionExtractor constructor accepts tracker and provider params."""
+        from owlbear.planning.extractor import ProjectDefinitionExtractor
+
+        tracker = _make_tracker(tmp_path)
+        extractor = ProjectDefinitionExtractor(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+        assert extractor is not None
+
+    @pytest.mark.asyncio
+    async def test_records_operation_project_extraction(self, tmp_path: Path) -> None:
+        """After extract(), tracker receives a record with operation='project_extraction'."""
+        from owlbear.planning.extractor import ProjectDefinitionExtractor
+
+        tracker = _make_tracker(tmp_path)
+        extractor = ProjectDefinitionExtractor(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = MagicMock()  # ProjectDefinition mock
+
+        with patch.object(extractor._agent, "run", AsyncMock(return_value=mock_run_result)):
+            await extractor.extract("build a project about AI assistants")
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "project_extraction"
+
+    @pytest.mark.asyncio
+    async def test_no_record_when_no_tracker(self) -> None:
+        """No record_agent_usage call when ProjectDefinitionExtractor has tracker=None."""
+        from owlbear.planning.extractor import ProjectDefinitionExtractor
+
+        extractor = ProjectDefinitionExtractor(model="test", tracker=None)
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = MagicMock()
+
+        with (
+            patch.object(extractor._agent, "run", AsyncMock(return_value=mock_run_result)),
+            patch("owlbear.planning.extractor.record_agent_usage") as mock_record,
+        ):
+            await extractor.extract("build a project")
+            mock_record.assert_not_called()
+
+
+# ===========================================================================
+# AC3 & AC4 — SourceEvaluator records usage
+# ===========================================================================
+
+
+class TestFromAC_SourceEvaluatorWiring:
+    """AC3-4: SourceEvaluator accepts tracker/provider and records operation='source_evaluation'."""
+
+    def test_constructor_accepts_tracker_and_provider(self, tmp_path: Path) -> None:
+        """SourceEvaluator constructor accepts tracker and provider params."""
+        from owlbear.memory.knowledge.evaluator import SourceEvaluator
+
+        tracker = _make_tracker(tmp_path)
+        evaluator = SourceEvaluator(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+        assert evaluator is not None
+
+    @pytest.mark.asyncio
+    async def test_records_operation_source_evaluation(self, tmp_path: Path) -> None:
+        """After evaluate(), tracker receives a record with operation='source_evaluation'."""
+        from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
+
+        tracker = _make_tracker(tmp_path)
+        evaluator = SourceEvaluator(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = EvaluationResult(
+            relevance_score=0.8,
+            tags=[],
+            summary="relevant",
+            worth_ingesting=True,
+        )
+
+        with patch.object(evaluator._agent, "run", AsyncMock(return_value=mock_run_result)):
+            await evaluator.evaluate(
+                "some content about the project",
+                {"name": "proj", "description": "about AI", "goals": ["build"]},
+            )
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "source_evaluation"
+
+    @pytest.mark.asyncio
+    async def test_no_record_when_no_tracker(self) -> None:
+        """No record_agent_usage call when SourceEvaluator has tracker=None."""
+        from owlbear.memory.knowledge.evaluator import EvaluationResult, SourceEvaluator
+
+        evaluator = SourceEvaluator(model="test", tracker=None)
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = EvaluationResult(
+            relevance_score=0.8,
+            tags=[],
+            summary="relevant",
+            worth_ingesting=True,
+        )
+
+        with (
+            patch.object(evaluator._agent, "run", AsyncMock(return_value=mock_run_result)),
+            patch("owlbear.memory.knowledge.evaluator.record_agent_usage") as mock_record,
+        ):
+            await evaluator.evaluate(
+                "content",
+                {"name": "p", "description": "d", "goals": []},
+            )
+            mock_record.assert_not_called()
+
+
+# ===========================================================================
+# AC3 & AC4 — IntraDocGraphBuilder records usage
+# ===========================================================================
+
+
+class TestFromAC_IntraDocGraphBuilderWiring:
+    """AC3-4: IntraDocGraphBuilder accepts tracker/provider.
+
+    Verifies constructor params and operation='intra_doc_graph' recording.
+    """
+
+    def test_constructor_accepts_tracker_and_provider(self, tmp_path: Path) -> None:
+        """IntraDocGraphBuilder constructor accepts tracker and provider params."""
+        from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+
+        tracker = _make_tracker(tmp_path)
+        builder = IntraDocGraphBuilder(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+        assert builder is not None
+
+    @pytest.mark.asyncio
+    async def test_records_operation_intra_doc_graph(self, tmp_path: Path) -> None:
+        """After build(), tracker receives a record with operation='intra_doc_graph'."""
+        from owlbear.memory.knowledge.extractor import ExtractionResult
+        from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+        from owlbear.memory.knowledge.models import Entity, EntityType
+
+        tracker = _make_tracker(tmp_path)
+        builder = IntraDocGraphBuilder(
+            model="test",
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        entities = [
+            Entity(name="Alpha", entity_type=EntityType.CONCEPT),
+            Entity(name="Beta", entity_type=EntityType.CONCEPT),
+        ]
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = ExtractionResult()  # empty result — no edges
+
+        with patch.object(builder._agent, "run", AsyncMock(return_value=mock_run_result)):
+            await builder.build(entities)
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "intra_doc_graph"
+
+    @pytest.mark.asyncio
+    async def test_no_record_when_no_tracker(self) -> None:
+        """No record_agent_usage call when IntraDocGraphBuilder tracker=None."""
+        from owlbear.memory.knowledge.extractor import ExtractionResult
+        from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+        from owlbear.memory.knowledge.models import Entity, EntityType
+
+        builder = IntraDocGraphBuilder(model="test", tracker=None)
+
+        entities = [
+            Entity(name="Alpha", entity_type=EntityType.CONCEPT),
+            Entity(name="Beta", entity_type=EntityType.CONCEPT),
+        ]
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = ExtractionResult()
+
+        with (
+            patch.object(builder._agent, "run", AsyncMock(return_value=mock_run_result)),
+            patch("owlbear.memory.knowledge.graph_builder.record_agent_usage") as mock_record,
+        ):
+            await builder.build(entities)
+            mock_record.assert_not_called()
+
+
+# ===========================================================================
+# AC3 & AC4 — InterDocGraphBuilder records usage
+# ===========================================================================
+
+
+class TestFromAC_InterDocGraphBuilderWiring:
+    """AC3-4: InterDocGraphBuilder accepts tracker/provider.
+
+    Verifies constructor params and operation='inter_doc_graph' recording.
+    """
+
+    def test_constructor_accepts_tracker_and_provider(self, tmp_path: Path) -> None:
+        """InterDocGraphBuilder constructor accepts tracker and provider params."""
+        from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
+
+        tracker = _make_tracker(tmp_path)
+        builder = InterDocGraphBuilder(
+            model="test",
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            tracker=tracker,
+            provider="copilot",
+        )
+        assert builder is not None
+
+    @pytest.mark.asyncio
+    async def test_records_operation_inter_doc_graph(self, tmp_path: Path) -> None:
+        """After build() with candidate pairs, tracker gets operation='inter_doc_graph' record."""
+        from owlbear.memory.knowledge.extractor import ExtractionResult
+        from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
+        from owlbear.memory.knowledge.models import Entity, EntityType
+
+        tracker = _make_tracker(tmp_path)
+        builder = InterDocGraphBuilder(
+            model="test",
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        entities = [
+            Entity(name="Alpha", entity_type=EntityType.CONCEPT, document_id="doc-1"),
+            Entity(name="Beta", entity_type=EntityType.CONCEPT, document_id="doc-2"),
+        ]
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = ExtractionResult()  # empty result — no edges
+
+        with (
+            patch.object(builder, "_find_candidate_pairs", return_value=[("id-a", "id-b")]),
+            patch.object(builder._agent, "run", AsyncMock(return_value=mock_run_result)),
+        ):
+            await builder.build(entities)
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "inter_doc_graph"
+
+    @pytest.mark.asyncio
+    async def test_no_record_when_no_tracker(self) -> None:
+        """No record_agent_usage call when InterDocGraphBuilder tracker=None."""
+        from owlbear.memory.knowledge.extractor import ExtractionResult
+        from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
+        from owlbear.memory.knowledge.models import Entity, EntityType
+
+        builder = InterDocGraphBuilder(
+            model="test",
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            tracker=None,
+        )
+
+        entities = [
+            Entity(name="Alpha", entity_type=EntityType.CONCEPT, document_id="doc-1"),
+            Entity(name="Beta", entity_type=EntityType.CONCEPT, document_id="doc-2"),
+        ]
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = ExtractionResult()
+
+        with (
+            patch.object(builder, "_find_candidate_pairs", return_value=[("id-a", "id-b")]),
+            patch.object(builder._agent, "run", AsyncMock(return_value=mock_run_result)),
+            patch(
+                "owlbear.memory.knowledge.inter_doc_graph_builder.record_agent_usage"
+            ) as mock_record,
+        ):
+            await builder.build(entities)
+            mock_record.assert_not_called()
+
+
+# ===========================================================================
+# AC5 — SessionMemoryHook bootstrap closure captures tracker
+# ===========================================================================
+
+
+class TestFromAC_SessionMemoryHookClosure:
+    """AC5: _wire_session_memory_hook accepts tracker/provider.
+
+    Verifies the bootstrap closure records operation='session_summary'.
+    """
+
+    def test_wire_function_accepts_tracker_param(self) -> None:
+        """_wire_session_memory_hook signature has a 'tracker' parameter."""
+        import inspect
+
+        from owlbear.bootstrap import _wire_session_memory_hook
+
+        sig = inspect.signature(_wire_session_memory_hook)
+        assert "tracker" in sig.parameters, (
+            "_wire_session_memory_hook must have a 'tracker' parameter"
+        )
+
+    @pytest.mark.asyncio
+    async def test_session_summarizer_records_operation_session_summary(
+        self, tmp_path: Path
+    ) -> None:
+        """After _summarize runs, tracker receives a record with operation='session_summary'."""
+        from owlbear.bootstrap import _wire_session_memory_hook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        tracker = _make_tracker(tmp_path)
+        hooks = HookRegistry()
+        mock_model = MagicMock()
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = "a structured summary"
+        mock_agent_inst = MagicMock()
+        mock_agent_inst.run = AsyncMock(return_value=mock_run_result)
+
+        with patch("pydantic_ai.Agent", return_value=mock_agent_inst):
+            # Will fail in RED — _wire_session_memory_hook does not yet accept tracker
+            _wire_session_memory_hook(
+                mock_model, tmp_path, hooks, tracker=tracker, provider="copilot"
+            )
+
+            session_handlers = hooks._handlers.get(HookEvent.SESSION_END, [])
+            assert session_handlers, "No SESSION_END handler was registered"
+            hook = session_handlers[0]
+
+            # Call the internal summarizer directly (bypasses SessionMemoryHook.__call__)
+            await hook._summarizer("some conversation text")
+
+        records = tracker.load()
+        assert len(records) == 1
+        assert records[0].operation == "session_summary"
+
+
+# ===========================================================================
+# AC6 — Bootstrap functions accept and pass tracker to secondary components
+# ===========================================================================
+
+
+class TestFromAC_BootstrapTrackerWiring:
+    """AC6: Bootstrap helpers accept tracker/provider and route it to secondary components."""
+
+    def test_build_knowledge_infra_accepts_tracker(self) -> None:
+        """_build_knowledge_infra signature includes a 'tracker' parameter."""
+        import inspect
+
+        from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+        sig = inspect.signature(_build_knowledge_infra)
+        assert "tracker" in sig.parameters, "_build_knowledge_infra must have a 'tracker' parameter"
+
+    def test_build_knowledge_toolset_accepts_tracker(self) -> None:
+        """_build_knowledge_toolset signature includes a 'tracker' parameter."""
+        import inspect
+
+        from owlbear.bootstrap.knowledge import _build_knowledge_toolset
+
+        sig = inspect.signature(_build_knowledge_toolset)
+        assert "tracker" in sig.parameters, (
+            "_build_knowledge_toolset must have a 'tracker' parameter"
+        )
+
+    def test_build_bookmark_toolset_accepts_tracker(self) -> None:
+        """_build_bookmark_toolset signature includes a 'tracker' parameter."""
+        import inspect
+
+        from owlbear.bootstrap.knowledge import _build_bookmark_toolset
+
+        sig = inspect.signature(_build_bookmark_toolset)
+        assert "tracker" in sig.parameters, (
+            "_build_bookmark_toolset must have a 'tracker' parameter"
+        )
+
+    def test_wire_post_model_hooks_accepts_tracker(self) -> None:
+        """_wire_post_model_hooks signature includes a 'tracker' parameter."""
+        import inspect
+
+        from owlbear.bootstrap import _wire_post_model_hooks
+
+        sig = inspect.signature(_wire_post_model_hooks)
+        assert "tracker" in sig.parameters, "_wire_post_model_hooks must have a 'tracker' parameter"
+
+    def test_bootstrap_condenser_receives_tracker(self) -> None:
+        """bootstrap() source passes tracker= to SummarizingCondenser."""
+        import ast
+        import inspect
+        import textwrap
+
+        from owlbear.bootstrap import bootstrap
+
+        source = textwrap.dedent(inspect.getsource(bootstrap))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "SummarizingCondenser"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "tracker":
+                        return  # Found tracker= kwarg in SummarizingCondenser(...)
+        pytest.fail("bootstrap() does not pass tracker= to SummarizingCondenser")
+
+
+# ===========================================================================
+# AC7 — OwlBearAgent._record_usage explicitly passes operation='turn'
+# ===========================================================================
+
+
+class TestFromAC_OwlBearAgentOperationTurn:
+    """AC7: OwlBearAgent._record_usage creates UsageRecord with explicit operation='turn'."""
+
+    def test_record_usage_passes_operation_turn(self) -> None:
+        """_record_usage source contains an explicit operation='turn' kwarg in UsageRecord(...)."""
+        import ast
+        import inspect
+        import textwrap
+
+        from owlbear.core.agent import OwlBearAgent
+
+        source = textwrap.dedent(inspect.getsource(OwlBearAgent._record_usage))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "UsageRecord"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "operation":
+                        return  # Found explicit operation= kwarg — test passes
+        pytest.fail("_record_usage() does not explicitly pass operation= to UsageRecord(**kwargs)")
+
+
+# ===========================================================================
+# AC2 gap — record_agent_usage must accept model: str | Model and resolve name
+# ===========================================================================
+
+
+class TestFromAC_RecordAgentUsageModelResolution:
+    """AC2 gap: record_agent_usage(model=) must accept a Model object and resolve its name."""
+
+    def test_model_object_name_resolved_in_record(self, tmp_path: Path) -> None:
+        """When a Model object with model_name attr is passed, stored model must be model_name.
+
+        AC2: model: str | Model -- resolves name internally (same logic as
+        OwlBearAgent._extract_model_name).
+        """
+        from owlbear.memory.usage import record_agent_usage
+
+        tracker = _make_tracker(tmp_path)
+        result = _make_usage_result()
+
+        mock_model = MagicMock()
+        mock_model.model_name = "gpt-4o-resolved"
+        # Ensure str(mock_model) differs so we can distinguish resolution from plain str cast
+        mock_model.__str__ = MagicMock(return_value="mock-model-str-repr")
+
+        record_agent_usage(
+            tracker=tracker,
+            result=result,
+            model=mock_model,  # Model object, not string
+            provider="copilot",
+            session_id="background:condenser",
+            operation="condenser",
+        )
+
+        records = tracker.load()
+        assert len(records) == 1
+        # AC2: must extract model_name via _extract_model_name logic, not str(model)
+        assert records[0].model == "gpt-4o-resolved", (
+            f"expected 'gpt-4o-resolved' but got {records[0].model!r}; "
+            "record_agent_usage must resolve Model.model_name not str(model)"
+        )
+
+
+# ===========================================================================
+# AC3 gap — provider constructor param must default to 'copilot' in all components
+# ===========================================================================
+
+
+class TestFromAC_ProviderDefaultCopilot:
+    """AC3 gap: all listed secondary components must default provider to 'copilot', not None."""
+
+    def test_summarizing_condenser_provider_default_is_copilot(self) -> None:
+        """SummarizingCondenser provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.core.condenser import SummarizingCondenser
+
+        sig = inspect.signature(SummarizingCondenser.__init__)
+        assert "provider" in sig.parameters, "SummarizingCondenser missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"SummarizingCondenser provider default is {sig.parameters['provider'].default!r}, "
+            "expected 'copilot'"
+        )
+
+    def test_entity_extractor_provider_default_is_copilot(self) -> None:
+        """EntityExtractor provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.memory.knowledge.extractor import EntityExtractor
+
+        sig = inspect.signature(EntityExtractor.__init__)
+        assert "provider" in sig.parameters, "EntityExtractor missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"EntityExtractor provider default is {sig.parameters['provider'].default!r}, "
+            "expected 'copilot'"
+        )
+
+    def test_project_definition_extractor_provider_default_is_copilot(self) -> None:
+        """ProjectDefinitionExtractor provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.planning.extractor import ProjectDefinitionExtractor
+
+        sig = inspect.signature(ProjectDefinitionExtractor.__init__)
+        assert "provider" in sig.parameters, "ProjectDefinitionExtractor missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"ProjectDefinitionExtractor provider default is "
+            f"{sig.parameters['provider'].default!r}, expected 'copilot'"
+        )
+
+    def test_source_evaluator_provider_default_is_copilot(self) -> None:
+        """SourceEvaluator provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.memory.knowledge.evaluator import SourceEvaluator
+
+        sig = inspect.signature(SourceEvaluator.__init__)
+        assert "provider" in sig.parameters, "SourceEvaluator missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"SourceEvaluator provider default is {sig.parameters['provider'].default!r}, "
+            "expected 'copilot'"
+        )
+
+    def test_intra_doc_graph_builder_provider_default_is_copilot(self) -> None:
+        """IntraDocGraphBuilder provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.memory.knowledge.graph_builder import IntraDocGraphBuilder
+
+        sig = inspect.signature(IntraDocGraphBuilder.__init__)
+        assert "provider" in sig.parameters, "IntraDocGraphBuilder missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"IntraDocGraphBuilder provider default is {sig.parameters['provider'].default!r}, "
+            "expected 'copilot'"
+        )
+
+    def test_inter_doc_graph_builder_provider_default_is_copilot(self) -> None:
+        """InterDocGraphBuilder provider parameter must default to 'copilot'."""
+        import inspect
+
+        from owlbear.memory.knowledge.inter_doc_graph_builder import InterDocGraphBuilder
+
+        sig = inspect.signature(InterDocGraphBuilder.__init__)
+        assert "provider" in sig.parameters, "InterDocGraphBuilder missing provider param"
+        assert sig.parameters["provider"].default == "copilot", (
+            f"InterDocGraphBuilder provider default is {sig.parameters['provider'].default!r}, "
+            "expected 'copilot'"
+        )
+
+
+# ===========================================================================
+# AC6 gap — Bootstrap must actually forward tracker at runtime, not just accept it
+# ===========================================================================
+
+
+class TestFromAC_BootstrapRuntimeForwarding:
+    """AC6 gap: bootstrap helper functions must *forward* tracker to secondary constructors.
+
+    The prior cycle's tests checked only that these functions have a 'tracker' parameter.
+    The reviewer found tracker is accepted but unused (ARG001).  These tests verify
+    the runtime forwarding behavior.
+    """
+
+    def test_wire_post_model_hooks_forwards_tracker_to_retrospective_hook(
+        self, tmp_path: Path
+    ) -> None:
+        """_wire_post_model_hooks must forward tracker= to RetrospectiveHook constructor.
+
+        Current impl marks tracker as ARG001 (unused) and omits it from the
+        RetrospectiveHook(...) call.
+        """
+        from owlbear.bootstrap import _wire_post_model_hooks
+
+        tracker = _make_tracker(tmp_path)
+        mock_ingest = MagicMock()
+        mock_hooks = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.session_memory_enabled = False
+        mock_model = MagicMock()
+
+        with (
+            patch("owlbear.core.retrospective_hook.RetrospectiveHook") as mock_retro_cls,
+            patch("owlbear.core.hook_worker_supervisor.HookWorkerSupervisor"),
+        ):
+            mock_retro_instance = MagicMock()
+            mock_retro_cls.return_value = mock_retro_instance
+
+            _wire_post_model_hooks(
+                mock_settings,
+                mock_model,
+                tmp_path,
+                mock_hooks,
+                mock_ingest,
+                tracker=tracker,
+            )
+
+        assert mock_retro_cls.called, "RetrospectiveHook was never instantiated"
+        forwarded = mock_retro_cls.call_args.kwargs.get("tracker")
+        assert forwarded is tracker, (
+            f"_wire_post_model_hooks did not forward tracker= to RetrospectiveHook; "
+            f"got tracker={forwarded!r}"
+        )
+
+    def test_wire_post_model_hooks_forwards_tracker_to_session_hook(
+        self, tmp_path: Path
+    ) -> None:
+        """_wire_post_model_hooks must forward tracker= to _wire_session_memory_hook.
+
+        Current impl calls _wire_session_memory_hook(model, workspace, hooks) with no tracker.
+        """
+        from owlbear.bootstrap import _wire_post_model_hooks
+
+        tracker = _make_tracker(tmp_path)
+        mock_hooks = MagicMock()
+        mock_settings = MagicMock()
+        mock_settings.session_memory_enabled = True
+        mock_model = MagicMock()
+
+        with patch("owlbear.bootstrap._wire_session_memory_hook") as mock_wire:
+            _wire_post_model_hooks(
+                mock_settings,
+                mock_model,
+                tmp_path,
+                mock_hooks,
+                None,  # ingest_pipeline=None — skips RetrospectiveHook branch
+                tracker=tracker,
+            )
+
+        assert mock_wire.called, "_wire_session_memory_hook was never called"
+        forwarded = mock_wire.call_args.kwargs.get("tracker")
+        assert forwarded is tracker, (
+            f"_wire_post_model_hooks did not forward tracker= to _wire_session_memory_hook; "
+            f"got tracker={forwarded!r}"
+        )
+
+    def test_build_knowledge_infra_passes_tracker_to_entity_extractor(self) -> None:
+        """_build_knowledge_infra must pass tracker= to EntityExtractor constructor.
+
+        Current impl marks tracker as ARG001 and calls EntityExtractor(model=chat_model)
+        with no tracker kwarg.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from owlbear.bootstrap.knowledge import _build_knowledge_infra
+
+        source = textwrap.dedent(inspect.getsource(_build_knowledge_infra))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "EntityExtractor"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "tracker":
+                        return  # tracker= kwarg found in EntityExtractor(...)
+        pytest.fail(
+            "_build_knowledge_infra does not pass tracker= to EntityExtractor; "
+            "AC6 requires tracker forwarded to all secondary components"
+        )
+
+    def test_build_knowledge_toolset_passes_tracker_to_inter_doc_builder(self) -> None:
+        """_build_knowledge_toolset must pass tracker= to InterDocGraphBuilder constructor.
+
+        Current impl calls InterDocGraphBuilder(model=, vector_store=, graph_store=)
+        with no tracker kwarg.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from owlbear.bootstrap.knowledge import _build_knowledge_toolset
+
+        source = textwrap.dedent(inspect.getsource(_build_knowledge_toolset))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "InterDocGraphBuilder"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "tracker":
+                        return  # tracker= kwarg found in InterDocGraphBuilder(...)
+        pytest.fail(
+            "_build_knowledge_toolset does not pass tracker= to InterDocGraphBuilder; "
+            "AC6 requires tracker forwarded to all secondary components"
+        )
+
+    def test_build_bookmark_toolset_passes_tracker_to_source_evaluator(self) -> None:
+        """_build_bookmark_toolset must pass tracker= to SourceEvaluator constructor.
+
+        Current impl calls SourceEvaluator(model=chat_model) with no tracker kwarg.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from owlbear.bootstrap.knowledge import _build_bookmark_toolset
+
+        source = textwrap.dedent(inspect.getsource(_build_bookmark_toolset))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "SourceEvaluator"
+            ):
+                for kw in node.keywords:
+                    if kw.arg == "tracker":
+                        return  # tracker= kwarg found in SourceEvaluator(...)
+        pytest.fail(
+            "_build_bookmark_toolset does not pass tracker= to SourceEvaluator; "
+            "AC6 requires tracker forwarded to all secondary components"
+        )
