@@ -1972,7 +1972,7 @@ class TestBuildKnowledgeSourceToolset:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_KnowledgeToolsetExceptPath:  # noqa: N801
+class TestFromAC_KnowledgeToolsetExceptPath:
     """AC: _build_knowledge_toolset returns None and logs warning when internal dep raises."""
 
     def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
@@ -1993,7 +1993,7 @@ class TestFromAC_KnowledgeToolsetExceptPath:  # noqa: N801
         assert "Failed to create KnowledgeToolset" in mock_logger.warning.call_args[0][0]
 
 
-class TestFromAC_BookmarkToolsetExceptPath:  # noqa: N801
+class TestFromAC_BookmarkToolsetExceptPath:
     """AC: _build_bookmark_toolset returns None and logs warning when internal dep raises."""
 
     def test_returns_none_and_logs_warning_on_error(self, tmp_path: Path) -> None:
@@ -2014,7 +2014,7 @@ class TestFromAC_BookmarkToolsetExceptPath:  # noqa: N801
         assert "Failed to create BookmarkToolset" in mock_logger.warning.call_args[0][0]
 
 
-class TestFromAC_WireKnowledgeToolsetsOuterExcept:  # noqa: N801
+class TestFromAC_WireKnowledgeToolsetsOuterExcept:
     """AC: _wire_knowledge_toolsets appends ComponentStatus(loaded=False) when infra raises."""
 
     def test_infra_raise_appends_error_status(self, tmp_path: Path) -> None:
@@ -2672,7 +2672,7 @@ class TestComponentStatusErrorSites:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_OpenAIClientCleanup:  # noqa: N801
+class TestFromAC_OpenAIClientCleanup:
     """AC#1 (#650): bootstrap must register the OpenAI client's close in cleanup.
 
     The AsyncOpenAI client created during bootstrap owns an
@@ -2764,7 +2764,7 @@ class TestFromAC_OpenAIClientCleanup:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
+class TestFromAC_ContextInjectionHookRemoval:
     """Proves ContextInjectionHook must not be registered by build_hooks().
 
     Counts SESSION_START handlers by type(handler).__module__ and
@@ -2866,7 +2866,7 @@ class TestFromAC_ContextInjectionHookRemoval:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BuildToolsetsNoBareModelDeprecation:  # noqa: N801
+class TestFromAC_BuildToolsetsNoBareModelDeprecation:
     """RED gate for #556: build_toolsets() must not pass a bare string model.
 
     The ``chat_model or settings.chat_model`` fallback in
