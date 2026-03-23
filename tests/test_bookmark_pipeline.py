@@ -224,11 +224,11 @@ class TestBookmarkPipelineHappyPath:
         # bookmark was stored
         assert result.bookmark is not None
         assert result.bookmark.url == SAMPLE_URL
-        assert result.bookmark.relevance_score == pytest.approx(0.85)
+        assert result.bookmark.relevance_score == 0.85
         assert result.ingested is True
         assert result.skipped_reason is None
         assert result.evaluation is not None
-        assert result.evaluation.relevance_score == pytest.approx(0.85)
+        assert result.evaluation.relevance_score == 0.85
 
         # verify bookmark is in the store
         stored = store.get_by_url(SAMPLE_URL)
@@ -370,7 +370,7 @@ class TestBookmarkPipelineThreshold:
 
         # Bookmark still created
         assert result.bookmark is not None
-        assert result.bookmark.relevance_score == pytest.approx(0.3)
+        assert result.bookmark.relevance_score == 0.3
 
         # Ingest NOT called
         mock_ingest.ingest_text.assert_not_awaited()
@@ -378,7 +378,7 @@ class TestBookmarkPipelineThreshold:
 
         # Evaluation still recorded
         assert result.evaluation is not None
-        assert result.evaluation.relevance_score == pytest.approx(0.3)
+        assert result.evaluation.relevance_score == 0.3
 
     @pytest.mark.asyncio
     async def test_high_score_but_not_worth_ingesting(
