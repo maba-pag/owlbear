@@ -3165,9 +3165,7 @@ class TestFromAC_BootstrapHookWorkerSupervisorWiring:
         assert callable(cleanup[0])
         assert cleanup[0].__name__ == "shutdown"
 
-    def test_no_supervisor_shutdown_when_ingest_pipeline_unavailable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_no_supervisor_shutdown_when_ingest_pipeline_unavailable(self, tmp_path: Path) -> None:
         """When ingest_pipeline is None, no supervisor shutdown callable is appended."""
         from owlbear.bootstrap import _wire_post_model_hooks
         from owlbear.core.hooks import HookRegistry
@@ -3188,13 +3186,10 @@ class TestFromAC_BootstrapHookWorkerSupervisorWiring:
 
         assert len(cleanup) == 0
 
-    def test_supervisor_is_a_hook_worker_supervisor_instance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_supervisor_is_a_hook_worker_supervisor_instance(self, tmp_path: Path) -> None:
         """The shutdown callable appended to cleanup belongs to a HookWorkerSupervisor."""
-        from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
-
         from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
         from owlbear.core.hooks import HookRegistry
         # Importing HookWorkerSupervisor fails today (module doesn't exist) — RED
 

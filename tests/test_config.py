@@ -713,3 +713,50 @@ class TestFromAC_QuestionPendingDefaultCleanup:
             f"Default notification_events contains events never emitted in src/owlbear: "
             f"{sorted(missing)!r}.  Live emitted events: {sorted(emitted_attrs)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: docs/architecture.md QUESTION_PENDING cleanup (#962)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ArchitectureDocQuestionPendingCleanup:
+    """AC #962: docs/architecture.md must not describe QUESTION_PENDING as a live or
+    default NotificationHook runtime event.  If the entry is kept, it must be marked
+    as reserved or not-currently-emitted.
+    """
+
+    def test_architecture_doc_does_not_list_question_pending_as_live_notification_event(
+        self,
+    ) -> None:
+        """docs/architecture.md must not present QUESTION_PENDING as a live event
+        in the NotificationHook column without a 'reserved' / 'not currently emitted' marker.
+
+        Fails today because line 266 reads:
+            | `QUESTION_PENDING` | User question queued | NotificationHook |
+        with no caveat, incorrectly implying it is a live runtime notification event.
+        """
+        from pathlib import Path
+
+        arch_md = Path(__file__).resolve().parent.parent / "docs" / "architecture.md"
+        content = arch_md.read_text(encoding="utf-8")
+
+        for line in content.splitlines():
+            # Only check lines that mention both QUESTION_PENDING and NotificationHook
+            # (i.e. the hook-events table row)
+            if "QUESTION_PENDING" in line and "NotificationHook" in line:
+                is_marked = any(
+                    marker in line.lower()
+                    for marker in [
+                        "reserved",
+                        "not currently emitted",
+                        "not emitted",
+                        "dead",
+                        "unused",
+                    ]
+                )
+                assert is_marked, (
+                    "docs/architecture.md describes QUESTION_PENDING as a live "
+                    "NotificationHook event without a reserved/not-currently-emitted "
+                    f"marker.  Offending line: {line!r}"
+                )

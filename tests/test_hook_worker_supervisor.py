@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
 from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
 
 # ---------------------------------------------------------------------------
@@ -321,3 +322,24 @@ class TestFromAC_HookWorkerSupervisorShutdown:
 
         assert cancelled_count[0] == 3  # all three workers cancelled
         assert len(supervisor._background_tasks) == 0
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_shutdown_signal_prevents_new_schedules(self) -> None:
+        """After shutdown(), schedule() must not start new background work.
+
+        The AC requires shutdown() to set a supervisor shutdown signal.  The
+        observable contract is that subsequent schedule() calls are no-ops —
+        they must not enqueue or execute new coroutines after shutdown.
+        """
+        supervisor = HookWorkerSupervisor(bg_concurrency=1)
+        await supervisor.shutdown()
+
+        ran = asyncio.Event()
+
+        async def probe_worker() -> None:
+            ran.set()
+
+        supervisor.schedule(probe_worker())
+        await asyncio.sleep(0.05)  # give the event loop time to dispatch any new task
+
+        assert not ran.is_set(), "schedule() after shutdown() must not run new background work"
