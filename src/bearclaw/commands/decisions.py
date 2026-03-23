@@ -67,7 +67,7 @@ def _parse_decision_file(path: Path) -> tuple[dict, str]:
 
     if not isinstance(data, dict):
         msg = f"Malformed frontmatter in {path}: expected a mapping"
-        raise TypeError(msg)
+        raise ValueError(msg)  # noqa: TRY004 — AC requires ValueError for all malformed-frontmatter cases
 
     body = text[end + 3 :]
     body = body.removeprefix("\n")
@@ -102,6 +102,10 @@ def _extract_options(body: str) -> list[str]:
     if not options_match:
         return []
     options_section = body[options_match.end() :]
+    # Stop at the next ## section heading so we don't bleed into other sections.
+    next_h2 = re.search(r"^##\s+", options_section, re.MULTILINE)
+    if next_h2:
+        options_section = options_section[: next_h2.start()]
     return re.findall(r"^###\s+(.+)$", options_section, re.MULTILINE)
 
 
