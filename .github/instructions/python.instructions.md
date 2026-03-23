@@ -13,6 +13,7 @@ description: "Python coding conventions for this workspace."
 ## Code style
 
 - **ruff** for linting and formatting (config in `pyproject.toml`). Run `uv run ruff check` and `uv run ruff format --check`.
+- **Docstrings:** Google convention enforced by ruff D rules (D2xx/D3xx/D4xx). D1xx (missing-docstring rules) are not yet enforced. Write Google-style docstrings (`Args:`, `Returns:`, `Raises:`) on all public classes and functions. Use raw-string docstrings (`r"""…"""`) only when the content contains backslash escape sequences.
 - Type hints on all function signatures. Use `from __future__ import annotations` for modern syntax.
 - Pylance strict mode for type checking.
 - Pydantic `BaseModel` / `BaseSettings` for structured data and config.
