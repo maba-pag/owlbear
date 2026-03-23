@@ -1013,9 +1013,7 @@ class TestBuilderDiscovered:
     that are exercised by the wiring changes introduced in task #789.
     """
 
-    def test_build_knowledge_infra_returns_none_on_failure(
-        self, tmp_path: object
-    ) -> None:
+    def test_build_knowledge_infra_returns_none_on_failure(self, tmp_path: object) -> None:
         """_build_knowledge_infra returns None instead of raising when setup fails."""
         import sqlite3 as _sqlite3
 
@@ -1026,9 +1024,7 @@ class TestBuilderDiscovered:
 
         assert result is None
 
-    def test_build_knowledge_toolset_returns_none_on_failure(
-        self, tmp_path: object
-    ) -> None:
+    def test_build_knowledge_toolset_returns_none_on_failure(self, tmp_path: object) -> None:
         """_build_knowledge_toolset returns None instead of raising when setup fails."""
         from owlbear.bootstrap.knowledge import (
             _build_knowledge_infra,
@@ -1060,9 +1056,7 @@ class TestBuilderDiscovered:
 
         assert result is None
 
-    def test_build_knowledge_toolset_inter_doc_graph_building(
-        self, tmp_path: object
-    ) -> None:
+    def test_build_knowledge_toolset_inter_doc_graph_building(self, tmp_path: object) -> None:
         """_build_knowledge_toolset with inter_doc_graph_building=True covers enricher path."""
         from owlbear.bootstrap.knowledge import (
             _build_knowledge_infra,
@@ -1097,3 +1091,29 @@ class TestBuilderDiscovered:
             )
 
         assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_emits_warning_log(self, caplog: pytest.LogCaptureFixture) -> None:
+        """consolidate() must emit a WARNING log when _run_llm raises.
+
+        Strengthens TestFromAC_LLMFailure::test_llm_error_logged_not_raised, which
+        verifies the return value but does not assert the log record.  Removing the
+        logger.warning() call in consolidation.py must break this test.
+        """
+        conn = _make_db()
+        _seed_chunks(conn, 2)
+
+        svc = ConsolidationService(conn=conn, graph_store=None, model="test")  # type: ignore[arg-type]
+
+        with (
+            patch.object(svc, "_run_llm", side_effect=RuntimeError("LLM down")),
+            caplog.at_level(logging.WARNING),
+        ):
+            await svc.consolidate()
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warning_records, "consolidate() must emit at least one WARNING when LLM call fails"
+        msgs = [r.getMessage().lower() for r in warning_records]
+        assert any("llm" in m or "consolidation" in m for m in msgs), (
+            f"WARNING message should mention LLM or consolidation, got: {msgs}"
+        )
