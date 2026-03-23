@@ -1430,6 +1430,14 @@ External repos and resources studied during OwlBear development.
 | AnyIO cancellation docs | <https://anyio.readthedocs.io/en/stable/cancellation.html> | MIT | Cancel scopes provide stronger blocking-await cancellation but change semantics; eliminated in favour of asyncio-native `Event` | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
 | .NET cancellation token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | N/A (docs) | One token per cancelable operation and linked parent/child cancellation as prior art for per-operation composition | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
 
+## Hook-Triggered Background Worker Pilot Research (Task #949)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | N/A | Worker catalog (`audit`, `map`, `testgaps`, `document`) and hook-driven daemon framing; used to evaluate candidate pilot types | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+| Python asyncio task docs | <https://docs.python.org/3/library/asyncio-task.html> | PSF | `create_task()` lifecycle, strong-reference requirement for background tasks, cancellation and timeout guidance | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+| Python asyncio sync primitives docs | <https://docs.python.org/3/library/asyncio-sync.html> | PSF | `Semaphore` for bounded concurrency and `Event` for cooperative shutdown in background worker design | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+
 ## BearClaw CLI Subprocess Result Helper (Task #926)
 
 | Source | URL | License | What we studied | Where Used | Date |
