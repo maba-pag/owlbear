@@ -990,3 +990,136 @@ class TestFromAC_RetrospectiveHookCancellation:
         cancel_signal = captured.get("cancel")
         assert cancel_signal is not None, "cancel signal must be passed to ingest_text"
         assert cancel_signal.is_set(), "cancel signal must be set when daemon shutdown fires"
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: RetrospectiveHook supervisor seam (#966)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RetrospectiveHookSupervisorSeam:
+    """RetrospectiveHook.__call__ delegates background work through an injected
+    HookWorkerSupervisor.schedule() seam instead of asyncio.create_task(), while
+    preserving existing eligibility gates and the cancel= ingestion seam.
+
+    All tests fail on HEAD because RetrospectiveHook.__init__ does not yet
+    accept a ``supervisor`` keyword argument.
+    """
+
+    def _make_hook(
+        self,
+        tmp_path: Path,
+        supervisor: object,
+        ingest: object | None = None,
+    ) -> RetrospectiveHook:
+        return RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=ingest or AsyncMock(),
+            kanban_root=tmp_path,
+            supervisor=supervisor,  # fails today: unexpected keyword argument
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_call_uses_supervisor_schedule_not_create_task(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-trivial success outcome calls supervisor.schedule(), not asyncio.create_task()."""
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("42", "review", "todo")],  # one rejection → non-trivial
+        )
+        mock_supervisor = MagicMock()
+        hook = self._make_hook(tmp_path, mock_supervisor)
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        with patch("owlbear.core.retrospective_hook.asyncio.create_task") as mock_ct:
+            await hook(_payload(task_id="42", outcome="success"))
+            mock_ct.assert_not_called()
+
+        mock_supervisor.schedule.assert_called_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_failure_outcome_skips_supervisor_schedule(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-success outcome does not reach supervisor.schedule()."""
+        # success-only gate must be preserved
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("42", "review", "todo")],  # rejection (non-trivial)
+        )
+        mock_supervisor = MagicMock()
+        hook = self._make_hook(tmp_path, mock_supervisor)
+
+        await hook(_payload(task_id="42", outcome="failure"))
+
+        mock_supervisor.schedule.assert_not_called()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_trivial_task_skips_supervisor_schedule(
+        self, tmp_path: Path
+    ) -> None:
+        """Zero rejections + low priority skips supervisor.schedule()."""
+        # eligibility gate must be preserved
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("42", "todo", "done")],  # forward move, no rejection
+        )
+        mock_supervisor = MagicMock()
+        hook = self._make_hook(tmp_path, mock_supervisor)
+
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        mock_supervisor.schedule.assert_not_called()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_rejection_gate_preserved_with_supervisor(
+        self, tmp_path: Path
+    ) -> None:
+        """At least one rejection → supervisor.schedule() is called (rejection gate intact)."""
+        _write_activity_log(
+            tmp_path,
+            [_move_entry("42", "review", "todo")],  # one rejection
+        )
+        mock_supervisor = MagicMock()
+        hook = self._make_hook(tmp_path, mock_supervisor)
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        await hook(_payload(task_id="42", outcome="success"))
+
+        mock_supervisor.schedule.assert_called_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_run_retrospective_cancel_seam_preserved_with_supervisor(
+        self, tmp_path: Path
+    ) -> None:
+        """_run_retrospective() still passes cancel= kwarg to ingest_text."""
+        # cancel= seam must be preserved when supervisor is injected
+        mock_ingest = AsyncMock()
+        mock_supervisor = MagicMock()
+
+        # supervisor= fails today: unexpected keyword argument
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            supervisor=mock_supervisor,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        await hook._run_retrospective("42")
+
+        mock_ingest.ingest_text.assert_called_once()
+        call_kwargs = mock_ingest.ingest_text.call_args.kwargs
+        assert "cancel" in call_kwargs, "_run_retrospective must pass cancel= to ingest_text"
+        assert isinstance(call_kwargs["cancel"], asyncio.Event)

@@ -3124,3 +3124,118 @@ class TestFromAC_QuestionPendingDefaultHook:
         )
         explicit_hooks, _ = build_hooks(explicit_settings, workspace_root=None)
         assert len(explicit_hooks.handlers.get(HookEvent.QUESTION_PENDING, [])) >= 1
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: bootstrap HookWorkerSupervisor wiring (#966)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BootstrapHookWorkerSupervisorWiring:
+    """_wire_post_model_hooks wires one HookWorkerSupervisor when ingest_pipeline is
+    available and appends supervisor.shutdown to cleanup; when ingest_pipeline is
+    unavailable, no supervisor shutdown callable is appended.
+
+    All tests fail on HEAD because _wire_post_model_hooks does not yet accept a
+    ``cleanup`` keyword argument.
+    """
+
+    def test_supervisor_shutdown_appended_to_cleanup_when_ingest_available(
+        self, tmp_path: Path
+    ) -> None:
+        """When ingest_pipeline is available, exactly one shutdown callable is appended."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookRegistry
+
+        hooks = HookRegistry()
+        cleanup: list = []
+        settings = OwlBearSettings()
+
+        # Fails today: _wire_post_model_hooks() got unexpected keyword argument 'cleanup'
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),  # ingest_pipeline available
+            cleanup=cleanup,
+        )
+
+        assert len(cleanup) == 1
+        assert callable(cleanup[0])
+        assert cleanup[0].__name__ == "shutdown"
+
+    def test_no_supervisor_shutdown_when_ingest_pipeline_unavailable(
+        self, tmp_path: Path
+    ) -> None:
+        """When ingest_pipeline is None, no supervisor shutdown callable is appended."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookRegistry
+
+        hooks = HookRegistry()
+        cleanup: list = []
+        settings = OwlBearSettings()
+
+        # Fails today: _wire_post_model_hooks() got unexpected keyword argument 'cleanup'
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            None,  # ingest_pipeline unavailable
+            cleanup=cleanup,
+        )
+
+        assert len(cleanup) == 0
+
+    def test_supervisor_is_a_hook_worker_supervisor_instance(
+        self, tmp_path: Path
+    ) -> None:
+        """The shutdown callable appended to cleanup belongs to a HookWorkerSupervisor."""
+        from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
+
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookRegistry
+        # Importing HookWorkerSupervisor fails today (module doesn't exist) — RED
+
+        hooks = HookRegistry()
+        cleanup: list = []
+        settings = OwlBearSettings()
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            cleanup=cleanup,
+        )
+
+        assert len(cleanup) == 1
+        shutdown_callable = cleanup[0]
+        # shutdown must be a bound method of a HookWorkerSupervisor
+        assert isinstance(getattr(shutdown_callable, "__self__", None), HookWorkerSupervisor)
+
+    def test_retrospective_hook_registered_for_task_complete_when_ingest_available(
+        self, tmp_path: Path
+    ) -> None:
+        """_wire_post_model_hooks registers a TASK_COMPLETE handler when ingest_pipeline is set."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        cleanup: list = []
+        settings = OwlBearSettings()
+        before_count = len(hooks.handlers.get(HookEvent.TASK_COMPLETE, []))
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            cleanup=cleanup,
+        )
+
+        after_count = len(hooks.handlers.get(HookEvent.TASK_COMPLETE, []))
+        assert after_count == before_count + 1
