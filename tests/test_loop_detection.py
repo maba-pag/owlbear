@@ -40,7 +40,7 @@ def _make_mock_journal() -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FailureCounter:  # noqa: N801
+class TestFromAC_FailureCounter:
     """Per-task failure counter: initialisation, increment, independence."""
 
     def test_counter_starts_at_zero_for_new_task(self) -> None:
@@ -78,7 +78,7 @@ class TestFromAC_FailureCounter:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MaxFailuresConfig:  # noqa: N801
+class TestFromAC_MaxFailuresConfig:
     """max_failures threshold: default value and custom override."""
 
     def test_default_max_failures_is_three(self) -> None:
@@ -124,7 +124,7 @@ class TestFromAC_MaxFailuresConfig:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SkipAndEscalate:  # noqa: N801
+class TestFromAC_SkipAndEscalate:
     """After max failures the task is skipped and user is notified."""
 
     @pytest.mark.asyncio
@@ -142,8 +142,7 @@ class TestFromAC_SkipAndEscalate:  # noqa: N801
         # Channel should have been used to communicate with user
         assert channel.send.called or channel.send_blocks.called
 
-    @pytest.mark.asyncio
-    async def test_escalation_not_triggered_below_threshold(self) -> None:
+    def test_escalation_not_triggered_below_threshold(self) -> None:
         """Calling escalate on a task below threshold raises or returns
         without sending anything."""
         _make_mock_channel()
@@ -206,7 +205,7 @@ class TestFromAC_SkipAndEscalate:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EscalationOptions:  # noqa: N801
+class TestFromAC_EscalationOptions:
     """Escalation must present retry, skip, and stop options to the user."""
 
     @pytest.mark.asyncio
@@ -249,8 +248,7 @@ class TestFromAC_EscalationOptions:  # noqa: N801
 
         assert result == EscalationChoice.STOP
 
-    @pytest.mark.asyncio
-    async def test_escalation_choice_enum_has_three_values(self) -> None:
+    def test_escalation_choice_enum_has_three_values(self) -> None:
         """EscalationChoice must define exactly retry, skip, and stop."""
         members = {m.value for m in EscalationChoice}
         assert "retry" in members
@@ -303,7 +301,7 @@ class TestFromAC_EscalationOptions:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_JournalPersistence:  # noqa: N801
+class TestFromAC_JournalPersistence:
     """Failure attempt counts are persisted in ErrorJournal."""
 
     def test_record_failure_logs_to_journal(self) -> None:

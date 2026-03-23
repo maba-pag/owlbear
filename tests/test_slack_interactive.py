@@ -516,11 +516,10 @@ class TestFallbackPathsIntegration:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendImageContextKey:  # noqa: N801
+class TestFromAC_SendImageContextKey:
     """send_image must support context_key for thread registry integration."""
 
-    @pytest.mark.asyncio
-    async def test_send_image_accepts_context_key_kwarg(self) -> None:
+    def test_send_image_accepts_context_key_kwarg(self) -> None:
         """send_image signature must accept context_key as keyword argument."""
         import inspect
 
@@ -673,7 +672,7 @@ class TestFromAC_SendImageContextKey:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendImageTsExtractionFailure:  # noqa: N801
+class TestFromAC_SendImageTsExtractionFailure:
     """When ts cannot be extracted from files_upload_v2 response, send_image
     must log a debug message and skip thread registry registration — without
     raising an exception.
