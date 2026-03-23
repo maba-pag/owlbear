@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from owlbear.config import RigorProfile
     from owlbear.core.agent_registry import AgentRegistry
+    from owlbear.core.delegation import DispatchContext
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.usage import UsageTracker
 
@@ -30,3 +31,4 @@ class OwlBearDeps:
     agent_registry: AgentRegistry | None = field(default=None)
     delegation_depth: int = field(default=0)
     rigor_profile: RigorProfile | None = field(default=None)
+    dispatch_context: DispatchContext | None = field(default=None)

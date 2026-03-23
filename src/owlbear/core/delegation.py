@@ -29,12 +29,68 @@ if TYPE_CHECKING:
     from typing import ClassVar
 from owlbear.core.errors import ErrorCategory, ToolError, classify_error, error_to_user_message
 
-__all__ = ["MAX_DELEGATION_DEPTH", "DelegationToolset"]
+__all__ = [
+    "MAX_DELEGATION_DEPTH",
+    "DelegationToolset",
+    "DispatchContext",
+    "format_dispatch_context",
+]
 
 logger = logging.getLogger(__name__)
 
 MAX_DELEGATION_DEPTH: int = 5
 """Maximum nesting depth for agent-to-agent delegation."""
+
+
+@dataclasses.dataclass
+class DispatchContext:
+    """Runtime context forwarded to child agents during delegation.
+
+    Attributes:
+        workspace_root: Absolute path to the active workspace.
+        channel_name: Name of the channel that initiated the run.
+        task_id: Kanban task ID, if the run is task-scoped.
+        task_title: Short title of the task, if available.
+        task_status: Current task status, if available.
+    """
+
+    workspace_root: str
+    channel_name: str
+    task_id: str | None = None
+    task_title: str | None = None
+    task_status: str | None = None
+
+
+def format_dispatch_context(ctx: DispatchContext) -> tuple[str, dict[str, str]]:
+    """Format *ctx* into per-run instructions text and a metadata dict.
+
+    Args:
+        ctx: Populated :class:`DispatchContext` for the current run.
+
+    Returns:
+        A ``(instructions, metadata)`` pair where *instructions* is a
+        human-readable string and *metadata* contains only the fields
+        that are present on *ctx*.
+    """
+    lines = [
+        f"Workspace: {ctx.workspace_root}",
+        f"Channel: {ctx.channel_name}",
+    ]
+    metadata: dict[str, str] = {}
+
+    if ctx.task_id is not None:
+        lines.append(f"Task ID: {ctx.task_id}")
+        metadata["task_id"] = ctx.task_id
+
+    if ctx.task_title is not None:
+        lines.append(f"Task: {ctx.task_title}")
+        metadata["task_title"] = ctx.task_title
+
+    if ctx.task_status is not None:
+        lines.append(f"Status: {ctx.task_status}")
+        metadata["task_status"] = ctx.task_status
+
+    return "\n".join(lines), metadata
 
 
 class DelegationToolset(FunctionToolset):
@@ -132,9 +188,20 @@ class DelegationToolset(FunctionToolset):
             delegation_depth=depth + 1,
         )
 
+        # -- Build per-run kwargs from dispatch context -------------------
+        run_kwargs: dict[str, object] = {
+            "deps": inner_deps,
+            "usage": ctx.usage,
+        }
+        dc = ctx.deps.dispatch_context
+        if dc is not None:
+            instructions, metadata = format_dispatch_context(dc)  # type: ignore[arg-type]
+            run_kwargs["instructions"] = instructions
+            run_kwargs["metadata"] = metadata
+
         # -- Run inner agent ----------------------------------------------
         try:
-            result = await agent.run(task, deps=inner_deps, usage=ctx.usage)
+            result = await agent.run(task, **run_kwargs)
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "Delegation to '%s' failed: %s",
