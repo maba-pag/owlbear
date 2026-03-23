@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import builtins
 import sqlite3
-import sys
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -648,7 +647,16 @@ class TestDefaultWebReadFetch:
 
     @pytest.mark.asyncio
     async def test_happy_path_returns_extracted_text(self) -> None:
-        """Successful HTTP GET + trafilatura extract returns text content."""
+        """Successful HTTP GET + extract_markdown returns raw Markdown unchanged.
+
+        AC2: the mock returns raw Markdown with link syntax and _default_web_read
+        must return it unchanged (no wrapping).
+        """
+        raw_markdown = (
+            "# Python Async Patterns\n\n"
+            "See [asyncio docs](https://docs.python.org/3/library/asyncio.html) "
+            "for advanced usage."
+        )
         mock_resp = MagicMock()
         mock_resp.text = "<html><body>Python async patterns</body></html>"
         mock_resp.raise_for_status = MagicMock()
@@ -658,17 +666,17 @@ class TestDefaultWebReadFetch:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract = MagicMock(return_value="Python async patterns")
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value=raw_markdown,
+            ),
             patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
         ):
             result = await _default_web_read("https://example.com/article")
 
-        assert result == "Python async patterns"
+        assert result == raw_markdown, "_default_web_read must return raw Markdown unchanged"
         mock_client.get.assert_awaited_once_with("https://example.com/article")
         mock_resp.raise_for_status.assert_called_once()
 
@@ -691,19 +699,21 @@ class TestDefaultWebReadFetch:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+            ) as mock_extract,
             patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
             pytest.raises(httpx.HTTPStatusError),
         ):
             await _default_web_read("https://example.com/fail")
 
+        mock_extract.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_extract_returns_none(self) -> None:
-        """When trafilatura.extract returns None, function returns empty string."""
+        """When extract_markdown returns empty, function returns empty string."""
         mock_resp = MagicMock()
         mock_resp.text = ""
         mock_resp.raise_for_status = MagicMock()
@@ -713,12 +723,12 @@ class TestDefaultWebReadFetch:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        mock_trafilatura = MagicMock()
-        mock_trafilatura.extract = MagicMock(return_value=None)
-
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict(sys.modules, {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value="",
+            ),
             patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
         ):
             result = await _default_web_read("https://example.com/empty")

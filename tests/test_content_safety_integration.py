@@ -373,16 +373,14 @@ class TestFromACBookmarkPipelineExcluded:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
+        # fetch_url MUST wrap (contrast baseline — sys.modules[trafilatura] seam)
+        # AC3: fetch_url() half continues to patch sys.modules[trafilatura] while
+        # the bookmark half uses the module-local bookmark_pipeline.extract_markdown.
         mock_trafilatura = MagicMock()
         mock_trafilatura.extract.return_value = "Article text"
-
-        # fetch_url MUST wrap (contrast baseline — fails in RED)
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "owlbear.core.context_hydration.extract_markdown",
-                return_value="Article text",
-            ),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
         ):
             fetch_result = await fetch_url("https://example.com/article")
         assert _OPEN_TAG in fetch_result, (
@@ -392,7 +390,10 @@ class TestFromACBookmarkPipelineExcluded:
         # _default_web_read must NOT wrap
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value="Article text",
+            ),
         ):
             from owlbear.memory.knowledge.bookmark_pipeline import _default_web_read
 
