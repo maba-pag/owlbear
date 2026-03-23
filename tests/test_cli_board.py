@@ -406,16 +406,12 @@ def _subproc_fail_list(returncode: int = 1, stdout: str = ""):
     parse failure.  Any subsequent log call returns an empty JSON array so only
     the list-stage error is observable.
     """
+    from conftest import make_completed_process  # type: ignore[import-untyped]
 
-    def _run(args: list[str], **_kwargs: object) -> MagicMock:
-        proc = MagicMock()
+    def _run(args: list[str], **_kwargs: object) -> object:
         if "list" in args:
-            proc.returncode = returncode
-            proc.stdout = stdout
-        else:
-            proc.returncode = 0
-            proc.stdout = "[]"
-        return proc
+            return make_completed_process(returncode=returncode, stdout=stdout)
+        return make_completed_process(returncode=0, stdout="[]")
 
     return _run
 
@@ -431,16 +427,12 @@ def _subproc_fail_log(
     move-log stage.  If ``returncode`` is 0 and ``stdout`` is invalid JSON, it
     simulates a JSON parse failure on the move-log stage.
     """
+    from conftest import make_completed_process  # type: ignore[import-untyped]
 
-    def _run(args: list[str], **_kwargs: object) -> MagicMock:
-        proc = MagicMock()
+    def _run(args: list[str], **_kwargs: object) -> object:
         if "list" in args:
-            proc.returncode = 0
-            proc.stdout = json.dumps(tasks)
-        else:
-            proc.returncode = returncode
-            proc.stdout = stdout
-        return proc
+            return make_completed_process(returncode=0, stdout=json.dumps(tasks))
+        return make_completed_process(returncode=returncode, stdout=stdout)
 
     return _run
 
