@@ -548,9 +548,7 @@ class TestBuilderDiscovered:
     """
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_subprocess_called_exactly_twice_when_tasks_present(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_subprocess_called_exactly_twice_when_tasks_present(self, mock_run: MagicMock) -> None:
         """With tasks: subprocess.run is invoked exactly twice — once for list, once for log."""
         mock_run.side_effect = _subproc([_task()], [])
         runner.invoke(app, ["board"])
