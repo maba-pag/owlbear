@@ -37,6 +37,73 @@ External repos and resources studied during OwlBear development.
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline shared-skill precedent used to separate Impeccable's reusable knowledge layer from its added command layer | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | `user-invocable`, `argument-hint`, slash-command behavior, progressive loading, and skill-vs-prompt tradeoffs for OwlBear adoption | `docs/research/impeccable-command-patterns.md` | 2026-03-22 |
 
+## Ruflo Analysis (Task #947)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | MIT | High-level platform claims, worker catalog, hook system, MCP surface, swarm taxonomy, and programmatic usage surface | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+| ruvnet/ruflo AGENTS.md | <https://raw.githubusercontent.com/ruvnet/ruflo/main/AGENTS.md> | MIT | Codex or Claude coordination model, agent types, execution responsibilities, and command patterns | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+| ruvnet/ruflo agent definitions | <https://github.com/ruvnet/ruflo/tree/main/agents> | MIT | YAML agent definitions and `.agents` compatibility surface | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+| ruvnet/ruflo package.json | <https://raw.githubusercontent.com/ruvnet/ruflo/main/package.json> | MIT | Published package shape, Node requirement, CLI bin, and optional JS package ecosystem | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+| ruvnet/ruflo v3 docs | <https://github.com/ruvnet/ruflo/tree/main/v3> | MIT | Modular package layout, MCP-first module split, and plugin or microkernel framing | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+| ruvnet/ruflo LICENSE | <https://raw.githubusercontent.com/ruvnet/ruflo/main/LICENSE> | MIT | Reuse conditions for code or configuration copying and adaptation | `docs/research/ruflo-analysis.md` | 2026-03-23 |
+
+## Hook-Triggered Background Worker Pilot (Task #949)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | MIT | Background worker catalog (`audit`, `map`, `testgaps`, `document`) and daemon or hook framing used to bound the candidate pilot set | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+| ruvnet/ruflo AGENTS.md | <https://raw.githubusercontent.com/ruvnet/ruflo/main/AGENTS.md> | MIT | Hook, task, and coordination concepts used to compare OwlBear trigger fit and advisory scope | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+| Python asyncio task docs | <https://docs.python.org/3/library/asyncio-task.html> | PSF | Strong-reference requirement for background tasks plus timeout and cancellation guidance for supervised fire-and-forget work | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+| Python asyncio sync docs | <https://docs.python.org/3/library/asyncio-sync.html> | PSF | `Semaphore` and `Event` semantics for bounded concurrency and cooperative shutdown of daemon workers | `docs/research/hook-triggered-background-worker-pilot.md` | 2026-03-23 |
+
+## Hook-Triggered Background Worker Supervision (Task #953)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python asyncio task docs | <https://docs.python.org/3/library/asyncio-task.html> | PSF | `create_task()` strong-reference guidance, `TaskGroup` lifecycle, and cancellation behavior for hook-owned background work | `docs/research/hook-triggered-background-worker-supervision.md` | 2026-03-23 |
+| Python asyncio sync docs | <https://docs.python.org/3/library/asyncio-sync.html> | PSF | `Semaphore` and `Event` semantics used to compare bounded hook-worker supervision options | `docs/research/hook-triggered-background-worker-supervision.md` | 2026-03-23 |
+| aiohttp advanced docs | <https://docs.aiohttp.org/en/stable/web_advanced.html> | Apache-2.0 | Cleanup-time background task tracking and graceful shutdown patterns used to justify plugging hook-worker drain into OwlBear bootstrap cleanup | `docs/research/hook-triggered-background-worker-supervision.md` | 2026-03-23 |
+
+## HookEvent Reaction Routing (Task #950)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Trigger plus action model, traced action failures, inferred targets, and notification actions used to shape a config-driven router instead of event-bus mutation | `docs/research/hookevent-reaction-routing.md` | 2026-03-23 |
+| Prefect create automations guide | <https://docs.prefect.io/v3/how-to-guides/automations/creating-automations> | N/A (docs) | YAML/JSON automation schema and ordered action examples used to propose explicit OwlBear reaction rules | `docs/research/hookevent-reaction-routing.md` | 2026-03-23 |
+| Celery task guide | <https://docs.celeryq.dev/en/stable/userguide/tasks.html> | BSD-3-Clause | Retry/backoff options, task handlers, and exhausted-retry behavior used to evaluate OwlBear retry reuse instead of a second retry engine | `docs/research/hookevent-reaction-routing.md` | 2026-03-23 |
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Signal-based lifecycle observation and retry/failure hooks used to compare event-bus boundaries and non-blocking handler expectations | `docs/research/hookevent-reaction-routing.md` | 2026-03-23 |
+| ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | MIT | Original hook and routing inspiration that led to task #950 and framed the event-to-action research question | `docs/research/hookevent-reaction-routing.md` | 2026-03-23 |
+
+## HookReaction Schema and Router Wiring (Task #955)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Trigger/action structure, ordered actions, and inferred-target patterns used to justify explicit but minimal HookReaction rules | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+| Prefect create automations guide | <https://docs.prefect.io/v3/how-to-guides/automations/creating-automations> | N/A (docs) | YAML/JSON automation examples used to compare free-form dicts versus typed rule models | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+| Pydantic models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Nested model behavior, concrete container guidance, and extra-field handling for the `hook_reactions` schema recommendation | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+| Pydantic validators docs | <https://docs.pydantic.dev/latest/concepts/validators/> | MIT | Field/model validator patterns used to recommend startup-safe rule validation and shallow matcher checks | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+| Pydantic settings docs | <https://docs.pydantic.dev/latest/concepts/pydantic_settings/> | MIT | `env_nested_delimiter`, nested complex parsing, and partial-update behavior used to fit HookReaction rules into OwlBear settings | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Signal/handler decoupling precedent used to keep HookRegistry observational and place routing in a separate handler | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
+
+## question_pending Default Hook Surface (Task #962)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Prefect events docs | <https://docs.prefect.io/v3/concepts/events> | N/A (docs) | Observed-event model and matching-event trigger behavior used to justify keeping defaults aligned to real emitters | `docs/research/question-pending-default-hook-surface.md` | 2026-03-23 |
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Trigger/action model for notification automations, used to compare live events versus speculative config surfaces | `docs/research/question-pending-default-hook-surface.md` | 2026-03-23 |
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Concrete dispatched-signal model used to prefer live signal inventories over dead defaults | `docs/research/question-pending-default-hook-surface.md` | 2026-03-23 |
+| GitHub Actions events docs | <https://docs.github.com/en/actions/reference/events-that-trigger-workflows> | N/A (docs) | Supported trigger and activity tables, plus unsupported-event notes, used to justify removing dead default event names from user-facing surfaces | `docs/research/question-pending-default-hook-surface.md` | 2026-03-23 |
+
+## Dispatched Agent Runtime Context (Task #951)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI instructions docs | <https://ai.pydantic.dev/agents/#instructions> | MIT | Static vs dynamic vs runtime instructions, plus append order for per-run context injection | `docs/research/dispatched-agent-runtime-context.md` | 2026-03-23 |
+| PydanticAI Agent API | <https://ai.pydantic.dev/api/agent/> | MIT | Per-run `instructions` and `metadata` kwargs used to separate LLM-visible context from observability context | `docs/research/dispatched-agent-runtime-context.md` | 2026-03-23 |
+| PydanticAI multi-agent docs | <https://ai.pydantic.dev/multi-agent-applications/> | MIT | Delegation patterns and shared deps or usage flow relevant to child-agent dispatch | `docs/research/dispatched-agent-runtime-context.md` | 2026-03-23 |
+| ruvnet/ruflo AGENTS.md | <https://raw.githubusercontent.com/ruvnet/ruflo/main/AGENTS.md> | MIT | Layered coordination context and runtime prompt surfaces that motivated task #951 | `docs/research/dispatched-agent-runtime-context.md` | 2026-03-23 |
+
 ## BearClaw Board Command Research (Task #905)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -1353,6 +1420,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | AWS Builders' Library â€” Timeouts, retries, and backoff with jitter | <https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/> | N/A | Single-point-in-stack retry principle, multiplicative retry anti-pattern, jitter strategy | `docs/research/daemon-retry-reconciliation.md` | 2026-03-06 |
 | Microsoft Azure â€” Retry Pattern | <https://learn.microsoft.com/en-us/azure/architecture/patterns/retry> | N/A (docs) | Layered retry guidance: lower-level should fail fast, higher-level owns policy; idempotency considerations | `docs/research/daemon-retry-reconciliation.md` | 2026-03-06 |
+
+## Cooperative Pipeline Cancellation Research (Task #733)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python asyncio `Event` docs | <https://docs.python.org/3/library/asyncio-sync.html#event> | PSF | `Event` is a lightweight cooperative signal with `set()`, `wait()`, and `is_set()`; good fit for polling loop boundaries | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
+| Python asyncio task cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF | `Task.cancel()` raises `CancelledError` at the next await; hard interruption is distinct from event polling | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
+| AnyIO cancellation docs | <https://anyio.readthedocs.io/en/stable/cancellation.html> | MIT | Cancel scopes provide stronger blocking-await cancellation but change semantics; eliminated in favour of asyncio-native `Event` | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
+| .NET cancellation token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | N/A (docs) | One token per cancelable operation and linked parent/child cancellation as prior art for per-operation composition | `docs/research/cooperative-cancellation.md` | 2026-03-20 |
 
 ## BearClaw CLI Subprocess Result Helper (Task #926)
 
