@@ -13,6 +13,7 @@ time; these meta-tests catch structural violations at the file level.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -59,7 +60,35 @@ OUT_OF_SCOPE_FILES = [
 ]
 
 
-class TestFromAC_RunHelperRemoved:  # noqa: N801
+class _DirectAwaitFinder(ast.NodeVisitor):
+    """Walks an async function's body looking for ``await`` expressions or
+    ``async for`` loops, but does **not** recurse into nested function
+    definitions (sync or async).
+
+    Usage: call ``finder.generic_visit(async_func_node)`` to start at the
+    function body without triggering the ``AsyncFunctionDef`` short-circuit.
+    """
+
+    def __init__(self) -> None:
+        self.found = False
+
+    def visit_Await(self, _node: ast.Await) -> None:
+        self.found = True
+
+    def visit_AsyncFor(self, node: ast.AsyncFor) -> None:
+        self.found = True
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        pass  # stop — do not look for awaits inside nested sync functions
+
+    def visit_AsyncFunctionDef(
+        self, node: ast.AsyncFunctionDef
+    ) -> None:
+        pass  # stop — do not look for awaits inside nested async functions
+
+
+class TestFromAC_RunHelperRemoved:
     """AC: In the 27 in-scope files the local _run() helper is removed and no
     _run() call sites remain."""
 
@@ -82,7 +111,7 @@ class TestFromAC_RunHelperRemoved:  # noqa: N801
         )
 
 
-class TestFromAC_AsyncConversion:  # noqa: N801
+class TestFromAC_AsyncConversion:
     """AC: Every test that executed a coroutine via _run() is converted to
     ``async def`` + ``@pytest.mark.asyncio``.  Tests that did not execute
     coroutines remain synchronous."""
@@ -124,3 +153,41 @@ class TestFromAC_AsyncConversion:  # noqa: N801
                 f"{filepath}:{line_no} `async def {m.group(2)}` "
                 "is missing @pytest.mark.asyncio (asyncio_mode=strict requires it)"
             )
+
+    @pytest.mark.parametrize("filepath", IN_SCOPE_FILES)
+    def test_non_coroutine_tests_remain_sync(self, filepath: str) -> None:
+        """Every ``async def test_`` in an in-scope file must contain at least
+        one ``await`` expression or ``async for`` loop directly in its body.
+
+        An async test with no ``await`` was not executing a coroutine — it
+        should have remained a plain ``def`` test.
+
+        AC: tests that do not execute coroutines remain synchronous.
+        """
+        content = (ROOT / filepath).read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(content)
+        except SyntaxError as exc:
+            pytest.fail(f"{filepath} has a syntax error: {exc}")
+
+        violations: list[str] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.AsyncFunctionDef):
+                continue
+            if not node.name.startswith("test_"):
+                continue
+            finder = _DirectAwaitFinder()
+            # Use generic_visit so the outer AsyncFunctionDef handler is
+            # bypassed — we want to walk the *body*, not the node header.
+            finder.generic_visit(node)
+            if not finder.found:
+                violations.append(
+                    f"  {filepath}:{node.lineno}  async def {node.name}"
+                    " — no `await` found; should remain a plain `def` test"
+                )
+
+        assert not violations, (
+            "Non-coroutine tests incorrectly converted to async def "
+            "(AC: tests without coroutines must remain synchronous):\n"
+            + "\n".join(violations)
+        )
