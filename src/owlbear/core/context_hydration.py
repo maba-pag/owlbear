@@ -15,6 +15,7 @@ import httpx
 from pydantic import BaseModel
 
 from owlbear.paths import sandbox_path
+from owlbear.web_extract import extract_markdown
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -111,15 +112,7 @@ async def fetch_url(
     except httpx.HTTPError:
         return ""
 
-    import trafilatura  # noqa: PLC0415 — lazy for test-time sys.modules patching
-
-    content = trafilatura.extract(
-        resp.text,
-        output_format="markdown",
-        include_links=True,
-        url=url,
-    )
-    result = content or ""
+    result = extract_markdown(resp.text, url=url) or ""
 
     from owlbear.config import OwlBearSettings  # noqa: PLC0415
 
