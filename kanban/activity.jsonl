@@ -4705,3 +4705,72 @@
 {"timestamp":"2026-03-23T06:53:15.7194642+01:00","action":"move","task_id":775,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-23T06:53:20.8728296+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
 {"timestamp":"2026-03-23T06:53:20.8762046+01:00","action":"release","task_id":775,"detail":"auditor-775"}
+{"timestamp":"2026-03-23T06:53:50.4125421+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:54:31.2734829+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T06:54:31.2771981+01:00","action":"claim","task_id":965,"detail":"test-writer"}
+{"timestamp":"2026-03-23T06:54:59.5800115+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T06:54:59.5836617+01:00","action":"claim","task_id":947,"detail":"builder"}
+{"timestamp":"2026-03-23T06:55:10.4488817+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T06:55:10.4558197+01:00","action":"claim","task_id":949,"detail":"reviewer"}
+{"timestamp":"2026-03-23T06:55:26.8348439+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T06:55:31.0000022+01:00","action":"edit","task_id":947,"detail":"Research ruflo Enterprise AI Orchestration Platform"}
+{"timestamp":"2026-03-23T06:55:31.0031599+01:00","action":"release","task_id":947,"detail":"builder"}
+{"timestamp":"2026-03-23T06:57:02.3794837+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T06:57:02.3826271+01:00","action":"claim","task_id":968,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T06:58:34.591151+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T06:59:08.8096081+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T06:59:31.7174552+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T06:59:31.720578+01:00","action":"release","task_id":968,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:00:21.1430472+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T07:00:21.1461978+01:00","action":"claim","task_id":968,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:00:43.0195535+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T07:01:18.4077274+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T07:01:36.5836373+01:00","action":"edit","task_id":949,"detail":"Archive redundant hook-triggered background worker pilot umbrella task"}
+{"timestamp":"2026-03-23T07:01:36.5878511+01:00","action":"release","task_id":949,"detail":"reviewer"}
+{"timestamp":"2026-03-23T07:02:22.0916561+01:00","action":"edit","task_id":968,"detail":"Test question_pending default hook cleanup"}
+{"timestamp":"2026-03-23T07:02:22.0980628+01:00","action":"release","task_id":968,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:03:53.1718236+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T07:03:58.3577281+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T07:04:03.2720718+01:00","action":"edit","task_id":965,"detail":"Test HookReaction policy schema and bootstrap router wiring"}
+{"timestamp":"2026-03-23T07:04:03.2767799+01:00","action":"release","task_id":965,"detail":"test-writer"}
+{"timestamp":"2026-03-23T07:04:45.0190644+01:00","action":"edit","task_id":876,"detail":"Add context_hydration RED assertions for extract_markdown url forwarding"}
+{"timestamp":"2026-03-23T07:04:45.0248739+01:00","action":"claim","task_id":876,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:04:50.2421238+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:04:50.2474423+01:00","action":"claim","task_id":521,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:05:01.2861002+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T07:05:01.2918786+01:00","action":"claim","task_id":958,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:05:11.1621121+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T07:05:11.167412+01:00","action":"claim","task_id":934,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:06:27.3537359+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:06:32.4613144+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:06:32.4651199+01:00","action":"release","task_id":521,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:10:31.385124+01:00","action":"edit","task_id":876,"detail":"Add context_hydration RED assertions for extract_markdown url forwarding"}
+{"timestamp":"2026-03-23T07:10:36.1388841+01:00","action":"edit","task_id":876,"detail":"Add context_hydration RED assertions for extract_markdown url forwarding"}
+{"timestamp":"2026-03-23T07:10:36.1430108+01:00","action":"release","task_id":876,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:11:03.52178+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T07:11:25.5872906+01:00","action":"edit","task_id":934,"detail":"Create OwlBear frontend-design skill from curated Impeccable references"}
+{"timestamp":"2026-03-23T07:11:25.5912178+01:00","action":"release","task_id":934,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:11:49.3020684+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T07:11:54.8866578+01:00","action":"edit","task_id":958,"detail":"Test dispatch-context carrier and delegation runtime instructions"}
+{"timestamp":"2026-03-23T07:11:54.8912094+01:00","action":"release","task_id":958,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:13:30.6848311+01:00","action":"edit","task_id":535,"detail":"Make logfire import conditional in daemon.py"}
+{"timestamp":"2026-03-23T07:13:30.690747+01:00","action":"claim","task_id":535,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:14:04.8915714+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T07:14:04.8956625+01:00","action":"claim","task_id":854,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:14:43.7087336+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-23T07:14:43.7136282+01:00","action":"claim","task_id":844,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:18:18.171468+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T07:18:23.6162805+01:00","action":"edit","task_id":854,"detail":"Tests for public pydantic-ai typing imports"}
+{"timestamp":"2026-03-23T07:18:23.6208747+01:00","action":"release","task_id":854,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:20:55.529794+01:00","action":"edit","task_id":535,"detail":"Make logfire import conditional in daemon.py"}
+{"timestamp":"2026-03-23T07:21:00.3297706+01:00","action":"edit","task_id":535,"detail":"Make logfire import conditional in daemon.py"}
+{"timestamp":"2026-03-23T07:21:00.3330589+01:00","action":"release","task_id":535,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:30:20.83147+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-23T07:30:26.8798557+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-23T07:30:26.8840981+01:00","action":"release","task_id":844,"detail":"rose-rapid"}
+{"timestamp":"2026-03-23T07:33:40.6478899+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:33:40.6516496+01:00","action":"claim","task_id":521,"detail":"auditor"}
+{"timestamp":"2026-03-23T07:41:50.2904362+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:41:54.9813617+01:00","action":"move","task_id":521,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T07:42:00.3831583+01:00","action":"edit","task_id":521,"detail":"Consider relocating VoiceChannel to channels/ package"}
+{"timestamp":"2026-03-23T07:42:00.3875968+01:00","action":"release","task_id":521,"detail":"auditor"}
