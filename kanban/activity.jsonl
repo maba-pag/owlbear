@@ -4698,3 +4698,10 @@
 {"timestamp":"2026-03-23T06:41:47.7474913+01:00","action":"move","task_id":868,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-23T06:41:52.3050368+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
 {"timestamp":"2026-03-23T06:41:52.3081524+01:00","action":"release","task_id":868,"detail":"auditor-claude-opus-4.6"}
+{"timestamp":"2026-03-23T06:42:44.9974987+01:00","action":"edit","task_id":868,"detail":"Create leaf markdown extraction helper for cross-layer callers"}
+{"timestamp":"2026-03-23T06:43:46.9168387+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:43:46.920621+01:00","action":"claim","task_id":775,"detail":"auditor-775"}
+{"timestamp":"2026-03-23T06:53:11.8708627+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:53:15.7194642+01:00","action":"move","task_id":775,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T06:53:20.8728296+01:00","action":"edit","task_id":775,"detail":"Add kanban-md skill to researcher and curator agent definitions"}
+{"timestamp":"2026-03-23T06:53:20.8762046+01:00","action":"release","task_id":775,"detail":"auditor-775"}
