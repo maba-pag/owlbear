@@ -1020,9 +1020,7 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         )
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_call_uses_supervisor_schedule_not_create_task(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_call_uses_supervisor_schedule_not_create_task(self, tmp_path: Path) -> None:
         """Non-trivial success outcome calls supervisor.schedule(), not asyncio.create_task()."""
         _write_activity_log(
             tmp_path,
@@ -1040,9 +1038,7 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         mock_supervisor.schedule.assert_called_once()
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_failure_outcome_skips_supervisor_schedule(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_failure_outcome_skips_supervisor_schedule(self, tmp_path: Path) -> None:
         """Non-success outcome does not reach supervisor.schedule()."""
         # success-only gate must be preserved
         _write_activity_log(
@@ -1057,9 +1053,7 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         mock_supervisor.schedule.assert_not_called()
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_trivial_task_skips_supervisor_schedule(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_trivial_task_skips_supervisor_schedule(self, tmp_path: Path) -> None:
         """Zero rejections + low priority skips supervisor.schedule()."""
         # eligibility gate must be preserved
         _write_activity_log(
@@ -1081,9 +1075,7 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         mock_supervisor.schedule.assert_not_called()
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_rejection_gate_preserved_with_supervisor(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_rejection_gate_preserved_with_supervisor(self, tmp_path: Path) -> None:
         """At least one rejection → supervisor.schedule() is called (rejection gate intact)."""
         _write_activity_log(
             tmp_path,
