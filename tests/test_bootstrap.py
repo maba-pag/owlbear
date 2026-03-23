@@ -2971,3 +2971,156 @@ class TestFromAC_BuildToolsetsNoBareModelDeprecation:
             f"chat_model or settings.chat_model passed bare string {captured[0]!r} "
             "to _build_bookmark_toolset — fix expected in #556"
         )
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: HookReaction settings parsing (#965)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_OwlBearSettingsHookReactions:
+    """AC: OwlBearSettings defaults hook_reactions to [] and preserves
+    declared rule order when parsing hook_reactions list input into
+    HookReactionRule objects.
+    """
+
+    def test_hook_reactions_defaults_to_empty_list(self) -> None:
+        settings = OwlBearSettings()
+        assert settings.hook_reactions == []
+
+    def test_hook_reactions_parses_list_of_dicts_to_rule_objects(self) -> None:
+        from owlbear.core.hook_reaction_router import HookReactionRule
+
+        settings = OwlBearSettings(
+            hook_reactions=[
+                {"events": ["task_complete"], "actions": ["notify"]},
+            ]
+        )
+        assert len(settings.hook_reactions) == 1
+        assert isinstance(settings.hook_reactions[0], HookReactionRule)
+
+    def test_hook_reactions_preserves_rule_order(self) -> None:
+        rules_input = [
+            {"events": ["on_error"], "actions": ["retry"]},
+            {"events": ["task_complete"], "actions": ["notify"]},
+            {"events": ["budget_warning"], "actions": ["escalate"]},
+        ]
+        settings = OwlBearSettings(hook_reactions=rules_input)
+        assert len(settings.hook_reactions) == 3
+        assert settings.hook_reactions[0].events == ["on_error"]
+        assert settings.hook_reactions[1].events == ["task_complete"]
+        assert settings.hook_reactions[2].events == ["budget_warning"]
+
+    def test_hook_reactions_preserves_actions_per_rule(self) -> None:
+        from owlbear.core.hook_reaction_router import HookReactionRule
+
+        rules_input = [
+            {"events": ["task_complete"], "actions": ["notify", "escalate"]},
+        ]
+        settings = OwlBearSettings(hook_reactions=rules_input)
+        rule = settings.hook_reactions[0]
+        assert isinstance(rule, HookReactionRule)
+        assert rule.actions == ["notify", "escalate"]
+
+    def test_hook_reactions_empty_list_is_valid(self) -> None:
+        settings = OwlBearSettings(hook_reactions=[])
+        assert settings.hook_reactions == []
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: build_hooks() HookReaction wiring (#965)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BuildHooksHookReactions:
+    """AC: invalid hook_reactions event names fail build_hooks/router registration
+    instead of being skipped silently.
+    AC: build_hooks() leaves existing NotificationHook registrations intact
+    when reaction handlers are added.
+    """
+
+    def test_build_hooks_no_reactions_leaves_notification_events(self) -> None:
+        """Happy: empty hook_reactions does not disturb NotificationHook handlers."""
+        settings = OwlBearSettings(
+            hook_reactions=[],
+            notification_events=["task_complete"],
+        )
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        task_handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        assert len(task_handlers) >= 1
+
+    def test_build_hooks_with_reactions_preserves_notification_handlers(self) -> None:
+        """AC: NotificationHook registrations remain intact when reactions are added."""
+        settings = OwlBearSettings(
+            hook_reactions=[{"events": ["on_error"], "actions": ["retry"]}],
+            notification_events=["task_complete"],
+        )
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        # NotificationHook registers a handler for TASK_COMPLETE
+        task_handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        assert len(task_handlers) >= 1
+
+    def test_build_hooks_with_reactions_adds_handler_for_configured_event(self) -> None:
+        """AC: build_hooks registers one handler per configured reaction event."""
+        settings = OwlBearSettings(
+            hook_reactions=[
+                {"events": ["budget_warning"], "actions": ["escalate"]},
+            ],
+            notification_events=[],
+        )
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        budget_handlers = hooks.handlers.get(HookEvent.BUDGET_WARNING, [])
+        assert len(budget_handlers) >= 1
+
+    def test_build_hooks_invalid_event_name_raises_not_skips(self) -> None:
+        """AC: invalid event name fails at registration, not silently skipped."""
+        # We need to bypass HookReactionRule validation to get an invalid event
+        # into the settings, then verify build_hooks raises rather than skipping.
+        from owlbear.core.hook_reaction_router import HookReactionRule
+
+        bad_rule = HookReactionRule.__new__(HookReactionRule)
+        object.__setattr__(bad_rule, "events", ["completely_invalid_hook_event"])
+        object.__setattr__(bad_rule, "actions", ["notify"])
+        object.__setattr__(bad_rule, "match", None)
+
+        settings = OwlBearSettings()
+        # Inject the bad rule directly (bypassing Pydantic validation on the field)
+        object.__setattr__(settings, "hook_reactions", [bad_rule])
+
+        with pytest.raises((ValueError, KeyError)):
+            build_hooks(settings, workspace_root=None)
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: question_pending default hook cleanup (#968)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_QuestionPendingDefaultHook:
+    """AC: build_hooks() with default settings registers TASK_COMPLETE and ON_ERROR handlers
+    but NOT QUESTION_PENDING; explicit config can still register QUESTION_PENDING.
+    """
+
+    def test_default_build_hooks_registers_task_complete_and_on_error_not_question_pending(
+        self,
+    ) -> None:
+        """Default build_hooks must register TASK_COMPLETE and ON_ERROR but not QUESTION_PENDING."""
+        hooks, _ = build_hooks(OwlBearSettings(), workspace_root=None)
+        assert len(hooks.handlers.get(HookEvent.TASK_COMPLETE, [])) >= 1
+        assert len(hooks.handlers.get(HookEvent.ON_ERROR, [])) >= 1
+        # question_pending is not in the new default — must have zero handlers
+        assert len(hooks.handlers.get(HookEvent.QUESTION_PENDING, [])) == 0
+
+    def test_explicit_question_pending_config_registers_handler_while_default_excludes_it(
+        self,
+    ) -> None:
+        """Default must not register QUESTION_PENDING; explicit config must still register it."""
+        # Guard: default registration must not include QUESTION_PENDING (fails until builder's fix)
+        default_hooks, _ = build_hooks(OwlBearSettings(), workspace_root=None)
+        assert len(default_hooks.handlers.get(HookEvent.QUESTION_PENDING, [])) == 0
+        # Main: explicit notification_events=[..., question_pending] must still register it
+        explicit_settings = OwlBearSettings(
+            notification_events=["task_complete", "question_pending"],
+        )
+        explicit_hooks, _ = build_hooks(explicit_settings, workspace_root=None)
+        assert len(explicit_hooks.handlers.get(HookEvent.QUESTION_PENDING, [])) >= 1

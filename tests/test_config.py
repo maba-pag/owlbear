@@ -637,3 +637,80 @@ class TestFromAC_FlatEnvRegressionGuard:  # noqa: N801
         monkeypatch.setenv("OWLBEAR_DEBUG", "true")
         settings = OwlBearSettings()
         assert settings.debug is True
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: question_pending default hook cleanup (#968)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_QuestionPendingDefaultCleanup:
+    """Default notification_events excludes question_pending; explicit config accepts it."""
+
+    def test_default_notification_events_excludes_question_pending(self) -> None:
+        """Default notification_events must be exactly [task_complete, on_error]."""
+        assert OwlBearSettings().notification_events == ["task_complete", "on_error"]
+
+    def test_env_var_question_pending_explicit_opt_in_while_default_excludes_it(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default must not include question_pending; env var can still add it explicitly."""
+        # Guard: default must not include question_pending (fails until builder's fix)
+        assert "question_pending" not in OwlBearSettings().notification_events
+        # Main: env var override that includes question_pending is still accepted
+        monkeypatch.setenv(
+            "OWLBEAR_NOTIFICATION_EVENTS",
+            '["task_complete", "question_pending"]',
+        )
+        settings = OwlBearSettings()
+        assert "question_pending" in settings.notification_events
+
+    def test_direct_constructor_question_pending_explicit_opt_in_while_default_excludes_it(
+        self,
+    ) -> None:
+        """Default must not include question_pending; direct constructor can still add it."""
+        # Guard: default must not include question_pending (fails until builder's fix)
+        assert "question_pending" not in OwlBearSettings().notification_events
+        # Main: direct constructor with question_pending is still accepted
+        explicit = OwlBearSettings(notification_events=["task_complete", "question_pending"])
+        assert "question_pending" in explicit.notification_events
+
+    def test_default_notification_events_subset_of_live_emitted_hook_events(self) -> None:
+        """Regression: default notification_events must be a subset of HookEvent members
+        passed to .emit() call sites in src/owlbear.
+
+        This prevents dead default events (events registered by default but never
+        actually emitted by runtime code) from reaching users.
+        """
+        import ast
+        from pathlib import Path
+
+        src_root = Path(__file__).resolve().parent.parent / "src" / "owlbear"
+        emitted_attrs: set[str] = set()
+
+        for py_file in src_root.rglob("*.py"):
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                # Match obj.emit(...)
+                if not (isinstance(node.func, ast.Attribute) and node.func.attr == "emit"):
+                    continue
+                # First positional arg must be HookEvent.SOMETHING
+                if not node.args:
+                    continue
+                first_arg = node.args[0]
+                if (
+                    isinstance(first_arg, ast.Attribute)
+                    and isinstance(first_arg.value, ast.Name)
+                    and first_arg.value.id == "HookEvent"
+                ):
+                    emitted_attrs.add(first_arg.attr.lower())
+
+        default_events = OwlBearSettings().notification_events
+        missing = set(default_events) - emitted_attrs
+        assert not missing, (
+            f"Default notification_events contains events never emitted in src/owlbear: "
+            f"{sorted(missing)!r}.  Live emitted events: {sorted(emitted_attrs)}"
+        )
