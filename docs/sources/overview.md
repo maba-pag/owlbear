@@ -1874,6 +1874,13 @@ External repos and resources studied during OwlBear development.
 | trafilatura Python usage docs | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | Apache-2.0 | Public raw extract contract for markdown output, link inclusion, URL forwarding, and metadata extraction | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
 | trafilatura GitHub repo | <https://github.com/adbar/trafilatura> | Apache-2.0 | Confirmed project license and the helper-boundary API surface already covered in `tests/test_web_extract.py` | `docs/research/content-extractor-extract-markdown-delegation-red-task.md` | 2026-03-21 |
 
+## Context Hydration Extract Markdown Seam RED Coverage (Task #869)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `unittest.mock` docs | <https://docs.python.org/3/library/unittest.mock.html#where-to-patch> | PSF | Canonical "patch where the object is looked up" rule — confirms module-local `extract_markdown` is the correct seam after helper migration | `docs/research/context-hydration-extract-markdown-red-task.md` | 2026-03-20 |
+| pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | Fixture-scoped patching semantics for narrow consumer-site helper seam replacement | `docs/research/context-hydration-extract-markdown-red-task.md` | 2026-03-20 |
+
 ## Context Hydration URL Forwarding RED Coverage (Task #876)
 
 | Source | URL | License | What we studied | Where Used | Date |
