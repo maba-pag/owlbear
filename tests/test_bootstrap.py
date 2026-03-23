@@ -116,9 +116,9 @@ class TestBuildHooks:
     def test_notification_events_registered(self) -> None:
         settings = OwlBearSettings()
         hooks, _ = build_hooks(settings, workspace_root=None)
-        # Default notification_events includes task_complete & question_pending
+        # Default events: task_complete and on_error (question_pending removed in #962)
         assert len(hooks.handlers.get(HookEvent.TASK_COMPLETE, [])) >= 1
-        assert len(hooks.handlers.get(HookEvent.QUESTION_PENDING, [])) >= 1
+        assert len(hooks.handlers.get(HookEvent.ON_ERROR, [])) >= 1
 
     def test_observability_hook_with_workspace(self, tmp_path: Path) -> None:
         settings = OwlBearSettings()

@@ -249,7 +249,7 @@ class OwlBearSettings(BaseSettings):
 
     # --- Notifications ---
     notification_events: list[str] = Field(
-        default=["task_complete", "question_pending", "on_error"],
+        default=["task_complete", "on_error"],
         description="Event names that trigger user notifications.",
     )
     notification_backends: list[str] = Field(

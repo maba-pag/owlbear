@@ -179,10 +179,9 @@ class TestNotificationSettingsDefaults:
     """Verify notification fields have correct defaults."""
 
     def test_notification_events_default(self, default_settings: OwlBearSettings) -> None:
-        """Default notification_events should be task_complete, question_pending, on_error."""
+        """Default notification_events must be [task_complete, on_error]."""
         assert default_settings.notification_events == [
             "task_complete",
-            "question_pending",
             "on_error",
         ]
 
