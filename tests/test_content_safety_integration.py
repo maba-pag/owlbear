@@ -398,3 +398,66 @@ class TestFromACBookmarkPipelineExcluded:
             "content goes to knowledge graph, not LLM context"
         )
         assert bookmark_result == "Article text"
+
+
+# ===========================================================================
+# AC #876: fetch_url() caller-seam — delegates to module-local extract_markdown
+# ===========================================================================
+
+
+class TestFromAC_FetchUrlExtractMarkdownSeam:
+    """fetch_url() caller-seam: delegates to module-local extract_markdown.
+
+    Caller-boundary assertions per task #876.  Does not test helper-internal
+    trafilatura kwargs (owned by #874 / tests/test_web_extract.py).
+    Fails pre-#873: extract_markdown is never called by fetch_url.
+    Passes once #873 imports extract_markdown and calls it with resp.text + url.
+    """
+
+    @pytest.mark.asyncio
+    async def test_fetch_url_forwards_to_helper_and_wraps_output(self) -> None:
+        """fetch_url() calls extract_markdown(html_body, url=url) once and wraps result.
+
+        Two invariants:
+        1. Caller-seam: extract_markdown called exactly once with the fetched HTML
+           body as first positional arg and url= as keyword arg.
+        2. Wrapping contract: the raw helper return value is wrapped by
+           wrap_untrusted_content, so the final result contains _OPEN_TAG.
+
+        Both invariants fail pre-#873 (assert_called_once_with raises because
+        the mock is never invoked; result is empty so _OPEN_TAG is absent).
+        """
+        from owlbear.core.context_hydration import fetch_url
+
+        html_body = "<html><body><p>Web article</p></body></html>"
+        target_url = "https://example.com/news/story"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract.return_value = None  # pre-#873 fallback
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                create=True,
+            ) as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "extracted news article"
+            result = await fetch_url(target_url)
+
+        # Seam assertion: helper forwarded html body and url= (fails pre-#873)
+        mock_extract_md.assert_called_once_with(html_body, url=target_url)
+        # Wrapping assertion: raw helper output still passes through wrap_untrusted_content
+        assert _OPEN_TAG in result, (
+            "wrapping must be applied to extract_markdown return value"
+        )

@@ -544,6 +544,92 @@ class TestBuilderDiscovered:
 
         assert result == ""
 
+
+# ===========================================================================
+# AC #876: fetch_url() delegates to extract_markdown(html_body, url=url)
+# ===========================================================================
+
+
+class TestFromAC_FetchUrlExtractMarkdownForwarding:
+    """fetch_url() forwards resp.text and url= to extract_markdown helper.
+
+    RED supplement for #873 per task #876.
+    Fails pre-#873 (trafilatura called directly).
+    Passes once #873 imports extract_markdown and delegates via it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_forwards_html_body_and_url_to_extract_markdown(self) -> None:
+        """fetch_url() calls extract_markdown(html_body, url=url) exactly once.
+
+        Caller-boundary assertion: does not check trafilatura kwargs (owned by #874).
+        Fails pre-#873 because extract_markdown is never called by fetch_url.
+        """
+        html_body = "<html><body><p>Article text</p></body></html>"
+        target_url = "https://example.com/article"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract.return_value = None  # pre-#873 code path
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                create=True,
+            ) as mock_extract_md,
+        ):
+            mock_extract_md.return_value = "## Article\n\nArticle text"
+            await fetch_url(target_url)
+
+        mock_extract_md.assert_called_once_with(html_body, url=target_url)
+
+    @pytest.mark.asyncio
+    async def test_helper_return_propagates_to_fetch_url_result(self) -> None:
+        """fetch_url() result contains the value returned by extract_markdown.
+
+        Fails pre-#873: result comes from trafilatura mock ("unrelated output"),
+        not from the extract_markdown mock, so the distinctive marker is absent.
+        Passes once #873 delegates through extract_markdown.
+        """
+        html_body = "<html><body><p>Notable content</p></body></html>"
+        target_url = "https://example.com/page"
+        distinctive_marker = "DISTINCT_MARKER_FROM_EXTRACT_MARKDOWN"
+
+        mock_resp = MagicMock()
+        mock_resp.text = html_body
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        mock_trafilatura = MagicMock()
+        mock_trafilatura.extract.return_value = "unrelated trafilatura output"
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch.dict("sys.modules", {"trafilatura": mock_trafilatura}),
+            patch(
+                "owlbear.core.context_hydration.extract_markdown",
+                create=True,
+            ) as mock_extract_md,
+        ):
+            mock_extract_md.return_value = distinctive_marker
+            result = await fetch_url(target_url)
+
+        assert distinctive_marker in result
+
     @pytest.mark.asyncio
     async def test_hydrate_url_success_populates_urls_dict(self, tmp_path: Path) -> None:
         """Successful URL fetch through hydrate() populates result.urls."""
