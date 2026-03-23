@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
     from owlbear.memory.knowledge.graph import GraphStore
     from owlbear.memory.knowledge.protocol import VectorStoreProtocol
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +72,15 @@ class InterDocGraphBuilder:
         print(result.edges_added, result.edges)
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         model: str | Model,
         vector_store: VectorStoreProtocol,
         graph_store: GraphStore,
         top_k: int = 10,
         cosine_threshold: float = 0.70,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
     ) -> None:
         relation_types = ", ".join(rt.value for rt in RelationType)
         self._agent: Agent[None, ExtractionResult] = Agent(
@@ -87,6 +92,8 @@ class InterDocGraphBuilder:
         self._graph_store = graph_store
         self._top_k = top_k
         self._cosine_threshold = cosine_threshold
+        self._tracker = tracker
+        self._provider = provider
 
     async def build(
         self,
@@ -139,6 +146,15 @@ class InterDocGraphBuilder:
                 )
                 continue
 
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._agent.model or ""),
+                    provider=self._provider or "",
+                    session_id="background:inter_doc_graph",
+                    operation="inter_doc_graph",
+                )
             stamped = self._stamp_edges(result.output.edges, batch, entity_map, scope)
             all_edges.extend(stamped)
 
@@ -204,9 +220,7 @@ class InterDocGraphBuilder:
                 return True
 
         edges = self._graph_store.list_edges(source_id=entity_b, target_id=entity_a)
-        return any(
-            edge.metadata.get("source") == "inter_doc_inference" for edge in edges
-        )
+        return any(edge.metadata.get("source") == "inter_doc_inference" for edge in edges)
 
     @staticmethod
     def _batch_pairs(

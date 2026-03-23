@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
     from owlbear.core.hooks import HookRegistry
     from owlbear.memory.knowledge.ingest import IngestPipeline
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
 
 logger = logging.getLogger(__name__)
 
@@ -82,19 +85,23 @@ class RetrospectiveHook:
             per-operation cancel signal passed to ``ingest_text`` is also set.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         model: Model,
         ingest_pipeline: IngestPipeline,
         kanban_root: Path,
         shutdown_event: asyncio.Event | None = None,
         supervisor: HookWorkerSupervisor | None = None,
+        tracker: UsageTracker | None = None,
+        provider: str = "copilot",
     ) -> None:
         self._ingest_pipeline = ingest_pipeline
         self._kanban_root = kanban_root
         self._model = model
         self._shutdown_event = shutdown_event
         self._supervisor = supervisor
+        self._tracker = tracker
+        self._provider = provider
         self._agent: Agent[None, RetroFindings] | None = None
 
     def _get_agent(self) -> Agent[None, RetroFindings]:
@@ -203,6 +210,15 @@ class RetrospectiveHook:
         try:
             agent = self._get_agent()
             result = await agent.run(f"Generate a retrospective for completed task #{task_id}.")
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._model),
+                    provider=self._provider,
+                    session_id="background:retrospective",
+                    operation="retrospective",
+                )
             findings: RetroFindings = result.output
 
             text = self._format_findings(task_id, findings)

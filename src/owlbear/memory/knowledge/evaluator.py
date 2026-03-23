@@ -11,6 +11,10 @@ from pydantic_ai import Agent
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
+
 logger = logging.getLogger(__name__)
 
 MAX_CONTENT_LENGTH = 2000
@@ -89,12 +93,19 @@ class SourceEvaluator:
         print(result.relevance_score, result.tags)
     """
 
-    def __init__(self, model: str | Model) -> None:
+    def __init__(
+        self,
+        model: str | Model,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
+    ) -> None:
         self._agent: Agent[None, EvaluationResult] = Agent(
             model,
             output_type=EvaluationResult,
             system_prompt=EVALUATION_PROMPT,
         )
+        self._tracker = tracker
+        self._provider = provider
 
     async def evaluate(
         self,
@@ -140,4 +151,13 @@ class SourceEvaluator:
                 worth_ingesting=False,
             )
         else:
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._agent.model or ""),
+                    provider=self._provider or "",
+                    session_id="background:source_evaluation",
+                    operation="source_evaluation",
+                )
             return result.output

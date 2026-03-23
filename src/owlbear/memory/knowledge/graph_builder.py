@@ -19,6 +19,10 @@ from owlbear.memory.knowledge.models import Edge, Entity, RelationType
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
+
 logger = logging.getLogger(__name__)
 
 _BATCH_THRESHOLD = 80
@@ -66,13 +70,20 @@ class IntraDocGraphBuilder:
         print(result.edges_added, result.edges)
     """
 
-    def __init__(self, model: str | Model) -> None:
+    def __init__(
+        self,
+        model: str | Model,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
+    ) -> None:
         relation_types = ", ".join(rt.value for rt in RelationType)
         self._agent: Agent[None, ExtractionResult] = Agent(
             model,
             output_type=ExtractionResult,
             system_prompt=GRAPH_BUILDER_PROMPT.format(relation_types=relation_types),
         )
+        self._tracker = tracker
+        self._provider = provider
 
     async def build(
         self,
@@ -125,6 +136,15 @@ class IntraDocGraphBuilder:
             )
             return GraphBuildResult()
 
+        if self._tracker is not None:
+            record_agent_usage(
+                tracker=self._tracker,
+                result=result,
+                model=str(self._agent.model or ""),
+                provider=self._provider or "",
+                session_id="background:intra_doc_graph",
+                operation="intra_doc_graph",
+            )
         edges = self._stamp_edges(result.output.edges, scope)
         return GraphBuildResult(edges_added=len(edges), edges=edges)
 
@@ -153,6 +173,15 @@ class IntraDocGraphBuilder:
                 )
                 continue
 
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._agent.model or ""),
+                    provider=self._provider or "",
+                    session_id="background:intra_doc_graph",
+                    operation="intra_doc_graph",
+                )
             all_edges.extend(self._stamp_edges(result.output.edges, scope))
 
         return GraphBuildResult(edges_added=len(all_edges), edges=all_edges)
@@ -162,10 +191,7 @@ class IntraDocGraphBuilder:
         """Build a user prompt listing entities for the LLM."""
         lines = [
             f"Entities ({len(entities)}):",
-            *(
-                f"- [{e.id}] {e.name} ({e.entity_type}): {e.description}"
-                for e in entities
-            ),
+            *(f"- [{e.id}] {e.name} ({e.entity_type}): {e.description}" for e in entities),
         ]
         return "\n".join(lines)
 

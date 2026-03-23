@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.graph import GraphStore
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.qdrant import QdrantVectorStore
+    from owlbear.memory.usage import UsageTracker
     from owlbear.tools.browser.toolset import BrowserToolset
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class _KnowledgeInfra:
 def _build_knowledge_infra(
     workspace: Path,
     chat_model: str | Model | None = None,
+    tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> _KnowledgeInfra | None:
     """Create shared knowledge infrastructure objects once.
 
@@ -109,6 +111,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     bg_concurrency: int = 5,
     consolidation_enabled: bool = False,
     consolidation_interval: int = 1800,  # noqa: ARG001
+    tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> (
     tuple[
         AbstractToolset,
@@ -230,6 +233,7 @@ def _build_bookmark_toolset(
     workspace: Path,
     chat_model: str | Model,
     ingest_threshold: float = 0.7,
+    tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> AbstractToolset | None:
     """Create a :class:`BookmarkToolset` backed by the knowledge DB.
 

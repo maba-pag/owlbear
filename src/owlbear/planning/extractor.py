@@ -12,6 +12,10 @@ from owlbear.planning.models import ProjectDefinition
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
+    from owlbear.memory.usage import UsageTracker
+
+from owlbear.memory.usage import record_agent_usage
+
 logger = logging.getLogger(__name__)
 
 EXTRACTION_PROMPT = """\
@@ -55,12 +59,19 @@ class ProjectDefinitionExtractor:
         print(definition.name, definition.goals)
     """
 
-    def __init__(self, model: str | Model) -> None:
+    def __init__(
+        self,
+        model: str | Model,
+        tracker: UsageTracker | None = None,
+        provider: str | None = None,
+    ) -> None:
         self._agent: Agent[None, ProjectDefinition] = Agent(
             model,
             output_type=ProjectDefinition,
             system_prompt=EXTRACTION_PROMPT,
         )
+        self._tracker = tracker
+        self._provider = provider
 
     async def extract(self, text: str) -> ProjectDefinition:
         """Extract a project definition from *text*.
@@ -77,4 +88,13 @@ class ProjectDefinitionExtractor:
             logger.warning("Project definition extraction failed", exc_info=True)
             return _default_definition()
         else:
+            if self._tracker is not None:
+                record_agent_usage(
+                    tracker=self._tracker,
+                    result=result,
+                    model=str(self._agent.model or ""),
+                    provider=self._provider or "",
+                    session_id="background:project_extraction",
+                    operation="project_extraction",
+                )
             return result.output

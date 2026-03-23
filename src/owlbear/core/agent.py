@@ -235,6 +235,7 @@ class OwlBearAgent:
                 tool_calls=usage.tool_calls or 0,
                 estimated_cost_usd=estimated_cost,
                 premium_requests=premium,
+                operation="turn",
             )
             self.tracker.append(record)  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001

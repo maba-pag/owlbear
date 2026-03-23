@@ -62,14 +62,27 @@ def _wire_session_memory_hook(
     model: Model,
     workspace: Path,
     hooks: HookRegistry,
+    *,
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> None:
     """Register :class:`SessionMemoryHook` with an LLM-backed summarizer."""
     from pydantic_ai import Agent  # noqa: PLC0415
 
     from owlbear.core.session_memory_hook import SessionMemoryHook  # noqa: PLC0415
+    from owlbear.memory.usage import record_agent_usage  # noqa: PLC0415
 
     async def _summarize(text: str) -> str:
         result = await Agent(model, system_prompt=_SESSION_SUMMARY_PROMPT).run(text)
+        if tracker is not None:
+            record_agent_usage(
+                tracker=tracker,
+                result=result,
+                model=str(model),
+                provider=provider,
+                session_id="background:session_summary",
+                operation="session_summary",
+            )
         return result.output
 
     SessionMemoryHook(workspace_root=workspace, summarizer=_summarize).register(hooks)
@@ -98,6 +111,7 @@ def _wire_post_model_hooks(  # noqa: PLR0913
     hooks: HookRegistry,
     ingest_pipeline: object | None,
     cleanup: list | None = None,
+    tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> None:
     """Register hooks that depend on the model being available."""
     if ingest_pipeline is not None:
@@ -215,6 +229,7 @@ async def bootstrap(
         condenser = SummarizingCondenser(
             max_events=settings.condenser_max_events,
             model=model,
+            tracker=tracker,
         )
         history_processors = [condenser]
 
