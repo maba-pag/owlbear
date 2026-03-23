@@ -42,7 +42,7 @@ MAX_DELEGATION_DEPTH: int = 5
 """Maximum nesting depth for agent-to-agent delegation."""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class DispatchContext:
     """Runtime context forwarded to child agents during delegation.
 
