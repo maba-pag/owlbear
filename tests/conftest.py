@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import warnings
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -120,3 +121,18 @@ def make_settings(tmp_path: Path, **overrides: object) -> OwlBearSettings:
     }
     defaults.update(overrides)
     return OwlBearSettings(**defaults)  # type: ignore[arg-type]
+
+
+def make_completed_process(
+    *,
+    returncode: int = 0,
+    stdout: str = "",
+    stderr: str = "",
+) -> subprocess.CompletedProcess[str]:
+    """Build a real text-mode subprocess.CompletedProcess for use in tests."""
+    return subprocess.CompletedProcess(
+        args=[],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
