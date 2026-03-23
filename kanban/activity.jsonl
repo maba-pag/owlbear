@@ -4317,3 +4317,10 @@
 {"timestamp":"2026-03-23T02:36:42.2077386+01:00","action":"move","task_id":728,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-23T02:36:46.9497939+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
 {"timestamp":"2026-03-23T02:36:46.9529423+01:00","action":"release","task_id":728,"detail":"auditor"}
+{"timestamp":"2026-03-23T02:37:11.2417207+01:00","action":"edit","task_id":728,"detail":"Add structured handoff template to agent-common.instructions.md"}
+{"timestamp":"2026-03-23T02:37:36.3773327+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-23T02:37:36.3804372+01:00","action":"claim","task_id":781,"detail":"auditor"}
+{"timestamp":"2026-03-23T02:43:42.5266839+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-23T02:43:46.8271343+01:00","action":"move","task_id":781,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-23T02:43:51.1764393+01:00","action":"edit","task_id":781,"detail":"Implement knowledge-ops SKILL.md content"}
+{"timestamp":"2026-03-23T02:43:51.180117+01:00","action":"release","task_id":781,"detail":"auditor"}
