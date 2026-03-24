@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 _MAX_PORT = 65535
 _ALLOWED_ACTIONS: frozenset[str] = frozenset({"notify", "retry", "escalate"})
+_MATCH_SCALAR_TYPES: tuple[type[object], ...] = (str, int, float, bool)
 
 
 class HookReactionRule(BaseModel):
@@ -77,12 +78,13 @@ class HookReactionRule(BaseModel):
         if v is None:
             return v
         for key, val in v.items():
-            if isinstance(val, (dict, list)):
-                msg = (
-                    f"match values must be scalars; "
-                    f"key {key!r} has a non-scalar value ({type(val).__name__})"
-                )
-                raise ValueError(msg)  # noqa: TRY004 — must be ValueError for Pydantic ValidationError wrapping
+            if val is None or isinstance(val, _MATCH_SCALAR_TYPES):
+                continue
+            msg = (
+                f"match values must be scalars; "
+                f"key {key!r} has a non-scalar value ({type(val).__name__})"
+            )
+            raise ValueError(msg)
         return v
 
 
