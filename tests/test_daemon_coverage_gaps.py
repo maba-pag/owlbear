@@ -98,7 +98,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-        await (go())
+        await go()
 
         assert "X1" not in state.running
         assert "X1" not in state.retries
@@ -127,7 +127,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:
             async def go() -> None:
                 await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-            await (go())
+            await go()
 
         warn_calls = mock_logger.warning.call_args_list
         assert any("Failed to block exhausted task" in str(c) for c in warn_calls)
@@ -152,7 +152,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=5)
 
-        await (go())
+        await go()
 
         mock_kanban.kanban_edit.assert_called_once()
         call_kwargs = mock_kanban.kanban_edit.call_args
@@ -180,7 +180,7 @@ class TestFromAC_ReconcileRetryExhaustedKanbanFailure:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, max_retry_attempts=2)
 
-        await (go())
+        await go()
 
         # Exhausted → kanban_edit called to block
         mock_kanban.kanban_edit.assert_called_once()
@@ -227,7 +227,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         # Retry entry consumed
         assert "R1" not in state.retries
@@ -275,7 +275,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 wip_store=mock_wip,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)  # drain tasks spawned by poll_tick
 
         assert len(captured_prompts) == 1
@@ -313,7 +313,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         # Retry NOT dispatched — still in retries
         assert "R3" in state.retries
@@ -345,7 +345,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 shutdown_event=shutdown,
             )
 
-        await (go())
+        await go()
 
         # Retry NOT dispatched due to shutdown
         assert "R4" not in state.running
@@ -375,7 +375,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         # Still pending
         assert "R5" in state.retries
@@ -412,7 +412,7 @@ class TestFromAC_PollTickRetryRedispatch:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         mock_registry.get.assert_called_with("builder")
 
@@ -478,7 +478,7 @@ class TestFromAC_RunDaemonInflightCancellation:
                     agent_registry=MagicMock(),
                 )
 
-            await (go())
+            await go()
 
         assert inflight_task is not None
         assert inflight_task.cancelled()
@@ -527,7 +527,7 @@ class TestFromAC_RunDaemonInflightCancellation:
                 )
 
             # Should not raise
-            await (go())
+            await go()
 
 
 # ---------------------------------------------------------------------------
@@ -566,7 +566,7 @@ class TestFromAC_ReconcileLintGate:
                     workspace=Path("/fake"),
                 )
 
-            await (go())
+            await go()
 
         # Task should NOT be moved to review — it failed lint
         mock_kanban.kanban_move.assert_not_called()
@@ -596,7 +596,7 @@ class TestFromAC_ReconcileLintGate:
                     workspace=Path("/fake"),
                 )
 
-            await (go())
+            await go()
 
         mock_lint.assert_not_called()
         # Task moved to review normally
@@ -624,7 +624,7 @@ class TestFromAC_ReconcileLintGate:
                     workspace=None,
                 )
 
-            await (go())
+            await go()
 
         mock_lint.assert_not_called()
         mock_kanban.kanban_move.assert_called_once_with("LG3", "review")
@@ -656,7 +656,7 @@ class TestFromAC_ReconcileSuccessPath:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        await (go())
+        await go()
 
         mock_wip.clear.assert_called_once_with(agent="builder", task_id="S1")
         mock_kanban.kanban_move.assert_called_once_with("S1", "review")
@@ -678,7 +678,7 @@ class TestFromAC_ReconcileSuccessPath:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
 
-        await (go())
+        await go()
 
         mock_hooks.emit.assert_called_once_with(
             HookEvent.TASK_COMPLETE,
@@ -700,7 +700,7 @@ class TestFromAC_ReconcileSuccessPath:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        await (go())
+        await go()
 
         mock_kanban.kanban_move.assert_called_once_with("S3", "review")
         assert "S3" not in state.claimed
@@ -732,7 +732,7 @@ class TestFromAC_ReconcileFailureSideEffects:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, wip_store=mock_wip)
 
-        await (go())
+        await go()
 
         mock_wip.save.assert_called_once()
         call_kwargs = mock_wip.save.call_args.kwargs
@@ -757,7 +757,7 @@ class TestFromAC_ReconcileFailureSideEffects:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
 
-        await (go())
+        await go()
 
         mock_hooks.emit.assert_called_once_with(
             HookEvent.TASK_COMPLETE,
@@ -781,7 +781,7 @@ class TestFromAC_ReconcileFailureSideEffects:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        await (go())
+        await go()
 
         assert "F3" in state.retries
         entry = state.retries["F3"]
@@ -813,7 +813,7 @@ class TestFromAC_ReconcileFailureSideEffects:
         async def go() -> None:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
-        await (go())
+        await go()
 
         assert state.retries["F4"].attempt == 2
 
@@ -851,7 +851,7 @@ class TestFromAC_DetectStaleTasks:
                 stale_timeout=300.0,
             )
 
-        await (go())
+        await go()
 
         mock_task.cancel.assert_called_once()
         assert "ST1" not in state.running
@@ -884,7 +884,7 @@ class TestFromAC_DetectStaleTasks:
                 stale_timeout=300.0,
             )
 
-        await (go())
+        await go()
 
         # Task still cancelled and removed despite kanban failure
         mock_task.cancel.assert_called_once()
@@ -918,7 +918,7 @@ class TestFromAC_DetectStaleTasks:
             )
 
         # Should not raise
-        await (go())
+        await go()
 
         mock_task.cancel.assert_called_once()
         assert "ST3" not in state.running
@@ -946,7 +946,7 @@ class TestFromAC_DetectStaleTasks:
                 stale_timeout=300.0,
             )
 
-        await (go())
+        await go()
 
         mock_task.cancel.assert_not_called()
         assert "ST4" in state.running
@@ -985,7 +985,7 @@ class TestFromAC_PollTickDispatchNewTasks:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         mock_kanban.kanban_move.assert_called_with("T1", "in-progress")
         assert "T1" in state.claimed
@@ -1025,7 +1025,7 @@ class TestFromAC_PollTickDispatchNewTasks:
                 wip_store=mock_wip,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)  # drain tasks spawned by poll_tick
 
         assert len(captured_prompts) == 1
@@ -1069,7 +1069,7 @@ class TestFromAC_PollTickDispatchNewTasks:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         # Critical (P2) dispatched before nice-to-have (P1)
         assert dispatched_ids[0] == "P2"
@@ -1103,7 +1103,7 @@ class TestFromAC_PollTickDispatchNewTasks:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         # Only C2 dispatched, C1 skipped
         assert "C2" in state.running
@@ -1134,7 +1134,7 @@ class TestFromAC_PollTickDispatchNewTasks:
                 shutdown_event=asyncio.Event(),
             )
 
-        await (go())
+        await go()
 
         assert "NEW1" not in state.running
 
@@ -1186,7 +1186,7 @@ class TestFromAC_PollLoopExceptionRecovery:
                     shutdown_event=shutdown,
                 )
 
-            await (go())
+            await go()
 
         assert call_count >= 2  # Loop continued after first failure
 
@@ -1217,7 +1217,7 @@ class TestFromAC_ChannelLoopPaths:
                 mock_agent,
             )
 
-        await (go())
+        await go()
 
         assert shutdown.is_set()
 
@@ -1234,7 +1234,7 @@ class TestFromAC_ChannelLoopPaths:
         async def go() -> None:
             await channel_loop(shutdown, sentinel, channel, mock_agent)
 
-        await (go())
+        await go()
 
         # Only the "real message" should have been processed
         mock_agent.turn.assert_called_once_with("real message")
@@ -1259,7 +1259,7 @@ class TestFromAC_ChannelLoopPaths:
                     mock_agent,
                 )
 
-            await (go())
+            await go()
 
         mock_recover.assert_called_once()
         call_args = mock_recover.call_args
@@ -1282,7 +1282,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(None, "original", "body")
 
-        assert await (go()) == "original"
+        assert await go() == "original"
 
     @pytest.mark.asyncio
     async def test_empty_body_returns_prompt_unchanged(self) -> None:
@@ -1292,7 +1292,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(hydrator, "original", "")
 
-        assert await (go()) == "original"
+        assert await go() == "original"
         hydrator.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1308,7 +1308,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(hydrator, "base prompt", "some body")
 
-        output = await (go())
+        output = await go()
         assert "## Pre-hydrated Context" in output
         assert "### https://example.com" in output
         assert "Page content" in output
@@ -1326,7 +1326,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(hydrator, "base prompt", "some body")
 
-        output = await (go())
+        output = await go()
         assert "## Pre-hydrated Context" in output
         assert "### src/main.py" in output
         assert "def main(): pass" in output
@@ -1344,7 +1344,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(hydrator, "prompt", "body text")
 
-        output = await (go())
+        output = await go()
         assert "### https://docs.example.com" in output
         assert "### README.md" in output
 
@@ -1359,7 +1359,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(failing_hydrator, "original", "body")
 
-        assert await (go()) == "original"
+        assert await go() == "original"
 
     @pytest.mark.asyncio
     async def test_hydrator_empty_result_no_sections(self) -> None:
@@ -1374,7 +1374,7 @@ class TestFromAC_ApplyHydration:
         async def go() -> str:
             return await _apply_hydration(hydrator, "original", "body")
 
-        assert await (go()) == "original"
+        assert await go() == "original"
 
 
 # ---------------------------------------------------------------------------
@@ -1410,7 +1410,7 @@ class TestFromAC_PollTickWithChannel:
                     channel=mock_channel,
                 )
 
-            await (go())
+            await go()
 
         mock_stale.assert_called_once()
 
@@ -1438,7 +1438,7 @@ class TestFromAC_PollTickWithChannel:
                     channel=None,
                 )
 
-            await (go())
+            await go()
 
         mock_stale.assert_not_called()
 
@@ -1489,7 +1489,7 @@ class TestFromAC_PollTickShutdownDuringDispatch:
                 shutdown_event=shutdown,
             )
 
-        await (go())
+        await go()
 
         # Second task should not be dispatched due to shutdown
         assert "SD2" not in state.running
@@ -1517,7 +1517,7 @@ class TestFromAC_PollTickShutdownDuringDispatch:
                 shutdown_event=shutdown,
             )
 
-        await (go())
+        await go()
 
         assert "X" not in state.running
 
@@ -1557,7 +1557,7 @@ class TestFromAC_RunDaemonSessionLoadCoroutine:
                 settings=settings,
             )
 
-        await (go())
+        await go()
 
         # SESSION_END emitted with the awaited messages
         emit_calls = mock_agent.hooks.emit.call_args_list
@@ -1624,7 +1624,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1651,14 +1651,12 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
         assert call is not None, "builder.run() was not called"
-        assert "deps" in call[1], (
-            "builder.run() must receive deps= kwarg containing OwlBearDeps"
-        )
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg containing OwlBearDeps"
 
     @pytest.mark.asyncio
     async def test_deps_has_dispatch_context_populated(self, tmp_path: Path) -> None:
@@ -1678,7 +1676,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1709,7 +1707,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1739,7 +1737,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1769,7 +1767,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1824,7 +1822,7 @@ class TestFromAC_PollTickRetryDispatchContext:
                 wip_store=mock_wip,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -1876,9 +1874,7 @@ class TestFromAC_PollTickRetryDispatchContext:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_context_task_title_from_kanban_show(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dispatch_context_task_title_from_kanban_show(self, tmp_path: Path) -> None:
         """dispatch_context.task_title comes from kanban_show details['title'] (retry branch).
 
         Addresses reviewer LAX: existing tests never assert task_title value.
@@ -1912,9 +1908,7 @@ class TestFromAC_PollTickRetryDispatchContext:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_context_task_status_from_kanban_show(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dispatch_context_task_status_from_kanban_show(self, tmp_path: Path) -> None:
         """dispatch_context.task_status comes from kanban_show details['status'] (retry branch).
 
         Addresses reviewer LAX: existing tests never assert task_status value.
@@ -2010,9 +2004,7 @@ class TestFromAC_PollTickRetryDispatchContext:
         )
 
     @pytest.mark.asyncio
-    async def test_wip_summary_not_in_instructions_kwarg(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_wip_summary_not_in_instructions_kwarg(self, tmp_path: Path) -> None:
         """WIP summary must NOT appear in instructions= in the retry branch.
 
         Addresses reviewer LAX: prior suite asserted WIP is in prompt but never
@@ -2066,6 +2058,96 @@ class TestFromAC_PollTickRetryDispatchContext:
             "WIP content must NOT migrate into instructions= (belongs in prompt only)"
         )
 
+    @pytest.mark.asyncio
+    async def test_instructions_contains_workspace_field(self, tmp_path: Path) -> None:
+        """instructions= value contains 'Workspace: {path}' from format_dispatch_context() (retry).
+
+        Addresses reviewer HIGH: prior suite checked only Channel/Task ID/Task substrings.
+        format_dispatch_context() always emits Workspace as the first line.
+        A partial instructions string that omits the workspace field would
+        still pass the prior 23 tests.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert f"Workspace: {tmp_path!s}" in instructions_val, (
+            f"instructions must contain 'Workspace: {tmp_path!s}'; got {instructions_val!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_instructions_contains_status_field(self, tmp_path: Path) -> None:
+        """instructions= value contains 'Status: {status}' from format_dispatch_context() (retry).
+
+        Addresses reviewer HIGH: format_dispatch_context() emits Status when
+        task_status is not None, but no daemon-scope test pinned that field.
+        Uses status='in-progress' (non-default) to catch hard-coded 'todo'.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+
+        state.retries["RDC_ST1"] = RetryEntry(
+            task_id="RDC_ST1",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior error",
+        )
+        state.claimed.add("RDC_ST1")
+        mock_kanban.kanban_show.return_value = json.dumps(
+            {
+                "id": "RDC_ST1",
+                "title": "Status field task",
+                "status": "in-progress",
+                "body": "body",
+            }
+        )
+        mock_kanban.kanban_list.return_value = json.dumps([])
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        await poll_tick(
+            state=state,
+            kanban=mock_kanban,
+            agent_registry=mock_registry,
+            max_concurrent=3,
+            shutdown_event=asyncio.Event(),
+            channel=channel,
+            workspace=tmp_path,
+        )
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert "Status: in-progress" in instructions_val, (
+            f"instructions must contain 'Status: in-progress'; got {instructions_val!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # poll_tick: fresh-dispatch branch (step 7) — dispatch context reuse
@@ -2114,7 +2196,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2152,14 +2234,12 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
         assert call is not None, "builder.run() was not called"
-        assert "deps" in call[1], (
-            "builder.run() must receive deps= kwarg containing OwlBearDeps"
-        )
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg containing OwlBearDeps"
 
     @pytest.mark.asyncio
     async def test_deps_has_dispatch_context_populated(self, tmp_path: Path) -> None:
@@ -2190,7 +2270,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2232,7 +2312,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2271,7 +2351,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2313,7 +2393,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 workspace=tmp_path,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2366,7 +2446,7 @@ class TestFromAC_PollTickFreshDispatchContext:
                 hydrator=fake_hydrator,
             )
 
-        await (go())
+        await go()
         await asyncio.sleep(0)
 
         call = mock_agent.run.call_args
@@ -2432,9 +2512,7 @@ class TestFromAC_PollTickFreshDispatchContext:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_context_task_title_from_kanban_show(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dispatch_context_task_title_from_kanban_show(self, tmp_path: Path) -> None:
         """dispatch_context.task_title comes from kanban_show details['title'] (fresh branch).
 
         Addresses reviewer LAX: existing tests never assert task_title value.
@@ -2479,9 +2557,7 @@ class TestFromAC_PollTickFreshDispatchContext:
         )
 
     @pytest.mark.asyncio
-    async def test_dispatch_context_task_status_from_kanban_show(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dispatch_context_task_status_from_kanban_show(self, tmp_path: Path) -> None:
         """dispatch_context.task_status comes from kanban_show details['status'] (fresh branch).
 
         Addresses reviewer LAX: existing tests never assert task_status value.
@@ -2580,6 +2656,112 @@ class TestFromAC_PollTickFreshDispatchContext:
             f"instructions must contain 'Task: Fresh Instruction Task'; got {instructions_val!r}"
         )
 
+    @pytest.mark.asyncio
+    async def test_instructions_contains_workspace_field(self, tmp_path: Path) -> None:
+        """instructions= value contains 'Workspace: {path}' from format_dispatch_context() (fresh).
+
+        Addresses reviewer HIGH: prior suite checked only Channel/Task ID/Task substrings.
+        format_dispatch_context() always emits Workspace as the first line.
+        A partial instructions string that omits the workspace field would
+        still pass the prior 23 tests.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps(
+            [self._make_todo_task("FDC_WS", "Workspace task")]
+        )
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC_WS", "Workspace task", "body"
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert f"Workspace: {tmp_path!s}" in instructions_val, (
+            f"instructions must contain 'Workspace: {tmp_path!s}'; got {instructions_val!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_instructions_contains_status_field(self, tmp_path: Path) -> None:
+        """instructions= value contains 'Status: {status}' from format_dispatch_context() (fresh).
+
+        Addresses reviewer HIGH: format_dispatch_context() emits Status when
+        task_status is not None, but no daemon-scope test pinned that field.
+        Uses status='in-progress' in kanban_show (task was just moved there)
+        to catch hard-coded 'todo' default.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps(
+            [
+                {
+                    "id": "FDC_ST1",
+                    "title": "Status field task",
+                    "status": "todo",
+                    "priority": "important",
+                }
+            ]
+        )
+        mock_kanban.kanban_show.return_value = json.dumps(
+            {
+                "id": "FDC_ST1",
+                "title": "Status field task",
+                "status": "in-progress",
+                "body": "body",
+            }
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert "Status: in-progress" in instructions_val, (
+            f"instructions must contain 'Status: in-progress'; got {instructions_val!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TDD RED: _run_builder_with_context fallback must not swallow in-coroutine
@@ -2650,6 +2832,4 @@ class TestFromAC_809_RunBuilderContextFallback:
 
         # Current code calls builder.run twice (once with context, once without);
         # after fix it must be called exactly once then propagate the error.
-        assert call_count == 1, (
-            f"builder.run called {call_count} times -- must be exactly once"
-        )
+        assert call_count == 1, f"builder.run called {call_count} times -- must be exactly once"
