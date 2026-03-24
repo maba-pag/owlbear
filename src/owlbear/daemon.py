@@ -588,7 +588,12 @@ async def reconcile_tasks(  # noqa: PLR0913
     permanent: the task is blocked immediately and retry logic is skipped.
 
     Emits :attr:`HookEvent.TASK_COMPLETE` with ``{task_id, outcome}``
-    for each finished task when *hooks* is provided.
+    for each finished task when *hooks* is provided.  The ``outcome``
+    value is one of:
+
+    - ``"success"`` — task completed without error
+    - ``"budget_exceeded"`` — task raised :class:`~owlbear.core.errors.BudgetExceededError`
+    - ``"failure"`` — task raised any other exception
     """
     done_ids = [tid for tid, rt in state.running.items() if rt.asyncio_task.done()]
     for tid in done_ids:
