@@ -43,26 +43,26 @@ good enough today.
 
 | Command | Closest OwlBear analog | Outcome |
 |---------|------------------------|---------|
-| `/teach-impeccable` | `project-definition` skill; archived #703 pre-hydration | Partial -> add a dedicated onboarding prompt |
-| `/audit` | reviewer agent + `code-review` skill | Partial -> strong pilot candidate |
-| `/critique` | none | New capability |
-| `/normalize` | planned `frontend-design` skill + builder workflow | New capability |
-| `/polish` | reviewer or writer quality gates | Partial -> strong pilot candidate |
-| `/distill` | none | New capability |
-| `/clarify` | writer workflow, docs editing habits | Partial |
-| `/optimize` | reviewer + `pytest-and-linting` skill | Partial |
-| `/harden` | reviewer + `architecture-standards` risk checks | Partial |
-| `/animate` | none | New capability |
-| `/colorize` | none | New capability |
-| `/bolder` | none | New capability |
-| `/quieter` | none | New capability |
-| `/delight` | none | New capability |
-| `/extract` | `architecture-standards` + `task-decomposition` | Partial |
-| `/adapt` | none | New capability |
-| `/onboard` | `project-definition` skill | Partial |
-| `/typeset` | none | New capability |
-| `/arrange` | none | New capability |
-| `/overdrive` | `visual-output` only as inspiration | New capability |
+| `/teach-impeccable` | `project-definition` skill; archived #703 pre-hydration | partial fit |
+| `/audit` | reviewer agent + `code-review` skill | partial fit |
+| `/critique` | none | new capability |
+| `/normalize` | planned `frontend-design` skill + builder workflow | new capability |
+| `/polish` | reviewer or writer quality gates | partial fit |
+| `/distill` | none | new capability |
+| `/clarify` | writer workflow, docs editing habits | partial fit |
+| `/optimize` | reviewer + `pytest-and-linting` skill | partial fit |
+| `/harden` | reviewer + `architecture-standards` risk checks | partial fit |
+| `/animate` | none | new capability |
+| `/colorize` | none | new capability |
+| `/bolder` | none | new capability |
+| `/quieter` | none | new capability |
+| `/delight` | none | new capability |
+| `/extract` | `architecture-standards` + `task-decomposition` | partial fit |
+| `/adapt` | none | new capability |
+| `/onboard` | `project-definition` skill | partial fit |
+| `/typeset` | none | new capability |
+| `/arrange` | none | new capability |
+| `/overdrive` | `visual-output` only as inspiration | new capability |
 
 The key pattern is asymmetry: OwlBear has good generic research, review, and
 prompt infrastructure, but almost none of the design-specific user vocabulary
