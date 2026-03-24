@@ -29,14 +29,10 @@ logger = logging.getLogger(__name__)
 class ConsolidationService:
     """Periodically consolidate unconsolidated chunks into insights.
 
-    Parameters
-    ----------
-    conn:
-        SQLite connection with the v8+ knowledge-graph schema.
-    graph_store:
-        Optional graph store (reserved for future enrichment).
-    model:
-        Model identifier passed to the LLM call.
+    Args:
+        conn: SQLite connection with the v8+ knowledge-graph schema.
+        graph_store: Optional graph store (reserved for future enrichment).
+        model: Model identifier passed to the LLM call.
     """
 
     def __init__(

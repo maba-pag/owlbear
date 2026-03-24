@@ -55,17 +55,13 @@ class DocumentStatus(BaseModel):
 def compute_content_hash(content: str) -> str:
     """Return the SHA-256 hex digest of *content* after stripping whitespace.
 
-    Parameters
-    ----------
-    content:
-        Raw document text.  Leading/trailing whitespace is stripped
-        before hashing so that cosmetic differences (e.g. trailing
-        newlines in HTTP responses) do not produce false positives.
+    Args:
+        content: Raw document text. Leading/trailing whitespace is stripped
+            before hashing so that cosmetic differences (e.g. trailing
+            newlines in HTTP responses) do not produce false positives.
 
     Returns:
-    -------
-    str
-        64-character lowercase hex digest.
+        str: 64-character lowercase hex digest.
     """
     return hashlib.sha256(content.strip().encode()).hexdigest()
 
@@ -78,16 +74,11 @@ def compute_content_hash(content: str) -> str:
 class DocumentStore:
     """Database and vector-store CRUD for documents, chunks, and entities.
 
-    Parameters
-    ----------
-    conn:
-        SQLite connection with the knowledge schema already applied.
-    graph_store:
-        Store for entities and edges.
-    vector_store:
-        Store for chunk/entity embeddings.
-    embedding_provider:
-        Batch embedding provider (for entity embeddings).
+    Args:
+        conn: SQLite connection with the knowledge schema already applied.
+        graph_store: Store for entities and edges.
+        vector_store: Store for chunk/entity embeddings.
+        embedding_provider: Batch embedding provider (for entity embeddings).
     """
 
     def __init__(
@@ -136,9 +127,7 @@ class DocumentStore:
         """Check whether *content* differs from the previously-ingested version.
 
         Returns:
-        -------
-        tuple[bool, str | None]
-            ``(changed, existing_document_id)``.
+            tuple[bool, str | None]: ``(changed, existing_document_id)``.
         """
         new_hash = compute_content_hash(content)
         existing = self.find_status_by_source(source, scope=scope)
@@ -264,14 +253,14 @@ class DocumentStore:
     ) -> tuple[int, int]:
         """Store entities and edges in the graph store.
 
-        Parameters
-        ----------
-        chunk_ids:
-            When provided, must be the same length as *results*.  Each
-            extraction result's entities are stamped with the
-            corresponding chunk_id.
-        pipeline_name:
-            Provenance label stamped on metadata.
+        Args:
+            results: Extraction outputs to persist into entity and edge tables.
+            scope: Logical tenant scope for stored graph records.
+            document_id: Optional document identifier stamped into entity metadata.
+            chunk_ids: When provided, must be the same length as *results*.
+                Each extraction result's entities are stamped with the
+                corresponding chunk_id.
+            pipeline_name: Provenance label stamped on metadata.
         """
         provenance = {
             "source_pipeline": pipeline_name,

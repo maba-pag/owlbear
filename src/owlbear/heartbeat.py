@@ -46,20 +46,14 @@ def _is_active_hour(hour: int, active_hours: tuple[int, int]) -> bool:
 class HeartbeatRunner:
     """Periodic agent wakeup driven by a HEARTBEAT.md prompt file.
 
-    Parameters
-    ----------
-    agent:
-        The :class:`~owlbear.core.agent.OwlBearAgent` to invoke each tick.
-    channel:
-        Channel to forward non-OK findings to the user.
-    interval_seconds:
-        Seconds between heartbeat ticks.
-    active_hours:
-        ``(start, end)`` UTC hours.  Ticks outside this window are skipped.
-    shutdown_event:
-        Shared event — setting it causes the run loop to exit.
-    heartbeat_path:
-        Path to the HEARTBEAT.md prompt file.
+    Args:
+        agent: The :class:`~owlbear.core.agent.OwlBearAgent` to invoke each tick.
+        channel: Channel to forward non-OK findings to the user.
+        interval_seconds: Seconds between heartbeat ticks.
+        active_hours: ``(start, end)`` UTC hours. Ticks outside this window are
+            skipped.
+        shutdown_event: Shared event; setting it causes the run loop to exit.
+        heartbeat_path: Path to the HEARTBEAT.md prompt file.
     """
 
     def __init__(  # noqa: PLR0913

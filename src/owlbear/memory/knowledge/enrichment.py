@@ -29,22 +29,14 @@ class GraphEnricher:
     Owns the ``_background_tasks`` set and ``_bg_semaphore`` that bound
     concurrent enrichment work.
 
-    Parameters
-    ----------
-    conn:
-        SQLite connection for idempotency checks.
-    graph_store:
-        Graph store for inserting inferred edges.
-    graph_builder:
-        Optional intra-document graph builder.
-    inter_doc_builder:
-        Optional inter-document graph builder.
-    document_store:
-        Document store for status updates.
-    pipeline_name:
-        Label stamped into provenance metadata.
-    bg_concurrency:
-        Maximum concurrent background enrichment tasks.
+    Args:
+        conn: SQLite connection for idempotency checks.
+        graph_store: Graph store for inserting inferred edges.
+        graph_builder: Optional intra-document graph builder.
+        inter_doc_builder: Optional inter-document graph builder.
+        document_store: Document store for status updates.
+        pipeline_name: Label stamped into provenance metadata.
+        bg_concurrency: Maximum concurrent background enrichment tasks.
     """
 
     def __init__(  # noqa: PLR0913
