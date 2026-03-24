@@ -732,7 +732,12 @@ def _run_builder_with_context(
     prompt: str,
     run_kwargs: dict[str, object],
 ) -> object:
-    """Call builder.run with context kwargs, falling back for legacy fakes."""
+    """Call builder.run with context kwargs.
+
+    Falls back to ``builder.run(prompt)`` only when kwargs are rejected at
+    call-time (legacy fakes without ``**kwargs``). Errors raised while awaiting
+    the returned coroutine must propagate unchanged.
+    """
     try:
         run_coro = builder.run(prompt, **run_kwargs)  # type: ignore[no-any-return, attr-defined]
     except TypeError as exc:
@@ -740,15 +745,10 @@ def _run_builder_with_context(
             raise
         return builder.run(prompt)  # type: ignore[no-any-return, attr-defined]
 
-    async def _await_with_fallback() -> object:
-        try:
-            return await run_coro
-        except TypeError as exc:
-            if "unexpected keyword argument" not in str(exc):
-                raise
-            return await builder.run(prompt)  # type: ignore[no-any-return, attr-defined]
+    async def _await_run() -> object:
+        return await run_coro
 
-    return _await_with_fallback()
+    return _await_run()
 
 
 async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
