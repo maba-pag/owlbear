@@ -566,6 +566,48 @@ async def schedule_task_retry(  # noqa: PLR0913
     )
 
 
+def make_retry_executor(
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    max_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
+    backoff_base: float = _DEFAULT_BACKOFF_BASE,
+    backoff_max: float = _DEFAULT_BACKOFF_MAX,
+) -> Callable[[dict[str, object]], object]:
+    """Build a hook reaction executor that schedules task retries on failure."""
+
+    async def _executor(data: dict[str, object]) -> None:
+        task_id_raw = data.get("task_id")
+        if task_id_raw is None or task_id_raw == "":
+            logger.warning("Retry executor called without task_id in payload")
+            return
+
+        task_id = str(task_id_raw)
+        outcome = str(data.get("outcome", ""))
+
+        # Retry reactions should only schedule retries for generic failures.
+        if outcome != "failure":
+            return
+
+        # If a retry already exists for this task, keep the operation idempotent.
+        if task_id in state.retries:
+            return
+
+        error_obj = data.get("error")
+        error = error_obj if isinstance(error_obj, Exception) else RuntimeError(str(error_obj))
+        await schedule_task_retry(
+            state=state,
+            kanban=kanban,
+            task_id=task_id,
+            error=error,
+            max_attempts=max_attempts,
+            backoff_base=backoff_base,
+            backoff_max=backoff_max,
+        )
+
+    return _executor
+
+
 async def reconcile_tasks(  # noqa: PLR0913
     *,
     state: OrchestratorState,
