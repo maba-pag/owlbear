@@ -1185,3 +1185,4 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         call_kwargs = mock_ingest.ingest_text.call_args.kwargs
         assert "cancel" in call_kwargs, "_run_retrospective must pass cancel= to ingest_text"
         assert isinstance(call_kwargs["cancel"], asyncio.Event)
+
