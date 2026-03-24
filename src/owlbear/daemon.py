@@ -503,7 +503,65 @@ def _compute_retry_delay(*, attempt: int, base: float, maximum: float) -> float:
     return min(base * 2 ** (attempt - 1), maximum)
 
 
-async def reconcile_tasks(  # noqa: PLR0913, C901, PLR0912
+async def schedule_task_retry(  # noqa: PLR0913
+    *,
+    state: OrchestratorState,
+    kanban: KanbanToolset,
+    task_id: str,
+    error: Exception,
+    max_attempts: int,
+    backoff_base: float,
+    backoff_max: float,
+) -> None:
+    """Handle task-level retry policy for a failed task.
+
+    The write path is idempotent for concurrent callers that compute the
+    same ``next_attempt`` value.
+    """
+    from owlbear.core.errors import BudgetExceededError  # noqa: PLC0415
+
+    if isinstance(error, BudgetExceededError):
+        reason = f"Budget exceeded: {error}"
+        try:
+            await kanban.kanban_edit(task_id, block=reason)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to block budget-exceeded task %s", task_id, exc_info=True)
+        state.claimed.discard(task_id)
+        return
+
+    prev = state.retries.get(task_id)
+    next_attempt = (prev.attempt + 1) if prev else 1
+
+    # Allow same-attempt concurrent callers to observe and skip duplicate writes.
+    await asyncio.sleep(0)
+    current = state.retries.get(task_id)
+    if current is not None and current.attempt >= next_attempt:
+        return
+
+    if next_attempt > max_attempts:
+        reason = f"Retry exhausted after {max_attempts} attempts. Last error: {error}"
+        try:
+            await kanban.kanban_edit(task_id, block=reason)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to block exhausted task %s", task_id, exc_info=True)
+        state.retries.pop(task_id, None)
+        state.claimed.discard(task_id)
+        return
+
+    delay = _compute_retry_delay(
+        attempt=next_attempt,
+        base=backoff_base,
+        maximum=backoff_max,
+    )
+    state.retries[task_id] = RetryEntry(
+        task_id=task_id,
+        attempt=next_attempt,
+        next_due=datetime.now(UTC) + timedelta(seconds=delay),
+        last_error=str(error),
+    )
+
+
+async def reconcile_tasks(  # noqa: PLR0913
     *,
     state: OrchestratorState,
     kanban: KanbanToolset,
@@ -554,44 +612,15 @@ async def reconcile_tasks(  # noqa: PLR0913, C901, PLR0912
                     {"task_id": tid, "outcome": "failure"},
                 )
 
-            # --- Task-level retry (#625) ---
-            # Budget exceeded — skip retry entirely (#750)
-            from owlbear.core.errors import BudgetExceededError  # noqa: PLC0415
-
-            if isinstance(exc, BudgetExceededError):
-                reason = f"Budget exceeded: {exc}"
-                try:
-                    await kanban.kanban_edit(tid, block=reason)
-                except Exception:  # noqa: BLE001
-                    logger.warning("Failed to block budget-exceeded task %s", tid, exc_info=True)
-                state.claimed.discard(tid)
-                continue
-
-            prev = state.retries.get(tid)
-            next_attempt = (prev.attempt + 1) if prev else 1
-
-            if next_attempt > max_retry_attempts:
-                # Retries exhausted — block on kanban and release
-                reason = f"Retry exhausted after {max_retry_attempts} attempts. Last error: {exc}"
-                try:
-                    await kanban.kanban_edit(tid, block=reason)
-                except Exception:  # noqa: BLE001
-                    logger.warning("Failed to block exhausted task %s", tid, exc_info=True)
-                state.retries.pop(tid, None)
-                state.claimed.discard(tid)
-            else:
-                # Schedule retry — keep in claimed
-                delay = _compute_retry_delay(
-                    attempt=next_attempt,
-                    base=backoff_base,
-                    maximum=backoff_max,
-                )
-                state.retries[tid] = RetryEntry(
-                    task_id=tid,
-                    attempt=next_attempt,
-                    next_due=datetime.now(UTC) + timedelta(seconds=delay),
-                    last_error=str(exc),
-                )
+            await schedule_task_retry(
+                state=state,
+                kanban=kanban,
+                task_id=tid,
+                error=exc,
+                max_attempts=max_retry_attempts,
+                backoff_base=backoff_base,
+                backoff_max=backoff_max,
+            )
         else:
             if wip_store is not None:
                 wip_store.clear(agent="builder", task_id=tid)
