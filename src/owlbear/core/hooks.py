@@ -174,6 +174,7 @@ class HookRegistry:
 
     def __init__(self) -> None:
         self._handlers: dict[HookEvent, list[Handler]] = {}
+        self.reaction_executors: dict[str, Any] | None = None
 
     # -- public API ----------------------------------------------------------
 

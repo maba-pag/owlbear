@@ -60,10 +60,13 @@ def build_hooks(
 
         async def _noop(_data: object) -> None: ...
 
+        executors = {"notify": _noop, "retry": _noop, "escalate": _noop}
+
         HookReactionRouter(
             rules=settings.hook_reactions,
-            executors={"notify": _noop, "retry": _noop, "escalate": _noop},
+            executors=executors,
         ).register(hooks)
+        hooks.reaction_executors = executors
 
     if workspace_root is not None:
         event_path = workspace_root / ".owlbear" / "events.jsonl"
