@@ -87,7 +87,7 @@ class TestNotificationHookDispatch:
         b1.notify, b2.notify = _b1, _b2
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        await (hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
+        await hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"})
         assert order == ["first", "second"]
 
     @pytest.mark.asyncio
@@ -97,7 +97,7 @@ class TestNotificationHookDispatch:
         b2 = _mock_backend("second", success=True)
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        await (hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
+        await hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"})
 
         b1.notify.assert_called_once()
         b2.notify.assert_not_called()
@@ -108,7 +108,7 @@ class TestNotificationHookDispatch:
         b1 = _mock_backend("b1")
 
         hook = NotificationHook(backends=[b1], notification_events=["task_complete"])
-        await (hook({"_hook_event": HookEvent.SESSION_START}))
+        await hook({"_hook_event": HookEvent.SESSION_START})
 
         b1.notify.assert_not_called()
 
@@ -120,7 +120,7 @@ class TestNotificationHookDispatch:
         b2 = _mock_backend("second", success=True)
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
-        await (hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
+        await hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"})
 
         b2.notify.assert_called_once()
 
@@ -134,7 +134,7 @@ class TestNotificationHookDispatch:
 
         hook = NotificationHook(backends=[b1, b2], notification_events=["task_complete"])
         with caplog.at_level(logging.WARNING):
-            await (hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"}))
+            await hook({"_hook_event": HookEvent.TASK_COMPLETE, "message": "done"})
 
         assert any(
             "all notification backends failed" in rec.message.lower() for rec in caplog.records
@@ -184,7 +184,7 @@ class TestNotificationHookRegister:
         registry = HookRegistry()
         hook.register(registry)
 
-        await (registry.emit(HookEvent.TASK_COMPLETE, {"message": "done"}))
+        await registry.emit(HookEvent.TASK_COMPLETE, {"message": "done"})
         b1.notify.assert_called_once()
 
 
@@ -201,7 +201,7 @@ class TestConsoleBellBackend:
         """Bell backend writes the bell character and flushes stdout."""
         backend = ConsoleBellBackend()
         with patch("owlbear.core.notification_hook.sys") as mock_sys:
-            result = await (backend.notify("hello", HookEvent.TASK_COMPLETE))
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
 
         mock_sys.stdout.write.assert_called_once_with("\a")
         mock_sys.stdout.flush.assert_called_once()
@@ -226,7 +226,7 @@ class TestWinSoundBackend:
         mock_winsound = MagicMock()
         with patch.dict("sys.modules", {"winsound": mock_winsound}):
             backend = WinSoundBackend()
-            result = await (backend.notify("hello", HookEvent.TASK_COMPLETE))
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
 
         mock_winsound.MessageBeep.assert_called_once_with(
             mock_winsound.MB_ICONINFORMATION,
@@ -246,7 +246,7 @@ class TestWinSoundBackend:
         _sys.modules["winsound"] = None  # type: ignore[assignment]
         try:
             backend = WinSoundBackend()
-            result = await (backend.notify("hello", HookEvent.TASK_COMPLETE))
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
         finally:
             if original is not None:
                 _sys.modules["winsound"] = original
@@ -261,7 +261,7 @@ class TestWinSoundBackend:
         mock_winsound.MessageBeep.side_effect = RuntimeError("speaker off")
         with patch.dict("sys.modules", {"winsound": mock_winsound}):
             backend = WinSoundBackend()
-            result = await (backend.notify("hello", HookEvent.TASK_COMPLETE))
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
         assert result is False
 
 
@@ -452,6 +452,21 @@ class TestFromAC_SlackNotificationBackend:
                 and "owlbear.channels" in node.module
             ):
                 pytest.fail(
-                    f"Found forbidden import in notification_hook.py: "
-                    f"from {node.module} import ..."
+                    f"Found forbidden import in notification_hook.py: from {node.module} import ..."
                 )
+
+    def test_no_owlbear_channels_plain_import(self) -> None:
+        """notification_hook.py must not use plain `import owlbear.channels[.*]` statements."""
+        import ast
+        import pathlib
+
+        source = pathlib.Path("src/owlbear/core/notification_hook.py").read_text()
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if "owlbear.channels" in alias.name:
+                        pytest.fail(
+                            "Found forbidden plain import in notification_hook.py:"
+                            f" import {alias.name}"
+                        )
