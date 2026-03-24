@@ -1124,14 +1124,24 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_trivial_task_skips_supervisor_schedule(self, tmp_path: Path) -> None:
-        """Zero rejections + low priority skips supervisor.schedule()."""
-        # eligibility gate must be preserved
+        """AC1/AC2 (#981): ineligible task must still reach supervisor.schedule().
+
+        Updated for #981 strict-eligibility-deferral: the inline fast-path that
+        previously returned early for zero-rejections + low-priority tasks must be
+        removed.  __call__ must schedule even for trivial tasks; eligibility
+        filtering (no _run_retrospective call) happens inside the background task.
+
+        FAILS on HEAD: the legacy fast-path returns early before supervisor.schedule().
+        """
+        # Forward move for task "42": zero rejections after the move.
         _write_activity_log(
             tmp_path,
             [_move_entry("42", "todo", "done")],  # forward move, no rejection
         )
         mock_supervisor = MagicMock()
         hook = self._make_hook(tmp_path, mock_supervisor)
+        mock_run = AsyncMock()
+        hook._run_retrospective = mock_run
 
         with patch(
             "owlbear.core.retrospective_hook.subprocess.run",
@@ -1142,7 +1152,14 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         ):
             await hook(_payload(task_id="42", outcome="success"))
 
-        mock_supervisor.schedule.assert_not_called()
+        # AC1: __call__ must schedule even for ineligible tasks.
+        # FAILS on HEAD: fast-path returns early → schedule not called.
+        mock_supervisor.schedule.assert_called_once()
+        scheduled = mock_supervisor.schedule.call_args[0][0]
+        await scheduled  # execute the background coroutine
+
+        # AC2: background task must filter the ineligible task.
+        mock_run.assert_not_called()
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_rejection_gate_preserved_with_supervisor(self, tmp_path: Path) -> None:
