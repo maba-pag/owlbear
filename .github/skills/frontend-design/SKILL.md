@@ -35,6 +35,7 @@ load the one(s) relevant to the current task.
 | [references/interaction-design.md](references/interaction-design.md) | States, focus, keyboard, dialogs, undo/confirm |
 | [references/responsive-design.md](references/responsive-design.md) | Mobile-first, breakpoints, container queries, real devices |
 | [references/ux-writing.md](references/ux-writing.md) | Button labels, error messages, empty states, tone |
+| [references/anti-patterns.md](references/anti-patterns.md) | Anti-pattern classification: universal blockers vs. taste heuristics |
 
 ---
 
