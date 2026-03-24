@@ -1529,3 +1529,152 @@ class TestFromAC_981_NonBlockingEligibilityHandoff:
 
         # FAILS on HEAD: create_task never called (early return in __call__).
         assert len(captured) == 1
+
+
+# ---------------------------------------------------------------------------
+# #981 -- Strict eligibility deferral (default helpers + existing activity log)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_981_StrictEligibilityDeferral:
+    """AC1/AC2: __call__ must NEVER call eligibility helpers inline, even when the
+    default (unmonkeypatched) helpers are in use and activity.jsonl already exists
+    on disk.
+
+    The current implementation contains a legacy fast-path::
+
+        if _uses_default_eligibility_helpers() and activity.jsonl.is_file():
+            rejection_count = _count_rejections(task_id)
+            if rejection_count == 0:
+                priority = _get_priority(task_id)
+                if priority < "needed":
+                    return  # early return WITHOUT scheduling
+
+    This violates AC1 ("must not call … on the awaited hook path") and AC2
+    ("eligibility checks … must all execute inside the supervisor-scheduled
+    background task").
+
+    All tests FAIL on HEAD: the fast-path returns early before supervisor.schedule()
+    / asyncio.create_task() is reached for ineligible tasks.
+    """
+
+    def _hook_with_supervisor(self, tmp_path: Path, supervisor: object) -> RetrospectiveHook:
+        return RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+            supervisor=supervisor,
+        )
+
+    def _hook_no_supervisor(self, tmp_path: Path) -> RetrospectiveHook:
+        return RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+
+    # -- AC1: __call__ must schedule even when activity log is present and task
+    #         appears ineligible (fast-path must be removed).
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ineligible_task_with_existing_activity_log_still_reaches_supervisor(
+        self, tmp_path: Path
+    ) -> None:
+        """AC1: supervisor.schedule() must be called even when activity.jsonl exists
+        and the task has zero rejections with a low priority.
+
+        FAILS on HEAD: the fast-path calls _count_rejections ("42" → 0), then
+        _get_priority → "important", and returns early — supervisor.schedule() is
+        never reached.
+        """
+        # Write activity.jsonl with entries for a *different* task so that
+        # task "42" has zero rejections in the log.
+        _write_activity_log(tmp_path, [_move_entry("999", "review", "todo")])
+
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        # Do NOT monkeypatch _count_rejections or _get_priority —
+        # they must be the real, default implementations for the fast-path to trigger.
+
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # AC1 / AC2: ineligible tasks must still reach supervisor.schedule()
+        # so that background eligibility filtering can happen inside the bg task.
+        # FAILS on HEAD: fast-path returns early → schedule call_count == 0.
+        assert supervisor.schedule.call_count == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ineligible_task_with_existing_activity_log_still_reaches_create_task(
+        self, tmp_path: Path
+    ) -> None:
+        """AC1 (create_task fallback): create_task must be called even when
+        activity.jsonl exists and the task has zero rejections with a low priority.
+
+        FAILS on HEAD: same fast-path causes early return before create_task.
+        """
+        _write_activity_log(tmp_path, [_move_entry("999", "review", "todo")])
+
+        hook = self._hook_no_supervisor(tmp_path)
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ), patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # AC1: create_task must be reached for any success outcome.
+        # FAILS on HEAD: fast-path returns early → captured is empty.
+        assert len(captured) == 1
+
+    # -- AC2: background task must filter ineligible tasks even when
+    #         activity log exists (filtering moves from __call__ into the bg coro).
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_background_task_filters_ineligible_when_activity_log_present(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: the supervisor-scheduled background coroutine must filter out
+        ineligible tasks (0 rejections + low priority) — _run_retrospective must
+        NOT be called for them.
+
+        FAILS on HEAD: supervisor.schedule() is never reached (fast-path early
+        return), so the assertion on schedule call_count already fails.
+        """
+        _write_activity_log(tmp_path, [_move_entry("999", "review", "todo")])
+
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        mock_run = AsyncMock()
+        hook._run_retrospective = mock_run
+
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # Expect the background coro was scheduled (AC1 prerequisite).
+        # FAILS on HEAD at this line: schedule not called due to fast-path.
+        assert supervisor.schedule.call_count == 1
+        scheduled = supervisor.schedule.call_args[0][0]
+        await scheduled  # run the background coroutine
+
+        # AC2: background coro must have filtered the ineligible task.
+        mock_run.assert_not_called()
