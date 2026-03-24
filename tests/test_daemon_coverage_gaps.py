@@ -2833,3 +2833,93 @@ class TestFromAC_809_RunBuilderContextFallback:
         # Current code calls builder.run twice (once with context, once without);
         # after fix it must be called exactly once then propagate the error.
         assert call_count == 1, f"builder.run called {call_count} times -- must be exactly once"
+
+
+# ---------------------------------------------------------------------------
+# task #961: dispatch context integrity — AC2 correctness contract
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_961_DispatchContextIntegrity:
+    """AC2: dispatch context (instructions=, deps=) must reliably reach the builder.
+
+    _run_builder_with_context is the shared delivery mechanism used by both
+    poll_tick branches.  It must not silently discard dispatch context when
+    the builder's coroutine raises a TypeError that is unrelated to the caller's
+    kwargs support (i.e., the error originated inside the coroutine body, not
+    at call time).
+
+    This gap means: a builder that accepts dispatch kwargs at its signature but
+    raises TypeError internally (e.g., from type-checking toolsets) would be
+    silently retried without dispatch context — making AC2 unreliable.
+    """
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_not_silently_dropped_on_in_coroutine_typeerror(
+        self,
+    ) -> None:
+        """dispatch context must not be silently discarded when coroutine raises TypeError.
+
+        Scenario: builder.run() accepts **kwargs at call-time (no call-time TypeError),
+        but the coroutine body raises TypeError with 'unexpected keyword argument' for
+        an internal reason (e.g., forwarding kwargs to a downstream toolset that does
+        not accept them).
+
+        Expected: TypeError propagates to the caller.
+        Actual (bug): _run_builder_with_context treats the in-coroutine TypeError as a
+        legacy-signature mismatch, silently retries without dispatch context, and returns
+        a result — AC2 is violated.
+        """
+        exc_msg = "unexpected keyword argument 'toolsets'"
+
+        async def fake_run_accepts_kwargs_raises_inside(
+            _prompt: str, **kwargs: object
+        ) -> str:
+            # Accepts **kwargs at call time — no call-time TypeError.
+            # Raises *inside* the coroutine to simulate a downstream forward failure.
+            if kwargs:
+                raise TypeError(exc_msg)
+            return "ran-without-dispatch-context"
+
+        builder = MagicMock()
+        builder.run = fake_run_accepts_kwargs_raises_inside
+
+        # The TypeError must propagate — dispatch context was passed to builder.run()
+        # and the error originated inside the coroutine, not from a signature mismatch.
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            await _run_builder_with_context(builder, "prompt", {"instructions": "ctx"})
+
+    @pytest.mark.asyncio
+    async def test_builder_invoked_exactly_once_when_in_coroutine_typeerror(
+        self,
+    ) -> None:
+        """builder.run() must be called exactly once per dispatch (AC2 + AC3).
+
+        If _run_builder_with_context retries on in-coroutine TypeError, builder.run()
+        is called twice: once with dispatch context (which fails) and once without.
+        The second call silently drops the dispatch context, violating AC2.
+        """
+        import contextlib
+
+        call_count = 0
+        exc_msg = "unexpected keyword argument 'format'"
+
+        async def fake_run_counts_calls(
+            _prompt: str, **kwargs: object
+        ) -> str:
+            nonlocal call_count
+            call_count += 1
+            if kwargs:
+                raise TypeError(exc_msg)
+            return "retried-without-context"
+
+        builder = MagicMock()
+        builder.run = fake_run_counts_calls
+
+        with contextlib.suppress(TypeError):
+            await _run_builder_with_context(builder, "prompt", {"instructions": "ctx"})
+
+        assert call_count == 1, (
+            f"builder.run() was called {call_count} times — must be called exactly once. "
+            "A second call without dispatch kwargs means AC2's delivery guarantee is missing."
+        )
