@@ -1365,6 +1365,33 @@ class TestFromAC_981_NonBlockingEligibilityHandoff:
         mock_count.assert_not_called()  # FAILS on HEAD
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_call_does_not_invoke_get_priority_directly_create_task_path(
+        self, tmp_path: Path
+    ) -> None:
+        """__call__ must not invoke _get_priority before create_task on the zero-rejection path.
+
+        Parity with test_call_does_not_invoke_get_priority_directly_supervisor_path
+        for the create_task fallback.  _get_priority must only be called inside the
+        background coroutine, not in __call__ itself.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        hook._count_rejections = MagicMock(return_value=0)
+        mock_priority = MagicMock(return_value="needed")
+        hook._get_priority = mock_priority
+        hook._run_retrospective = AsyncMock()
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        mock_priority.assert_not_called()  # _get_priority must not be called in __call__
+        if captured:
+            await captured[0]  # type: ignore[misc]  # cleanup to avoid RuntimeWarning
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_create_task_fallback_background_coro_invokes_count_rejections(
         self, tmp_path: Path
     ) -> None:
@@ -1392,6 +1419,34 @@ class TestFromAC_981_NonBlockingEligibilityHandoff:
         mock_count.assert_called()  # FAILS on HEAD (0 calls after reset)
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_create_task_fallback_background_coro_invokes_get_priority_zero_rejections(
+        self, tmp_path: Path
+    ) -> None:
+        """create_task background coroutine must call _get_priority for zero-rejection tasks.
+
+        Parity with test_supervisor_background_coro_invokes_get_priority_zero_rejections
+        for the create_task fallback.  After resetting the mock, awaiting the captured
+        coroutine must show _get_priority was called inside the background task.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        hook._count_rejections = MagicMock(return_value=0)
+        mock_priority = MagicMock(return_value="critical")
+        hook._get_priority = mock_priority
+        hook._run_retrospective = AsyncMock()
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        mock_priority.reset_mock()
+        assert captured, "create_task must be called"
+        await captured[0]  # type: ignore[misc]
+        mock_priority.assert_called()  # background coro must call _get_priority for 0 rejections
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_create_task_fallback_ineligible_task_reaches_create_task_then_filtered(
         self, tmp_path: Path
     ) -> None:
@@ -1417,3 +1472,60 @@ class TestFromAC_981_NonBlockingEligibilityHandoff:
         await captured[0]  # type: ignore[misc]
         mock_run.assert_not_called()
 
+    # -- Real default-helpers path (no monkeypatching) ----------------------
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_real_helper_path_supervisor_schedules_ineligible_task(
+        self, tmp_path: Path
+    ) -> None:
+        """Default (unmocked) helpers must not block __call__ from scheduling.
+
+        FAILS on HEAD: _uses_default_eligibility_helpers() returns True when
+        _count_rejections/_get_priority are not monkeypatched.  __call__ then
+        reads the empty activity log (0 rejections) and calls subprocess for
+        priority ("important"), decides the task is ineligible, and returns
+        early — supervisor.schedule() is never reached.
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        # Do NOT monkeypatch _count_rejections or _get_priority.
+        # Empty tmp_path → no activity.jsonl → 0 rejections.
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # FAILS on HEAD: early return in __call__ prevents scheduling.
+        assert supervisor.schedule.call_count == 1
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_real_helper_path_create_task_schedules_ineligible_task(
+        self, tmp_path: Path
+    ) -> None:
+        """Default (unmocked) helpers must not block asyncio.create_task from being called.
+
+        FAILS on HEAD: same _uses_default_eligibility_helpers() early-return
+        causes __call__ to exit before asyncio.create_task() is reached for an
+        ineligible (zero-rejections + low-priority) task.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        # Do NOT monkeypatch _count_rejections or _get_priority.
+        captured: list[object] = []
+        with patch(
+            "owlbear.core.retrospective_hook.subprocess.run",
+            return_value=MagicMock(
+                stdout=_kanban_show_json("42", priority="important"),
+                returncode=0,
+            ),
+        ), patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # FAILS on HEAD: create_task never called (early return in __call__).
+        assert len(captured) == 1
