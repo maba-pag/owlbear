@@ -871,9 +871,7 @@ class TestFromAC_921_AgeThresholdCellScope:
     """
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_threshold_color_not_directly_preceding_title_text(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_threshold_color_not_directly_preceding_title_text(self, mock_run: MagicMock) -> None:
         """Threshold ANSI opener must not immediately precede the title text.
 
         If the style were applied to the Title cell the output would contain
@@ -888,14 +886,12 @@ class TestFromAC_921_AgeThresholdCellScope:
         with _with_config(_THRESHOLD_CONFIG_YAML):
             result = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert result.exit_code == 0
-        assert "38;5;34" in result.output              # Age IS styled — RED trigger
-        assert unique_title in result.output            # title still renders
+        assert "38;5;34" in result.output  # Age IS styled — RED trigger
+        assert unique_title in result.output  # title still renders
         assert f"38;5;34m{unique_title}" not in result.output  # title NOT styled
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_threshold_color_not_directly_preceding_id_text(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_threshold_color_not_directly_preceding_id_text(self, mock_run: MagicMock) -> None:
         """Threshold ANSI opener must not immediately precede the task ID text.
 
         Fails on HEAD (no ANSI); once styling lands, asserts ID cell is not
@@ -907,14 +903,12 @@ class TestFromAC_921_AgeThresholdCellScope:
         with _with_config(_THRESHOLD_CONFIG_YAML):
             result = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert result.exit_code == 0
-        assert "38;5;34" in result.output         # Age IS styled — RED trigger
-        assert "88877" in result.output            # ID still renders
+        assert "38;5;34" in result.output  # Age IS styled — RED trigger
+        assert "88877" in result.output  # ID still renders
         assert "38;5;34m88877" not in result.output  # ID NOT wrapped with threshold color
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_tags_column_data_intact_when_threshold_fires(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_tags_column_data_intact_when_threshold_fires(self, mock_run: MagicMock) -> None:
         """Tags column must render its data unchanged when threshold styling fires.
 
         Fails on HEAD (no ANSI); also asserts that the unique tag text is not
@@ -932,9 +926,34 @@ class TestFromAC_921_AgeThresholdCellScope:
         with _with_config(_THRESHOLD_CONFIG_YAML):
             result = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert result.exit_code == 0
-        assert "38;5;34" in result.output              # Age IS styled — RED trigger
-        assert unique_tag in result.output             # tag text still renders
+        assert "38;5;34" in result.output  # Age IS styled — RED trigger
+        assert unique_tag in result.output  # tag text still renders
         assert f"38;5;34m{unique_tag}" not in result.output  # tag NOT wrapped
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_color_not_applied_to_assignee_cell(self, mock_run: MagicMock) -> None:
+        """Threshold ANSI opener must not immediately precede the assignee text.
+
+        If the style were applied to the Assignee cell the output would contain
+        the ANSI opener (``38;5;34m``) directly before the assignee string.
+        This test constrains styling to the Age cell only and guards against
+        a regression to row-level or multi-cell styling.
+        """
+        unique_assignee = "SENTINEL_ASSIGNEE_NOT_STYLED_XYZ"
+        task = _task(
+            task_id=1,
+            title="Assignee scope check",
+            status="in-progress",
+            assignee=unique_assignee,
+        )
+        log = [_move(1, "todo", "in-progress", timestamp=_now_minus_hours(3.0))]
+        mock_run.side_effect = _subproc([task], log)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output  # Age IS styled — regression guard active
+        assert unique_assignee in result.output  # assignee still renders
+        assert f"38;5;34m{unique_assignee}" not in result.output  # assignee NOT styled
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_status_order_preserved_while_threshold_styling_applied(
@@ -989,7 +1008,7 @@ class TestFromAC_921_AgeThresholdCellScope:
         assert review_pos != -1
         assert todo_pos != -1
         assert review_task_pos > review_pos  # task title after its own section header
-        assert todo_task_pos > todo_pos      # task title after its own section header
+        assert todo_task_pos > todo_pos  # task title after its own section header
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_age_text_value_unchanged_after_stripping_ansi_sequences(
@@ -1050,10 +1069,7 @@ class TestFromAC_921_FallbackMappingValidation:
             result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert "38;5;34" in result_valid.output  # RED trigger ✓
 
-        _bad = (
-            "statuses:\n  - name: in-progress\n"
-            'tui:\n  age_thresholds:\n    - color: "34"\n'
-        )
+        _bad = 'statuses:\n  - name: in-progress\ntui:\n  age_thresholds:\n    - color: "34"\n'
         mock_run.side_effect = _age_subproc(3.0)
         with _with_config(_bad):
             result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
@@ -1071,10 +1087,7 @@ class TestFromAC_921_FallbackMappingValidation:
             result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert "38;5;34" in result_valid.output  # RED trigger ✓
 
-        _bad = (
-            "statuses:\n  - name: in-progress\n"
-            "tui:\n  age_thresholds:\n    - after: 1h\n"
-        )
+        _bad = "statuses:\n  - name: in-progress\ntui:\n  age_thresholds:\n    - after: 1h\n"
         mock_run.side_effect = _age_subproc(3.0)
         with _with_config(_bad):
             result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
@@ -1083,9 +1096,7 @@ class TestFromAC_921_FallbackMappingValidation:
         assert "38;5;34" not in result_fallback.output
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_threshold_list_of_scalars_falls_back_to_plain_age(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_threshold_list_of_scalars_falls_back_to_plain_age(self, mock_run: MagicMock) -> None:
         """``age_thresholds`` is a list of scalars (not mappings) → plain Age, exit 0."""
         mock_run.side_effect = _age_subproc(3.0)
         with _with_config(_THRESHOLD_CONFIG_YAML):
