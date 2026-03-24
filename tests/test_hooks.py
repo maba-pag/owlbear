@@ -1,4 +1,4 @@
-"""Tests for owlbear.core.hooks — HookRegistry and HookEvent."""
+﻿"""Tests for owlbear.core.hooks â€” HookRegistry and HookEvent."""
 
 from __future__ import annotations
 
@@ -183,3 +183,26 @@ class TestNewHookEventsEmitRegister:
         registry.register(HookEvent.QUESTION_PENDING, handler)
         asyncio.run(registry.emit(HookEvent.QUESTION_PENDING, {"q": "confirm?"}))
         handler.assert_called_once_with({"q": "confirm?"})
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: HookRegistry reaction_executors attribute (#991)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_991_HookRegistryReactionExecutors:
+    """AC#1: HookRegistry.__init__ sets reaction_executors = None by default."""
+
+    def test_reaction_executors_defaults_to_none(self) -> None:
+        """HookRegistry() initialises reaction_executors to None."""
+        registry = HookRegistry()
+        assert registry.reaction_executors is None
+
+    def test_reaction_executors_is_settable(self) -> None:
+        """reaction_executors can be replaced with a dict and read back."""
+        registry = HookRegistry()
+        # Pre-check: attribute must exist and be None (set in __init__)
+        assert registry.reaction_executors is None
+        executors: dict[str, Any] = {"notify": MagicMock(), "retry": MagicMock()}
+        registry.reaction_executors = executors
+        assert registry.reaction_executors is executors

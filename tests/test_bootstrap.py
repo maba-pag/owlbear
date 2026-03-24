@@ -3255,9 +3255,7 @@ class TestFromAC_870_BootstrapShutdownSignalWiring:
     accept a shutdown_event keyword argument.
     """
 
-    def test_wire_post_model_hooks_accepts_shutdown_event_kwarg(
-        self, tmp_path: Path
-    ) -> None:
+    def test_wire_post_model_hooks_accepts_shutdown_event_kwarg(self, tmp_path: Path) -> None:
         """_wire_post_model_hooks accepts a shutdown_event= keyword without TypeError."""
         import asyncio
 
@@ -3278,9 +3276,7 @@ class TestFromAC_870_BootstrapShutdownSignalWiring:
             shutdown_event=shutdown_event,
         )
 
-    def test_registered_hook_cancel_signal_linked_to_shutdown_event(
-        self, tmp_path: Path
-    ) -> None:
+    def test_registered_hook_cancel_signal_linked_to_shutdown_event(self, tmp_path: Path) -> None:
         """The hook registered via _wire_post_model_hooks has a cancel signal linked to shutdown.
 
         When shutdown_event is set after registration, the cancel signal on the
@@ -3307,9 +3303,7 @@ class TestFromAC_870_BootstrapShutdownSignalWiring:
         )
 
         handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
-        retro_hook = next(
-            (h for h in handlers if isinstance(h, RetrospectiveHook)), None
-        )
+        retro_hook = next((h for h in handlers if isinstance(h, RetrospectiveHook)), None)
         assert retro_hook is not None, "RetrospectiveHook must be registered for TASK_COMPLETE"
 
         # The hook must carry a cancel signal linked to shutdown_event.
@@ -3334,3 +3328,71 @@ class TestFromAC_870_BootstrapShutdownSignalWiring:
         assert linked_signal.is_set(), (
             "cancel signal must reflect live shutdown_event state after it fires"
         )
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: build_hooks() reaction_executors wiring (#991)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_991_BuildHooksReactionExecutors:
+    """AC#2-#4: build_hooks() stores reaction_executors on hooks when configured.
+
+    All four tests fail on HEAD because:
+    - HookRegistry has no reaction_executors attribute (AttributeError)
+    - build_hooks() does not store executors on hooks
+    """
+
+    def test_reaction_executors_is_dict_when_reactions_configured(self) -> None:
+        """AC#2: hooks.reaction_executors is a dict with notify/retry/escalate keys."""
+        settings = OwlBearSettings(
+            hook_reactions=[{"events": ["task_complete"], "actions": ["notify"]}]
+        )
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        assert isinstance(hooks.reaction_executors, dict)
+        assert "notify" in hooks.reaction_executors
+        assert "retry" in hooks.reaction_executors
+        assert "escalate" in hooks.reaction_executors
+
+    def test_reaction_executors_none_when_no_reactions(self) -> None:
+        """AC#4: hooks.reaction_executors is None when hook_reactions is empty."""
+        settings = OwlBearSettings()  # hook_reactions defaults to []
+        hooks, _ = build_hooks(settings, workspace_root=None)
+        assert hooks.reaction_executors is None
+
+    def test_reaction_executors_is_same_object_passed_to_router(self) -> None:
+        """AC#2: hooks.reaction_executors is the same dict object (identity) passed to router."""
+        from owlbear.core.hook_reaction_router import HookReactionRouter
+
+        settings = OwlBearSettings(
+            hook_reactions=[{"events": ["on_error"], "actions": ["retry"]}]
+        )
+
+        real_init = HookReactionRouter.__init__
+        captured: list[dict] = []
+
+        def capturing_init(self_inner: HookReactionRouter, *, rules, executors) -> None:
+            captured.append(executors)
+            real_init(self_inner, rules=rules, executors=executors)
+
+        with patch(
+            "owlbear.core.hook_reaction_router.HookReactionRouter.__init__",
+            capturing_init,
+        ):
+            hooks, _ = build_hooks(settings, workspace_root=None)
+
+        assert len(captured) == 1
+        assert hooks.reaction_executors is captured[0]
+
+    def test_build_hooks_return_contract_still_two_tuple(self) -> None:
+        """AC#3: return is still a 2-tuple with HookRegistry first after reactions wired."""
+        settings = OwlBearSettings(
+            hook_reactions=[{"events": ["task_complete"], "actions": ["notify"]}]
+        )
+        result = build_hooks(settings, workspace_root=None)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        hooks, _ = result
+        assert isinstance(hooks, HookRegistry)
+        # reaction_executors must be set; AttributeError here proves RED on current HEAD
+        assert hooks.reaction_executors is not None
