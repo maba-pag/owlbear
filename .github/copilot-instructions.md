@@ -30,6 +30,16 @@ OwlBear is an always-on, laptop-resident AI development system. It receives user
 - **Deliverables are kanban tasks and working code, not documents.** Research documents are _supporting artifacts_ — they have value, but writing a doc is never the end goal. After completing a research or analysis task, always create the follow-up kanban tasks that the research recommends. A research task is not done until its findings are actionable items on the board. Link the kanban task body to the research doc (e.g., `See docs/research/{slug}.md for details`).
 - **Verify subagent output, never trust self-reports.** After a subagent reports completion, verify the deliverables exist and match the acceptance criteria. Run tests yourself. Check that promised kanban tasks were actually created.
 
+## Command Surface Selection
+
+| Surface | Choose this when | OwlBear example |
+| ------- | ---------------- | --------------- |
+| `.prompt.md` | You are defining a user-facing one-shot command that should run only when explicitly invoked. | `.github/prompts/orchestrate.prompt.md` |
+| `SKILL.md` | You are defining reusable domain knowledge that should auto-load by relevance, or you need co-located resources (scripts, templates, examples). | `.github/skills/research-workflow/SKILL.md` |
+| `.agent.md` | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, or handoff boundaries. | `.github/agents/reviewer.agent.md` |
+
+Default rule: user-facing one-shot commands use `.prompt.md` unless they need auto-loading or co-located resources.
+
 ## Formatting rules for writing files
 
 - **No backtick wrappers around `.agent.md` or `.instructions.md` content.** When the `read_file` tool returns agent/instruction files, it wraps them in ` ```chatagent ` or ` ```instructions ` fencing. These fences are **added by the tool, not part of the file**. Never write them back when creating or editing these files. The file must start directly with `---` (YAML frontmatter).
