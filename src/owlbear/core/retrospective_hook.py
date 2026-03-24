@@ -180,7 +180,8 @@ class RetrospectiveHook:
         Schedules the retrospective analysis as a background task via the
         injected :class:`~owlbear.core.hook_worker_supervisor.HookWorkerSupervisor`
         when available, or falls back to a bare :func:`asyncio.create_task`.
-        Non-success outcomes are silently skipped.
+        Non-success outcomes are silently skipped. Eligibility checks run inside
+        the scheduled background coroutine.
         """
         outcome = data.get("outcome")
         if outcome != "success":
@@ -189,18 +190,6 @@ class RetrospectiveHook:
         task_id = str(data.get("task_id", ""))
         if not task_id:
             return
-
-        # Keep the legacy fast-path only when a local activity log exists.
-        # Missing logs are treated as unknown and deferred to background eligibility.
-        if (
-            self._uses_default_eligibility_helpers()
-            and (self._kanban_root / "activity.jsonl").is_file()
-        ):
-            rejection_count = self._count_rejections(task_id)
-            if rejection_count == 0:
-                priority = self._get_priority(task_id)
-                if _PRIORITY_ORDER.index(priority) < _PRIORITY_ORDER.index("needed"):
-                    return
 
         if self._supervisor is not None:
             self._supervisor.schedule(
