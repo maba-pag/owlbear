@@ -37,7 +37,12 @@ from rich.logging import RichHandler
 
 from owlbear.core.delegation import DispatchContext, format_dispatch_context
 from owlbear.core.deps import OwlBearDeps
-from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
+from owlbear.core.errors import (
+    BudgetExceededError,
+    ErrorCategory,
+    classify_error,
+    error_to_user_message,
+)
 from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.core.lint_gate import LintGateError, run_lint_gate
 from owlbear.process import is_process_alive
@@ -608,9 +613,14 @@ async def reconcile_tasks(  # noqa: PLR0913
                     summary=summary[:_WIP_MAX_CHARS],
                 )
             if hooks is not None:
+                outcome = (
+                    "budget_exceeded"
+                    if isinstance(exc, BudgetExceededError)
+                    else "failure"
+                )
                 await hooks.emit(
                     HookEvent.TASK_COMPLETE,
-                    {"task_id": tid, "outcome": "failure"},
+                    {"task_id": tid, "outcome": outcome},
                 )
 
             await schedule_task_retry(
