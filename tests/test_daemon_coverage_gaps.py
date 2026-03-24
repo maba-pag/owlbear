@@ -34,6 +34,7 @@ from owlbear.daemon import (
     RetryEntry,
     RunningTask,
     _apply_hydration,
+    _run_builder_with_context,
     channel_loop,
     detect_stale_tasks,
     poll_loop,
@@ -2149,4 +2150,78 @@ class TestFromAC_PollTickFreshDispatchContext:
         )
         assert "HydratedPageContent" not in call[1]["instructions"], (
             "hydrated content must NOT migrate into instructions="
+        )
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: _run_builder_with_context fallback must not swallow in-coroutine
+# TypeError (#809 HIGH reviewer finding)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_809_RunBuilderContextFallback:
+    """_run_builder_with_context must not silently retry on in-coroutine TypeError.
+
+    HIGH finding from reviewer (task #809): lines 710 and 718 added an async
+    fallback that catches TypeError raised *inside* the awaited coroutine body
+    and silently retries without dispatch context.  The helper should only fall
+    back when builder.run() raises at *call-time* (a legacy signature without
+    **kwargs).  A TypeError raised *inside* the coroutine is a real error and
+    must propagate to the caller unchanged.
+
+    Reproducer from reviewer: builder.run(prompt, instructions=ctx) returns a
+    coroutine; the coroutine raises TypeError with 'unexpected keyword argument';
+    current code catches it and retries with builder.run(prompt) alone, returning
+    a result instead of raising -- silently dropping dispatch context.
+    """
+
+    @pytest.mark.asyncio
+    async def test_in_coroutine_typeerror_propagates_to_caller(self) -> None:
+        """TypeError raised inside the awaited coroutine must propagate, not be swallowed.
+
+        Reproducer: fake_run accepts **kwargs at signature level (no call-time
+        TypeError) but raises inside the coroutine body when kwargs are present.
+        The fallback would succeed by calling without kwargs -- but the error
+        should have propagated instead.
+        """
+        exc_msg = "unexpected keyword argument 'toolsets'"
+
+        async def fake_run(prompt: str, **kwargs: object) -> str:  # noqa: ARG001
+            if kwargs:
+                raise TypeError(exc_msg)
+            return "reran-without-context"
+
+        builder = MagicMock()
+        builder.run = fake_run
+
+        # Must propagate -- current code incorrectly swallows this and retries
+        # with no-kwargs fallback (returning "reran-without-context" silently).
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            await _run_builder_with_context(builder, "prompt", {"instructions": "ctx"})
+
+    @pytest.mark.asyncio
+    async def test_builder_called_exactly_once_on_in_coroutine_error(self) -> None:
+        """builder.run must be called exactly once; in-coroutine TypeError must not retry."""
+        import contextlib
+
+        call_count = 0
+        exc_msg = "unexpected keyword argument 'toolsets'"
+
+        async def fake_run(prompt: str, **kwargs: object) -> str:  # noqa: ARG001
+            nonlocal call_count
+            call_count += 1
+            if kwargs:
+                raise TypeError(exc_msg)
+            return "reran-without-context"
+
+        builder = MagicMock()
+        builder.run = fake_run
+
+        with contextlib.suppress(TypeError):
+            await _run_builder_with_context(builder, "prompt", {"instructions": "ctx"})
+
+        # Current code calls builder.run twice (once with context, once without);
+        # after fix it must be called exactly once then propagate the error.
+        assert call_count == 1, (
+            f"builder.run called {call_count} times -- must be exactly once"
         )
