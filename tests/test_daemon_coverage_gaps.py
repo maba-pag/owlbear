@@ -1836,6 +1836,236 @@ class TestFromAC_PollTickRetryDispatchContext:
             "instructions= kwarg must also be present alongside WIP-bearing prompt"
         )
 
+    # -- retry branch: reviewer-cited coverage gaps (channel_name / task_title /
+    #    task_status propagation and WIP non-migration into instructions=) ----------
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_channel_name_matches_channel_object(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.channel_name propagates from channel.name (retry branch).
+
+        Addresses reviewer LAX: existing tests never assert channel_name value.
+        A mutation hard-coding channel_name='cli' still passes the prior suite.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "slack-workspace"  # non-default to catch hard-coded "cli"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.channel_name == "slack-workspace", (
+            f"channel_name must propagate from channel.name, got {ctx.channel_name!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_title_from_kanban_show(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.task_title comes from kanban_show details['title'] (retry branch).
+
+        Addresses reviewer LAX: existing tests never assert task_title value.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        # _setup() uses _make_kanban_show_json("RDC1", "Retry title", ...)
+        assert ctx.task_title == "Retry title", (
+            f"task_title must propagate from kanban_show 'title', got {ctx.task_title!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_status_from_kanban_show(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.task_status comes from kanban_show details['status'] (retry branch).
+
+        Addresses reviewer LAX: existing tests never assert task_status value.
+        Uses a non-default status ('in-progress') so a mutation hard-coding
+        'todo' would fail this test.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+
+        state.retries["RDC_STT"] = RetryEntry(
+            task_id="RDC_STT",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior error",
+        )
+        state.claimed.add("RDC_STT")
+        mock_kanban.kanban_show.return_value = json.dumps(
+            {"id": "RDC_STT", "title": "Status task", "status": "in-progress", "body": "body"}
+        )
+        mock_kanban.kanban_list.return_value = json.dumps([])
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        await poll_tick(
+            state=state,
+            kanban=mock_kanban,
+            agent_registry=mock_registry,
+            max_concurrent=3,
+            shutdown_event=asyncio.Event(),
+            channel=channel,
+            workspace=tmp_path,
+        )
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.task_status == "in-progress", (
+            f"task_status must propagate from kanban_show 'status', got {ctx.task_status!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_instructions_content_reflects_dispatch_context_fields(
+        self, tmp_path: Path
+    ) -> None:
+        """instructions= value contains channel/task_id/title from dispatch_context (retry).
+
+        Addresses reviewer LAX: prior suite only checked key presence; a constant
+        string would satisfy it.  format_dispatch_context() must produce the
+        instructions value — verified by checking content semantics.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup()
+        channel = MagicMock()
+        channel.name = "retry-instruction-chan"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert isinstance(instructions_val, str), "instructions= must be a string"
+        # These substrings are only present if format_dispatch_context() was called
+        # with a correctly populated DispatchContext.
+        assert "Channel: retry-instruction-chan" in instructions_val, (
+            f"instructions must contain 'Channel: retry-instruction-chan'; got {instructions_val!r}"
+        )
+        assert "Task ID: RDC1" in instructions_val, (
+            f"instructions must contain 'Task ID: RDC1'; got {instructions_val!r}"
+        )
+        assert "Task: Retry title" in instructions_val, (
+            f"instructions must contain 'Task: Retry title'; got {instructions_val!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_wip_summary_not_in_instructions_kwarg(
+        self, tmp_path: Path
+    ) -> None:
+        """WIP summary must NOT appear in instructions= in the retry branch.
+
+        Addresses reviewer LAX: prior suite asserted WIP is in prompt but never
+        asserted it does NOT leak into instructions=.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        mock_wip = MagicMock()
+
+        state.retries["RDC_WIP2"] = RetryEntry(
+            task_id="RDC_WIP2",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior error",
+        )
+        state.claimed.add("RDC_WIP2")
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "RDC_WIP2", "WIP non-migration task", "Task body"
+        )
+        mock_kanban.kanban_list.return_value = json.dumps([])
+        mock_wip.load.return_value = "RetryWIPSentinelContent"
+
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        await poll_tick(
+            state=state,
+            kanban=mock_kanban,
+            agent_registry=mock_registry,
+            max_concurrent=3,
+            shutdown_event=asyncio.Event(),
+            channel=channel,
+            workspace=tmp_path,
+            wip_store=mock_wip,
+        )
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        prompt_arg = call[0][0]
+        assert "RetryWIPSentinelContent" in prompt_arg, (
+            "WIP content must appear in the positional prompt"
+        )
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        assert "RetryWIPSentinelContent" not in call[1]["instructions"], (
+            "WIP content must NOT migrate into instructions= (belongs in prompt only)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # poll_tick: fresh-dispatch branch (step 7) — dispatch context reuse
@@ -2150,6 +2380,204 @@ class TestFromAC_PollTickFreshDispatchContext:
         )
         assert "HydratedPageContent" not in call[1]["instructions"], (
             "hydrated content must NOT migrate into instructions="
+        )
+
+    # -- fresh branch: reviewer-cited coverage gaps (channel_name / task_title /
+    #    task_status propagation and instructions= content verification) -----------
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_channel_name_matches_channel_object(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.channel_name propagates from channel.name (fresh branch).
+
+        Addresses reviewer LAX: existing tests never assert channel_name value.
+        A mutation hard-coding channel_name='cli' still passes the prior suite.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "slack-workspace"  # non-default to catch hard-coded "cli"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task()])
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC1", "Fresh task", "Fresh task body"
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.channel_name == "slack-workspace", (
+            f"channel_name must propagate from channel.name, got {ctx.channel_name!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_title_from_kanban_show(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.task_title comes from kanban_show details['title'] (fresh branch).
+
+        Addresses reviewer LAX: existing tests never assert task_title value.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps(
+            [self._make_todo_task("FDC_TTL", "Specific Title Value")]
+        )
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC_TTL", "Specific Title Value", "body"
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.task_title == "Specific Title Value", (
+            f"task_title must propagate from kanban_show 'title', got {ctx.task_title!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_context_task_status_from_kanban_show(
+        self, tmp_path: Path
+    ) -> None:
+        """dispatch_context.task_status comes from kanban_show details['status'] (fresh branch).
+
+        Addresses reviewer LAX: existing tests never assert task_status value.
+        Uses a non-default status ('in-progress') so a mutation hard-coding
+        'todo' would fail this test.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        mock_kanban.kanban_list.return_value = json.dumps([self._make_todo_task("FDC_STS")])
+        mock_kanban.kanban_show.return_value = json.dumps(
+            {"id": "FDC_STS", "title": "Status task", "status": "in-progress", "body": "body"}
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be populated"
+        assert ctx.task_status == "in-progress", (
+            f"task_status must propagate from kanban_show 'status', got {ctx.task_status!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_instructions_content_reflects_dispatch_context_fields(
+        self, tmp_path: Path
+    ) -> None:
+        """instructions= value contains channel/task_id/title from dispatch_context (fresh).
+
+        Addresses reviewer LAX: prior suite only checked key presence; a constant
+        string would satisfy it.  format_dispatch_context() must produce the
+        instructions value — verified by checking content semantics.
+        """
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        channel = MagicMock()
+        channel.name = "fresh-instruction-chan"
+
+        mock_kanban.kanban_list.return_value = json.dumps(
+            [self._make_todo_task("FDC_IC", "Fresh Instruction Task")]
+        )
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "FDC_IC", "Fresh Instruction Task", "body"
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None
+        assert "instructions" in call[1], "instructions= kwarg must be present"
+        instructions_val = call[1]["instructions"]
+        assert isinstance(instructions_val, str), "instructions= must be a string"
+        assert "Channel: fresh-instruction-chan" in instructions_val, (
+            f"instructions must contain 'Channel: fresh-instruction-chan'; got {instructions_val!r}"
+        )
+        assert "Task ID: FDC_IC" in instructions_val, (
+            f"instructions must contain 'Task ID: FDC_IC'; got {instructions_val!r}"
+        )
+        assert "Task: Fresh Instruction Task" in instructions_val, (
+            f"instructions must contain 'Task: Fresh Instruction Task'; got {instructions_val!r}"
         )
 
 
