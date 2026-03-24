@@ -56,7 +56,8 @@ The failure context includes two categories:
 
 Track `stale_retried` IDs across cycles: when the planner's dispatch includes a
 `retry_hint`, add that task ID to the stale_retried set. Clear an ID from the set
-when the task moves to a new status (it's no longer stale).
+when the planner dispatches the task in the next cycle **without** a `retry_hint`
+— that signals the task moved and is no longer stale.
 
 Receive the JSON plan. If `dispatch` is empty (only blocked tasks), report the blocked
 tasks to the user and stop.
@@ -68,7 +69,7 @@ those to the user as potential issues.
 
 | Setting | Value | Notes |
 | --- | --- | --- |
-| **Wave size** | 5 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
+| **Wave size** | 4 | Max parallel dispatches per wave. Single source of truth — all wave-batching rules derive from this. |
 
 ## Step 2 — Dispatch
 
@@ -102,40 +103,43 @@ no compatibility violations.**
 
 **Phase 1 — Draft the wave plan before dispatching:**
 
-1. Separate into four buckets: **auditors**, **builders**, **light flex** (researcher, writer, architect, kanban-planner, curator), **heavy flex** (reviewer, test-writer). Keep priority order within each.
+1. Separate into four buckets: **auditors**, **builders**, **light flex**, **heavy flex**. Keep priority order within each.
 2. **Auditor waves.** One auditor per wave. Fill remaining slots (up to wave-size) with light flex, priority order.
 3. **Builder waves.** One builder per wave. Fill remaining slots with light flex first (if any remain), then heavy flex, priority order.
 4. **Overflow waves.** Remaining light + heavy flex → new waves (up to wave-size), priority order.
-5. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all waves, keep the last.
+5. **Periodic curator runs.** Every fifth cycle (in cycles 5, 10, 15...) → add a curator agent to the last wave with a remaining slot. If all waves are full, skip the curator for this cycle.
+6. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
 
 **Phase 2 — Execute the plan:**
 
-6. Dispatch waves in order as drafted. No further reordering.
+7. Dispatch waves in order as drafted. No further reordering.
 
 #### Worked example
 
-**Input (priority order):** #862 (reviewer), #780 (reviewer), #854 (reviewer), #920 (test-writer), #947 (researcher), #910 (auditor), #788 (writer), #846 (writer), #781 (writer), #728 (writer), #853 (builder), #934 (builder), #521 (builder), #556 (builder), #733 (builder), #775 (builder)
+**Input (priority order):** #862 (reviewer), #780 (reviewer), #920 (test-writer), #947 (researcher), #910 (auditor), #788 (writer), #781 (writer), #728 (writer), #853 (builder), #934 (builder), #521 (builder), #556 (builder), #733 (builder), #775 (builder)
 
-Buckets: auditors=[#910], builders=[#853,#934,#521,#556,#733,#775], light=[#947,#788,#846,#781,#728], heavy=[#862,#780,#854,#920]
+Buckets: auditors=[#910], builders=[#853,#934,#521,#556,#733,#775], light=[#947,#788,#781,#728], heavy=[#862,#780,#920]
 
 Step 2 — auditor waves (fill with light):
 ```
-Wave 1: #910 (auditor), #947 (researcher), #788 (writer), #846 (writer), #781 (writer)  ← 1+4 light (full)
+Wave 1: #910 (auditor), #947 (researcher), #788 (writer), #781 (writer)  ← 1+3 light (full)
 ```
 Light remaining: [#728]
 
 Step 3 — builder waves (fill with remaining light, then heavy):
 ```
-Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer), #854 (reviewer)  ← 1+1 light+3 heavy (full)
+Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer),  ← 1+1 light+2 heavy (full)
 Wave 3: #934 (builder), #920 (test-writer)                                                 ← 1+1 heavy
 Wave 4–7: #521, #556, #733, #775 (builders)                                                ← solo each
 ```
 
 Step 4 — overflow: nothing remaining.
 
-Step 5 — drop rule: Waves 4–7 solo non-auditor → **dropped.** Wave 3 has 2 tasks → kept.
+Step 5 — Not a cycle mod 5 → no curator.
 
-**Final plan — 3 waves, 12 tasks.** 4 builders deferred. Compare old algorithm: 4 waves (auditor ran solo).
+Step 6 — drop rule: Waves 4–7 solo non-auditor → **dropped.** Wave 3 has 2 tasks → kept.
+
+**Final plan — 3 waves, 10 tasks.** 4 builders deferred.
 
 After all waves from this plan complete, proceed to Step 3.
 
@@ -154,7 +158,7 @@ If any subagent crashes with a **rate-limit error** (the error message contains
    sequential mode, including the retries from step 2). If the current wave had
    fewer than 3 remaining dispatches, the sequential requirement carries into the
    next wave(s) within the same cycle.
-4. Once the sequential minimum is satisfied,**resume parallel dispatch**.
+4. Once the sequential minimum is satisfied, **resume parallel dispatch**.
 
 The planner dispatch does not count toward the sequential minimum — it is always a
 single call and is not affected by this rule.
@@ -170,9 +174,15 @@ the planner for first-stale tasks), append it to the dispatch prompt:
 runSubagent("builder", "Build: #103\nRetry context: Review FAIL: missing coverage on parser module", "Builder #103")
 ```
 
-This is the sole exception to the ID-only dispatch rule. The hint is a single line
-(≤120 chars) summarizing the prior failure — it gives the agent targeted context
+The hint is a single line
+(≤120 tokens) summarizing the prior failure — it gives the agent targeted context
 without restating AC or procedures.
+
+**Exception — curator:** The curator's prompt does not include a task ID:
+
+```
+runSubagent("curator", "Curate: Periodic curation", "Curation")
+```
 
 Example — 5 tasks dispatched in parallel waves:
 
@@ -191,9 +201,7 @@ runSubagent("researcher", "Research: #112", "Researcher #112")
 ```
 [parallel — both return]
 
-Note: auditors share waves only with **light flex** agents (researcher, writer,
-architect, kanban-planner, curator) — never with builders, heavy flex (reviewer,
-test-writer), or other auditors. See wave assembly rules above.
+Note: auditors share waves only with **light flex** agents — never with builders, heavy flex, or other auditors. See wave assembly rules above.
 
 **Error handling:** If a subagent errors (crash, timeout, no response):
 
@@ -218,14 +226,9 @@ After all dispatches from Step 2 complete:
 2. **Re-plan:** Go to Step 1. The planner reads fresh board state. Tasks that
    advanced are in their new status. Tasks that failed are unchanged (planner flags
    them as stale). Dependencies resolved by this cycle's successes unlock new tasks.
-3. **Empty plan?** — If the planner returns an empty `dispatch` array:
-   - If any tasks reached `done` during this session, dispatch the curator:
-     ```
-     runSubagent("curator", "Curate: session complete", "Curation")
-     ```
-   - Report final status to the user and stop.
 
 The loop continues until the planner has nothing to dispatch.
+**Do not stop for any reason other than an empty plan.**
 
 ## Self-critique checklist
 
@@ -241,4 +244,4 @@ Before reporting session complete:
 - [ ] Rate-limit sequential fallback applied correctly (≥ 3 sequential dispatches, reset on new cycle)
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
 - [ ] `manage_todo_list` updated at every step transition
-- [ ] Session summary reports all completed/blocked/failed tasks
+- [ ] I did not stop the loop early for any reason — only an empty plan should end the session
