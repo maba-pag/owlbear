@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
 from owlbear.core.hooks import TaskCompleteData  # noqa: TC001
+from owlbear.memory.knowledge.cancellation import LinkedCancelSignal
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 
     from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor
     from owlbear.core.hooks import HookRegistry
+    from owlbear.memory.knowledge.cancellation import CancelSignal
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.usage import UsageTracker
 
@@ -114,6 +116,7 @@ class RetrospectiveHook:
         ingest_pipeline: IngestPipeline,
         kanban_root: Path,
         shutdown_event: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
         supervisor: HookWorkerSupervisor | None = None,
         tracker: UsageTracker | None = None,
         provider: str = "copilot",
@@ -122,10 +125,26 @@ class RetrospectiveHook:
         self._kanban_root = kanban_root
         self._model = model
         self._shutdown_event = shutdown_event
+        self._cancel = self._compose_cancel(cancel=cancel, shutdown_event=shutdown_event)
         self._supervisor = supervisor
         self._tracker = tracker
         self._provider = provider
         self._agent: Agent[None, RetroFindings] | None = None
+
+    @staticmethod
+    def _compose_cancel(
+        *,
+        cancel: CancelSignal | None,
+        shutdown_event: asyncio.Event | None,
+    ) -> CancelSignal:
+        """Compose optional cancel sources into one linked signal."""
+        if cancel is not None and shutdown_event is not None:
+            return LinkedCancelSignal(cancel, shutdown_event)
+        if cancel is not None:
+            return cancel
+        if shutdown_event is not None:
+            return shutdown_event
+        return asyncio.Event()
 
     def _get_agent(self) -> Agent[None, RetroFindings]:
         """Lazily create the PydanticAI agent on first use."""
@@ -227,9 +246,6 @@ class RetrospectiveHook:
 
     async def _run_retrospective(self, task_id: str) -> None:
         """Run the retrospective agent and ingest findings."""
-        cancel = asyncio.Event()
-        if self._shutdown_event is not None and self._shutdown_event.is_set():
-            cancel.set()
         try:
             agent = self._get_agent()
             result = await agent.run(f"Generate a retrospective for completed task #{task_id}.")
@@ -246,7 +262,11 @@ class RetrospectiveHook:
 
             text = self._format_findings(task_id, findings)
             metadata = {"source_type": "retrospective", "task_id": task_id}
-            await self._ingest_pipeline.ingest_text(text, metadata, cancel=cancel)
+            await self._ingest_pipeline.ingest_text(
+                text=text,
+                metadata=metadata,
+                cancel=self._cancel,
+            )
         except Exception:
             logger.exception("Retrospective failed for task %s", task_id)
 

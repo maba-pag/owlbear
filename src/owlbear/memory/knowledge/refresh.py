@@ -7,6 +7,7 @@ file_glob).  Collects per-item results into a :class:`RefreshResult` summary.
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -19,15 +20,14 @@ from owlbear.memory.knowledge.models import SourceType
 from owlbear.paths import sandbox_path
 
 if TYPE_CHECKING:
-    import asyncio
-
+    from owlbear.memory.knowledge.cancellation import CancelSignal
     from owlbear.memory.knowledge.ingest import IngestPipeline, IngestResult
     from owlbear.memory.knowledge.models import KnowledgeSource
     from owlbear.memory.knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
 
-CrawlHandler = Callable[[dict[str, object]], Awaitable[list["IngestResult"]]]
+CrawlHandler = Callable[..., Awaitable[list["IngestResult"]]]
 """Callback that receives a raw source config dict and returns ingest results.
 
 The bootstrap layer is responsible for constructing the appropriate CrawlConfig
@@ -91,7 +91,12 @@ class RefreshOrchestrator:
 
     # -- public API ----------------------------------------------------------
 
-    async def refresh(self, source: KnowledgeSource) -> RefreshResult:
+    async def refresh(
+        self,
+        source: KnowledgeSource,
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
         """Refresh a single knowledge source.
 
         Dispatches to the appropriate handler based on
@@ -112,7 +117,7 @@ class RefreshOrchestrator:
             SourceType.FILE_GLOB: self._handle_file_glob,
         }[source.source_type]
 
-        result = await handler(source)
+        result = await handler(source, cancel=cancel)
         self._update_source_record(source, result)
         return result
 
@@ -120,7 +125,7 @@ class RefreshOrchestrator:
         self,
         scope: str | None = None,
         *,
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> list[RefreshResult]:
         """Refresh all enabled sources, ordered by priority descending.
 
@@ -138,24 +143,34 @@ class RefreshOrchestrator:
         for src in sources:
             if cancel is not None and cancel.is_set():
                 break
-            result = await self.refresh(src)
+            result = await self.refresh(src, cancel=cancel)
             results.append(result)
         return results
 
     # -- handlers ------------------------------------------------------------
 
-    async def _handle_url_list(self, source: KnowledgeSource) -> RefreshResult:
+    async def _handle_url_list(
+        self,
+        source: KnowledgeSource,
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
         """Ingest each URL in ``config['urls']``."""
         urls: list[str] = source.config.get("urls", [])
-        return await self._ingest_items(source.id, urls)
+        return await self._ingest_items(source.id, urls, cancel=cancel)
 
-    async def _handle_crawl(self, source: KnowledgeSource) -> RefreshResult:
+    async def _handle_crawl(
+        self,
+        source: KnowledgeSource,
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
         """Delegate to the injected crawl handler callback."""
         if self._crawl_handler is None:
             msg = "Cannot refresh crawl source: crawl handler is not configured"
             raise ValueError(msg)
 
-        ingest_results = await self._crawl_handler(source.config)
+        ingest_results = await self._run_crawl_handler(source.config, cancel=cancel)
 
         refreshed = sum(1 for r in ingest_results if not r.skipped)
         skipped = sum(1 for r in ingest_results if r.skipped)
@@ -168,7 +183,12 @@ class RefreshOrchestrator:
             errors=[],
         )
 
-    async def _handle_file_glob(self, source: KnowledgeSource) -> RefreshResult:
+    async def _handle_file_glob(
+        self,
+        source: KnowledgeSource,
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
         """Resolve file glob pattern and ingest matching files.
 
         Both ``base_dir`` (when provided) and each resolved glob path are
@@ -196,7 +216,7 @@ class RefreshOrchestrator:
                 errors.append(f"{p}: {exc}")
                 logger.warning("Skipping path outside workspace: %s", p)
 
-        result = await self._ingest_items(source.id, items)
+        result = await self._ingest_items(source.id, items, cancel=cancel)
         # Merge sandbox errors into the ingest result
         if errors:
             return RefreshResult(
@@ -215,7 +235,7 @@ class RefreshOrchestrator:
         source_id: str,
         items: list[str],
         *,
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> RefreshResult:
         """Ingest a list of URLs or file paths, collecting per-item results."""
         refreshed = 0
@@ -227,7 +247,7 @@ class RefreshOrchestrator:
             if cancel is not None and cancel.is_set():
                 break
             try:
-                result: IngestResult = await self._pipeline.ingest(item)
+                result: IngestResult = await self._ingest_item(item, cancel=cancel)
                 if result.skipped:
                     skipped += 1
                 else:
@@ -244,6 +264,53 @@ class RefreshOrchestrator:
             failed=failed,
             errors=errors,
         )
+
+    async def _run_crawl_handler(
+        self,
+        config: dict[str, object],
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> list[IngestResult]:
+        """Call crawl handler and pass cancel= when supported."""
+        assert self._crawl_handler is not None  # narrowed by caller
+
+        if cancel is None or not self._supports_cancel_kwarg(self._crawl_handler):
+            return await self._crawl_handler(config)
+        return await self._crawl_handler(config, cancel=cancel)
+
+    async def _ingest_item(
+        self,
+        item: str,
+        *,
+        cancel: CancelSignal | None = None,
+    ) -> IngestResult:
+        """Call ingest pipeline and pass cancel= when supported."""
+        if cancel is None or not self._supports_cancel_kwarg(self._pipeline.ingest):
+            return await self._pipeline.ingest(item)
+
+        return await self._pipeline.ingest(item, cancel=cancel)
+
+    @staticmethod
+    def _supports_cancel_kwarg(callable_obj: object) -> bool:
+        """Return True when *callable_obj* supports ``cancel=``.
+
+        AsyncMock instances commonly hold the real callable in ``side_effect``;
+        check that first to avoid double invocation from fallback retries.
+        """
+        side_effect = getattr(callable_obj, "side_effect", None)
+        target = side_effect if callable(side_effect) else callable_obj
+
+        try:
+            signature = inspect.signature(target)
+        except (TypeError, ValueError):
+            return True
+
+        for param in signature.parameters.values():
+            if param.kind is inspect.Parameter.VAR_KEYWORD:
+                return True
+            if param.name == "cancel":
+                return True
+        return False
 
     def _update_source_record(self, source: KnowledgeSource, result: RefreshResult) -> None:
         """Persist refresh outcome on the source record."""

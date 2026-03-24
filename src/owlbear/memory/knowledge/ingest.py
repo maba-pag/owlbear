@@ -23,6 +23,7 @@ from owlbear.memory.knowledge.intake import IntakeResult, read_file, read_text, 
 from owlbear.memory.knowledge.protocol import HybridEmbedding
 
 if TYPE_CHECKING:
+    from owlbear.memory.knowledge.cancellation import CancelSignal
     from owlbear.memory.knowledge.chunker import Chunk, TextChunker
     from owlbear.memory.knowledge.document_store import DocumentStore
     from owlbear.memory.knowledge.enrichment import GraphEnricher
@@ -117,7 +118,13 @@ class IngestPipeline:
         """Cascade-delete all data for *document_id*."""
         self._store.delete_document_data(document_id)
 
-    async def ingest(self, source: str | Path, *, scope: str = "global") -> IngestResult:
+    async def ingest(
+        self,
+        source: str | Path,
+        *,
+        scope: str = "global",
+        cancel: CancelSignal | None = None,
+    ) -> IngestResult:
         """Ingest content from *source* through the full pipeline.
 
         Parameters
@@ -177,7 +184,7 @@ class IngestPipeline:
             )
 
         # 3-9. Delegate remaining pipeline steps.
-        return await self._ingest_from_intake(intake_result, scope=scope)
+        return await self._ingest_from_intake(intake_result, scope=scope, cancel=cancel)
 
     async def ingest_text(
         self,
@@ -185,7 +192,7 @@ class IngestPipeline:
         metadata: dict[str, Any] | None = None,
         *,
         scope: str = "global",
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> IngestResult:
         """Ingest raw text through the full pipeline.
 
@@ -249,7 +256,7 @@ class IngestPipeline:
         intake_result: IntakeResult,
         *,
         scope: str = "global",
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> IngestResult:
         """Run the pipeline from an already-resolved IntakeResult."""
         document_id = uuid4().hex
@@ -335,7 +342,7 @@ class IngestPipeline:
         self,
         chunks: list[Chunk],
         *,
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> list[ExtractionResult]:
         """Run entity extraction per chunk (LLM I/O-bound)."""
         results = []

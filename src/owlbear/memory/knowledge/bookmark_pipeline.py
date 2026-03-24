@@ -10,6 +10,7 @@ Orchestrates the full bookmark flow:
 
 from __future__ import annotations
 
+import inspect
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -21,12 +22,12 @@ from owlbear.memory.knowledge.evaluator import EvaluationResult  # noqa: TC001 â
 from owlbear.web_extract import extract_markdown
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Awaitable, Callable
 
     from owlbear.memory.knowledge.bookmark import BookmarkStore
+    from owlbear.memory.knowledge.cancellation import CancelSignal
     from owlbear.memory.knowledge.evaluator import SourceEvaluator
-    from owlbear.memory.knowledge.ingest import IngestPipeline
+    from owlbear.memory.knowledge.ingest import IngestPipeline, IngestResult
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class BookmarkPipeline:
         scope: str = "global",
         project_context: dict[str, Any] | None = None,
         *,
-        cancel: asyncio.Event | None = None,
+        cancel: CancelSignal | None = None,
     ) -> BookmarkResult:
         """Run the full bookmark pipeline for *url*.
 
@@ -168,7 +169,12 @@ class BookmarkPipeline:
         if should_ingest:
             assert self._ingest is not None  # for type narrowing
             assert content is not None  # guarded by `content` truthiness above
-            result = await self._ingest.ingest_text(content, metadata={"url": url}, scope=scope)
+            result = await self._ingest_text(
+                content,
+                url=url,
+                scope=scope,
+                cancel=cancel,
+            )
             ingested = not result.skipped
             if ingested:
                 document_id = result.document_id
@@ -199,6 +205,45 @@ class BookmarkPipeline:
             evaluation=evaluation,
             ingested=ingested,
         )
+
+    async def _ingest_text(
+        self,
+        content: str,
+        *,
+        url: str,
+        scope: str,
+        cancel: CancelSignal | None,
+    ) -> IngestResult:
+        """Call ingest_text and pass cancel= when supported."""
+        assert self._ingest is not None  # guarded by caller
+
+        if cancel is None or not self._supports_cancel_kwarg(self._ingest.ingest_text):
+            return await self._ingest.ingest_text(content, metadata={"url": url}, scope=scope)
+
+        return await self._ingest.ingest_text(
+            content,
+            metadata={"url": url},
+            scope=scope,
+            cancel=cancel,
+        )
+
+    @staticmethod
+    def _supports_cancel_kwarg(callable_obj: object) -> bool:
+        """Return True when *callable_obj* supports ``cancel=``."""
+        side_effect = getattr(callable_obj, "side_effect", None)
+        target = side_effect if callable(side_effect) else callable_obj
+
+        try:
+            signature = inspect.signature(target)
+        except (TypeError, ValueError):
+            return True
+
+        for param in signature.parameters.values():
+            if param.kind is inspect.Parameter.VAR_KEYWORD:
+                return True
+            if param.name == "cancel":
+                return True
+        return False
 
 
 # ---------------------------------------------------------------------------

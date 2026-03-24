@@ -39,6 +39,7 @@ from .toolsets import (
 )
 
 if TYPE_CHECKING:
+    import asyncio
     from collections.abc import Callable
     from pathlib import Path
 
@@ -114,18 +115,24 @@ def _wire_post_model_hooks(  # noqa: PLR0913
     hooks: HookRegistry,
     ingest_pipeline: object | None,
     cleanup: list | None = None,
+    shutdown_event: asyncio.Event | None = None,
     tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> None:
     """Register hooks that depend on the model being available."""
     if ingest_pipeline is not None:
         from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor  # noqa: PLC0415
         from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
+        from owlbear.memory.knowledge.cancellation import LinkedCancelSignal  # noqa: PLC0415
 
         supervisor = HookWorkerSupervisor()
         RetrospectiveHook(
             model=model,
             ingest_pipeline=ingest_pipeline,
             kanban_root=workspace / "kanban",
+            shutdown_event=shutdown_event,
+            cancel=LinkedCancelSignal(shutdown_event)
+            if shutdown_event is not None
+            else LinkedCancelSignal(),
             supervisor=supervisor,
         ).register(hooks)
         if cleanup is not None:
@@ -140,6 +147,7 @@ async def bootstrap(  # noqa: PLR0915
     *,
     channel_name: str = "cli",
     workspace_root: Path | None = None,
+    shutdown_event: asyncio.Event | None = None,
 ) -> BootstrapResult:
     """Wire all OwlBear components and return a :class:`BootstrapResult`."""
     from pathlib import Path as _Path  # noqa: PLC0415
@@ -199,7 +207,15 @@ async def bootstrap(  # noqa: PLR0915
         )
         raise ValueError(msg)
 
-    _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline, cleanup=cleanup)
+    _wire_post_model_hooks(
+        settings,
+        model,
+        workspace,
+        hooks,
+        ingest_pipeline,
+        cleanup=cleanup,
+        shutdown_event=shutdown_event,
+    )
 
     session_path = (
         settings.config_dir / "projects" / active_project.id / "sessions" / "session.jsonl"
