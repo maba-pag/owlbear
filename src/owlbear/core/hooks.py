@@ -29,6 +29,7 @@ __all__ = [
     "OnMessageData",
     "PostToolUseData",
     "PreToolUseData",
+    "QuestionPendingData",
     "SessionEndData",
     "SessionStartData",
     "SubagentCompleteData",
@@ -123,6 +124,18 @@ class TaskCompleteData(TypedDict):
 
     task_id: str
     outcome: str
+
+
+# Functional TypedDict form preserves __required_keys__/__optional_keys__
+# under postponed annotations on Python 3.12.
+QuestionPendingData = TypedDict(  # noqa: UP013
+    "QuestionPendingData",
+    {
+        "source": str,
+        "question": str,
+        "tool_name": NotRequired[str],
+    },
+)
 
 
 class DaemonStartupData(TypedDict):
@@ -231,6 +244,12 @@ class HookRegistry:
         self,
         event: Literal[HookEvent.TASK_COMPLETE],
         data: TaskCompleteData,
+    ) -> None: ...
+    @overload
+    async def emit(
+        self,
+        event: Literal[HookEvent.QUESTION_PENDING],
+        data: QuestionPendingData,
     ) -> None: ...
     @overload
     async def emit(

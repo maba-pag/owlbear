@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from owlbear.core.hooks import HookEvent, HookRegistry
+from owlbear.core.hooks import HookEvent, HookRegistry, QuestionPendingData
 from owlbear.safety.policy import ApprovalPolicy, ApprovalSession
 
 if TYPE_CHECKING:
@@ -105,6 +105,13 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
             f"Action requires approval: {action_description}. Approve? (yes/no/approve all {name})"
         )
         await self.channel.send_blocks(blocks, text_fallback)
+
+        payload: QuestionPendingData = {
+            "source": "approval_gate",
+            "question": text_fallback,
+            "tool_name": name,
+        }
+        await self.hooks.emit(HookEvent.QUESTION_PENDING, payload)
 
         # Wait for the user's response
         response = await self.channel.receive()

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 from pydantic_ai.toolsets import FunctionToolset
 
 from owlbear.core.exceptions import OwlBearError
+from owlbear.core.hooks import HookEvent, HookRegistry, QuestionPendingData
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -59,13 +60,14 @@ class AskUserToolset(FunctionToolset):
 
     tool_alias: ClassVar[str] = "ask_user"
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         channel: ChannelPlugin,
         timeout_seconds: float = 120.0,
         max_retries: int = 3,
         timeout_action: TimeoutAction = TimeoutAction.ABORT,
         default_response: str = "(no response)",
+        hooks: HookRegistry | None = None,
     ) -> None:
         super().__init__()
         self._channel = channel
@@ -73,6 +75,7 @@ class AskUserToolset(FunctionToolset):
         self._max_retries = max_retries
         self._timeout_action = timeout_action
         self._default_response = default_response
+        self._hooks = hooks
         self._register_tools()
 
     # ------------------------------------------------------------------
@@ -107,6 +110,7 @@ class AskUserToolset(FunctionToolset):
         """
         prompt = self._format_prompt(question, options)
         await self._channel.send(prompt)
+        await self._emit_question_pending(prompt)
 
         if options is None:
             return await self._receive_with_timeout()
@@ -116,6 +120,16 @@ class AskUserToolset(FunctionToolset):
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def _emit_question_pending(self, prompt: str) -> None:
+        """Emit QUESTION_PENDING if hooks are configured."""
+        if self._hooks is None:
+            return
+        payload: QuestionPendingData = {
+            "source": "ask_user",
+            "question": prompt,
+        }
+        await self._hooks.emit(HookEvent.QUESTION_PENDING, payload)
 
     @staticmethod
     def _format_prompt(question: str, options: list[str] | None) -> str:
