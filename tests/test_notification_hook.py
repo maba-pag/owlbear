@@ -263,3 +263,195 @@ class TestWinSoundBackend:
             backend = WinSoundBackend()
             result = await (backend.notify("hello", HookEvent.TASK_COMPLETE))
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# SlackNotificationBackend (TDD RED — task #980)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SlackNotificationBackend:
+    """TDD RED tests for SlackNotificationBackend (task #980, implements #978).
+
+    All tests import SlackNotificationBackend inside each method so that
+    existing tests in this file remain passing while this class fails RED.
+    """
+
+    # ------------------------------------------------------------------
+    # AC1 — Protocol conformance
+    # ------------------------------------------------------------------
+
+    def test_isinstance_notification_backend(self) -> None:
+        """SlackNotificationBackend satisfies the NotificationBackend protocol."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        assert isinstance(SlackNotificationBackend("tok", "chan"), NotificationBackend)
+
+    # ------------------------------------------------------------------
+    # AC1 — name property
+    # ------------------------------------------------------------------
+
+    def test_name_returns_slack(self) -> None:
+        """name property returns 'slack'."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        assert SlackNotificationBackend("tok", "chan").name == "slack"
+
+    # ------------------------------------------------------------------
+    # AC1 — Happy path: returns True on success
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_returns_true_on_success(self) -> None:
+        """notify() returns True when chat_postMessage succeeds."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
+        mock_client_cls.return_value = mock_instance
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is True
+        mock_client_cls.assert_called_once_with(token="mytoken")
+        mock_instance.chat_postMessage.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # AC1 — Guard: bot_token is None → returns False
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_returns_false_when_bot_token_is_none(self) -> None:
+        """notify() returns False immediately when bot_token is None."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        backend = SlackNotificationBackend(None, "mychannel")
+        result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # AC1 — Guard: channel_id is None → returns False
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_returns_false_when_channel_id_is_none(self) -> None:
+        """notify() returns False immediately when channel_id is None."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        backend = SlackNotificationBackend("mytoken", None)
+        result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # AC1 — Import guard: AsyncWebClient is None → returns False
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_returns_false_when_asyncwebclient_unavailable(self) -> None:
+        """notify() returns False when slack_sdk is not installed (AsyncWebClient is None)."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", None):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # AC1 — Exception handling: logs warning, returns False, no propagation
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_returns_false_and_logs_warning_on_exception(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """notify() catches exceptions from chat_postMessage, logs a warning, returns False."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.chat_postMessage = AsyncMock(side_effect=RuntimeError("network error"))
+        mock_client_cls.return_value = mock_instance
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            with caplog.at_level(logging.WARNING):
+                result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+        assert any(rec.levelno >= logging.WARNING for rec in caplog.records)
+
+    # ------------------------------------------------------------------
+    # AC1 — Message format: *{event.value}*: {message}
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_formats_message_with_event_value(self) -> None:
+        """notify() posts *{event.value}*: {message} to chat_postMessage."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
+        mock_client_cls.return_value = mock_instance
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            await backend.notify("task done", HookEvent.TASK_COMPLETE)
+
+        call_kwargs = mock_instance.chat_postMessage.call_args.kwargs
+        assert call_kwargs.get("channel") == "mychannel"
+        assert call_kwargs.get("text") == f"*{HookEvent.TASK_COMPLETE.value}*: task done"
+
+    # ------------------------------------------------------------------
+    # AC1 — Message format: *notification*: {message} when event is None
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_formats_message_with_none_event(self) -> None:
+        """notify() posts *notification*: {message} when event is None (defensive fallback)."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
+        mock_client_cls.return_value = mock_instance
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            await backend.notify("some message", None)  # type: ignore[arg-type]
+
+        call_kwargs = mock_instance.chat_postMessage.call_args.kwargs
+        assert call_kwargs.get("text") == "*notification*: some message"
+
+    # ------------------------------------------------------------------
+    # AC1 — Structural guard: no imports from owlbear.channels
+    # ------------------------------------------------------------------
+
+    def test_no_owlbear_channels_import(self) -> None:
+        """notification_hook.py must not import from owlbear.channels."""
+        import ast
+        import pathlib
+
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        _ = SlackNotificationBackend  # referenced to trigger ImportError at RED phase
+
+        source = pathlib.Path("src/owlbear/core/notification_hook.py").read_text()
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and "owlbear.channels" in node.module
+            ):
+                pytest.fail(
+                    f"Found forbidden import in notification_hook.py: "
+                    f"from {node.module} import ..."
+                )
