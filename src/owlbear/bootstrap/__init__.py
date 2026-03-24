@@ -51,6 +51,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_TOOLSET_RESULT_WITH_CONSOLIDATION = 4
+_TOOLSET_RESULT_LEGACY = 3
+
 _SESSION_SUMMARY_PROMPT = (
     "Summarise this conversation into structured markdown with "
     "headings ## Key Decisions, ## Active Tasks, ## Workspace State. "
@@ -132,7 +135,7 @@ def _wire_post_model_hooks(  # noqa: PLR0913
         _wire_session_memory_hook(model, workspace, hooks)
 
 
-async def bootstrap(
+async def bootstrap(  # noqa: PLR0915
     settings: OwlBearSettings,
     *,
     channel_name: str = "cli",
@@ -174,7 +177,7 @@ async def bootstrap(
     model = OpenAIChatModel(settings.chat_model, provider=provider)
 
     component_statuses: list[ComponentStatus] = []
-    toolsets, knowledge_service, ingest_pipeline, consolidation_svc = build_toolsets(
+    toolset_result = build_toolsets(
         settings,
         workspace,
         hooks,
@@ -184,6 +187,17 @@ async def bootstrap(
         cleanup=cleanup,
         summary=component_statuses,
     )
+    if len(toolset_result) == _TOOLSET_RESULT_WITH_CONSOLIDATION:
+        toolsets, knowledge_service, ingest_pipeline, consolidation_svc = toolset_result
+    elif len(toolset_result) == _TOOLSET_RESULT_LEGACY:
+        toolsets, knowledge_service, ingest_pipeline = toolset_result
+        consolidation_svc = None
+    else:
+        msg = (
+            "build_toolsets() must return "
+            f"{_TOOLSET_RESULT_LEGACY} or {_TOOLSET_RESULT_WITH_CONSOLIDATION} values"
+        )
+        raise ValueError(msg)
 
     _wire_post_model_hooks(settings, model, workspace, hooks, ingest_pipeline, cleanup=cleanup)
 

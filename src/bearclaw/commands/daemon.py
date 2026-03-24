@@ -11,8 +11,10 @@ from typing import Annotated
 
 import typer
 
-from owlbear.config import get_settings
+from owlbear.config import OwlBearSettings, get_settings
 from owlbear.process import is_process_alive
+
+_SETTINGS_CLS = OwlBearSettings
 
 app = typer.Typer()
 

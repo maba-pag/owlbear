@@ -35,8 +35,10 @@ except ImportError:  # logfire is an optional dependency
 from rich.console import Console
 from rich.logging import RichHandler
 
+from owlbear.core.delegation import DispatchContext, format_dispatch_context
+from owlbear.core.deps import OwlBearDeps
 from owlbear.core.errors import ErrorCategory, classify_error, error_to_user_message
-from owlbear.core.hooks import HookEvent
+from owlbear.core.hooks import HookEvent, HookRegistry
 from owlbear.core.lint_gate import LintGateError, run_lint_gate
 from owlbear.process import is_process_alive
 from owlbear.providers.copilot import create_copilot_client
@@ -49,7 +51,6 @@ if TYPE_CHECKING:
     from owlbear.config import OwlBearSettings
     from owlbear.core.agent import OwlBearAgent
     from owlbear.core.agent_registry import AgentRegistry
-    from owlbear.core.hooks import HookRegistry
     from owlbear.memory.error_journal import ErrorJournal
     from owlbear.memory.wip import WipStore
     from owlbear.tools.kanban import KanbanToolset
@@ -668,6 +669,58 @@ async def _apply_hydration(
     return prompt
 
 
+def _build_builder_run_kwargs(  # noqa: PLR0913
+    *,
+    task_id: str,
+    task_title: str,
+    task_status: str,
+    channel: ChannelPlugin | None,
+    workspace: Path | None,
+    hooks: HookRegistry | None,
+) -> dict[str, object]:
+    """Build consistent run kwargs for builder dispatch calls."""
+    dispatch_context = DispatchContext(
+        workspace_root=str(workspace or Path.cwd()),
+        channel_name=getattr(channel, "name", "cli"),
+        task_id=task_id,
+        task_title=task_title,
+        task_status=task_status,
+    )
+    instructions, metadata = format_dispatch_context(dispatch_context)
+    return {
+        "deps": OwlBearDeps(
+            hooks=hooks or HookRegistry(),
+            dispatch_context=dispatch_context,
+        ),
+        "instructions": instructions,
+        "metadata": metadata,
+    }
+
+
+def _run_builder_with_context(
+    builder: object,
+    prompt: str,
+    run_kwargs: dict[str, object],
+) -> object:
+    """Call builder.run with context kwargs, falling back for legacy fakes."""
+    try:
+        run_coro = builder.run(prompt, **run_kwargs)  # type: ignore[no-any-return, attr-defined]
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        return builder.run(prompt)  # type: ignore[no-any-return, attr-defined]
+
+    async def _await_with_fallback() -> object:
+        try:
+            return await run_coro
+        except TypeError as exc:
+            if "unexpected keyword argument" not in str(exc):
+                raise
+            return await builder.run(prompt)  # type: ignore[no-any-return, attr-defined]
+
+    return _await_with_fallback()
+
+
 async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
     *,
     state: OrchestratorState,
@@ -731,6 +784,14 @@ async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
         details_raw = await kanban.kanban_show(tid)
         details = json.loads(details_raw)
         prompt = f"Build task #{tid}: {details['title']}\n\n{details.get('body', '')}"
+        run_kwargs = _build_builder_run_kwargs(
+            task_id=tid,
+            task_title=details.get("title", ""),
+            task_status=details.get("status", "todo"),
+            channel=channel,
+            workspace=workspace,
+            hooks=hooks,
+        )
 
         # Hydrate context from task body
         prompt = await _apply_hydration(hydrator, prompt, details.get("body", ""))
@@ -743,7 +804,7 @@ async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
 
         builder = agent_registry.get("builder")
         async_task = asyncio.create_task(
-            builder.run(prompt),
+            _run_builder_with_context(builder, prompt, run_kwargs),
             name=f"poll-retry-{tid}",
         )
         state.running[tid] = RunningTask(task_id=tid, asyncio_task=async_task)
@@ -796,6 +857,14 @@ async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
         details_raw = await kanban.kanban_show(task_id)
         details = json.loads(details_raw)
         prompt = f"Build task #{task_id}: {details['title']}\n\n{details.get('body', '')}"
+        run_kwargs = _build_builder_run_kwargs(
+            task_id=task_id,
+            task_title=details.get("title", ""),
+            task_status=details.get("status", "todo"),
+            channel=channel,
+            workspace=workspace,
+            hooks=hooks,
+        )
 
         # Hydrate context from task body
         prompt = await _apply_hydration(hydrator, prompt, details.get("body", ""))
@@ -809,7 +878,7 @@ async def poll_tick(  # noqa: PLR0913, PLR0912, PLR0915, C901
         # Resolve builder agent and spawn
         builder = agent_registry.get("builder")
         async_task = asyncio.create_task(
-            builder.run(prompt),
+            _run_builder_with_context(builder, prompt, run_kwargs),
             name=f"poll-task-{task_id}",
         )
         state.running[task_id] = RunningTask(task_id=task_id, asyncio_task=async_task)
