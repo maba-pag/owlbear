@@ -379,8 +379,174 @@ class TestFromAC_NotificationEventsDefault:
         """question_pending must not be in the default notification event list."""
         assert "question_pending" not in default_settings.notification_events
 
-    def test_default_notification_events_unchanged(
-        self, default_settings: OwlBearSettings
-    ) -> None:
+    def test_default_notification_events_unchanged(self, default_settings: OwlBearSettings) -> None:
         """Default notification events must be exactly task_complete and on_error."""
         assert set(default_settings.notification_events) == {"task_complete", "on_error"}
+
+
+# ---------------------------------------------------------------------------
+# Strengthen: QuestionPendingData value type annotations (reviewer gap 1)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_970_QuestionPendingDataTypeAnnotations:
+    """``QuestionPendingData`` value annotations must be exactly str / NotRequired[str]."""
+
+    def test_source_annotation_is_str(self) -> None:
+        """``source`` must be annotated as ``str``, not a subtype or alias."""
+        from typing import get_type_hints
+
+        hints = get_type_hints(QuestionPendingData, include_extras=True)
+        assert hints["source"] is str
+
+    def test_question_annotation_is_str(self) -> None:
+        """``question`` must be annotated as ``str``."""
+        from typing import get_type_hints
+
+        hints = get_type_hints(QuestionPendingData, include_extras=True)
+        assert hints["question"] is str
+
+    def test_tool_name_annotation_is_not_required_str(self) -> None:
+        """``tool_name`` must be annotated as ``NotRequired[str]``."""
+        from typing import NotRequired, get_type_hints
+
+        hints = get_type_hints(QuestionPendingData, include_extras=True)
+        assert hints["tool_name"] == NotRequired[str]
+
+
+# ---------------------------------------------------------------------------
+# Strengthen: AskUser emitted question equals exactly the formatted prompt
+# (reviewer gap 2 — options branch only checked substrings)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_970_AskUserExactFormattedPrompt:
+    """The emitted ``question`` must equal the exact formatted prompt, not just contain it."""
+
+    @pytest.mark.asyncio
+    async def test_emit_question_is_exact_plain_question(self) -> None:
+        """No-options question emitted verbatim, no extra whitespace or wrapping."""
+        channel = _make_channel("yes")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        ts = AskUserToolset(channel, hooks=hooks)
+        await ts.ask_user("Are you sure?")
+
+        assert len(emitted) == 1
+        assert emitted[0]["question"] == "Are you sure?"
+
+    @pytest.mark.asyncio
+    async def test_emit_question_is_exact_options_prompt(self) -> None:
+        """Options question emitted as the full numbered-list prompt, not just a substring."""
+        channel = _make_channel("1")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        ts = AskUserToolset(channel, hooks=hooks)
+        await ts.ask_user("Pick one:", options=["alpha", "beta"])
+
+        expected = "Pick one:\n[1] alpha\n[2] beta\nChoose [1-2]:"
+        assert len(emitted) == 1
+        assert emitted[0]["question"] == expected
+
+    @pytest.mark.asyncio
+    async def test_emit_question_three_options_exact(self) -> None:
+        """Three-option prompt has correct numbering and terminator."""
+        channel = _make_channel("2")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        ts = AskUserToolset(channel, hooks=hooks)
+        await ts.ask_user("Choose:", options=["x", "y", "z"])
+
+        expected = "Choose:\n[1] x\n[2] y\n[3] z\nChoose [1-3]:"
+        assert len(emitted) == 1
+        assert emitted[0]["question"] == expected
+
+
+# ---------------------------------------------------------------------------
+# Strengthen: ApprovalGate emitted question equals text_fallback exactly
+# (reviewer gap 3 — existing test only checks non-empty string)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_970_ApprovalGateExactFallbackText:
+    """The emitted ``question`` must equal the ``text_fallback`` string exactly."""
+
+    @pytest.mark.asyncio
+    async def test_emit_question_equals_text_fallback_no_args(self) -> None:
+        """No-arg tool: emitted question matches 'Action requires approval: {name}...' verbatim."""
+        channel = _make_channel("yes")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        gate = _make_gate(
+            rules=[ApprovalRule(tool_name="rm_all")],
+            hooks=hooks,
+            channel=channel,
+        )
+        ctx = MagicMock()
+        tool = MagicMock()
+        await gate.call_tool("rm_all", {}, ctx, tool)
+
+        expected = "Action requires approval: rm_all. Approve? (yes/no/approve all rm_all)"
+        assert len(emitted) >= 1
+        assert emitted[0]["question"] == expected
+
+    @pytest.mark.asyncio
+    async def test_emit_question_equals_text_fallback_with_args(self) -> None:
+        """With tool args: emitted question embeds the args summary verbatim."""
+        channel = _make_channel("yes")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        gate = _make_gate(
+            rules=[ApprovalRule(tool_name="git_push")],
+            hooks=hooks,
+            channel=channel,
+        )
+        ctx = MagicMock()
+        tool = MagicMock()
+        await gate.call_tool("git_push", {"branch": "main"}, ctx, tool)
+
+        expected = (
+            "Action requires approval: git_push(branch='main')."
+            " Approve? (yes/no/approve all git_push)"
+        )
+        assert len(emitted) >= 1
+        assert emitted[0]["question"] == expected
+
+    @pytest.mark.asyncio
+    async def test_emit_question_not_a_generic_placeholder(self) -> None:
+        """Emitted question must contain the actual tool name and 'Action requires approval'."""
+        channel = _make_channel("yes")
+        emitted: list[dict[str, Any]] = []
+
+        hooks = HookRegistry()
+        hooks.register(HookEvent.QUESTION_PENDING, emitted.append)  # type: ignore[arg-type]
+
+        gate = _make_gate(
+            rules=[ApprovalRule(tool_name="deploy")],
+            hooks=hooks,
+            channel=channel,
+        )
+        ctx = MagicMock()
+        tool = MagicMock()
+        await gate.call_tool("deploy", {"env": "prod"}, ctx, tool)
+
+        assert len(emitted) >= 1
+        question = emitted[0]["question"]
+        assert "Action requires approval:" in question
+        assert "deploy" in question
+        assert "yes/no" in question
