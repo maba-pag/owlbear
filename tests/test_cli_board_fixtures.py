@@ -481,3 +481,19 @@ class TestFromAC_MoveAgeFixtures:
         task_data = json.loads(list_json)
         # created is still present for CLI fallback to read after ignoring wrong-destination move
         assert task_data[0]["created"] == f"{created_date.isoformat()}T10:00:00+01:00"
+
+
+class TestBuilderDiscovered:
+    """Builder-added tests for parser-sensitive detail formatting contract."""
+
+    def test_board_move_detail_matches_exact_from_to_shape(self) -> None:
+        from cli_board_fixtures import board_move  # type: ignore[import-not-found]
+
+        move = board_move(task_id=11, from_status="todo", to_status="review")
+        assert move["detail"] == "todo -> review"
+
+    def test_board_move_detail_contains_required_delimiter_token(self) -> None:
+        from cli_board_fixtures import board_move  # type: ignore[import-not-found]
+
+        move = board_move(task_id=12, from_status="backlog", to_status="in-progress")
+        assert " -> " in move["detail"]
