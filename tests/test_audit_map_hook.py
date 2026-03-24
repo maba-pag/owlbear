@@ -107,33 +107,35 @@ class TestFromAC_AuditMapAdvisoryHookEligibility:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_failure_outcome_skips_schedule(self, tmp_path: Path) -> None:
-        """AC2: outcome == 'failure' → supervisor.schedule() not called."""
+        """AC2: outcome == 'failure' → returns immediately; no tag lookup, no schedule."""
         supervisor = MagicMock()
         hook = _make_hook(tmp_path, supervisor=supervisor)
-        await hook(_payload(outcome="failure"))
+        with patch("owlbear.core.audit_map_hook.subprocess.run") as mock_subprocess:
+            await hook(_payload(outcome="failure"))
         supervisor.schedule.assert_not_called()
+        mock_subprocess.assert_not_called()  # proves immediate return before tag lookup
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_non_success_outcome_skipped_skips_schedule(self, tmp_path: Path) -> None:
-        """AC2 edge: outcome == 'skipped' (non-success) → supervisor.schedule() not called."""
+        """AC2 edge: outcome == 'skipped' → returns immediately; no tag lookup, no schedule."""
         supervisor = MagicMock()
         hook = _make_hook(tmp_path, supervisor=supervisor)
-        await hook(_payload(outcome="skipped"))
+        with patch("owlbear.core.audit_map_hook.subprocess.run") as mock_subprocess:
+            await hook(_payload(outcome="skipped"))
         supervisor.schedule.assert_not_called()
+        mock_subprocess.assert_not_called()  # proves immediate return before tag lookup
 
     # -- AC3: config flag gate -----------------------------------------------
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_config_flag_false_skips_schedule(self, tmp_path: Path) -> None:
-        """AC3: audit_map_worker_enabled=False → supervisor.schedule() not called."""
+        """AC3: audit_map_worker_enabled=False → returns immediately; no tag lookup, no schedule."""
         supervisor = MagicMock()
         hook = _make_hook(tmp_path, enabled=False, supervisor=supervisor)
-        with patch(
-            "owlbear.core.audit_map_hook.subprocess.run",
-            return_value=_subprocess_returning_tags(["worker:audit-map"]),
-        ):
+        with patch("owlbear.core.audit_map_hook.subprocess.run") as mock_subprocess:
             await hook(_payload(outcome="success"))
         supervisor.schedule.assert_not_called()
+        mock_subprocess.assert_not_called()  # proves immediate return before tag lookup
 
     # -- AC4: worker:audit-map tag gate --------------------------------------
 
@@ -309,8 +311,86 @@ class TestFromAC_AuditMapAdvisoryHookWorker:
         channel_spy.send.assert_not_called()
 
 
-class TestBuilderDiscovered_AuditMapAdvisoryHookBranches:
-    """Builder-discovered coverage for defensive branches and helper seams."""
+# ---------------------------------------------------------------------------
+# AC6/AC7: Path-traversal confinement (retry gap — missing from first TestFromAC_ cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AuditMapAdvisoryHookPathSafety:
+    """Worker must never write outside docs/scratch/, regardless of task_id content.
+
+    AC6: output confined to docs/scratch/{task-id}-audit-map.md.
+    AC7: no writes under src/ or under docs/ outside scratch/.
+
+    All tests FAIL (RED) because the current implementation joins task_id
+    into the output path without sanitisation, allowing ``../`` sequences to
+    escape docs/scratch/.
+    """
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_single_parent_traversal_task_id_does_not_escape_scratch(
+        self, tmp_path: Path
+    ) -> None:
+        """AC6/AC7: task_id='../escape' must not write docs/escape-audit-map.md.
+
+        Path trace: docs/scratch/../escape-audit-map.md resolves to
+        docs/escape-audit-map.md, which is outside docs/scratch/.
+        """
+        task_id = "../escape"
+        lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id=task_id)
+        await lazy_coro
+
+        # Path traversal target: one level above scratch/ inside docs/
+        escaped = tmp_path / "docs" / "escape-audit-map.md"
+        assert not escaped.exists(), (
+            f"Path traversal: worker wrote to {escaped} — file must stay inside docs/scratch/"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_double_parent_traversal_task_id_does_not_write_to_src(
+        self, tmp_path: Path
+    ) -> None:
+        """AC7: task_id='../../src/malicious' must not write to src/malicious-audit-map.md.
+
+        Path trace: docs/scratch/../../src/malicious-audit-map.md resolves to
+        src/malicious-audit-map.md, which is under src/.
+        Pre-create src/ so the write attempt succeeds and we can assert the file's presence.
+        """
+        task_id = "../../src/malicious"
+        (tmp_path / "src").mkdir(parents=True, exist_ok=True)
+
+        lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id=task_id)
+        await lazy_coro
+
+        # Path traversal target: two levels up from scratch/ into src/
+        escaped = tmp_path / "src" / "malicious-audit-map.md"
+        assert not escaped.exists(), (
+            f"Path traversal: worker wrote to {escaped} — AC7 forbids writes under src/"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_all_written_files_are_under_scratch(self, tmp_path: Path) -> None:
+        """AC6: after worker run with path-like task_id, every created file is inside docs/scratch/.
+
+        Uses '../escape' — docs/scratch/../escape-audit-map.md resolves to
+        docs/escape-audit-map.md, which is not inside docs/scratch/.
+        """
+        task_id = "../escape"
+        lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id=task_id)
+        await lazy_coro
+
+        scratch = tmp_path / "docs" / "scratch"
+        docs_root = tmp_path / "docs"
+        non_scratch_files = [
+            f for f in docs_root.rglob("*") if f.is_file() and not f.is_relative_to(scratch)
+        ]
+        assert not non_scratch_files, (
+            f"AC6 violated: files outside docs/scratch/: {non_scratch_files}"
+        )
+
+
+class TestFromAC_AuditMapAdvisoryHookBranches:
+    """Defensive branches and helper seams verifying the eligibility contract."""
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_empty_task_id_skips_subprocess_and_schedule(self, tmp_path: Path) -> None:
@@ -395,3 +475,262 @@ class TestBuilderDiscovered_AuditMapAdvisoryHookBranches:
         lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id="42")
         await lazy_coro
         lazy_coro.close()
+
+
+# ---------------------------------------------------------------------------
+# AC7: OwlBearSettings.audit_map_worker_enabled config field (#983)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_983_AuditMapConfigFlag:
+    """AC7: audit_map_worker_enabled: bool = Field(default=False) in OwlBearSettings.
+
+    All tests FAIL (RED) until the field is added to src/owlbear/config.py.
+    """
+
+    def test_owlbear_settings_has_audit_map_worker_enabled_field(self) -> None:
+        """AC7: OwlBearSettings exposes audit_map_worker_enabled as a model field."""
+        from owlbear.config import OwlBearSettings
+
+        assert "audit_map_worker_enabled" in OwlBearSettings.model_fields, (
+            "OwlBearSettings must declare audit_map_worker_enabled as a Pydantic model field"
+        )
+
+    def test_audit_map_worker_enabled_defaults_to_false(self) -> None:
+        """AC7: audit_map_worker_enabled defaults to False when not set."""
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings()
+        assert settings.audit_map_worker_enabled is False, (
+            "audit_map_worker_enabled must default to False"
+        )
+
+    def test_audit_map_worker_enabled_is_bool_not_int(self) -> None:
+        """AC7: the default value is strictly bool, not an int or other truthy type."""
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings()
+        assert type(settings.audit_map_worker_enabled) is bool, (
+            "audit_map_worker_enabled must be a bool, not an int or other type"
+        )
+
+    def test_audit_map_worker_enabled_can_be_set_to_true(self) -> None:
+        """AC7: passing audit_map_worker_enabled=True produces a settings object with True."""
+        from owlbear.config import OwlBearSettings
+
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+        assert settings.audit_map_worker_enabled is True
+
+    def test_audit_map_worker_enabled_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """AC7: OWLBEAR_AUDIT_MAP_WORKER_ENABLED env-var overrides the default to True."""
+        import importlib
+
+        monkeypatch.setenv("OWLBEAR_AUDIT_MAP_WORKER_ENABLED", "true")
+        import owlbear.config as _cfg_mod
+
+        # Force a fresh settings construction so the env-var is picked up.
+        fresh = _cfg_mod.OwlBearSettings()
+        assert fresh.audit_map_worker_enabled is True, (
+            "OWLBEAR_AUDIT_MAP_WORKER_ENABLED=true must set audit_map_worker_enabled to True"
+        )
+        importlib.invalidate_caches()
+
+
+# ---------------------------------------------------------------------------
+# AC8: _wire_post_model_hooks() with channel parameter (#983)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_983_AuditMapWiringInBootstrap:
+    """AC8: _wire_post_model_hooks() wires AuditMapAdvisoryHook behind config flag,
+    accepts a channel= parameter, and threads it to the hook.
+
+    All tests FAIL (RED) until _wire_post_model_hooks accepts channel= and
+    wires AuditMapAdvisoryHook when audit_map_worker_enabled=True.
+    """
+
+    def test_wire_post_model_hooks_accepts_channel_kwarg(self, tmp_path: Path) -> None:
+        """AC8: _wire_post_model_hooks does not raise TypeError when called with channel=None."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.hooks import HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings()
+
+        # Must not raise TypeError for unexpected keyword argument 'channel'
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),  # ingest_pipeline
+            channel=None,
+        )
+
+    def test_audit_map_hook_registered_when_flag_enabled_and_ingest_available(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8: AuditMapAdvisoryHook registered for TASK_COMPLETE when flag=True and ingest set."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),  # ingest_pipeline available
+            channel=None,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        audit_handlers = [h for h in handlers if isinstance(h, AuditMapAdvisoryHook)]
+        assert len(audit_handlers) == 1, (
+            f"Exactly one AuditMapAdvisoryHook must be registered, found {len(audit_handlers)}"
+        )
+
+    def test_audit_map_hook_not_registered_when_flag_disabled(self, tmp_path: Path) -> None:
+        """AC8: AuditMapAdvisoryHook is NOT registered when audit_map_worker_enabled=False."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=False)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),  # ingest_pipeline present but flag off
+            channel=None,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        audit_handlers = [h for h in handlers if isinstance(h, AuditMapAdvisoryHook)]
+        assert len(audit_handlers) == 0, (
+            "AuditMapAdvisoryHook must NOT be registered when audit_map_worker_enabled=False"
+        )
+
+    def test_audit_map_hook_not_registered_when_ingest_pipeline_none(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8: AuditMapAdvisoryHook is NOT registered when ingest_pipeline is None."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            None,  # ingest_pipeline unavailable
+            channel=None,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        audit_handlers = [h for h in handlers if isinstance(h, AuditMapAdvisoryHook)]
+        assert len(audit_handlers) == 0, (
+            "AuditMapAdvisoryHook must NOT be registered when ingest_pipeline is None"
+        )
+
+    def test_audit_map_hook_receives_channel_when_provided(self, tmp_path: Path) -> None:
+        """AC8: channel passed to _wire_post_model_hooks is threaded to AuditMapAdvisoryHook."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.channels.base import ChannelPlugin
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+        channel = MagicMock(spec=ChannelPlugin)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            channel=channel,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        audit_hook = next((h for h in handlers if isinstance(h, AuditMapAdvisoryHook)), None)
+        assert audit_hook is not None, "AuditMapAdvisoryHook must be registered"
+        assert audit_hook._channel is channel, (
+            "channel passed to _wire_post_model_hooks must reach the AuditMapAdvisoryHook"
+        )
+
+    def test_audit_map_hook_channel_is_none_when_channel_none_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8: AuditMapAdvisoryHook._channel is None when channel=None is forwarded."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            channel=None,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        audit_hook = next((h for h in handlers if isinstance(h, AuditMapAdvisoryHook)), None)
+        assert audit_hook is not None, "AuditMapAdvisoryHook must be registered"
+        assert audit_hook._channel is None, (
+            "AuditMapAdvisoryHook._channel must be None when channel=None is passed"
+        )
+
+    def test_audit_map_hook_shares_supervisor_with_retrospective_hook(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8: AuditMapAdvisoryHook shares the same HookWorkerSupervisor as RetrospectiveHook."""
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+        from owlbear.core.retrospective_hook import RetrospectiveHook
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings(audit_map_worker_enabled=True)
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            channel=None,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        retro_hook = next((h for h in handlers if isinstance(h, RetrospectiveHook)), None)
+        audit_hook = next((h for h in handlers if isinstance(h, AuditMapAdvisoryHook)), None)
+
+        assert retro_hook is not None, "RetrospectiveHook must be registered for TASK_COMPLETE"
+        assert audit_hook is not None, "AuditMapAdvisoryHook must be registered for TASK_COMPLETE"
+        assert audit_hook._supervisor is retro_hook._supervisor, (
+            "AuditMapAdvisoryHook and RetrospectiveHook must share the same HookWorkerSupervisor"
+        )
