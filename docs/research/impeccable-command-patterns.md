@@ -86,9 +86,16 @@ frontend-design skill once #934 and #938 exist [S1, S3, S5].
    public cross-tool pack, build it from a separate source tree or release step,
    not from hand-maintained root folders inside the main repo [S1, S2, S6].
 5. Adapt `/teach-impeccable` as "scan first, ask only missing questions,
-   write/update a dedicated design-context file under `docs/`". Do not write
-   mutable project context into `.github/copilot-instructions.md` or reintroduce
-   `.impeccable.md`-style provider files [S1, S4, S5].
+   write/update a dedicated design-context file under `docs/`". The onboarding
+   flow should gather six categories adapted from Impeccable's four UX-focused
+   question groups [S1, S2]: **users** (who they are, context, job-to-be-done),
+   **jobs** (core tasks and emotional goals), **tone** (brand personality,
+   3-word voice), **references** (sites or apps that capture the right feel),
+   **anti-references** (what the UI must not look like), and **accessibility
+   needs** (WCAG level, reduced-motion, color-blindness accommodations). The
+   target storage file is `docs/design-context.md`. The flow must not write to
+   `.github/copilot-instructions.md`, `.impeccable.md`, or any provider-config
+   file [S1, S4, S5].
 
 ## 5. Follow-up Tasks
 
