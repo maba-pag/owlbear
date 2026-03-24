@@ -2873,9 +2873,7 @@ class TestFromAC_961_DispatchContextIntegrity:
         """
         exc_msg = "unexpected keyword argument 'toolsets'"
 
-        async def fake_run_accepts_kwargs_raises_inside(
-            _prompt: str, **kwargs: object
-        ) -> str:
+        async def fake_run_accepts_kwargs_raises_inside(_prompt: str, **kwargs: object) -> str:
             # Accepts **kwargs at call time — no call-time TypeError.
             # Raises *inside* the coroutine to simulate a downstream forward failure.
             if kwargs:
@@ -2905,9 +2903,7 @@ class TestFromAC_961_DispatchContextIntegrity:
         call_count = 0
         exc_msg = "unexpected keyword argument 'format'"
 
-        async def fake_run_counts_calls(
-            _prompt: str, **kwargs: object
-        ) -> str:
+        async def fake_run_counts_calls(_prompt: str, **kwargs: object) -> str:
             nonlocal call_count
             call_count += 1
             if kwargs:
@@ -2923,6 +2919,264 @@ class TestFromAC_961_DispatchContextIntegrity:
         assert call_count == 1, (
             f"builder.run() was called {call_count} times — must be called exactly once. "
             "A second call without dispatch kwargs means AC2's delivery guarantee is missing."
+        )
+
+
+# ---------------------------------------------------------------------------
+# #961 AC1 fallback defaults and AC2 metadata delivery (reviewer retry gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_961_FallbacksAndMetadata:
+    """AC1 fallback + AC2 metadata delivery — reviewer-identified gaps.
+
+    The reviewer noted two specific mutation-blind spots:
+    1. AC1 fallback: workspace=None and channel=None paths are untested.
+       A broken fallback (e.g., workspace_root=str(None)) would still pass
+       the existing suite.
+    2. AC2 metadata: builder.run() must receive metadata= kwarg. Dropping
+       metadata= from the helper return dict would still pass the existing suite.
+
+    Both gaps apply to both the retry branch (step 3) and fresh dispatch
+    branch (step 7) of poll_tick.
+    """
+
+    # -- Retry branch (step 3) helpers ------------------------------------
+
+    @staticmethod
+    def _setup_retry() -> tuple[OrchestratorState, AsyncMock, MagicMock, AsyncMock]:
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        state.retries["RFMR1"] = RetryEntry(
+            task_id="RFMR1",
+            attempt=1,
+            next_due=datetime.now(UTC) - timedelta(seconds=5),
+            last_error="prior error",
+        )
+        state.claimed.add("RFMR1")
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "RFMR1", "Fallback retry task", "Body text"
+        )
+        mock_kanban.kanban_list.return_value = json.dumps([])
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+        return state, mock_kanban, mock_registry, mock_agent
+
+    # -- Fresh dispatch branch (step 7) helpers ---------------------------
+
+    @staticmethod
+    def _setup_fresh() -> tuple[OrchestratorState, AsyncMock, MagicMock, AsyncMock]:
+        state = OrchestratorState()
+        mock_kanban: AsyncMock = AsyncMock()
+        mock_registry = MagicMock()
+        mock_kanban.kanban_list.return_value = json.dumps(
+            [{"id": "RFMF1", "title": "Fallback fresh task", "status": "todo",
+              "priority": "important"}]
+        )
+        mock_kanban.kanban_show.return_value = _make_kanban_show_json(
+            "RFMF1", "Fallback fresh task", "Body text"
+        )
+        mock_agent: AsyncMock = AsyncMock()
+        mock_agent.run = AsyncMock(return_value=MagicMock())
+        mock_registry.get.return_value = mock_agent
+        return state, mock_kanban, mock_registry, mock_agent
+
+    # -- AC1 fallback: retry branch ---------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_retry_branch_workspace_none_uses_cwd_fallback(self) -> None:
+        """AC1: retry branch with workspace=None must set workspace_root=str(Path.cwd()).
+
+        A broken fallback (e.g., workspace_root='None') would still pass the
+        pre-existing suite because no test passes workspace=None to poll_tick.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup_retry()
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                workspace=None,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be set"
+        assert ctx.workspace_root == str(Path.cwd()), (
+            f"workspace_root must fall back to str(Path.cwd()), got {ctx.workspace_root!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_retry_branch_channel_none_uses_cli_fallback(self) -> None:
+        """AC1: retry branch with channel=None must set channel_name='cli'.
+
+        A broken fallback (e.g., channel_name=str(None)) would still pass the
+        pre-existing suite because existing tests only pin non-None channel values.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup_retry()
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=None,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be set"
+        assert ctx.channel_name == "cli", (
+            f"channel_name must fall back to 'cli' when channel=None, got {ctx.channel_name!r}"
+        )
+
+    # -- AC1 fallback: fresh dispatch branch ------------------------------
+
+    @pytest.mark.asyncio
+    async def test_fresh_branch_workspace_none_uses_cwd_fallback(self) -> None:
+        """AC1: fresh dispatch branch with workspace=None must use Path.cwd() fallback."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup_fresh()
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                workspace=None,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be set"
+        assert ctx.workspace_root == str(Path.cwd()), (
+            f"workspace_root must fall back to str(Path.cwd()), got {ctx.workspace_root!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fresh_branch_channel_none_uses_cli_fallback(self) -> None:
+        """AC1: fresh dispatch branch with channel=None must set channel_name='cli'."""
+        state, mock_kanban, mock_registry, mock_agent = self._setup_fresh()
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=None,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "deps" in call[1], "builder.run() must receive deps= kwarg"
+        ctx = call[1]["deps"].dispatch_context
+        assert ctx is not None, "dispatch_context must be set"
+        assert ctx.channel_name == "cli", (
+            f"channel_name must fall back to 'cli' when channel=None, got {ctx.channel_name!r}"
+        )
+
+    # -- AC2 metadata delivery: retry branch ------------------------------
+
+    @pytest.mark.asyncio
+    async def test_retry_branch_builder_run_receives_metadata_kwarg(self, tmp_path: Path) -> None:
+        """AC2: builder.run() must receive metadata= kwarg in the retry branch.
+
+        Dropping metadata= from the helper return dict would still pass the
+        pre-existing suite because no test in RetryDispatchContext checks metadata.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup_retry()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "metadata" in call[1], (
+            "builder.run() must receive metadata= kwarg produced by format_dispatch_context()"
+        )
+        metadata = call[1]["metadata"]
+        assert isinstance(metadata, dict), f"metadata must be a dict, got {type(metadata)}"
+        assert metadata.get("task_id") == "RFMR1", (
+            f"metadata must include task_id from DispatchContext, got {metadata!r}"
+        )
+
+    # -- AC2 metadata delivery: fresh dispatch branch ---------------------
+
+    @pytest.mark.asyncio
+    async def test_fresh_branch_builder_run_receives_metadata_kwarg(self, tmp_path: Path) -> None:
+        """AC2: builder.run() must receive metadata= kwarg in the fresh dispatch branch.
+
+        Dropping metadata= from the helper return dict would still pass the
+        pre-existing suite because no test in FreshDispatchContext checks metadata.
+        """
+        state, mock_kanban, mock_registry, mock_agent = self._setup_fresh()
+        channel = MagicMock()
+        channel.name = "test-channel"
+
+        async def go() -> None:
+            await poll_tick(
+                state=state,
+                kanban=mock_kanban,
+                agent_registry=mock_registry,
+                max_concurrent=3,
+                shutdown_event=asyncio.Event(),
+                channel=channel,
+                workspace=tmp_path,
+            )
+
+        await go()
+        await asyncio.sleep(0)
+
+        call = mock_agent.run.call_args
+        assert call is not None, "builder.run() was not called"
+        assert "metadata" in call[1], (
+            "builder.run() must receive metadata= kwarg produced by format_dispatch_context()"
+        )
+        metadata = call[1]["metadata"]
+        assert isinstance(metadata, dict), f"metadata must be a dict, got {type(metadata)}"
+        assert metadata.get("task_id") == "RFMF1", (
+            f"metadata must include task_id from DispatchContext, got {metadata!r}"
         )
 
 
