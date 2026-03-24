@@ -310,8 +310,7 @@ def _has_class_def(filepath: Path, class_name: str) -> bool:
     """Return True if *filepath* contains a class definition named *class_name*."""
     tree = ast.parse(filepath.read_text(encoding="utf-8"))
     return any(
-        isinstance(node, ast.ClassDef) and node.name == class_name
-        for node in ast.walk(tree)
+        isinstance(node, ast.ClassDef) and node.name == class_name for node in ast.walk(tree)
     )
 
 
@@ -379,4 +378,20 @@ class TestFromAC_ZeroDuplicates:
             pytest.skip(f"{filename} does not exist")
         assert not _has_func_def(filepath, "_make_settings"), (
             f"_make_settings still defined in {filename}"
+        )
+
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "test_cli_board.py",
+            "test_cli_chat.py",
+        ],
+    )
+    def test_no_duplicate_make_completed_process(self, filename: str) -> None:
+        """make_completed_process must not be defined in individual test files."""
+        filepath = TESTS_DIR / filename
+        if not filepath.exists():
+            pytest.skip(f"{filename} does not exist")
+        assert not _has_func_def(filepath, "make_completed_process"), (
+            f"make_completed_process still defined in {filename}"
         )
