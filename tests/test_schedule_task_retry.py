@@ -1,4 +1,4 @@
-"""RED-phase tests for schedule_task_retry standalone function (#990).
+"""RED-phase tests for schedule_task_retry standalone function (#990 / #984).
 
 Tests describe the contract for:
     async def schedule_task_retry(
@@ -6,13 +6,18 @@ Tests describe the contract for:
     ) -> None
 
 All tests MUST FAIL until #984 extracts the function from reconcile_tasks.
+
+AC1 — function signature (added by #984 test-writer)
+AC6 — reconcile_tasks delegates (added by #984 test-writer)
+AC2/AC3/AC4/AC5 — already covered by #990 classes below.
 """
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -632,3 +637,216 @@ class TestFromAC_ScheduleTaskRetry_KanbanFailure:
 
         # claimed still discarded despite kanban error
         assert "kf2" not in state.claimed
+
+
+# ---------------------------------------------------------------------------
+# AC1: schedule_task_retry exists as a module-level async function with the
+#      correct signature  (added for #984 task)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ScheduleTaskRetry_Signature:
+    """AC1: function exists at module level with keyword-only args and returns None."""
+
+    def test_is_importable_from_daemon(self) -> None:
+        """schedule_task_retry is importable from owlbear.daemon as a callable."""
+        from owlbear.daemon import schedule_task_retry
+
+        assert callable(schedule_task_retry)
+
+    def test_is_async_function(self) -> None:
+        """schedule_task_retry is a coroutine function (async def)."""
+        from owlbear.daemon import schedule_task_retry
+
+        assert asyncio.iscoroutinefunction(schedule_task_retry)
+
+    def test_has_required_parameters(self) -> None:
+        """Signature includes all seven required parameters from AC1."""
+        from owlbear.daemon import schedule_task_retry
+
+        sig = inspect.signature(schedule_task_retry)
+        params = set(sig.parameters.keys())
+        required = {
+            "state",
+            "kanban",
+            "task_id",
+            "error",
+            "max_attempts",
+            "backoff_base",
+            "backoff_max",
+        }
+        assert required.issubset(params), f"Missing parameters: {required - params}"
+
+    def test_all_params_are_keyword_only(self) -> None:
+        """All parameters must be keyword-only (function uses * separator)."""
+        from owlbear.daemon import schedule_task_retry
+
+        sig = inspect.signature(schedule_task_retry)
+        for name, param in sig.parameters.items():
+            assert param.kind in (
+                inspect.Parameter.KEYWORD_ONLY,
+                inspect.Parameter.VAR_KEYWORD,
+            ), f"Parameter '{name}' is not keyword-only"
+
+
+# ---------------------------------------------------------------------------
+# AC6: reconcile_tasks calls schedule_task_retry instead of inline retry logic
+#      (added for #984 task)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReconcileCallsScheduleTaskRetry:
+    """AC6: reconcile_tasks delegates retry logic to schedule_task_retry on failure."""
+
+    @pytest.mark.asyncio
+    async def test_reconcile_calls_schedule_task_retry_on_failure(self) -> None:
+        """Failed task triggers schedule_task_retry call instead of inline retry."""
+        from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
+
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+
+        dummy = MagicMock(spec=asyncio.Task)
+        dummy.done.return_value = True
+        dummy.exception.return_value = RuntimeError("agent fail")
+
+        state.running["rc1"] = RunningTask(task_id="rc1", asyncio_task=dummy)
+        state.claimed.add("rc1")
+
+        schedule_calls: list[dict[str, object]] = []
+
+        async def mock_schedule(**kwargs: object) -> None:
+            schedule_calls.append(dict(kwargs))
+
+        with patch("owlbear.daemon.schedule_task_retry", side_effect=mock_schedule):
+            await reconcile_tasks(state=state, kanban=mock_kanban)
+
+        assert len(schedule_calls) == 1, (
+            "reconcile_tasks must delegate to schedule_task_retry on failure. "
+            f"Got {len(schedule_calls)} calls."
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_passes_state_kanban_task_id_error(self) -> None:
+        """schedule_task_retry receives state, kanban, task_id, and error from reconcile."""
+        from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
+
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+
+        error = RuntimeError("delegate-me")
+        dummy = MagicMock(spec=asyncio.Task)
+        dummy.done.return_value = True
+        dummy.exception.return_value = error
+
+        state.running["rc2"] = RunningTask(task_id="rc2", asyncio_task=dummy)
+        state.claimed.add("rc2")
+
+        schedule_calls: list[dict[str, object]] = []
+
+        async def mock_schedule(**kwargs: object) -> None:
+            schedule_calls.append(dict(kwargs))
+
+        with patch("owlbear.daemon.schedule_task_retry", side_effect=mock_schedule):
+            await reconcile_tasks(state=state, kanban=mock_kanban)
+
+        call = schedule_calls[0]
+        assert call["state"] is state
+        assert call["kanban"] is mock_kanban
+        assert call["task_id"] == "rc2"
+        assert call["error"] is error
+
+    @pytest.mark.asyncio
+    async def test_reconcile_passes_retry_config_params(self) -> None:
+        """schedule_task_retry receives max_attempts, backoff_base, backoff_max from reconcile."""
+        from owlbear.daemon import (
+            _DEFAULT_BACKOFF_BASE,
+            _DEFAULT_BACKOFF_MAX,
+            _DEFAULT_MAX_RETRY_ATTEMPTS,
+            OrchestratorState,
+            RunningTask,
+            reconcile_tasks,
+        )
+
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+
+        dummy = MagicMock(spec=asyncio.Task)
+        dummy.done.return_value = True
+        dummy.exception.return_value = RuntimeError("x")
+
+        state.running["rc3"] = RunningTask(task_id="rc3", asyncio_task=dummy)
+        state.claimed.add("rc3")
+
+        schedule_calls: list[dict[str, object]] = []
+
+        async def mock_schedule(**kwargs: object) -> None:
+            schedule_calls.append(dict(kwargs))
+
+        with patch("owlbear.daemon.schedule_task_retry", side_effect=mock_schedule):
+            await reconcile_tasks(state=state, kanban=mock_kanban)
+
+        call = schedule_calls[0]
+        assert call["max_attempts"] == _DEFAULT_MAX_RETRY_ATTEMPTS
+        assert call["backoff_base"] == _DEFAULT_BACKOFF_BASE
+        assert call["backoff_max"] == _DEFAULT_BACKOFF_MAX
+
+    @pytest.mark.asyncio
+    async def test_reconcile_passes_custom_retry_config(self) -> None:
+        """Custom max_retry_attempts/backoff values are forwarded to schedule_task_retry."""
+        from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
+
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+
+        dummy = MagicMock(spec=asyncio.Task)
+        dummy.done.return_value = True
+        dummy.exception.return_value = RuntimeError("y")
+
+        state.running["rc4"] = RunningTask(task_id="rc4", asyncio_task=dummy)
+        state.claimed.add("rc4")
+
+        schedule_calls: list[dict[str, object]] = []
+
+        async def mock_schedule(**kwargs: object) -> None:
+            schedule_calls.append(dict(kwargs))
+
+        with patch("owlbear.daemon.schedule_task_retry", side_effect=mock_schedule):
+            await reconcile_tasks(
+                state=state,
+                kanban=mock_kanban,
+                max_retry_attempts=7,
+                backoff_base=15.0,
+                backoff_max=500.0,
+            )
+
+        call = schedule_calls[0]
+        assert call["max_attempts"] == 7
+        assert call["backoff_base"] == 15.0
+        assert call["backoff_max"] == 500.0
+
+    @pytest.mark.asyncio
+    async def test_reconcile_does_not_call_schedule_on_success(self) -> None:
+        """Successful tasks do not trigger schedule_task_retry."""
+        from owlbear.daemon import OrchestratorState, RunningTask, reconcile_tasks
+
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+        mock_kanban.kanban_move.return_value = "moved"
+
+        dummy = MagicMock(spec=asyncio.Task)
+        dummy.done.return_value = True
+        dummy.exception.return_value = None
+
+        state.running["rc5"] = RunningTask(task_id="rc5", asyncio_task=dummy)
+        state.claimed.add("rc5")
+
+        schedule_calls: list[dict[str, object]] = []
+
+        async def mock_schedule(**kwargs: object) -> None:  # noqa: ARG001
+            schedule_calls.append({})
+
+        with patch("owlbear.daemon.schedule_task_retry", side_effect=mock_schedule):
+            await reconcile_tasks(state=state, kanban=mock_kanban)
+
+        assert len(schedule_calls) == 0
