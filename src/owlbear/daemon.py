@@ -526,6 +526,7 @@ async def schedule_task_retry(  # noqa: PLR0913
             await kanban.kanban_edit(task_id, block=reason)
         except Exception:  # noqa: BLE001
             logger.warning("Failed to block budget-exceeded task %s", task_id, exc_info=True)
+        state.retries.pop(task_id, None)
         state.claimed.discard(task_id)
         return
 
