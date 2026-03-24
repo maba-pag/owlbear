@@ -48,7 +48,7 @@ from owlbear.process import is_process_alive
 from owlbear.providers.copilot import create_copilot_client
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from types import FrameType
 
     from owlbear.channels.base import ChannelPlugin
@@ -573,7 +573,7 @@ def make_retry_executor(
     max_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
     backoff_base: float = _DEFAULT_BACKOFF_BASE,
     backoff_max: float = _DEFAULT_BACKOFF_MAX,
-) -> Callable[[dict[str, object]], object]:
+) -> Callable[[dict[str, object]], Awaitable[None]]:
     """Build a hook reaction executor that schedules task retries on failure."""
 
     async def _executor(data: dict[str, object]) -> None:
@@ -591,6 +591,11 @@ def make_retry_executor(
 
         # If a retry already exists for this task, keep the operation idempotent.
         if task_id in state.retries:
+            return
+
+        # Reconcile emits a failure hook without ``error`` and then schedules a retry
+        # directly with the real exception. Skip the hook-side write in that case.
+        if "error" not in data:
             return
 
         error_obj = data.get("error")
