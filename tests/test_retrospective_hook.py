@@ -1186,3 +1186,234 @@ class TestFromAC_RetrospectiveHookSupervisorSeam:
         assert "cancel" in call_kwargs, "_run_retrospective must pass cancel= to ingest_text"
         assert isinstance(call_kwargs["cancel"], asyncio.Event)
 
+
+# ---------------------------------------------------------------------------
+# #989 -- Non-blocking eligibility handoff
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_981_NonBlockingEligibilityHandoff:
+    """Eligibility checks must be deferred to the background task, not run in __call__.
+
+    AC:
+      (a) __call__ does NOT call _count_rejections or _get_priority directly.
+      (b) The supervisor-scheduled background coroutine DOES invoke both.
+      (c) Ineligible tasks (zero rejections + low priority) are passed to
+          supervisor.schedule() but the background coroutine returns early.
+      (d) create_task fallback path mirrors (a)-(c) without a supervisor.
+
+    All tests FAIL on current HEAD because __call__ calls _count_rejections
+    (and _get_priority when count==0) synchronously before scheduling.
+    """
+
+    def _hook_with_supervisor(self, tmp_path: Path, supervisor: object) -> RetrospectiveHook:
+        return RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+            supervisor=supervisor,
+        )
+
+    def _hook_no_supervisor(self, tmp_path: Path) -> RetrospectiveHook:
+        return RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=AsyncMock(),
+            kanban_root=tmp_path,
+        )
+
+    # -- (a) __call__ must NOT call eligibility checks synchronously
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_call_does_not_invoke_count_rejections_directly_supervisor_path(
+        self, tmp_path: Path
+    ) -> None:
+        """__call__ must not invoke _count_rejections before scheduling.
+
+        FAILS on HEAD: _count_rejections IS called in __call__ before supervisor.schedule.
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        mock_count = MagicMock(return_value=1)
+        hook._count_rejections = mock_count
+        hook._get_priority = MagicMock(return_value="needed")
+        hook._run_retrospective = AsyncMock()
+
+        await hook(_payload(task_id="42", outcome="success"))
+
+        mock_count.assert_not_called()  # FAILS on HEAD
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_call_does_not_invoke_get_priority_directly_supervisor_path(
+        self, tmp_path: Path
+    ) -> None:
+        """__call__ must not invoke _get_priority before scheduling.
+
+        FAILS on HEAD: _get_priority IS called when _count_rejections returns 0.
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        hook._count_rejections = MagicMock(return_value=0)
+        mock_priority = MagicMock(return_value="needed")
+        hook._get_priority = mock_priority
+        hook._run_retrospective = AsyncMock()
+
+        await hook(_payload(task_id="42", outcome="success"))
+
+        mock_priority.assert_not_called()  # FAILS on HEAD
+
+    # -- (b) Background coroutine must invoke eligibility checks
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_supervisor_background_coro_invokes_count_rejections(
+        self, tmp_path: Path
+    ) -> None:
+        """Supervisor-scheduled background coroutine must call _count_rejections.
+
+        FAILS on HEAD: the scheduled coroutine is _run_retrospective which does
+        not call _count_rejections.  After resetting the mock, awaiting the
+        background coroutine still shows 0 calls.
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        mock_count = MagicMock(return_value=1)
+        hook._count_rejections = mock_count
+        hook._get_priority = MagicMock(return_value="needed")
+        hook._run_retrospective = AsyncMock()
+
+        await hook(_payload(task_id="42", outcome="success"))
+        mock_count.reset_mock()
+
+        scheduled = supervisor.schedule.call_args[0][0]
+        await scheduled
+
+        mock_count.assert_called()  # FAILS on HEAD (0 calls after reset)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_supervisor_background_coro_invokes_get_priority_zero_rejections(
+        self, tmp_path: Path
+    ) -> None:
+        """Background coroutine must call _get_priority for zero-rejection tasks.
+
+        FAILS on HEAD: the scheduled coroutine is _run_retrospective which does
+        not call _get_priority.  After resetting the mock, awaiting the background
+        coroutine still shows 0 calls.
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        hook._count_rejections = MagicMock(return_value=0)
+        mock_priority = MagicMock(return_value="critical")
+        hook._get_priority = mock_priority
+        hook._run_retrospective = AsyncMock()
+
+        await hook(_payload(task_id="42", outcome="success"))
+        mock_priority.reset_mock()
+
+        scheduled = supervisor.schedule.call_args[0][0]
+        await scheduled
+
+        mock_priority.assert_called()  # FAILS on HEAD (0 calls after reset)
+
+    # -- (c) Ineligible tasks: supervisor.schedule called, background filters them
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_supervisor_ineligible_task_reaches_schedule_then_filtered(
+        self, tmp_path: Path
+    ) -> None:
+        """Ineligible task must reach supervisor.schedule(); background returns early.
+
+        FAILS on HEAD: __call__ returns before calling supervisor.schedule() for
+        ineligible tasks (zero rejections + low priority).
+        """
+        supervisor = MagicMock()
+        hook = self._hook_with_supervisor(tmp_path, supervisor)
+        hook._count_rejections = MagicMock(return_value=0)
+        hook._get_priority = MagicMock(return_value="important")
+        mock_run = AsyncMock()
+        hook._run_retrospective = mock_run
+
+        await hook(_payload(task_id="42", outcome="success"))
+
+        # FAILS on HEAD: schedule() never called (early return in __call__)
+        assert supervisor.schedule.call_count == 1
+        scheduled = supervisor.schedule.call_args[0][0]
+        await scheduled
+        mock_run.assert_not_called()
+
+    # -- (d) create_task fallback mirrors (a)-(c)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_call_does_not_invoke_count_rejections_directly_create_task_path(
+        self, tmp_path: Path
+    ) -> None:
+        """__call__ must not invoke _count_rejections before create_task.
+
+        FAILS on HEAD: _count_rejections IS called in __call__ before create_task.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        mock_count = MagicMock(return_value=1)
+        hook._count_rejections = mock_count
+        hook._get_priority = MagicMock(return_value="needed")
+        hook._run_retrospective = AsyncMock()
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        mock_count.assert_not_called()  # FAILS on HEAD
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_create_task_fallback_background_coro_invokes_count_rejections(
+        self, tmp_path: Path
+    ) -> None:
+        """create_task background coroutine must call _count_rejections.
+
+        FAILS on HEAD: asyncio.create_task() receives _run_retrospective() which
+        does not call _count_rejections.  After resetting, awaiting coroutine shows 0.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        mock_count = MagicMock(return_value=1)
+        hook._count_rejections = mock_count
+        hook._get_priority = MagicMock(return_value="needed")
+        hook._run_retrospective = AsyncMock()
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        mock_count.reset_mock()
+        assert captured, "create_task must be called for an eligible task"
+        await captured[0]  # type: ignore[misc]
+        mock_count.assert_called()  # FAILS on HEAD (0 calls after reset)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_create_task_fallback_ineligible_task_reaches_create_task_then_filtered(
+        self, tmp_path: Path
+    ) -> None:
+        """Ineligible task must reach create_task(); background coroutine filters it.
+
+        FAILS on HEAD: __call__ returns early, so create_task() is never called.
+        """
+        hook = self._hook_no_supervisor(tmp_path)
+        hook._count_rejections = MagicMock(return_value=0)
+        hook._get_priority = MagicMock(return_value="important")
+        mock_run = AsyncMock()
+        hook._run_retrospective = mock_run
+        captured: list[object] = []
+
+        with patch(
+            "owlbear.core.retrospective_hook.asyncio.create_task",
+            side_effect=lambda c: captured.append(c) or MagicMock(),
+        ):
+            await hook(_payload(task_id="42", outcome="success"))
+
+        # FAILS on HEAD: create_task() never called (early return in __call__)
+        assert len(captured) == 1
+        await captured[0]  # type: ignore[misc]
+        mock_run.assert_not_called()
+
