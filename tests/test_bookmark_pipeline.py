@@ -836,6 +836,39 @@ class TestFromAC_DefaultWebReadExtractMarkdownSeam:
 
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_extract_called_with_url_forwarded(self) -> None:
+        """_default_web_read() forwards the URL to extract_markdown as url= kwarg.
+
+        Fails against current HEAD because _default_web_read() calls
+        ``extract_markdown(resp.text)`` without the ``url=`` keyword argument.
+        The builder must change the call to
+        ``extract_markdown(resp.text, url=url)`` to pass this test.
+        """
+        target_url = "https://example.com/article"
+        mock_resp = MagicMock()
+        mock_resp.text = "<html><body>Content to extract</body></html>"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "owlbear.memory.knowledge.bookmark_pipeline.extract_markdown",
+                return_value="Extracted content",
+            ) as mock_extract,
+            patch("owlbear.core.retry.TRANSIENT_RETRY", lambda fn: fn),
+        ):
+            await _default_web_read(target_url)
+
+        # Fails against current HEAD: extract_markdown(resp.text) is called
+        # without url= so source-URL link resolution is lost.
+        mock_extract.assert_called_once_with(mock_resp.text, url=target_url)
+
 
 # ===========================================================================
 # cancel= parameter — cooperative cancellation seam (task #880)

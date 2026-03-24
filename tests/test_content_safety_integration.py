@@ -196,11 +196,16 @@ class TestFromACWebReadWrapping:
         """_web_read() output contains untrusted-content tags."""
         from owlbear.tools.web_search import WebSearchToolset
 
+        # Set response body to the expected content; extract_content is mocked
+        # to return empty text so the fallback path in _web_read() runs and
+        # wraps it with untrusted-content tags.
+        _mock_httpx.__aenter__.return_value.get.return_value.text = "Extracted web content"
+
         with (
             patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=_mock_httpx),
-            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
         ):
-            mock_traf.extract.return_value = "Extracted web content"
+            mock_extract.return_value.text = ""  # empty → fallback path → wrapping
             ts = WebSearchToolset()
             result = await ts._web_read("https://example.com")
 
@@ -218,23 +223,26 @@ class TestFromACWebReadWrapping:
         """
         from owlbear.tools.web_search import WebSearchToolset
 
-        # Step 1: verify wrapping IS applied by default (fails in RED)
+        # Step 1: verify wrapping IS applied by default.
+        # extract_content returns empty to trigger the fallback path that wraps.
+        _mock_httpx.__aenter__.return_value.get.return_value.text = "Web content"
         with (
             patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=_mock_httpx),
-            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
         ):
-            mock_traf.extract.return_value = "Web content"
+            mock_extract.return_value.text = ""  # fallback path → wrapping
             ts = WebSearchToolset()
             result_default = await ts._web_read("https://example.com")
         assert _OPEN_TAG in result_default, "wrapping must work by default first"
 
         # Step 2: verify wrapping NOT applied when disabled
         monkeypatch.setenv("OWLBEAR_WRAP_WEB_CONTENT", "false")
+        _mock_httpx.__aenter__.return_value.get.return_value.text = "Raw web content"
         with (
             patch("owlbear.tools.web_search.httpx.AsyncClient", return_value=_mock_httpx),
-            patch("owlbear.tools.web_search.trafilatura") as mock_traf,
+            patch("owlbear.tools.web_search.extract_content") as mock_extract,
         ):
-            mock_traf.extract.return_value = "Raw web content"
+            mock_extract.return_value.text = ""  # fallback path → no wrapping
             ts2 = WebSearchToolset()
             result_disabled = await ts2._web_read("https://example.com")
         assert _OPEN_TAG not in result_disabled, "wrapping must be skipped when disabled"
