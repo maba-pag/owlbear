@@ -26,6 +26,7 @@ from conftest import MockChannel  # type: ignore[import-untyped]
 
 from owlbear.core.delegation import DispatchContext
 from owlbear.core.deps import OwlBearDeps
+from owlbear.core.errors import BudgetExceededError
 from owlbear.core.hooks import HookEvent
 from owlbear.core.lint_gate import LintGateResult
 from owlbear.daemon import (
@@ -2922,4 +2923,102 @@ class TestFromAC_961_DispatchContextIntegrity:
         assert call_count == 1, (
             f"builder.run() was called {call_count} times — must be called exactly once. "
             "A second call without dispatch kwargs means AC2's delivery guarantee is missing."
+        )
+
+
+# ---------------------------------------------------------------------------
+# reconcile_tasks: BudgetExceededError emits budget_exceeded outcome (#995)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReconcileBudgetExceededOutcome:
+    """When a task fails with BudgetExceededError, hooks.emit must be called
+    with HookEvent.TASK_COMPLETE and outcome='budget_exceeded', not 'failure'."""
+
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_emits_hook_with_budget_exceeded_outcome(self) -> None:
+        """BudgetExceededError → hooks.emit called with outcome='budget_exceeded'."""
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+        mock_hooks = AsyncMock()
+
+        exc = BudgetExceededError("spend limit reached")
+        state.running["BE1"] = RunningTask(
+            task_id="BE1",
+            asyncio_task=_make_done_task(exception=exc),
+        )
+        state.claimed.add("BE1")
+
+        async def go() -> None:
+            await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
+
+        await go()
+
+        mock_hooks.emit.assert_called_once_with(
+            HookEvent.TASK_COMPLETE,
+            {"task_id": "BE1", "outcome": "budget_exceeded"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_outcome_not_failure(self) -> None:
+        """BudgetExceededError must NOT emit outcome='failure'."""
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+        mock_hooks = AsyncMock()
+
+        exc = BudgetExceededError("over limit")
+        state.running["BE2"] = RunningTask(
+            task_id="BE2",
+            asyncio_task=_make_done_task(exception=exc),
+        )
+        state.claimed.add("BE2")
+
+        async def go() -> None:
+            await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
+
+        await go()
+
+        emitted = mock_hooks.emit.call_args
+        assert emitted is not None, "hooks.emit was never called"
+        _, payload = emitted.args
+        assert payload.get("outcome") != "failure", (
+            "BudgetExceededError must emit outcome='budget_exceeded', not 'failure'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_outcome_distinct_from_plain_failure(self) -> None:
+        """BudgetExceededError emits 'budget_exceeded'; plain errors emit 'failure'."""
+        state = OrchestratorState()
+        mock_kanban = AsyncMock()
+        mock_hooks = AsyncMock()
+
+        budget_exc = BudgetExceededError("over limit")
+        plain_exc = ValueError("bad input")
+
+        state.running["BE3"] = RunningTask(
+            task_id="BE3",
+            asyncio_task=_make_done_task(exception=budget_exc),
+        )
+        state.running["FE3"] = RunningTask(
+            task_id="FE3",
+            asyncio_task=_make_done_task(exception=plain_exc),
+        )
+        state.claimed.add("BE3")
+        state.claimed.add("FE3")
+
+        async def go() -> None:
+            await reconcile_tasks(state=state, kanban=mock_kanban, hooks=mock_hooks)
+
+        await go()
+
+        outcomes: dict[str, str] = {}
+        for call in mock_hooks.emit.call_args_list:
+            _, payload = call.args
+            outcomes[payload["task_id"]] = payload["outcome"]
+
+        assert outcomes.get("BE3") == "budget_exceeded", (
+            f"BudgetExceededError must emit 'budget_exceeded', got {outcomes.get('BE3')!r}"
+        )
+        assert outcomes.get("FE3") == "failure", (
+            f"Plain ValueError must still emit 'failure', got {outcomes.get('FE3')!r}"
         )
