@@ -718,6 +718,70 @@ class TestFromAC_ScheduleTaskRetry_Signature:
                 inspect.Parameter.VAR_KEYWORD,
             ), f"Parameter '{name}' is not keyword-only"
 
+    def test_state_and_kanban_parameters_carry_type_annotations(self) -> None:
+        """AC1: state and kanban carry the exact class annotations from the spec.
+
+        Uses raw annotation strings because daemon.py uses from __future__ import
+        annotations, which stores annotations as strings rather than live types.
+        Pinning the exact class names prevents silent annotation removal or aliasing.
+        """
+        from owlbear.daemon import schedule_task_retry
+
+        sig = inspect.signature(schedule_task_retry)
+        state_ann = sig.parameters["state"].annotation
+        kanban_ann = sig.parameters["kanban"].annotation
+
+        assert state_ann != inspect.Parameter.empty, "state must have a type annotation"
+        assert kanban_ann != inspect.Parameter.empty, "kanban must have a type annotation"
+        assert str(state_ann) == "OrchestratorState", (
+            f"state annotation is {state_ann!r}, expected 'OrchestratorState'"
+        )
+        assert str(kanban_ann) == "KanbanToolset", (
+            f"kanban annotation is {kanban_ann!r}, expected 'KanbanToolset'"
+        )
+
+    def test_scalar_parameters_carry_exact_type_annotations(self) -> None:
+        """AC1: task_id: str, error: Exception, max_attempts: int, backoff_*: float.
+
+        Verifies the exact annotation strings so that removing or changing any
+        individual annotation breaks the test.
+        """
+        from owlbear.daemon import schedule_task_retry
+
+        sig = inspect.signature(schedule_task_retry)
+        expected_annotations = {
+            "task_id": "str",
+            "error": "Exception",
+            "max_attempts": "int",
+            "backoff_base": "float",
+            "backoff_max": "float",
+        }
+        for param_name, expected_type_str in expected_annotations.items():
+            ann = sig.parameters[param_name].annotation
+            assert ann != inspect.Parameter.empty, (
+                f"{param_name} must have a type annotation"
+            )
+            assert str(ann) == expected_type_str, (
+                f"{param_name} annotation is {ann!r}, expected {expected_type_str!r}"
+            )
+
+    def test_return_annotation_is_none(self) -> None:
+        """AC1: function must declare a -> None return annotation.
+
+        With from __future__ import annotations the return annotation is stored
+        as the string 'None', not type(None).  Checking it is non-empty and equals
+        'None' pins both the presence and the exact declared type.
+        """
+        from owlbear.daemon import schedule_task_retry
+
+        sig = inspect.signature(schedule_task_retry)
+        assert sig.return_annotation != inspect.Signature.empty, (
+            "return annotation must be present"
+        )
+        assert str(sig.return_annotation) == "None", (
+            f"return annotation is {sig.return_annotation!r}, expected 'None'"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6: reconcile_tasks calls schedule_task_retry instead of inline retry logic
@@ -880,3 +944,151 @@ class TestFromAC_ReconcileCallsScheduleTaskRetry:
             await reconcile_tasks(state=state, kanban=mock_kanban)
 
         assert len(schedule_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# AC5 (retry): idempotency guard fires when current attempt EXCEEDS next_attempt
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ScheduleTaskRetry_IdempotencyGuardHigherAttempt:
+    """AC5 gap: guard must also fire when current.attempt > next_attempt (not just ==).
+
+    The reviewer noted that existing idempotency tests only prove same-attempt
+    concurrency from empty state.  This class tests the strictly-greater case:
+    a concurrent writer has already advanced the entry beyond next_attempt while
+    the guarded call was suspended at ``await asyncio.sleep(0)``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_guard_skips_when_current_attempt_exceeds_next_attempt(self) -> None:
+        """Guard triggers when state already has attempt N+2 and caller computed N+1.
+
+        Setup: state starts with attempt=1, so caller computes next_attempt=2.
+        After the internal sleep(0) yield, a concurrent coro writes attempt=3.
+        Guard: current.attempt (3) >= next_attempt (2) → caller returns early.
+        State must still hold attempt=3, not be overwritten to 2.
+        """
+        from owlbear.daemon import OrchestratorState, schedule_task_retry
+
+        state = OrchestratorState()
+        state.claimed.add("hg1")
+        state.retries["hg1"] = _make_retry_entry("hg1", attempt=1)  # type: ignore[assignment]
+        mock_kanban = AsyncMock()
+
+        async def _advance_to_attempt_3() -> None:
+            # Yield once so schedule_task_retry runs first and reads prev=1
+            await asyncio.sleep(0)
+            # Now the guarded call is suspended at its own sleep(0); write attempt=3
+            state.retries["hg1"] = _make_retry_entry("hg1", attempt=3)  # type: ignore[assignment]
+
+        await asyncio.gather(
+            schedule_task_retry(
+                state=state,
+                kanban=mock_kanban,
+                task_id="hg1",
+                error=RuntimeError("stale caller"),
+                max_attempts=10,
+                backoff_base=10.0,
+                backoff_max=320.0,
+            ),
+            _advance_to_attempt_3(),
+        )
+
+        # The guarded call must not have overwritten attempt=3 back to 2
+        assert state.retries["hg1"].attempt == 3  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_guard_skips_produces_no_kanban_call(self) -> None:
+        """Guard return on higher current attempt must not produce any kanban_edit call."""
+        from owlbear.daemon import OrchestratorState, schedule_task_retry
+
+        state = OrchestratorState()
+        state.claimed.add("hg2")
+        state.retries["hg2"] = _make_retry_entry("hg2", attempt=1)  # type: ignore[assignment]
+        mock_kanban = AsyncMock()
+
+        async def _advance_to_attempt_4() -> None:
+            await asyncio.sleep(0)
+            state.retries["hg2"] = _make_retry_entry("hg2", attempt=4)  # type: ignore[assignment]
+
+        await asyncio.gather(
+            schedule_task_retry(
+                state=state,
+                kanban=mock_kanban,
+                task_id="hg2",
+                error=RuntimeError("stale"),
+                max_attempts=10,
+                backoff_base=10.0,
+                backoff_max=320.0,
+            ),
+            _advance_to_attempt_4(),
+        )
+
+        mock_kanban.kanban_edit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# AC6 (retry): kanban failure is LOGGED, not just swallowed
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ScheduleTaskRetry_KanbanFailureLogging:
+    """AC6 gap: the reviewer noted tests only verified non-propagation and cleanup.
+
+    These tests assert ``logger.warning`` is actually called when kanban_edit
+    raises — verifying the contract phrase 'exception is logged but not propagated'.
+    """
+
+    @pytest.mark.asyncio
+    async def test_kanban_failure_during_exhaustion_logs_warning(self) -> None:
+        """logger.warning is called when kanban_edit raises on exhaustion."""
+        from owlbear.daemon import OrchestratorState, schedule_task_retry
+
+        state = OrchestratorState()
+        state.claimed.add("kfl1")
+        state.retries["kfl1"] = _make_retry_entry("kfl1", attempt=5)  # type: ignore[assignment]
+        mock_kanban = AsyncMock()
+        mock_kanban.kanban_edit = AsyncMock(side_effect=RuntimeError("kanban unreachable"))
+
+        with patch("owlbear.daemon.logger") as mock_logger:
+            await schedule_task_retry(
+                state=state,
+                kanban=mock_kanban,
+                task_id="kfl1",
+                error=RuntimeError("fifth fail"),
+                max_attempts=5,
+                backoff_base=10.0,
+                backoff_max=320.0,
+            )
+
+        mock_logger.warning.assert_called_once()
+        # The warning must reference the task ID so operators can triage
+        call_args = mock_logger.warning.call_args
+        assert "kfl1" in str(call_args)
+
+    @pytest.mark.asyncio
+    async def test_kanban_failure_during_budget_block_logs_warning(self) -> None:
+        """logger.warning is called when kanban_edit raises on budget-exceeded block."""
+        from owlbear.core.errors import BudgetExceededError
+        from owlbear.daemon import OrchestratorState, schedule_task_retry
+
+        state = OrchestratorState()
+        state.claimed.add("kfl2")
+        mock_kanban = AsyncMock()
+        mock_kanban.kanban_edit = AsyncMock(side_effect=ConnectionError("network gone"))
+
+        with patch("owlbear.daemon.logger") as mock_logger:
+            await schedule_task_retry(
+                state=state,
+                kanban=mock_kanban,
+                task_id="kfl2",
+                error=BudgetExceededError("limit hit"),
+                max_attempts=5,
+                backoff_base=10.0,
+                backoff_max=320.0,
+            )
+
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args
+        assert "kfl2" in str(call_args)
