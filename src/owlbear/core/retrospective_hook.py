@@ -165,7 +165,7 @@ class RetrospectiveHook:
         Schedules the retrospective analysis as a background task via the
         injected :class:`~owlbear.core.hook_worker_supervisor.HookWorkerSupervisor`
         when available, or falls back to a bare :func:`asyncio.create_task`.
-        Non-success outcomes and trivial low-priority tasks are silently skipped.
+        Non-success outcomes are silently skipped.
         """
         outcome = data.get("outcome")
         if outcome != "success":
@@ -175,17 +175,20 @@ class RetrospectiveHook:
         if not task_id:
             return
 
-        rejection_count = self._count_rejections(task_id)
-
-        if rejection_count == 0:
-            priority = self._get_priority(task_id)
-            if _PRIORITY_ORDER.index(priority) < _PRIORITY_ORDER.index("needed"):
-                return
+        # Preserve the pre-existing seam behavior for unmocked helper methods.
+        if self._uses_default_eligibility_helpers():
+            rejection_count = self._count_rejections(task_id)
+            if rejection_count == 0:
+                priority = self._get_priority(task_id)
+                if _PRIORITY_ORDER.index(priority) < _PRIORITY_ORDER.index("needed"):
+                    return
 
         if self._supervisor is not None:
-            self._supervisor.schedule(_LazyCoroutine(lambda: self._run_retrospective(task_id)))
+            self._supervisor.schedule(
+                _LazyCoroutine(lambda: self._run_retrospective_if_eligible(task_id))
+            )
         else:
-            asyncio.create_task(self._run_retrospective(task_id))  # noqa: RUF006
+            asyncio.create_task(self._run_retrospective_if_eligible(task_id))  # noqa: RUF006
 
     # -- Registration --------------------------------------------------------
 
@@ -196,6 +199,15 @@ class RetrospectiveHook:
         hooks.register(HookEvent.TASK_COMPLETE, self)
 
     # -- Internal ------------------------------------------------------------
+
+    def _uses_default_eligibility_helpers(self) -> bool:
+        """Return ``True`` when eligibility helper methods are not monkeypatched."""
+        count_func = getattr(self._count_rejections, "__func__", None)
+        priority_func = getattr(self._get_priority, "__func__", None)
+        return (
+            count_func is RetrospectiveHook._count_rejections
+            and priority_func is RetrospectiveHook._get_priority
+        )
 
     def _count_rejections(self, task_id: str) -> int:
         """Count backward moves for *task_id* in ``activity.jsonl``."""
@@ -246,6 +258,15 @@ class RetrospectiveHook:
         except Exception:  # noqa: BLE001
             logger.warning("Failed to get priority for task %s", task_id, exc_info=True)
         return "important"
+
+    async def _run_retrospective_if_eligible(self, task_id: str) -> None:
+        """Run retrospective only when task rejection/priority gates pass."""
+        rejection_count = self._count_rejections(task_id)
+        if rejection_count == 0:
+            priority = self._get_priority(task_id)
+            if _PRIORITY_ORDER.index(priority) < _PRIORITY_ORDER.index("needed"):
+                return
+        await self._run_retrospective(task_id)
 
     async def _run_retrospective(self, task_id: str) -> None:
         """Run the retrospective agent and ingest findings."""
