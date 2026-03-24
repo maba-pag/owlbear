@@ -48,6 +48,13 @@ External repos and resources studied during OwlBear development.
 | ruvnet/ruflo v3 docs | <https://github.com/ruvnet/ruflo/tree/main/v3> | MIT | Modular package layout, MCP-first module split, and plugin or microkernel framing | `docs/research/ruflo-analysis.md` | 2026-03-23 |
 | ruvnet/ruflo LICENSE | <https://raw.githubusercontent.com/ruvnet/ruflo/main/LICENSE> | MIT | Reuse conditions for code or configuration copying and adaptation | `docs/research/ruflo-analysis.md` | 2026-03-23 |
 
+## TASK_COMPLETE Audit-Map Advisory Worker Research (Task #954)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | MIT | 12 context-triggered background workers (`audit`, `map`, `testgaps`, `document`) and auto-trigger patterns for validating OwlBear worker design | `docs/research/task-complete-audit-map-advisory-worker.md` | 2026-03-24 |
+| Python asyncio task docs | <https://docs.python.org/3/library/asyncio-task.html> | PSF-2.0 | `create_task()` strong-reference lifecycle, `Semaphore` bounded concurrency, and cooperative cancellation patterns | `docs/research/task-complete-audit-map-advisory-worker.md` | 2026-03-24 |
+
 ## Hook-Triggered Background Worker Pilot (Task #949)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -86,6 +93,51 @@ External repos and resources studied during OwlBear development.
 | Pydantic settings docs | <https://docs.pydantic.dev/latest/concepts/pydantic_settings/> | MIT | `env_nested_delimiter`, nested complex parsing, and partial-update behavior used to fit HookReaction rules into OwlBear settings | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
 | Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Signal/handler decoupling precedent used to keep HookRegistry observational and place routing in a separate handler | `docs/research/hookreaction-schema-router-wiring.md` | 2026-03-23 |
 
+## Hook Reaction Retry Delegation (Task #956)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Celery task retry docs | <https://docs.celeryq.dev/en/stable/userguide/tasks.html#retrying> | BSD-3-Clause | `self.retry()` reuses task-owned counters; signals can trigger retry through the same mechanism; one retry counter per task pattern | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
+| Temporal Python failure detection docs | <https://docs.temporal.io/develop/python/failure-detection> | MIT | `RetryPolicy` owned by the scheduler, not the activity; retry state at orchestrator level, not executor level | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
+| Prefect automations triggers docs | <https://docs.prefect.io/v3/automate/events/automations-triggers> | N/A (docs) | Event-driven actions delegate to existing executors; action tracing for failure attribution | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
+
+## Retry Executor Wiring (Task #985)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Celery task retry docs | <https://docs.celeryq.dev/en/stable/userguide/tasks.html#retrying> | BSD-3-Clause | Centralized retry state pattern; `self.retry()` reuses task-owned counters confirming idempotent retry approach | `docs/research/retry-executor-wiring.md` | 2026-03-24 |
+| Temporal Python failure detection docs | <https://docs.temporal.io/develop/python/failure-detection> | MIT | RetryPolicy at scheduler level; non-retryable errors bypass retry confirming budget-exceeded skip pattern | `docs/research/retry-executor-wiring.md` | 2026-03-24 |
+| Prefect automations triggers docs | <https://docs.prefect.io/v3/automate/events/automations-triggers> | N/A (docs) | Event-driven actions delegate to existing executors via payload matching; confirms match-predicate approach for outcome filtering | `docs/research/retry-executor-wiring.md` | 2026-03-24 |
+
+## Expose Reaction Executors via HookRegistry (Task #991)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Flask API docs — Flask.extensions | <https://flask.palletsprojects.com/en/stable/api/#flask.Flask.extensions> | BSD-3-Clause | Central app object stores extension state as a dict attribute; validates registry-attribute pattern for OwlBear HookRegistry | `docs/research/expose-reaction-executors.md` | 2026-03-24 |
+| Celery Application docs — app.tasks | <https://docs.celeryq.dev/en/stable/userguide/application.html> | BSD-3-Clause | App object exposes task registry as dict attribute for late binding; confirms mutable-dict-on-registry as standard pattern | `docs/research/expose-reaction-executors.md` | 2026-03-24 |
+
+## Budget-Exceeded Outcome Emission (Task #993)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Celery task retry docs | <https://docs.celeryq.dev/en/stable/userguide/tasks.html#retrying> | BSD-3-Clause | `dont_autoretry_for` excludes specific exception types from retry; `Task.throws` marks expected errors as non-error states | `docs/research/budget-exceeded-outcome-emission.md` | 2026-03-24 |
+| Temporal Python failure detection docs | <https://docs.temporal.io/develop/python/failure-detection> | MIT | `ApplicationError(non_retryable=True)` bypasses retry; `non_retryable_error_types` in RetryPolicy distinguishes permanent from transient failures | `docs/research/budget-exceeded-outcome-emission.md` | 2026-03-24 |
+
+## Council Protocol C Validation (Task #976)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI multi-agent docs | <https://ai.pydantic.dev/multi-agent-applications/> | MIT | Level 3 programmatic hand-off and agent delegation patterns; confirmed asyncio.gather sufficiency for parallel perspective agents | `docs/research/council-protocol-c-validation.md` | 2026-03-24 |
+| PydanticAI graph beta parallel docs | <https://ai.pydantic.dev/graph/beta/parallel/> | MIT | Broadcasting and join patterns for formal fan-out/fan-in; evaluated as YAGNI for 2-agent council | `docs/research/council-protocol-c-validation.md` | 2026-03-24 |
+
+## Frontend-Normalize Prompt Research (Task #945)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable `/normalize` skill | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Plan/Execute/Clean Up structure, 8 normalization dimensions, never-list guardrails, mandatory design-context preparation | `docs/research/frontend-normalize-prompt.md` | 2026-03-24 |
+| Impeccable website | <https://impeccable.style> | N/A | Public audit/normalize/polish pipeline, normalize usage examples, command taxonomy | `docs/research/frontend-normalize-prompt.md` | 2026-03-24 |
+| VS Code prompt file docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | `.prompt.md` frontmatter schema, `${input:}` syntax, Markdown link file references, tool list priority | `docs/research/frontend-normalize-prompt.md` | 2026-03-24 |
+
 ## question_pending Default Hook Surface (Task #962)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -112,6 +164,14 @@ External repos and resources studied during OwlBear development.
 | Rich Tables docs | <https://rich.readthedocs.io/en/stable/tables.html> | MIT | Table sections, column configuration, and empty-table handling for a grouped terminal board | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
 | Typer Commands docs | <https://typer.tiangolo.com/tutorial/commands/> | MIT | Dedicated command registration conventions for a `board` command module | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
 | Typer Testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | `CliRunner` invocation and output assertions for command tests | `docs/research/bearclaw-board-command.md` | 2026-03-21 |
+
+## Design-Context Onboarding Prompt Research (Task #943)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Impeccable repo (`/teach-impeccable` pattern) | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Scan-first, ask-only-missing, persist-to-file onboarding flow studied indirectly via parent research #930 | `docs/research/design-context-onboarding-prompt.md` | 2026-03-24 |
+| VS Code Prompt Files docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | Frontmatter format, file references via relative paths, `${input:}` syntax, and prompt invocation behavior | `docs/research/design-context-onboarding-prompt.md` | 2026-03-24 |
+| VS Code Customization Overview | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Prompt files for repeatable tasks confirmed; skills for reusable knowledge; agents for persistent personas | `docs/research/design-context-onboarding-prompt.md` | 2026-03-24 |
 
 ## BearClaw Board Implementation Gate (Task #910)
 
@@ -1454,6 +1514,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | ykdojo/claude-code-tips | <https://github.com/ykdojo/claude-code-tips> | All Rights Reserved | 45 workflow tips, 6 skills (handoff, clone, half-clone, review-claudemd, gha, reddit-fetch), GLOBAL-CLAUDE.md patterns, command decomposition for approval gates, context token management strategies, structured handoff documents, instruction review from session history, agentic coding spectrum (4 levels) | `docs/research/claude-code-tips.md` | 2026-03-06 |
 
+## Prompt vs Skill vs Agent Rules (Task #942)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code prompt files docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | Prompt file mechanics: slash-command invocation, tools/agent/model frontmatter, single-task framing, tool-list priority | `docs/research/prompt-vs-skill-vs-agent-rules.md` | 2026-03-24 |
+| VS Code custom agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent mechanics: persistent persona, tool restrictions, handoffs, model preferences, subagent orchestration | `docs/research/prompt-vs-skill-vs-agent-rules.md` | 2026-03-24 |
+| VS Code agent skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skill mechanics: progressive loading, co-located scripts/resources, open standard, auto-load by relevance | `docs/research/prompt-vs-skill-vs-agent-rules.md` | 2026-03-24 |
+| VS Code customization overview | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Official taxonomy: instructions for standards, prompts for tasks, skills for capabilities, agents for personas | `docs/research/prompt-vs-skill-vs-agent-rules.md` | 2026-03-24 |
+
 ## Global vs Scoped Instructions Audit (Task #705)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -1473,14 +1542,36 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | cookiecutter | <https://github.com/cookiecutter/cookiecutter> | BSD-3 | Jinja2 project templates from repos, `cookiecutter.json` config; informed hardcoded-template approach (simpler, YAGNI) | `docs/research/project-workspace.md` (comparison), `src/owlbear/projects/workspace.py` (template dispatch pattern) | 2026-03-03 |
+
+## Non-Blocking Retrospective Hook Handoff (Task #964)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python `asyncio.to_thread` docs | <https://docs.python.org/3/library/asyncio-task.html#asyncio.to_thread> | PSF | Official guidance for offloading blocking I/O to thread pool without blocking the event loop | `docs/research/non-blocking-retrospective-hook-handoff.md` | 2026-03-24 |
+| Python `asyncio.create_subprocess_exec` docs | <https://docs.python.org/3/library/asyncio-subprocess.html> | PSF | Async subprocess API; precedent for non-blocking subprocess in asyncio | `docs/research/non-blocking-retrospective-hook-handoff.md` | 2026-03-24 |
+| aiohttp background tasks docs | <https://docs.aiohttp.org/en/stable/web_advanced.html#background-tasks> | Apache-2.0 | Tracked background task + cleanup context pattern; confirms handler-to-task handoff as standard | `docs/research/non-blocking-retrospective-hook-handoff.md` | 2026-03-24 |
 | copier | <https://github.com/copier-org/copier> | MIT | Template lifecycle (scaffold + update), `copier.yml` questions; evaluated but not adopted (YAGNI â€” update lifecycle not needed) | `docs/research/project-workspace.md` (comparison) | 2026-03-03 |
 
 ## Source Discovery & Bookmarking Research (Task #304)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
+
+## Expose reaction_executors via HookRegistry Attribute (Task #991)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Flask `app.extensions` docs | <https://flask.palletsprojects.com/en/stable/api/#flask.Flask.extensions> | BSD-3-Clause | Central app-object dict attribute for storing extension state; validated optional-attribute-on-registry pattern | `src/owlbear/core/hooks.py` (`HookRegistry.reaction_executors`), `docs/research/expose-reaction-executors.md` | 2026-03-24 |
+| Celery application docs | <https://docs.celeryq.dev/en/stable/userguide/application.html> | BSD-3-Clause | `app.tasks` dict attribute for late-binding task registry; confirmed assembly-layer assignment without core-layer import | `src/owlbear/core/hooks.py` (`HookRegistry.reaction_executors`), `docs/research/expose-reaction-executors.md` | 2026-03-24 |
 | Karakeep (fka Hoarder) | <https://github.com/karakeep-app/karakeep> | AGPL-3.0 | AI-based auto-tagging via LLM prompt; bookmark â†’ extract â†’ tag pipeline; inspired `SourceEvaluator` LLM scoring pattern | `docs/research/source-discovery-bookmarking.md` (prior art), `src/owlbear/memory/knowledge/evaluator.py` (LLM eval pattern) | 2026-03-03 |
 | Pinboard API v1 | <https://pinboard.in/api/> | N/A | Minimal bookmark model: url, title, description, tags, datetime, toread flag; `posts/suggest` for tag recommendations; informed `BookmarkStore` field design | `docs/research/source-discovery-bookmarking.md` (data model comparison) | 2026-03-03 |
+
+## HookReaction Notify and Escalate Executor Wiring (Task #957)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Trigger-action model and `send-notification` action delegation pattern used to justify backend-chain factory approach for notify executor | `docs/research/hookreaction-notify-escalate-executors.md` | 2026-03-24 |
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Signal handler separation from retry engine state used to justify non-blocking escalation executor | `docs/research/hookreaction-notify-escalate-executors.md` | 2026-03-24 |
 | Omnivore digest-score | <https://github.com/omnivore-app/omnivore/tree/main/ml/digest-score> | N/A | ML-based relevance scoring (random forest); evaluated but not adopted (too complex for LLM-scored approach) | `docs/research/source-discovery-bookmarking.md` (comparison) | 2026-03-03 |
 
 ## Slack Structured Proposals Research (Task #307)
@@ -1913,3 +2004,74 @@ External repos and resources studied during OwlBear development.
 | Python asyncio task-cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF | `Task.cancel()` injects `CancelledError`; caught cancellation must be re-raised — informs the `_run_extract` re-raise pattern | `src/owlbear/memory/knowledge/ingest.py` (`_ingest_from_intake`) | 2026-03-20 |
 | AnyIO cancellation docs | <https://anyio.readthedocs.io/en/stable/cancellation.html> | MIT | Level-cancellation and cancel-scope model studied and rejected; OwlBear uses asyncio cooperative polling instead | `docs/research/operation-scoped-cancellation-signal.md` | 2026-03-20 |
 | .NET cancellation-token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC BY 4.0 | One token per cancelable operation, poll at work boundaries, linked parent/child cancellation — direct prior art for the `cancel: asyncio.Event` seam | `src/owlbear/memory/knowledge/refresh.py`, `ingest.py`, `bookmark_pipeline.py`, `src/owlbear/tools/browser/integration.py`, `src/owlbear/core/retrospective_hook.py` | 2026-03-20 |
+
+## QUESTION_PENDING Emit Implementation (Task #967)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | `before_task_publish` / `task_prerun` emit-once-per-boundary pattern used to justify single emit before human-wait | `docs/research/question-pending-emit-implementation.md` | 2026-03-23 |
+| Prefect event-driven docs | <https://docs.prefect.io/v3/get-started> | N/A (docs) | Event-driven state transitions (Paused, Pending) fire once at boundary, not on every poll/retry | `docs/research/question-pending-emit-implementation.md` | 2026-03-23 |
+
+## Frontend Instructions Skill Handoff (Task #937)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code — Custom instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | Always-on vs file-based instruction scoping; instructions for project standards, skills for specialized capabilities | `docs/research/frontend-instructions-skill-handoff.md` | 2026-03-24 |
+| VS Code — Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Progressive loading model (discovery → instructions → resources); skills vs instructions separation rationale | `docs/research/frontend-instructions-skill-handoff.md` | 2026-03-24 |
+
+## Frontend Anti-Pattern Taxonomy (Task #938)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | DO/DON'T anti-pattern catalog across 7 design categories and "AI Slop Test" framing for taste-specific heuristic classification | `docs/research/frontend-anti-pattern-taxonomy.md` | 2026-03-24 |
+| Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline anti-pattern warnings and design-thinking skill framing used to distinguish universal blockers from taste heuristics | `docs/research/frontend-anti-pattern-taxonomy.md` | 2026-03-24 |
+| WCAG 2.1/2.2 Understanding Docs | <https://www.w3.org/WAI/WCAG21/Understanding/> | W3C Document License | Formal success criteria backing universal blockers: SC 2.4.7 (Focus Visible), 2.4.13 (Focus Appearance), 1.4.3 (Contrast Minimum), 1.4.11 (Non-text Contrast), 2.5.5 (Target Size), 3.3.2 (Labels or Instructions) | `docs/research/frontend-anti-pattern-taxonomy.md` | 2026-03-24 |
+| NNGroup "Placeholders in Form Fields Are Harmful" | <https://www.nngroup.com/articles/form-design-placeholders/> | N/A (article) | 7 documented usability harms of placeholder-as-label pattern, a11y failures for screen readers and cognitive impairments | `docs/research/frontend-anti-pattern-taxonomy.md` | 2026-03-24 |
+
+## Council Debate System Research (Task #145)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Du et al. "Improving Factuality through Multiagent Debate" | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Convergent debate protocol: N agents propose, see each other's responses, K rounds, arrive at common answer (ICML 2024) | `docs/research/council-debate-system.md` | 2026-03-24 |
+| Liang et al. "MAD: Multi-Agent Debate" | <https://arxiv.org/abs/2305.19118> | arXiv non-exclusive | Adversarial debate with judge; Degeneration-of-Thought problem; adaptive round termination (EMNLP 2024) | `docs/research/council-debate-system.md` | 2026-03-24 |
+| Chan et al. "ChatEval" | <https://arxiv.org/abs/2308.07201> | arXiv non-exclusive | Multi-agent referee team for evaluation via debate; parallel-then-synthesize protocol variant | `docs/research/council-debate-system.md` | 2026-03-24 |
+| Irving et al. "AI Safety via Debate" | <https://arxiv.org/abs/1805.00899> | arXiv non-exclusive | Foundational two-player zero-sum debate game theory; PSPACE complexity results for debate with polynomial-time judges | `docs/research/council-debate-system.md` | 2026-03-24 |
+| composable-models/llm_multiagent_debate | <https://github.com/composable-models/llm_multiagent_debate> | N/A | Reference implementation of Du et al. convergent debate (516 stars, Python) | `docs/research/council-debate-system.md` | 2026-03-24 |
+| Skytliang/Multi-Agents-Debate | <https://github.com/Skytliang/Multi-Agents-Debate> | GPL-3.0 | Reference implementation of Liang et al. MAD adversarial debate (539 stars, Python) | `docs/research/council-debate-system.md` | 2026-03-24 |
+
+## Priority-Routed Notifications (Task #952)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Grafana notification policies docs | <https://grafana.com/docs/grafana/latest/alerting/configure-notifications/create-notification-policy/> | AGPL-3.0 (docs: CC-BY-SA-4.0) | Label-based routing tree with severity matching to contact points, child policy inheritance, and mute timings as prior art for priority-based notification routing | `docs/research/priority-routed-notifications.md` | 2026-03-24 |
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Trigger plus action model with notification blocks (Slack, Teams, Email) and template-driven messages as prior art for event-to-notification routing | `docs/research/priority-routed-notifications.md` | 2026-03-24 |
+
+## SlackNotificationBackend Research (Task #978)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Slack SDK Web API docs | <https://docs.slack.dev/tools/python-slack-sdk/web/index.html> | N/A (docs) | `AsyncWebClient.chat_postMessage()` async pattern, `RateLimitErrorRetryHandler`, and error handling via `SlackApiError` for one-way notification delivery | `docs/research/slack-notification-backend.md` | 2026-03-24 |
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Template-driven Slack notification blocks with event context as prior art for message formatting | `docs/research/slack-notification-backend.md` | 2026-03-24 |
+
+## Notify Dedup: NotificationHook vs HookReactionRouter (Task #963)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Prometheus AlertManager docs | <https://prometheus.io/docs/alerting/latest/alertmanager/> | Apache-2.0 (docs: CC-BY-4.0) | Routing trees, inhibition rules, grouping � single notification path per alert as prior art for assembly-time event exclusion | `docs/research/notify-dedup-notificationhook-vs-router.md` | 2026-03-24 |
+| Prefect automations docs | <https://docs.prefect.io/v3/concepts/automations> | N/A (docs) | Independent trigger/action automations; no built-in dedup between automations, used as counterexample for OwlBear's single-user UX | `docs/research/notify-dedup-notificationhook-vs-router.md` | 2026-03-24 |
+| Celery signals guide | <https://docs.celeryq.dev/en/stable/userguide/signals.html> | BSD-3-Clause | Independent signal handlers with no built-in dedup, used to justify explicit assembly-time exclusion over runtime tracking | `docs/research/notify-dedup-notificationhook-vs-router.md` | 2026-03-24 |
+
+## Two-Tier Priority Notification Config (Task #977)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Grafana notification policies docs | <https://grafana.com/docs/grafana/latest/alerting/fundamentals/notifications/notification-policies/> | AGPL-3.0 (docs: CC-BY-SA-4.0) | Label-based routing with contact-point inheritance and child policy override semantics as prior art for tier-based notification config | `docs/research/two-tier-notification-config.md` | 2026-03-24 |
+| Pydantic deprecated fields docs | <https://docs.pydantic.dev/latest/concepts/fields/#deprecated-fields> | MIT | `Field(deprecated=...)` native deprecation mechanism emitting `DeprecationWarning` on access for backward-compatible field migration | `docs/research/two-tier-notification-config.md` | 2026-03-24 |
+| Pydantic validators docs | <https://docs.pydantic.dev/latest/concepts/validators/> | MIT | `model_validator(mode='after')` for cross-field migration logic and `warnings.catch_warnings()` pattern for suppressing internal access | `docs/research/two-tier-notification-config.md` | 2026-03-24 |
+
+## Frontend-Polish Prompt Research (Task #946)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Impeccable `/polish` skill | <https://github.com/pbakaus/impeccable> | Apache-2.0 | 11-category polish checklist, pre-polish assessment, final verification steps, and polish-is-the-last-step constraint | `docs/research/frontend-polish-prompt.md` | 2026-03-24 |
+| VS Code Prompt Files docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | Frontmatter format, input syntax, file references, and prompt invocation behavior | `docs/research/frontend-polish-prompt.md` | 2026-03-24 |
