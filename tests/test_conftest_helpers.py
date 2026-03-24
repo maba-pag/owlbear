@@ -395,3 +395,89 @@ class TestFromAC_ZeroDuplicates:
         assert not _has_func_def(filepath, "make_completed_process"), (
             f"make_completed_process still defined in {filename}"
         )
+
+
+# ===================================================================
+# AC3: Named OSError seam for missing-binary case
+# ===================================================================
+
+
+def _find_test_methods_with_direct_error_construct(
+    filepath: Path,
+    class_name: str,
+    error_names: tuple[str, ...],
+) -> list[str]:
+    """Return names of test methods in *class_name* that directly call *error_names* constructors.
+
+    Only detects direct ``ast.Call`` nodes where ``.func`` is an ``ast.Name``
+    matching one of *error_names* — i.e. ``FileNotFoundError(...)`` but NOT
+    ``isinstance(x, FileNotFoundError)``.
+    """
+    tree = ast.parse(filepath.read_text(encoding="utf-8"))
+    offending: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name.startswith("test_"):
+                    for subnode in ast.walk(item):
+                        if (
+                            isinstance(subnode, ast.Call)
+                            and isinstance(subnode.func, ast.Name)
+                            and subnode.func.id in error_names
+                        ):
+                            offending.append(item.name)
+                            break
+    return offending
+
+
+class TestFromAC_MissingBinarySeam:
+    """AC3: Explicit named OSError fixture/helper for missing-binary case in BearClaw CLI tests.
+
+    Verifies that:
+    - A named ``make_missing_binary_error`` helper is importable from conftest  (following the
+      ``make_completed_process`` precedent for shared CLI-test helpers).
+    - The helper returns a ``FileNotFoundError`` (an ``OSError`` subclass) whose message
+      references the ``kanban-md`` binary.
+    - The board failure-path tests use the named seam instead of inlining
+      ``FileNotFoundError(...)`` directly.
+    """
+
+    def test_named_seam_importable_from_conftest(self) -> None:
+        """make_missing_binary_error is importable from conftest."""
+        from conftest import make_missing_binary_error  # type: ignore[import-untyped]
+
+        assert callable(make_missing_binary_error)
+
+    def test_named_seam_returns_file_not_found_error(self) -> None:
+        """Calling make_missing_binary_error() returns a FileNotFoundError instance."""
+        from conftest import make_missing_binary_error  # type: ignore[import-untyped]
+
+        error = make_missing_binary_error()
+        assert isinstance(error, FileNotFoundError)
+
+    def test_named_seam_is_os_error_subtype(self) -> None:
+        """FileNotFoundError is an OSError subtype — verifies the subtype contract."""
+        from conftest import make_missing_binary_error  # type: ignore[import-untyped]
+
+        error = make_missing_binary_error()
+        assert isinstance(error, OSError)
+
+    def test_named_seam_message_references_kanban_md(self) -> None:
+        """The error message from the seam references the kanban-md binary."""
+        from conftest import make_missing_binary_error  # type: ignore[import-untyped]
+
+        error = make_missing_binary_error()
+        assert "kanban-md" in str(error)
+
+    def test_board_failure_tests_do_not_inline_file_not_found_error(self) -> None:
+        """TestFromAC_BoardFailurePaths uses named seam — no inline FileNotFoundError() calls."""
+        filepath = TESTS_DIR / "test_cli_board.py"
+        offending = _find_test_methods_with_direct_error_construct(
+            filepath,
+            "TestFromAC_BoardFailurePaths",
+            ("FileNotFoundError", "OSError"),
+        )
+        assert offending == [], (
+            f"Test methods still inline FileNotFoundError/OSError directly: {offending}. "
+            "Use make_missing_binary_error() seam instead."
+        )
