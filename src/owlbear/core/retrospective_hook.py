@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import subprocess
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
@@ -22,7 +23,7 @@ from owlbear.core.hooks import TaskCompleteData  # noqa: TC001
 from owlbear.memory.knowledge.cancellation import LinkedCancelSignal
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
 
     from pydantic_ai.models import Model
@@ -57,7 +58,7 @@ _RETRO_SYSTEM_PROMPT = (
 )
 
 
-class _LazyCoroutine:
+class _LazyCoroutine(Coroutine[Any, Any, None]):
     """Create the coroutine only when first awaited by the supervisor.
 
     Tests inject a mock supervisor that only asserts ``schedule()`` calls. With
@@ -69,10 +70,24 @@ class _LazyCoroutine:
         self._factory = factory
         self._coro: Coroutine[Any, Any, None] | None = None
 
-    def __await__(self) -> Generator[Any, None, None]:
+    def _ensure_coro(self) -> Coroutine[Any, Any, None]:
         if self._coro is None:
             self._coro = self._factory()
-        return self._coro.__await__()
+        return self._coro
+
+    def __await__(self) -> Generator[Any, None, None]:
+        return self._ensure_coro().__await__()
+
+    def send(self, value: object) -> object:
+        return self._ensure_coro().send(value)
+
+    def throw(
+        self,
+        typ: type[BaseException] | BaseException,
+        val: BaseException | object = None,
+        tb: object = None,
+    ) -> object:
+        return self._ensure_coro().throw(typ, val, tb)
 
     def close(self) -> None:
         if self._coro is not None:
@@ -175,8 +190,12 @@ class RetrospectiveHook:
         if not task_id:
             return
 
-        # Preserve the pre-existing seam behavior for unmocked helper methods.
-        if self._uses_default_eligibility_helpers():
+        # Keep the legacy fast-path only when a local activity log exists.
+        # Missing logs are treated as unknown and deferred to background eligibility.
+        if (
+            self._uses_default_eligibility_helpers()
+            and (self._kanban_root / "activity.jsonl").is_file()
+        ):
             rejection_count = self._count_rejections(task_id)
             if rejection_count == 0:
                 priority = self._get_priority(task_id)
@@ -188,7 +207,9 @@ class RetrospectiveHook:
                 _LazyCoroutine(lambda: self._run_retrospective_if_eligible(task_id))
             )
         else:
-            asyncio.create_task(self._run_retrospective_if_eligible(task_id))  # noqa: RUF006
+            asyncio.create_task(  # noqa: RUF006
+                _LazyCoroutine(lambda: self._run_retrospective_if_eligible(task_id))
+            )
 
     # -- Registration --------------------------------------------------------
 
