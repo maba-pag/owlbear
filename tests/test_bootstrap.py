@@ -3234,3 +3234,103 @@ class TestFromAC_BootstrapHookWorkerSupervisorWiring:
 
         after_count = len(hooks.handlers.get(HookEvent.TASK_COMPLETE, []))
         assert after_count == before_count + 1
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: bootstrap shutdown_event → LinkedCancelSignal wiring (#870)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_870_BootstrapShutdownSignalWiring:
+    """_wire_post_model_hooks accepts shutdown_event and wires it into the hook.
+
+    AC 5: Compose the per-operation signal only in the current direct daemon-owned
+    ingest path associated with RetrospectiveHook.
+
+    Architecture note: Bootstrap creates LinkedCancelSignal(shutdown_event) and
+    passes it to RetrospectiveHook.__init__; _wire_post_model_hooks() needs to
+    accept shutdown_event (currently not passed at all).
+
+    All tests fail on current HEAD because _wire_post_model_hooks() does not yet
+    accept a shutdown_event keyword argument.
+    """
+
+    def test_wire_post_model_hooks_accepts_shutdown_event_kwarg(
+        self, tmp_path: Path
+    ) -> None:
+        """_wire_post_model_hooks accepts a shutdown_event= keyword without TypeError."""
+        import asyncio
+
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookRegistry
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings()
+        shutdown_event = asyncio.Event()
+
+        # Must not raise TypeError for unexpected keyword argument 'shutdown_event'
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            shutdown_event=shutdown_event,
+        )
+
+    def test_registered_hook_cancel_signal_linked_to_shutdown_event(
+        self, tmp_path: Path
+    ) -> None:
+        """The hook registered via _wire_post_model_hooks has a cancel signal linked to shutdown.
+
+        When shutdown_event is set after registration, the cancel signal on the
+        registered hook reflects that live state. This verifies that bootstrap
+        uses LinkedCancelSignal composition rather than passing None or a snapshot.
+        """
+        import asyncio
+
+        from owlbear.bootstrap import _wire_post_model_hooks
+        from owlbear.core.hooks import HookEvent, HookRegistry
+        from owlbear.core.retrospective_hook import RetrospectiveHook
+
+        hooks = HookRegistry()
+        settings = OwlBearSettings()
+        shutdown_event = asyncio.Event()
+
+        _wire_post_model_hooks(
+            settings,
+            MagicMock(),
+            tmp_path,
+            hooks,
+            MagicMock(),
+            shutdown_event=shutdown_event,
+        )
+
+        handlers = hooks.handlers.get(HookEvent.TASK_COMPLETE, [])
+        retro_hook = next(
+            (h for h in handlers if isinstance(h, RetrospectiveHook)), None
+        )
+        assert retro_hook is not None, "RetrospectiveHook must be registered for TASK_COMPLETE"
+
+        # The hook must carry a cancel signal linked to shutdown_event.
+        # Check that it exposes a CancelSignal-compatible field linked to shutdown.
+        # We verify live linkage: set shutdown_event and the hook's cancel signal is also set.
+        from owlbear.memory.knowledge.cancellation import CancelSignal
+
+        # The hook's linked cancel signal: accessible via _cancel or inferred from
+        # _shutdown_event if the type has been migrated to CancelSignal.
+        linked_signal = getattr(retro_hook, "_cancel", None) or getattr(
+            retro_hook, "_shutdown_event", None
+        )
+        assert linked_signal is not None, (
+            "RetrospectiveHook must store a linked cancel signal (not None) "
+            "when shutdown_event is provided at bootstrap"
+        )
+        assert isinstance(linked_signal, CancelSignal), (
+            "stored cancel signal must satisfy CancelSignal protocol"
+        )
+
+        shutdown_event.set()
+        assert linked_signal.is_set(), (
+            "cancel signal must reflect live shutdown_event state after it fires"
+        )

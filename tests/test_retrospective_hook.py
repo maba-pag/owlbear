@@ -993,6 +993,76 @@ class TestFromAC_RetrospectiveHookCancellation:
 
 
 # ---------------------------------------------------------------------------
+# TDD RED: LinkedCancelSignal live-propagation seam — bootstrap wiring (#870)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_870_RetrospectiveHookLinkedSignal:
+    """RetrospectiveHook forwards a pre-composed LinkedCancelSignal to ingest_text.
+
+    AC 5: Compose the per-operation signal only in the daemon-owned ingest path.
+    The cancel signal forwarded to ingest_text must reflect the live state of
+    shutdown_event, not a one-time snapshot taken when _run_retrospective starts.
+
+    Fails on current HEAD because _run_retrospective creates a new asyncio.Event()
+    per call and only snapshot-copies shutdown_event.is_set() at startup; a
+    LinkedCancelSignal that was live-linked to shutdown_event at construction time
+    does not yet exist.
+    """
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cancel_reflects_live_shutdown_event_set_after_retrospective_completes(
+        self, tmp_path: Path
+    ) -> None:
+        """cancel signal forwarded to ingest_text reflects live shutdown_event state.
+
+        After _run_retrospective completes, setting shutdown_event must cause the
+        cancel signal received by ingest_text to also report is_set() == True.
+        A simple snapshot copy (asyncio.Event() created at call time) does NOT
+        satisfy this contract — only a LinkedCancelSignal delegating to shutdown_event
+        at is_set() call time satisfies it.
+        """
+        shutdown_event = asyncio.Event()  # NOT set initially
+        captured: dict[str, object] = {}
+
+        async def capture_cancel(**kwargs: object) -> object:
+            captured["cancel"] = kwargs.get("cancel")
+            return MagicMock()
+
+        mock_ingest = AsyncMock()
+        mock_ingest.ingest_text = capture_cancel
+
+        hook = RetrospectiveHook(
+            model=MagicMock(),
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            shutdown_event=shutdown_event,
+        )
+        hook._agent = MagicMock()
+        hook._agent.run = _mock_agent_run(_sample_findings())
+
+        # shutdown_event is NOT set at the time _run_retrospective is called
+        assert not shutdown_event.is_set()
+        await hook._run_retrospective("42")
+
+        cancel_signal = captured.get("cancel")
+        assert cancel_signal is not None, "cancel signal must be passed to ingest_text"
+
+        # Before setting shutdown_event, the cancel signal should not be set
+        assert not cancel_signal.is_set(), "cancel should not report set before shutdown fires"
+
+        # Set shutdown_event AFTER _run_retrospective has already completed
+        shutdown_event.set()
+
+        # The linked cancel signal must reflect the live state of shutdown_event;
+        # a snapshot copy (plain asyncio.Event) would return False here.
+        assert cancel_signal.is_set(), (
+            "cancel signal must reflect live shutdown_event state — "
+            "use LinkedCancelSignal, not a snapshot asyncio.Event()"
+        )
+
+
+# ---------------------------------------------------------------------------
 # TDD RED: RetrospectiveHook supervisor seam (#966)
 # ---------------------------------------------------------------------------
 
