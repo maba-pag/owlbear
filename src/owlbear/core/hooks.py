@@ -142,7 +142,9 @@ QuestionPendingData = TypedDict(  # noqa: UP013
         "tool_name": NotRequired[str],
     },
 )
-QuestionPendingData.__doc__ = "Payload for :attr:`HookEvent.QUESTION_PENDING`."  # class form not possible; see comment above
+QuestionPendingData.__doc__ = (
+    "Payload for :attr:`HookEvent.QUESTION_PENDING`."  # class form not possible; see comment above
+)
 
 
 class DaemonStartupData(TypedDict):
@@ -176,6 +178,12 @@ class HookRegistry:
         registry = HookRegistry()
         registry.register(HookEvent.ON_MESSAGE, my_handler)
         await registry.emit(HookEvent.ON_MESSAGE, {"text": "hello"})
+
+    Attributes:
+        reaction_executors: Executor dict set by ``build_hooks()`` when
+            ``hook_reactions`` is configured; ``None`` by default.  The daemon
+            wiring layer replaces noop entries with real executors at startup
+            (see task #992).
     """
 
     def __init__(self) -> None:

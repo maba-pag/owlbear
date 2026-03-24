@@ -35,7 +35,11 @@ def build_hooks(
     Returns:
     -------
     tuple[HookRegistry, ProgressReporter | None]
-        Fully-wired hook registry and optional progress reporter.
+        Fully-wired hook registry and optional progress reporter.  When
+        ``settings.hook_reactions`` is non-empty the registry's
+        ``reaction_executors`` attribute is set to the noop executor dict
+        passed to ``HookReactionRouter``; downstream code (see task #992)
+        replaces those noops with real executors.
     """
     hooks = HookRegistry()
 
