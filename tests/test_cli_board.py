@@ -642,9 +642,7 @@ class TestFromAC_AgeThresholdStyling:
     """
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_age_above_1h_threshold_emits_34_tier_ansi_color(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_age_above_1h_threshold_emits_34_tier_ansi_color(self, mock_run: MagicMock) -> None:
         """Age 3 h crosses the 1 h threshold → 38;5;34 ANSI sequence in Age cell."""
         mock_run.side_effect = _age_subproc(3.0)
         with _with_config(_THRESHOLD_CONFIG_YAML):
@@ -653,9 +651,7 @@ class TestFromAC_AgeThresholdStyling:
         assert "38;5;34" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_age_above_24h_threshold_emits_226_tier_ansi_color(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_age_above_24h_threshold_emits_226_tier_ansi_color(self, mock_run: MagicMock) -> None:
         """Age 36 h crosses the 24 h threshold → 38;5;226 ANSI sequence in Age cell."""
         mock_run.side_effect = _age_subproc(36.0)
         with _with_config(_THRESHOLD_CONFIG_YAML):
@@ -726,9 +722,7 @@ class TestFromAC_AgeThresholdFallback:
     """
 
     @patch("bearclaw.commands.board.subprocess.run")
-    def test_missing_config_file_exits_zero_with_plain_age_text(
-        self, mock_run: MagicMock
-    ) -> None:
+    def test_missing_config_file_exits_zero_with_plain_age_text(self, mock_run: MagicMock) -> None:
         """Missing kanban/config.yml → board exits 0 with plain Age, no crash.
 
         Currently FAILS because ``_read_status_order`` raises ``FileNotFoundError``
@@ -832,4 +826,276 @@ class TestFromAC_AgeThresholdFallback:
         with _with_config(_bad):
             result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
         assert result_fallback.exit_code == 0
+        assert "38;5;34" not in result_fallback.output
+
+
+# ---------------------------------------------------------------------------
+# Helpers for #921 — multi-status threshold config
+# ---------------------------------------------------------------------------
+
+# Config that includes todo, in-progress, and review in status order alongside
+# age thresholds — used in order/grouping invariant tests so that both "todo"
+# and "in-progress" appear in the config-ordered sections.
+_MULTI_STATUS_THRESHOLD_CONFIG_YAML = """\
+statuses:
+  - name: todo
+  - name: in-progress
+  - name: review
+tui:
+  age_thresholds:
+    - after: 0s
+      color: "242"
+    - after: 1h
+      color: "34"
+    - after: 24h
+      color: "226"
+"""
+
+
+# ---------------------------------------------------------------------------
+# AC #3 — Age cell scope invariants (task #921)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_921_AgeThresholdCellScope:
+    """AC #3 (#921): Age-threshold ANSI styling confined to the Age cell only.
+
+    Title, ID, Assignee, and Tags cells must not receive the threshold color.
+    Status order, task grouping, and displayed age text must be unchanged from
+    the #910 baseline.
+
+    Every test includes an ANSI assertion as a RED trigger: it fails on current
+    HEAD because board.py does not apply any threshold styling yet.  Once the
+    implementation lands, the ANSI assertion passes AND the invariant assertion
+    must also hold, constraining the builder to cell-level styling only.
+    """
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_color_not_directly_preceding_title_text(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Threshold ANSI opener must not immediately precede the title text.
+
+        If the style were applied to the Title cell the output would contain
+        the ANSI opener (``38;5;34m``) directly before the title string.  This
+        test fails on HEAD (no ANSI present yet) and constrains styling to the
+        Age cell.
+        """
+        unique_title = "SENTINEL_TITLE_NOT_STYLED_ABC"
+        task = _task(task_id=1, title=unique_title, status="in-progress")
+        log = [_move(1, "todo", "in-progress", timestamp=_now_minus_hours(3.0))]
+        mock_run.side_effect = _subproc([task], log)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output              # Age IS styled — RED trigger
+        assert unique_title in result.output            # title still renders
+        assert f"38;5;34m{unique_title}" not in result.output  # title NOT styled
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_color_not_directly_preceding_id_text(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Threshold ANSI opener must not immediately precede the task ID text.
+
+        Fails on HEAD (no ANSI); once styling lands, asserts ID cell is not
+        wrapped with the threshold color.
+        """
+        task = _task(task_id=88877, title="ID cell scope check", status="in-progress")
+        log = [_move(88877, "todo", "in-progress", timestamp=_now_minus_hours(3.0))]
+        mock_run.side_effect = _subproc([task], log)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output         # Age IS styled — RED trigger
+        assert "88877" in result.output            # ID still renders
+        assert "38;5;34m88877" not in result.output  # ID NOT wrapped with threshold color
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_tags_column_data_intact_when_threshold_fires(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Tags column must render its data unchanged when threshold styling fires.
+
+        Fails on HEAD (no ANSI); also asserts that the unique tag text is not
+        directly wrapped with the threshold ANSI opener.
+        """
+        unique_tag = "unique-tag-xyz-sentinel"
+        task = _task(
+            task_id=1,
+            title="Tagged task",
+            status="in-progress",
+            tags=["phase-99", unique_tag],
+        )
+        log = [_move(1, "todo", "in-progress", timestamp=_now_minus_hours(3.0))]
+        mock_run.side_effect = _subproc([task], log)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output              # Age IS styled — RED trigger
+        assert unique_tag in result.output             # tag text still renders
+        assert f"38;5;34m{unique_tag}" not in result.output  # tag NOT wrapped
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_status_order_preserved_while_threshold_styling_applied(
+        self, mock_run: MagicMock
+    ) -> None:
+        """``todo`` section appears before ``in-progress`` when threshold config is active.
+
+        Uses a config with both statuses listed in the canonical order.  The
+        ANSI assertion is the RED trigger — fails on HEAD because no styling
+        exists yet.  Once styling lands, status ordering must remain unaffected.
+        """
+        tasks = [
+            _task(task_id=1, status="in-progress", title="In-prog task"),
+            _task(task_id=2, status="todo", title="Todo task"),
+        ]
+        log = [_move(1, "todo", "in-progress", timestamp=_now_minus_hours(3.0))]
+        mock_run.side_effect = _subproc(tasks, log)
+        with _with_config(_MULTI_STATUS_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;34" in result.output  # Age IS styled — RED trigger
+        todo_pos = result.output.find("todo")
+        in_progress_pos = result.output.find("in-progress")
+        assert todo_pos != -1
+        assert in_progress_pos != -1
+        assert todo_pos < in_progress_pos  # config-defined order preserved
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_task_grouping_preserved_while_threshold_styling_applied(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Each task must appear under its own status section when threshold config is active.
+
+        Fails on HEAD because the ANSI assertion (RED trigger) fires first.
+        Once styling lands, section grouping must be unaffected: each task
+        title appears after its own section header in the output.
+        """
+        tasks = [
+            _task(task_id=10, status="review", title="Review section task"),
+            _task(task_id=20, status="todo", title="Todo section task"),
+        ]
+        log = [_move(10, "in-progress", "review", timestamp=_now_minus_hours(27.0))]
+        mock_run.side_effect = _subproc(tasks, log)
+        with _with_config(_MULTI_STATUS_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;226" in result.output  # 27 h → 24 h tier — RED trigger
+        review_pos = result.output.find("review")
+        todo_pos = result.output.find("todo")
+        review_task_pos = result.output.find("Review section task")
+        todo_task_pos = result.output.find("Todo section task")
+        assert review_pos != -1
+        assert todo_pos != -1
+        assert review_task_pos > review_pos  # task title after its own section header
+        assert todo_task_pos > todo_pos      # task title after its own section header
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_age_text_value_unchanged_after_stripping_ansi_sequences(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Stripping ANSI sequences from styled output must leave plain age text intact.
+
+        Uses a task created exactly two days ago so the displayed age is always
+        ``2d`` regardless of the time of day the test runs.  Verifies that
+        styling is purely additive markup that does not alter the visible label.
+        The ANSI assertion is the RED trigger.
+        """
+        import datetime as _dt2
+        import re
+
+        two_days_ago = (_dt2.datetime.now(tz=_dt2.UTC) - _dt2.timedelta(days=2)).date()
+        task = _task(
+            task_id=1,
+            title="Age text task",
+            status="in-progress",
+            created=f"{two_days_ago.isoformat()}T00:00:00+00:00",
+        )
+        log: list[dict[str, object]] = []  # no move entry — fallback to created date
+        mock_run.side_effect = _subproc([task], log)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result.exit_code == 0
+        assert "38;5;226" in result.output  # 2 d → 24 h tier — RED trigger
+        stripped = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "2d" in stripped  # age text preserved after ANSI removal
+
+
+# ---------------------------------------------------------------------------
+# AC #4 — fallback for malformed mapping entries (task #921)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_921_FallbackMappingValidation:
+    """AC #4 (#921): Malformed threshold mapping entries → plain Age fallback.
+
+    Covers the "not a list of {after,color} mappings" sub-case of AC4 that
+    ``TestFromAC_AgeThresholdFallback`` does not test explicitly: entries with
+    a missing ``after`` key, a missing ``color`` key, and a list of scalars
+    instead of mapping objects.
+
+    Contrast pattern mirrors the existing fallback tests: the first invoke with
+    valid config asserts ANSI styling works (RED trigger — fails on HEAD);
+    the second invoke with the malformed config verifies the fallback.
+    """
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_entry_missing_after_key_falls_back_to_plain_age(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Entry ``{color: "34"}`` with no ``after`` key → plain Age, exit 0."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = (
+            "statuses:\n  - name: in-progress\n"
+            'tui:\n  age_thresholds:\n    - color: "34"\n'
+        )
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "Threshold task" in result_fallback.output  # row rendered
+        assert "38;5;34" not in result_fallback.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_entry_missing_color_key_falls_back_to_plain_age(
+        self, mock_run: MagicMock
+    ) -> None:
+        """Entry ``{after: 1h}`` with no ``color`` key → plain Age, exit 0."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = (
+            "statuses:\n  - name: in-progress\n"
+            "tui:\n  age_thresholds:\n    - after: 1h\n"
+        )
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "Threshold task" in result_fallback.output  # row rendered
+        assert "38;5;34" not in result_fallback.output
+
+    @patch("bearclaw.commands.board.subprocess.run")
+    def test_threshold_list_of_scalars_falls_back_to_plain_age(
+        self, mock_run: MagicMock
+    ) -> None:
+        """``age_thresholds`` is a list of scalars (not mappings) → plain Age, exit 0."""
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_THRESHOLD_CONFIG_YAML):
+            result_valid = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert "38;5;34" in result_valid.output  # RED trigger ✓
+
+        _bad = "statuses:\n  - name: in-progress\ntui:\n  age_thresholds:\n    - 1h\n    - 24h\n"
+        mock_run.side_effect = _age_subproc(3.0)
+        with _with_config(_bad):
+            result_fallback = runner.invoke(app, ["board"], env=_ANSI_ENV)
+        assert result_fallback.exit_code == 0
+        assert "Threshold task" in result_fallback.output  # row rendered
         assert "38;5;34" not in result_fallback.output
