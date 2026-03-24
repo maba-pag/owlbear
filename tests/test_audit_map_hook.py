@@ -734,3 +734,106 @@ class TestFromAC_983_AuditMapWiringInBootstrap:
         assert audit_hook._supervisor is retro_hook._supervisor, (
             "AuditMapAdvisoryHook and RetrospectiveHook must share the same HookWorkerSupervisor"
         )
+
+
+class TestBuilderDiscovered:
+    """Additional builder-discovered coverage for advisory metadata helpers."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_worker_advisory_includes_task_metadata_and_acceptance_criteria(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Advisory template includes title/status/tags and AC lines from task markdown."""
+        task_file = tmp_path / "tasks" / "42-audit-map-worker.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        task_file.write_text(
+            """---
+id: 42
+title: Audit map worker pilot
+status: review
+tags:
+  - phase-6
+  - worker:audit-map
+class: standard
+---
+
+## Acceptance Criteria
+- [ ] AC one
+- [ ] AC two
+
+## Notes
+Ignore this section.
+""",
+            encoding="utf-8",
+        )
+
+        lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id="42")
+        await lazy_coro
+
+        advisory = (tmp_path / "docs" / "scratch" / "42-audit-map.md").read_text(
+            encoding="utf-8"
+        )
+        assert "- Title: Audit map worker pilot" in advisory
+        assert "- Status: review" in advisory
+        assert "- Tags: phase-6, worker:audit-map" in advisory
+        assert "- [ ] AC one" in advisory
+        assert "- [ ] AC two" in advisory
+        assert "Ignore this section." not in advisory
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_worker_advisory_uses_fallback_when_ac_section_missing(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Advisory falls back to a placeholder when task markdown has no AC section."""
+        task_file = tmp_path / "tasks" / "42-no-ac.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        task_file.write_text(
+            """---
+id: 42
+title: No AC task
+status: done
+tags:
+  - worker:audit-map
+---
+
+## Notes
+No acceptance criteria are defined here.
+""",
+            encoding="utf-8",
+        )
+
+        lazy_coro = await _trigger_and_capture_worker(tmp_path, task_id="42")
+        await lazy_coro
+
+        advisory = (tmp_path / "docs" / "scratch" / "42-audit-map.md").read_text(
+            encoding="utf-8"
+        )
+        assert "- (Acceptance Criteria section not found in task file)" in advisory
+
+    def test_split_frontmatter_without_closing_delimiter_returns_body_only(self) -> None:
+        """Malformed markdown without a closing frontmatter delimiter is handled safely."""
+        frontmatter, body = AuditMapAdvisoryHook._split_frontmatter_and_body(
+            """---
+id: 42
+title: Missing closing delimiter
+## Acceptance Criteria
+- [ ] unreachable
+"""
+        )
+        assert frontmatter == []
+        assert body[0] == "---"
+
+    def test_build_advisory_handles_task_file_read_errors(self, tmp_path: Path) -> None:
+        """Task metadata read errors fall back to safe defaults instead of raising."""
+        task_file = tmp_path / "tasks" / "42-read-error.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        task_file.write_text("---\nid: 42\n---\n", encoding="utf-8")
+
+        hook = _make_hook(tmp_path)
+        with patch.object(Path, "read_text", side_effect=OSError("boom")):
+            advisory = hook._build_advisory(task_id="42")
+
+        assert "- Title: (unknown title)" in advisory
+        assert "- Status: unknown" in advisory

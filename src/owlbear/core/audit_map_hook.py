@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _AUDIT_MAP_TAG = "worker:audit-map"
+_AC_HEADING = "## Acceptance Criteria"
 
 
 class _LazyCoroutine:
@@ -123,23 +124,150 @@ class AuditMapAdvisoryHook:
 
         safe_task_id = self._safe_task_id(task_id)
         advisory_path = scratch_dir / f"{safe_task_id}-audit-map.md"
-        advisory_path.write_text(self._build_advisory(task_id), encoding="utf-8")
+        advisory_path.write_text(self._build_advisory(task_id=task_id), encoding="utf-8")
 
         if self._channel is not None:
             await self._channel.send(
                 f"Audit-map advisory generated for task #{task_id}: {advisory_path}"
             )
 
-    @staticmethod
-    def _build_advisory(task_id: str) -> str:
-        """Build a minimal human-readable advisory artifact."""
-        return (
-            f"# Audit-Map Advisory - Task #{task_id}\n\n"
-            "This advisory worker ran in safe mode.\n\n"
-            "- Output is restricted to docs/scratch/.\n"
-            "- No kanban mutations were performed.\n"
-            "- No source files were modified.\n"
+    def _build_advisory(self, *, task_id: str) -> str:
+        """Build a template-based advisory artifact from kanban task metadata."""
+        title = "(unknown title)"
+        status = "unknown"
+        tags: list[str] = []
+        acceptance_criteria: list[str] = []
+
+        task_file = self._resolve_task_file(task_id)
+        if task_file is not None:
+            try:
+                raw = task_file.read_text(encoding="utf-8")
+                frontmatter, body = self._split_frontmatter_and_body(raw)
+                title, status, tags = self._parse_frontmatter(frontmatter)
+                acceptance_criteria = self._extract_acceptance_criteria(body)
+            except OSError:
+                logger.warning(
+                    "Failed to read task metadata for advisory task %s",
+                    task_id,
+                    exc_info=True,
+                )
+
+        lines = [
+            f"# Audit-Map Advisory - Task #{task_id}",
+            "",
+            "## Task Metadata",
+            f"- Title: {title}",
+            f"- Status: {status}",
+            f"- Tags: {', '.join(tags) if tags else '(none)'}",
+            "",
+            "## Acceptance Criteria",
+        ]
+
+        if acceptance_criteria:
+            lines.extend(acceptance_criteria)
+        else:
+            lines.append("- (Acceptance Criteria section not found in task file)")
+
+        lines.extend(
+            [
+                "",
+                "## Safety Notes",
+                "- Output is restricted to docs/scratch/.",
+                "- No kanban mutations were performed.",
+                "- No source files were modified.",
+            ]
         )
+        return "\n".join(lines) + "\n"
+
+    def _resolve_task_file(self, task_id: str) -> Path | None:
+        """Locate the markdown task file for *task_id* under kanban/tasks/."""
+        tasks_dir = self._kanban_root / "tasks"
+        if not tasks_dir.is_dir():
+            return None
+        safe_task_id = self._safe_task_id(task_id)
+        matches = sorted(tasks_dir.glob(f"{safe_task_id}-*.md"))
+        return matches[0] if matches else None
+
+    @staticmethod
+    def _split_frontmatter_and_body(markdown: str) -> tuple[list[str], list[str]]:
+        """Split markdown into frontmatter lines and body lines."""
+        lines = markdown.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return [], lines
+
+        for index in range(1, len(lines)):
+            if lines[index].strip() == "---":
+                return lines[1:index], lines[index + 1 :]
+
+        return [], lines
+
+    @staticmethod
+    def _parse_frontmatter(lines: list[str]) -> tuple[str, str, list[str]]:
+        """Parse title, status, and tags from task frontmatter lines."""
+        title = "(unknown title)"
+        status = "unknown"
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("title:"):
+                value = stripped.split(":", maxsplit=1)[1].strip()
+                if value:
+                    title = value
+            elif stripped.startswith("status:"):
+                value = stripped.split(":", maxsplit=1)[1].strip()
+                if value:
+                    status = value
+
+        return title, status, AuditMapAdvisoryHook._collect_frontmatter_tags(lines)
+
+    @staticmethod
+    def _collect_frontmatter_tags(lines: list[str]) -> list[str]:
+        """Collect list-style tags from frontmatter lines."""
+        tags: list[str] = []
+        in_tags = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            if stripped == "tags:":
+                in_tags = True
+                continue
+
+            if not in_tags:
+                continue
+
+            if stripped.startswith("- "):
+                value = stripped[2:].strip()
+                if value:
+                    tags.append(value)
+                continue
+
+            if stripped == "" or line.startswith((" ", "\t")):
+                continue
+
+            break
+
+        return tags
+
+    @staticmethod
+    def _extract_acceptance_criteria(lines: list[str]) -> list[str]:
+        """Extract the acceptance-criteria section lines from task markdown body."""
+        collecting = False
+        criteria: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not collecting:
+                if stripped == _AC_HEADING:
+                    collecting = True
+                continue
+
+            if line.startswith("## "):
+                break
+
+            if stripped:
+                criteria.append(line.rstrip())
+
+        return criteria
 
     @staticmethod
     def _safe_task_id(task_id: str) -> str:

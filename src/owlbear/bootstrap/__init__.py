@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     from pydantic_ai.models import Model
 
+    from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.hooks import HookRegistry
     from owlbear.projects.models import Project
@@ -114,12 +115,14 @@ def _wire_post_model_hooks(  # noqa: PLR0913
     workspace: Path,
     hooks: HookRegistry,
     ingest_pipeline: object | None,
+    channel: ChannelPlugin | None = None,
     cleanup: list | None = None,
     shutdown_event: asyncio.Event | None = None,
     tracker: UsageTracker | None = None,  # noqa: ARG001
 ) -> None:
     """Register hooks that depend on the model being available."""
     if ingest_pipeline is not None:
+        from owlbear.core.audit_map_hook import AuditMapAdvisoryHook  # noqa: PLC0415
         from owlbear.core.hook_worker_supervisor import HookWorkerSupervisor  # noqa: PLC0415
         from owlbear.core.retrospective_hook import RetrospectiveHook  # noqa: PLC0415
         from owlbear.memory.knowledge.cancellation import LinkedCancelSignal  # noqa: PLC0415
@@ -135,6 +138,14 @@ def _wire_post_model_hooks(  # noqa: PLR0913
             else LinkedCancelSignal(),
             supervisor=supervisor,
         ).register(hooks)
+        if settings.audit_map_worker_enabled:
+            AuditMapAdvisoryHook(
+                settings=settings,
+                supervisor=supervisor,
+                kanban_root=workspace / "kanban",
+                workspace_root=workspace,
+                channel=channel,
+            ).register(hooks)
         if cleanup is not None:
             cleanup.append(supervisor.shutdown)
 
@@ -213,6 +224,7 @@ async def bootstrap(  # noqa: PLR0915
         workspace,
         hooks,
         ingest_pipeline,
+        channel=channel,
         cleanup=cleanup,
         shutdown_event=shutdown_event,
     )

@@ -483,6 +483,13 @@ class OwlBearSettings(BaseSettings):
             "see architecture-standards config section)."
         ),
     )
+    audit_map_worker_enabled: bool = Field(
+        default=False,
+        description=(
+            "Enable TASK_COMPLETE audit-map advisory worker hook. "
+            "Defaults to False (opt-in pilot mode)."
+        ),
+    )
 
     # --- Board context ---
     board_context_enabled: bool = Field(
