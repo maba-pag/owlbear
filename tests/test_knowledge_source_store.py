@@ -6,6 +6,8 @@ Pydantic model, and all KnowledgeSourceStore CRUD operations.
 
 from __future__ import annotations
 
+import contextlib
+import re
 import sqlite3
 
 import pytest
@@ -174,16 +176,12 @@ class TestCreate:
         assert got.id == src.id
         assert got.name == src.name
 
-    def test_create_duplicate_name_scope_raises(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_create_duplicate_name_scope_raises(self, store: KnowledgeSourceStore) -> None:
         store.create(_source(name="dup"))
         with pytest.raises(sqlite3.IntegrityError):
             store.create(_source(name="dup"))
 
-    def test_same_name_different_scope_ok(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_same_name_different_scope_ok(self, store: KnowledgeSourceStore) -> None:
         store.create(_source(name="shared", scope="project-a"))
         store.create(_source(name="shared", scope="project-b"))
         assert store.get_by_name("shared", scope="project-a") is not None
@@ -193,23 +191,17 @@ class TestCreate:
 class TestGet:
     """store.get() / get_by_name() lookups."""
 
-    def test_get_returns_none_for_missing(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_get_returns_none_for_missing(self, store: KnowledgeSourceStore) -> None:
         assert store.get("nonexistent") is None
 
-    def test_get_by_name_returns_match(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_get_by_name_returns_match(self, store: KnowledgeSourceStore) -> None:
         src = _source(name="wiki", scope="global")
         store.create(src)
         got = store.get_by_name("wiki", scope="global")
         assert got is not None
         assert got.id == src.id
 
-    def test_get_by_name_returns_none_for_missing(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_get_by_name_returns_none_for_missing(self, store: KnowledgeSourceStore) -> None:
         assert store.get_by_name("nope") is None
 
     def test_get_by_name_scoped(self, store: KnowledgeSourceStore) -> None:
@@ -224,16 +216,12 @@ class TestListAll:
     def test_list_all_empty(self, store: KnowledgeSourceStore) -> None:
         assert store.list_all() == []
 
-    def test_list_all_returns_everything(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_list_all_returns_everything(self, store: KnowledgeSourceStore) -> None:
         store.create(_source(name="a"))
         store.create(_source(name="b"))
         assert len(store.list_all()) == 2
 
-    def test_list_all_filtered_by_scope(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_list_all_filtered_by_scope(self, store: KnowledgeSourceStore) -> None:
         store.create(_source(name="x", scope="alpha"))
         store.create(_source(name="y", scope="beta"))
         result = store.list_all(scope="alpha")
@@ -251,9 +239,7 @@ class TestListEnabled:
         assert len(result) == 1
         assert result[0].name == "on"
 
-    def test_ordered_by_priority_desc(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_ordered_by_priority_desc(self, store: KnowledgeSourceStore) -> None:
         store.create(_source(name="low", priority=1))
         store.create(_source(name="high", priority=10))
         store.create(_source(name="mid", priority=5))
@@ -301,26 +287,20 @@ class TestUpdate:
 class TestDelete:
     """store.delete() removes by id."""
 
-    def test_delete_existing_returns_true(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_delete_existing_returns_true(self, store: KnowledgeSourceStore) -> None:
         src = _source()
         store.create(src)
         assert store.delete(src.id) is True
         assert store.get(src.id) is None
 
-    def test_delete_missing_returns_false(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_delete_missing_returns_false(self, store: KnowledgeSourceStore) -> None:
         assert store.delete("nonexistent") is False
 
 
 class TestJsonRoundTrip:
     """config dict survives store → retrieve cycle."""
 
-    def test_nested_config_round_trips(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_nested_config_round_trips(self, store: KnowledgeSourceStore) -> None:
         cfg = {
             "urls": ["https://a.com", "https://b.com"],
             "depth": 3,
@@ -333,11 +313,273 @@ class TestJsonRoundTrip:
         assert got.config == cfg
         assert got.config["options"]["follow_redirects"] is True  # type: ignore[index]
 
-    def test_empty_config_round_trips(
-        self, store: KnowledgeSourceStore
-    ) -> None:
+    def test_empty_config_round_trips(self, store: KnowledgeSourceStore) -> None:
         src = _source(config={})
         store.create(src)
         got = store.get(src.id)
         assert got is not None
         assert got.config == {}
+
+
+# ===========================================================================
+# _SELECT_COLS column-contract tests  (TDD RED — task #892)
+# ===========================================================================
+
+# Canonical 11-column list; order must stay aligned with _row_to_model().
+_EXPECTED_SELECT_COLS = (
+    "id, name, source_type, config, scope, enabled, priority, "
+    "last_refreshed_at, last_error, created_at, updated_at"
+)
+
+
+def _capture_sql(conn: sqlite3.Connection) -> list[str]:
+    """Install a trace callback on *conn* and return the list it accumulates."""
+    executed: list[str] = []
+    conn.set_trace_callback(executed.append)
+    return executed
+
+
+def _select_stmts_on_ks(executed: list[str]) -> list[str]:
+    """Filter for knowledge_sources SELECT statements and normalise whitespace."""
+    return [
+        re.sub(r"\s+", " ", s.strip())
+        for s in executed
+        if "SELECT" in s.upper() and "knowledge_sources" in s
+    ]
+
+
+class TestFromAC_SelectColsAttribute:
+    """AC3 + AC4: _SELECT_COLS class attribute exists with the canonical column list."""
+
+    def test_attribute_exists_on_store_class(self) -> None:
+        """KnowledgeSourceStore._SELECT_COLS must be defined as a class attribute."""
+        assert hasattr(KnowledgeSourceStore, "_SELECT_COLS")
+
+    def test_attribute_equals_canonical_column_list(self) -> None:
+        """_SELECT_COLS must equal the exact 11-column ordered list required by _row_to_model."""
+        assert KnowledgeSourceStore._SELECT_COLS == _EXPECTED_SELECT_COLS  # type: ignore[attr-defined]
+
+
+class TestFromAC_SelectColsInReadPaths:
+    """AC2 + AC3 + AC4: every read path emits SQL whose column list equals _SELECT_COLS."""
+
+    def test_get_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """get(source_id) SELECT uses the canonical column list."""
+        src = _source(name="sc-get")
+        store.create(src)
+        executed = _capture_sql(conn)
+        store.get(src.id)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get() emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+    def test_get_by_name_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """get_by_name(name, scope) SELECT uses the canonical column list."""
+        src = _source(name="sc-byname")
+        store.create(src)
+        executed = _capture_sql(conn)
+        store.get_by_name(src.name, scope=src.scope)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get_by_name() emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+    def test_list_all_no_scope_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """list_all() (no scope) SELECT uses the canonical column list."""
+        store.create(_source(name="sc-all-unscoped"))
+        executed = _capture_sql(conn)
+        store.list_all()
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_all() emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+    def test_list_all_with_scope_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """list_all(scope=...) SELECT uses the canonical column list."""
+        store.create(_source(name="sc-all-scoped", scope="test-scope"))
+        executed = _capture_sql(conn)
+        store.list_all(scope="test-scope")
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_all(scope=...) emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+    def test_list_enabled_no_scope_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """list_enabled() (no scope) SELECT uses the canonical column list."""
+        store.create(_source(name="sc-enabled-unscoped", enabled=True))
+        executed = _capture_sql(conn)
+        store.list_enabled()
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_enabled() emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+    def test_list_enabled_with_scope_sql_contains_select_cols(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """list_enabled(scope=...) SELECT uses the canonical column list."""
+        store.create(_source(name="sc-enabled-scoped", scope="x-scope", enabled=True))
+        executed = _capture_sql(conn)
+        store.list_enabled(scope="x-scope")
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_enabled(scope=...) emitted no SELECT on knowledge_sources"
+        assert all(
+            KnowledgeSourceStore._SELECT_COLS in s  # type: ignore[attr-defined]
+            for s in stmts
+        )
+
+
+# ---------------------------------------------------------------------------
+# Sentinel used to prove _SELECT_COLS is referenced dynamically, not hardcoded.
+# We patch _SELECT_COLS to "id" (a valid single column) and assert the emitted
+# SQL contains "SELECT id FROM" — which would only be true if the query is built
+# from the class attribute at runtime.  The hardcoded queries all produce
+# "SELECT id, name, ..." so "SELECT id FROM" is absent → test FAILs until the
+# builder refactors to use _SELECT_COLS in the query strings.
+# ---------------------------------------------------------------------------
+_SENTINEL_COLS = "id"
+_SENTINEL_PREFIX = f"SELECT {_SENTINEL_COLS} FROM"
+
+
+class TestFromAC_SelectColsDynamicReuse:
+    """AC4: each read-query path builds its SELECT clause from _SELECT_COLS at runtime.
+
+    These tests monkeypatch _SELECT_COLS to a sentinel value ("id") and assert that
+    the emitted SQL starts with "SELECT id FROM" — proving the query is constructed
+    from the class attribute, not from a hardcoded literal.
+
+    With the current implementation (hardcoded column lists), all six tests FAIL
+    because the SQL contains "SELECT id, name, ..." even after patching.  After the
+    GREEN refactor the tests will pass once queries use _SELECT_COLS dynamically.
+    """
+
+    def test_get_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """get() must emit SQL containing the runtime value of _SELECT_COLS."""
+        src = _source(name="dyn-get")
+        store.create(src)
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.get(src.id)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get() emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"get() SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
+
+    def test_get_by_name_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """get_by_name() must emit SQL containing the runtime value of _SELECT_COLS."""
+        src = _source(name="dyn-byname")
+        store.create(src)
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.get_by_name(src.name, scope=src.scope)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get_by_name() emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"get_by_name() SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
+
+    def test_list_all_no_scope_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """list_all() (no scope) must emit SQL containing the runtime value of _SELECT_COLS."""
+        store.create(_source(name="dyn-all"))
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.list_all()
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_all() emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"list_all() SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
+
+    def test_list_all_with_scope_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """list_all(scope=...) must emit SQL containing the runtime value of _SELECT_COLS."""
+        store.create(_source(name="dyn-all-scoped", scope="dyn-scope"))
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.list_all(scope="dyn-scope")
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_all(scope=...) emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"list_all(scope=...) SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
+
+    def test_list_enabled_no_scope_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """list_enabled() (no scope) must emit SQL containing the runtime value of _SELECT_COLS."""
+        store.create(_source(name="dyn-enabled", enabled=True))
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.list_enabled()
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_enabled() emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"list_enabled() SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
+
+    def test_list_enabled_with_scope_sql_built_from_select_cols(
+        self,
+        store: KnowledgeSourceStore,
+        conn: sqlite3.Connection,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """list_enabled(scope=...) must emit SQL containing the runtime value of _SELECT_COLS."""
+        store.create(_source(name="dyn-enabled-scoped", scope="dyn-x", enabled=True))
+        monkeypatch.setattr(KnowledgeSourceStore, "_SELECT_COLS", _SENTINEL_COLS)
+        executed = _capture_sql(conn)
+        with contextlib.suppress(IndexError):
+            store.list_enabled(scope="dyn-x")
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "list_enabled(scope=...) emitted no SELECT on knowledge_sources"
+        assert any(_SENTINEL_PREFIX in s for s in stmts), (
+            f"list_enabled(scope=...) SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
+        )
