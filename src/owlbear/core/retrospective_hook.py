@@ -2,8 +2,9 @@
 
 Listens on :pyattr:`HookEvent.TASK_COMPLETE`, filters trivial tasks, runs a
 PydanticAI agent for structured retrospective analysis, and ingests findings
-into the knowledge graph.  The heavy work runs fire-and-forget via
-:func:`asyncio.create_task`.
+into the knowledge graph.  When a :class:`~owlbear.core.hook_worker_supervisor.HookWorkerSupervisor`
+is injected the heavy work is handed off through it; otherwise it falls back
+to a bare :func:`asyncio.create_task` call.
 """
 
 from __future__ import annotations
@@ -161,8 +162,10 @@ class RetrospectiveHook:
     async def __call__(self, data: TaskCompleteData) -> None:
         """Handle a ``TASK_COMPLETE`` event.
 
-        Spawns the retrospective analysis as a fire-and-forget background
-        task.  Non-success outcomes are silently skipped.
+        Schedules the retrospective analysis as a background task via the
+        injected :class:`~owlbear.core.hook_worker_supervisor.HookWorkerSupervisor`
+        when available, or falls back to a bare :func:`asyncio.create_task`.
+        Non-success outcomes and trivial low-priority tasks are silently skipped.
         """
         outcome = data.get("outcome")
         if outcome != "success":
