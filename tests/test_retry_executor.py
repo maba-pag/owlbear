@@ -158,3 +158,43 @@ class TestFromAC_RetryExecutorIntegration:
         await executor({"task_id": "1", "outcome": "failure", "error": "second error"})
 
         assert state.retries["1"].attempt == 1
+
+    @pytest.mark.asyncio
+    async def test_retry_executor_daemon_order_does_not_double_schedule(self) -> None:
+        """Daemon fires hook first (no error field), then calls schedule_task_retry directly.
+
+        In the actual daemon reconcile path the hook emission precedes the direct
+        schedule_task_retry call.  Because the hook executor runs without an error
+        field it seeds RetryEntry(attempt=1), and the subsequent direct call must
+        NOT increment the attempt counter to 2 — the task has only failed once.
+        This is the *reverse* ordering from AC7 and exposes the double-scheduling gap
+        identified in the reviewer's CRITICAL finding.
+        """
+        from owlbear.daemon import (
+            OrchestratorState,
+            make_retry_executor,
+            schedule_task_retry,
+        )
+
+        state = OrchestratorState()
+        kanban = AsyncMock()
+        executor = make_retry_executor(state=state, kanban=kanban)
+
+        # Step 1: hook fires first — exactly what the daemon emits (task_id + outcome, no error)
+        await executor({"task_id": "T1", "outcome": "failure"})
+
+        # Step 2: daemon's own direct schedule_task_retry fires next with the real exception
+        await schedule_task_retry(
+            state=state,
+            kanban=kanban,
+            task_id="T1",
+            error=RuntimeError("the actual error"),
+            max_attempts=5,
+            backoff_base=10.0,
+            backoff_max=320.0,
+        )
+
+        # After the daemon's dual-fire pattern, attempt should still be 1 (first failure),
+        # not 2 (double-counted).  The real error text must also be preserved.
+        assert state.retries["T1"].attempt == 1
+        assert "actual error" in state.retries["T1"].last_error
