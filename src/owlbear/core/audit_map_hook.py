@@ -121,7 +121,8 @@ class AuditMapAdvisoryHook:
         scratch_dir = self._workspace_root / "docs" / "scratch"
         scratch_dir.mkdir(parents=True, exist_ok=True)
 
-        advisory_path = scratch_dir / f"{task_id}-audit-map.md"
+        safe_task_id = self._safe_task_id(task_id)
+        advisory_path = scratch_dir / f"{safe_task_id}-audit-map.md"
         advisory_path.write_text(self._build_advisory(task_id), encoding="utf-8")
 
         if self._channel is not None:
@@ -139,3 +140,10 @@ class AuditMapAdvisoryHook:
             "- No kanban mutations were performed.\n"
             "- No source files were modified.\n"
         )
+
+    @staticmethod
+    def _safe_task_id(task_id: str) -> str:
+        """Convert task IDs into a single safe filename segment."""
+        leaf = task_id.replace("\\", "/").rsplit("/", maxsplit=1)[-1]
+        safe = "".join(ch for ch in leaf if ch.isalnum() or ch in {"-", "_"})
+        return safe or "task"
