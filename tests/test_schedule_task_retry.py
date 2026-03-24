@@ -440,6 +440,36 @@ class TestFromAC_ScheduleTaskRetry_BudgetExceeded:
         block_str = call_args.kwargs.get("block", "")
         assert "budget" in block_str.lower() or "exceeded" in block_str.lower()
 
+    @pytest.mark.asyncio
+    async def test_budget_exceeded_clears_existing_retry_entry(self) -> None:
+        """AC2: When a retry entry already exists and BudgetExceededError fires,
+        the pre-existing entry must be removed so poll_tick cannot re-dispatch
+        a permanently blocked task."""
+        from owlbear.core.errors import BudgetExceededError
+        from owlbear.daemon import OrchestratorState, schedule_task_retry
+
+        state = OrchestratorState()
+        state.claimed.add("b5")
+        # Seed a pre-existing retry entry (simulates a task that failed once,
+        # then failed again with BudgetExceededError on the retry attempt).
+        state.retries["b5"] = _make_retry_entry("b5", attempt=1)  # type: ignore[assignment]
+        mock_kanban = AsyncMock()
+        mock_kanban.kanban_edit = AsyncMock(return_value="ok")
+
+        await schedule_task_retry(
+            state=state,
+            kanban=mock_kanban,
+            task_id="b5",
+            error=BudgetExceededError("$10 exceeded on retry"),
+            max_attempts=5,
+            backoff_base=10.0,
+            backoff_max=320.0,
+        )
+
+        # The stale retry entry must be cleared — otherwise poll_tick will
+        # re-dispatch a permanently blocked task.
+        assert "b5" not in state.retries
+
 
 # ---------------------------------------------------------------------------
 # AC5: Idempotency
