@@ -2249,7 +2249,7 @@ class TestRetryDispatchUsesWip:
         captured_prompts: list[str] = []
         mock_builder = AsyncMock()
 
-        async def capture_run(prompt: str) -> str:
+        async def capture_run(prompt: str, **_kwargs: object) -> str:
             captured_prompts.append(prompt)
             return "done"
 
