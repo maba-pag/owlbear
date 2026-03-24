@@ -120,7 +120,13 @@ class SubagentCompleteData(TypedDict):
 
 
 class TaskCompleteData(TypedDict):
-    """Payload for :attr:`HookEvent.TASK_COMPLETE`."""
+    """Payload for :attr:`HookEvent.TASK_COMPLETE`.
+
+    Valid ``outcome`` values:
+    - ``"success"``
+    - ``"failure"``
+    - ``"budget_exceeded"``
+    """
 
     task_id: str
     outcome: str
