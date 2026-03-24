@@ -107,6 +107,9 @@ class AskUserToolset(FunctionToolset):
         When *options* is provided, formats a numbered list and validates
         the response (by index or case-insensitive text match).  Invalid
         input triggers a re-ask up to ``max_retries`` times.
+
+        Emits :attr:`~owlbear.core.hooks.HookEvent.QUESTION_PENDING` via the
+        hook registry (if configured) before awaiting the user's response.
         """
         prompt = self._format_prompt(question, options)
         await self._channel.send(prompt)

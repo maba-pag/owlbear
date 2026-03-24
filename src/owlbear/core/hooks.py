@@ -136,6 +136,7 @@ QuestionPendingData = TypedDict(  # noqa: UP013
         "tool_name": NotRequired[str],
     },
 )
+QuestionPendingData.__doc__ = "Payload for :attr:`HookEvent.QUESTION_PENDING`."  # class form not possible; see comment above
 
 
 class DaemonStartupData(TypedDict):

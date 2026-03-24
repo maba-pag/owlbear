@@ -72,7 +72,8 @@ class ApprovalGateToolset(WrapperToolset):  # type: ignore[type-arg]
         Flow:
         1. If the tool is not matched by any policy rule, proceed directly.
         2. If the tool is pre-granted in the session, proceed directly.
-        3. Otherwise, send an approval prompt via the channel.
+        3. Otherwise, send an approval prompt via the channel and emit
+           :attr:`~owlbear.core.hooks.HookEvent.QUESTION_PENDING`.
         4. Based on the user's response:
            - ``yes`` / ``y``: proceed with the wrapped tool call.
            - ``no`` / ``n``: return a denial message.
