@@ -12,6 +12,11 @@ import logging
 import sys
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+try:
+    from slack_sdk.web.async_client import AsyncWebClient
+except ImportError:  # pragma: no cover
+    AsyncWebClient = None  # type: ignore[assignment]
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -67,6 +72,39 @@ class WinSoundBackend:
             winsound.MessageBeep(winsound.MB_ICONINFORMATION)
         except Exception:  # noqa: BLE001
             logger.warning("winsound.MessageBeep failed", exc_info=True)
+            return False
+        return True
+
+
+class SlackNotificationBackend:
+    """Sends lifecycle notifications to Slack via ``chat_postMessage``."""
+
+    def __init__(self, bot_token: str | None, channel_id: str | None) -> None:
+        self._bot_token = bot_token
+        self._channel_id = channel_id
+
+    @property
+    def name(self) -> str:
+        """Backend identifier."""
+        return "slack"
+
+    async def notify(self, message: str, event: HookEvent | None) -> bool:
+        """Post a formatted notification message to the configured Slack channel."""
+        if self._bot_token is None or self._channel_id is None:
+            return False
+        if AsyncWebClient is None:
+            return False
+
+        event_label = event.value if event is not None else "notification"
+
+        try:
+            client = AsyncWebClient(token=self._bot_token)
+            await client.chat_postMessage(
+                channel=self._channel_id,
+                text=f"*{event_label}*: {message}",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Slack chat_postMessage failed", exc_info=True)
             return False
         return True
 
