@@ -96,7 +96,7 @@ def _patch_decisions_dir(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsRegistration:  # noqa: N801
+class TestFromAC_DecisionsRegistration:
     """AC: Registered in cli.py via app.add_typer(decisions_app)."""
 
     def test_decisions_in_main_help(self) -> None:
@@ -116,7 +116,7 @@ class TestFromAC_DecisionsRegistration:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsConstants:  # noqa: N801
+class TestFromAC_DecisionsConstants:
     """AC: Module constants DECISIONS_DIR, PENDING, RESOLVED (relative to cwd)."""
 
     def test_decisions_dir_is_docs_decisions(self) -> None:
@@ -140,7 +140,7 @@ class TestFromAC_DecisionsConstants:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ParseDecisionFile:  # noqa: N801
+class TestFromAC_ParseDecisionFile:
     """AC: _parse_decision_file returns (frontmatter_dict, body_str) or raises ValueError."""
 
     def test_parse_valid_file(self, tmp_path: Path) -> None:
@@ -195,13 +195,26 @@ class TestFromAC_ParseDecisionFile:  # noqa: N801
         with pytest.raises(ValueError, match=r"[Ff]rontmatter|[Mm]alformed|[Yy]AML|yaml"):
             _parse_decision_file(path)
 
+    def test_parse_raises_value_error_not_type_error_on_yaml_list(self, tmp_path: Path) -> None:
+        """AC: raises ValueError (not TypeError) when frontmatter is a YAML list.
+
+        A YAML list is malformed frontmatter — the AC requires ValueError for all
+        malformed-frontmatter cases, not TypeError.
+        """
+        from bearclaw.commands.decisions import _parse_decision_file
+
+        path = tmp_path / "list_yaml.md"
+        path.write_text("---\n- item1\n- item2\n---\n\nBody.", encoding="utf-8")
+        with pytest.raises(ValueError, match=r"[Mm]alformed|mapping"):
+            _parse_decision_file(path)
+
 
 # ---------------------------------------------------------------------------
 # decisions list
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsList:  # noqa: N801
+class TestFromAC_DecisionsList:
     """AC: 'bearclaw decisions list' scans pending/ for *.md, outputs Rich Table."""
 
     def test_list_no_pending_shows_message(self, tmp_path: Path) -> None:
@@ -282,7 +295,7 @@ class TestFromAC_DecisionsList:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsShow:  # noqa: N801
+class TestFromAC_DecisionsShow:
     """AC: 'bearclaw decisions show {task_id}' displays full content via rich.markdown."""
 
     def test_show_found_displays_content(self, tmp_path: Path) -> None:
@@ -335,7 +348,7 @@ class TestFromAC_DecisionsShow:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsResolve:  # noqa: N801
+class TestFromAC_DecisionsResolve:
     """AC: 'bearclaw decisions resolve {task_id}' interactive flow."""
 
     def test_resolve_full_flow(self, tmp_path: Path) -> None:
@@ -350,9 +363,7 @@ class TestFromAC_DecisionsResolve:  # noqa: N801
 
         # Input: choose "A", notes "Looks good", confirm "y"
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
-            result = runner.invoke(
-                app, ["decisions", "resolve", "800"], input="A\nLooks good\ny\n"
-            )
+            result = runner.invoke(app, ["decisions", "resolve", "800"], input="A\nLooks good\ny\n")
         assert result.exit_code == 0
         # File moved from pending to resolved
         assert not (pending / fname).exists()
@@ -369,9 +380,7 @@ class TestFromAC_DecisionsResolve:  # noqa: N801
         fname = path.name
 
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
-            runner.invoke(
-                app, ["decisions", "resolve", "810"], input="B\nCustom is better\ny\n"
-            )
+            runner.invoke(app, ["decisions", "resolve", "810"], input="B\nCustom is better\ny\n")
         resolved_content = (resolved / fname).read_text(encoding="utf-8")
         assert "## Resolution" in resolved_content
         assert "Custom is better" in resolved_content
@@ -411,9 +420,7 @@ class TestFromAC_DecisionsResolve:  # noqa: N801
         fname = path.name
 
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
-            runner.invoke(
-                app, ["decisions", "resolve", "830"], input="A\nnotes\nn\n"
-            )
+            runner.invoke(app, ["decisions", "resolve", "830"], input="A\nnotes\nn\n")
         # File should still be in pending
         assert (pending / fname).exists()
         assert not (resolved / fname).exists()
@@ -441,7 +448,9 @@ class TestFromAC_DecisionsResolve:  # noqa: N801
             - Already have it
         """)
         _make_decision_file(
-            pending, task_id="840", options=options_text,
+            pending,
+            task_id="840",
+            options=options_text,
         )
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
             result = runner.invoke(
@@ -472,7 +481,7 @@ class TestFromAC_DecisionsResolve:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DecisionsErrors:  # noqa: N801
+class TestFromAC_DecisionsErrors:
     """AC: Graceful error messages via typer.echo + typer.Exit(code=1)."""
 
     def test_list_missing_pending_dir_shows_error(self, tmp_path: Path) -> None:
@@ -485,6 +494,17 @@ class TestFromAC_DecisionsErrors:  # noqa: N801
         assert result.exit_code in (0, 1)
         # Should NOT have a Python traceback
         assert "Traceback" not in result.output
+
+    def test_list_empty_pending_exits_with_code_1(self, tmp_path: Path) -> None:
+        """AC: typer.Exit(code=1) is required when pending/ exists but has no decisions.
+
+        The AC mandates typer.Exit(code=1) for the 'no pending decisions' error
+        path. Returning normally (exit code 0) violates the contract.
+        """
+        with _patch_decisions_dir(tmp_path):
+            result = runner.invoke(app, ["decisions", "list"])
+        assert result.exit_code == 1
+        assert "no pending" in result.output.lower()
 
     def test_show_malformed_file_shows_error(self, tmp_path: Path) -> None:
         """Malformed frontmatter shows graceful error, not traceback."""
@@ -507,8 +527,32 @@ class TestFromAC_DecisionsErrors:  # noqa: N801
         _make_decision_file(pending, task_id="860")
         # Don't create resolved/ dir — should be auto-created
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
-            result = runner.invoke(
-                app, ["decisions", "resolve", "860"], input="A\nnotes\ny\n"
-            )
+            result = runner.invoke(app, ["decisions", "resolve", "860"], input="A\nnotes\ny\n")
         assert result.exit_code == 0
         assert (decisions_dir / "resolved" / "860-test-decision.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# _extract_options helper
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExtractOptions:
+    """AC: decisions resolve extracts options from ## Options subsection headings only."""
+
+    def test_extract_options_does_not_include_headings_after_next_h2(self) -> None:
+        """Headings in sections after ## Options are not extracted as options.
+
+        _extract_options must stop at the next ## heading. Options that appear
+        under a different H2 section (e.g. ## Recommendation) are not options.
+        """
+        from bearclaw.commands.decisions import _extract_options
+
+        body = (
+            "## Options\n\n"
+            "### A: First option\n\n"
+            "## Other Section\n\n"
+            "### B: Should not be extracted\n"
+        )
+        options = _extract_options(body)
+        assert options == ["A: First option"]
