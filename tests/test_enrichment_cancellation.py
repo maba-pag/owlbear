@@ -304,19 +304,16 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
     async def test_schedule_graph_enrichment_is_noop_after_shutdown(
         self,
         enricher: GraphEnricher,
-        mock_graph_builder: MagicMock,
     ) -> None:
         """schedule_graph_enrichment() does not create tasks after shutdown()."""
         await enricher.shutdown()  # AttributeError on current HEAD
 
-        call_count_before = mock_graph_builder.build.call_count
         enricher.schedule_graph_enrichment("doc2", [SAMPLE_EXTRACTION], "global")
-        await asyncio.sleep(0.05)
-
-        assert mock_graph_builder.build.call_count == call_count_before, (
-            "schedule_graph_enrichment() must not invoke builder after shutdown"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "schedule_graph_enrichment() must not create any task after shutdown"
         )
-        assert len(enricher._background_tasks) == 0
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_schedule_inter_doc_enrichment_is_noop_after_shutdown(
@@ -341,14 +338,12 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
 
         await enricher.shutdown()  # AttributeError on current HEAD
 
-        call_count_before = mock_inter_doc_builder.build.call_count
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
-        await asyncio.sleep(0.05)
-
-        assert mock_inter_doc_builder.build.call_count == call_count_before, (
-            "schedule_inter_doc_enrichment() must not invoke builder after shutdown"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "schedule_inter_doc_enrichment() must not create any task after shutdown"
         )
-        assert len(enricher._background_tasks) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -362,29 +357,23 @@ class TestFromAC_GraphEnricherCancelSignal:
     All tests fail on current HEAD: schedule_* do not accept a cancel parameter.
     """
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_schedule_graph_enrichment_is_noop_when_cancel_set(
+    def test_schedule_graph_enrichment_is_noop_when_cancel_set(
         self,
         enricher: GraphEnricher,
-        mock_graph_builder: MagicMock,
     ) -> None:
         """schedule_graph_enrichment() creates no task when cancel.is_set() is True."""
         cancel = MagicMock()
         cancel.is_set.return_value = True
 
-        call_count_before = mock_graph_builder.build.call_count
-
         # TypeError on current HEAD: schedule_graph_enrichment() has no cancel param
         enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
-        await asyncio.sleep(0.05)
-
-        assert mock_graph_builder.build.call_count == call_count_before, (
-            "schedule_graph_enrichment() must not invoke builder when cancel.is_set() is True"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "schedule_graph_enrichment() must not create any task when cancel.is_set() is True"
         )
-        assert len(enricher._background_tasks) == 0
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_schedule_inter_doc_enrichment_is_noop_when_cancel_set(
+    def test_schedule_inter_doc_enrichment_is_noop_when_cancel_set(
         self,
         conn: sqlite3.Connection,
         mock_graph_store: MagicMock,
@@ -407,16 +396,13 @@ class TestFromAC_GraphEnricherCancelSignal:
         cancel = MagicMock()
         cancel.is_set.return_value = True
 
-        call_count_before = mock_inter_doc_builder.build.call_count
-
         # TypeError on current HEAD: schedule_inter_doc_enrichment() has no cancel param
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
-        await asyncio.sleep(0.05)
-
-        assert mock_inter_doc_builder.build.call_count == call_count_before, (
-            "schedule_inter_doc_enrichment() must not invoke builder when cancel.is_set() is True"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "schedule_inter_doc_enrichment() must not create any task when cancel.is_set() is True"
         )
-        assert len(enricher._background_tasks) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -442,27 +428,21 @@ class TestFromAC_GraphEnricherShutdownFlag:
         assert hasattr(enricher, "_shutdown"), "GraphEnricher must have _shutdown attribute"
         assert enricher._shutdown is False, "_shutdown must initialize to False"
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_shutdown_flag_set_directly_prevents_schedule_graph_enrichment(
+    def test_shutdown_flag_set_directly_prevents_schedule_graph_enrichment(
         self,
         enricher: GraphEnricher,
-        mock_graph_builder: MagicMock,
     ) -> None:
         """Setting _shutdown=True directly prevents schedule_graph_enrichment creating tasks."""
         enricher._shutdown = True  # set without calling shutdown()
 
-        call_count_before = mock_graph_builder.build.call_count
-
         enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
-        await asyncio.sleep(0.05)
-
-        assert mock_graph_builder.build.call_count == call_count_before, (
-            "_shutdown=True must block schedule_graph_enrichment"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "_shutdown=True must block task creation in schedule_graph_enrichment"
         )
-        assert len(enricher._background_tasks) == 0
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_shutdown_flag_set_directly_prevents_schedule_inter_doc_enrichment(
+    def test_shutdown_flag_set_directly_prevents_schedule_inter_doc_enrichment(
         self,
         conn: sqlite3.Connection,
         mock_graph_store: MagicMock,
@@ -484,15 +464,12 @@ class TestFromAC_GraphEnricherShutdownFlag:
 
         enricher._shutdown = True  # set without calling shutdown()
 
-        call_count_before = mock_inter_doc_builder.build.call_count
-
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
-        await asyncio.sleep(0.05)
-
-        assert mock_inter_doc_builder.build.call_count == call_count_before, (
-            "_shutdown=True must block schedule_inter_doc_enrichment"
+        # Synchronous check: done callbacks require an event loop tick to fire;
+        # a created task would appear in _background_tasks before the loop runs.
+        assert len(enricher._background_tasks) == 0, (
+            "_shutdown=True must block task creation in schedule_inter_doc_enrichment"
         )
-        assert len(enricher._background_tasks) == 0
 
 
 # ---------------------------------------------------------------------------
