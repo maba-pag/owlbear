@@ -617,9 +617,7 @@ class TestFromAC_DecisionsResolveAtomicity:
             "pending file must not contain ## Resolution section when move fails"
         )
 
-    def test_resolve_consistent_state_after_post_move_write_failure(
-        self, tmp_path: Path
-    ) -> None:
+    def test_resolve_consistent_state_after_post_move_write_failure(self, tmp_path: Path) -> None:
         """After shutil.move succeeds but write_text raises, resolved file must have
         correct content or not exist at all.
 
@@ -663,3 +661,54 @@ class TestFromAC_DecisionsResolveAtomicity:
             assert "## Resolution" in content, (
                 "resolved file must contain ## Resolution section after post-move write failure"
             )
+
+    def test_resolve_pending_file_original_content_after_partial_write(
+        self, tmp_path: Path
+    ) -> None:
+        """Pending file must contain its ORIGINAL content after a partial post-move write.
+
+        Current implementation: shutil.move(pending → resolved) THEN write_text(resolved).
+        If write_text truncates the file and writes some bytes before raising, the rollback
+        moves that partially-overwritten file back to pending — leaving pending with corrupted
+        content, not the original.
+
+        The contract requires that pending is either fully intact (original content) or gone.
+        A partially-overwritten pending file is a data-safety violation.
+
+        A correct implementation writes to a temp file first (before any move) so the pending
+        file is never mutated until the write is guaranteed complete.
+        """
+        decisions_dir = tmp_path / "decisions"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        pending = decisions_dir / "pending"
+        resolved_dir = decisions_dir / "resolved"
+        resolved_dir.mkdir(exist_ok=True)
+        path = _make_decision_file(pending, task_id="890")
+        fname = path.name
+        original_content = path.read_text(encoding="utf-8")
+
+        _original_write_text = Path.write_text
+
+        def _partial_write(self: Path, data: str, **kwargs: object) -> None:
+            if "resolved" in str(self.parent):
+                # Simulate: file is opened (truncated), partial bytes written, then fails.
+                with self.open("w", encoding="utf-8") as f:
+                    f.write(data[:20])
+                msg = "simulated partial write failure"
+                raise OSError(msg)
+            _original_write_text(self, data, **kwargs)  # type: ignore[arg-type]
+
+        with (
+            patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir),
+            patch.object(Path, "write_text", _partial_write),
+        ):
+            runner.invoke(app, ["decisions", "resolve", "890"], input="A\nnotes\ny\n")
+
+        assert (pending / fname).exists(), (
+            "pending file must be restored after partial write failure"
+        )
+        pending_content = (pending / fname).read_text(encoding="utf-8")
+        assert pending_content == original_content, (
+            "pending file must contain original content after partial write failure, "
+            "not partially-overwritten content from the failed write"
+        )
