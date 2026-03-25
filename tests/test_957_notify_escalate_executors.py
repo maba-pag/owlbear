@@ -138,6 +138,34 @@ class TestFromAC_987_NotifyExecutorFactory:
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, "Expected at least one WARNING when a backend raises"
 
+    @pytest.mark.asyncio
+    async def test_backend_exception_warning_names_failing_backend(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC4 stronger: per-backend exception warning identifies the backend by name.
+
+        This distinguishes the per-backend warning (which names the backend) from
+        the generic all-backends-failed warning.  Removing the backend-specific
+        warning path would leave no record referencing the backend name.
+        """
+        backend = _make_backend(returns=RuntimeError("fail"))
+        backend.name = "test-backend-xyz"
+
+        executor = _make_notify_executor([backend])
+        with caplog.at_level(logging.WARNING):
+            await executor({})
+
+        named_warnings = [
+            r
+            for r in caplog.records
+            if r.levelno >= logging.WARNING and "test-backend-xyz" in r.getMessage()
+        ]
+        all_warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+        assert named_warnings, (
+            "Backend-failure warning must identify the specific backend name "
+            f"'test-backend-xyz'. Warnings found: {all_warnings}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2 + AC5 — _make_escalate_executor factory
@@ -331,3 +359,39 @@ class TestFromAC_987_BuildHooksExecutorWiring:
             f"(no real retry executor should be wired), "
             f"got: {getattr(retry_fn, '__qualname__', 'unknown')}"
         )
+
+    @pytest.mark.asyncio
+    async def test_wired_notify_executor_invokes_backend(self) -> None:
+        """AC6 behavioral: the wired notify executor from build_hooks() actually
+        calls a notification backend, proving the assembly wires a working
+        factory output and not a noop-equivalent callable.
+        """
+        settings = _settings_with(["notify"])
+        mock_backend = _make_backend(returns=True)
+
+        with (
+            patch("owlbear.bootstrap.hooks.ConsoleBellBackend", return_value=mock_backend),
+            patch("owlbear.bootstrap.hooks.WinSoundBackend", return_value=MagicMock()),
+        ):
+            hooks_obj, _ = build_hooks(settings)
+            notify_executor = hooks_obj.reaction_executors["notify"]
+
+        await notify_executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        mock_backend.notify.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_wired_escalate_executor_calls_channel(self) -> None:
+        """AC6 behavioral: the wired escalate executor from build_hooks() actually
+        calls channel.send(), proving the assembly wires a working factory output
+        and not a noop-equivalent callable.
+        """
+        settings = _settings_with(["escalate"])
+        mock_channel = AsyncMock()
+
+        hooks_obj, _ = build_hooks(settings, channel=mock_channel)
+        escalate_executor = hooks_obj.reaction_executors["escalate"]
+
+        await escalate_executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        mock_channel.send.assert_called_once()
