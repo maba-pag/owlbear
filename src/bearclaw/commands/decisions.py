@@ -218,15 +218,22 @@ def decisions_resolve(
 
     resolved_dir = DECISIONS_DIR / "resolved"
     resolved_path = resolved_dir / path.name
+    staged_path = resolved_dir / f".{path.name}.resolved.tmp"
+    moved = False
     try:
         resolved_dir.mkdir(parents=True, exist_ok=True)
+        # Stage final content before moving the source file so partial writes
+        # can't corrupt the pending copy during rollback.
+        staged_path.write_text(updated_text, encoding="utf-8")
         shutil.move(str(path), str(resolved_path))
-        resolved_path.write_text(updated_text, encoding="utf-8")
+        moved = True
+        staged_path.replace(resolved_path)
     except OSError as exc:
-        # If write fails after move, rollback so we don't strand pending content in resolved/.
-        if resolved_path.exists() and not path.exists():
+        if moved and resolved_path.exists() and not path.exists():
             with suppress(OSError):
                 shutil.move(str(resolved_path), str(path))
+        with suppress(OSError):
+            staged_path.unlink()
         _cli_error(f"Failed to resolve decision '{task_id}': {exc}")
 
     typer.echo(f"Decision '{task_id}' resolved and moved to resolved/.")
