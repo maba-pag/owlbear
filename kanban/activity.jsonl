@@ -8813,3 +8813,500 @@
 {"timestamp":"2026-03-25T01:40:01.0135543+01:00","action":"move","task_id":936,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-25T01:40:05.451112+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
 {"timestamp":"2026-03-25T01:40:05.4572207+01:00","action":"release","task_id":936,"detail":"auditor"}
+{"timestamp":"2026-03-25T01:40:34.8361393+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:41:24.6277971+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:41:24.6372953+01:00","action":"claim","task_id":996,"detail":"builder"}
+{"timestamp":"2026-03-25T01:41:30.0514641+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:42:13.2925268+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:42:13.3001078+01:00","action":"claim","task_id":961,"detail":"reviewer-961"}
+{"timestamp":"2026-03-25T01:43:34.2619055+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:43:34.2672111+01:00","action":"release","task_id":939,"detail":"researcher"}
+{"timestamp":"2026-03-25T01:46:25.4013524+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:46:28.6487906+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:46:28.6546043+01:00","action":"release","task_id":996,"detail":"builder"}
+{"timestamp":"2026-03-25T01:48:42.5978667+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:49:07.3769217+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:49:07.3827942+01:00","action":"release","task_id":961,"detail":"reviewer-961"}
+{"timestamp":"2026-03-25T01:52:51.0900083+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:52:51.0948459+01:00","action":"claim","task_id":939,"detail":"architect-939"}
+{"timestamp":"2026-03-25T01:52:55.4419137+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:53:12.1830789+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:53:12.1899786+01:00","action":"claim","task_id":961,"detail":"writer-961"}
+{"timestamp":"2026-03-25T01:53:25.7419145+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:53:25.7455265+01:00","action":"claim","task_id":956,"detail":"builder-956"}
+{"timestamp":"2026-03-25T01:53:41.6394118+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:53:41.6457036+01:00","action":"release","task_id":956,"detail":"builder-956"}
+{"timestamp":"2026-03-25T01:55:48.426605+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:55:52.5580866+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:55:52.5624329+01:00","action":"release","task_id":939,"detail":"architect-939"}
+{"timestamp":"2026-03-25T01:58:48.3759139+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:58:53.2470541+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:58:53.2550453+01:00","action":"release","task_id":961,"detail":"writer-961"}
+{"timestamp":"2026-03-25T01:59:21.0901096+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:59:21.0964134+01:00","action":"claim","task_id":996,"detail":"reviewer-996"}
+{"timestamp":"2026-03-25T01:59:21.8577515+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:59:21.8635165+01:00","action":"release","task_id":996,"detail":"reviewer-996"}
+{"timestamp":"2026-03-25T02:02:35.3364187+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:02:35.3437663+01:00","action":"claim","task_id":996,"detail":"writer-996"}
+{"timestamp":"2026-03-25T02:02:39.0335998+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T02:02:39.0405246+01:00","action":"claim","task_id":961,"detail":"auditor-961"}
+{"timestamp":"2026-03-25T02:05:23.893199+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:05:35.0073054+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:05:35.0148061+01:00","action":"release","task_id":996,"detail":"writer-996"}
+{"timestamp":"2026-03-25T02:11:34.8798598+01:00","action":"move","task_id":961,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T02:11:39.332782+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T02:11:39.3380724+01:00","action":"release","task_id":961,"detail":"auditor-961"}
+{"timestamp":"2026-03-25T02:11:58.5599904+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T02:12:19.963195+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T02:13:10.1025379+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:13:10.1089523+01:00","action":"claim","task_id":927,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:13:29.4309573+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:13:29.437224+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:13:40.5551558+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:13:45.2421174+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:13:45.2500889+01:00","action":"release","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:15:49.6978376+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:15:53.9642085+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:15:53.9707805+01:00","action":"release","task_id":927,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:16:45.2264865+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:16:45.2327433+01:00","action":"claim","task_id":939,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:18:24.4625752+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:18:28.7924035+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:18:28.7984859+01:00","action":"release","task_id":939,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:21:20.8773116+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:21:20.8825785+01:00","action":"claim","task_id":996,"detail":"auditor"}
+{"timestamp":"2026-03-25T02:33:06.3865028+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:33:11.4137789+01:00","action":"move","task_id":996,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T02:33:15.7249192+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:33:15.7308605+01:00","action":"release","task_id":996,"detail":"auditor"}
+{"timestamp":"2026-03-25T02:33:34.4861351+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T02:34:40.8898838+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:34:40.8962495+01:00","action":"claim","task_id":927,"detail":"reviewer"}
+{"timestamp":"2026-03-25T02:35:00.3548814+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:35:00.360137+01:00","action":"claim","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-25T02:35:17.9345886+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:35:38.7277528+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:39:44.1439108+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:39:44.1497522+01:00","action":"claim","task_id":992,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:40:09.2102747+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:40:13.1013237+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:40:16.1859492+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:40:16.1917831+01:00","action":"release","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-25T02:41:42.2529131+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:41:42.2586325+01:00","action":"claim","task_id":939,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:42:20.8400102+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:42:20.8492099+01:00","action":"claim","task_id":945,"detail":"builder"}
+{"timestamp":"2026-03-25T02:42:25.402029+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:42:25.408351+01:00","action":"claim","task_id":975,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:42:30.8780766+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:44:56.939535+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:45:16.7425836+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:45:19.4958808+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:45:21.5361058+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:45:21.5424215+01:00","action":"release","task_id":975,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:45:22.549614+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:45:22.556428+01:00","action":"release","task_id":992,"detail":"test-writer"}
+{"timestamp":"2026-03-25T02:45:23.3509703+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:45:23.3570774+01:00","action":"release","task_id":927,"detail":"reviewer"}
+{"timestamp":"2026-03-25T02:45:26.7024378+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:46:05.8297371+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:47:20.006353+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:47:25.4163489+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T02:47:25.4228565+01:00","action":"release","task_id":939,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:47:27.6443427+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:47:27.649672+01:00","action":"release","task_id":945,"detail":"builder"}
+{"timestamp":"2026-03-25T02:48:58.0241869+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:48:58.0315084+01:00","action":"claim","task_id":975,"detail":"reviewer-copilot"}
+{"timestamp":"2026-03-25T02:49:01.6017809+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:49:01.6091672+01:00","action":"claim","task_id":992,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:49:15.2279299+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T02:49:15.2372403+01:00","action":"claim","task_id":938,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:49:16.3773785+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:49:16.3839768+01:00","action":"claim","task_id":946,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:49:30.3799772+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:49:30.3867953+01:00","action":"claim","task_id":927,"detail":"writer-copilot"}
+{"timestamp":"2026-03-25T02:50:03.1180125+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T02:50:03.1243162+01:00","action":"claim","task_id":870,"detail":"builder"}
+{"timestamp":"2026-03-25T02:50:53.1158558+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T02:50:57.3392623+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:51:01.0910829+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T02:51:01.0968199+01:00","action":"release","task_id":938,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:51:17.9338509+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:51:27.2184314+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T02:51:27.224181+01:00","action":"release","task_id":927,"detail":"writer-copilot"}
+{"timestamp":"2026-03-25T02:51:33.2486929+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:51:33.2536402+01:00","action":"claim","task_id":956,"detail":"test-writer-copilot"}
+{"timestamp":"2026-03-25T02:51:37.6938141+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T02:51:37.7023037+01:00","action":"release","task_id":956,"detail":"test-writer-copilot"}
+{"timestamp":"2026-03-25T02:51:48.192595+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:51:48.1984025+01:00","action":"release","task_id":946,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:52:18.5614507+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:52:19.3699999+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T02:54:07.4914871+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T02:54:14.1407131+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:54:31.6783424+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T02:54:31.68475+01:00","action":"release","task_id":992,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:54:32.0936137+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T02:54:32.0999315+01:00","action":"release","task_id":870,"detail":"builder"}
+{"timestamp":"2026-03-25T02:55:20.294925+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T02:55:20.300766+01:00","action":"claim","task_id":863,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:55:24.8063414+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T02:55:24.8123108+01:00","action":"claim","task_id":844,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T02:55:24.9414253+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T02:55:25.9950995+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T02:55:26.0018966+01:00","action":"claim","task_id":809,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T03:00:38.574547+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T03:00:39.7914715+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T03:00:39.7995597+01:00","action":"release","task_id":975,"detail":"reviewer-copilot"}
+{"timestamp":"2026-03-25T03:03:50.8280127+01:00","action":"edit","task_id":976,"detail":"Council system — minimal Protocol C for architecture decisions"}
+{"timestamp":"2026-03-25T03:03:50.8400075+01:00","action":"claim","task_id":976,"detail":"architect"}
+{"timestamp":"2026-03-25T03:04:15.7874745+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T03:04:15.7968995+01:00","action":"claim","task_id":927,"detail":"auditor"}
+{"timestamp":"2026-03-25T03:04:24.4514746+01:00","action":"edit","task_id":976,"detail":"Council system — minimal Protocol C for architecture decisions"}
+{"timestamp":"2026-03-25T03:04:29.7632218+01:00","action":"edit","task_id":976,"detail":"Council system — minimal Protocol C for architecture decisions"}
+{"timestamp":"2026-03-25T03:04:35.1163675+01:00","action":"edit","task_id":976,"detail":"Council system — minimal Protocol C for architecture decisions"}
+{"timestamp":"2026-03-25T03:04:35.1241333+01:00","action":"block","task_id":976,"detail":"Research recommends deferral at .40 confidence. No trigger conditions met: Copilot rate limit still binding, no architect-gate quality failures observed, no external project management. Three prior research docs independently rejected multi-persona deliberation. Revisit when a trigger condition from research doc section 4 is met."}
+{"timestamp":"2026-03-25T03:04:35.1310767+01:00","action":"release","task_id":976,"detail":"architect"}
+{"timestamp":"2026-03-25T03:10:07.4771357+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T03:10:21.1104278+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T03:10:21.1183612+01:00","action":"release","task_id":844,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T03:16:39.9352994+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T03:16:49.7017531+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T03:16:54.7272532+01:00","action":"move","task_id":927,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T03:17:00.2612329+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T03:17:00.2699844+01:00","action":"release","task_id":927,"detail":"auditor"}
+{"timestamp":"2026-03-25T03:17:42.3774057+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-25T03:19:20.4913073+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:19:20.5012362+01:00","action":"claim","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-25T03:19:27.6747179+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:19:27.68481+01:00","action":"claim","task_id":992,"detail":"reviewer"}
+{"timestamp":"2026-03-25T03:19:28.6565845+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T03:19:28.6632711+01:00","action":"claim","task_id":938,"detail":"halo-frost"}
+{"timestamp":"2026-03-25T03:19:58.847545+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T03:19:58.8556247+01:00","action":"claim","task_id":939,"detail":"reviewer-github-copilot-939"}
+{"timestamp":"2026-03-25T03:21:14.21782+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T03:21:34.5403064+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T03:21:34.5465921+01:00","action":"release","task_id":809,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T03:26:29.3130955+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:26:37.0083575+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:26:37.0135805+01:00","action":"release","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-25T03:28:12.2517552+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:28:13.0847145+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:28:13.0917482+01:00","action":"release","task_id":992,"detail":"reviewer"}
+{"timestamp":"2026-03-25T03:28:14.3554533+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T03:28:15.1570365+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T03:28:15.8740404+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T03:28:15.8799776+01:00","action":"release","task_id":939,"detail":"reviewer-github-copilot-939"}
+{"timestamp":"2026-03-25T03:30:01.2995539+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:30:01.3061774+01:00","action":"claim","task_id":867,"detail":"builder-github-copilot-867"}
+{"timestamp":"2026-03-25T03:30:16.8275038+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:30:16.8344523+01:00","action":"claim","task_id":945,"detail":"reviewer-github-copilot-945"}
+{"timestamp":"2026-03-25T03:32:42.1587844+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:32:52.4487289+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:32:52.4540432+01:00","action":"block","task_id":867,"detail":"TestFromAC seam contract mismatch: one test requires extract_markdown call without url while another requires url forwarding"}
+{"timestamp":"2026-03-25T03:32:55.547892+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:32:55.5562412+01:00","action":"release","task_id":867,"detail":"builder-github-copilot-867"}
+{"timestamp":"2026-03-25T03:33:24.2637936+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:33:24.2701575+01:00","action":"claim","task_id":946,"detail":"reviewer-github-copilot-946"}
+{"timestamp":"2026-03-25T03:33:25.9573682+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:33:39.4751949+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:33:40.1779634+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:33:40.1854277+01:00","action":"release","task_id":946,"detail":"reviewer-github-copilot-946"}
+{"timestamp":"2026-03-25T03:34:42.2021129+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:34:47.1791095+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:34:47.2882671+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:34:47.3164216+01:00","action":"claim","task_id":870,"detail":"reviewer-github-copilot-870"}
+{"timestamp":"2026-03-25T03:34:50.3167114+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:34:50.323506+01:00","action":"release","task_id":945,"detail":"reviewer-github-copilot-945"}
+{"timestamp":"2026-03-25T03:35:51.7088833+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T03:35:56.5216436+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T03:35:56.5274208+01:00","action":"release","task_id":863,"detail":"builder-copilot"}
+{"timestamp":"2026-03-25T03:37:00.5613958+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T03:37:00.5666429+01:00","action":"claim","task_id":734,"detail":"builder-github-copilot-734"}
+{"timestamp":"2026-03-25T03:37:09.5827324+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:37:09.589589+01:00","action":"claim","task_id":777,"detail":"builder-github-copilot-777"}
+{"timestamp":"2026-03-25T03:38:50.8741742+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:38:50.8804658+01:00","action":"claim","task_id":867,"detail":"builder-github-copilot-867"}
+{"timestamp":"2026-03-25T03:39:42.9642393+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T03:39:46.1090957+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T03:39:46.1144505+01:00","action":"release","task_id":734,"detail":"builder-github-copilot-734"}
+{"timestamp":"2026-03-25T03:40:22.9921278+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:40:23.7905124+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:40:23.7978509+01:00","action":"release","task_id":870,"detail":"reviewer-github-copilot-870"}
+{"timestamp":"2026-03-25T03:40:23.9660123+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:40:23.9731273+01:00","action":"release","task_id":867,"detail":"builder-github-copilot-867"}
+{"timestamp":"2026-03-25T03:41:17.3022819+01:00","action":"edit","task_id":867,"detail":"Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura"}
+{"timestamp":"2026-03-25T03:42:35.6829038+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:42:48.0663349+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:42:48.0729312+01:00","action":"release","task_id":777,"detail":"builder-github-copilot-777"}
+{"timestamp":"2026-03-25T03:43:59.3856526+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T03:43:59.3915495+01:00","action":"claim","task_id":892,"detail":"builder-github-copilot-892"}
+{"timestamp":"2026-03-25T03:44:06.3685123+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:44:06.3741844+01:00","action":"claim","task_id":834,"detail":"builder-github-copilot-834"}
+{"timestamp":"2026-03-25T03:44:09.8168838+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T03:44:09.82184+01:00","action":"claim","task_id":890,"detail":"builder-github-copilot-890"}
+{"timestamp":"2026-03-25T03:45:39.2929985+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:45:42.9203947+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:45:42.9257474+01:00","action":"release","task_id":834,"detail":"builder-github-copilot-834"}
+{"timestamp":"2026-03-25T03:45:55.6784795+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:45:55.6842853+01:00","action":"claim","task_id":777,"detail":"reviewer-github-copilot-777"}
+{"timestamp":"2026-03-25T03:46:02.3903681+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:46:02.3972305+01:00","action":"claim","task_id":870,"detail":"writer-github-copilot-870"}
+{"timestamp":"2026-03-25T03:46:15.834428+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:46:15.840844+01:00","action":"claim","task_id":992,"detail":"writer-github-copilot-992"}
+{"timestamp":"2026-03-25T03:46:40.9454566+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T03:46:41.6349056+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T03:46:41.640362+01:00","action":"release","task_id":892,"detail":"builder-github-copilot-892"}
+{"timestamp":"2026-03-25T03:47:16.2676946+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T03:47:16.2735595+01:00","action":"claim","task_id":956,"detail":"builder-github-copilot-956"}
+{"timestamp":"2026-03-25T03:47:49.5449694+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T03:47:50.2893068+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T03:47:51.0114671+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T03:47:51.017917+01:00","action":"release","task_id":956,"detail":"builder-github-copilot-956"}
+{"timestamp":"2026-03-25T03:47:53.463682+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T03:47:54.2450639+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T03:47:54.2503358+01:00","action":"release","task_id":890,"detail":"builder-github-copilot-890"}
+{"timestamp":"2026-03-25T03:48:50.585165+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:48:54.7863705+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:49:07.5741943+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T03:49:07.5789757+01:00","action":"release","task_id":870,"detail":"writer-github-copilot-870"}
+{"timestamp":"2026-03-25T03:50:40.5505906+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:50:45.9760766+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:50:45.9829361+01:00","action":"release","task_id":992,"detail":"writer-github-copilot-992"}
+{"timestamp":"2026-03-25T03:50:52.683464+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T03:54:11.1608391+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:54:20.5601938+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:54:21.2291413+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T03:54:21.2348754+01:00","action":"release","task_id":777,"detail":"reviewer-github-copilot-777"}
+{"timestamp":"2026-03-25T03:55:30.0883266+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:55:30.0944838+01:00","action":"claim","task_id":946,"detail":"writer-github-copilot-946"}
+{"timestamp":"2026-03-25T03:55:50.3038556+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T03:55:50.3114533+01:00","action":"claim","task_id":844,"detail":"reviewer-github-copilot-844"}
+{"timestamp":"2026-03-25T03:56:39.8980607+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T03:56:39.9045047+01:00","action":"claim","task_id":809,"detail":"reviewer-github-copilot-809"}
+{"timestamp":"2026-03-25T03:57:40.0882392+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:58:01.2410807+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:58:06.8772374+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T03:58:06.8846732+01:00","action":"release","task_id":946,"detail":"writer-github-copilot-946"}
+{"timestamp":"2026-03-25T03:58:56.3360819+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:58:56.354942+01:00","action":"claim","task_id":834,"detail":"builder-github-copilot-834"}
+{"timestamp":"2026-03-25T03:59:06.4460122+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:59:09.5589199+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T03:59:09.5641437+01:00","action":"release","task_id":834,"detail":"builder-github-copilot-834"}
+{"timestamp":"2026-03-25T04:02:37.0966435+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T04:02:37.8389997+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T04:02:37.8466659+01:00","action":"release","task_id":809,"detail":"reviewer-github-copilot-809"}
+{"timestamp":"2026-03-25T04:06:52.8698462+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T04:06:53.6096977+01:00","action":"edit","task_id":844,"detail":"Wire UsageTracker to secondary LLM call sites"}
+{"timestamp":"2026-03-25T04:06:53.6169633+01:00","action":"release","task_id":844,"detail":"reviewer-github-copilot-844"}
+{"timestamp":"2026-03-25T04:08:20.5661323+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:08:20.5723833+01:00","action":"claim","task_id":975,"detail":"writer"}
+{"timestamp":"2026-03-25T04:09:00.9896161+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T04:09:00.9959175+01:00","action":"claim","task_id":863,"detail":"copilot-reviewer-863"}
+{"timestamp":"2026-03-25T04:09:13.5062155+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T04:09:13.5125774+01:00","action":"claim","task_id":939,"detail":"test-writer-agent"}
+{"timestamp":"2026-03-25T04:09:15.6467908+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:09:21.5189218+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T04:09:23.6592025+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:09:28.7180337+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T04:09:28.7238791+01:00","action":"claim","task_id":890,"detail":"copilot"}
+{"timestamp":"2026-03-25T04:09:30.5763452+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T04:09:40.3730619+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:09:46.75176+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:10:09.9958002+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T04:10:10.0027726+01:00","action":"release","task_id":975,"detail":"writer"}
+{"timestamp":"2026-03-25T04:18:11.200819+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T04:18:39.6171299+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T04:18:39.6252032+01:00","action":"release","task_id":863,"detail":"copilot-reviewer-863"}
+{"timestamp":"2026-03-25T04:20:10.5127212+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T04:20:10.5184585+01:00","action":"release","task_id":939,"detail":"test-writer-agent"}
+{"timestamp":"2026-03-25T04:20:19.5184658+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T04:20:46.4321383+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T04:20:46.4386077+01:00","action":"release","task_id":890,"detail":"copilot"}
+{"timestamp":"2026-03-25T04:21:53.3552393+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T04:21:53.362634+01:00","action":"claim","task_id":734,"detail":"reviewer-agent"}
+{"timestamp":"2026-03-25T04:22:01.6677618+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T04:22:01.6735356+01:00","action":"claim","task_id":892,"detail":"builder-agent"}
+{"timestamp":"2026-03-25T04:22:41.2008825+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T04:22:41.2066511+01:00","action":"claim","task_id":945,"detail":"test-writer-agent"}
+{"timestamp":"2026-03-25T04:24:26.4856907+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T04:24:29.8445856+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T04:24:29.8497822+01:00","action":"release","task_id":892,"detail":"builder-agent"}
+{"timestamp":"2026-03-25T04:24:42.3155052+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T04:24:42.3202715+01:00","action":"release","task_id":945,"detail":"test-writer-agent"}
+{"timestamp":"2026-03-25T04:27:27.5799151+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T04:27:28.2561552+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T04:27:28.2611254+01:00","action":"release","task_id":734,"detail":"reviewer-agent"}
+{"timestamp":"2026-03-25T04:31:24.4979803+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T04:31:24.5030761+01:00","action":"claim","task_id":871,"detail":"researcher-agent"}
+{"timestamp":"2026-03-25T04:31:31.0469511+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T04:31:31.0527999+01:00","action":"claim","task_id":992,"detail":"auditor"}
+{"timestamp":"2026-03-25T04:31:38.7681213+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T04:31:38.7749857+01:00","action":"claim","task_id":877,"detail":"researcher"}
+{"timestamp":"2026-03-25T04:32:04.8922355+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T04:32:04.8980997+01:00","action":"claim","task_id":809,"detail":"writer-agent"}
+{"timestamp":"2026-03-25T04:34:50.265155+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T04:34:50.2703949+01:00","action":"release","task_id":809,"detail":"writer-agent"}
+{"timestamp":"2026-03-25T04:36:33.6247821+01:00","action":"create","task_id":997,"detail":"Add shutdown drain and CancelSignal to GraphEnricher"}
+{"timestamp":"2026-03-25T04:37:00.313812+01:00","action":"edit","task_id":997,"detail":"Add shutdown drain and CancelSignal to GraphEnricher"}
+{"timestamp":"2026-03-25T04:37:09.9506688+01:00","action":"create","task_id":998,"detail":"Wire GraphEnricher.shutdown into bootstrap cleanup"}
+{"timestamp":"2026-03-25T04:37:15.5907275+01:00","action":"edit","task_id":998,"detail":"Wire GraphEnricher.shutdown into bootstrap cleanup"}
+{"timestamp":"2026-03-25T04:37:19.7256526+01:00","action":"create","task_id":999,"detail":"Thread CancelSignal from IngestPipeline to GraphEnricher schedule calls"}
+{"timestamp":"2026-03-25T04:37:26.458135+01:00","action":"edit","task_id":999,"detail":"Thread CancelSignal from IngestPipeline to GraphEnricher schedule calls"}
+{"timestamp":"2026-03-25T04:37:30.2553919+01:00","action":"create","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T04:37:36.7907832+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T04:39:00.1640472+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T04:39:00.1704592+01:00","action":"release","task_id":871,"detail":"researcher-agent"}
+{"timestamp":"2026-03-25T04:41:37.5087781+01:00","action":"create","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T04:41:44.0844221+01:00","action":"create","task_id":1002,"detail":"RED tests for tool-invoked cancellation wiring"}
+{"timestamp":"2026-03-25T04:42:20.8734731+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T04:42:30.9634743+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T04:42:30.9704378+01:00","action":"release","task_id":877,"detail":"researcher"}
+{"timestamp":"2026-03-25T04:43:00.8269073+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T04:43:05.2953262+01:00","action":"move","task_id":992,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T04:43:10.1379149+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T04:43:10.144188+01:00","action":"release","task_id":992,"detail":"auditor"}
+{"timestamp":"2026-03-25T04:43:29.8729309+01:00","action":"edit","task_id":992,"detail":"Implement make_retry_executor and wire into run_daemon"}
+{"timestamp":"2026-03-25T04:44:39.9327061+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T04:44:39.9384025+01:00","action":"claim","task_id":870,"detail":"auditor"}
+{"timestamp":"2026-03-25T05:03:48.5570233+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T05:03:52.3067528+01:00","action":"move","task_id":870,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T05:03:57.1643888+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T05:03:57.1723416+01:00","action":"release","task_id":870,"detail":"auditor"}
+{"timestamp":"2026-03-25T05:04:17.1183922+01:00","action":"edit","task_id":870,"detail":"Implement operation-scoped cancellation signal for knowledge pipelines"}
+{"timestamp":"2026-03-25T05:05:01.4978835+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T05:05:01.5047189+01:00","action":"claim","task_id":975,"detail":"auditor"}
+{"timestamp":"2026-03-25T05:10:47.0203315+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T05:10:51.3415032+01:00","action":"move","task_id":975,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T05:10:56.0816134+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T05:10:56.0879831+01:00","action":"release","task_id":975,"detail":"auditor"}
+{"timestamp":"2026-03-25T05:11:14.1165704+01:00","action":"edit","task_id":975,"detail":"Add make_completed_process duplicate-guard to test_conftest_helpers.py"}
+{"timestamp":"2026-03-25T05:11:49.6090149+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T05:11:49.6143703+01:00","action":"claim","task_id":946,"detail":"auditor-github-copilot-946"}
+{"timestamp":"2026-03-25T05:24:12.8758169+01:00","action":"move","task_id":946,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T05:24:17.741301+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T05:24:17.7473639+01:00","action":"release","task_id":946,"detail":"auditor-github-copilot-946"}
+{"timestamp":"2026-03-25T05:24:33.7447865+01:00","action":"edit","task_id":946,"detail":"Add frontend-polish prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T05:25:25.8633799+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T05:25:25.8688123+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-25T05:25:37.6096237+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T05:25:43.5918081+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T05:25:43.5976764+01:00","action":"claim","task_id":939,"detail":"builder"}
+{"timestamp":"2026-03-25T05:25:47.4871575+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T05:25:50.926841+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T05:26:00.1613833+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T05:26:00.1688283+01:00","action":"claim","task_id":834,"detail":"reviewer"}
+{"timestamp":"2026-03-25T05:26:32.269372+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T05:26:32.2769034+01:00","action":"claim","task_id":938,"detail":"copilot-reviewer-938"}
+{"timestamp":"2026-03-25T05:28:52.591876+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T05:29:06.38853+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T05:29:06.3932891+01:00","action":"release","task_id":939,"detail":"builder"}
+{"timestamp":"2026-03-25T05:30:25.071436+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T05:30:28.8394159+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T05:30:28.8435751+01:00","action":"release","task_id":834,"detail":"reviewer"}
+{"timestamp":"2026-03-25T05:31:49.608008+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T05:31:55.1930157+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T05:31:55.1986019+01:00","action":"release","task_id":938,"detail":"copilot-reviewer-938"}
+{"timestamp":"2026-03-25T05:32:56.1681331+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T05:32:56.1733532+01:00","action":"claim","task_id":892,"detail":"reviewer-892"}
+{"timestamp":"2026-03-25T05:32:57.5153768+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T05:32:57.5234013+01:00","action":"claim","task_id":945,"detail":"builder"}
+{"timestamp":"2026-03-25T05:33:42.7964588+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T05:33:42.8035396+01:00","action":"claim","task_id":890,"detail":"reviewer"}
+{"timestamp":"2026-03-25T05:38:50.0847114+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-25T05:43:14.7129199+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T05:43:15.3578163+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T05:43:15.3633426+01:00","action":"release","task_id":892,"detail":"reviewer-892"}
+{"timestamp":"2026-03-25T05:47:52.1785097+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T05:47:52.184324+01:00","action":"claim","task_id":871,"detail":"architect"}
+{"timestamp":"2026-03-25T05:48:17.3135743+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T05:48:17.3189878+01:00","action":"claim","task_id":809,"detail":"auditor"}
+{"timestamp":"2026-03-25T05:48:28.2645092+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T05:48:28.2697329+01:00","action":"claim","task_id":938,"detail":"writer"}
+{"timestamp":"2026-03-25T05:53:23.4523955+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T05:53:23.4576819+01:00","action":"release","task_id":938,"detail":"writer"}
+{"timestamp":"2026-03-25T05:55:33.6044597+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T05:56:02.8431372+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T05:56:09.1754487+01:00","action":"delete","task_id":997,"detail":"Add shutdown drain and CancelSignal to GraphEnricher"}
+{"timestamp":"2026-03-25T05:56:14.8573771+01:00","action":"edit","task_id":998,"detail":"Wire GraphEnricher.shutdown into bootstrap cleanup"}
+{"timestamp":"2026-03-25T05:56:15.6253438+01:00","action":"edit","task_id":999,"detail":"Thread CancelSignal from IngestPipeline to GraphEnricher schedule calls"}
+{"timestamp":"2026-03-25T05:56:16.4115523+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T05:56:27.6428334+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T05:56:33.3066965+01:00","action":"edit","task_id":998,"detail":"Wire GraphEnricher.shutdown into bootstrap cleanup"}
+{"timestamp":"2026-03-25T05:56:34.1032309+01:00","action":"edit","task_id":999,"detail":"Thread CancelSignal from IngestPipeline to GraphEnricher schedule calls"}
+{"timestamp":"2026-03-25T05:56:34.9178899+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T05:56:58.8797254+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T05:57:03.3449423+01:00","action":"edit","task_id":871,"detail":"Manage GraphEnricher background-task cancellation and draining"}
+{"timestamp":"2026-03-25T05:57:03.35097+01:00","action":"release","task_id":871,"detail":"architect"}
+{"timestamp":"2026-03-25T06:04:45.4854297+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T06:04:50.3885015+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T06:04:50.393209+01:00","action":"release","task_id":809,"detail":"auditor"}
+{"timestamp":"2026-03-25T06:06:35.1089561+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T06:06:35.11314+01:00","action":"claim","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:06:50.1726366+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T06:06:50.1784439+01:00","action":"claim","task_id":939,"detail":"copilot-reviewer-939"}
+{"timestamp":"2026-03-25T06:06:55.9753764+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T06:06:55.9817183+01:00","action":"claim","task_id":877,"detail":"architect"}
+{"timestamp":"2026-03-25T06:07:16.3498886+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T06:07:16.3562807+01:00","action":"claim","task_id":863,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:07:28.2740304+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T06:07:37.9102122+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T06:07:42.8664102+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T06:07:42.8748849+01:00","action":"release","task_id":863,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:08:28.513545+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T06:08:39.0762505+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T06:08:39.0825542+01:00","action":"release","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:10:29.3200621+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T06:10:38.0464789+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T06:10:38.0518786+01:00","action":"release","task_id":939,"detail":"copilot-reviewer-939"}
+{"timestamp":"2026-03-25T06:12:10.7347214+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T06:12:34.169077+01:00","action":"edit","task_id":1002,"detail":"RED tests for tool-invoked cancellation wiring"}
+{"timestamp":"2026-03-25T06:12:43.7512905+01:00","action":"edit","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T06:12:43.7560553+01:00","action":"release","task_id":877,"detail":"architect"}
+{"timestamp":"2026-03-25T06:12:44.6411377+01:00","action":"delete","task_id":877,"detail":"Expose daemon shutdown to tool-invoked knowledge cancellation"}
+{"timestamp":"2026-03-25T06:13:51.7643138+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:13:51.7701921+01:00","action":"claim","task_id":1001,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:14:07.5003901+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T06:14:07.5056568+01:00","action":"claim","task_id":892,"detail":"writer-892"}
+{"timestamp":"2026-03-25T06:14:08.5776155+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T06:14:08.5829055+01:00","action":"claim","task_id":734,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:14:23.1853775+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T06:14:33.2975722+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T06:14:38.0646997+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-25T06:14:38.0701531+01:00","action":"release","task_id":734,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:15:24.9447676+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T06:15:24.9512321+01:00","action":"release","task_id":892,"detail":"writer-892"}
+{"timestamp":"2026-03-25T06:20:31.4642487+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:20:45.7313761+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:20:50.874076+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:20:50.8786233+01:00","action":"release","task_id":1001,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:22:21.7118877+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T06:22:21.7193853+01:00","action":"claim","task_id":834,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:23:03.792039+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T06:23:07.9758939+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-25T06:23:07.9822482+01:00","action":"release","task_id":834,"detail":"test-writer"}
+{"timestamp":"2026-03-25T06:30:32.8721954+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T06:30:32.8775619+01:00","action":"claim","task_id":1000,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:30:39.6423821+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T06:30:40.9656157+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:30:40.971181+01:00","action":"claim","task_id":1001,"detail":"architect"}
+{"timestamp":"2026-03-25T06:30:52.2836963+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T06:30:52.3018118+01:00","action":"claim","task_id":938,"detail":"auditor"}
+{"timestamp":"2026-03-25T06:30:53.8149155+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T06:30:53.8206307+01:00","action":"claim","task_id":939,"detail":"writer"}
+{"timestamp":"2026-03-25T06:32:09.0629893+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T06:32:09.0689611+01:00","action":"release","task_id":939,"detail":"writer"}
+{"timestamp":"2026-03-25T06:35:52.4606589+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:36:09.3900227+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:37:07.3881364+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:37:11.9273826+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:37:17.3301166+01:00","action":"edit","task_id":1001,"detail":"Add CancelSlot and wire tool-invoked cancellation to daemon shutdown"}
+{"timestamp":"2026-03-25T06:37:17.3372735+01:00","action":"release","task_id":1001,"detail":"architect"}
+{"timestamp":"2026-03-25T06:37:19.4847303+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T06:37:19.4910875+01:00","action":"release","task_id":1000,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:37:44.7852998+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T06:38:06.1755058+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T06:38:10.2133004+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T06:38:14.3967438+01:00","action":"move","task_id":938,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T06:38:19.8830298+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T06:38:19.8882947+01:00","action":"release","task_id":938,"detail":"auditor"}
