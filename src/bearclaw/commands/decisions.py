@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -215,12 +216,17 @@ def decisions_resolve(
     text = text.replace("status: pending", "status: resolved", 1)
     updated_text = text.rstrip() + "\n" + resolution_section
 
-    # Move first so failed moves leave pending content untouched.
     resolved_dir = DECISIONS_DIR / "resolved"
-    resolved_dir.mkdir(parents=True, exist_ok=True)
     resolved_path = resolved_dir / path.name
-    shutil.move(str(path), str(resolved_path))
-
-    resolved_path.write_text(updated_text, encoding="utf-8")
+    try:
+        resolved_dir.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(path), str(resolved_path))
+        resolved_path.write_text(updated_text, encoding="utf-8")
+    except OSError as exc:
+        # If write fails after move, rollback so we don't strand pending content in resolved/.
+        if resolved_path.exists() and not path.exists():
+            with suppress(OSError):
+                shutil.move(str(resolved_path), str(path))
+        _cli_error(f"Failed to resolve decision '{task_id}': {exc}")
 
     typer.echo(f"Decision '{task_id}' resolved and moved to resolved/.")
