@@ -395,3 +395,135 @@ class TestFromAC_987_BuildHooksExecutorWiring:
         await escalate_executor({"_hook_event": HookEvent.TASK_COMPLETE})
 
         mock_channel.send.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Retry additions (reviewer FAIL 2026-03-25)
+# AC1 strengthened: call args + all-false warning
+# AC2 strengthened: channel.receive guard
+# AC6: export boundary guard
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_957_NotifyCallArgContract:
+    """AC1 retry: backend.notify() arg contract and all-false-backends warning.
+
+    The prior test suite called assert_called_once() but did not verify the
+    positional args passed to notify() or check the pool-level warning that
+    fires when every backend returns False without raising.
+    """
+
+    @pytest.mark.asyncio
+    async def test_notify_called_with_message_as_first_arg(self) -> None:
+        """AC1: first positional arg to backend.notify() must be a str message."""
+        backend = _make_backend(returns=True)
+        executor = _make_notify_executor([backend])
+        await executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        args = backend.notify.call_args.args
+        assert isinstance(args[0], str), (
+            f"First arg to notify() must be a str, got {type(args[0])!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_notify_called_with_event_as_second_arg(self) -> None:
+        """AC1: second positional arg to backend.notify() must be the hook event."""
+        backend = _make_backend(returns=True)
+        executor = _make_notify_executor([backend])
+        event = HookEvent.TASK_COMPLETE
+        await executor({"_hook_event": event})
+
+        args = backend.notify.call_args.args
+        assert len(args) >= 2, "notify() must receive at least two positional args"
+        assert args[1] == event, (
+            f"Second arg to notify() must be the event object, got {args[1]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_all_false_backends_logs_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC1 edge: a WARNING is logged when every backend returns False (none raise).
+
+        This is the pool-level all-backends-failed warning, distinct from the
+        per-backend exception warning covered by
+        TestFromAC_987_NotifyExecutorFactory.test_warning_logged_on_backend_failure.
+        """
+        backends = [_make_backend(returns=False), _make_backend(returns=False)]
+        executor = _make_notify_executor(backends)
+
+        with caplog.at_level(logging.WARNING):
+            await executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings, (
+            "Expected at least one WARNING when all backends return False without raising"
+        )
+
+
+class TestFromAC_957_EscalateReceiveGuard:
+    """AC2 retry: channel.receive must NEVER be called by the escalate executor.
+
+    The escalate executor is send-only (AC2). The prior test suite verified
+    send was called but never asserted receive was not called.
+    """
+
+    @pytest.mark.asyncio
+    async def test_channel_receive_never_called(self) -> None:
+        """AC2: escalate executor must not invoke channel.receive()."""
+        channel = AsyncMock()
+        executor = _make_escalate_executor(channel)
+        await executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        channel.receive.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_channel_receive_never_called_with_extra_payload(self) -> None:
+        """AC2 edge: receive guard holds even when payload contains extra keys."""
+        channel = AsyncMock()
+        executor = _make_escalate_executor(channel)
+        await executor({"_hook_event": HookEvent.ON_ERROR, "task_id": "99", "reason": "timeout"})
+
+        channel.send.assert_called_once()
+        channel.receive.assert_not_called()
+
+
+class TestFromAC_957_ExportBoundary:
+    """AC6: private factory functions must not appear in any public namespace.
+
+    The reviewer noted that no test guards the private/export boundary.
+    These tests will catch any future refactor that accidentally re-exports
+    _make_notify_executor or _make_escalate_executor via __init__.py.
+    """
+
+    def test_make_notify_executor_not_on_bootstrap_package(self) -> None:
+        """AC6: _make_notify_executor must not be re-exported from owlbear.bootstrap."""
+        import owlbear.bootstrap as _bootstrap
+
+        assert not hasattr(_bootstrap, "_make_notify_executor"), (
+            "_make_notify_executor must not be accessible via owlbear.bootstrap"
+        )
+
+    def test_make_escalate_executor_not_on_bootstrap_package(self) -> None:
+        """AC6: _make_escalate_executor must not be re-exported from owlbear.bootstrap."""
+        import owlbear.bootstrap as _bootstrap
+
+        assert not hasattr(_bootstrap, "_make_escalate_executor"), (
+            "_make_escalate_executor must not be accessible via owlbear.bootstrap"
+        )
+
+    def test_make_notify_executor_not_on_top_level_package(self) -> None:
+        """AC6: _make_notify_executor must not be accessible from the owlbear package."""
+        import owlbear
+
+        assert not hasattr(owlbear, "_make_notify_executor"), (
+            "_make_notify_executor must not be re-exported from the owlbear top-level package"
+        )
+
+    def test_make_escalate_executor_not_on_top_level_package(self) -> None:
+        """AC6: _make_escalate_executor must not be accessible from the owlbear package."""
+        import owlbear
+
+        assert not hasattr(owlbear, "_make_escalate_executor"), (
+            "_make_escalate_executor must not be re-exported from the owlbear top-level package"
+        )
