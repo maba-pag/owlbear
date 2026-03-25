@@ -37,7 +37,7 @@ Some agents are dispatched by condition rather than status:
 | Agent            | Trigger condition                                                              | Dispatched by   |
 | ---------------- | ------------------------------------------------------------------------------ | ---------------- |
 | `kanban-planner` | Task body contains "Needs decomposition" (set by architect or any agent), OR orchestrator user explicitly requests it | Planner includes in dispatch list |
-| `curator`        | End of orchestration session (tasks reached `done`)                            | Orchestrator directly (not via planner) |
+| `curator`        | Every 5th orchestration cycle (periodic, see orchestration skill Step 2)       | Orchestrator directly (not via planner) |
 
 **Kanban-planner dispatch:** When the planner's Board Scan finds a task whose body
 contains the marker `Needs decomposition:` (typically set by the architect during
