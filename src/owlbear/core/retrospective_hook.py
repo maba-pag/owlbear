@@ -125,6 +125,10 @@ class RetrospectiveHook:
             per-operation cancel signal passed to ``ingest_text`` is also set.
         cancel: Optional pre-composed cooperative cancel signal injected by
             bootstrap.
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-retrospective usage via ``operation='retrospective'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(  # noqa: PLR0913

@@ -68,6 +68,13 @@ class IntraDocGraphBuilder:
         builder = IntraDocGraphBuilder(model="openai:gpt-4o")
         result = await builder.build(entities, scope="global", document_id="doc-1")
         print(result.edges_added, result.edges)
+
+    Args:
+        model: PydanticAI model string or :class:`~pydantic_ai.models.Model` instance.
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-build usage via ``operation='intra_doc_graph'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(

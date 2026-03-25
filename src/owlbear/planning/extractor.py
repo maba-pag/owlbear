@@ -57,6 +57,13 @@ class ProjectDefinitionExtractor:
         extractor = ProjectDefinitionExtractor(model="openai:gpt-4o")
         definition = await extractor.extract("We want to build ...")
         print(definition.name, definition.goals)
+
+    Args:
+        model: PydanticAI model string or :class:`~pydantic_ai.models.Model` instance.
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-extraction usage via ``operation='project_extraction'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(

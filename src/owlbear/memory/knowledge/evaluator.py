@@ -91,6 +91,13 @@ class SourceEvaluator:
         evaluator = SourceEvaluator(model="openai:gpt-4o")
         result = await evaluator.evaluate(content, {"name": "MyProject", ...})
         print(result.relevance_score, result.tags)
+
+    Args:
+        model: PydanticAI model string or :class:`~pydantic_ai.models.Model` instance.
+        tracker: Optional :class:`~owlbear.memory.usage.UsageTracker` to record
+            per-evaluation usage via ``operation='source_evaluation'``.
+        provider: Provider name forwarded to the usage record (e.g. ``'copilot'``).
+            Only meaningful when *tracker* is set.
     """
 
     def __init__(
