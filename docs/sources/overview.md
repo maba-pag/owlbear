@@ -22,11 +22,24 @@ External repos and resources studied during OwlBear development.
 
 ## Frontend-Design Skill RED Test Gate (Task #941)
 
+## Daemon Builder Dispatch Usage Tracking (Task #845)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PydanticAI Agent.run API | <https://ai.pydantic.dev/api/agent/> | MIT | AgentRunResult.usage() return shape and usage accumulator parameter | `docs/research/daemon-usage-tracking.md` | 2026-03-25 |
+| PydanticAI RunUsage API | <https://ai.pydantic.dev/api/usage/> | MIT | RunUsage dataclass fields and incr method for accumulation pattern | `docs/research/daemon-usage-tracking.md` | 2026-03-25 |
+
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Required skill directory layout, frontmatter contract, progressive loading, and co-located resource-file model that the RED tests should target | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Minimal `frontend-design` package precedent used to avoid over-asserting optional files beyond `SKILL.md` | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
 | pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Reference-pack skill precedent used to justify asserting the seven required `references/*.md` files in the RED contract | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+
+## GraphEnricher Cancellation Test Approach (Task #1000)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python asyncio task cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF-2.0 | `Task.cancel()` semantics, `asyncio.gather(return_exceptions=True)` shutdown pattern, strong-ref `background_tasks` set idiom | `docs/research/graphenricher-cancellation-test-approach.md` | 2026-03-25 |
 
 ## Impeccable Command Pattern Research (Task #930)
 
@@ -53,7 +66,29 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | ruvnet/ruflo README | <https://github.com/ruvnet/ruflo> | MIT | 12 context-triggered background workers (`audit`, `map`, `testgaps`, `document`) and auto-trigger patterns for validating OwlBear worker design | `docs/research/task-complete-audit-map-advisory-worker.md` | 2026-03-24 |
+
+## Tool-Invoked Knowledge Cancellation Research (Task #877)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| .NET CancellationTokenSource/Token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC-BY-4.0 | Token source (write-side) vs token (read-side) split; CreateLinkedTokenSource for parent/child composition; one token per cancelable operation | `docs/research/tool-invoked-cancellation.md` | 2026-03-25 |
+| PydanticAI Function Tools docs | <https://ai.pydantic.dev/tools/> | MIT | FunctionToolset tool registration patterns; bound methods access self not RunContext; confirmed RunContext-free tool signatures for knowledge toolsets | `docs/research/tool-invoked-cancellation.md` | 2026-03-25 |
 | Python asyncio task docs | <https://docs.python.org/3/library/asyncio-task.html> | PSF-2.0 | `create_task()` strong-reference lifecycle, `Semaphore` bounded concurrency, and cooperative cancellation patterns | `docs/research/task-complete-audit-map-advisory-worker.md` | 2026-03-24 |
+
+## CancelSlot Validation Research (Task #1001)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| .NET CancellationTokenSource/Token docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC-BY-4.0 | Write-side/read-side split pattern; CreateLinkedTokenSource composition; validated CancelSlot maps to CancellationTokenSource | `docs/research/cancel-slot-validation.md` | 2026-03-25 |
+| AnyIO cancellation docs | <https://anyio.readthedocs.io/en/stable/cancellation.html> | MIT | Cooperative cancellation via cancel scopes in Python async; confirms polling `is_set()` is idiomatic for async-native code | `docs/research/cancel-slot-validation.md` | 2026-03-25 |
+
+## Frontend Audit Prompt Design (Task #944)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable `/audit` SKILL.md | <https://github.com/pbakaus/impeccable/blob/main/source/skills/audit/SKILL.md> | Apache-2.0 | 5-dimension scored audit structure (a11y, perf, theming, responsive, anti-patterns), P0–P3 severity scheme, 0–20 health score, recommended-commands section | `docs/research/frontend-audit-prompt-design.md` | 2026-03-25 |
+| pbakaus/impeccable README | <https://github.com/pbakaus/impeccable> | Apache-2.0 | `audit → normalize → polish` pipeline, scoped audit via area argument, command-chaining UX | `docs/research/frontend-audit-prompt-design.md` | 2026-03-25 |
+| axe-core rule taxonomy | <https://github.com/dequelabs/axe-core> | MPL-2.0 | Impact tiers (critical/serious/moderate/minor), WCAG category grouping precedent | `docs/research/frontend-audit-prompt-design.md` | 2026-03-25 |
 
 ## Hook-Triggered Background Worker Pilot (Task #949)
 
@@ -1552,6 +1587,14 @@ External repos and resources studied during OwlBear development.
 | aiohttp background tasks docs | <https://docs.aiohttp.org/en/stable/web_advanced.html#background-tasks> | Apache-2.0 | Tracked background task + cleanup context pattern; confirms handler-to-task handoff as standard | `docs/research/non-blocking-retrospective-hook-handoff.md` | 2026-03-24 |
 | copier | <https://github.com/copier-org/copier> | MIT | Template lifecycle (scaffold + update), `copier.yml` questions; evaluated but not adopted (YAGNI â€” update lifecycle not needed) | `docs/research/project-workspace.md` (comparison) | 2026-03-03 |
 
+## Frontend Normalize Prompt Design (Task #945)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pbakaus/impeccable `/normalize` SKILL.md | <https://github.com/pbakaus/impeccable/blob/main/source/skills/normalize/SKILL.md> | Apache-2.0 | Plan → Execute → Clean Up structure, 8-dimension checklist, guardrails (never-list), adapted into 4-step workflow with 6 dimensions for `.github/prompts/frontend-normalize.prompt.md` | `docs/research/frontend-normalize-prompt.md` | 2026-03-25 |
+| pbakaus/impeccable README | <https://github.com/pbakaus/impeccable> | Apache-2.0 | `audit → normalize → polish` pipeline, optional scope argument (`/normalize blog`), command UX precedent | `docs/research/frontend-normalize-prompt.md` | 2026-03-25 |
+| VS Code prompt file docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | `${input:scope}` optional-input syntax, description-only frontmatter contract, `.prompt.md` file placement | `.github/prompts/frontend-normalize.prompt.md` | 2026-03-25 |
+
 ## Source Discovery & Bookmarking Research (Task #304)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -2075,3 +2118,11 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Impeccable `/polish` skill | <https://github.com/pbakaus/impeccable> | Apache-2.0 | 11-category polish checklist, pre-polish assessment, final verification steps, and polish-is-the-last-step constraint | `docs/research/frontend-polish-prompt.md` | 2026-03-24 |
 | VS Code Prompt Files docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | Frontmatter format, input syntax, file references, and prompt invocation behavior | `docs/research/frontend-polish-prompt.md` | 2026-03-24 |
+
+## GraphEnricher Cancellation and Draining Research (Task #871)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python asyncio task cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF | `Task.cancel()` + `asyncio.gather(return_exceptions=True)` as the shutdown drain pattern for background task sets | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
+| Python asyncio `create_task` strong-ref pattern | <https://docs.python.org/3/library/asyncio-task.html#creating-tasks> | PSF | `background_tasks.add(task)` + `task.add_done_callback(background_tasks.discard)` — validates existing GraphEnricher bookkeeping | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
+| .NET CancellationToken docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC BY 4.0 | One token per cancelable operation; check before starting new work — model for per-schedule CancelSignal param | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
