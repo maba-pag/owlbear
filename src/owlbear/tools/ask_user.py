@@ -56,6 +56,7 @@ class AskUserToolset(FunctionToolset):
         max_retries: Maximum re-ask attempts when option input is invalid.
         timeout_action: Behaviour on timeout or retry exhaustion.
         default_response: String returned when ``timeout_action`` is SKIP.
+        hooks: Optional registry used to emit :attr:`~owlbear.core.hooks.HookEvent.QUESTION_PENDING` before awaiting user input.
     """
 
     tool_alias: ClassVar[str] = "ask_user"
