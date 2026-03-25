@@ -62,6 +62,9 @@ class KnowledgeSourceStore:
         "last_refreshed_at, last_error, created_at, updated_at"
     )
 
+    def _select_from_sources(self) -> str:
+        return f"SELECT {self._SELECT_COLS} FROM knowledge_sources"  # noqa: S608
+
     # -- CRUD ----------------------------------------------------------------
 
     def create(self, source: KnowledgeSource) -> None:
@@ -93,9 +96,7 @@ class KnowledgeSourceStore:
     def get(self, source_id: str) -> KnowledgeSource | None:
         """Return the source with *source_id*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, name, source_type, config, scope, enabled, priority,"
-            "       last_refreshed_at, last_error, created_at, updated_at"
-            " FROM knowledge_sources WHERE id = ?",
+            f"{self._select_from_sources()} WHERE id = ?",
             (source_id,),
         ).fetchone()
         if row is None:
@@ -105,9 +106,7 @@ class KnowledgeSourceStore:
     def get_by_name(self, name: str, scope: str = "global") -> KnowledgeSource | None:
         """Return the source matching *name* + *scope*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, name, source_type, config, scope, enabled, priority,"
-            "       last_refreshed_at, last_error, created_at, updated_at"
-            " FROM knowledge_sources WHERE name = ? AND scope = ?",
+            f"{self._select_from_sources()} WHERE name = ? AND scope = ?",
             (name, scope),
         ).fetchone()
         if row is None:
@@ -118,16 +117,12 @@ class KnowledgeSourceStore:
         """Return all sources, optionally filtered by *scope*."""
         if scope is not None:
             rows = self._conn.execute(
-                "SELECT id, name, source_type, config, scope, enabled, priority,"
-                "       last_refreshed_at, last_error, created_at, updated_at"
-                " FROM knowledge_sources WHERE scope = ?",
+                f"{self._select_from_sources()} WHERE scope = ?",
                 (scope,),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT id, name, source_type, config, scope, enabled, priority,"
-                "       last_refreshed_at, last_error, created_at, updated_at"
-                " FROM knowledge_sources",
+                self._select_from_sources(),
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
 
@@ -138,18 +133,14 @@ class KnowledgeSourceStore:
         """
         if scope is not None:
             rows = self._conn.execute(
-                "SELECT id, name, source_type, config, scope, enabled, priority,"
-                "       last_refreshed_at, last_error, created_at, updated_at"
-                " FROM knowledge_sources"
+                f"{self._select_from_sources()}"
                 " WHERE enabled = 1 AND scope = ?"
                 " ORDER BY priority DESC",
                 (scope,),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT id, name, source_type, config, scope, enabled, priority,"
-                "       last_refreshed_at, last_error, created_at, updated_at"
-                " FROM knowledge_sources"
+                f"{self._select_from_sources()}"
                 " WHERE enabled = 1"
                 " ORDER BY priority DESC",
             ).fetchall()
