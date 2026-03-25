@@ -470,3 +470,136 @@ class TestFromAC_SlackNotificationBackend:
                             "Found forbidden plain import in notification_hook.py:"
                             f" import {alias.name}"
                         )
+
+    # ------------------------------------------------------------------
+    # AC5 — Short-circuit: guard exits BEFORE constructing AsyncWebClient
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_bot_token_none_never_constructs_client(self) -> None:
+        """When bot_token is None, returns False without constructing AsyncWebClient."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend(None, "mychannel")
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+        mock_client_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_notify_channel_id_none_never_constructs_client(self) -> None:
+        """When channel_id is None, returns False without constructing AsyncWebClient."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        mock_client_cls = MagicMock()
+        with patch("owlbear.core.notification_hook.AsyncWebClient", mock_client_cls):
+            backend = SlackNotificationBackend("mytoken", None)
+            result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+        mock_client_cls.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # AC3 — Structural guard: no owlbear.config / settings imports
+    # ------------------------------------------------------------------
+
+    def test_no_config_settings_import(self) -> None:
+        """notification_hook.py must not import from owlbear.config or reference OwlBearSettings."""
+        import ast
+        import pathlib
+
+        source = pathlib.Path("src/owlbear/core/notification_hook.py").read_text()
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                if "owlbear.config" in node.module or "settings" in node.module.lower():
+                    pytest.fail(
+                        f"Found forbidden config/settings import in notification_hook.py: "
+                        f"from {node.module} import ..."
+                    )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if "owlbear.config" in alias.name or "settings" in alias.name.lower():
+                        pytest.fail(
+                            f"Found forbidden config/settings import in notification_hook.py: "
+                            f"import {alias.name}"
+                        )
+
+    # ------------------------------------------------------------------
+    # AC3 — Constructor signature: exactly bot_token and channel_id, nothing else
+    # ------------------------------------------------------------------
+
+    def test_constructor_signature_exact_two_params(self) -> None:
+        """SlackNotificationBackend.__init__ accepts exactly bot_token and channel_id."""
+        import inspect
+
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        sig = inspect.signature(SlackNotificationBackend.__init__)
+        params = [p for p in sig.parameters if p != "self"]
+        assert params == ["bot_token", "channel_id"], (
+            f"Expected __init__ params ['bot_token', 'channel_id'], got {params}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC5 — AsyncWebClient None guard exits BEFORE the exception handler
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_notify_asyncwebclient_none_exits_before_exception_handler(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """When AsyncWebClient is None, returns False without entering the exception handler."""
+        from owlbear.core.notification_hook import SlackNotificationBackend
+
+        with patch("owlbear.core.notification_hook.AsyncWebClient", None):
+            backend = SlackNotificationBackend("mytoken", "mychannel")
+            with caplog.at_level(logging.WARNING):
+                result = await backend.notify("hello", HookEvent.TASK_COMPLETE)
+
+        assert result is False
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert not warning_records, (
+            "Warning was logged — notify() entered the exception handler instead of "
+            "short-circuiting at 'if AsyncWebClient is None'"
+        )
+
+    # ------------------------------------------------------------------
+    # AC4 — Import-guard shape: try/except ImportError around AsyncWebClient
+    # ------------------------------------------------------------------
+
+    def test_asyncwebclient_import_guard_exists(self) -> None:
+        """notification_hook.py must guard the AsyncWebClient import with try/except ImportError."""
+        import ast
+        import pathlib
+
+        source = pathlib.Path("src/owlbear/core/notification_hook.py").read_text()
+        tree = ast.parse(source)
+
+        found_guard = False
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            # Body must import AsyncWebClient from slack_sdk
+            for stmt in node.body:
+                if not isinstance(stmt, ast.ImportFrom):
+                    continue
+                if "slack_sdk" not in (stmt.module or ""):
+                    continue
+                if not any(alias.name == "AsyncWebClient" for alias in stmt.names):
+                    continue
+                # Handler must catch ImportError (or bare except)
+                for handler in node.handlers:
+                    if handler.type is None or (
+                        isinstance(handler.type, ast.Name) and handler.type.id == "ImportError"
+                    ):
+                        found_guard = True
+
+        assert found_guard, (
+            "notification_hook.py must guard "
+            "'from slack_sdk.web.async_client import AsyncWebClient' "
+            "with a try/except ImportError block"
+        )
