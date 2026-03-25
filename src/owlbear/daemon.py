@@ -497,6 +497,7 @@ async def channel_loop(  # noqa: PLR0913
 _DEFAULT_MAX_RETRY_ATTEMPTS = 5
 _DEFAULT_BACKOFF_BASE = 10.0
 _DEFAULT_BACKOFF_MAX = 320.0
+_HOOK_RETRY_PLACEHOLDER_ERROR = "__hook_failure_without_error__"
 
 
 def _compute_retry_delay(*, attempt: int, base: float, maximum: float) -> float:
@@ -535,6 +536,17 @@ async def schedule_task_retry(  # noqa: PLR0913
         return
 
     prev = state.retries.get(task_id)
+    if (
+        prev is not None
+        and prev.attempt == 1
+        and prev.last_error == _HOOK_RETRY_PLACEHOLDER_ERROR
+        and not isinstance(error, BudgetExceededError)
+    ):
+        # A hook-side seed with no concrete error should be replaced, not incremented,
+        # when reconcile reports the same failure with the real exception.
+        state.retries[task_id] = dataclasses.replace(prev, last_error=str(error))
+        return
+
     next_attempt = (prev.attempt + 1) if prev else 1
 
     # Allow same-attempt concurrent callers to observe and skip duplicate writes.
@@ -593,12 +605,7 @@ def make_retry_executor(
         if task_id in state.retries:
             return
 
-        # Reconcile emits a failure hook without ``error`` and then schedules a retry
-        # directly with the real exception. Skip the hook-side write in that case.
-        if "error" not in data:
-            return
-
-        error_obj = data.get("error")
+        error_obj = data.get("error", _HOOK_RETRY_PLACEHOLDER_ERROR)
         error = error_obj if isinstance(error_obj, Exception) else RuntimeError(str(error_obj))
         await schedule_task_retry(
             state=state,
