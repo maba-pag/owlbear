@@ -1199,9 +1199,7 @@ class TestFromAC_BootstrapRuntimeForwarding:
             f"got tracker={forwarded!r}"
         )
 
-    def test_wire_post_model_hooks_forwards_tracker_to_session_hook(
-        self, tmp_path: Path
-    ) -> None:
+    def test_wire_post_model_hooks_forwards_tracker_to_session_hook(self, tmp_path: Path) -> None:
         """_wire_post_model_hooks must forward tracker= to _wire_session_memory_hook.
 
         Current impl calls _wire_session_memory_hook(model, workspace, hooks) with no tracker.
@@ -1312,4 +1310,126 @@ class TestFromAC_BootstrapRuntimeForwarding:
         pytest.fail(
             "_build_bookmark_toolset does not pass tracker= to SourceEvaluator; "
             "AC6 requires tracker forwarded to all secondary components"
+        )
+
+
+# ===========================================================================
+# AC4 gap (retry-2) — RetrospectiveHook must pass model object, not str(model)
+# ===========================================================================
+
+
+class TestFromAC_RetrospectiveHookModelFidelity:
+    """AC4 (retry-2): RetrospectiveHook must forward the model object to record_agent_usage.
+
+    The previous cycle passed model=str(self._model), which bypasses the
+    model_name resolution in record_agent_usage() and stores a wrong identifier.
+    AC2 requires model: str | Model -- resolves name internally; the call site
+    must pass the raw Model, not a pre-stringified version.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retrospective_hook_stores_model_name_not_str_repr(self, tmp_path: Path) -> None:
+        """UsageRecord.model must equal model.model_name, not str(model).
+
+        Creates a mock model where str(model) != model.model_name.
+        If the call site passes str(self._model), the stored identifier will be
+        the str-repr, not the resolved model_name — and this test will FAIL.
+        """
+        from owlbear.core.retrospective_hook import RetroFindings, RetrospectiveHook
+
+        tracker = _make_tracker(tmp_path)
+        mock_ingest = MagicMock()
+        mock_ingest.ingest_text = AsyncMock()
+
+        # Craft a model mock where str() and model_name differ so we can detect
+        # which one was forwarded to record_agent_usage.
+        mock_model = MagicMock()
+        mock_model.model_name = "copilot-gpt-4o-resolved"
+        mock_model.__str__ = MagicMock(return_value="copilot-gpt-4o-stringified")
+
+        hook = RetrospectiveHook(
+            model=mock_model,
+            ingest_pipeline=mock_ingest,
+            kanban_root=tmp_path,
+            tracker=tracker,
+            provider="copilot",
+        )
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = RetroFindings(
+            what_worked=[],
+            what_failed=[],
+            error_patterns=[],
+            reusable_patterns=[],
+        )
+        mock_agent = MagicMock()
+        mock_agent.run = AsyncMock(return_value=mock_run_result)
+
+        with patch.object(hook, "_get_agent", return_value=mock_agent):
+            await hook._run_retrospective("42")
+
+        records = tracker.load()
+        assert len(records) == 1, "Expected exactly one UsageRecord after _run_retrospective"
+        assert records[0].model == "copilot-gpt-4o-resolved", (
+            f"UsageRecord.model is {records[0].model!r}; "
+            "RetrospectiveHook must pass model=self._model (not str(self._model)) "
+            "to record_agent_usage so that model_name resolution runs correctly"
+        )
+
+
+# ===========================================================================
+# AC5 gap (retry-2) — Session closure must pass model object, not str(model)
+# ===========================================================================
+
+
+class TestFromAC_SessionMemoryHookModelFidelity:
+    """AC5 (retry-2): session closure must pass model object to record_agent_usage.
+
+    The previous cycle passed model=str(model), which bypasses model_name
+    resolution and stores a wrong identifier in the UsageRecord.
+    AC2 requires model: str | Model -- resolves name internally; the closure
+    must pass the raw Model, not a pre-stringified version.
+    """
+
+    @pytest.mark.asyncio
+    async def test_session_closure_stores_model_name_not_str_repr(self, tmp_path: Path) -> None:
+        """UsageRecord.model for session_summary must equal model.model_name, not str(model).
+
+        Creates a mock model where str(model) != model.model_name.
+        If the closure passes str(model), the stored identifier will be the
+        str-repr — and this test will FAIL.
+        """
+        from owlbear.bootstrap import _wire_session_memory_hook
+        from owlbear.core.hooks import HookEvent, HookRegistry
+
+        tracker = _make_tracker(tmp_path)
+        hooks = HookRegistry()
+
+        # Craft a model mock where str() and model_name differ.
+        mock_model = MagicMock()
+        mock_model.model_name = "copilot-gpt-4o-resolved"
+        mock_model.__str__ = MagicMock(return_value="copilot-gpt-4o-stringified")
+
+        mock_run_result = _make_usage_result()
+        mock_run_result.output = "summary text"
+        mock_agent_inst = MagicMock()
+        mock_agent_inst.run = AsyncMock(return_value=mock_run_result)
+
+        with patch("pydantic_ai.Agent", return_value=mock_agent_inst):
+            _wire_session_memory_hook(
+                mock_model, tmp_path, hooks, tracker=tracker, provider="copilot"
+            )
+
+            session_handlers = hooks._handlers.get(HookEvent.SESSION_END, [])
+            assert session_handlers, "No SESSION_END handler was registered"
+            hook = session_handlers[0]
+
+            await hook._summarizer("some conversation text")
+
+        records = tracker.load()
+        assert len(records) == 1, "Expected exactly one UsageRecord after _summarize"
+        assert records[0].model == "copilot-gpt-4o-resolved", (
+            f"UsageRecord.model is {records[0].model!r}; "
+            "session memory closure must pass model=model (not str(model)) "
+            "to record_agent_usage so that model_name resolution runs correctly"
         )
