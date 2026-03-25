@@ -167,3 +167,79 @@ class TestFromAC_HelpersArePure:
         list_json, log_json = board_payloads(tasks=[task], moves=[move])
         assert isinstance(list_json, str)
         assert isinstance(log_json, str)
+
+
+# ---------------------------------------------------------------------------
+# AC #2 (strict) — Local helpers _task/_move must NOT appear in migrated classes
+#
+# Reviewer cycle: prior tests only verified PRESENCE of board_task/board_move
+# but a partial migration would still pass. These tests enforce FULL migration
+# by asserting no direct call to the local _task/_move Name nodes exist in the
+# migrated class bodies.  Uses AST Call node inspection so that board_task(...)
+# (a different ast.Name id) is never confused with _task(...).
+# Green on arrival (builder completed migration), but provide regression
+# protection if migration is ever reverted.
+# ---------------------------------------------------------------------------
+
+
+def _local_name_calls(cls: ast.ClassDef, func_name: str) -> list[ast.Call]:
+    """Return all ast.Call nodes inside *cls* whose function is a bare Name == func_name.
+
+    This is exact-match: board_task has id='board_task', _task has id='_task'.
+    They are distinct ast.Name nodes and this helper will NOT confuse them.
+    """
+    return [
+        node
+        for node in ast.walk(cls)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == func_name
+    ]
+
+
+class TestFromAC_NoLocalHelpersInMigratedClasses:
+    """AC2 (strict): migrated classes must NOT call local _task or _move helpers."""
+
+    def test_board_rendering_does_not_call_local_task(self) -> None:
+        """TestFromAC_BoardRendering must have zero direct _task() AST calls after migration."""
+        _, tree = _board_src()
+        cls = _find_class(tree, "TestFromAC_BoardRendering")
+        assert cls is not None, "TestFromAC_BoardRendering not found"
+        calls = _local_name_calls(cls, "_task")
+        assert len(calls) == 0, (
+            f"TestFromAC_BoardRendering still has {len(calls)} local _task() call(s) "
+            "— migration incomplete"
+        )
+
+    def test_assignee_display_does_not_call_local_task(self) -> None:
+        """TestFromAC_AssigneeDisplay must have zero direct _task() AST calls after migration."""
+        _, tree = _board_src()
+        cls = _find_class(tree, "TestFromAC_AssigneeDisplay")
+        assert cls is not None, "TestFromAC_AssigneeDisplay not found"
+        calls = _local_name_calls(cls, "_task")
+        assert len(calls) == 0, (
+            f"TestFromAC_AssigneeDisplay still has {len(calls)} local _task() call(s) "
+            "— migration incomplete"
+        )
+
+    def test_age_in_status_does_not_call_local_task(self) -> None:
+        """TestFromAC_AgeInStatus must have zero direct _task() AST calls after migration."""
+        _, tree = _board_src()
+        cls = _find_class(tree, "TestFromAC_AgeInStatus")
+        assert cls is not None, "TestFromAC_AgeInStatus not found"
+        calls = _local_name_calls(cls, "_task")
+        assert len(calls) == 0, (
+            f"TestFromAC_AgeInStatus still has {len(calls)} local _task() call(s) "
+            "— migration incomplete"
+        )
+
+    def test_age_in_status_does_not_call_local_move(self) -> None:
+        """TestFromAC_AgeInStatus must have zero direct _move() AST calls after migration."""
+        _, tree = _board_src()
+        cls = _find_class(tree, "TestFromAC_AgeInStatus")
+        assert cls is not None, "TestFromAC_AgeInStatus not found"
+        calls = _local_name_calls(cls, "_move")
+        assert len(calls) == 0, (
+            f"TestFromAC_AgeInStatus still has {len(calls)} local _move() call(s) "
+            "— migration incomplete"
+        )
