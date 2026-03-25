@@ -12,7 +12,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.toolsets import FunctionToolset
 
-from owlbear.core.agent_def import AgentDefinition  # noqa: F401
+from owlbear.core.agent_def import AgentDefinition
 from owlbear.core.agent_registry import AgentRegistry
 
 # Block real LLM calls in the test suite.
@@ -285,7 +285,7 @@ class TestBuildAgentMissingTools:
         assert warnings == []
 
 
-class TestFromAC_SingleAgentConstruction:  # noqa: N801
+class TestFromAC_SingleAgentConstruction:
     """Tests that _build_agent constructs exactly one Agent() per call (#827).
 
     Contract: regardless of role, _build_agent must call Agent() exactly once.
@@ -376,7 +376,8 @@ class TestBuilderDiscovered:
     """Builder-discovered edge-case tests for _build_agent (#561)."""
 
     def test_empty_policy_skips_apply_role_policy(self, tmp_path: Path) -> None:
-        """When role policy has empty denied_tools AND allowed_tools,
+        """When role policy has empty denied_tools AND allowed_tools.
+
         apply_role_policy must NOT be called (guard condition).
         """
         md = tmp_path / "custom.md"
@@ -404,3 +405,311 @@ class TestBuilderDiscovered:
             registry.get("custom")
 
         mock_apply.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: Task #890 — AgentRegistry.register() programmatic registration
+# ---------------------------------------------------------------------------
+
+
+def _make_defn(name: str, description: str = "A test agent") -> AgentDefinition:
+    """Construct a minimal AgentDefinition without reading a file."""
+    return AgentDefinition(name=name, description=description, system_prompt="You help.")
+
+
+class TestFromAC_ProgrammaticRegistration:
+    """Tests for AgentRegistry.register(defn) — programmatic registration.
+
+    All tests in this class target the new ``register()`` method specified in
+    task #890.  Since ``register()`` does not exist yet, every test must FAIL
+    with ``AttributeError`` until the builder implements it.
+    """
+
+    # ------------------------------------------------------------------
+    # AC: register() stores defn under defn.name
+    # ------------------------------------------------------------------
+
+    def test_register_stores_definition_under_name(self, tmp_path: Path) -> None:
+        """register(defn) must store ``defn`` in definitions[defn.name]."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("my_agent")
+
+        registry.register(defn)
+
+        assert "my_agent" in registry.definitions
+        assert registry.definitions["my_agent"] is defn
+
+    def test_register_multiple_definitions_stored(self, tmp_path: Path) -> None:
+        """Registering two distinct agents stores both under their respective names."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn_a = _make_defn("alpha")
+        defn_b = _make_defn("beta")
+
+        registry.register(defn_a)
+        registry.register(defn_b)
+
+        assert registry.definitions["alpha"] is defn_a
+        assert registry.definitions["beta"] is defn_b
+
+    # ------------------------------------------------------------------
+    # AC: get() returns an Agent for a programmatically registered definition
+    # ------------------------------------------------------------------
+
+    def test_get_returns_agent_for_registered_defn(self, tmp_path: Path) -> None:
+        """After register(defn), get(defn.name) must return an Agent instance."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("prog_agent")
+
+        registry.register(defn)
+        agent = registry.get("prog_agent")
+
+        assert isinstance(agent, Agent)
+
+    def test_get_caches_programmatically_registered_agent(self, tmp_path: Path) -> None:
+        """Two consecutive get() calls on a registered defn return the same object."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("cached_prog")
+
+        registry.register(defn)
+        first = registry.get("cached_prog")
+        second = registry.get("cached_prog")
+
+        assert first is second
+
+    # ------------------------------------------------------------------
+    # AC: re-registering the same name evicts the stale cached Agent
+    # ------------------------------------------------------------------
+
+    def test_reregistration_evicts_stale_cache(self, tmp_path: Path) -> None:
+        """After a second register() with the same name, get() returns a fresh instance."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn_v1 = _make_defn("agent_x", "Version 1")
+        defn_v2 = _make_defn("agent_x", "Version 2")
+
+        registry.register(defn_v1)
+        first = registry.get("agent_x")
+
+        registry.register(defn_v2)  # should evict the cached instance
+        second = registry.get("agent_x")
+
+        assert first is not second
+
+    def test_reregistration_updates_stored_definition(self, tmp_path: Path) -> None:
+        """After a second register(), definitions[name] reflects the new defn."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn_v1 = _make_defn("shared_name", "Old description")
+        defn_v2 = _make_defn("shared_name", "New description")
+
+        registry.register(defn_v1)
+        registry.register(defn_v2)
+
+        assert registry.definitions["shared_name"] is defn_v2
+
+    # ------------------------------------------------------------------
+    # AC: scan() clears programmatic registrations, keeps only file-scanned
+    # ------------------------------------------------------------------
+
+    def test_scan_clears_programmatic_registrations(self, agents_dir: Path) -> None:
+        """scan() must remove programmatically registered agents not on disk."""
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("ephemeral")
+        registry.register(defn)
+        assert "ephemeral" in registry.definitions
+
+        registry.scan()
+
+        assert "ephemeral" not in registry.definitions
+
+    def test_scan_leaves_only_file_scanned_definitions(self, agents_dir: Path) -> None:
+        """After scan(), definitions contains exactly the file-scanned agents."""
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.register(_make_defn("extra_prog"))
+
+        registry.scan()
+
+        # agents_dir fixture contains "builder" and "reviewer".
+        assert set(registry.definitions.keys()) == {"builder", "reviewer"}
+
+    def test_scan_on_empty_dir_clears_programmatic_registrations(self, tmp_path: Path) -> None:
+        """scan() on an empty dir removes all programmatic registrations."""
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        registry = AgentRegistry(empty, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.register(_make_defn("will_be_gone"))
+
+        registry.scan()
+
+        assert registry.definitions == {}
+
+    # ------------------------------------------------------------------
+    # AC: list_agents() and definitions include programmatic registrations
+    # ------------------------------------------------------------------
+
+    def test_list_agents_includes_programmatic(self, tmp_path: Path) -> None:
+        """list_agents() must include programmatically registered definitions."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("prog_listed")
+
+        registry.register(defn)
+        agents_list = registry.list_agents()
+
+        names = {a.name for a in agents_list}
+        assert "prog_listed" in names
+
+    def test_definitions_property_includes_programmatic(self, tmp_path: Path) -> None:
+        """Definitions property must include programmatically registered entries."""
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("prop_check")
+
+        registry.register(defn)
+
+        assert "prop_check" in registry.definitions
+
+    def test_programmatic_and_file_scanned_coexist_in_list_agents(self, agents_dir: Path) -> None:
+        """After scan() + register(), list_agents() returns both scanned and programmatic."""
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.scan()  # loads "builder" and "reviewer"
+
+        defn = _make_defn("injected")
+        registry.register(defn)
+
+        names = {a.name for a in registry.list_agents()}
+        assert "builder" in names
+        assert "reviewer" in names
+        assert "injected" in names
+
+    def test_programmatic_and_file_scanned_coexist_in_definitions(self, agents_dir: Path) -> None:
+        """After scan() + register(), definitions contains both sources."""
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+        registry.register(_make_defn("extra"))
+
+        definitions = registry.definitions
+        assert "builder" in definitions
+        assert "reviewer" in definitions
+        assert "extra" in definitions
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: Task #897 — Role-filter simplification without core.roles
+# ---------------------------------------------------------------------------
+
+
+def _write_validator_md(path: Path, name: str = "val") -> None:
+    """Write a minimal validator role agent definition for #897 tests."""
+    path.write_text(
+        f"---\nname: {name}\ndescription: Val\nrole: validator\ntools:\n  - x\n---\nBody.\n",
+        encoding="utf-8",
+    )
+
+
+def _write_builder_md(path: Path, name: str = "bld") -> None:
+    """Write a minimal builder role agent definition for #897 tests."""
+    path.write_text(
+        f"---\nname: {name}\ndescription: Bld\nrole: builder\ntools:\n  - x\n---\nBody.\n",
+        encoding="utf-8",
+    )
+
+
+class TestFromAC_ValidatorDirectFiltering:
+    """Validator _build_agent must call AbstractToolset.filtered() directly.
+
+    After #897, AgentRegistry must NOT use apply_role_policy or _ROLE_POLICIES.
+    Direct ts.filtered(predicate) calls replace the indirection layer for
+    validator-role agents.
+    """
+
+    def test_validator_does_not_call_apply_role_policy(self, tmp_path: Path) -> None:
+        """_build_agent for a validator role must NOT call apply_role_policy."""
+        _write_validator_md(tmp_path / "val.md")
+        registry = AgentRegistry(tmp_path, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+        with patch("owlbear.core.agent_registry.apply_role_policy") as mock_apply:
+            registry.get("val")
+        mock_apply.assert_not_called()
+
+    def test_validator_filtered_called_when_role_policy_patched_out(self, tmp_path: Path) -> None:
+        """Direct filtered() call survives even when apply_role_policy is patched out.
+
+        If _build_agent only called filtered() via apply_role_policy, replacing
+        apply_role_policy with a no-op would prevent filtered() from firing.
+        After #897 refactoring, filtered() is called directly so patching
+        apply_role_policy has no effect on whether filtered() is invoked.
+        """
+        _write_validator_md(tmp_path / "val.md")
+        mock_ts = MagicMock(spec=FunctionToolset)
+        mock_ts.filtered.return_value = FunctionToolset()
+        registry = AgentRegistry(tmp_path, lambda _: mock_ts, default_model=_TEST_MODEL)
+        registry.scan()
+
+        # Patch apply_role_policy to a no-op that does NOT call ts.filtered().
+        with patch("owlbear.core.agent_registry.apply_role_policy", return_value=FunctionToolset()):
+            registry.get("val")
+
+        # After refactor: filtered() is called directly in _build_agent.
+        # Currently FAILS: filtered() only fires inside apply_role_policy, which is patched out.
+        mock_ts.filtered.assert_called()
+
+    def test_validator_filtered_despite_empty_role_policies_dict(self, tmp_path: Path) -> None:
+        """Filtering must happen even when _ROLE_POLICIES is an empty dict.
+
+        With empty _ROLE_POLICIES the current code falls back to BUILDER_POLICY
+        (which has no constraints), skipping filtered(). After #897, filtering
+        occurs via direct ts.filtered() calls that bypass _ROLE_POLICIES entirely.
+        """
+        _write_validator_md(tmp_path / "val.md")
+        mock_ts = MagicMock(spec=FunctionToolset)
+        mock_ts.filtered.return_value = FunctionToolset()
+        registry = AgentRegistry(tmp_path, lambda _: mock_ts, default_model=_TEST_MODEL)
+        registry.scan()
+
+        with patch("owlbear.core.agent_registry._ROLE_POLICIES", {}):
+            registry.get("val")
+
+        # After refactor: direct filtering independent of _ROLE_POLICIES.
+        # Currently FAILS: empty dict → BUILDER_POLICY fallback → filtered() skipped.
+        mock_ts.filtered.assert_called()
+
+
+class TestFromAC_BuilderFilterBypass:
+    """Guard: builder agents bypass all role-filtering infrastructure.
+
+    After removing the core.roles dependency from agent_registry.py, builders
+    must continue to receive unfiltered toolsets via direct string comparison
+    (role == 'validator') rather than AgentRole enum lookup.
+    """
+
+    def test_agent_registry_no_core_roles_import(self) -> None:
+        """After #897: agent_registry.py must not import owlbear.core.roles."""
+        import ast
+        import inspect
+
+        source = Path(inspect.getfile(AgentRegistry)).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        roles_imports = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "owlbear.core.roles"
+        ]
+        assert roles_imports == [], (
+            "agent_registry.py still imports 'owlbear.core.roles'; "
+            "remove this dependency as part of #897"
+        )
+
+    def test_agent_registry_no_role_policies_dict(self) -> None:
+        """After #897: _ROLE_POLICIES module-level dict must be removed."""
+        import ast
+        import inspect
+
+        source = Path(inspect.getfile(AgentRegistry)).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        role_policies_defs = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            for target in node.targets
+            if isinstance(target, ast.Name) and target.id == "_ROLE_POLICIES"
+        ]
+        assert role_policies_defs == [], (
+            "_ROLE_POLICIES must be removed from agent_registry.py as part of #897"
+        )
