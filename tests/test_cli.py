@@ -569,7 +569,7 @@ class TestChatAsyncRunsCleanup:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RichTracebackCli:  # noqa: N801
+class TestFromAC_RichTracebackCli:
     """AC#1: rich.traceback.install(show_locals=False, suppress=[typer, click]) in cli.py main().
 
     The rich traceback handler must be installed at the CLI app callback level
