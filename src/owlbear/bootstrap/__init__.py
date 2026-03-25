@@ -83,7 +83,7 @@ def _wire_session_memory_hook(
             record_agent_usage(
                 tracker=tracker,
                 result=result,
-                model=str(model),
+                model=model,
                 provider=provider,
                 session_id="background:session_summary",
                 operation="session_summary",

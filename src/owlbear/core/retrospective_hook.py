@@ -286,7 +286,7 @@ class RetrospectiveHook:
                 record_agent_usage(
                     tracker=self._tracker,
                     result=result,
-                    model=str(self._model),
+                    model=self._model,
                     provider=self._provider,
                     session_id="background:retrospective",
                     operation="retrospective",

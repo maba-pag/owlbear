@@ -132,7 +132,11 @@ def record_agent_usage(  # noqa: PLR0913
         return
 
     try:
-        model_name = model if isinstance(model, str) else getattr(model, "model_name", str(model))
+        if isinstance(model, str):
+            model_name = model
+        else:
+            candidate = getattr(model, "model_name", None)
+            model_name = candidate if isinstance(candidate, str) else str(model)
         usage = result.usage()
 
         estimated_cost: float | None = None
