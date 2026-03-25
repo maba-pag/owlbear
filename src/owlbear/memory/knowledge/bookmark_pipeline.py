@@ -57,21 +57,17 @@ class BookmarkResult(BaseModel):
 class BookmarkPipeline:
     """Orchestrate URL → extract → evaluate → ingest → bookmark.
 
-    Parameters
-    ----------
-    bookmark_store:
-        CRUD façade for the ``bookmarks`` table.
-    evaluator:
-        LLM-based source relevance evaluator.
-    ingest_pipeline:
-        Optional knowledge ingest pipeline.  When ``None``, ingestion is
-        skipped even if the evaluation score is high.
-    web_read_fn:
-        Async callable ``(url) -> str | None``.  Defaults to a simple
-        httpx + trafilatura extraction if not provided.
-    ingest_threshold:
-        Minimum ``relevance_score`` required to trigger ingestion
-        (also requires ``worth_ingesting=True``).
+    Args:
+        bookmark_store (BookmarkStore): CRUD façade for the ``bookmarks`` table.
+        evaluator (SourceEvaluator): LLM-based source relevance evaluator.
+        ingest_pipeline (IngestPipeline | None): Optional knowledge ingest
+            pipeline. When ``None``, ingestion is skipped even if the
+            evaluation score is high.
+        web_read_fn (Callable[[str], Awaitable[str | None]] | None): Async
+            callable ``(url) -> str | None``. Defaults to a simple httpx +
+            trafilatura extraction if not provided.
+        ingest_threshold (float): Minimum ``relevance_score`` required to trigger ingestion
+            (also requires ``worth_ingesting=True``).
     """
 
     def __init__(
@@ -101,27 +97,21 @@ class BookmarkPipeline:
     ) -> BookmarkResult:
         """Run the full bookmark pipeline for *url*.
 
-        Parameters
-        ----------
-        url:
-            The URL to bookmark and ingest.
-        reason:
-            Optional human-readable reason for bookmarking.
-        scope:
-            Knowledge-graph scope for the ingested content.
-        project_context:
-            Optional project metadata passed to the evaluator.
-        cancel:
-            Optional :class:`asyncio.Event`.  When set, the pipeline
-            exits cooperatively before the next stage (extract, evaluate,
-            ingest, or store).  Earlier-stage results are preserved in
-            the returned :class:`BookmarkResult`.
+        Args:
+            url (str): The URL to bookmark and ingest.
+            reason (str | None): Optional human-readable reason for bookmarking.
+            scope (str): Knowledge-graph scope for the ingested content.
+            project_context (dict[str, Any] | None): Optional project metadata
+                passed to the evaluator.
+            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
+                When set, the pipeline exits cooperatively before the next
+                stage (extract, evaluate, ingest, or store). Earlier-stage
+                results are preserved in the returned
+                :class:`BookmarkResult`.
 
         Returns:
-        -------
-        BookmarkResult
-            Contains the stored bookmark, evaluation, ingestion flag, and
-            any skip reason.
+            BookmarkResult: Contains the stored bookmark, evaluation, ingestion
+                flag, and any skip reason.
         """
         # 1. Dedup check
         existing = self._store.get_by_url(url, scope)

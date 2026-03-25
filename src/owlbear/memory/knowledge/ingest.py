@@ -63,24 +63,19 @@ class IngestPipeline:
     Coordinates: intake → chunk → parallel(embed, extract) → store.
     Delegates all document CRUD to :class:`DocumentStore`.
 
-    Parameters
-    ----------
-    store:
-        Document CRUD store for status tracking, chunks, embeddings,
-        and entity/edge persistence.
-    entity_extractor:
-        LLM-based entity/relationship extractor (async, I/O-bound).
-    text_chunker:
-        Splits text into chunks.
-    workspace_root:
-        Workspace root directory for path-confinement checks.
-    enricher:
-        Optional :class:`~owlbear.memory.knowledge.enrichment.GraphEnricher`
-        for background graph enrichment scheduling.  When ``None``,
-        enrichment calls are silently skipped.
-    pipeline_name:
-        Label stamped into ``source_pipeline`` provenance metadata.
-        Defaults to ``'ingest'``.
+    Args:
+        store (DocumentStore): Document CRUD store for status tracking,
+            chunks, embeddings, and entity/edge persistence.
+        entity_extractor (EntityExtractor): LLM-based
+            entity/relationship extractor (async, I/O-bound).
+        text_chunker (TextChunker): Splits text into chunks.
+        workspace_root (Path): Workspace root directory for path-confinement checks.
+        enricher (GraphEnricher | None): Optional
+            :class:`~owlbear.memory.knowledge.enrichment.GraphEnricher` for
+            background graph enrichment scheduling. When ``None``,
+            enrichment calls are silently skipped.
+        pipeline_name (str): Label stamped into ``source_pipeline`` provenance metadata.
+            Defaults to ``'ingest'``.
     """
 
     def __init__(  # noqa: PLR0913
@@ -127,17 +122,14 @@ class IngestPipeline:
     ) -> IngestResult:
         """Ingest content from *source* through the full pipeline.
 
-        Parameters
-        ----------
-        source:
-            A file path (:class:`~pathlib.Path` or ``str``) or an HTTP URL.
-        scope:
-            Visibility scope for the ingested data (default ``'global'``).
+        Args:
+            source (str | Path): A file path (:class:`~pathlib.Path` or ``str``) or an HTTP URL.
+            scope (str): Visibility scope for the ingested data (default ``'global'``).
+            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
+                When set, ingestion exits cooperatively before the next stage.
 
         Returns:
-        -------
-        IngestResult
-            Summary with document_id, counts, and final status.
+            IngestResult: Summary with document_id, counts, and final status.
         """
         source_str = str(source)
 
@@ -200,21 +192,19 @@ class IngestPipeline:
         file path or URL.  Useful for crawled page content or other
         in-memory text.
 
-        Parameters
-        ----------
-        text:
-            The raw text content to ingest.
-        metadata:
-            Optional metadata dict (e.g. ``{"url": ..., "source_type": "crawl"}``).
-            Merged into the :class:`IntakeResult` metadata.
-        cancel:
-            Optional :class:`asyncio.Event`.  When set, extraction stops
-            before the next chunk (cooperative cancellation).
+        Args:
+            text (str): The raw text content to ingest.
+            metadata (dict[str, Any] | None): Optional metadata dict
+                (e.g. ``{"url": ..., "source_type": "crawl"}``).
+                Merged into the :class:`IntakeResult` metadata.
+            scope (str): Visibility scope for the ingested data
+                (default ``'global'``).
+            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
+                When set, extraction stops
+                before the next chunk (cooperative cancellation).
 
         Returns:
-        -------
-        IngestResult
-            Summary with document_id, counts, and final status.
+            IngestResult: Summary with document_id, counts, and final status.
         """
         source_label = str((metadata or {}).get("url", "inline"))
 

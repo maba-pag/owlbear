@@ -19,11 +19,9 @@ if TYPE_CHECKING:
 class KnowledgeSourceStore:
     """Synchronous CRUD façade for the ``knowledge_sources`` table.
 
-    Parameters
-    ----------
-    conn:
-        An open :class:`sqlite3.Connection` whose schema already contains
-        the ``knowledge_sources`` table (see ``schema.py`` / ``init_db``).
+    Args:
+        conn (sqlite3.Connection): An open :class:`sqlite3.Connection` whose schema already contains
+            the ``knowledge_sources`` table (see ``schema.py`` / ``init_db``).
     """
 
     def __init__(self, conn: sqlite3.Connection) -> None:

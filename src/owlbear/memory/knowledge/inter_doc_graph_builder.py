@@ -110,7 +110,8 @@ class InterDocGraphBuilder:
 
         Returns:
         GraphBuildResult:
-            The inferred edges and a count of edges added.:"""
+            The inferred edges and a count of edges added.:
+        """
         _min_entities = 2
         if len(entities) < _min_entities:
             return GraphBuildResult()

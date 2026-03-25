@@ -28,23 +28,19 @@ async def crawl_and_ingest(
 ) -> list[IngestResult]:
     """Crawl URLs and ingest each page through the knowledge pipeline.
 
-    Parameters
-    ----------
-    crawler:
-        A :class:`~owlbear.tools.browser.crawler.WebCrawler` instance.
-    pipeline:
-        A :class:`~owlbear.memory.knowledge.ingest.IngestPipeline` instance.
-    config:
-        Crawl configuration (seed URLs, limits, etc.).
-    cancel:
-        Optional :class:`asyncio.Event`.  When set, the loop stops before
-        ingesting the next page.
+    Args:
+        crawler (WebCrawler): A
+            :class:`~owlbear.tools.browser.crawler.WebCrawler` instance.
+        pipeline (IngestPipeline): A
+            :class:`~owlbear.memory.knowledge.ingest.IngestPipeline` instance.
+        config (CrawlConfig): Crawl configuration (seed URLs, limits, etc.).
+        cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
+            When set, the loop stops before
+            ingesting the next page.
 
     Returns:
-    -------
-    list[IngestResult]
-        One result per successfully ingested page.  Pages that fail during
-        ingestion are logged and skipped.
+        list[IngestResult]: One result per successfully ingested page.
+            Pages that fail during ingestion are logged and skipped.
     """
     crawl_result = await crawler.crawl(config)
     results: list[IngestResult] = []

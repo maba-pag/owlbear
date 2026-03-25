@@ -241,16 +241,13 @@ _SCAFFOLDERS: dict[str, Callable[[Path, str], None]] = {
 class ProjectWorkspace:
     """Orchestrates creation of new project directories.
 
-    Parameters
-    ----------
-    project_root:
-        Base directory under which new projects are created.
-    store:
-        :class:`ProjectStore` for registering created projects.
-    run_cmd:
-        Callable that runs a subprocess command given a list of args.
-        Defaults to :func:`subprocess.run` with ``check=True``.
-        Pass a mock in tests to avoid real git/kanban-md calls.
+    Args:
+        project_root (Path): Base directory under which new projects are created.
+        store (ProjectStore): :class:`ProjectStore` for registering created projects.
+        run_cmd (Callable[[list[str]], None] | None): Callable that runs a
+            subprocess command given a list of args.
+            Defaults to :func:`subprocess.run` with ``check=True``.
+            Pass a mock in tests to avoid real git/kanban-md calls.
     """
 
     def __init__(
@@ -278,11 +275,8 @@ class ProjectWorkspace:
         Returns the path to the created project directory.
 
         Raises:
-        ------
-        ValueError
-            If the template is unknown or the project name is a duplicate.
-        FileExistsError
-            If the target directory already exists.
+            ValueError: If the template is unknown or the project name is a duplicate.
+            FileExistsError: If the target directory already exists.
         """
         # 1. Validate template
         if template not in TEMPLATES:

@@ -38,23 +38,18 @@ class SlackChannel(ChannelPlugin):
     Uses ``AsyncWebClient`` for sending messages and ``SocketModeClient``
     for receiving real-time events via Socket Mode.
 
-    Parameters
-    ----------
-    app_token:
-        Slack app-level token (``xapp-...``) for Socket Mode.
-    bot_token:
-        Slack bot token (``xoxb-...``) for Web API calls.
-    channel_id:
-        Default Slack channel ID for outgoing messages.
-    receive_timeout:
-        Seconds to wait for an incoming message before returning ``None``.
-    allowed_user_ids:
-        Slack user IDs permitted to send messages.  When non-empty, messages
-        from any other sender are silently dropped.  An empty set (default)
-        allows all senders.
-    rate_limit_per_minute:
-        Maximum messages accepted per user per minute.  ``0`` (default)
-        disables rate limiting.
+    Args:
+        app_token (str): Slack app-level token (``xapp-...``) for Socket Mode.
+        bot_token (str): Slack bot token (``xoxb-...``) for Web API calls.
+        channel_id (str): Default Slack channel ID for outgoing messages.
+        receive_timeout (float): Seconds to wait for an incoming message before
+            returning ``None``.
+        allowed_user_ids (frozenset[str]): Slack user IDs permitted to send
+            messages. When non-empty, messages
+            from any other sender are silently dropped.  An empty set (default)
+            allows all senders.
+        rate_limit_per_minute (int): Maximum messages accepted per user per minute.  ``0`` (default)
+            disables rate limiting.
     """
 
     def __init__(  # noqa: PLR0913
@@ -121,14 +116,11 @@ class SlackChannel(ChannelPlugin):
     ) -> None:
         """Send *message* to the configured Slack channel.
 
-        Parameters
-        ----------
-        message:
-            Text to send (Markdown is converted to mrkdwn).
-        context_key:
-            Optional context identifier (e.g. ``"project_id:task_id"``).
-            When provided, the first message creates a thread and subsequent
-            messages with the same key auto-thread.
+        Args:
+            message (str): Text to send (Markdown is converted to mrkdwn).
+            context_key (str | None): Optional context identifier (e.g. ``"project_id:task_id"``).
+                When provided, the first message creates a thread and subsequent
+                messages with the same key auto-thread.
         """
         kwargs: dict[str, Any] = {
             "channel": self._channel_id,
@@ -154,20 +146,16 @@ class SlackChannel(ChannelPlugin):
     ) -> None:
         """Send a Block Kit structured message to the configured Slack channel.
 
-        Parameters
-        ----------
-        blocks:
-            Non-empty list of Block Kit block dicts.
-        text_fallback:
-            Plain-text fallback — Slack uses it for notifications and
-            accessibility readers.
-        thread_ts:
-            Optional thread timestamp to reply in a thread.
+        Args:
+            blocks (list[dict[str, Any]]): Non-empty list of Block Kit block dicts.
+            text_fallback (str): Plain-text fallback — Slack uses it for notifications and
+                accessibility readers.
+            thread_ts (str | None): Optional thread timestamp to reply in a thread.
+            context_key (str | None): Optional context identifier for automatic
+                thread registry integration.
 
         Raises:
-        ------
-        ValueError
-            If *blocks* is empty.
+            ValueError: If *blocks* is empty.
         """
         if not blocks:
             msg = "blocks must be non-empty"
@@ -215,17 +203,12 @@ class SlackChannel(ChannelPlugin):
 
         Requires the ``files:write`` bot scope.
 
-        Parameters
-        ----------
-        file_or_bytes:
-            Path to the image file or raw image bytes.
-        caption:
-            Optional caption used as both ``title`` and ``initial_comment``.
-        thread_ts:
-            Optional thread timestamp to reply in a thread.
-        context_key:
-            Optional context identifier for automatic thread registry
-            integration.  Explicit *thread_ts* takes precedence.
+        Args:
+            file_or_bytes (str | Path | bytes): Path to the image file or raw image bytes.
+            caption (str): Optional caption used as both ``title`` and ``initial_comment``.
+            thread_ts (str | None): Optional thread timestamp to reply in a thread.
+            context_key (str | None): Optional context identifier for automatic thread registry
+                integration.  Explicit *thread_ts* takes precedence.
         """
         kwargs: dict[str, Any] = {
             "file": file_or_bytes,

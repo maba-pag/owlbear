@@ -138,10 +138,8 @@ class PidFile:
     - **Stale** (process dead): the file is removed and re-created.
     - **Alive** (process running): :exc:`RuntimeError` is raised.
 
-    Parameters
-    ----------
-    path:
-        Absolute path to the PID file (e.g. ``config_dir / "owlbear.pid"``).
+    Args:
+        path (Path): Absolute path to the PID file (e.g. ``config_dir / "owlbear.pid"``).
     """
 
     def __init__(self, path: Path) -> None:
@@ -188,15 +186,11 @@ def setup_logging(log_file: Path) -> logging.Logger:
     :func:`rich.traceback.install` is called so unhandled exceptions render
     rich tracebacks on stderr.
 
-    Parameters
-    ----------
-    log_file:
-        Path to the log file (e.g. ``config_dir / "owlbear.log"``).
+    Args:
+        log_file (Path): Path to the log file (e.g. ``config_dir / "owlbear.log"``).
 
     Returns:
-    -------
-    logging.Logger
-        The root logger, configured with both handlers.
+        logging.Logger: The root logger, configured with both handlers.
     """
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -255,15 +249,11 @@ def configure_otel(otel_endpoint: str) -> None:
     Sets ``OTEL_EXPORTER_OTLP_ENDPOINT`` in the process environment and
     calls :func:`logfire.configure` with ``send_to_logfire=False``.
 
-    Parameters
-    ----------
-    otel_endpoint:
-        The OTLP endpoint URL (e.g. ``http://localhost:4318``).
+    Args:
+        otel_endpoint (str): The OTLP endpoint URL (e.g. ``http://localhost:4318``).
 
     Raises:
-    ------
-    RuntimeError
-        When ``logfire`` is not installed.
+        RuntimeError: When ``logfire`` is not installed.
     """
     if logfire is None:
         msg = "logfire is required for OTel configuration but is not installed"
@@ -1054,33 +1044,31 @@ async def run_daemon(  # noqa: PLR0913, PLR0915, PLR0912, C901
     - The sentinel file ``config_dir / "owlbear.stop"`` appears
     - A signal (SIGINT / SIGTERM) sets the shutdown event
 
-    Parameters
-    ----------
-    channel:
-        The I/O channel to read from and write to.
-    agent:
-        The OwlBearAgent that processes each message.
-    config_dir:
-        Directory containing PID and sentinel files.
-    settings:
-        Optional application settings.  Enables token refresh and, when
-        ``autonomous_mode`` is ``True``, the poll-dispatch-reconcile loop.
-    otel_endpoint:
-        Optional OTLP endpoint URL. When set, Logfire SDK is configured
-        before instrumentation.
-    error_journal:
-        Optional :class:`~owlbear.memory.error_journal.ErrorJournal` for
-        logging errors from ``_recover_from_error``.  When *None*, error
-        journal logging is silently skipped.
-    kanban_toolset:
-        Required for autonomous mode.  Provides board I/O (list, show,
-        move) used by the poll-dispatch-reconcile loop.
-    agent_registry:
-        Required for autonomous mode.  Supplies the ``'builder'`` agent
-        used to execute dispatched tasks.
-    workspace_root:
-        Optional workspace root path included in the ``SESSION_START``
-        hook payload.  Defaults to ``Path.cwd()`` when *None*.
+    Args:
+        channel (ChannelPlugin): The I/O channel to read from and write to.
+        agent (OwlBearAgent): The OwlBearAgent that processes each message.
+        config_dir (Path): Directory containing PID and sentinel files.
+        settings (OwlBearSettings | None): Optional application settings.
+            Enables token refresh and, when ``autonomous_mode`` is ``True``,
+            the poll-dispatch-reconcile loop.
+        otel_endpoint (str | None): Optional OTLP endpoint URL.
+            When set, Logfire SDK is configured before instrumentation.
+        error_journal (ErrorJournal | None): Optional
+            :class:`~owlbear.memory.error_journal.ErrorJournal` for logging
+            errors from ``_recover_from_error``. When *None*, error journal
+            logging is silently skipped.
+        kanban_toolset (KanbanToolset | None): Required for autonomous mode.
+            Provides board I/O (list, show, move) used by the
+            poll-dispatch-reconcile loop.
+        agent_registry (AgentRegistry | None): Required for autonomous mode.
+            Supplies the ``'builder'`` agent used to execute dispatched tasks.
+        workspace_root (Path | None): Optional workspace root path included in
+            the ``SESSION_START`` hook payload. Defaults to ``Path.cwd()`` when
+            *None*.
+        hydrator (Callable | None): Optional URL/context hydration callable
+            passed through to delegated builder runs.
+        consolidation_svc (object | None): Optional consolidation service
+            passed through to delegated builder runs.
     """
     shutdown_event = asyncio.Event()
     loop = asyncio.get_running_loop()

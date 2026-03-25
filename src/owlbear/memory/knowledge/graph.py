@@ -25,11 +25,9 @@ if TYPE_CHECKING:
 class GraphStore:
     """Synchronous CRUD façade for knowledge-graph entities, edges, and documents.
 
-    Parameters
-    ----------
-    conn:
-        An open :class:`sqlite3.Connection` where :func:`init_db` has
-        already been called.
+    Args:
+        conn (sqlite3.Connection): An open :class:`sqlite3.Connection` where :func:`init_db` has
+            already been called.
     """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
@@ -325,22 +323,16 @@ class GraphStore:
     ) -> list[tuple[Entity, Edge]]:
         """BFS traversal returning neighbor entities with their connecting edges.
 
-        Parameters
-        ----------
-        entity_id:
-            Starting entity for the traversal.
-        max_depth:
-            Maximum number of hops (1 = direct neighbors only).
-        max_nodes:
-            Stop collecting once this many neighbors have been found.
-        scopes:
-            Optional scope filter passed through to :meth:`list_edges`.
+        Args:
+            entity_id (str): Starting entity for the traversal.
+            max_depth (int): Maximum number of hops (1 = direct neighbors only).
+            max_nodes (int): Stop collecting once this many neighbors have been found.
+            scopes (list[str] | None): Optional scope filter passed through to :meth:`list_edges`.
 
         Returns:
-        -------
         list[tuple[Entity, Edge]]:
-            Each tuple is ``(neighbor_entity, connecting_edge)``.
-            Returns an empty list if *entity_id* does not exist.
+            Each tuple is ``(neighbor_entity, connecting_edge)``.:
+            Returns an empty list if *entity_id* does not exist.:
         """
         if self.get_entity(entity_id) is None:
             return []

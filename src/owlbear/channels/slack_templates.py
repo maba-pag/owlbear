@@ -32,14 +32,10 @@ def format_proposal_blocks(
     Returns a list containing: header, description section, divider,
     numbered option sections, and a context footer.
 
-    Parameters
-    ----------
-    title:
-        Proposal title (displayed as header).
-    description:
-        Rich-text description (mrkdwn-compatible).
-    options:
-        List of option strings to present as numbered choices.
+    Args:
+        title (str): Proposal title (displayed as header).
+        description (str): Rich-text description (mrkdwn-compatible).
+        options (list[str]): List of option strings to present as numbered choices.
     """
     blocks: list[dict] = []
 
@@ -96,20 +92,13 @@ def format_status_blocks(  # noqa: PLR0913
     Returns a list containing: header, 2-column fields section, and a
     last-action section.
 
-    Parameters
-    ----------
-    task_name:
-        Name of the task being tracked.
-    step:
-        Current step number.
-    total_steps:
-        Total number of steps.
-    status:
-        Current status label.
-    eta:
-        Estimated time remaining.
-    last_tool:
-        Name of the last tool invoked.
+    Args:
+        task_name (str): Name of the task being tracked.
+        step (int): Current step number.
+        total_steps (int): Total number of steps.
+        status (str): Current status label.
+        eta (str): Estimated time remaining.
+        last_tool (str): Name of the last tool invoked.
     """
     blocks: list[dict] = []
 
@@ -165,15 +154,11 @@ def format_interactive_proposal_blocks(
     :func:`format_proposal_blocks` (which lists numbered text), this variant
     produces interactive elements that Slack can post back via action payloads.
 
-    Parameters
-    ----------
-    title:
-        Proposal title (displayed as header).
-    description:
-        Rich-text description (mrkdwn-compatible).
-    options:
-        Each dict must have ``text`` (display label) and ``value`` keys.
-        Buttons receive ``action_id`` = ``"option_{index}"``.
+    Args:
+        title (str): Proposal title (displayed as header).
+        description (str): Rich-text description (mrkdwn-compatible).
+        options (list[dict]): Each dict must have ``text`` (display label) and ``value`` keys.
+            Buttons receive ``action_id`` = ``"option_{index}"``.
     """
     blocks: list[dict] = [
         {
@@ -208,13 +193,10 @@ def format_approval_blocks(
 ) -> list[dict]:
     """Build Block Kit blocks with approve / deny buttons.
 
-    Parameters
-    ----------
-    action_description:
-        Human-readable description of the action awaiting approval.
-    action_id_prefix:
-        Prefix for button ``action_id`` values.  Produces
-        ``"{prefix}_approve"`` and ``"{prefix}_deny"``.
+    Args:
+        action_description (str): Human-readable description of the action awaiting approval.
+        action_id_prefix (str): Prefix for button ``action_id`` values.  Produces
+            ``"{prefix}_approve"`` and ``"{prefix}_deny"``.
     """
     return [
         {
@@ -254,16 +236,11 @@ def format_progress_blocks(
 ) -> list[dict]:
     """Build Block Kit blocks with an emoji progress bar.
 
-    Parameters
-    ----------
-    task_name:
-        Name of the task being tracked.
-    current_step:
-        Completed steps so far (0-based OK).
-    total_steps:
-        Total number of steps.
-    eta:
-        Optional estimated time remaining.  Omitted from output when *None*.
+    Args:
+        task_name (str): Name of the task being tracked.
+        current_step (int): Completed steps so far (0-based OK).
+        total_steps (int): Total number of steps.
+        eta (str | None): Optional estimated time remaining.  Omitted from output when *None*.
     """
     bar = (_FILLED * current_step) + (_UNFILLED * (total_steps - current_step))
     progress_line = f"{bar}  {current_step}/{total_steps}"
@@ -304,14 +281,10 @@ def format_proposal_text(
 ) -> str:
     """Plain-text proposal for non-interactive channels (CLI, logging).
 
-    Parameters
-    ----------
-    title:
-        Proposal title.
-    description:
-        Description body.
-    options:
-        Either plain strings or dicts with a ``text`` key.
+    Args:
+        title (str): Proposal title.
+        description (str): Description body.
+        options (list[str] | list[dict]): Either plain strings or dicts with a ``text`` key.
     """
     lines = [title, "", description, ""]
     for i, opt in enumerate(options, 1):
@@ -326,10 +299,8 @@ def format_proposal_text(
 def format_approval_text(action_description: str) -> str:
     """Plain-text approval prompt for non-interactive channels.
 
-    Parameters
-    ----------
-    action_description:
-        Human-readable description of the action awaiting approval.
+    Args:
+        action_description (str): Human-readable description of the action awaiting approval.
     """
     return f"Approval required: {action_description}\nReply 'approve' to approve or 'deny' to deny."
 
@@ -342,16 +313,11 @@ def format_progress_text(
 ) -> str:
     """Plain-text progress update for non-interactive channels.
 
-    Parameters
-    ----------
-    task_name:
-        Name of the task being tracked.
-    current_step:
-        Completed steps so far.
-    total_steps:
-        Total number of steps.
-    eta:
-        Optional estimated time remaining.
+    Args:
+        task_name (str): Name of the task being tracked.
+        current_step (int): Completed steps so far.
+        total_steps (int): Total number of steps.
+        eta (str | None): Optional estimated time remaining.
     """
     bar = (_FILLED * current_step) + (_UNFILLED * (total_steps - current_step))
     line = f"{task_name}: {bar} {current_step}/{total_steps}"

@@ -116,12 +116,13 @@ class SourceEvaluator:
 
         Args:
             content (str): Text content to evaluate. Truncated to first 2000 chars.
-            project_context (dict[str, Any] | None): Dict with ``name``, ``description``, ``goals`` keys.
+            project_context (dict[str, Any] | None): Dict with ``name``,
+                ``description``, ``goals`` keys.
                 When ``None``, returns a neutral score (0.5) without calling the LLM.
 
         Returns:
             EvaluationResult: Structured evaluation with score, tags, summary, and ingest flag.
-"""
+        """
         if not content or not content.strip():
             return EvaluationResult(
                 relevance_score=0.0,

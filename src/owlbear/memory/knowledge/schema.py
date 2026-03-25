@@ -292,11 +292,9 @@ def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
 def init_db(conn: sqlite3.Connection) -> None:
     """Create all knowledge-graph relational tables if they do not exist.
 
-    Parameters
-    ----------
-    conn:
-        An open :class:`sqlite3.Connection`.  Works with both file-backed
-        and ``:memory:`` databases.
+    Args:
+        conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both file-backed
+            and ``:memory:`` databases.
 
     The function is **idempotent** — calling it more than once on the same
     connection is safe and will not duplicate data or raise errors.

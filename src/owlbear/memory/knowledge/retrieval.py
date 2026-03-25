@@ -32,7 +32,6 @@ class RetrievalResult(BaseModel):
     """Immutable result from :meth:`GraphAugmentedRetriever.retrieve`.
 
     Attributes:
-    ----------
     chunks:
         Vector search hits as ``(id, score)`` pairs, highest score first.
     expansion_text:
@@ -69,25 +68,17 @@ class GraphAugmentedRetriever:
     Pipeline: embed query → ``search_similar`` (document chunks) → resolve
     chunk_ids to entities → ``get_neighbors`` per entity → format + budget-cap.
 
-    Parameters
-    ----------
-    vector_store:
-        Vector storage backend for similarity search.
-    graph_store:
-        Graph store for entity lookups and neighbor traversal.
-    embedding_provider:
-        Provider for generating query embeddings.
-    expansion_depth:
-        Max BFS hops for neighbor expansion (0 = no expansion).
-    max_expansion_tokens:
-        Word-count budget for *expansion_text*.
-    max_neighbors_per_entity:
-        ``max_nodes`` passed to :meth:`GraphStore.get_neighbors`.
-    expansion_enabled:
-        Master kill-switch — ``False`` disables all graph expansion.
-    weight_by_importance:
-        When ``True``, sort expanded neighbors by :attr:`Entity.importance`
-        descending so higher-importance entities appear first.
+    Args:
+        vector_store (VectorStoreProtocol): Vector storage backend for similarity search.
+        graph_store (GraphStore): Graph store for entity lookups and neighbor traversal.
+        embedding_provider (EmbeddingProvider): Provider for generating query embeddings.
+        expansion_depth (int): Max BFS hops for neighbor expansion (0 = no expansion).
+        max_expansion_tokens (int): Word-count budget for *expansion_text*.
+        max_neighbors_per_entity (int): ``max_nodes`` passed to :meth:`GraphStore.get_neighbors`.
+        expansion_enabled (bool): Master kill-switch — ``False`` disables all graph expansion.
+        weight_by_importance (bool): When ``True``, sort expanded neighbors by
+            :attr:`Entity.importance`
+            descending so higher-importance entities appear first.
     """
 
     def __init__(  # noqa: PLR0913
@@ -123,19 +114,15 @@ class GraphAugmentedRetriever:
     ) -> RetrievalResult:
         """Embed *query*, search, and optionally expand via the knowledge graph.
 
-        Parameters
-        ----------
-        query:
-            Natural-language query to embed and search.
-        top_k:
-            Maximum number of vector-search results.
-        scopes:
-            Optional scope filter forwarded to vector store and graph store.
+        Args:
+            query (str): Natural-language query to embed and search.
+            top_k (int): Maximum number of vector-search results.
+            scopes (list[str] | None): Optional scope filter forwarded to
+                vector store and graph store.
 
         Returns:
-        -------
-        RetrievalResult:
-            Vector chunks, formatted expansion text, and entity count.
+            RetrievalResult: Vector chunks, formatted expansion text, and
+                entity count.
         """
         embedding = self._embed(query)
 

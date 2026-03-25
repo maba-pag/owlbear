@@ -46,11 +46,9 @@ class Bookmark(BaseModel):
 class BookmarkStore:
     """Synchronous CRUD façade for the ``bookmarks`` table.
 
-    Parameters
-    ----------
-    conn:
-        An open :class:`sqlite3.Connection` whose schema already contains
-        the ``bookmarks`` table (see ``schema.py`` / ``init_db``).
+    Args:
+        conn (sqlite3.Connection): An open :class:`sqlite3.Connection` whose schema already contains
+            the ``bookmarks`` table (see ``schema.py`` / ``init_db``).
     """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
@@ -141,14 +139,10 @@ class BookmarkStore:
     ) -> list[Bookmark]:
         """Return bookmarks matching the optional filters.
 
-        Parameters
-        ----------
-        scope:
-            Filter by scope. ``None`` returns all scopes.
-        tag:
-            Filter by tag (substring match in JSON-encoded tags column).
-        min_score:
-            Minimum relevance_score threshold.
+        Args:
+            scope (str | None): Filter by scope. ``None`` returns all scopes.
+            tag (str | None): Filter by tag (substring match in JSON-encoded tags column).
+            min_score (float | None): Minimum relevance_score threshold.
         """
         clauses: list[str] = []
         params: list[object] = []

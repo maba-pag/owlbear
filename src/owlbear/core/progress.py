@@ -25,19 +25,15 @@ logger = logging.getLogger(__name__)
 class ProgressReporter:
     """Periodically report agent progress to a channel.
 
-    Parameters
-    ----------
-    channel:
-        Any object satisfying :class:`~owlbear.channels.base.ChannelPlugin`.
-    interval:
-        Seconds between heartbeat ticks.
-    detail:
-        ``"brief"`` for a short status line, ``"detailed"`` for full
-        tool-arg / session info.
-    agent_name:
-        Optional agent identifier included in detailed messages.
-    session_id:
-        Optional session identifier included in detailed messages.
+    Args:
+        channel (ChannelPlugin): Any object satisfying
+            :class:`~owlbear.channels.base.ChannelPlugin`.
+        interval (float): Seconds between heartbeat ticks.
+        detail (Literal['brief', 'detailed']): ``"brief"`` for a short status
+            line, ``"detailed"`` for full
+            tool-arg / session info.
+        agent_name (str | None): Optional agent identifier included in detailed messages.
+        session_id (str | None): Optional session identifier included in detailed messages.
     """
 
     def __init__(

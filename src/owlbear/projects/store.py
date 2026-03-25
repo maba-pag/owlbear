@@ -15,11 +15,9 @@ from owlbear.projects.models import Project
 class ProjectStore:
     """File-backed CRUD store for :class:`Project` instances.
 
-    Parameters
-    ----------
-    projects_dir:
-        Directory where ``{id}.json`` files are stored.
-        Created on first write if it does not exist.
+    Args:
+        projects_dir (Path): Directory where ``{id}.json`` files are stored.
+            Created on first write if it does not exist.
     """
 
     def __init__(self, projects_dir: Path) -> None:

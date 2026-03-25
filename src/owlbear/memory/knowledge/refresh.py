@@ -60,17 +60,14 @@ class RefreshResult(BaseModel):
 class RefreshOrchestrator:
     """Dispatches refresh operations by source type.
 
-    Parameters
-    ----------
-    store:
-        CRUD store for knowledge source records.
-    pipeline:
-        Async ingestion pipeline (handles delta detection internally).
-    crawl_handler:
-        Optional callback for ``crawl`` source types.  Receives the raw
-        source config dict and returns a list of :class:`IngestResult`.
-    workspace_root:
-        Root path used as default ``base_dir`` for ``file_glob`` sources.
+    Args:
+        store (KnowledgeSourceStore): CRUD store for knowledge source records.
+        pipeline (IngestPipeline): Async ingestion pipeline (handles delta detection internally).
+        crawl_handler (CrawlHandler | None): Optional callback for ``crawl``
+            source types. Receives the raw
+            source config dict and returns a list of :class:`IngestResult`.
+        workspace_root (Path | None): Root path used as default ``base_dir``
+            for ``file_glob`` sources.
     """
 
     def __init__(
@@ -103,9 +100,7 @@ class RefreshOrchestrator:
         :attr:`source.source_type`.
 
         Raises:
-        ------
-        ValueError
-            If *source* is disabled.
+            ValueError: If *source* is disabled.
         """
         if not source.enabled:
             msg = f"Source {source.id!r} is disabled"
@@ -129,14 +124,12 @@ class RefreshOrchestrator:
     ) -> list[RefreshResult]:
         """Refresh all enabled sources, ordered by priority descending.
 
-        Parameters
-        ----------
-        scope:
-            Optional scope filter passed to
-            :meth:`KnowledgeSourceStore.list_enabled`.
-        cancel:
-            Optional :class:`asyncio.Event`.  When set, the loop stops
-            before starting the next source.
+        Args:
+            scope (str | None): Optional scope filter passed to
+                :meth:`KnowledgeSourceStore.list_enabled`.
+            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
+                When set, the loop stops
+                before starting the next source.
         """
         sources = self._store.list_enabled(scope)
         results: list[RefreshResult] = []

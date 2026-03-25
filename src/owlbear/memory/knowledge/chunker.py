@@ -60,18 +60,14 @@ class TextChunker:
     def chunk(self, text: str, *, metadata: dict[str, Any] | None = None) -> list[Chunk]:
         """Split *text* into chunks respecting the separator hierarchy.
 
-        Parameters
-        ----------
-        text:
-            The source text to chunk.
-        metadata:
-            Arbitrary metadata propagated to every :class:`Chunk`.  The
-            keys ``start_char`` and ``end_char`` are added automatically.
+        Args:
+            text (str): The source text to chunk.
+            metadata (dict[str, Any] | None): Arbitrary metadata propagated to
+                every :class:`Chunk`. The
+                keys ``start_char`` and ``end_char`` are added automatically.
 
         Returns:
-        -------
-        list[Chunk]
-            An empty list when *text* is empty or whitespace-only.
+            list[Chunk]: An empty list when *text* is empty or whitespace-only.
         """
         if not text or not text.strip():
             return []

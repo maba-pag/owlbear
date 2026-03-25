@@ -67,14 +67,10 @@ def _compute_recency_score(
     Score decays exponentially with importance-based resistance:
     ``(1 - decay_rate * (1 - importance)) ** hours_since_created``.
 
-    Parameters
-    ----------
-    created_at_iso:
-        ISO-8601 datetime string for when the item was created.
-    decay_rate:
-        Base hourly decay rate.
-    importance:
-        Importance weight in ``[0, 1]`` that dampens decay.
+    Args:
+        created_at_iso (str): ISO-8601 datetime string for when the item was created.
+        decay_rate (float): Base hourly decay rate.
+        importance (float): Importance weight in ``[0, 1]`` that dampens decay.
     """
     created = datetime.fromisoformat(created_at_iso)
     if created.tzinfo is None:
@@ -95,13 +91,10 @@ class QdrantVectorStore:
     Stores dense, sparse, and ColBERT multi-vector embeddings in a single
     Qdrant collection with payload-based discrimination.
 
-    Parameters
-    ----------
-    location:
-        Qdrant storage location — ``':memory:'`` for in-memory or a
-        filesystem path for persistent storage.
-    collection_name:
-        Name of the Qdrant collection (default ``'owlbear_vectors'``).
+    Args:
+        location (str): Qdrant storage location — ``':memory:'`` for in-memory or a
+            filesystem path for persistent storage.
+        collection_name (str): Name of the Qdrant collection (default ``'owlbear_vectors'``).
     """
 
     def __init__(
@@ -175,16 +168,13 @@ class QdrantVectorStore:
     ) -> None:
         """Store (or upsert) an embedding for the given ID.
 
-        Parameters
-        ----------
-        entity_or_doc_id:
-            Unique string identifier for the entity or document.
-        embedding:
-            Dense vector (``list[float]``) or full hybrid embedding.
-        embedding_type:
-            Whether this is an ``'entity'`` or ``'document'`` embedding.
-        scope:
-            Visibility scope stored in payload (default ``'global'``).
+        Args:
+            entity_or_doc_id (str): Unique string identifier for the entity or document.
+            embedding (list[float] | HybridEmbedding): Dense vector
+                (``list[float]``) or full hybrid embedding.
+            embedding_type (Literal['entity', 'document']): Whether this is an
+                ``'entity'`` or ``'document'`` embedding.
+            scope (str): Visibility scope stored in payload (default ``'global'``).
         """
         self._ensure_collection()
 
@@ -257,20 +247,14 @@ class QdrantVectorStore:
         For :class:`HybridEmbedding` queries, uses prefetch (sparse + dense)
         with ColBERT rescore when all vectors are available.
 
-        Parameters
-        ----------
-        query_embedding:
-            Dense vector or full hybrid embedding.
-        top_k:
-            Maximum number of results.
-        embedding_type:
-            Restrict to ``'entity'`` or ``'document'`` only.
-        scopes:
-            Filter by scope payload field.
-        recency_weight:
-            Blend weight for temporal freshness boost.
-        decay_rate:
-            Hourly exponential decay rate for recency scoring.
+        Args:
+            query_embedding (list[float] | HybridEmbedding): Dense vector or full hybrid embedding.
+            top_k (int): Maximum number of results.
+            embedding_type (Literal['entity', 'document'] | None): Restrict to
+                ``'entity'`` or ``'document'`` only.
+            scopes (list[str] | None): Filter by scope payload field.
+            recency_weight (float): Blend weight for temporal freshness boost.
+            decay_rate (float): Hourly exponential decay rate for recency scoring.
         """
         self._ensure_collection()
 
