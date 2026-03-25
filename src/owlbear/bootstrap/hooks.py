@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear.core.command_guard import CommandSafetyGuard
 from owlbear.core.hooks import HookRegistry
@@ -19,9 +19,55 @@ if TYPE_CHECKING:
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
+    from owlbear.core.hook_reaction_router import Executor
+    from owlbear.core.notification_hook import NotificationBackend
     from owlbear.core.progress import ProgressReporter
 
 logger = logging.getLogger(__name__)
+
+
+def _event_label(value: object) -> str:
+    """Return a stable event label for reaction messages."""
+    if value is None:
+        return "notification"
+    raw_value = getattr(value, "value", value)
+    return str(raw_value)
+
+
+def _make_notify_executor(backends: list[NotificationBackend]) -> Executor:
+    """Build a backend-chain notify executor for hook reactions."""
+
+    async def _executor(data: dict[str, Any]) -> None:
+        event = data.get("_hook_event")
+        event_name = _event_label(event)
+        message = data.get("message", f"OwlBear: {event_name}")
+
+        for backend in backends:
+            try:
+                if await backend.notify(str(message), event):
+                    return
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Notification backend %r failed for %s",
+                    backend.name,
+                    event_name,
+                    exc_info=True,
+                )
+
+        logger.warning("All notification backends failed for event %s", event_name)
+
+    return _executor
+
+
+def _make_escalate_executor(channel: ChannelPlugin) -> Executor:
+    """Build a channel-send escalation executor for hook reactions."""
+
+    async def _executor(data: dict[str, Any]) -> None:
+        event_name = _event_label(data.get("_hook_event"))
+        payload = {key: value for key, value in data.items() if key != "_hook_event"}
+        await channel.send(f"Escalation [{event_name}] payload={payload!r}")
+
+    return _executor
 
 
 def build_hooks(
@@ -54,8 +100,9 @@ def build_hooks(
 
         LessonsInjectionHook().register(hooks)
 
+    notification_backends = [ConsoleBellBackend(), WinSoundBackend()]
     NotificationHook(
-        backends=[ConsoleBellBackend(), WinSoundBackend()],
+        backends=notification_backends,
         notification_events=settings.notification_events,
     ).register(hooks)
 
@@ -64,7 +111,17 @@ def build_hooks(
 
         async def _noop(_data: object) -> None: ...
 
-        executors = {"notify": _noop, "retry": _noop, "escalate": _noop}
+        executors = {
+            "notify": _make_notify_executor(notification_backends),
+            "retry": _noop,
+            "escalate": _noop,
+        }
+        if channel is not None:
+            executors["escalate"] = _make_escalate_executor(channel)
+        else:
+            logger.warning(
+                "Escalate hook reaction configured but no channel provided; using noop executor"
+            )
 
         HookReactionRouter(
             rules=settings.hook_reactions,
