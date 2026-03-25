@@ -79,9 +79,7 @@ class TestFromAC_FrontendNormalizePrompt:
     def test_references_design_context_md(self) -> None:
         """AC2: Prompt must reference docs/design-context.md."""
         content = _read_prompt()
-        assert "docs/design-context.md" in content, (
-            "Prompt must reference 'docs/design-context.md'"
-        )
+        assert "docs/design-context.md" in content, "Prompt must reference 'docs/design-context.md'"
 
     def test_references_frontend_design_skill_by_relative_path(self) -> None:
         """AC2: Prompt must reference the frontend-design skill by relative path."""
@@ -99,10 +97,26 @@ class TestFromAC_FrontendNormalizePrompt:
     def test_skill_reference_is_not_absolute_path(self) -> None:
         """AC2: Skill path reference must be relative, not absolute."""
         content = _read_prompt()
-        # No absolute path pattern near 'frontend-design'
-        absolute_ref = re.search(r"([A-Za-z]:\\|/[A-Za-z])[^\s]*frontend-design", content)
-        assert not absolute_ref, (
-            "Skill reference must be a relative path, not an absolute path"
+        # An absolute Unix path starts with / not preceded by . (which would be a relative ../)
+        # An absolute Windows path starts with a drive letter followed by :\
+        absolute_ref = re.search(
+            r"(?<!\.)(/[A-Za-z][^\s]*frontend-design)|([A-Za-z]:\\[^\s]*frontend-design)",
+            content,
+        )
+        assert not absolute_ref, "Skill reference must be a relative path, not an absolute path"
+
+    def test_skill_reference_resolves_to_existing_file(self) -> None:
+        """AC2: The relative skill path in the prompt must resolve to an actual existing file."""
+        content = _read_prompt()
+        match = re.search(r"(\.\.?/[\w\-./]*frontend-design[\w\-./]*SKILL\.md)", content)
+        assert match, (
+            "Prompt must contain a relative skill path reference to frontend-design/SKILL.md"
+        )
+        relative_path = match.group(1)
+        resolved = (PROMPT_PATH.parent / relative_path).resolve()
+        assert resolved.exists(), (
+            f"Skill path '{relative_path}' in the prompt resolves to '{resolved}', "
+            "which does not exist. Expected path: '../skills/frontend-design/SKILL.md'."
         )
 
     # -- AC3: plan-before-edit gate + all 6 normalization dimensions --
@@ -120,7 +134,8 @@ class TestFromAC_FrontendNormalizePrompt:
         plan_match = re.search(r"\bplan\b", content, re.IGNORECASE)
         dim_match = re.search(
             r"\btypography\b|\bcolor\b|\blayout\b|\bspacing\b",
-            content, re.IGNORECASE,
+            content,
+            re.IGNORECASE,
         )
         assert plan_match is not None, "Prompt must contain a plan step"
         assert dim_match is not None, "Prompt must contain normalization dimensions"
@@ -182,12 +197,11 @@ class TestFromAC_FrontendNormalizePrompt:
             "token usage": r"\btoken\b",
         }
         missing = [
-            dim for dim, pattern in dimensions.items()
+            dim
+            for dim, pattern in dimensions.items()
             if not re.search(pattern, content, re.IGNORECASE)
         ]
-        assert not missing, (
-            f"Prompt is missing required normalization dimensions: {missing}"
-        )
+        assert not missing, f"Prompt is missing required normalization dimensions: {missing}"
 
     # -- AC4: post-change verification steps --
 
@@ -216,9 +230,7 @@ class TestFromAC_FrontendNormalizePrompt:
         """AC4: Verification steps must appear after the plan/execute sections."""
         content = _read_prompt()
         plan_match = re.search(r"\bplan\b", content, re.IGNORECASE)
-        verify_match = re.search(
-            r"\baccessib|\bresponsive\b|one.off", content, re.IGNORECASE
-        )
+        verify_match = re.search(r"\baccessib|\bresponsive\b|one.off", content, re.IGNORECASE)
         assert plan_match is not None, "Prompt must contain a plan step"
         assert verify_match is not None, "Prompt must contain verification steps"
         assert verify_match.start() > plan_match.start(), (
