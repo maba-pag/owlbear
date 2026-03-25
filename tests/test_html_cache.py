@@ -1,14 +1,13 @@
-"""Tests for raw-HTML cache layer — HtmlCache, CrawlConfig TTL, WebCrawler integration.
+"""Tests for the raw-HTML cache layer and crawler cache integration.
 
-RED phase: all tests must fail (ImportError or AssertionError) because
-``owlbear.tools.browser.html_cache`` does not exist yet.
-
-AC reference: task #759 — Implement raw-HTML cache layer for WebCrawler.
+Coverage includes cache read/write behavior, TTL semantics, and
+cache-hit/cache-miss crawler paths.
 """
 
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import time
 from pathlib import Path
@@ -72,7 +71,7 @@ def mock_browser_manager(mock_page: AsyncMock) -> MagicMock:
 # ===================================================================
 
 
-class TestFromAC_HtmlCacheBasic:  # noqa: N801
+class TestFromAC_HtmlCacheBasic:
     """HtmlCache provides get/put for caching raw HTML by URL."""
 
     def test_put_and_get_roundtrip(self, cache: HtmlCache) -> None:
@@ -108,7 +107,7 @@ class TestFromAC_HtmlCacheBasic:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_HtmlCacheFileNaming:  # noqa: N801
+class TestFromAC_HtmlCacheFileNaming:
     """Cache files are named by SHA-256(normalize_url(url)) + .html."""
 
     def test_file_uses_sha256_of_normalized_url(self, cache: HtmlCache, cache_dir: Path) -> None:
@@ -137,7 +136,7 @@ class TestFromAC_HtmlCacheFileNaming:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_HtmlCacheInit:  # noqa: N801
+class TestFromAC_HtmlCacheInit:
     """HtmlCache.__init__ validates and creates the cache directory."""
 
     def test_creates_cache_dir(self, tmp_path: Path) -> None:
@@ -170,7 +169,7 @@ class TestFromAC_HtmlCacheInit:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_CrawlConfigCacheTtl:  # noqa: N801
+class TestFromAC_CrawlConfigCacheTtl:
     """CrawlConfig has a cache_ttl_seconds field with 24h default and >= 0 validator."""
 
     def test_default_is_86400(self) -> None:
@@ -204,7 +203,7 @@ class TestFromAC_CrawlConfigCacheTtl:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_WebCrawlerHtmlCacheParam:  # noqa: N801
+class TestFromAC_WebCrawlerHtmlCacheParam:
     """WebCrawler.__init__ accepts an optional html_cache: HtmlCache | None."""
 
     def test_accepts_html_cache(self, mock_browser_manager: MagicMock, cache: HtmlCache) -> None:
@@ -232,7 +231,7 @@ class TestFromAC_WebCrawlerHtmlCacheParam:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_CacheHitSkipsNavigation:  # noqa: N801
+class TestFromAC_CacheHitSkipsNavigation:
     """On cache hit, _fetch_and_extract uses cached HTML without navigating."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -316,7 +315,7 @@ class TestFromAC_CacheHitSkipsNavigation:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_CachePutOnMiss:  # noqa: N801
+class TestFromAC_CachePutOnMiss:
     """After a live fetch (cache miss), the HTML is stored via put()."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -373,7 +372,7 @@ class TestFromAC_CachePutOnMiss:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_CacheGetEdgeCases:  # noqa: N801
+class TestFromAC_CacheGetEdgeCases:
     """HtmlCache.get() handles missing, expired, and error conditions."""
 
     def test_returns_none_when_file_missing(self, cache: HtmlCache) -> None:
@@ -446,7 +445,7 @@ class TestFromAC_CacheGetEdgeCases:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_CacheIOFailuresSilent:  # noqa: N801
+class TestFromAC_CacheIOFailuresSilent:
     """Cache I/O errors are caught and logged, never raised to the caller."""
 
     def test_get_returns_none_on_read_error(self, cache: HtmlCache, cache_dir: Path) -> None:
@@ -494,12 +493,77 @@ class TestFromAC_CacheIOFailuresSilent:  # noqa: N801
         assert cache.get(url, ttl_seconds=3600) == "good content"
 
 
+class TestBuilderDiscovered:
+    """Additional coverage for cache I/O logging edge paths."""
+
+    def test_get_logs_debug_when_cache_path_is_not_a_file(
+        self,
+        cache: HtmlCache,
+        cache_dir: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """get() logs debug when the cache path exists but is not a regular file."""
+        url = "https://example.com/non-file"
+        cache.put(url, "content")
+
+        normalized = normalize_url(url)
+        filename = hashlib.sha256(normalized.encode()).hexdigest() + ".html"
+        filepath = cache_dir / filename
+        filepath.unlink()
+        filepath.mkdir()
+
+        with caplog.at_level(logging.DEBUG, logger="owlbear.tools.browser.html_cache"):
+            result = cache.get(url, ttl_seconds=3600)
+
+        assert result is None
+        assert any("Cache read failed" in record.message for record in caplog.records)
+
+    def test_get_logs_debug_when_read_text_raises(
+        self,
+        cache: HtmlCache,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """get() logs debug and returns None when file read raises OSError."""
+        url = "https://example.com/read-error"
+        cache.put(url, "content")
+
+        def _raise_read_text(_self: Path, *_args: object, **_kwargs: object) -> str:
+            raise OSError
+
+        monkeypatch.setattr(Path, "read_text", _raise_read_text)
+
+        with caplog.at_level(logging.DEBUG, logger="owlbear.tools.browser.html_cache"):
+            result = cache.get(url, ttl_seconds=3600)
+
+        assert result is None
+        assert any("Cache read failed" in record.message for record in caplog.records)
+
+    def test_put_logs_debug_when_write_text_raises(
+        self,
+        cache: HtmlCache,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """put() logs debug and does not raise when file write raises OSError."""
+
+        def _raise_write_text(_self: Path, *_args: object, **_kwargs: object) -> int:
+            raise OSError
+
+        monkeypatch.setattr(Path, "write_text", _raise_write_text)
+
+        with caplog.at_level(logging.DEBUG, logger="owlbear.tools.browser.html_cache"):
+            cache.put("https://example.com/write-error", "content")
+
+        assert any("Cache write failed" in record.message for record in caplog.records)
+
+
 # ===================================================================
 # AC 6+7 — Integration: cache-miss-then-hit flow with WebCrawler
 # ===================================================================
 
 
-class TestFromAC_WebCrawlerCacheIntegration:  # noqa: N801
+class TestFromAC_WebCrawlerCacheIntegration:
     """WebCrawler.crawl() uses HtmlCache for miss-then-hit flow."""
 
     @pytest.mark.asyncio(loop_scope="function")

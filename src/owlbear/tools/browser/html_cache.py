@@ -56,7 +56,10 @@ class HtmlCache:
         """
         filepath = self._path_for(url)
         try:
+            if not filepath.exists():
+                return None
             if not filepath.is_file():
+                logger.debug("Cache read failed for %s: cache path is not a file", url)
                 return None
             if ttl_seconds > 0:
                 age = time.time() - filepath.stat().st_mtime
