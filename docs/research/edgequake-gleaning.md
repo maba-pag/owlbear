@@ -84,7 +84,10 @@ Flow: entities[] → _find_candidate_pairs (vector similarity, cosine ≥ 0.70)
 - **Pre-filter:** Vector similarity with `cosine_threshold=0.70` and `top_k=10`
   excludes structurally ineligible pairs before any LLM call is made.
 - **Error model:** Per-batch exception handling; failures continue to next batch.
-- **No cost tracking:** `self._tracker` is not present on `InterDocGraphBuilder`.
+- **Cost tracking:** Optional. `InterDocGraphBuilder` accepts `tracker` and calls
+  `record_agent_usage(..., operation="inter_doc_graph")` for each successful
+  batch when a tracker is provided; bootstrap wiring currently passes this
+  tracker from knowledge bootstrap.
 
 ## 4. Gleaning Applicability Evaluation
 
