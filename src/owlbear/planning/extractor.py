@@ -63,7 +63,7 @@ class ProjectDefinitionExtractor:
         self,
         model: str | Model,
         tracker: UsageTracker | None = None,
-        provider: str | None = None,
+        provider: str = "copilot",
     ) -> None:
         self._agent: Agent[None, ProjectDefinition] = Agent(
             model,
@@ -92,8 +92,8 @@ class ProjectDefinitionExtractor:
                 record_agent_usage(
                     tracker=self._tracker,
                     result=result,
-                    model=str(self._agent.model or ""),
-                    provider=self._provider or "",
+                    model=self._agent.model or "",
+                    provider=self._provider,
                     session_id="background:project_extraction",
                     operation="project_extraction",
                 )

@@ -65,7 +65,7 @@ class SummarizingCondenser:
         target_size: int | None = None,
         model: str | Model | None = None,
         tracker: UsageTracker | None = None,
-        provider: str | None = None,
+        provider: str = "copilot",
     ) -> None:
         self._max_events = max_events
         self._keep_first = keep_first
@@ -95,8 +95,8 @@ class SummarizingCondenser:
             record_agent_usage(
                 tracker=self._tracker,
                 result=summary_result,
-                model=str(self._model or ""),
-                provider=self._provider or "",
+                model=self._model or "",
+                provider=self._provider,
                 session_id="background:condenser",
                 operation="condenser",
             )

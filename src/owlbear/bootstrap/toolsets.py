@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from owlbear.memory.knowledge.ingest import IngestPipeline
     from owlbear.memory.knowledge.query_service import KnowledgeQueryService
     from owlbear.memory.session import SessionStore
+    from owlbear.memory.usage import UsageTracker
     from owlbear.projects.models import Project
     from owlbear.projects.store import ProjectStore
 
@@ -63,7 +64,7 @@ def _resolve_active_project(
     return project, store
 
 
-def _wire_knowledge_toolsets(  # noqa: PLR0913
+def _wire_knowledge_toolsets(  # noqa: C901, PLR0912, PLR0913, PLR0915
     raw: list[AbstractToolset],
     settings: OwlBearSettings,
     workspace: Path,
@@ -72,6 +73,8 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
     cleanup: list[Callable] | None,
     summary: list[ComponentStatus],
     _pkg: object,
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> tuple[KnowledgeQueryService | None, IngestPipeline | None, ConsolidationService | None]:
     """Build knowledge, bookmark, source, and web-search toolsets.
 
@@ -97,9 +100,16 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
         resolved_model = chat_model
 
     try:
+        infra_kwargs: dict[str, object] = {
+            "chat_model": resolved_model,
+        }
+        if tracker is not None:
+            infra_kwargs["tracker"] = tracker
+            infra_kwargs["provider"] = provider
+
         infra = _pkg._build_knowledge_infra(  # noqa: SLF001
             workspace,
-            chat_model=resolved_model,
+            **infra_kwargs,
         )
     except Exception as exc:  # noqa: BLE001
         infra = None
@@ -117,17 +127,24 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
         if cleanup is not None:
             cleanup.append(infra.conn.close)
 
+        knowledge_kwargs: dict[str, object] = {
+            "project_id": active_project_id,
+            "chat_model": resolved_model,
+            "max_tokens": settings.knowledge_context_tokens,
+            "knowledge_graph_expansion": settings.knowledge_graph_expansion,
+            "inter_doc_graph_building": settings.inter_doc_graph_building,
+            "bg_concurrency": settings.ingest_bg_concurrency,
+            "consolidation_enabled": settings.consolidation_enabled,
+            "consolidation_interval": settings.consolidation_interval,
+        }
+        if tracker is not None:
+            knowledge_kwargs["tracker"] = tracker
+            knowledge_kwargs["provider"] = provider
+
         knowledge_result = _pkg._build_knowledge_toolset(  # noqa: SLF001
             workspace,
             infra,
-            project_id=active_project_id,
-            chat_model=resolved_model,
-            max_tokens=settings.knowledge_context_tokens,
-            knowledge_graph_expansion=settings.knowledge_graph_expansion,
-            inter_doc_graph_building=settings.inter_doc_graph_building,
-            bg_concurrency=settings.ingest_bg_concurrency,
-            consolidation_enabled=settings.consolidation_enabled,
-            consolidation_interval=settings.consolidation_interval,
+            **knowledge_kwargs,
         )
         if knowledge_result is not None:
             knowledge_ts, knowledge_service, ingest_pipeline, consolidation_svc = knowledge_result
@@ -143,10 +160,17 @@ def _wire_knowledge_toolsets(  # noqa: PLR0913
                 )
             )
 
+        bookmark_kwargs: dict[str, object] = {
+            "chat_model": resolved_model,
+        }
+        if tracker is not None:
+            bookmark_kwargs["tracker"] = tracker
+            bookmark_kwargs["provider"] = provider
+
         bookmark_ts = _pkg._build_bookmark_toolset(  # noqa: SLF001
             infra,
             workspace,
-            chat_model=resolved_model,
+            **bookmark_kwargs,
         )
         if bookmark_ts is not None:
             raw.append(bookmark_ts)
@@ -278,6 +302,8 @@ def build_toolsets(  # noqa: PLR0913
     channel: ChannelPlugin,
     active_project_id: str | None = None,
     chat_model: str | Model | None = None,
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
     cleanup: list[Callable] | None = None,
     summary: list[ComponentStatus] | None = None,
 ) -> tuple[
@@ -357,6 +383,8 @@ def build_toolsets(  # noqa: PLR0913
         cleanup,
         _summary,
         _pkg,
+        tracker=tracker,
+        provider=provider,
     )
     _wire_web_search(raw, _summary, browser_config=settings.browser)
 

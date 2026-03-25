@@ -76,7 +76,7 @@ class EntityExtractor:
         self,
         model: str | Model,
         tracker: UsageTracker | None = None,
-        provider: str | None = None,
+        provider: str = "copilot",
     ) -> None:
         self._agent: Agent[None, ExtractionResult] = Agent(
             model,
@@ -113,8 +113,8 @@ class EntityExtractor:
                 record_agent_usage(
                     tracker=self._tracker,
                     result=result,
-                    model=str(self._agent.model or ""),
-                    provider=self._provider or "",
+                    model=self._agent.model or "",
+                    provider=self._provider,
                     session_id="background:entity_extraction",
                     operation="entity_extraction",
                 )

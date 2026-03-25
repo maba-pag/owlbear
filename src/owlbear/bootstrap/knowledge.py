@@ -52,7 +52,8 @@ class _KnowledgeInfra:
 def _build_knowledge_infra(
     workspace: Path,
     chat_model: str | Model | None = None,
-    tracker: UsageTracker | None = None,  # noqa: ARG001
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> _KnowledgeInfra | None:
     """Create shared knowledge infrastructure objects once.
 
@@ -83,7 +84,11 @@ def _build_knowledge_infra(
         graph_store = GraphStore(conn)
         embedding_provider = BgeM3EmbeddingProvider()
         vector_store = QdrantVectorStore(location=str(owlbear_dir / "qdrant"))
-        entity_extractor = EntityExtractor(model=chat_model)
+        entity_extractor = EntityExtractor(
+            model=chat_model,
+            tracker=tracker,
+            provider=provider,
+        )
         text_chunker = TextChunker()
 
         return _KnowledgeInfra(
@@ -111,7 +116,8 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     bg_concurrency: int = 5,
     consolidation_enabled: bool = False,
     consolidation_interval: int = 1800,  # noqa: ARG001
-    tracker: UsageTracker | None = None,  # noqa: ARG001
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> (
     tuple[
         AbstractToolset,
@@ -144,6 +150,8 @@ def _build_knowledge_toolset(  # noqa: PLR0913
                 model=chat_model,
                 vector_store=infra.vector_store,
                 graph_store=infra.graph_store,
+                tracker=tracker,
+                provider=provider,
             )
 
         store = DocumentStore(
@@ -228,12 +236,13 @@ def _build_knowledge_toolset(  # noqa: PLR0913
         return None
 
 
-def _build_bookmark_toolset(
+def _build_bookmark_toolset(  # noqa: PLR0913
     infra: _KnowledgeInfra,
     workspace: Path,
     chat_model: str | Model,
     ingest_threshold: float = 0.7,
-    tracker: UsageTracker | None = None,  # noqa: ARG001
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> AbstractToolset | None:
     """Create a :class:`BookmarkToolset` backed by the knowledge DB.
 
@@ -250,7 +259,7 @@ def _build_bookmark_toolset(
         from owlbear.memory.knowledge.evaluator import SourceEvaluator  # noqa: PLC0415
 
         bookmark_store = BookmarkStore(infra.conn)
-        evaluator = SourceEvaluator(model=chat_model)
+        evaluator = SourceEvaluator(model=chat_model, tracker=tracker, provider=provider)
 
         store = DocumentStore(
             conn=infra.conn,

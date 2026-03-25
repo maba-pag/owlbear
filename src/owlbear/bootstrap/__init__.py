@@ -118,7 +118,8 @@ def _wire_post_model_hooks(  # noqa: PLR0913
     channel: ChannelPlugin | None = None,
     cleanup: list | None = None,
     shutdown_event: asyncio.Event | None = None,
-    tracker: UsageTracker | None = None,  # noqa: ARG001
+    tracker: UsageTracker | None = None,
+    provider: str = "copilot",
 ) -> None:
     """Register hooks that depend on the model being available."""
     if ingest_pipeline is not None:
@@ -137,6 +138,8 @@ def _wire_post_model_hooks(  # noqa: PLR0913
             if shutdown_event is not None
             else LinkedCancelSignal(),
             supervisor=supervisor,
+            tracker=tracker,
+            provider=provider,
         ).register(hooks)
         if settings.audit_map_worker_enabled:
             AuditMapAdvisoryHook(
@@ -150,7 +153,13 @@ def _wire_post_model_hooks(  # noqa: PLR0913
             cleanup.append(supervisor.shutdown)
 
     if settings.session_memory_enabled:
-        _wire_session_memory_hook(model, workspace, hooks)
+        _wire_session_memory_hook(
+            model,
+            workspace,
+            hooks,
+            tracker=tracker,
+            provider=provider,
+        )
 
 
 async def bootstrap(  # noqa: PLR0915
@@ -194,6 +203,7 @@ async def bootstrap(  # noqa: PLR0915
     cleanup.append(openai_client.close)
     provider = OpenAIProvider(openai_client=openai_client)
     model = OpenAIChatModel(settings.chat_model, provider=provider)
+    tracker = UsageTracker(settings.usage_path)
 
     component_statuses: list[ComponentStatus] = []
     toolset_result = build_toolsets(
@@ -203,6 +213,8 @@ async def bootstrap(  # noqa: PLR0915
         channel,
         active_project_id=active_project.id if active_project else None,
         chat_model=model,
+        tracker=tracker,
+        provider=settings.provider,
         cleanup=cleanup,
         summary=component_statuses,
     )
@@ -227,6 +239,8 @@ async def bootstrap(  # noqa: PLR0915
         channel=channel,
         cleanup=cleanup,
         shutdown_event=shutdown_event,
+        tracker=tracker,
+        provider=settings.provider,
     )
 
     session_path = (
@@ -264,14 +278,13 @@ async def bootstrap(  # noqa: PLR0915
         model=model,
     )
 
-    tracker = UsageTracker(settings.usage_path)
-
     history_processors = None
     if settings.condenser_enabled:
         condenser = SummarizingCondenser(
             max_events=settings.condenser_max_events,
             model=model,
             tracker=tracker,
+            provider=settings.provider,
         )
         history_processors = [condenser]
 

@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from datetime import timedelta
     from pathlib import Path
 
+    from pydantic_ai.models import Model
+
 _logger = logging.getLogger(__name__)
 
 
@@ -116,7 +118,7 @@ def record_agent_usage(  # noqa: PLR0913
     *,
     tracker: UsageTracker | None,
     result: object,
-    model: str,
+    model: str | Model,
     provider: str,
     session_id: str,
     operation: str = "turn",
@@ -130,6 +132,7 @@ def record_agent_usage(  # noqa: PLR0913
         return
 
     try:
+        model_name = model if isinstance(model, str) else getattr(model, "model_name", str(model))
         usage = result.usage()
 
         estimated_cost: float | None = None
@@ -138,7 +141,7 @@ def record_agent_usage(  # noqa: PLR0913
             from owlbear.memory.usage_cost import calc_estimated_cost  # noqa: PLC0415
 
             estimated_cost = calc_estimated_cost(
-                model,
+                model_name,
                 provider,
                 usage.input_tokens or 0,
                 usage.output_tokens or 0,
@@ -148,14 +151,14 @@ def record_agent_usage(  # noqa: PLR0913
                     get_premium_requests,
                 )
 
-                premium = get_premium_requests(model)
+                premium = get_premium_requests(model_name)
         except Exception:  # noqa: BLE001
             _logger.warning("Usage enrichment unavailable", exc_info=True)
 
         record = UsageRecord(
             timestamp=datetime.now(UTC),
             session_id=session_id,
-            model=model,
+            model=model_name,
             provider=provider,
             input_tokens=usage.input_tokens or 0,
             output_tokens=usage.output_tokens or 0,

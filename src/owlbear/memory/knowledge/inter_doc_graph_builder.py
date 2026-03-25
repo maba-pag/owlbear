@@ -80,7 +80,7 @@ class InterDocGraphBuilder:
         top_k: int = 10,
         cosine_threshold: float = 0.70,
         tracker: UsageTracker | None = None,
-        provider: str | None = None,
+        provider: str = "copilot",
     ) -> None:
         relation_types = ", ".join(rt.value for rt in RelationType)
         self._agent: Agent[None, ExtractionResult] = Agent(
@@ -103,20 +103,14 @@ class InterDocGraphBuilder:
     ) -> GraphBuildResult:
         """Infer cross-document relationships for *entities*.
 
-        Parameters
-        ----------
-        entities:
-            Entities to find cross-document relationships for.
-        scope:
-            Scope tag applied to all inferred edges.
-        document_id:
-            Optional document identifier for logging/provenance.
+        Args:
+            entities (list[Entity]): Entities to find cross-document relationships for.
+            scope (str): Scope tag applied to all inferred edges.
+            document_id (str | None): Optional document identifier for logging/provenance.
 
         Returns:
-        -------
         GraphBuildResult:
-            The inferred edges and a count of edges added.
-        """
+            The inferred edges and a count of edges added.:"""
         _min_entities = 2
         if len(entities) < _min_entities:
             return GraphBuildResult()
@@ -150,8 +144,8 @@ class InterDocGraphBuilder:
                 record_agent_usage(
                     tracker=self._tracker,
                     result=result,
-                    model=str(self._agent.model or ""),
-                    provider=self._provider or "",
+                    model=self._agent.model or "",
+                    provider=self._provider,
                     session_id="background:inter_doc_graph",
                     operation="inter_doc_graph",
                 )

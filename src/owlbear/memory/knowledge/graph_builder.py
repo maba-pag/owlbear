@@ -74,7 +74,7 @@ class IntraDocGraphBuilder:
         self,
         model: str | Model,
         tracker: UsageTracker | None = None,
-        provider: str | None = None,
+        provider: str = "copilot",
     ) -> None:
         relation_types = ", ".join(rt.value for rt in RelationType)
         self._agent: Agent[None, ExtractionResult] = Agent(
@@ -93,20 +93,14 @@ class IntraDocGraphBuilder:
     ) -> GraphBuildResult:
         """Infer cross-chunk relationships for *entities* from a single document.
 
-        Parameters
-        ----------
-        entities:
-            Entities extracted from the document's chunks.
-        scope:
-            Scope tag applied to all inferred edges.
-        document_id:
-            Document identifier for logging/provenance.
+        Args:
+            entities (list[Entity]): Entities extracted from the document's chunks.
+            scope (str): Scope tag applied to all inferred edges.
+            document_id (str | None): Document identifier for logging/provenance.
 
         Returns:
-        -------
         GraphBuildResult:
-            The inferred edges and a count of edges added.
-        """
+            The inferred edges and a count of edges added.:"""
         _min_entities = 2
         if len(entities) < _min_entities:
             return GraphBuildResult()
@@ -140,8 +134,8 @@ class IntraDocGraphBuilder:
             record_agent_usage(
                 tracker=self._tracker,
                 result=result,
-                model=str(self._agent.model or ""),
-                provider=self._provider or "",
+                model=self._agent.model or "",
+                provider=self._provider,
                 session_id="background:intra_doc_graph",
                 operation="intra_doc_graph",
             )
@@ -177,8 +171,8 @@ class IntraDocGraphBuilder:
                 record_agent_usage(
                     tracker=self._tracker,
                     result=result,
-                    model=str(self._agent.model or ""),
-                    provider=self._provider or "",
+                    model=self._agent.model or "",
+                    provider=self._provider,
                     session_id="background:intra_doc_graph",
                     operation="intra_doc_graph",
                 )
