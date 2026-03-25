@@ -108,10 +108,12 @@ importance-weighted selection for conflicts. No schema changes needed.
 chunk. The merged result is stored once with the existing `document_id`/`chunk_id`
 linkage. No provenance changes required.
 
-**Partial-failure behavior:** The second gleaning pass may fail while the first
-succeeds. The existing exception swallowing (`return ExtractionResult()` on any
-failure) makes this safe: if Pass 2 raises, the caller silently returns Pass 1's
-result. This degrades gracefully by design.
+**Partial-failure behavior:** The current extractor returns an empty
+`ExtractionResult()` for any exception in `extract()`. A naive two-pass
+implementation inside `extract()` would therefore drop Pass 1 output if Pass 2
+raises unless the prototype explicitly preserves Pass 1 before entering the
+second call. Gleaning is still contract-compatible, but preserving first-pass
+output must be implemented intentionally.
 
 **Cancellation:** ✗ `extract()` has no internal cancellation. Adding a gleaning
 pass adds a second LLM call, doubling the non-interruptible window per chunk.
@@ -119,10 +121,12 @@ The outer `_run_extract()` loop checks cancellation between chunks, not within a
 single `extract()` call. This worsens responsiveness for long chunks but does not
 break correctness.
 
-**Usage/cost tracking:** ✓ `record_agent_usage()` is called for each `Agent.run()`
-result. Both Pass 1 and Pass 2 are tracked independently. Total cost per chunk
-doubles (minus the "what did I miss?" prompt, which is short). The `UsageTracker`
-correctly accumulates both.
+**Usage/cost tracking:** The current `record_agent_usage()` call executes once
+per successful `extract()` invocation. A gleaning prototype that runs two
+`Agent.run()` calls within one `extract()` call will not automatically produce
+per-pass telemetry unless the implementation adds pass-level instrumentation.
+Without that explicit instrumentation, cost attribution is coarse-grained at the
+extract-call level.
 
 **Open question — recall on code documents:** The +18-25% recall figure is from
 EdgeQuake's generic document benchmark. OwlBear's extraction targets code-oriented
@@ -199,5 +203,21 @@ appropriate for their responsibilities.
 
 ## 7. Follow-up Tasks
 
-One task is warranted (evaluation harness + prototype). Implementation tasks
-for `_run_extract()` and `InterDocGraphBuilder` are explicitly not created.
+One follow-up is warranted. No follow-ups are created for
+`IngestPipeline._run_extract()` or `InterDocGraphBuilder.build()` because
+gleaning is not the correct lever for those codepaths.
+
+1. Title: Research: EntityExtractor gleaning prototype and recall benchmark
+Priority rationale: `someday` because this is hypothesis validation work and not
+a production blocker.
+Dependencies: none.
+One-line AC: Build a measurable benchmark and prototype plan that decides
+go/no-go for EntityExtractor gleaning integration using recall and cost deltas.
+
+`kanban-md create` command:
+
+```powershell
+kanban\kanban-md.exe create "Research: EntityExtractor gleaning prototype and recall benchmark" --status ideation --priority someday --tags "research,scope:core,knowledge,phase-research" -d "See docs/research/edgequake-gleaning.md §7 for context. AC: build a benchmark and prototype plan that can measure recall and cost deltas before any production integration."
+```
+
+Created task ID after execution: `#891`.
