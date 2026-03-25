@@ -328,7 +328,7 @@ def build_toolsets(  # noqa: PLR0913
 
     raw.append(FileToolset(workspace_root=workspace))
     raw.append(TerminalToolset(workspace_root=workspace, hooks=hooks))
-    raw.append(AskUserToolset(channel))
+    raw.append(AskUserToolset(channel, hooks=hooks))
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
     profile_dir = sandbox_path(workspace, "browser_profiles")
     profile_dir.mkdir(parents=True, exist_ok=True)
