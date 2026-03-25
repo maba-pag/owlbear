@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
+from cli_board_fixtures import board_move, board_task
 from typer.testing import CliRunner
 
 from bearclaw.cli import app
@@ -120,63 +121,63 @@ class TestFromAC_BoardRendering:
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_id_column_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "ID" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_title_column_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "Title" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_assignee_column_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "Assignee" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_age_column_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "Age" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_tags_column_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "Tags" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_status_as_section_header(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task(status="in-progress")], [])
+        mock_run.side_effect = _subproc([board_task(status="in-progress")], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "in-progress" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_task_title(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task(title="My important task")], [])
+        mock_run.side_effect = _subproc([board_task(title="My important task")], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "My important task" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_task_id(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task(task_id=42)], [])
+        mock_run.side_effect = _subproc([board_task(task_id=42)], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "42" in result.output
 
     @patch("bearclaw.commands.board.subprocess.run")
     def test_renders_task_tags(self, mock_run: MagicMock) -> None:
-        mock_run.side_effect = _subproc([_task(tags=["cli", "phase-1"])], [])
+        mock_run.side_effect = _subproc([board_task(tags=["cli", "phase-1"])], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "cli" in result.output
@@ -185,8 +186,8 @@ class TestFromAC_BoardRendering:
     def test_status_order_follows_config_yml(self, mock_run: MagicMock) -> None:
         """``todo`` appears before ``in-progress`` per kanban/config.yml order."""
         tasks = [
-            _task(task_id=1, status="in-progress", title="In progress task"),
-            _task(task_id=2, status="todo", title="Todo task"),
+            board_task(task_id=1, status="in-progress", title="In progress task"),
+            board_task(task_id=2, status="todo", title="Todo task"),
         ]
         mock_run.side_effect = _subproc(tasks, [])
         result = runner.invoke(app, ["board"])
@@ -200,8 +201,8 @@ class TestFromAC_BoardRendering:
     @patch("bearclaw.commands.board.subprocess.run")
     def test_tasks_appear_under_their_own_status_section(self, mock_run: MagicMock) -> None:
         tasks = [
-            _task(task_id=10, status="review", title="Review task"),
-            _task(task_id=20, status="todo", title="Todo task"),
+            board_task(task_id=10, status="review", title="Review task"),
+            board_task(task_id=20, status="todo", title="Todo task"),
         ]
         mock_run.side_effect = _subproc(tasks, [])
         result = runner.invoke(app, ["board"])
@@ -223,7 +224,10 @@ class TestFromAC_AssigneeDisplay:
     @patch("bearclaw.commands.board.subprocess.run")
     def test_assignee_shown_over_claimed_by(self, mock_run: MagicMock) -> None:
         """``assignee`` takes priority over ``claimed_by`` when both are present."""
-        mock_run.side_effect = _subproc([_task(assignee="alice", claimed_by="bot-worker")], [])
+        mock_run.side_effect = _subproc(
+            [board_task(assignee="alice", claimed_by="bot-worker")],
+            [],
+        )
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "alice" in result.output
@@ -232,7 +236,7 @@ class TestFromAC_AssigneeDisplay:
     @patch("bearclaw.commands.board.subprocess.run")
     def test_claimed_by_shown_when_no_assignee(self, mock_run: MagicMock) -> None:
         """``claimed_by`` is the display value when ``assignee`` is absent."""
-        mock_run.side_effect = _subproc([_task(claimed_by="builder-agent")], [])
+        mock_run.side_effect = _subproc([board_task(claimed_by="builder-agent")], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "builder-agent" in result.output
@@ -240,7 +244,7 @@ class TestFromAC_AssigneeDisplay:
     @patch("bearclaw.commands.board.subprocess.run")
     def test_dash_shown_when_neither_assignee_nor_claimed_by(self, mock_run: MagicMock) -> None:
         """``--`` is the placeholder when neither assignee nor claimed_by is set."""
-        mock_run.side_effect = _subproc([_task()], [])
+        mock_run.side_effect = _subproc([board_task()], [])
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 0
         assert "--" in result.output
@@ -262,14 +266,14 @@ class TestFromAC_AgeInStatus:
         today = datetime.datetime.now(tz=datetime.UTC).date()
         move_date = today - datetime.timedelta(days=12)
         created_date = today - datetime.timedelta(days=41)
-        task = _task(
+        task = board_task(
             task_id=151,
             title="Alpha task",
             status="in-progress",
             created=f"{created_date.isoformat()}T10:00:00+01:00",
         )
         log = [
-            _move(
+            board_move(
                 task_id=151,
                 from_status="todo",
                 to_status="in-progress",
@@ -290,7 +294,7 @@ class TestFromAC_AgeInStatus:
 
         today = datetime.datetime.now(tz=datetime.UTC).date()
         created_date = today - datetime.timedelta(days=27)
-        task = _task(
+        task = board_task(
             task_id=152,
             title="Beta task",
             status="in-progress",
@@ -311,15 +315,15 @@ class TestFromAC_AgeInStatus:
         today = datetime.datetime.now(tz=datetime.UTC).date()
         early_date = today - datetime.timedelta(days=21)
         late_date = today - datetime.timedelta(days=11)
-        task = _task(task_id=153, title="Gamma task", status="in-progress")
+        task = board_task(task_id=153, title="Gamma task", status="in-progress")
         log = [
-            _move(
+            board_move(
                 task_id=153,
                 from_status="backlog",
                 to_status="in-progress",
                 timestamp=f"{early_date.isoformat()}T10:00:00+01:00",
             ),
-            _move(
+            board_move(
                 task_id=153,
                 from_status="todo",
                 to_status="in-progress",
@@ -341,7 +345,7 @@ class TestFromAC_AgeInStatus:
         today = datetime.datetime.now(tz=datetime.UTC).date()
         created_date = today - datetime.timedelta(days=29)
         wrong_move_date = today - datetime.timedelta(days=16)
-        task = _task(
+        task = board_task(
             task_id=154,
             title="Delta task",
             status="review",
@@ -349,7 +353,7 @@ class TestFromAC_AgeInStatus:
         )
         log = [
             # Move to "in-progress", NOT current status "review" — must be ignored.
-            _move(
+            board_move(
                 task_id=154,
                 from_status="todo",
                 to_status="in-progress",
