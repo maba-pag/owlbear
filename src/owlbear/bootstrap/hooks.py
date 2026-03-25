@@ -116,9 +116,13 @@ def build_hooks(
             "retry": _noop,
             "escalate": _noop,
         }
+        escalate_configured = any(
+            "escalate" in getattr(rule, "actions", [])
+            for rule in settings.hook_reactions
+        )
         if channel is not None:
             executors["escalate"] = _make_escalate_executor(channel)
-        else:
+        elif escalate_configured:
             logger.warning(
                 "Escalate hook reaction configured but no channel provided; using noop executor"
             )

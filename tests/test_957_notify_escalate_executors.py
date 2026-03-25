@@ -260,7 +260,8 @@ class TestFromAC_987_BuildHooksNoneChannelEscalate:
             build_hooks(settings, channel=None)
 
         escalate_warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno >= logging.WARNING and "escalat" in r.getMessage().lower()
         ]
         assert not escalate_warnings, (
