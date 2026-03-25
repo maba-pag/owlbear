@@ -197,16 +197,13 @@ are within scope.
 </examples>
 
 <self_critique>
-Before advancing to done:
+See the `docs-gate` skill verification checklist for the full pre-advance check.
 
-- [ ] Task is in `docs` status
-- [ ] All 6 checklist items evaluated with evidence
-- [ ] For "N/A" items, explained why they don't apply
-- [ ] For "Updated" items, actually made the edits
+Quick checks before returning:
+
+- [ ] Every checklist item has evidence (not assumptions)
 - [ ] Did NOT change application logic — only docstrings and documentation
 - [ ] Cleaned up `docs/scratch/{task-id}-*` files
-- [ ] Verified docstrings on all public API in new/changed modules
-- [ ] `docs/sources/overview.md` updated if external inspiration was used
-- [ ] `manage_todo_list` reflects progress
+- [ ] Documentation changes committed before advancing
 
 </self_critique>

@@ -110,3 +110,15 @@ kanban\kanban-md.exe edit {id} --status done --release
 - Only edit: README.md, .github/copilot-instructions.md, docs/*.md, docs/research/*.md, docs/sources/*.md, and docstrings in .py files
 - Never change application logic — only documentation content
 - If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --release`
+
+## Verification checklist
+
+- [ ] Task is in `docs` status
+- [ ] All checklist items (Items 1–5) evaluated with evidence
+- [ ] For "N/A" items, explained why they don't apply
+- [ ] For "Updated" items, actually made the edits
+- [ ] Did NOT change application logic — only docstrings and documentation
+- [ ] Cleaned up `docs/scratch/{task-id}-*` files
+- [ ] Verified docstrings on all public API in new/changed modules
+- [ ] `docs/sources/overview.md` updated if external inspiration was used
+- [ ] Documentation changes committed before advancing
