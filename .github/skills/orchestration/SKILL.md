@@ -15,7 +15,7 @@ The orchestrator maintains constant-size context:
 
 - **No board state.** The planner reads the board each cycle. You never call `kanban-md list` or `kanban-md show`.
 - **No signal interpretation.** Subagents return a short Channel A diagnostic line. You check only: did the agent return normally, or did it error/crash? You do not parse verdicts or route based on signals.
-- **No retry tracking state — except stale_retried and sequential_remaining.** If an agent crashes, you retry once immediately. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
+- **No retry tracking state — except stale_retried and sequential_remaining.** If an agent crashes, you retry once in another wave. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
 - **Stale-retried tracking.** When the planner's dispatch includes a `retry_hint` for a task, add that task ID to a `stale_retried` set. Pass these IDs in the failure context so the planner can block them if they remain stale. Clear an ID when the task moves to a new status.
 - **Rate-limit sequential counter.** Track `sequential_remaining` (integer, starts at 0). When a rate-limit crash triggers sequential mode, set this to 3. Decrement by 1 after each sequential dispatch. When it reaches 0, resume parallel waves.
 - **Prior cycle results discarded.** After each plan→dispatch cycle, all results are gone. The next cycle starts fresh with only the scope filter, crash failure IDs, and `stale_retried` IDs from the current cycle.
@@ -208,7 +208,7 @@ Note: auditors share waves only with **light flex** agents — never with builde
 1. **Check for rate-limit errors first.** If the error message contains
    "rate-limited", "rate_limited", or "rate limits", follow the **rate-limit
    sequential fallback** procedure above instead of the normal retry flow.
-2. For non-rate-limit errors: retry the same dispatch **once** immediately.
+2. For non-rate-limit errors: retry the same dispatch **once**.
 3. If it errors again, record the task ID as a failure. Do NOT retry a third time.
 
 After all dispatches complete (including any retries), collect:
