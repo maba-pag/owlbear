@@ -616,3 +616,50 @@ class TestFromAC_DecisionsResolveAtomicity:
         assert "## Resolution" not in pending_content, (
             "pending file must not contain ## Resolution section when move fails"
         )
+
+    def test_resolve_consistent_state_after_post_move_write_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """After shutil.move succeeds but write_text raises, resolved file must have
+        correct content or not exist at all.
+
+        Current failure mode: resolved file is stranded with original pending content
+        (status: pending, no ## Resolution) after the post-move write_text raises.
+        That is an inconsistent partial state — a pending-content file living at the
+        resolved/ path — a data-safety violation with no rollback.
+
+        The contract requires that on write failure after the move, one of:
+        - The resolved file contains correct content (status: resolved + ## Resolution), OR
+        - The resolved file does not exist (clean rollback / atomic write-then-rename).
+        """
+        decisions_dir = tmp_path / "decisions"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        pending = decisions_dir / "pending"
+        resolved_dir = decisions_dir / "resolved"
+        resolved_dir.mkdir(exist_ok=True)
+        path = _make_decision_file(pending, task_id="880")
+        fname = path.name
+
+        _original_write_text = Path.write_text
+
+        def _fail_resolved_write(self: Path, *args: object, **kwargs: object) -> None:
+            if "resolved" in str(self.parent):
+                msg = "simulated disk full after move"
+                raise OSError(msg)
+            _original_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+        with (
+            patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir),
+            patch.object(Path, "write_text", _fail_resolved_write),
+        ):
+            runner.invoke(app, ["decisions", "resolve", "880"], input="A\nnotes\ny\n")
+
+        resolved_file = resolved_dir / fname
+        if resolved_file.exists():
+            content = resolved_file.read_text(encoding="utf-8")
+            assert "status: resolved" in content, (
+                "resolved file must not be left with pending content after post-move write failure"
+            )
+            assert "## Resolution" in content, (
+                "resolved file must contain ## Resolution section after post-move write failure"
+            )
