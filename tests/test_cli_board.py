@@ -466,9 +466,9 @@ class TestFromAC_BoardFailurePaths:
         self, mock_run: MagicMock
     ) -> None:
         """Spawn failure → exit 1, Error: prefix in output, kanban-md named, no JSON mention."""
-        mock_run.side_effect = FileNotFoundError(
-            "No such file or directory: 'kanban/kanban-md.exe'"
-        )
+        from conftest import make_missing_binary_error  # type: ignore[import-untyped]
+
+        mock_run.side_effect = make_missing_binary_error()
         result = runner.invoke(app, ["board"])
         assert result.exit_code == 1
         assert "Error:" in result.output

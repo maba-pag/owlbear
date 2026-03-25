@@ -136,3 +136,11 @@ def make_completed_process(
         stdout=stdout,
         stderr=stderr,
     )
+
+
+def make_missing_binary_error(
+    *,
+    binary_path: str = "kanban/kanban-md.exe",
+) -> FileNotFoundError:
+    """Build a FileNotFoundError used by CLI tests for missing kanban-md."""
+    return FileNotFoundError(f"No such file or directory: '{binary_path}'")
