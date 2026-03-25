@@ -27,6 +27,7 @@ _EXPECTED_REFERENCE_FILES = [
     "interaction-design.md",
     "responsive-design.md",
     "ux-writing.md",
+    "anti-patterns.md",
 ]
 
 
@@ -166,9 +167,7 @@ class TestFromAC_DesignContextPrompts:
     def test_skill_body_has_design_context_section(self) -> None:
         """AC1: SKILL.md must contain a 'Design Context' section."""
         text = _SKILL_FILE.read_text(encoding="utf-8")
-        assert "design context" in text.lower(), (
-            "SKILL.md must contain a 'Design Context' section"
-        )
+        assert "design context" in text.lower(), "SKILL.md must contain a 'Design Context' section"
 
     def test_skill_body_asks_for_target_audience(self) -> None:
         """AC1: Design Context section must ask for the target audience."""
@@ -232,12 +231,9 @@ class TestFromAC_SkillLinkLayout:
         """AC3: SKILL.md body must link to each of the seven expected reference files."""
         text = _SKILL_FILE.read_text(encoding="utf-8")
         missing = [
-            fname for fname in _EXPECTED_REFERENCE_FILES
-            if f"references/{fname}" not in text
+            fname for fname in _EXPECTED_REFERENCE_FILES if f"references/{fname}" not in text
         ]
-        assert missing == [], (
-            f"SKILL.md is missing links to reference files: {missing}"
-        )
+        assert missing == [], f"SKILL.md is missing links to reference files: {missing}"
 
 
 class TestFromAC_ProviderSetupInstructions:
@@ -260,8 +256,7 @@ class TestFromAC_ProviderSetupInstructions:
                 if slash_cmd_re.match(line):
                     violations.append(f"{p.name}:{i}: {line.rstrip()}")
         assert violations == [], (
-            "Provider slash-command instructions found in skill package:\n"
-            + "\n".join(violations)
+            "Provider slash-command instructions found in skill package:\n" + "\n".join(violations)
         )
 
     def test_no_provider_setup_or_installation_heading(self) -> None:
@@ -313,8 +308,7 @@ class TestFromAC_OwlBearAdaptation:
             ref_path = _REFERENCES_DIR / filename
             if ref_path.exists():
                 content_lines = [
-                    ln for ln in ref_path.read_text(encoding="utf-8").splitlines()
-                    if ln.strip()
+                    ln for ln in ref_path.read_text(encoding="utf-8").splitlines() if ln.strip()
                 ]
                 if len(content_lines) < 20:
                     thin.append(f"{filename}: only {len(content_lines)} non-empty lines")
@@ -361,7 +355,8 @@ class TestFromAC_Attribution:
 
 class TestFromAC_ScopeBoundary:
     """AC7: Skill package contains only .github/skills/frontend-design/** files and
-    does not absorb scope from #937 (frontend.instructions.md) or #938 (anti-pattern taxonomy).
+    does not absorb scope from #937 (frontend.instructions.md). Anti-pattern taxonomy
+    (#938) is now a legitimate part of the package via references/anti-patterns.md.
     """
 
     _SKILL_DIR = _REPO_ROOT / ".github" / "skills" / "frontend-design"
@@ -385,11 +380,10 @@ class TestFromAC_ScopeBoundary:
             f"Unexpected files found in skill package (AC7 scope violation): {extra}"
         )
 
-    def test_skill_package_has_no_anti_pattern_taxonomy(self) -> None:
-        """AC7: SKILL.md must not contain an anti-pattern taxonomy (belongs to #938)."""
-        skill_lower = _SKILL_FILE.read_text(encoding="utf-8").lower()
-        assert "anti-pattern taxonomy" not in skill_lower, (
-            "SKILL.md must not include an 'anti-pattern taxonomy' (that scope belongs to #938)"
+    def test_skill_package_includes_anti_pattern_taxonomy(self) -> None:
+        """AC5/#938: references/anti-patterns.md must be present — #938 delivers the taxonomy."""
+        assert (_REFERENCES_DIR / "anti-patterns.md").exists(), (
+            "references/anti-patterns.md must exist — #938 delivered the anti-pattern taxonomy"
         )
 
     def test_skill_package_has_no_instructions_files(self) -> None:
@@ -398,4 +392,263 @@ class TestFromAC_ScopeBoundary:
         assert instructions_in_package == [], (
             f"Unexpected .instructions.md file(s) found in skill package (scope belongs to #937): "
             f"{[str(p.name) for p in instructions_in_package]}"
+        )
+
+
+class TestFromAC_AntiPatternTaxonomy:
+    """Tests for #938: references/anti-patterns.md two-tier anti-pattern reference.
+
+    AC1: File has Universal Blockers and Taste Heuristics top-level sections.
+         Blockers have WCAG/source citations; Taste Heuristics cover ≥5 categories.
+    AC2: SKILL.md reference table has a row linking references/anti-patterns.md,
+         positioned after the ux-writing row.
+    AC3: File has an attribution header referencing NOTICE.md, crediting Impeccable
+         and Anthropic.
+    AC6: File has ≥ 20 non-empty lines.
+    """
+
+    _FILE = _REFERENCES_DIR / "anti-patterns.md"
+
+    # ------------------------------------------------------------------
+    # AC1 + AC6: file existence and structure
+    # ------------------------------------------------------------------
+
+    def test_anti_patterns_file_exists(self) -> None:
+        """AC1: references/anti-patterns.md must exist on disk."""
+        assert self._FILE.exists(), f"Expected anti-patterns reference at {self._FILE}"
+
+    def test_anti_patterns_has_universal_blockers_section(self) -> None:
+        """AC1: anti-patterns.md must contain a top-level 'Universal Blockers' section."""
+        text = self._FILE.read_text(encoding="utf-8")
+        assert "universal blockers" in text.lower(), (
+            "anti-patterns.md must contain a 'Universal Blockers' section"
+        )
+
+    def test_anti_patterns_has_taste_heuristics_section(self) -> None:
+        """AC1: anti-patterns.md must contain a top-level 'Taste Heuristics' section."""
+        text = self._FILE.read_text(encoding="utf-8")
+        assert "taste heuristics" in text.lower(), (
+            "anti-patterns.md must contain a 'Taste Heuristics' section"
+        )
+
+    def test_universal_blockers_section_precedes_taste_heuristics(self) -> None:
+        """AC1: Universal Blockers section must appear before Taste Heuristics."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        ub_pos = lower.find("universal blockers")
+        th_pos = lower.find("taste heuristics")
+        assert ub_pos != -1, "anti-patterns.md must contain a 'Universal Blockers' section"
+        assert th_pos != -1, "anti-patterns.md must contain a 'Taste Heuristics' section"
+        assert ub_pos < th_pos, (
+            "'Universal Blockers' section must appear before 'Taste Heuristics' section"
+        )
+
+    def test_anti_patterns_has_at_least_20_non_empty_lines(self) -> None:
+        """AC6: anti-patterns.md must have at least 20 non-empty lines."""
+        text = self._FILE.read_text(encoding="utf-8")
+        non_empty = [ln for ln in text.splitlines() if ln.strip()]
+        assert len(non_empty) >= 20, (
+            f"anti-patterns.md must have ≥ 20 non-empty lines, found {len(non_empty)}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC1: Universal Blockers content — all 9 items and WCAG citations
+    # ------------------------------------------------------------------
+
+    def test_universal_blockers_have_wcag_or_source_citations(self) -> None:
+        """AC1: Universal Blockers must cite WCAG SC or a documented usability source."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        has_wcag = "sc " in lower or "wcag" in lower
+        has_nngroup = "nngroup" in lower or "nielsen" in lower
+        assert has_wcag or has_nngroup, (
+            "anti-patterns.md Universal Blockers must include WCAG SC citations "
+            "or documented usability sources (NNGroup)"
+        )
+
+    def test_universal_blockers_covers_all_9_items(self) -> None:
+        """AC1: Universal Blockers must expand all 9 existing SKILL.md quick-check items."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        # Signals for each of the 9 blockers in SKILL.md
+        expected_signals = [
+            "focus",  # visible focus indicator
+            "placeholder",  # placeholder as label
+            "hover",  # hover-only critical actions
+            "contrast",  # contrast below AA
+            "touch",  # touch targets < 44x44px
+            "mobile",  # critical actions hidden on mobile
+            "motion",  # reduced-motion fallback
+            "label",  # ambiguous primary labels
+            "error",  # generic error messages
+        ]
+        missing = [s for s in expected_signals if s not in lower]
+        assert missing == [], (
+            f"anti-patterns.md Universal Blockers section is missing content for: {missing}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC1: Taste Heuristics — ≥5 categories
+    # ------------------------------------------------------------------
+
+    def test_taste_heuristics_covers_typography_category(self) -> None:
+        """AC1: Taste Heuristics must cover the typography category."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        assert "typograph" in lower or "font" in lower, (
+            "anti-patterns.md Taste Heuristics must cover the typography category"
+        )
+
+    def test_taste_heuristics_covers_color_category(self) -> None:
+        """AC1: Taste Heuristics must cover the color category."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        assert "color" in lower or "colour" in lower, (
+            "anti-patterns.md Taste Heuristics must cover the color category"
+        )
+
+    def test_taste_heuristics_covers_layout_category(self) -> None:
+        """AC1: Taste Heuristics must cover the layout category."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        assert "layout" in lower or "card" in lower or "grid" in lower, (
+            "anti-patterns.md Taste Heuristics must cover the layout category"
+        )
+
+    def test_taste_heuristics_covers_visual_category(self) -> None:
+        """AC1: Taste Heuristics must cover the visual category (glassmorphism, shadows)."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        assert "glassmorphism" in lower or "shadow" in lower or "visual" in lower, (
+            "anti-patterns.md Taste Heuristics must cover the visual category"
+        )
+
+    def test_taste_heuristics_covers_motion_category(self) -> None:
+        """AC1: Taste Heuristics must cover the motion category (bounce, easing)."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        has_motion = (
+            "motion" in lower or "animation" in lower or "bounce" in lower or "easing" in lower
+        )
+        assert has_motion, "anti-patterns.md Taste Heuristics must cover the motion category"
+
+    # ------------------------------------------------------------------
+    # AC2: SKILL.md reference table integration
+    # ------------------------------------------------------------------
+
+    def test_skill_md_links_to_anti_patterns(self) -> None:
+        """AC2: SKILL.md must have a reference table row linking references/anti-patterns.md."""
+        text = _SKILL_FILE.read_text(encoding="utf-8")
+        assert "references/anti-patterns.md" in text, (
+            "SKILL.md reference table must include a row linking to references/anti-patterns.md"
+        )
+
+    def test_skill_md_anti_patterns_row_after_ux_writing_row(self) -> None:
+        """AC2: The anti-patterns.md row must appear after the ux-writing row in SKILL.md."""
+        text = _SKILL_FILE.read_text(encoding="utf-8")
+        ux_pos = text.find("ux-writing.md")
+        anti_pos = text.find("anti-patterns.md")
+        assert ux_pos != -1, "ux-writing.md row not found in SKILL.md reference table"
+        assert anti_pos != -1, "anti-patterns.md row not found in SKILL.md reference table"
+        assert ux_pos < anti_pos, (
+            "anti-patterns.md row must appear AFTER the ux-writing.md row in SKILL.md"
+        )
+
+    # ------------------------------------------------------------------
+    # AC3: Attribution header
+    # ------------------------------------------------------------------
+
+    def test_anti_patterns_attribution_references_notice(self) -> None:
+        """AC3: anti-patterns.md must include an attribution header referencing NOTICE.md."""
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        assert "notice" in lower, (
+            "anti-patterns.md must include an attribution header referencing NOTICE.md"
+        )
+
+    def test_anti_patterns_attribution_credits_impeccable(self) -> None:
+        """AC3: anti-patterns.md attribution header must credit Impeccable."""
+        text = self._FILE.read_text(encoding="utf-8")
+        assert "impeccable" in text.lower(), (
+            "anti-patterns.md must credit Impeccable in the attribution header"
+        )
+
+    def test_anti_patterns_attribution_credits_anthropic(self) -> None:
+        """AC3: anti-patterns.md attribution header must credit Anthropic."""
+        text = self._FILE.read_text(encoding="utf-8")
+        assert "anthropic" in text.lower(), (
+            "anti-patterns.md must credit Anthropic in the attribution header"
+        )
+
+    # ------------------------------------------------------------------
+    # AC1 (retry-cycle additions): per-item Citation/Rationale labels and
+    # warning-not-ban framing — reviewer found these MISSING in prior cycle.
+    # ------------------------------------------------------------------
+
+    def test_universal_blockers_each_item_has_citation_label(self) -> None:
+        """AC1: Every universal blocker bullet must carry an explicit 'Citation:' label.
+
+        Pins per-item citation structure so removing any single Citation: label fails
+        the suite (mutation guard identified by reviewer in cycle 1).
+        """
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        ub_start = lower.find("universal blockers")
+        th_start = lower.find("taste heuristics")
+        assert ub_start != -1, "anti-patterns.md must contain a 'Universal Blockers' section"
+        assert th_start != -1, "anti-patterns.md must contain a 'Taste Heuristics' section"
+        ub_section = text[ub_start:th_start]
+        blocker_items = re.findall(r"^- \*\*", ub_section, re.MULTILINE)
+        citation_count = ub_section.count("Citation:")
+        assert citation_count >= 9, (
+            f"Expected ≥9 'Citation:' labels in Universal Blockers, found {citation_count}"
+        )
+        assert citation_count >= len(blocker_items), (
+            f"Every universal blocker must have an explicit 'Citation:' label; "
+            f"found {citation_count} citations for {len(blocker_items)} blocker items"
+        )
+
+    def test_universal_blockers_each_item_has_rationale_label(self) -> None:
+        """AC1: Every universal blocker bullet must carry an explicit 'Rationale:' label.
+
+        Pins per-item rationale structure so removing any single Rationale: label fails
+        the suite (mutation guard identified by reviewer in cycle 1).
+        """
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        ub_start = lower.find("universal blockers")
+        th_start = lower.find("taste heuristics")
+        assert ub_start != -1, "anti-patterns.md must contain a 'Universal Blockers' section"
+        assert th_start != -1, "anti-patterns.md must contain a 'Taste Heuristics' section"
+        ub_section = text[ub_start:th_start]
+        blocker_items = re.findall(r"^- \*\*", ub_section, re.MULTILINE)
+        rationale_count = ub_section.count("Rationale:")
+        assert rationale_count >= 9, (
+            f"Expected ≥9 'Rationale:' labels in Universal Blockers, found {rationale_count}"
+        )
+        assert rationale_count >= len(blocker_items), (
+            f"Every universal blocker must have an explicit 'Rationale:' label; "
+            f"found {rationale_count} rationale labels for {len(blocker_items)} blocker items"
+        )
+
+    def test_taste_heuristics_framed_as_warnings_not_bans(self) -> None:
+        """AC1: Taste Heuristics section must explicitly frame patterns as warnings, not bans.
+
+        Pins the warning-not-ban framing so converting heuristics into hard prohibitions
+        fails the suite (mutation guard identified by reviewer in cycle 1).
+        """
+        text = self._FILE.read_text(encoding="utf-8")
+        lower = text.lower()
+        th_start = lower.find("taste heuristics")
+        assert th_start != -1, "anti-patterns.md must contain a 'Taste Heuristics' section"
+        th_section_lower = lower[th_start:]
+        has_warning_framing = (
+            "not ban" in th_section_lower
+            or "warning signal" in th_section_lower
+            or "prompts for review" in th_section_lower
+            or "not automatic rejection" in th_section_lower
+        )
+        assert has_warning_framing, (
+            "Taste Heuristics section must explicitly state these are warnings, not bans "
+            "(e.g., 'not bans', 'warning signals', or 'prompts for review')"
         )
