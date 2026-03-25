@@ -556,3 +556,63 @@ class TestFromAC_ExtractOptions:
         )
         options = _extract_options(body)
         assert options == ["A: First option"]
+
+
+# ---------------------------------------------------------------------------
+# Resolve atomicity (reviewer data-safety finding)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DecisionsResolveAtomicity:
+    """AC: Graceful errors — pending file must not be mutated if the resolve move fails."""
+
+    def test_resolve_pending_file_unchanged_if_move_fails(self, tmp_path: Path) -> None:
+        """Pending file frontmatter must not be mutated when shutil.move raises.
+
+        The resolve command writes status: resolved and ## Resolution to the pending
+        file *before* moving it. If the move fails, the pending file is left in a
+        corrupted state. The contract requires the pending file to remain unmodified.
+        """
+        decisions_dir = tmp_path / "decisions"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        pending = decisions_dir / "pending"
+        resolved = decisions_dir / "resolved"
+        resolved.mkdir(exist_ok=True)
+        path = _make_decision_file(pending, task_id="870")
+        fname = path.name
+
+        with (
+            patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir),
+            patch("bearclaw.commands.decisions.shutil.move", side_effect=OSError("disk full")),
+        ):
+            runner.invoke(app, ["decisions", "resolve", "870"], input="A\nnotes\ny\n")
+
+        assert (pending / fname).exists(), "pending file should still exist after failed move"
+        pending_content = (pending / fname).read_text(encoding="utf-8")
+        assert "status: pending" in pending_content, (
+            "pending file frontmatter must not be mutated to 'resolved' when move fails"
+        )
+
+    def test_resolve_pending_file_has_no_resolution_section_if_move_fails(
+        self, tmp_path: Path
+    ) -> None:
+        """Pending file must not contain ## Resolution section after a failed move."""
+        decisions_dir = tmp_path / "decisions"
+        decisions_dir.mkdir(parents=True, exist_ok=True)
+        pending = decisions_dir / "pending"
+        resolved = decisions_dir / "resolved"
+        resolved.mkdir(exist_ok=True)
+        path = _make_decision_file(pending, task_id="871")
+        fname = path.name
+
+        with (
+            patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir),
+            patch("bearclaw.commands.decisions.shutil.move", side_effect=OSError("io error")),
+        ):
+            runner.invoke(app, ["decisions", "resolve", "871"], input="A\nnotes\ny\n")
+
+        assert (pending / fname).exists()
+        pending_content = (pending / fname).read_text(encoding="utf-8")
+        assert "## Resolution" not in pending_content, (
+            "pending file must not contain ## Resolution section when move fails"
+        )
