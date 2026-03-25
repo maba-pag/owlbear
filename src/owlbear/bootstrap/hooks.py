@@ -82,10 +82,13 @@ def build_hooks(
     -------
     tuple[HookRegistry, ProgressReporter | None]
         Fully-wired hook registry and optional progress reporter.  When
-        ``settings.hook_reactions`` is non-empty the registry's
-        ``reaction_executors`` attribute is set to the noop executor dict
-        passed to ``HookReactionRouter``; downstream code (see task #992)
-        replaces those noops with real executors.
+        ``settings.hook_reactions`` is non-empty, ``build_hooks()`` wires
+        the real notify executor (``_make_notify_executor``) directly into
+        ``reaction_executors["notify"]`` and, when *channel* is provided,
+        the real escalate executor (``_make_escalate_executor``) into
+        ``reaction_executors["escalate"]``; the retry slot stays noop.
+        When the escalate action is configured but *channel* is ``None``,
+        a warning is logged and the escalate slot falls back to noop.
     """
     hooks = HookRegistry()
 
