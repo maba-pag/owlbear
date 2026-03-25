@@ -23,7 +23,7 @@ import random
 import signal
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import httpx
 from pydantic_ai import Agent
@@ -48,13 +48,14 @@ from owlbear.process import is_process_alive
 from owlbear.providers.copilot import create_copilot_client
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
     from types import FrameType
 
     from owlbear.channels.base import ChannelPlugin
     from owlbear.config import OwlBearSettings
     from owlbear.core.agent import OwlBearAgent
     from owlbear.core.agent_registry import AgentRegistry
+    from owlbear.core.hook_reaction_router import Executor
     from owlbear.memory.error_journal import ErrorJournal
     from owlbear.memory.wip import WipStore
     from owlbear.tools.kanban import KanbanToolset
@@ -585,10 +586,10 @@ def make_retry_executor(
     max_attempts: int = _DEFAULT_MAX_RETRY_ATTEMPTS,
     backoff_base: float = _DEFAULT_BACKOFF_BASE,
     backoff_max: float = _DEFAULT_BACKOFF_MAX,
-) -> Callable[[dict[str, object]], Awaitable[None]]:
+) -> Executor:
     """Build a hook reaction executor that schedules task retries on failure."""
 
-    async def _executor(data: dict[str, object]) -> None:
+    async def _executor(data: dict[str, Any]) -> None:
         task_id_raw = data.get("task_id")
         if task_id_raw is None or task_id_raw == "":
             logger.warning("Retry executor called without task_id in payload")
@@ -1150,6 +1151,14 @@ async def run_daemon(  # noqa: PLR0913, PLR0915, PLR0912, C901
 
             wip_store = _WipStore(config_dir)
             state = OrchestratorState()
+            if agent.hooks.reaction_executors is not None:
+                agent.hooks.reaction_executors["retry"] = make_retry_executor(
+                    state=state,
+                    kanban=kanban_toolset,
+                    max_attempts=settings.task_retry_max_attempts,
+                    backoff_base=settings.task_retry_backoff_base,
+                    backoff_max=settings.task_retry_backoff_max,
+                )
             try:
                 async with asyncio.TaskGroup() as tg:
                     tg.create_task(
