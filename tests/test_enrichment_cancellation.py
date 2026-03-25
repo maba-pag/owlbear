@@ -595,7 +595,8 @@ class TestFromAC_GraphEnricherBootstrapCleanup:
         with (
             patch.object(_pkg_module, "_build_knowledge_infra", return_value=mock_infra),
             patch.object(
-                _pkg_module, "_build_knowledge_toolset",
+                _pkg_module,
+                "_build_knowledge_toolset",
                 side_effect=spy_build_knowledge_toolset,
             ),
             patch.object(_pkg_module, "_build_bookmark_toolset", return_value=None),
@@ -647,7 +648,8 @@ class TestFromAC_GraphEnricherBootstrapCleanup:
         with (
             patch.object(_pkg_module, "_build_knowledge_infra", return_value=mock_infra),
             patch.object(
-                _pkg_module, "_build_knowledge_toolset",
+                _pkg_module,
+                "_build_knowledge_toolset",
                 side_effect=spy_capture_cleanup,
             ),
             patch.object(_pkg_module, "_build_bookmark_toolset", return_value=None),
