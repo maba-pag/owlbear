@@ -31,7 +31,7 @@ single-pass baseline.
 | EntityExtractor | src/owlbear/memory/knowledge/extractor.py | .95 | Single-pass PydanticAI Agent, ExtractionResult schema, UsageTracker wiring |
 | IngestPipeline | src/owlbear/memory/knowledge/ingest.py | .90 | _run_extract() loop, cooperative cancellation via asyncio.Event, chunk provenance |
 | InterDocGraphBuilder | src/owlbear/memory/knowledge/inter_doc_graph_builder.py | .85 | Batched LLM inference, cosine_threshold=0.70, top_k=10, _BATCH_SIZE=40 |
-| Entity / Edge models | src/owlbear/memory/knowledge/models.py | .80 | Frozen Pydantic models, id = uuid4().hex, name-based identity |
+| Entity / Edge models | src/owlbear/memory/knowledge/models.py | .80 | Frozen Pydantic models, generated entity IDs, edge references by source_id/target_id |
 
 ## 3. Current-State Catalog
 
@@ -100,12 +100,20 @@ Flow: entities[] → _find_candidate_pairs (vector similarity, cosine ≥ 0.70)
 ```python
 Pass 1: await self._agent.run(text)          → ExtractionResult (initial)
 Pass 2: await self._agent.run(glean_prompt)  → ExtractionResult (incremental)
-Merge:  dedupe entities by name, merge edges by (source_id, target_id, relation)
+Merge:  choose canonical entity IDs by normalized name
+  build old_id -> canonical_id map across both passes
+  rewrite edge endpoints through that map
+  dedupe edges by (canonical_source_id, canonical_target_id, relation)
 ```
 
-**Schema compatibility (ExtractionResult):** ✓ Same frozen Pydantic model used
-for both passes. Merging requires only `{e.name: e for e in entities}` dedup with
-importance-weighted selection for conflicts. No schema changes needed.
+**Schema compatibility (ExtractionResult):** ✓ Same frozen Pydantic model can be
+used for both passes, but merge logic must canonicalize IDs before persistence.
+`Entity.id` values are generated per pass, while `Edge` references are id-based
+(`source_id`, `target_id`). Name-based dedup without endpoint rewrite would leave
+edges pointing to discarded pass-local IDs. Contract-compatible approach:
+canonicalize entities by name, maintain `old_id -> canonical_id`, rewrite all edge
+endpoints, and drop any edge whose rewritten endpoints are missing. No schema
+changes are needed; this is an algorithmic merge requirement.
 
 **Per-chunk storage/provenance:** ✓ Both passes produce results from the same
 chunk. The merged result is stored once with the existing `document_id`/`chunk_id`
