@@ -7,6 +7,11 @@ description: "Frontend development conventions — design systems, accessibility
 
 These conventions apply to all frontend/UI code in OwlBear projects. They are enforced by the architect (during review) and the reviewer (during verification) for tasks tagged `frontend` or `ui`.
 
+## Design guidance
+
+For deeper design guidance, use the `frontend-design` skill.
+It covers typography, color, spatial layout, motion, interaction, responsive patterns, and UX writing.
+
 ## Design system
 
 - **Porsche projects:** Use the [Porsche Design System](https://designsystem.porsche.com/) as the component library and design language. Follow PDS component APIs, spacing tokens, color tokens, and typography scales. Do not create custom components that duplicate PDS functionality.
