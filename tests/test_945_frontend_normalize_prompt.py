@@ -81,6 +81,25 @@ class TestFromAC_FrontendNormalizePrompt:
         content = _read_prompt()
         assert "docs/design-context.md" in content, "Prompt must reference 'docs/design-context.md'"
 
+    def test_design_context_read_is_conditional(self) -> None:
+        """AC2: The docs/design-context.md read must be conditional (if-it-exists guard).
+
+        docs/design-context.md may not exist in fresh workspaces (user hasn't run
+        /design-context yet). Sibling prompts frontend-audit and frontend-polish both
+        use 'if it exists' to handle this gracefully. frontend-normalize must do the same.
+        """
+        content = _read_prompt()
+        ref_pos = content.find("docs/design-context.md")
+        assert ref_pos != -1, "Prompt must reference docs/design-context.md"
+        # Check a window around the reference for conditional wording
+        window = content[max(0, ref_pos - 60) : ref_pos + 100]
+        assert re.search(
+            r"if it exists|if it is present|if available|if found", window, re.IGNORECASE
+        ), (
+            "The docs/design-context.md read must be conditional ('if it exists' or similar). "
+            "Sibling prompts guard this with 'if it exists'."
+        )
+
     def test_references_frontend_design_skill_by_relative_path(self) -> None:
         """AC2: Prompt must reference the frontend-design skill by relative path."""
         content = _read_prompt()
