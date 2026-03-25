@@ -137,6 +137,8 @@ def _wire_knowledge_toolsets(  # noqa: C901, PLR0912, PLR0913, PLR0915
             "consolidation_enabled": settings.consolidation_enabled,
             "consolidation_interval": settings.consolidation_interval,
         }
+        if cleanup is not None:
+            knowledge_kwargs["cleanup"] = cleanup
         if tracker is not None:
             knowledge_kwargs["tracker"] = tracker
             knowledge_kwargs["provider"] = provider

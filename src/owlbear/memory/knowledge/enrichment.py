@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import sqlite3
 
+    from owlbear.memory.knowledge.cancellation import CancelSignal
     from owlbear.memory.knowledge.document_store import DocumentStore
     from owlbear.memory.knowledge.extractor import ExtractionResult
     from owlbear.memory.knowledge.graph import GraphStore
@@ -57,6 +58,7 @@ class GraphEnricher:
         self._pipeline_name = pipeline_name
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._bg_semaphore = asyncio.Semaphore(bg_concurrency)
+        self._shutdown = False
 
     # -- Public API ----------------------------------------------------------
 
@@ -65,8 +67,14 @@ class GraphEnricher:
         document_id: str,
         extract_results: list[ExtractionResult],
         scope: str,
+        *,
+        cancel: CancelSignal | None = None,
     ) -> None:
         """Schedule non-blocking graph enrichment if graph_builder is available."""
+        if self._shutdown:
+            return
+        if cancel is not None and cancel.is_set():
+            return
         if self._graph_builder is None:
             return
         entities = [e for r in extract_results for e in r.entities]
@@ -82,8 +90,14 @@ class GraphEnricher:
         document_id: str,
         extract_results: list[ExtractionResult],
         scope: str,
+        *,
+        cancel: CancelSignal | None = None,
     ) -> None:
         """Schedule non-blocking inter-document graph enrichment if builder is available."""
+        if self._shutdown:
+            return
+        if cancel is not None and cancel.is_set():
+            return
         if self._inter_doc_builder is None:
             return
         entities = [e for r in extract_results for e in r.entities]
@@ -105,6 +119,23 @@ class GraphEnricher:
         task = asyncio.create_task(self._enrich_inter_doc_graph(document_id, entities, scope))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
+
+    async def drain(self) -> None:
+        """Await all tracked tasks to completion and clear their tracking references."""
+        tasks = list(self._background_tasks)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._background_tasks.difference_update(tasks)
+
+    async def shutdown(self) -> None:
+        """Set shutdown signal, cancel tracked tasks, and await cleanup."""
+        self._shutdown = True
+        tasks = list(self._background_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._background_tasks.difference_update(tasks)
 
     # -- Private helpers -----------------------------------------------------
 

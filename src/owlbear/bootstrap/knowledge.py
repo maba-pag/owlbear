@@ -11,6 +11,7 @@ from owlbear.tools.browser.config import BrowserConfig
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Callable
     from pathlib import Path
 
     from pydantic_ai.models import Model
@@ -116,6 +117,7 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     bg_concurrency: int = 5,
     consolidation_enabled: bool = False,
     consolidation_interval: int = 1800,  # noqa: ARG001
+    cleanup: list[Callable] | None = None,
     tracker: UsageTracker | None = None,
     provider: str = "copilot",
 ) -> (
@@ -173,6 +175,8 @@ def _build_knowledge_toolset(  # noqa: PLR0913
                 pipeline_name="ingest",
                 bg_concurrency=bg_concurrency,
             )
+            if cleanup is not None:
+                cleanup.append(enricher.shutdown)
 
         ingest_pipeline = IngestPipeline(
             store=store,
