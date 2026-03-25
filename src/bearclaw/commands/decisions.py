@@ -130,7 +130,7 @@ def decisions_list() -> None:
     pending = DECISIONS_DIR / "pending"
     if not pending.is_dir():
         typer.echo("No pending decisions directory found.")
-        raise typer.Exit(code=0)
+        raise typer.Exit(code=1)
 
     files = sorted(pending.glob("*.md"))
     if not files:
