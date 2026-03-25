@@ -311,7 +311,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -334,7 +334,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -360,7 +360,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -386,7 +386,7 @@ class TestRunCmd:
             pass
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -412,7 +412,7 @@ class TestRunCmd:
             raise RuntimeError(msg)
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -437,7 +437,7 @@ class TestRunCmd:
         pid_cm = _pid_context_manager()
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -463,7 +463,7 @@ class TestRunCmd:
             captured_kwargs.update(kwargs)
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -501,7 +501,7 @@ class TestCleanupLoopAwaitsAsync:
             pass
 
         with (
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.setup_logging"),
@@ -538,7 +538,7 @@ class TestChatAsyncRunsCleanup:
         mock_result.agent.session.load = MagicMock()
 
         with (
-            patch("bearclaw.commands.chat.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch(
                 "bearclaw.commands.chat.bootstrap",
                 new_callable=AsyncMock,

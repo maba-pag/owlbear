@@ -771,7 +771,7 @@ class TestFromACCliDaemonHydratorWiring:
             patch("owlbear.bootstrap.bootstrap", new=fake_bootstrap),
             patch("owlbear.daemon.run_daemon", new=fake_run_daemon),
             patch("owlbear.daemon.PidFile"),
-            patch("bearclaw.commands.daemon.OwlBearSettings") as mock_settings_cls,
+            patch("owlbear.config.OwlBearSettings") as mock_settings_cls,
             patch("owlbear.daemon.setup_logging"),
         ):
             mock_settings_cls.return_value = OwlBearSettings()
