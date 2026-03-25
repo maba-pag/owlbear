@@ -220,7 +220,7 @@ class TestFromAC_DecisionsList:
     def test_list_no_pending_shows_message(self, tmp_path: Path) -> None:
         with _patch_decisions_dir(tmp_path):
             result = runner.invoke(app, ["decisions", "list"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert "no pending" in result.output.lower() or "No pending" in result.output
 
     def test_list_one_decision_shows_table(self, tmp_path: Path) -> None:
@@ -485,13 +485,13 @@ class TestFromAC_DecisionsErrors:
     """AC: Graceful error messages via typer.echo + typer.Exit(code=1)."""
 
     def test_list_missing_pending_dir_shows_error(self, tmp_path: Path) -> None:
-        """If pending/ doesn't exist, graceful message (no traceback)."""
+        """If pending/ doesn't exist, exits with code 1 and graceful message (no traceback)."""
         decisions_dir = tmp_path / "decisions"
         decisions_dir.mkdir(parents=True, exist_ok=True)
         # Don't create pending/
         with patch("bearclaw.commands.decisions.DECISIONS_DIR", decisions_dir):
             result = runner.invoke(app, ["decisions", "list"])
-        assert result.exit_code in (0, 1)
+        assert result.exit_code == 1
         # Should NOT have a Python traceback
         assert "Traceback" not in result.output
 
