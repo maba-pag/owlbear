@@ -209,23 +209,18 @@ def decisions_resolve(
         typer.echo("Cancelled.")
         return
 
-    # Write resolution section and update frontmatter
+    # Prepare updated content, but don't mutate the pending file yet.
     resolution_section = f"\n## Resolution\n\n**Choice:** {choice}\n\n**Notes:** {notes}\n"
-
-    # Re-read file content to update
     text = path.read_text(encoding="utf-8")
-
-    # Update frontmatter status to resolved
     text = text.replace("status: pending", "status: resolved", 1)
+    updated_text = text.rstrip() + "\n" + resolution_section
 
-    # Append resolution section
-    text = text.rstrip() + "\n" + resolution_section
-
-    path.write_text(text, encoding="utf-8")
-
-    # Move to resolved/
+    # Move first so failed moves leave pending content untouched.
     resolved_dir = DECISIONS_DIR / "resolved"
     resolved_dir.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(path), str(resolved_dir / path.name))
+    resolved_path = resolved_dir / path.name
+    shutil.move(str(path), str(resolved_path))
+
+    resolved_path.write_text(updated_text, encoding="utf-8")
 
     typer.echo(f"Decision '{task_id}' resolved and moved to resolved/.")
