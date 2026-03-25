@@ -8537,3 +8537,279 @@
 {"timestamp":"2026-03-24T22:05:14.6367277+01:00","action":"move","task_id":994,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-24T22:05:20.0601566+01:00","action":"edit","task_id":994,"detail":"Test: HookRegistry reaction_executors attribute (TDD RED)"}
 {"timestamp":"2026-03-24T22:05:20.06499+01:00","action":"release","task_id":994,"detail":"auditor"}
+{"timestamp":"2026-03-24T22:06:16.2079413+01:00","action":"edit","task_id":994,"detail":"Test: HookRegistry reaction_executors attribute (TDD RED)"}
+{"timestamp":"2026-03-24T22:07:10.5025793+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:07:10.5094489+01:00","action":"claim","task_id":961,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:07:12.2475624+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:07:12.2546629+01:00","action":"claim","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:07:21.7153267+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:07:25.1146404+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:07:25.121983+01:00","action":"release","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:07:30.9142973+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:07:57.3638599+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:07:57.3718263+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:08:08.9901874+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:08:13.9845096+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:08:13.9906688+01:00","action":"release","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:10:45.8330947+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:10:45.8409673+01:00","action":"release","task_id":961,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:11:06.7931554+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:11:06.7993601+01:00","action":"claim","task_id":961,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:11:07.7375439+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:11:07.7433465+01:00","action":"release","task_id":961,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:14:21.7599698+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:14:21.7667685+01:00","action":"claim","task_id":996,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:14:23.0526384+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:14:23.0586459+01:00","action":"claim","task_id":945,"detail":"architect"}
+{"timestamp":"2026-03-24T22:14:49.3142549+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:14:49.3205863+01:00","action":"claim","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:15:09.316375+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:15:09.3216123+01:00","action":"claim","task_id":936,"detail":"builder"}
+{"timestamp":"2026-03-24T22:15:17.4474112+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:15:22.4234014+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:15:22.4289084+01:00","action":"release","task_id":936,"detail":"builder"}
+{"timestamp":"2026-03-24T22:15:48.2561754+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:16:09.1579706+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:16:13.2461298+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:16:19.0999821+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:16:19.1062822+01:00","action":"release","task_id":945,"detail":"architect"}
+{"timestamp":"2026-03-24T22:18:33.3748956+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:18:39.8513239+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:18:39.8565351+01:00","action":"release","task_id":996,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:19:33.1933762+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:19:33.1993596+01:00","action":"release","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:20:01.3424631+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:20:01.3471039+01:00","action":"claim","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:20:02.0176462+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:20:02.6413492+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:20:02.6460045+01:00","action":"release","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:20:53.4675452+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:20:53.4723759+01:00","action":"claim","task_id":927,"detail":"builder"}
+{"timestamp":"2026-03-24T22:22:10.4673654+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-24T22:22:10.4739035+01:00","action":"claim","task_id":809,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:23:14.6533722+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:23:18.9360286+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:23:18.9407501+01:00","action":"release","task_id":927,"detail":"builder"}
+{"timestamp":"2026-03-24T22:25:11.8712589+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:25:11.8766023+01:00","action":"claim","task_id":961,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:25:16.8718105+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-24T22:25:22.2095966+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-24T22:25:22.2172574+01:00","action":"release","task_id":809,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:27:22.854228+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:27:27.5624293+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:27:27.5670814+01:00","action":"release","task_id":961,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:30:09.3525939+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:30:09.3578447+01:00","action":"claim","task_id":954,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:30:13.1049122+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:30:13.1101608+01:00","action":"claim","task_id":996,"detail":"builder"}
+{"timestamp":"2026-03-24T22:30:17.042327+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:30:17.0470152+01:00","action":"claim","task_id":927,"detail":"reviewer-927-gpt54"}
+{"timestamp":"2026-03-24T22:30:29.9034939+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:30:29.9081434+01:00","action":"claim","task_id":936,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-24T22:30:30.6133402+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:30:30.6179484+01:00","action":"release","task_id":954,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:33:38.0840847+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:33:42.6224166+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:33:43.5646908+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T22:33:43.5715635+01:00","action":"release","task_id":936,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-24T22:33:59.2243908+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:34:10.7279817+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:34:10.732839+01:00","action":"release","task_id":996,"detail":"builder"}
+{"timestamp":"2026-03-24T22:35:45.9850741+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:35:51.9852307+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:35:52.8209493+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:35:52.8267934+01:00","action":"release","task_id":927,"detail":"reviewer-927-gpt54"}
+{"timestamp":"2026-03-24T22:37:15.7122987+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:15.7187538+01:00","action":"claim","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:37:22.5257443+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-24T22:37:22.5309251+01:00","action":"claim","task_id":734,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:37:26.2383626+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:31.6937302+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:31.7015144+01:00","action":"release","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:37:32.5051033+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-24T22:37:32.5106456+01:00","action":"claim","task_id":961,"detail":"fable-willow"}
+{"timestamp":"2026-03-24T22:37:39.0469745+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:39.0547682+01:00","action":"claim","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:37:43.1276325+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:43.1346159+01:00","action":"release","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:37:46.0855908+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T22:37:50.1198717+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-24T22:37:52.9300835+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-24T22:37:52.9368708+01:00","action":"claim","task_id":890,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:38:03.5181058+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-24T22:38:07.4286664+01:00","action":"edit","task_id":734,"detail":"Research: Evaluate EdgeQuake gleaning for current LLM extraction paths"}
+{"timestamp":"2026-03-24T22:38:07.4412444+01:00","action":"release","task_id":734,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:39:17.3671617+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-24T22:39:24.1233017+01:00","action":"edit","task_id":890,"detail":"Tests for AgentRegistry.register programmatic registration"}
+{"timestamp":"2026-03-24T22:39:24.129073+01:00","action":"release","task_id":890,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:40:06.0168663+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:40:06.0232137+01:00","action":"claim","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-24T22:40:30.4760106+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-24T22:40:30.4865164+01:00","action":"claim","task_id":834,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:41:08.8306856+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-24T22:41:13.9393284+01:00","action":"edit","task_id":834,"detail":"Tests for raw-HTML cache layer (TDD RED)"}
+{"timestamp":"2026-03-24T22:41:13.9457494+01:00","action":"release","task_id":834,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:41:24.5564481+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:41:32.3538611+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:41:38.4486588+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:41:38.4549548+01:00","action":"release","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-24T22:44:40.3974801+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:44:40.4109669+01:00","action":"claim","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:44:42.9387306+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:44:42.9470761+01:00","action":"claim","task_id":927,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:44:48.7335343+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:44:48.7388364+01:00","action":"claim","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:44:51.9571547+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:44:51.9639592+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:45:02.6114397+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:45:10.7068895+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:45:50.442428+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T22:45:50.4500593+01:00","action":"release","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:46:26.9169553+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:46:26.9237717+01:00","action":"release","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:46:56.6300488+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:46:56.6358705+01:00","action":"claim","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:46:57.3480014+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:47:05.1984841+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T22:47:05.2049479+01:00","action":"release","task_id":954,"detail":"builder"}
+{"timestamp":"2026-03-24T22:48:25.6224151+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:48:29.8148508+01:00","action":"edit","task_id":927,"detail":"Implement shared CompletedProcess factory for BearClaw CLI tests"}
+{"timestamp":"2026-03-24T22:48:29.8207653+01:00","action":"release","task_id":927,"detail":"test-writer"}
+{"timestamp":"2026-03-24T22:52:29.9196902+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:52:58.5535265+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T22:52:58.5597597+01:00","action":"release","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-24T22:53:44.8133548+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T22:53:44.8192343+01:00","action":"claim","task_id":921,"detail":"builder"}
+{"timestamp":"2026-03-24T22:53:58.6796269+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-24T22:53:58.6847173+01:00","action":"claim","task_id":892,"detail":"test-writer-892"}
+{"timestamp":"2026-03-24T22:55:50.5796431+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T22:56:07.2078455+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T22:56:07.2142031+01:00","action":"release","task_id":921,"detail":"builder"}
+{"timestamp":"2026-03-24T22:59:16.2784401+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-24T22:59:20.5608211+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-24T22:59:20.5664879+01:00","action":"release","task_id":892,"detail":"test-writer-892"}
+{"timestamp":"2026-03-24T23:02:36.8387344+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:02:36.8439781+01:00","action":"claim","task_id":921,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:03:17.3756223+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:03:17.3810513+01:00","action":"claim","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-24T23:03:18.0608371+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:03:18.724562+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:03:18.7303875+01:00","action":"release","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-24T23:05:33.8828624+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:05:33.8913146+01:00","action":"claim","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:05:34.5930903+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:05:35.3206184+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:05:36.0390195+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:05:36.0458964+01:00","action":"release","task_id":954,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:07:25.7817687+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:07:25.7885671+01:00","action":"claim","task_id":996,"detail":"test-writer-retry"}
+{"timestamp":"2026-03-24T23:08:36.0040661+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:08:40.3075702+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:08:40.3139073+01:00","action":"release","task_id":996,"detail":"test-writer-retry"}
+{"timestamp":"2026-03-24T23:11:44.3091046+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:11:48.1282247+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:11:48.1339449+01:00","action":"release","task_id":921,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:12:35.2867909+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:12:35.2918705+01:00","action":"claim","task_id":945,"detail":"builder"}
+{"timestamp":"2026-03-24T23:12:36.1454013+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:12:37.0278028+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:12:37.0329799+01:00","action":"release","task_id":945,"detail":"builder"}
+{"timestamp":"2026-03-24T23:15:57.8367005+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:15:57.84346+01:00","action":"claim","task_id":936,"detail":"test-writer"}
+{"timestamp":"2026-03-24T23:17:01.019694+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:17:05.4377895+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:17:05.4441332+01:00","action":"release","task_id":936,"detail":"test-writer"}
+{"timestamp":"2026-03-24T23:19:26.6830978+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:19:26.68971+01:00","action":"claim","task_id":954,"detail":"writer"}
+{"timestamp":"2026-03-24T23:19:42.0056706+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:19:42.0121017+01:00","action":"claim","task_id":921,"detail":"writer"}
+{"timestamp":"2026-03-24T23:19:43.3645698+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:19:43.3708993+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T23:19:53.218975+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:19:53.2243707+01:00","action":"claim","task_id":996,"detail":"fern-cliff"}
+{"timestamp":"2026-03-24T23:19:59.2084812+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:20:03.7856822+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-24T23:20:03.7903874+01:00","action":"release","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-24T23:20:33.5117788+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:20:33.5169736+01:00","action":"release","task_id":954,"detail":"writer"}
+{"timestamp":"2026-03-24T23:21:00.94827+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:21:00.9535991+01:00","action":"release","task_id":921,"detail":"writer"}
+{"timestamp":"2026-03-24T23:22:11.6636511+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:22:14.7850751+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-24T23:22:14.7922182+01:00","action":"release","task_id":996,"detail":"fern-cliff"}
+{"timestamp":"2026-03-24T23:23:20.4581538+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:23:20.4633479+01:00","action":"claim","task_id":945,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:23:52.3121032+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:23:52.3181679+01:00","action":"claim","task_id":936,"detail":"copilot-builder"}
+{"timestamp":"2026-03-24T23:26:56.716958+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:27:01.7629151+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-24T23:27:01.7675601+01:00","action":"release","task_id":936,"detail":"copilot-builder"}
+{"timestamp":"2026-03-24T23:28:16.7614474+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:28:17.7073273+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-24T23:28:17.7136504+01:00","action":"release","task_id":945,"detail":"reviewer"}
+{"timestamp":"2026-03-24T23:30:51.7126607+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:30:51.7180967+01:00","action":"claim","task_id":954,"detail":"auditor"}
+{"timestamp":"2026-03-24T23:48:24.4982773+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:48:29.9398776+01:00","action":"move","task_id":954,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-24T23:48:30.5774897+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:48:30.5837792+01:00","action":"release","task_id":954,"detail":"auditor"}
+{"timestamp":"2026-03-24T23:48:38.2521957+01:00","action":"edit","task_id":954,"detail":"Implement TASK_COMPLETE audit-map advisory worker pilot"}
+{"timestamp":"2026-03-24T23:49:44.4238097+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-24T23:49:44.431741+01:00","action":"claim","task_id":921,"detail":"auditor"}
+{"timestamp":"2026-03-25T00:07:41.0097033+01:00","action":"move","task_id":921,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T00:07:46.0509314+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-25T00:07:46.0556989+01:00","action":"release","task_id":921,"detail":"auditor"}
+{"timestamp":"2026-03-25T00:08:11.2690188+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-25T00:08:15.4824803+01:00","action":"edit","task_id":921,"detail":"Honor kanban age thresholds in bearclaw board Rich output"}
+{"timestamp":"2026-03-25T00:09:11.5731507+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T00:09:11.5794204+01:00","action":"claim","task_id":936,"detail":"reviewer"}
+{"timestamp":"2026-03-25T00:09:42.125766+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T00:09:42.1331898+01:00","action":"claim","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-25T00:09:44.7068249+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T00:09:44.7132841+01:00","action":"claim","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-25T00:09:49.7788449+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T00:09:49.7838881+01:00","action":"claim","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-25T00:10:09.4465674+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T00:10:16.6057043+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T00:10:16.6115639+01:00","action":"release","task_id":956,"detail":"builder"}
+{"timestamp":"2026-03-25T00:13:05.9455869+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T00:13:10.9521715+01:00","action":"edit","task_id":945,"detail":"Add frontend-normalize prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T00:13:10.9585785+01:00","action":"release","task_id":945,"detail":"test-writer"}
+{"timestamp":"2026-03-25T00:14:14.0948348+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T00:14:17.5375007+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T00:14:17.5445941+01:00","action":"release","task_id":936,"detail":"reviewer"}
+{"timestamp":"2026-03-25T00:22:19.7472155+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T00:22:19.7524838+01:00","action":"release","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-25T00:23:12.0517613+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T00:23:12.0591183+01:00","action":"claim","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-25T00:23:13.0293861+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T00:23:13.0352141+01:00","action":"release","task_id":996,"detail":"reviewer"}
+{"timestamp":"2026-03-25T01:11:55.8788527+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:11:55.8843564+01:00","action":"claim","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-25T01:12:07.5021668+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:12:07.5078991+01:00","action":"claim","task_id":936,"detail":"writer"}
+{"timestamp":"2026-03-25T01:12:11.806377+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:12:27.1268929+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:12:28.8132634+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:12:28.8190372+01:00","action":"claim","task_id":961,"detail":"brave-fjord"}
+{"timestamp":"2026-03-25T01:12:29.5865435+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:12:29.5915806+01:00","action":"claim","task_id":996,"detail":"test-writer"}
+{"timestamp":"2026-03-25T01:12:30.5558152+01:00","action":"edit","task_id":956,"detail":"Reuse daemon retry state for task-scoped HookReaction retries"}
+{"timestamp":"2026-03-25T01:12:30.5611687+01:00","action":"release","task_id":956,"detail":"test-writer"}
+{"timestamp":"2026-03-25T01:12:43.1180673+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:14:05.9063412+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:14:05.9127705+01:00","action":"release","task_id":936,"detail":"writer"}
+{"timestamp":"2026-03-25T01:14:44.9756778+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:14:47.5254901+01:00","action":"edit","task_id":961,"detail":"Implement daemon dispatch runtime context reuse"}
+{"timestamp":"2026-03-25T01:14:47.5322949+01:00","action":"release","task_id":961,"detail":"brave-fjord"}
+{"timestamp":"2026-03-25T01:28:38.9432317+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:28:43.1054682+01:00","action":"edit","task_id":996,"detail":"Test: make_retry_executor unit and integration tests"}
+{"timestamp":"2026-03-25T01:28:43.111802+01:00","action":"release","task_id":996,"detail":"test-writer"}
+{"timestamp":"2026-03-25T01:30:58.2791096+01:00","action":"edit","task_id":939,"detail":"Implement board-specific kanban JSON payload helper for BearClaw board CLI tests"}
+{"timestamp":"2026-03-25T01:30:58.2851125+01:00","action":"claim","task_id":939,"detail":"researcher"}
+{"timestamp":"2026-03-25T01:31:09.9716445+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:31:09.9729467+01:00","action":"claim","task_id":936,"detail":"auditor"}
+{"timestamp":"2026-03-25T01:39:56.5036915+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:40:01.0135543+01:00","action":"move","task_id":936,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T01:40:05.451112+01:00","action":"edit","task_id":936,"detail":"Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED)"}
+{"timestamp":"2026-03-25T01:40:05.4572207+01:00","action":"release","task_id":936,"detail":"auditor"}
