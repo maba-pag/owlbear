@@ -9310,3 +9310,13 @@
 {"timestamp":"2026-03-25T06:38:14.3967438+01:00","action":"move","task_id":938,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-25T06:38:19.8830298+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
 {"timestamp":"2026-03-25T06:38:19.8882947+01:00","action":"release","task_id":938,"detail":"auditor"}
+{"timestamp":"2026-03-25T06:39:05.0733226+01:00","action":"edit","task_id":938,"detail":"Add OwlBear frontend anti-pattern taxonomy"}
+{"timestamp":"2026-03-25T06:39:32.3092566+01:00","action":"edit","task_id":944,"detail":"Add frontend-audit prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T06:39:32.3141936+01:00","action":"claim","task_id":944,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:39:40.4571572+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T06:39:40.463609+01:00","action":"claim","task_id":892,"detail":"auditor-892"}
+{"timestamp":"2026-03-25T06:43:39.1561247+01:00","action":"edit","task_id":944,"detail":"Add frontend-audit prompt built on frontend-design skill"}
+{"timestamp":"2026-03-25T06:43:39.1630413+01:00","action":"release","task_id":944,"detail":"researcher"}
+{"timestamp":"2026-03-25T06:55:09.7348266+01:00","action":"move","task_id":892,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T06:55:15.3253284+01:00","action":"edit","task_id":892,"detail":"Test KnowledgeSourceStore _SELECT_COLS reuse (RED)"}
+{"timestamp":"2026-03-25T06:55:15.3316803+01:00","action":"release","task_id":892,"detail":"auditor-892"}
