@@ -135,7 +135,7 @@ def decisions_list() -> None:
     files = sorted(pending.glob("*.md"))
     if not files:
         typer.echo("No pending decisions.")
-        return
+        raise typer.Exit(code=1)
 
     table = Table(title="Pending Decisions")
     table.add_column("Task ID")
@@ -163,7 +163,7 @@ def decisions_list() -> None:
 
     if not found_any:
         typer.echo("No pending decisions.")
-        return
+        raise typer.Exit(code=1)
 
     console.print(table)
 
