@@ -9774,3 +9774,135 @@
 {"timestamp":"2026-03-25T15:46:27.9584504+01:00","action":"move","task_id":809,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-25T15:46:33.6856745+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
 {"timestamp":"2026-03-25T15:46:33.691889+01:00","action":"release","task_id":809,"detail":"auditor"}
+{"timestamp":"2026-03-25T15:47:11.4423225+01:00","action":"edit","task_id":809,"detail":"Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio"}
+{"timestamp":"2026-03-25T15:48:32.2865865+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T15:48:32.2917643+01:00","action":"claim","task_id":863,"detail":"builder"}
+{"timestamp":"2026-03-25T15:49:25.5995063+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T15:49:25.6072998+01:00","action":"claim","task_id":1000,"detail":"cape-mink"}
+{"timestamp":"2026-03-25T15:50:29.905866+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T15:50:29.9112339+01:00","action":"claim","task_id":987,"detail":"test-writer"}
+{"timestamp":"2026-03-25T15:53:39.4410854+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T15:53:51.685912+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T15:53:51.6932911+01:00","action":"release","task_id":1000,"detail":"cape-mink"}
+{"timestamp":"2026-03-25T15:54:49.7382416+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T15:54:52.8901517+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T15:54:52.898588+01:00","action":"release","task_id":863,"detail":"builder"}
+{"timestamp":"2026-03-25T15:56:11.3563138+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T15:56:15.9451698+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T15:56:15.9526221+01:00","action":"release","task_id":987,"detail":"test-writer"}
+{"timestamp":"2026-03-25T16:01:16.475439+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:01:16.482523+01:00","action":"claim","task_id":987,"detail":"copilot-builder"}
+{"timestamp":"2026-03-25T16:01:42.2583287+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:01:42.266417+01:00","action":"claim","task_id":863,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:02:30.3488283+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:02:30.3542345+01:00","action":"claim","task_id":1000,"detail":"test-writer-3"}
+{"timestamp":"2026-03-25T16:06:54.6346181+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:07:53.4176157+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:07:53.4253195+01:00","action":"release","task_id":987,"detail":"copilot-builder"}
+{"timestamp":"2026-03-25T16:08:50.0599608+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:08:50.0661206+01:00","action":"release","task_id":863,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:08:55.7419096+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:09:13.1210423+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:09:13.1259711+01:00","action":"release","task_id":1000,"detail":"test-writer-3"}
+{"timestamp":"2026-03-25T16:11:54.8504105+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:11:54.8575974+01:00","action":"claim","task_id":863,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:12:28.1397663+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:12:28.1450179+01:00","action":"release","task_id":863,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:16:28.0946115+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:16:28.102516+01:00","action":"claim","task_id":863,"detail":"copilot-writer"}
+{"timestamp":"2026-03-25T16:16:46.8910427+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:16:46.8972992+01:00","action":"claim","task_id":987,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-25T16:16:48.0596962+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:16:48.0658824+01:00","action":"claim","task_id":1000,"detail":"copilot-builder"}
+{"timestamp":"2026-03-25T16:18:27.7254513+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:19:03.6855896+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:19:15.2177615+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:19:15.2245039+01:00","action":"release","task_id":863,"detail":"copilot-writer"}
+{"timestamp":"2026-03-25T16:20:20.0133044+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:20:39.4142341+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:20:39.4210209+01:00","action":"release","task_id":1000,"detail":"copilot-builder"}
+{"timestamp":"2026-03-25T16:27:13.2675535+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:27:37.6691323+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:27:37.6758136+01:00","action":"release","task_id":987,"detail":"copilot-reviewer"}
+{"timestamp":"2026-03-25T16:33:35.5415911+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:33:35.5462918+01:00","action":"claim","task_id":863,"detail":"auditor"}
+{"timestamp":"2026-03-25T16:34:12.043055+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:34:12.0497136+01:00","action":"claim","task_id":987,"detail":"writer"}
+{"timestamp":"2026-03-25T16:43:27.0019062+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:43:27.007128+01:00","action":"release","task_id":987,"detail":"writer"}
+{"timestamp":"2026-03-25T16:44:37.1617474+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:44:47.0232291+01:00","action":"move","task_id":863,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T16:44:52.1970294+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:44:52.2045213+01:00","action":"release","task_id":863,"detail":"auditor"}
+{"timestamp":"2026-03-25T16:45:20.3151999+01:00","action":"edit","task_id":863,"detail":"Convert remaining NumPy-style docstrings to Google-style in researched files"}
+{"timestamp":"2026-03-25T16:46:59.3087094+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:46:59.3151703+01:00","action":"claim","task_id":1000,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:50:00.418161+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T16:50:13.1221486+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T16:50:13.1277308+01:00","action":"release","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-25T16:53:21.1596957+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:53:22.144979+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T16:53:22.1501483+01:00","action":"release","task_id":1000,"detail":"reviewer"}
+{"timestamp":"2026-03-25T16:58:02.0080614+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T16:58:02.0143732+01:00","action":"claim","task_id":987,"detail":"auditor"}
+{"timestamp":"2026-03-25T17:08:59.1851326+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T17:09:04.1477637+01:00","action":"move","task_id":987,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T17:09:09.6981587+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T17:09:09.7056542+01:00","action":"release","task_id":987,"detail":"auditor"}
+{"timestamp":"2026-03-25T17:09:45.5795001+01:00","action":"edit","task_id":987,"detail":"Test: HookReaction notify and escalate executor wiring"}
+{"timestamp":"2026-03-25T17:11:07.1527911+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:11:07.159998+01:00","action":"claim","task_id":563,"detail":"builder"}
+{"timestamp":"2026-03-25T17:11:15.6736192+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:11:15.6800162+01:00","action":"claim","task_id":1000,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:11:24.8843183+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:11:24.8917762+01:00","action":"claim","task_id":777,"detail":"amber-vapor"}
+{"timestamp":"2026-03-25T17:11:37.8733117+01:00","action":"edit","task_id":957,"detail":"Route HookReaction notification and escalation actions through existing executors"}
+{"timestamp":"2026-03-25T17:11:37.8796491+01:00","action":"claim","task_id":957,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:13:59.8376491+01:00","action":"edit","task_id":957,"detail":"Route HookReaction notification and escalation actions through existing executors"}
+{"timestamp":"2026-03-25T17:13:59.841739+01:00","action":"release","task_id":957,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:15:46.8742109+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:15:52.8222723+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:15:52.8239258+01:00","action":"release","task_id":563,"detail":"builder"}
+{"timestamp":"2026-03-25T17:17:28.9813714+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:17:34.3733875+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:17:34.3796313+01:00","action":"release","task_id":1000,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:18:11.5720864+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:18:21.1037007+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:18:21.1094733+01:00","action":"release","task_id":777,"detail":"amber-vapor"}
+{"timestamp":"2026-03-25T17:20:43.0951998+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:20:43.1004507+01:00","action":"claim","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:21:10.9875174+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:21:10.9932912+01:00","action":"claim","task_id":563,"detail":"copilot-reviewer-563"}
+{"timestamp":"2026-03-25T17:21:13.340188+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:21:13.3479516+01:00","action":"claim","task_id":1000,"detail":"builder"}
+{"timestamp":"2026-03-25T17:24:06.2050004+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:24:33.7387259+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:24:33.7446698+01:00","action":"release","task_id":1000,"detail":"builder"}
+{"timestamp":"2026-03-25T17:25:35.8711147+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:25:42.070892+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:25:42.0798359+01:00","action":"release","task_id":777,"detail":"test-writer"}
+{"timestamp":"2026-03-25T17:29:39.8780326+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:29:49.8238997+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:29:49.8329262+01:00","action":"release","task_id":563,"detail":"copilot-reviewer-563"}
+{"timestamp":"2026-03-25T17:34:04.4661986+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:34:04.4724513+01:00","action":"claim","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-25T17:34:06.5407887+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:34:06.5475793+01:00","action":"claim","task_id":1000,"detail":"reviewer"}
+{"timestamp":"2026-03-25T17:34:23.5086063+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:34:23.5132833+01:00","action":"claim","task_id":563,"detail":"writer"}
+{"timestamp":"2026-03-25T17:36:32.8962442+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:36:38.6826227+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:36:45.4380747+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:36:45.4454099+01:00","action":"release","task_id":563,"detail":"writer"}
+{"timestamp":"2026-03-25T17:38:31.7933517+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:38:43.1357594+01:00","action":"edit","task_id":1000,"detail":"Add tests for GraphEnricher cancellation and draining"}
+{"timestamp":"2026-03-25T17:38:43.1420714+01:00","action":"release","task_id":1000,"detail":"reviewer"}
+{"timestamp":"2026-03-25T17:39:04.013406+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:39:16.1793653+01:00","action":"edit","task_id":777,"detail":"Implement bearclaw decisions list/show/resolve commands"}
+{"timestamp":"2026-03-25T17:39:16.1851597+01:00","action":"release","task_id":777,"detail":"builder"}
+{"timestamp":"2026-03-25T17:42:45.9604842+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T17:42:45.9663121+01:00","action":"claim","task_id":563,"detail":"auditor"}
+{"timestamp":"2026-03-25T18:02:27.4598865+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T18:02:31.5796288+01:00","action":"move","task_id":563,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-25T18:02:36.5308971+01:00","action":"edit","task_id":563,"detail":"Add _SELECT_COLS constant to source_store.py"}
+{"timestamp":"2026-03-25T18:02:36.5375013+01:00","action":"release","task_id":563,"detail":"auditor"}
