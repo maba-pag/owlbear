@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from owlbear.memory.knowledge.document_store import DocumentStore
 from owlbear.memory.knowledge.enrichment import GraphEnricher
 from owlbear.memory.knowledge.extractor import ExtractionResult
 from owlbear.memory.knowledge.models import Edge, Entity, EntityType, RelationType
@@ -65,9 +66,11 @@ def mock_inter_doc_builder() -> MagicMock:
 
 
 @pytest.fixture
-def mock_document_store() -> MagicMock:
-    store = MagicMock()
-    store.set_status = MagicMock()
+def mock_document_store(conn: sqlite3.Connection, mock_graph_store: MagicMock) -> MagicMock:
+    """Mock DocumentStore — matches test_enrichment.py canonical fixture."""
+    store = MagicMock(spec=DocumentStore)
+    store.conn = conn
+    store.graph_store = mock_graph_store
     return store
 
 
@@ -94,8 +97,7 @@ def _seed_document_count(conn: sqlite3.Connection, scope: str, count: int = 2) -
     """Insert stub document_status rows to satisfy inter-doc min-doc threshold."""
     for i in range(count):
         conn.execute(
-            "INSERT OR IGNORE INTO document_status (document_id, scope, status)"
-            " VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO document_status (document_id, scope, status) VALUES (?, ?, ?)",
             (f"seed_doc_{i}", scope, "enriched"),
         )
     conn.commit()
@@ -192,7 +194,8 @@ class TestFromAC_GraphEnricherShutdown:
     ) -> None:
         """shutdown() on empty enricher returns without hanging."""
         await asyncio.wait_for(
-            enricher.shutdown(), timeout=1.0  # AttributeError on current HEAD
+            enricher.shutdown(),
+            timeout=1.0,  # AttributeError on current HEAD
         )
         assert len(enricher._background_tasks) == 0
 
@@ -301,22 +304,18 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
     async def test_schedule_graph_enrichment_is_noop_after_shutdown(
         self,
         enricher: GraphEnricher,
+        mock_graph_builder: MagicMock,
     ) -> None:
         """schedule_graph_enrichment() does not create tasks after shutdown()."""
         await enricher.shutdown()  # AttributeError on current HEAD
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._graph_builder.build = probe_build  # type: ignore[union-attr]
-
+        call_count_before = mock_graph_builder.build.call_count
         enricher.schedule_graph_enrichment("doc2", [SAMPLE_EXTRACTION], "global")
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), "schedule_graph_enrichment() must not run work after shutdown"
+        assert mock_graph_builder.build.call_count == call_count_before, (
+            "schedule_graph_enrichment() must not invoke builder after shutdown"
+        )
         assert len(enricher._background_tasks) == 0
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -342,19 +341,12 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
 
         await enricher.shutdown()  # AttributeError on current HEAD
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._inter_doc_builder.build = probe_build  # type: ignore[union-attr]
-
+        call_count_before = mock_inter_doc_builder.build.call_count
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), (
-            "schedule_inter_doc_enrichment() must not run work after shutdown"
+        assert mock_inter_doc_builder.build.call_count == call_count_before, (
+            "schedule_inter_doc_enrichment() must not invoke builder after shutdown"
         )
         assert len(enricher._background_tasks) == 0
 
@@ -374,27 +366,20 @@ class TestFromAC_GraphEnricherCancelSignal:
     async def test_schedule_graph_enrichment_is_noop_when_cancel_set(
         self,
         enricher: GraphEnricher,
+        mock_graph_builder: MagicMock,
     ) -> None:
         """schedule_graph_enrichment() creates no task when cancel.is_set() is True."""
         cancel = MagicMock()
         cancel.is_set.return_value = True
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._graph_builder.build = probe_build  # type: ignore[union-attr]
+        call_count_before = mock_graph_builder.build.call_count
 
         # TypeError on current HEAD: schedule_graph_enrichment() has no cancel param
-        enricher.schedule_graph_enrichment(
-            "doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel
-        )
+        enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), (
-            "schedule_graph_enrichment() must not run work when cancel.is_set() is True"
+        assert mock_graph_builder.build.call_count == call_count_before, (
+            "schedule_graph_enrichment() must not invoke builder when cancel.is_set() is True"
         )
         assert len(enricher._background_tasks) == 0
 
@@ -422,22 +407,14 @@ class TestFromAC_GraphEnricherCancelSignal:
         cancel = MagicMock()
         cancel.is_set.return_value = True
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._inter_doc_builder.build = probe_build  # type: ignore[union-attr]
+        call_count_before = mock_inter_doc_builder.build.call_count
 
         # TypeError on current HEAD: schedule_inter_doc_enrichment() has no cancel param
-        enricher.schedule_inter_doc_enrichment(
-            "doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel
-        )
+        enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), (
-            "schedule_inter_doc_enrichment() must not run work when cancel.is_set() is True"
+        assert mock_inter_doc_builder.build.call_count == call_count_before, (
+            "schedule_inter_doc_enrichment() must not invoke builder when cancel.is_set() is True"
         )
         assert len(enricher._background_tasks) == 0
 
@@ -469,22 +446,19 @@ class TestFromAC_GraphEnricherShutdownFlag:
     async def test_shutdown_flag_set_directly_prevents_schedule_graph_enrichment(
         self,
         enricher: GraphEnricher,
+        mock_graph_builder: MagicMock,
     ) -> None:
         """Setting _shutdown=True directly prevents schedule_graph_enrichment creating tasks."""
         enricher._shutdown = True  # set without calling shutdown()
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._graph_builder.build = probe_build  # type: ignore[union-attr]
+        call_count_before = mock_graph_builder.build.call_count
 
         enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), "_shutdown=True must block schedule_graph_enrichment"
+        assert mock_graph_builder.build.call_count == call_count_before, (
+            "_shutdown=True must block schedule_graph_enrichment"
+        )
         assert len(enricher._background_tasks) == 0
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -510,18 +484,14 @@ class TestFromAC_GraphEnricherShutdownFlag:
 
         enricher._shutdown = True  # set without calling shutdown()
 
-        ran = asyncio.Event()
-
-        async def probe_build(*_args: object, **_kwargs: object) -> MagicMock:
-            ran.set()
-            return MagicMock(edges=[], edges_added=0)
-
-        enricher._inter_doc_builder.build = probe_build  # type: ignore[union-attr]
+        call_count_before = mock_inter_doc_builder.build.call_count
 
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
         await asyncio.sleep(0.05)
 
-        assert not ran.is_set(), "_shutdown=True must block schedule_inter_doc_enrichment"
+        assert mock_inter_doc_builder.build.call_count == call_count_before, (
+            "_shutdown=True must block schedule_inter_doc_enrichment"
+        )
         assert len(enricher._background_tasks) == 0
 
 
