@@ -117,8 +117,7 @@ def build_hooks(
             "escalate": _noop,
         }
         escalate_configured = any(
-            "escalate" in getattr(rule, "actions", [])
-            for rule in settings.hook_reactions
+            "escalate" in getattr(rule, "actions", []) for rule in settings.hook_reactions
         )
         if channel is not None:
             executors["escalate"] = _make_escalate_executor(channel)
