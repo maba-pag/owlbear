@@ -312,6 +312,12 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
         size_before = len(enricher._background_tasks)
         build_count_before = mock_graph_builder.build.call_count
         enricher.schedule_graph_enrichment("doc2", [SAMPLE_EXTRACTION], "global")
+        # Immediate synchronous check — asyncio.create_task() adds to _background_tasks
+        # synchronously; done-callbacks fire only after an event-loop tick.
+        # This assertion proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "schedule_graph_enrichment() must not create any task after shutdown (pre-yield check)"
+        )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
         assert len(enricher._background_tasks) == size_before, (
@@ -347,6 +353,11 @@ class TestFromAC_GraphEnricherScheduleAfterShutdown:
         size_before = len(enricher._background_tasks)
         build_count_before = mock_inter_doc_builder.build.call_count
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
+        # Immediate synchronous check — proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "schedule_inter_doc_enrichment() must not create any task after shutdown"
+            " (pre-yield check)"
+        )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
         assert len(enricher._background_tasks) == size_before, (
@@ -382,6 +393,11 @@ class TestFromAC_GraphEnricherCancelSignal:
         build_count_before = mock_graph_builder.build.call_count
         # TypeError on current HEAD: schedule_graph_enrichment() has no cancel param
         enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
+        # Immediate synchronous check — proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "schedule_graph_enrichment() must not create any task when cancel.is_set() is True"
+            " (pre-yield check)"
+        )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
         assert len(enricher._background_tasks) == size_before, (
@@ -418,8 +434,11 @@ class TestFromAC_GraphEnricherCancelSignal:
         size_before = len(enricher._background_tasks)
         build_count_before = mock_inter_doc_builder.build.call_count
         # TypeError on current HEAD: schedule_inter_doc_enrichment() has no cancel param
-        enricher.schedule_inter_doc_enrichment(
-            "doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel
+        enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global", cancel=cancel)
+        # Immediate synchronous check — proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "schedule_inter_doc_enrichment() must not create any task when cancel.is_set()"
+            " is True (pre-yield check)"
         )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
@@ -466,6 +485,10 @@ class TestFromAC_GraphEnricherShutdownFlag:
         size_before = len(enricher._background_tasks)
         build_count_before = mock_graph_builder.build.call_count
         enricher.schedule_graph_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
+        # Immediate synchronous check — proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "_shutdown=True must block task creation in schedule_graph_enrichment (pre-yield check)"
+        )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
         assert len(enricher._background_tasks) == size_before, (
@@ -501,6 +524,11 @@ class TestFromAC_GraphEnricherShutdownFlag:
         size_before = len(enricher._background_tasks)
         build_count_before = mock_inter_doc_builder.build.call_count
         enricher.schedule_inter_doc_enrichment("doc1", [SAMPLE_EXTRACTION], "global")
+        # Immediate synchronous check — proves no task was created before any yield.
+        assert len(enricher._background_tasks) == size_before, (
+            "_shutdown=True must block task creation in schedule_inter_doc_enrichment"
+            " (pre-yield check)"
+        )
         await asyncio.sleep(0.05)  # give event loop a tick to dispatch any leaked task
 
         assert len(enricher._background_tasks) == size_before, (
