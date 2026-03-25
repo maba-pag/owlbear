@@ -63,6 +63,7 @@ class KnowledgeSourceStore:
     )
 
     def _select_from_sources(self) -> str:
+        """Return the ``SELECT … FROM knowledge_sources`` prefix using :attr:`_SELECT_COLS`."""
         return f"SELECT {self._SELECT_COLS} FROM knowledge_sources"  # noqa: S608
 
     # -- CRUD ----------------------------------------------------------------
@@ -140,9 +141,7 @@ class KnowledgeSourceStore:
             ).fetchall()
         else:
             rows = self._conn.execute(
-                f"{self._select_from_sources()}"
-                " WHERE enabled = 1"
-                " ORDER BY priority DESC",
+                f"{self._select_from_sources()} WHERE enabled = 1 ORDER BY priority DESC",
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
 
