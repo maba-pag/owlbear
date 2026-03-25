@@ -551,99 +551,114 @@ class TestFromAC_GraphEnricherBootstrapCleanup:
     NOTE: These tests turn green with #998, not #871. They remain red until
     #998 implements bootstrap enricher.shutdown cleanup registration.
 
-    Fail on current HEAD: _build_knowledge_toolset() has no cleanup parameter
-    (TypeError on the call site).
+    Tests exercise _wire_knowledge_toolsets (bootstrap-facing wiring layer) rather
+    than _build_knowledge_toolset directly, so they catch the forwarding gap in
+    src/owlbear/bootstrap/toolsets.py where cleanup is NOT forwarded to
+    _build_knowledge_toolset on current HEAD.
     """
 
-    def test_build_knowledge_toolset_registers_enricher_shutdown_when_inter_doc_enabled(
+    def test_wire_knowledge_toolsets_registers_enricher_shutdown_when_inter_doc_enabled(
         self,
         tmp_path: Path,
     ) -> None:
-        """When inter_doc_graph_building=True, enricher.shutdown is appended to cleanup.
+        """_wire_knowledge_toolsets registers enricher.shutdown in cleanup when inter_doc=True.
 
-        Uses the same patching pattern as TestBuildKnowledgeToolset in test_bootstrap.py.
-        Fails on current HEAD: _build_knowledge_toolset has no cleanup kwarg.
+        Tests the actual BootstrapResult.cleanup plumbing via _wire_knowledge_toolsets,
+        not the _build_knowledge_toolset helper in isolation.
+
+        Fails on current HEAD: _wire_knowledge_toolsets does not forward cleanup to
+        _build_knowledge_toolset (src/owlbear/bootstrap/toolsets.py), so the spy
+        never receives a non-None cleanup kwarg and enricher.shutdown is never appended.
+        NOTE: Turns green with #998.
         """
-        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
+        import owlbear.bootstrap as _pkg_module
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
 
         cleanup: list = []
+        mock_infra = MagicMock()
+        mock_enricher = MagicMock()  # no spec — .shutdown always accessible as a mock attr
+
+        def spy_build_knowledge_toolset(
+            _workspace: Path, _infra: object, **kwargs: object
+        ) -> tuple:
+            """Simulates #998: appends enricher.shutdown to cleanup when forwarded."""
+            c = kwargs.get("cleanup")
+            if c is not None:
+                c.append(mock_enricher.shutdown)
+            return (MagicMock(), MagicMock(), MagicMock(), None)
+
+        settings = OwlBearSettings(inter_doc_graph_building=True)
+        raw: list = []
+        summary: list = []
 
         with (
-            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
-            patch(
-                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
-                autospec=True,
+            patch.object(_pkg_module, "_build_knowledge_infra", return_value=mock_infra),
+            patch.object(
+                _pkg_module, "_build_knowledge_toolset",
+                side_effect=spy_build_knowledge_toolset,
             ),
-            patch(
-                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
-                return_value=None,
-            ),
+            patch.object(_pkg_module, "_build_bookmark_toolset", return_value=None),
+            patch.object(_pkg_module, "_build_knowledge_source_toolset", return_value=None),
         ):
-            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
-            assert infra is not None, "_build_knowledge_infra returned None unexpectedly"
-
-            # TypeError on current HEAD — _build_knowledge_toolset has no cleanup kwarg
-            result = _build_knowledge_toolset(
-                tmp_path,
-                infra,
-                chat_model="test-model",
-                inter_doc_graph_building=True,
-                cleanup=cleanup,
+            _wire_knowledge_toolsets(
+                raw, settings, tmp_path, None, None, cleanup, summary, _pkg_module
             )
 
-        assert result is not None, (
-            "_build_knowledge_toolset returned None with inter_doc_graph_building=True"
-        )
-        assert any(
-            callable(c)
-            and getattr(c, "__name__", "") == "shutdown"
-            and isinstance(getattr(c, "__self__", None), GraphEnricher)
-            for c in cleanup
-        ), (
-            "enricher.shutdown not in cleanup. Got: "
-            f"{[getattr(c, '__name__', str(c)) for c in cleanup]}"
+        # On current HEAD: cleanup kwarg is NOT forwarded → spy gets c=None →
+        # mock_enricher.shutdown is never appended → assertion FAILS (RED).
+        assert mock_enricher.shutdown in cleanup, (
+            "_wire_knowledge_toolsets must forward cleanup to _build_knowledge_toolset "
+            "when inter_doc_graph_building=True so that enricher.shutdown is registered. "
+            f"cleanup after call: {[getattr(f, '__name__', f) for f in cleanup]}"
         )
 
-    def test_no_enricher_shutdown_when_inter_doc_disabled(
+    def test_wire_knowledge_toolsets_forwards_cleanup_kwarg_to_build_knowledge_toolset(
         self,
         tmp_path: Path,
     ) -> None:
-        """When inter_doc_graph_building=False, no enricher.shutdown appears in cleanup.
+        """_wire_knowledge_toolsets must forward the cleanup list to _build_knowledge_toolset.
 
-        NOTE: Also turns green with #998.
-        Fails on current HEAD: _build_knowledge_toolset has no cleanup kwarg (TypeError).
+        Asserts that _build_knowledge_toolset receives the same cleanup list object
+        that was passed to _wire_knowledge_toolsets. Without this forwarding, no
+        code inside _build_knowledge_toolset can register enricher.shutdown.
+
+        Fails on current HEAD: cleanup kwarg is absent from the _build_knowledge_toolset
+        call in src/owlbear/bootstrap/toolsets.py.
+        NOTE: Turns green with #998.
         """
-        from owlbear.bootstrap import _build_knowledge_infra, _build_knowledge_toolset
+        import owlbear.bootstrap as _pkg_module
+        from owlbear.bootstrap.toolsets import _wire_knowledge_toolsets
+        from owlbear.config import OwlBearSettings
 
         cleanup: list = []
+        mock_infra = MagicMock()
+        captured_cleanup_kwarg: list = []
+
+        def spy_capture_cleanup(_workspace: Path, _infra: object, **kwargs: object) -> tuple:
+            """Captures the cleanup kwarg to verify forwarding."""
+            captured_cleanup_kwarg.append(kwargs.get("cleanup"))
+            return (MagicMock(), MagicMock(), MagicMock(), None)
+
+        settings = OwlBearSettings(inter_doc_graph_building=True)
+        raw: list = []
+        summary: list = []
 
         with (
-            patch("owlbear.memory.knowledge.qdrant.QdrantClient"),
-            patch(
-                "owlbear.memory.knowledge.embeddings.BgeM3EmbeddingProvider",
-                autospec=True,
+            patch.object(_pkg_module, "_build_knowledge_infra", return_value=mock_infra),
+            patch.object(
+                _pkg_module, "_build_knowledge_toolset",
+                side_effect=spy_capture_cleanup,
             ),
-            patch(
-                "owlbear.memory.knowledge.extractor.EntityExtractor.__init__",
-                return_value=None,
-            ),
+            patch.object(_pkg_module, "_build_bookmark_toolset", return_value=None),
+            patch.object(_pkg_module, "_build_knowledge_source_toolset", return_value=None),
         ):
-            infra = _build_knowledge_infra(tmp_path, chat_model="test-model")
-            assert infra is not None, "_build_knowledge_infra returned None unexpectedly"
-
-            # TypeError on current HEAD — _build_knowledge_toolset has no cleanup kwarg
-            result = _build_knowledge_toolset(
-                tmp_path,
-                infra,
-                chat_model="test-model",
-                inter_doc_graph_building=False,
-                cleanup=cleanup,
+            _wire_knowledge_toolsets(
+                raw, settings, tmp_path, None, None, cleanup, summary, _pkg_module
             )
 
-        assert result is not None
-        assert not any(
-            callable(c)
-            and getattr(c, "__name__", "") == "shutdown"
-            and isinstance(getattr(c, "__self__", None), GraphEnricher)
-            for c in cleanup
-        ), "enricher.shutdown must not be in cleanup when inter_doc_graph_building=False"
+        # On current HEAD: cleanup is NOT in knowledge_kwargs → captured value is None → FAILS.
+        assert captured_cleanup_kwarg == [cleanup], (
+            "_wire_knowledge_toolsets must pass cleanup to _build_knowledge_toolset. "
+            f"Captured kwarg: {captured_cleanup_kwarg}"
+        )
