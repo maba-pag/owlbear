@@ -20,7 +20,6 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
 from owlbear.core.hooks import TaskCompleteData  # noqa: TC001
-from owlbear.memory.knowledge.cancellation import LinkedCancelSignal
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -124,6 +123,8 @@ class RetrospectiveHook:
         kanban_root: Path to the kanban directory (contains ``activity.jsonl``).
         shutdown_event: Optional daemon shutdown event.  When set, the
             per-operation cancel signal passed to ``ingest_text`` is also set.
+        cancel: Optional pre-composed cooperative cancel signal injected by
+            bootstrap.
     """
 
     def __init__(  # noqa: PLR0913
@@ -153,9 +154,7 @@ class RetrospectiveHook:
         cancel: CancelSignal | None,
         shutdown_event: asyncio.Event | None,
     ) -> CancelSignal:
-        """Compose optional cancel sources into one linked signal."""
-        if cancel is not None and shutdown_event is not None:
-            return LinkedCancelSignal(cancel, shutdown_event)
+        """Resolve the cancel signal without core-owned runtime composition."""
         if cancel is not None:
             return cancel
         if shutdown_event is not None:
