@@ -435,14 +435,10 @@ class TestFromAC_957_NotifyCallArgContract:
 
         args = backend.notify.call_args.args
         assert len(args) >= 2, "notify() must receive at least two positional args"
-        assert args[1] == event, (
-            f"Second arg to notify() must be the event object, got {args[1]!r}"
-        )
+        assert args[1] == event, f"Second arg to notify() must be the event object, got {args[1]!r}"
 
     @pytest.mark.asyncio
-    async def test_all_false_backends_logs_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_all_false_backends_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """AC1 edge: a WARNING is logged when every backend returns False (none raise).
 
         This is the pool-level all-backends-failed warning, distinct from the
@@ -526,4 +522,96 @@ class TestFromAC_957_ExportBoundary:
 
         assert not hasattr(owlbear, "_make_escalate_executor"), (
             "_make_escalate_executor must not be re-exported from the owlbear top-level package"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Retry-2 additions (reviewer FAIL 2026-03-26)
+# AC1: notify message content — verifies payload message is forwarded, not a constant
+# AC4: exc_info on backend-failure warning — verifies traceback is attached
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_957_NotifyDetailedContract:
+    """AC1 + AC4 retry-2: message content derivation and exc_info traceback guard.
+
+    The prior retry added type and position checks (is str, is the event object)
+    but did not guard:
+      - AC1 line 43: that the message forwarded to notify() actually comes from
+        data["message"] when present, or from the event-derived default when absent.
+        A constant string would satisfy the prior test but violate this contract.
+      - AC4 line 54: that the per-backend warning record has exc_info attached,
+        i.e. traceback data is preserved. Removing exc_info=True from the logger
+        call would keep the prior suite green.
+    """
+
+    @pytest.mark.asyncio
+    async def test_notify_forwards_data_message_key_verbatim(self) -> None:
+        """AC1 gap: when data contains 'message', notify() must receive that exact string.
+
+        Replacing the payload-derived message with any constant at hooks.py line 43
+        would cause this test to fail.
+        """
+        backend = _make_backend(returns=True)
+        sentinel = "unique-sentinel-payload-message-f7a2c9"
+        executor = _make_notify_executor([backend])
+        await executor({"_hook_event": HookEvent.TASK_COMPLETE, "message": sentinel})
+
+        args = backend.notify.call_args.args
+        assert args[0] == sentinel, (
+            f"notify() must forward data['message'] verbatim, got {args[0]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_notify_default_message_references_event_name(self) -> None:
+        """AC1 gap: when data has no 'message' key, notify() receives an event-derived default.
+
+        A constant string that does not reference the event name would fail this test.
+        HookEvent.TASK_COMPLETE.value == "task_complete", so the default message must
+        contain "task_complete".
+        """
+        backend = _make_backend(returns=True)
+        executor = _make_notify_executor([backend])
+        await executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        args = backend.notify.call_args.args
+        sent_message: str = args[0]
+        # HookEvent.TASK_COMPLETE.value is "task_complete"
+        assert "task_complete" in sent_message, (
+            "Default notify message must contain the event label 'task_complete', "
+            f"got {sent_message!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_backend_failure_warning_has_exc_info_attached(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """AC4 gap: the per-backend WARNING must carry traceback info (exc_info=True).
+
+        Removing exc_info=True from the logger.warning() call at hooks.py line 54
+        would result in exc_info=(None, None, None) on the log record, which fails
+        this assertion.
+        """
+        backend = _make_backend(returns=RuntimeError("test-exc-abc"))
+        executor = _make_notify_executor([backend])
+
+        with caplog.at_level(logging.WARNING):
+            await executor({"_hook_event": HookEvent.TASK_COMPLETE})
+
+        # Look for a WARNING record with a real exception attached (exc_info not None/falsy)
+        exc_info_warnings = [
+            r
+            for r in caplog.records
+            if r.levelno >= logging.WARNING and r.exc_info is not None and r.exc_info[1] is not None
+        ]
+        assert exc_info_warnings, (
+            "Per-backend WARNING must include traceback info (exc_info=True). "
+            "Found records: "
+            + str(
+                [
+                    (r.getMessage(), r.exc_info)
+                    for r in caplog.records
+                    if r.levelno >= logging.WARNING
+                ]
+            )
         )
