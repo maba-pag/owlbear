@@ -330,9 +330,8 @@ class GraphStore:
             scopes (list[str] | None): Optional scope filter passed through to :meth:`list_edges`.
 
         Returns:
-        list[tuple[Entity, Edge]]:
-            Each tuple is ``(neighbor_entity, connecting_edge)``.:
-            Returns an empty list if *entity_id* does not exist.:
+            list[tuple[Entity, Edge]]: Each tuple is ``(neighbor_entity, connecting_edge)``.
+            Returns an empty list if *entity_id* does not exist.
         """
         if self.get_entity(entity_id) is None:
             return []

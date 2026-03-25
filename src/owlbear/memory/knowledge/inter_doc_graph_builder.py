@@ -109,8 +109,7 @@ class InterDocGraphBuilder:
             document_id (str | None): Optional document identifier for logging/provenance.
 
         Returns:
-        GraphBuildResult:
-            The inferred edges and a count of edges added.:
+            GraphBuildResult: The inferred edges and a count of edges added.
         """
         _min_entities = 2
         if len(entities) < _min_entities:
