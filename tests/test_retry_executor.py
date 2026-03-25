@@ -198,3 +198,98 @@ class TestFromAC_RetryExecutorIntegration:
         # not 2 (double-counted).  The real error text must also be preserved.
         assert state.retries["T1"].attempt == 1
         assert "actual error" in state.retries["T1"].last_error
+
+
+# ---------------------------------------------------------------------------
+# AC6 (real payload contract) — retry cycle additions
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RetryExecutorRealPayload:
+    """AC6 real-payload contract tests (retry cycle, second reviewer FAIL).
+
+    The real TASK_COMPLETE payload emitted by reconcile_tasks is:
+        {task_id: str, outcome: str}
+    No ``error`` key is present (see TaskCompleteData in owlbear.core.hooks).
+    AC6 requires that ``RetryEntry`` appears in ``state.retries`` after the hook
+    fires with this real payload shape.
+    """
+
+    @pytest.mark.asyncio
+    async def test_retry_executor_integration_real_daemon_payload(self) -> None:
+        """AC6 real contract: routing through HookRegistry with real payload creates RetryEntry.
+
+        TaskCompleteData only has task_id and outcome (no error field).  The
+        integration must produce a RetryEntry in state.retries when the hook fires
+        with that authentic payload, not only when a synthetic error field is present.
+        """
+        from owlbear.config import HookReactionRule
+        from owlbear.core.hook_reaction_router import HookReactionRouter
+        from owlbear.core.hooks import HookEvent, HookRegistry
+        from owlbear.daemon import OrchestratorState, RetryEntry, make_retry_executor
+
+        state = OrchestratorState()
+        kanban = AsyncMock()
+
+        rule = HookReactionRule(
+            events=["task_complete"],
+            actions=["retry"],
+            match={"outcome": "failure"},
+        )
+        executor = make_retry_executor(state=state, kanban=kanban)
+        router = HookReactionRouter(rules=[rule], executors={"retry": executor})
+        hooks = HookRegistry()
+        router.register(hooks)
+
+        # Emit the REAL TaskCompleteData shape — no error field
+        await hooks.emit(
+            HookEvent.TASK_COMPLETE,
+            {"task_id": "42", "outcome": "failure"},
+        )
+
+        # AC6: RetryEntry must appear in state.retries even without an explicit error field
+        assert "42" in state.retries
+        assert isinstance(state.retries["42"], RetryEntry)
+
+    @pytest.mark.asyncio
+    async def test_retry_executor_hook_seeds_entry_before_reconcile(self) -> None:
+        """Intermediate state: hook executor creates RetryEntry(attempt=1) before reconcile.
+
+        The daemon fires the hook first (with real payload, no error), then calls
+        schedule_task_retry directly.  After step 1 (hook fires) the entry must
+        already exist so that step 2 (direct schedule) is idempotent and does NOT
+        increment the attempt counter.
+
+        Tests the intermediate assertion the previous retry-cycle test
+        (test_retry_executor_daemon_order_does_not_double_schedule) omitted.
+        """
+        from owlbear.daemon import (
+            OrchestratorState,
+            make_retry_executor,
+            schedule_task_retry,
+        )
+
+        state = OrchestratorState()
+        kanban = AsyncMock()
+        executor = make_retry_executor(state=state, kanban=kanban)
+
+        # Step 1: hook fires with real daemon payload (no error field)
+        await executor({"task_id": "T1", "outcome": "failure"})
+
+        # INTERMEDIATE ASSERTION: entry must exist after hook fires
+        assert "T1" in state.retries, "hook executor must seed RetryEntry(attempt=1)"
+        assert state.retries["T1"].attempt == 1
+
+        # Step 2: reconcile fires directly with the real exception (idempotent)
+        await schedule_task_retry(
+            state=state,
+            kanban=kanban,
+            task_id="T1",
+            error=RuntimeError("real reconcile error"),
+            max_attempts=5,
+            backoff_base=10.0,
+            backoff_max=320.0,
+        )
+
+        # Idempotency: attempt must stay at 1, not increment to 2
+        assert state.retries["T1"].attempt == 1
