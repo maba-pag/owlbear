@@ -583,3 +583,123 @@ class TestFromAC_SelectColsDynamicReuse:
         assert any(_SENTINEL_PREFIX in s for s in stmts), (
             f"list_enabled(scope=...) SQL did not use _SELECT_COLS dynamically; SQL was: {stmts}"
         )
+
+
+# ===========================================================================
+# AC3 predicate-level tests  (retry cycle — task #563, test-writer)
+# These tests verify that get() filters strictly by id and that get_by_name()
+# filters strictly by (name AND scope).  The multi-row scenarios catch mutations
+# that relax the WHERE clause (e.g. "returns first row" or "scope-only filter").
+# ===========================================================================
+
+
+class TestFromAC_QueryBehaviorPredicates:
+    """AC3: get() uses id predicate; get_by_name() uses name AND scope predicate.
+
+    Multi-row fixtures are required so that a "first-row" or "scope-only"
+    regression would produce a wrong result and cause the assertion to fail.
+    """
+
+    # -- get() id predicate --------------------------------------------------
+
+    def test_get_discriminates_by_id_not_by_position(
+        self, store: KnowledgeSourceStore
+    ) -> None:
+        """get(id) must return the row with that specific id, not the first row.
+
+        Catches the mutation: fetchone() without WHERE id = ?.
+        """
+        src1 = _source(name="pred-get-1")
+        src2 = _source(name="pred-get-2")
+        store.create(src1)
+        store.create(src2)
+
+        got = store.get(src2.id)
+
+        assert got is not None
+        assert got.id == src2.id, (
+            f"get(src2.id) should return src2, but returned {got.id!r}"
+        )
+
+    def test_get_returns_none_when_id_absent_but_other_rows_exist(
+        self, store: KnowledgeSourceStore
+    ) -> None:
+        """get() must return None when id is not in db, even if other rows exist."""
+        src = _source(name="pred-get-present")
+        store.create(src)
+
+        result = store.get("00000000000000000000000000000000")
+
+        assert result is None
+
+    def test_get_sql_where_clause_filters_by_id(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """get() SQL must contain 'WHERE id =' so any id-predicate regression
+        is surfaced without running a multi-row scenario.
+
+        Note: sqlite3 trace expands parameters to literal values, not '?'.
+        """
+        src = _source(name="pred-get-sql")
+        store.create(src)
+        executed = _capture_sql(conn)
+        store.get(src.id)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get() emitted no SELECT on knowledge_sources"
+        assert any(re.search(r"WHERE id =", s) for s in stmts), (
+            f"get() SQL does not contain 'WHERE id ='; SQL was: {stmts}"
+        )
+
+    # -- get_by_name() name+scope predicate -----------------------------------
+
+    def test_get_by_name_discriminates_by_name_within_same_scope(
+        self, store: KnowledgeSourceStore
+    ) -> None:
+        """get_by_name(name, scope) must return the row matching name; two rows
+        with the same scope but different names must not be confused.
+
+        Catches the mutation: WHERE scope = ? (omitting name predicate).
+        """
+        src_alpha = _source(name="pred-alpha", scope="shared-scope")
+        src_beta = _source(name="pred-beta", scope="shared-scope")
+        store.create(src_alpha)
+        store.create(src_beta)
+
+        got = store.get_by_name("pred-beta", scope="shared-scope")
+
+        assert got is not None
+        assert got.id == src_beta.id, (
+            f"get_by_name('pred-beta') should return src_beta but returned {got.id!r}"
+        )
+
+    def test_get_by_name_returns_none_when_name_wrong_scope_exists(
+        self, store: KnowledgeSourceStore
+    ) -> None:
+        """get_by_name() must return None when name is absent in that scope,
+        even if a row with the same scope exists under a different name."""
+        store.create(_source(name="pred-real", scope="pred-scope"))
+
+        result = store.get_by_name("pred-ghost", scope="pred-scope")
+
+        assert result is None
+
+    def test_get_by_name_sql_where_clause_filters_by_name_and_scope(
+        self, store: KnowledgeSourceStore, conn: sqlite3.Connection
+    ) -> None:
+        """get_by_name() SQL must contain both 'name =' and 'scope =' so dropping
+        either predicate is caught by SQL inspection.
+
+        Note: sqlite3 trace expands parameters to literal values, not '?'.
+        """
+        src = _source(name="pred-gbn-sql")
+        store.create(src)
+        executed = _capture_sql(conn)
+        store.get_by_name(src.name, scope=src.scope)
+        stmts = _select_stmts_on_ks(executed)
+        assert stmts, "get_by_name() emitted no SELECT on knowledge_sources"
+        assert any(
+            re.search(r"WHERE name =", s) and re.search(r"AND scope =", s)
+            for s in stmts
+        ), (
+            f"get_by_name() SQL does not contain 'WHERE name = ... AND scope ='; SQL was: {stmts}"
+        )
