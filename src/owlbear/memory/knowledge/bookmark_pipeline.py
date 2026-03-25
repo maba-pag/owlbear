@@ -103,11 +103,13 @@ class BookmarkPipeline:
             scope (str): Knowledge-graph scope for the ingested content.
             project_context (dict[str, Any] | None): Optional project metadata
                 passed to the evaluator.
-            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
-                When set, the pipeline exits cooperatively before the next
-                stage (extract, evaluate, ingest, or store). Earlier-stage
-                results are preserved in the returned
-                :class:`BookmarkResult`.
+            cancel (CancelSignal | None): Optional cooperative cancellation
+                signal. When set, the pipeline exits cooperatively before
+                the next stage (extract, evaluate, ingest, or store).
+                Earlier-stage results are preserved in the returned
+                :class:`BookmarkResult`. Any object satisfying
+                :class:`CancelSignal` (e.g. :class:`asyncio.Event`) is
+                accepted.
 
         Returns:
             BookmarkResult: Contains the stored bookmark, evaluation, ingestion

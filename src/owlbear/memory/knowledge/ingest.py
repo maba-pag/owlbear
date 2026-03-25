@@ -125,8 +125,10 @@ class IngestPipeline:
         Args:
             source (str | Path): A file path (:class:`~pathlib.Path` or ``str``) or an HTTP URL.
             scope (str): Visibility scope for the ingested data (default ``'global'``).
-            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
-                When set, ingestion exits cooperatively before the next stage.
+            cancel (CancelSignal | None): Optional cooperative cancellation
+                signal. When set, ingestion exits cooperatively before the
+                next stage. Any object satisfying :class:`CancelSignal`
+                (e.g. :class:`asyncio.Event`) is accepted.
 
         Returns:
             IngestResult: Summary with document_id, counts, and final status.
@@ -199,9 +201,10 @@ class IngestPipeline:
                 Merged into the :class:`IntakeResult` metadata.
             scope (str): Visibility scope for the ingested data
                 (default ``'global'``).
-            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
-                When set, extraction stops
-                before the next chunk (cooperative cancellation).
+            cancel (CancelSignal | None): Optional cooperative cancellation
+                signal. When set, extraction stops before the next chunk.
+                Any object satisfying :class:`CancelSignal` (e.g.
+                :class:`asyncio.Event`) is accepted.
 
         Returns:
             IngestResult: Summary with document_id, counts, and final status.

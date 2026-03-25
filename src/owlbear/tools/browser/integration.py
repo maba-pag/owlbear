@@ -34,9 +34,10 @@ async def crawl_and_ingest(
         pipeline (IngestPipeline): A
             :class:`~owlbear.memory.knowledge.ingest.IngestPipeline` instance.
         config (CrawlConfig): Crawl configuration (seed URLs, limits, etc.).
-        cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
-            When set, the loop stops before
-            ingesting the next page.
+        cancel (CancelSignal | None): Optional cooperative cancellation
+            signal. When set, the loop stops before ingesting the next
+            page. Any object satisfying :class:`CancelSignal` (e.g.
+            :class:`asyncio.Event`) is accepted.
 
     Returns:
         list[IngestResult]: One result per successfully ingested page.

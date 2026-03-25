@@ -127,9 +127,10 @@ class RefreshOrchestrator:
         Args:
             scope (str | None): Optional scope filter passed to
                 :meth:`KnowledgeSourceStore.list_enabled`.
-            cancel (CancelSignal | None): Optional :class:`asyncio.Event`.
-                When set, the loop stops
-                before starting the next source.
+            cancel (CancelSignal | None): Optional cooperative cancellation
+                signal. When set, the loop stops before starting the next
+                source. Any object satisfying :class:`CancelSignal` (e.g.
+                :class:`asyncio.Event`) is accepted.
         """
         sources = self._store.list_enabled(scope)
         results: list[RefreshResult] = []
