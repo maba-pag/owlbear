@@ -42,6 +42,20 @@ _UUID_CANONICAL_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 # origin_path must point into the OwlBear source tree.
 _OWLBEAR_PATH_PREFIXES = ("src/", "tests/", "src\\", "tests\\")
 
+# Pre-compiled regex for gold alignment normalization.
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slug(text: str) -> str:
+    """Lowercase and strip all non-alphanumeric characters for loose substring matching.
+
+    Used to compare gold entity normalized_names against excerpt text without
+    being tripped up by spaces, underscores, or camelCase boundaries:
+    'hook reaction rule' -> 'hookreactionrule'
+    'HookReactionRule'  -> 'hookreactionrule'
+    """
+    return _NON_ALNUM_RE.sub("", text.lower())
+
 
 def _is_uuid_like(value: str) -> bool:
     return bool(_UUID_HEX_RE.match(value) or _UUID_CANONICAL_RE.match(value))
@@ -547,5 +561,155 @@ class TestFromAC_CorpusProvenance:
             "The following corpus samples have text that is not a verbatim excerpt "
             "of the referenced origin_path file.\n"
             "AC1 requires trimmed OwlBear samples (real excerpts, not synthetic prose):\n"
+            + "\n".join(failures)
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC 2 (gap) — gold alignment: each gold entity's normalized_name must be
+# derivable from the excerpt text (retry-cycle addition, reviewer FAIL #2)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GoldAlignmentContract:
+    """Retry-cycle gap: reviewer found that gold annotations are not tied to
+    the excerpt text — several samples pair a trimmed excerpt with gold entities
+    whose names do not appear in that chunk at all.
+
+    A benchmark corpus is only useful for recall measurement if the gold
+    annotations reference entities that are actually present in (or directly
+    derivable from) the excerpt being scored.  A gold label unrelated to the
+    text produces false recall failures that measure corpus labeling error
+    rather than extractor quality.
+
+    These tests enforce the alignment contract: every gold entity's
+    normalized_name, after lowercasing and stripping non-alphanumeric chars,
+    must appear as a substring in the similarly normalized sample text.
+    """
+
+    def test_each_gold_entity_normalized_name_appears_in_sample_text(
+        self,
+    ) -> None:
+        """Every gold entity normalized_name must be present in the corresponding
+        sample text after space/case normalization.
+
+        Normalization: lowercase + strip all non-alphanumeric characters.
+        This collapses 'hook reaction rule' and 'HookReactionRule' to the same
+        slug so concept names expressed with spaces still match the identifier
+        form in source text.
+
+        Fails when gold entities are unrelated to the excerpt (e.g. gold
+        'run_daemon' on text '_TRANSIENT_MAX_RETRIES = 3').
+        """
+        samples = load_corpus()
+        failures: list[str] = []
+        for sample in samples:
+            slug_text = _slug(sample.text)
+            for gold in sample.gold_entities:
+                slug_name = _slug(gold.normalized_name)
+                if slug_name and slug_name not in slug_text:
+                    failures.append(
+                        f"  sample '{sample.source_label}': "
+                        f"gold '{gold.normalized_name}' (slug: '{slug_name}') "
+                        f"not found in text {sample.text[:80]!r}"
+                    )
+        assert not failures, (
+            "The following gold entities are not present (even after "
+            "space/case normalization) in the corresponding excerpt text.\n"
+            "Gold labels must be extractable from the excerpt so the benchmark "
+            "measures extractor recall, not corpus labeling error:\n"
+            + "\n".join(failures)
+        )
+
+    def test_every_sample_has_at_least_one_gold_entity_present_in_text(
+        self,
+    ) -> None:
+        """Every non-empty-gold sample must have at least one entity whose
+        normalized_name appears in the excerpt text.
+
+        This is a per-sample gate: at minimum one gold annotation must be
+        grounded in the excerpt so the sample contributes meaningful signal
+        to recall measurement.
+        """
+        samples = load_corpus()
+        failures: list[str] = []
+        for sample in samples:
+            if not sample.gold_entities:
+                continue
+            slug_text = _slug(sample.text)
+            found_any = any(
+                _slug(gold.normalized_name) in slug_text
+                for gold in sample.gold_entities
+                if _slug(gold.normalized_name)
+            )
+            if not found_any:
+                failures.append(
+                    f"  sample '{sample.source_label}': none of "
+                    f"{[g.normalized_name for g in sample.gold_entities]} "
+                    f"found in text {sample.text[:80]!r}"
+                )
+        assert not failures, (
+            "The following samples have no gold entity appearing in the excerpt text.\n"
+            "Every benchmark sample must contain at least one of its gold entities "
+            "to be usable for recall measurement:\n"
+            + "\n".join(failures)
+        )
+
+    def test_gold_alignment_holds_for_python_samples(self) -> None:
+        """Python corpus samples must have all gold entities' names present in
+        the excerpt text.
+
+        Python entity names (class names, function names, constants) that are
+        annotated as gold should be verbatim identifiers occurring in the source
+        excerpt.  After slug normalization they must appear as substrings of the
+        normalized text.
+        """
+        samples = load_corpus()
+        failures: list[str] = []
+        for sample in samples:
+            if sample.source_kind != "python":
+                continue
+            slug_text = _slug(sample.text)
+            for gold in sample.gold_entities:
+                slug_name = _slug(gold.normalized_name)
+                if slug_name and slug_name not in slug_text:
+                    failures.append(
+                        f"  '{sample.source_label}': gold '{gold.normalized_name}' "
+                        f"(slug: '{slug_name}') not found in Python excerpt "
+                        f"{sample.text[:80]!r}"
+                    )
+        assert not failures, (
+            "Python corpus samples must have gold entity names appearing in the excerpt.\n"
+            "Python identifiers (class names, function names, constants) should be "
+            "substrings of the source excerpt after slug normalization:\n"
+            + "\n".join(failures)
+        )
+
+    def test_gold_alignment_holds_for_markdown_samples(self) -> None:
+        """Markdown corpus samples must have all gold entities' names present
+        in the excerpt text.
+
+        Concept and pattern names are expressed with spaces in normalized form
+        (e.g. 'module layering').  After slug normalization ('modulelayering')
+        they must appear as substrings of the normalized excerpt text.
+        """
+        samples = load_corpus()
+        failures: list[str] = []
+        for sample in samples:
+            if sample.source_kind != "markdown":
+                continue
+            slug_text = _slug(sample.text)
+            for gold in sample.gold_entities:
+                slug_name = _slug(gold.normalized_name)
+                if slug_name and slug_name not in slug_text:
+                    failures.append(
+                        f"  '{sample.source_label}': gold '{gold.normalized_name}' "
+                        f"(slug: '{slug_name}') not found in Markdown excerpt "
+                        f"{sample.text[:80]!r}"
+                    )
+        assert not failures, (
+            "Markdown corpus samples must have gold entity names appearing in the excerpt.\n"
+            "Concept and pattern names (after slug normalization) must be substrings "
+            "of the excerpt text:\n"
             + "\n".join(failures)
         )
