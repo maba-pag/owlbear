@@ -401,6 +401,34 @@ class TestFromAC_LLMFailure:
         assert result == 0
 
     @pytest.mark.asyncio
+    async def test_llm_failure_warning_includes_exc_info(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """WARNING log for LLM failure must include exc_info for debuggability.
+
+        AC: "LLM failure during consolidation is logged" requires the exception
+        details to be captured in the log record (exc_info=True), not just a
+        plain message.  Removing the exc_info would make failures invisible.
+        """
+        conn = _make_db()
+        _seed_chunks(conn, 2)
+
+        svc = ConsolidationService(conn=conn, graph_store=None, model="test")  # type: ignore[arg-type]
+
+        with (
+            patch.object(svc, "_run_llm", side_effect=RuntimeError("LLM down")),
+            caplog.at_level(logging.WARNING, logger="owlbear.memory.knowledge.consolidation"),
+        ):
+            await svc.consolidate()
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warning_records, "At least one WARNING must be emitted on LLM failure"
+        # exc_info must be set so the exception traceback is captured in logs
+        assert any(r.exc_info for r in warning_records), (
+            "WARNING record must include exc_info=True so the exception cause is captured"
+        )
+
+    @pytest.mark.asyncio
     async def test_loop_continues_after_llm_failure(self) -> None:
         """schedule_periodic() must not crash when consolidate() encounters LLM errors."""
         conn = _make_db()
@@ -999,6 +1027,108 @@ class TestFromAC_DaemonStartsConsolidationTimer:
             assert call_kwargs.kwargs.get("interval") == 900
         else:
             assert call_kwargs.args[0] == 900
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PydanticAILLMMocking — AC: LLM mocked via PydanticAI test utilities
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PydanticAILLMMocking:
+    """Verify ConsolidationService LLM calls use PydanticAI so tests can inject
+    TestModel / FunctionModel rather than patching ``_run_llm`` directly.
+
+    AC: LLM mocked via PydanticAI test utilities.
+
+    All three tests are RED — the current ``_run_llm`` placeholder stub must be
+    replaced with a real PydanticAI Agent before any of them can pass.
+    """
+
+    @pytest.mark.asyncio
+    async def test_consolidate_insight_text_driven_by_pydantic_ai_test_model(self) -> None:
+        """When TestModel is injected, stored insight reflects model output.
+
+        ConsolidationService must use a PydanticAI Agent internally so that
+        injecting ``TestModel(custom_output_text=...)`` controls the stored
+        insight text.  The current hardcoded stub ignores ``self._model``.
+        """
+        from pydantic_ai.models.test import TestModel
+
+        conn = _make_db()
+        _seed_chunks(conn, 3)
+        sentinel = "PYDANTIC_AI_SENTINEL_789test"
+        svc = ConsolidationService(
+            conn=conn,
+            graph_store=None,
+            model=TestModel(custom_output_text=sentinel),  # type: ignore[arg-type]
+        )
+        count = await svc.consolidate()
+
+        assert count == 1
+        row = conn.execute("SELECT insight FROM consolidations").fetchone()
+        assert row is not None
+        assert sentinel in row[0], (
+            f"Insight must be driven by PydanticAI TestModel output; got: {row[0]!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_consolidate_function_model_callback_invoked_for_llm(self) -> None:
+        """FunctionModel callback must be called when the LLM step executes.
+
+        A PydanticAI Agent backed by FunctionModel will invoke the callback each
+        time the agent runs.  The current stub never calls ``self._model``, so
+        this test remains RED until the stub is replaced.
+        """
+        from pydantic_ai.models.function import FunctionModel
+
+        conn = _make_db()
+        _seed_chunks(conn, 2)
+        calls: list[object] = []
+
+        def capture_model(messages: object, _info: object) -> str:
+            calls.append(messages)
+            return "captured pydantic insight"
+
+        svc = ConsolidationService(
+            conn=conn,
+            graph_store=None,
+            model=FunctionModel(capture_model),  # type: ignore[arg-type]
+        )
+        await svc.consolidate()
+
+        assert calls, (
+            "FunctionModel callback was never invoked — "
+            "_run_llm must use a PydanticAI Agent to enable test-model injection"
+        )
+
+    @pytest.mark.asyncio
+    async def test_consolidate_does_not_use_placeholder_stub_text(self) -> None:
+        """consolidate() must not store the hardcoded placeholder string.
+
+        The current ``_run_llm`` stub returns a fixed
+        ``'Consolidated insight from N chunks.'`` string.  When driven by a real
+        PydanticAI Agent (or TestModel), the stored insight must come from the
+        model, not the stub.
+        """
+        from pydantic_ai.models.test import TestModel
+
+        conn = _make_db()
+        _seed_chunks(conn, 2)
+        custom_output = "UNIQUE_PYDANTIC_OUTPUT_xz99"
+        svc = ConsolidationService(
+            conn=conn,
+            graph_store=None,
+            model=TestModel(custom_output_text=custom_output),  # type: ignore[arg-type]
+        )
+        await svc.consolidate()
+
+        row = conn.execute("SELECT insight FROM consolidations").fetchone()
+        assert row is not None
+        # The hardcoded placeholder text must not appear once the service is
+        # properly wired to a PydanticAI Agent.
+        assert "Consolidated insight from" not in row[0], (
+            "ConsolidationService must use PydanticAI Agent, not the placeholder stub"
+        )
 
 
 # ---------------------------------------------------------------------------
