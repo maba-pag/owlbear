@@ -65,3 +65,11 @@ docs/scratch/
 
 # Portable tools (downloaded binaries)
 kanban/*.exe
+
+# v1 build artifacts and caches (v1 code lives in v1/ subfolder)
+v1/.venv/
+v1/.pytest_cache/
+v1/.ruff_cache/
+v1/__pycache__/
+v1/.coverage
+v1/htmlcov/
