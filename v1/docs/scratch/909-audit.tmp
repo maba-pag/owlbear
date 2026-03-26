@@ -1,0 +1,22 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Root help lists board | cli.py L18+L56 registers board_app; 2 tests PASS | PASS |
+| 2. Rich table grouped by config status order | board.py L94-L130 reads config, groups, renders Rich table with ID/Title/Assignee/Age/Tags | PASS |
+| 3. Assignee priority assignee>claimed_by>-- | board.py L58 _assignee_display(); 3 tests PASS | PASS |
+| 4. Age from latest matching move with created fallback | board.py L68-90 _age_in_status(); 4 tests PASS | PASS |
+| 5. Empty board exits 0 with No tasks | board.py L99 	yper.echo; 3 tests PASS | PASS |
+| 6. Tests use CliRunner + mocked subprocess only | All tests patch earclaw.commands.board.subprocess.run | PASS |
+| 7. All new tests fail before implementation | Test-writer notes: 23 failed; builder commit 45ecfde adds impl only | PASS |
+
+### Test Results
+- pytest (scoped): 28 passed in 2.09s (23 original + 5 failure-path from #924)
+- pytest (full suite): 3751 passed, 97 failed (all pre-existing: numpy compat, bootstrap unpacking, AgentRegistry signature)
+- ruff (scoped): All checks passed
+
+### Architect Quality: 4/5
+AC was specific and mechanically verifiable after architect refinement. Two AC lines rewritten for precision (status order, exit code). Clean result.
+
+### Confidence: .97
+### Action: archive

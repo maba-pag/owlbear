@@ -1,0 +1,9 @@
+**Source:** #877 research (docs/research/tool-invoked-cancellation.md)
+
+**AC:**
+1. Add `CancelSlot` class to `owlbear.memory.knowledge.cancellation` satisfying `CancelSignal` protocol: `set_source(source: CancelSignal) -> None` for late binding; `is_set() -> bool` returns `False` when no source linked, delegates to source when linked.
+2. `KnowledgeToolset`, `KnowledgeSourceToolset`, and `BookmarkToolset` accept optional `cancel: CancelSignal | None = None` at construction and pass it to pipeline calls in `_ingest_document`, `_refresh_source`, `_bookmark_source`.
+3. `_build_knowledge_toolset`, `_build_bookmark_toolset`, and `_build_knowledge_source_toolset` in `bootstrap/knowledge.py` accept and forward a `cancel` param; `build_toolsets` in `bootstrap/toolsets.py` creates a `CancelSlot`, passes it to all 3 helpers, and stores the slot on `BootstrapResult.cancel_slot`.
+4. `run_daemon()` accepts `cancel_slot: CancelSlot | None = None` and calls `slot.set_source(LinkedCancelSignal(shutdown_event))` after creating `shutdown_event`.
+5. Non-daemon callers remain unchanged (`CancelSlot.is_set` returns `False` when unlinked, matching today's behavior).
+6. All RED tests from #1002 pass (GREEN) after implementation.

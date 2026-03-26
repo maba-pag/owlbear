@@ -1,0 +1,27 @@
+## Architecture Review (2026-03-24)
+**Verdict:** BLOCK
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Assign N agents with different perspectives to debate a topic. | Still unspecified: no interface contract, agent selection, perspective schema, or execution model. Research doc exists but AC was never refined. | Block — AC rewrite required if revisited. |
+| Structured protocol: each agent presents, responds, produces consensus or differentiated doc. | Research evaluated 4 protocol families and recommends Protocol C (parallel-then-synthesize) if ever implemented. But no verifiable AC exists in the task body. | Block — Protocol C details live in research doc and follow-up #976. |
+| Use cases: architecture decisions, code review, risk assessment. | Research (section 3.3) explicitly narrows to architecture decisions only. Code review already has 2 gates. Risk assessment deferred. Original task still bundles all three. | Block — multi-domain bundling persists. |
+| Research multi-agent debate literature before implementing. | DONE. docs/research/council-debate-system.md covers 10 sources, 4 protocol families, token cost analysis, and prior OwlBear rejections. | Research gate satisfied but finding is defer.  |
+
+### Architecture Notes
+- Research finding (.35 confidence): Defer. Three prior OwlBear research docs (orchestration-agent-frameworks.md, conductor-orchestrator-superpowers.md, quoroom-room.md) independently rejected multi-persona deliberation as token-expensive and YAGNI at daemon scale.
+- Existing 4-agent pipeline (researcher, architect, reviewer, auditor) already provides multi-perspective review at existing token cost.
+- Minimum viable council (Protocol C, 2+1) costs 3x tokens per decision on rate-limited Copilot endpoint.
+- Follow-up #976 captures the narrowed Protocol C approach at someday/ideation for if/when token budget constraints relax.
+- This original #145 is superseded by #976 for practical purposes.
+
+### Changes Made
+- Claimed #145 as copilot-architect
+- Appended this architecture review
+- Blocking #145 to ideation: research recommends defer, AC is still vague, scope is still bundled, and #976 captures the actionable subset.
+
+### Dependencies
+- Verified: P8 agent framework is complete
+- Verified: Research doc docs/research/council-debate-system.md is complete
+- Verified: Follow-up #976 exists at ideation/someday with Protocol C AC

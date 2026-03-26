@@ -1,0 +1,27 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Fail-fast validation step before command generation | Step 5a at SKILL.md:68-88, directly before Step 6 | PASS |
+| Rejects TEMP- titles with TEMP-planner-test example | Explicit bullet at SKILL.md:77 | PASS |
+| Rejects empty/unscoped bodies | Explicit bullet at SKILL.md:79 | PASS |
+| Instructs to refine/stop instead of emitting create | Fail-fast instruction at SKILL.md:82-83 | PASS |
+| Points to kanban-planner.agent.md as canonical source | Policy-source blockquote at SKILL.md:86-88 | PASS |
+| Self-critique checklist adds placeholder check | Final checklist item at SKILL.md:125 | PASS |
+| File scope limited to SKILL.md | git log confirms ddcefd2 changes 1 file only | PASS |
+
+### Test Results
+- pytest: 3751 passed, 109 failed (all pre-existing: numpy compat, condenser unpacking, frontend design skill, intent routing), 20 skipped. No failures attributable to #904.
+- ruff: 448 pre-existing errors (RUF100, D205, D209, D403). No new lint issues from docs-only change.
+
+### Upstream Commit Verified
+- ddcefd2 docs: add placeholder-task validation step to task-decomposition skill (#904, builder)
+
+### Architect Quality
+- AC specificity: 7 concrete, verifiable items with no vague criteria
+- Edge case coverage: no gaps discovered by builder or reviewer
+- Design direction: single-file docs-only scope was correct and efficient
+- AC quality score: 5/5
+
+### Confidence: .97
+### Action: archive

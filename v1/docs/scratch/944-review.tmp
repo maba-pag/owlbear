@@ -1,0 +1,25 @@
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AC1: description-only frontmatter + scope input | Clear, verifiable. Matches sibling prompt pattern (frontend-normalize, frontend-polish, design-context). | Tightened: explicit forbidden keys listed |
+| AC2: references skill by relative path + design-context.md | Clear, verifiable. Consistent with all three sibling prompts. | Tightened: explicit relative path specified |
+| AC3: severity-ranked audit with four categories | Original "severity-ranked" was underspecified. | Tightened: references anti-patterns.md two-tier taxonomy (blocker/heuristic) |
+| AC4: no code edits, recommends next commands | Clear, verifiable. | Tightened: explicit command names added |
+| AC5: four-step structure | New AC line. | Added: ensures structural consistency with siblings |
+
+### Architecture Notes
+- **Pattern consistency:** Three sibling prompts already exist: design-context.prompt.md (#943), frontend-normalize.prompt.md (#945), frontend-polish.prompt.md (#946). All follow a four-step structure (Load context, Plan, Execute, Verify/Guardrails). The audit prompt must follow the same pattern.
+- **Severity taxonomy:** The frontend-design skill's references/anti-patterns.md defines Universal Blockers (hard gates) vs Taste Heuristics (warnings). The audit output must use this existing classification rather than inventing a new one.
+- **Read-only constraint:** Unlike normalize and polish, the audit prompt must NOT edit any files. It produces a report only.
+- **TDD:** Test-writer will create contract tests (following test_945_frontend_normalize_prompt.py pattern) at the todo stage.
+- **No application code involved:** This is a markdown prompt file only, scope:copilot domain.
+
+### Changes Made
+- Refined AC: tightened 4 original lines, added AC5 (structural consistency)
+- No new tasks created (TDD handled by pipeline test-writer at todo stage)
+
+### Dependencies
+- Verified: #934 (archived), #938 (archived), #943 (archived) - all satisfied

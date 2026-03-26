@@ -1,0 +1,26 @@
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AC1: Add .github/prompts/frontend-polish.prompt.md with description-only frontmatter and optional scope input | Clear, verifiable. File location, frontmatter format, and input syntax all specified. Matches existing design-context.prompt.md pattern. | Keep |
+| AC2: Prompt reads docs/design-context.md and references frontend-design skill by relative path | Clear. The design-context.prompt.md creates docs/design-context.md as its output; polish prompt should reference it conditionally (may not exist yet). Skill reference matches existing pattern. | Keep |
+| AC3: Prompt focuses on final-detail checks for spacing, interaction states, copy consistency, focus treatment, loading or empty states, and mobile readiness | 6 specific categories named. Verifiable by file inspection. Research doc maps these to 4 skill reference files (interaction-design, spatial-design, responsive-design, ux-writing). | Keep |
+| AC4: Prompt treats polish as a last pass, not a redesign, and includes final verification steps | Clear intent with verifiable guardrails. Research doc provides Impeccable-sourced verification steps to adapt. | Keep |
+
+### Architecture Notes
+- This is a type:docs task producing a single .prompt.md file. No source code, no automated tests, no module layering concerns.
+- Existing pattern: design-context.prompt.md uses description-only frontmatter and optional input syntax. The builder should follow the same structure.
+- The 6 focus areas in AC3 map to frontend-design skill references: spatial-design.md (spacing), interaction-design.md (interaction states, focus treatment), ux-writing.md (copy consistency, loading/empty states), responsive-design.md (mobile readiness).
+- docs/design-context.md does not exist yet; it is generated on first run of the design-context prompt. The builder should treat the reference as conditional (when present).
+- Research doc at docs/research/frontend-polish-prompt.md is thorough and implementation-ready with .92 confidence.
+- TDD not applicable for prompt files; verification is by file inspection per research section 3.6.
+
+### Changes Made
+- Approved task, moved to todo
+
+### Dependencies
+- Verified: #934 (frontend-design skill) archived
+- Verified: #943 (design-context prompt) archived
+- No new dependencies needed

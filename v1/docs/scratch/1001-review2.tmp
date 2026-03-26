@@ -1,0 +1,27 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+- AC1 (CancelSlot): Refined with method signatures and return semantics. Precise.
+- AC2 (Toolset cancel param): Precise as-is. Named classes, methods, pipeline targets.
+- AC3 (Bootstrap wiring): Refined to name _build_*_toolset helpers and BootstrapResult.cancel_slot.
+- AC4 (Daemon wiring): Refined to add cancel_slot param on run_daemon.
+- AC5 (Non-daemon unchanged): Clear behavioral constraint, testable.
+- AC6 (Tests): Replaced vague 'focused tests' with explicit #1002 RED test reference.
+
+### Architecture Notes
+- CancelSlot maps to .NET CancellationTokenSource/Token (.90 confidence).
+- cancellation.py already owns CancelSignal + LinkedCancelSignal; CancelSlot co-locates.
+- Toolset constructors follow optional-param pattern; backward-compatible.
+- BootstrapResult is non-frozen dataclass (bootstrap/_types.py:93); safe to extend.
+- Existing precedent: RetrospectiveHook receives LinkedCancelSignal from bootstrap.
+- No security surface: internal-only, read-only access, single-threaded event loop.
+- No failure mode risk: unlinked CancelSlot returns False (same as today).
+
+### TDD Dependency Fix
+- Added depends_on #1002 to #1001.
+- WARNING: #1002 has depends_on [1001, 870] creating circular dep. Architect reviewing #1002 must remove depends_on 1001.
+
+### Changes Made
+- Refined AC1, AC3, AC4, AC6
+- Added depends_on: 1002 (TDD compliance)

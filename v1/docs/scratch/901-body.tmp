@@ -1,0 +1,27 @@
+## Audit (retry)
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. researcher.agent.md rejects TEMP-* and empty/unscoped bodies; no scope invention | Line 45: explicit rejection rule with both triggers | PASS |
+| 2. research-workflow Step 1 fail-fast before askQuestions | Lines 41-43: fail-fast block precedes line 47 askQuestions path | PASS |
+| 3. Missing body alone = refusal, not ambiguity | Line 99 boundaries section: explicit statement | PASS |
+| 4. TEMP-planner-test example with hygiene doc link | grep confirms literal in both files with planner-temp-task-hygiene.md ref | PASS |
+| 5. Only two guidance files modified | git show a9bdb6d + 43ed208: only .github/agents/researcher.agent.md and .github/skills/research-workflow/SKILL.md | PASS |
+
+### Test Results
+- pytest (full suite): 3753 passed, 109 failed (all pre-existing: numpy, bearclaw.commands.daemon, AgentRegistry, frontend_design_skill — none related to #901 docs-only changes)
+- ruff: pre-existing RUF100 warnings in unrelated test files; no new findings from #901
+
+### Architect Quality
+- AC specificity: 5 concrete, verifiable items with explicit scope guard (AC5)
+- Edge case coverage: AC4 correctly required a concrete example — caught missing content on first review cycle
+- Design direction: architecture notes correctly scoped to two files, no unnecessary widening
+- AC quality score: 4/5 (adequate; AC4 gap required one review-retry cycle, but the scope guard and verification criteria were precise)
+
+### Upstream Commits
+- a9bdb6d docs: add placeholder-task rejection rules (#901, builder)
+- 43ed208 docs: add TEMP-planner-test example (#901, builder)
+- Both committed; no orphaned deliverables
+
+### Confidence: .97
+### Action: archive

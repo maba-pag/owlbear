@@ -1,0 +1,17 @@
+## Research
+Research doc: docs/research/budget-exceeded-outcome-emission.md
+
+Key findings:
+- Approach validated with .90 confidence (up from .85 in parent research)
+- Consumer compatibility audit: all 6 TASK_COMPLETE consumers verified SAFE
+- AuditMapHook, RetrospectiveHook use outcome != success pattern (budget_exceeded correctly skipped)
+- HookReactionRouter match predicates on outcome: failure naturally exclude budget_exceeded
+- All existing test files use non-budget exceptions (RuntimeError, ValueError, LintGateError); none break
+- Prior art: Celery dont_autoretry_for, Temporal non_retryable confirm the pattern
+- depends_on 985 is a dangling reference (archived via SPLIT); real dependency is #984 (done)
+- Task is independent of #991 and #992 per architecture review
+- Implementation is ~5 LOC in reconcile_tasks plus TypedDict docstring update
+- AC is complete and ready for TDD decomposition by architect
+
+Sources: Celery task retry docs, Temporal failure detection docs
+Attribution: docs/sources/overview.md updated with #993 section

@@ -1,0 +1,175 @@
+.........................................
+ERROR: Coverage failure: total of 28 is less than fail-under=90
+                                                                         [100%]
+============================== warnings summary ===============================
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_qdrant_vector_store.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_search_benchmark.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+______________ coverage: platform win32, python 3.12.13-final-0 _______________
+
+Name                                                      Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------------------------
+src\bearclaw\__init__.py                                      1      1     0%   3
+src\bearclaw\cli.py                                          38     38     0%   7-72
+src\bearclaw\commands\__init__.py                             6      6     0%   1-11
+src\bearclaw\commands\auth.py                                36     36     0%   3-71
+src\bearclaw\commands\browser.py                             35     35     0%   3-66
+src\bearclaw\commands\chat.py                                93     93     0%   3-191
+src\bearclaw\commands\daemon.py                             115    115     0%   3-201
+src\bearclaw\commands\decisions.py                          131    131     0%   3-227
+src\bearclaw\commands\knowledge_source.py                    81     81     0%   3-168
+src\bearclaw\commands\project.py                             65     65     0%   3-136
+src\bearclaw\commands\slack.py                               74     74     0%   3-139
+src\bearclaw\commands\usage.py                               69     69     0%   3-148
+src\bearclaw\commands\voice.py                               37     37     0%   3-96
+src\owlbear\__init__.py                                       2      0   100%
+src\owlbear\auth\__init__.py                                  1      0   100%
+src\owlbear\auth\copilot.py                                  95     62    35%   63, 78-88, 105-137, 147-159, 177-183, 199-210, 219-229, 244-262
+src\owlbear\bootstrap\__init__.py                            93     66    29%   67-75, 83-91, 102-112, 122-250
+src\owlbear\bootstrap\_types.py                              49     21    57%   66-89
+src\owlbear\bootstrap\channel.py                             18     14    22%   22-48
+src\owlbear\bootstrap\hooks.py                               32     19    41%   40-74
+src\owlbear\bootstrap\knowledge.py                          118     19    84%   95-97, 136-140, 156, 176, 223-225, 274-276, 321-323, 342-344
+src\owlbear\bootstrap\registry.py                            45     34    24%   30-45, 57-86
+src\owlbear\bootstrap\toolsets.py                           147     65    56%   49-63, 97, 104-106, 137, 155, 174-183, 204-206, 217-218, 240-268, 321-328, 333-346, 381-398
+src\owlbear\channels\__init__.py                              5      0   100%
+src\owlbear\channels\base.py                                 14      3    79%   46, 57, 70
+src\owlbear\channels\cli.py                                  41     24    41%   58-59, 63, 67-68, 75-81, 93-104, 121-124
+src\owlbear\channels\slack.py                               158    128    19%   13-15, 74-89, 102, 109, 114, 133-145, 172-191, 200, 230-262, 271-281, 291-298, 306, 312-320, 324-328, 334-347, 365-417
+src\owlbear\channels\slack_mrkdwn.py                         20     16    20%   22-54
+src\owlbear\channels\slack_templates.py                      55     55     0%   19-360
+src\owlbear\config.py                                       254     68    73%   69-76, 82-85, 91-104, 110-113, 120-121, 128-129, 521-522, 531-532, 540-541, 549-550, 558-559, 567-568, 576-577, 585-586, 594-595, 603-604, 612-613, 621-622, 635-640, 652, 664-669
+src\owlbear\core\__init__.py                                  1      0   100%
+src\owlbear\core\agent.py                                    94     78    17%   73-100, 111-112, 117-119, 132-183, 187-230, 239-255
+src\owlbear\core\agent_def.py                                46     28    39%   72-96, 110-118
+src\owlbear\core\agent_registry.py                           73     54    26%   69-75, 87-101, 116-127, 131, 136, 160-166, 174-195
+src\owlbear\core\board_context.py                            36     24    33%   52-57, 65-76, 80-81, 84-103
+src\owlbear\core\circuit_breaker.py                          64     40    38%   68, 77-89, 93-96, 100-114, 138-139, 143-161
+src\owlbear\core\command_guard.py                            44     27    39%   109-112, 129-148, 154-156, 162-165, 169-172
+src\owlbear\core\condenser.py                                72     57    21%   66-71, 83-120, 130-147, 151-180, 185-206
+src\owlbear\core\content_safety.py                           13     13     0%   7-45
+src\owlbear\core\context_hook.py                             37     37     0%   8-120
+src\owlbear\core\context_hydration.py                       116    116     0%   8-220
+src\owlbear\core\delegation.py                               39     18    54%   92-153
+src\owlbear\core\deps.py                                     10      0   100%
+src\owlbear\core\errors.py                                   68     31    54%   29-30, 45-47, 93-97, 108-142, 166, 206-219
+src\owlbear\core\exceptions.py                                7      3    57%   26-28
+src\owlbear\core\hooks.py                                    91     16    82%   169, 177-181, 185, 255-261, 274-275
+src\owlbear\core\jsonl_store.py                              20     11    45%   32-33, 38, 44-47, 56-59
+src\owlbear\core\lessons_hook.py                             55     55     0%   8-121
+src\owlbear\core\lint_gate.py                                46     29    37%   50-68, 73-76, 81-89, 94-118
+src\owlbear\core\lint_hook.py                                35     22    37%   41-49, 55-57, 64-67, 72-82
+src\owlbear\core\notification_hook.py                        61     41    33%   43, 47-49, 58, 62-71, 92-93, 97-116, 120-128, 133-137
+src\owlbear\core\observability.py                            92     59    36%   82, 88-90, 100-118, 132-152, 171-172, 176-179, 186-189, 193-223
+src\owlbear\core\progress.py                                 77     77     0%   8-163
+src\owlbear\core\retrospective_hook.py                      112    112     0%   9-229
+src\owlbear\core\retry.py                                     9      1    89%   36
+src\owlbear\core\roles.py                                    28     10    64%   124-139
+src\owlbear\core\session_memory_hook.py                      34     34     0%   10-86
+src\owlbear\core\subagent_hook.py                            58     43    26%   46, 57-77, 87-89, 99-114, 122-142
+src\owlbear\core\test_hook.py                                45     22    51%   75-76, 86-90, 101-103, 109-128, 133-134
+src\owlbear\daemon.py                                       394    278    29%   33-34, 142, 145-160, 168, 195-219, 239-241, 262-267, 281-296, 314-443, 457-459, 467-477, 502, 529-603, 620-641, 650-668, 699-816, 834-858, 924, 953-963, 984-1024, 1038-1040, 1052-1054
+src\owlbear\heartbeat.py                                     42     42     0%   12-118
+src\owlbear\memory\__init__.py                                4      0   100%
+src\owlbear\memory\context.py                                38     26    32%   26-27, 32, 44-46, 50, 57-60, 71-85
+src\owlbear\memory\error_journal.py                          43     21    51%   51-52, 59, 76-88, 105-112, 118-125
+src\owlbear\memory\knowledge\__init__.py                     13      2    85%   55-56
+src\owlbear\memory\knowledge\bookmark.py                     69     36    48%   64, 69-71, 75, 103-124, 128-134, 153-172, 179-186, 193-200
+src\owlbear\memory\knowledge\bookmark_pipeline.py            70     46    34%   109-179, 198-219
+src\owlbear\memory\knowledge\bookmark_toolset.py             42     24    43%   95-121, 137-146
+src\owlbear\memory\knowledge\chunker.py                     113     90    20%   14, 76-91, 98-120, 124-150, 154-160, 164-182, 191-221, 227-239
+src\owlbear\memory\knowledge\consolidation.py                41      0   100%
+src\owlbear\memory\knowledge\document_store.py              116     75    35%   70, 124-131, 143-149, 161-180, 184-189, 197-210, 219-239, 252-254, 276-305, 311-321, 331-363
+src\owlbear\memory\knowledge\embeddings.py                   67     51    24%   44-50, 62-79, 86-93, 102-109, 119-140, 148-153
+src\owlbear\memory\knowledge\enrichment.py                   64     52    19%   60-67, 78-86, 95-115, 126-127, 136-163, 176-185
+src\owlbear\memory\knowledge\evaluator.py                    36     16    56%   58, 68-76, 93, 119-143
+src\owlbear\memory\knowledge\extractor.py                    32     16    50%   74-80, 92-114
+src\owlbear\memory\knowledge\graph.py                       161    127    21%   43, 48, 53-55, 60, 75, 92-110, 114-122, 131-157, 165-183, 191-200, 211-226, 230-237, 247-271, 278-283, 300-315, 345-377, 386-398, 402-408, 418-429, 445-450
+src\owlbear\memory\knowledge\graph_builder.py                57     57     0%   7-172
+src\owlbear\memory\knowledge\ingest.py                      133     91    32%   108, 114, 118, 135-180, 209-240, 252-299, 310-314, 323-329, 338-344, 357-392
+src\owlbear\memory\knowledge\intake.py                       28     11    61%   30, 44-49, 66-69, 83
+src\owlbear\memory\knowledge\inter_doc_graph_builder.py      94     94     0%   8-253
+src\owlbear\memory\knowledge\models.py                       66      1    98%   42
+src\owlbear\memory\knowledge\protocol.py                     14      0   100%
+src\owlbear\memory\knowledge\qdrant.py                      134     97    28%   21, 57, 79-84, 113-117, 123, 133-165, 189-213, 226-242, 275-308, 315-331, 342-367, 378-387, 400-447, 460-489
+src\owlbear\memory\knowledge\query_service.py               108     87    19%   31, 97-105, 113-143, 149-163, 175-194, 206-244, 248-251
+src\owlbear\memory\knowledge\refresh.py                     100     67    33%   90, 105-117, 136-143, 149-150, 154-163, 178-209, 221-240, 250-270
+src\owlbear\memory\knowledge\retrieval.py                    61     35    43%   58, 140-172, 184-187, 196-198, 207-232
+src\owlbear\memory\knowledge\schema.py                       91     46    49%   165-169, 183-188, 202-209, 221-225, 237-247, 259-266, 279-286, 342-357
+src\owlbear\memory\knowledge\source_store.py                 50     31    38%   37, 42-44, 48, 69-88, 92-100, 106-114, 118-131, 138-155, 162-185, 189-194
+src\owlbear\memory\session.py                                55     32    42%   34-35, 40, 45, 49, 58-62, 68-71, 75-79, 88-92, 99, 103-106, 110-112
+src\owlbear\memory\usage.py                                  71     34    52%   46, 74, 80-81, 87-103, 129-172
+src\owlbear\memory\usage_cost.py                             17     17     0%   14-69
+src\owlbear\memory\wip.py                                    28     28     0%   8-72
+src\owlbear\orchestrator\__init__.py                          1      1     0%   3
+src\owlbear\orchestrator\loop_detection.py                   64     64     0%   10-157
+src\owlbear\paths.py                                         14      4    71%   26-27, 33-34
+src\owlbear\planning\__init__.py                              0      0   100%
+src\owlbear\planning\extractor.py                            21     21     0%   3-80
+src\owlbear\planning\markdown.py                             35     35     0%   8-91
+src\owlbear\planning\models.py                               18     18     0%   11-48
+src\owlbear\process.py                                        8      5    38%   10-15
+src\owlbear\projects\__init__.py                              1      1     0%   3
+src\owlbear\projects\models.py                               25     25     0%   7-63
+src\owlbear\projects\store.py                                50     50     0%   8-110
+src\owlbear\projects\toolset.py                              64     64     0%   15-159
+src\owlbear\projects\workspace.py                            84     84     0%   14-318
+src\owlbear\providers\__init__.py                             1      0   100%
+src\owlbear\providers\copilot.py                             38     21    45%   41-42, 64-78, 97-116, 147-150
+src\owlbear\providers\copilot_multipliers.py                 10     10     0%   15-52
+src\owlbear\safety\__init__.py                                0      0   100%
+src\owlbear\safety\gate.py                                   44     44     0%   24-168
+src\owlbear\safety\policy.py                                 69     69     0%   12-185
+src\owlbear\skills\__init__.py                                3      3     0%   3-7
+src\owlbear\skills\registry.py                               72     72     0%   14-171
+src\owlbear\tools\__init__.py                                11      0   100%
+src\owlbear\tools\ask_user.py                                71     40    44%   108-114, 123-130, 134-142, 146-181, 185-188
+src\owlbear\tools\browser\__init__.py                         1      0   100%
+src\owlbear\tools\browser\actions.py                         43     31    28%   49-55, 73-75, 95-97, 114-116, 147-164, 193-199
+src\owlbear\tools\browser\config.py                           3      0   100%
+src\owlbear\tools\browser\content_extractor.py               39     24    38%   75-115
+src\owlbear\tools\browser\content_guard.py                   36     15    58%   126-129, 160-172, 181-193
+src\owlbear\tools\browser\crawl_config.py                    60     60     0%   8-101
+src\owlbear\tools\browser\crawler.py                         90     90     0%   9-223
+src\owlbear\tools\browser\html_cache.py                      38     38     0%   8-89
+src\owlbear\tools\browser\integration.py                     17     17     0%   7-73
+src\owlbear\tools\browser\launcher.py                        37     37     0%   7-103
+src\owlbear\tools\browser\manager.py                        158    123    22%   74-80, 91-94, 116-152, 161-171, 180-195, 199-205, 213-218, 222-235, 239-252, 258-260, 264-274, 278-299
+src\owlbear\tools\browser\safety.py                          34     22    35%   42, 55-66, 72-74, 81-92
+src\owlbear\tools\browser\toolset.py                         70     30    57%   92, 110-120, 124-126, 135-138, 193, 197, 201, 205, 214-222, 231, 243-247
+src\owlbear\tools\browser\url_utils.py                       87     87     0%   8-206
+src\owlbear\tools\diagram\__init__.py                         3      3     0%   3-6
+src\owlbear\tools\diagram\service.py                         32     32     0%   3-67
+src\owlbear\tools\diagram\toolset.py                         31     31     0%   22-113
+src\owlbear\tools\filesystem.py                              99     67    32%   57, 71, 134-148, 158-161, 170-176, 185-194, 204-214, 229-255
+src\owlbear\tools\git_local.py                               75     42    44%   67, 75-85, 135-138, 146-152, 160-164, 172-178, 182-185, 189-192, 199-203
+src\owlbear\tools\github_api.py                              91     64    30%   64-70, 98-109, 117, 135, 139, 147-162, 189-202, 215-228, 241-254, 262-271
+src\owlbear\tools\hooked.py                                  47     23    51%   65, 70-73, 88-91, 119-136, 153
+src\owlbear\tools\kanban.py                                 109     77    29%   76-86, 166-183, 191-194, 214-227, 236-240, 264-281, 297-308, 312-315
+src\owlbear\tools\knowledge.py                               62     35    44%   84, 98, 145-168, 188-199, 214-220
+src\owlbear\tools\knowledge_source.py                        53     28    47%   66, 120-142, 153-167, 179-184
+src\owlbear\tools\mcp_registry.py                            60     43    28%   44-45, 61-69, 83-90, 101, 114-115, 130-135, 139, 173-193
+src\owlbear\tools\mcp_servers.py                             15      7    53%   41, 63, 79, 98-104
+src\owlbear\tools\protocols.py                               17      9    47%   27-30, 35-39
+src\owlbear\tools\screenshot.py                              19     10    47%   42-47, 55, 66-67, 75
+src\owlbear\tools\screenshot_hook.py                         34     17    50%   74-76, 84-101
+src\owlbear\tools\terminal.py                                97     63    35%   67, 78-113, 145, 173-187, 211-258
+src\owlbear\tools\visual_feedback.py                         29      9    69%   96-100, 104-107
+src\owlbear\tools\web_search.py                              93     66    29%   36, 86-99, 141-176, 191-227
+src\owlbear\voice\__init__.py                                 3      3     0%   3-7
+src\owlbear\voice\channel.py                                 84     84     0%   15-236
+src\owlbear\voice\streaming_stt.py                           56     56     0%   16-182
+src\owlbear\voice\stt.py                                     30     30     0%   12-109
+src\owlbear\voice\tts.py                                     30     30     0%   12-88
+---------------------------------------------------------------------------------------
+TOTAL                                                      8449   6097    28%
+FAIL Required test coverage of 90.0% not reached. Total coverage: 27.84%
+41 passed, 2 warnings in 5.90s
+

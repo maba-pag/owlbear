@@ -1,0 +1,31 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Leaf export + no forbidden imports | web_extract.py:8-9 __all__; AST guard test at test_web_extract.py:320 | PASS |
+| 2. Lazy import + actionable ImportError | web_extract.py:15 sentinel; web_extract.py:38-44 lazy path; 2 lazy-import tests + 3 missing-dep tests | PASS |
+| 3. Exact delegate call + raw return | web_extract.py:48-52 single extract call; line 56 raw return | PASS |
+| 4. None/exception fallback empty string | web_extract.py:53-56 except+or; 4 fallback tests | PASS |
+| 5. No caller migration + RED tests pass | Commits 38dc077,0ff00f7,7d4bd6c,fb1d711 touch only web_extract files; 16/16 pass | PASS |
+
+### Test Results
+- pytest (scoped): 16 passed, 0 failed
+- pytest (full suite): 3790 passed, 128 failed (all pre-existing: numpy compat, missing modules, unrelated tasks)
+- ruff (scoped): All checks passed
+- Coverage: 100% (16 stmts, 0 missed)
+
+### Architect Quality
+- AC specificity: Excellent - exact function signature, kwargs, import boundary, fallback behavior
+- Edge case coverage: Complete - lazy import timing, missing dep, None, exception
+- Design direction: Correct - leaf module precedent followed
+- AC Quality Score: 5/5
+
+### Upstream Commits Verified
+- 165702d feat: add extract_markdown helper and tests (#874, auditor)
+- 38dc077 feat: implement extract_markdown leaf helper (#868, builder)
+- 0ff00f7 fix: make trafilatura import truly lazy (#868, builder)
+- 7d4bd6c test: fix lint + add AC1 import-boundary guard (#868, test-writer)
+- fb1d711 test: format path expression (#868, builder)
+
+### Confidence: .97
+### Action: archive

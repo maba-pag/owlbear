@@ -1,0 +1,22 @@
+## Test-Writer Notes
+- Test file: tests/test_blocked_url_error_location.py (new)
+- Modified: tests/test_daemon_journal_async.py (removed pre-seeding workaround)
+- Classes: TestFromAC_BlockedURLErrorLocation, TestFromAC_DaemonCleanImport
+- Tests per category: happy 0, edge 0, error 3, boundary 2
+- Total: 5 tests, all FAIL (RED) in tests/test_blocked_url_error_location.py
+- ruff: clean
+
+### AC coverage
+| AC Line | Test(s) | Category |
+|---------|---------|----------|
+| AC1: remove owlbear.tools pre-seeding | test_daemon_journal_async.py — workaround removed; existing tests pass in pytest context (other modules pre-load the chain), subprocess regression captured by AC4/AC5 | cleanup |
+| AC2: errors.py must not import tools.browser.safety | test_errors_no_import_from_browser_safety | error |
+| AC3: BlockedURLError.__module__ == owlbear.core.exceptions | test_blocked_url_error_module | error |
+| AC3: classify_error returns PERMANENT | test_classify_error_returns_permanent | error |
+| AC4: fresh subprocess imports owlbear.daemon without tools pre-seeding | test_daemon_import_without_tools_preseeding | boundary |
+| AC5: fresh subprocess imports config then daemon with no pre-seeding | test_daemon_import_config_then_daemon | boundary |
+| AC6: test_browser_safety remains green | Not a new test — constraint, not authoring scope | -- |
+| AC7: tests fail before #850 | Confirmed: 5 FAILED, 0 passed in test_blocked_url_error_location.py | -- |
+
+### Note on AC1
+Removing the pre-seeding comment block (`import owlbear.tools`) from `test_daemon_journal_async.py` does not cause those tests to fail in a pytest session — pytest loads many modules before reaching this file, so the circular import is already resolved. The subprocess tests (AC4/AC5) reliably reproduce the fresh-process failure, which is the correct regression guard for #850.

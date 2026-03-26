@@ -1,0 +1,25 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Importable conftest helper for success/nonzero/malformed | make_completed_process at conftest.py:127, returns real subprocess.CompletedProcess[str]. 14+ contract tests in TestFromAC_MakeCompletedProcess. | PASS |
+| AC2: Board routing local, composes shared helper | _subproc_fail_list/_subproc_fail_log at test_cli_board.py:401-435 import and compose the shared helper | PASS |
+| AC3: Named OSError fixture/helper | make_missing_binary_error at conftest.py:141, returns FileNotFoundError with kanban-md reference. 5 contract tests in TestFromAC_MissingBinarySeam. Board test composes seam at test_cli_board.py:473. | PASS |
+| AC4: Reuse in chat + board failure tests | test_cli_chat.py:305,318,333,346 all use make_completed_process. Board helpers compose it at test_cli_board.py:409,430. | PASS |
+| AC5: Contract coverage + duplicate guard | TestFromAC_MakeCompletedProcess (14 tests), TestFromAC_ZeroDuplicates::test_no_duplicate_make_completed_process, TestFromAC_MissingBinarySeam regression guard (5 tests) | PASS |
+| AC6: Scope under tests/ only | Both helpers defined only in tests/conftest.py. No src/ references found. | PASS |
+
+### Test Results
+- pytest full suite: 2442 passed, 15 failed (all pre-existing, none from #927 scope), 2 skipped, 4 collection errors ignored (RED-phase)
+- ruff: clean on all 4 task files (conftest.py, test_conftest_helpers.py, test_cli_board.py, test_cli_chat.py)
+
+### AC Quality Score: 4
+AC was adequate for a follow-up research task. Most ACs were pre-satisfied by incremental pipeline work (#920, #924, #926). AC3 deferral was correctly enforced by the reviewer on the first pass. Minor confusion: AC5 duplicate-guard was tracked as #975 follow-up initially but delivered within #927 itself.
+
+### Notes
+- Scratch file docs/scratch/927-builder-notes.tmp still exists (writer noted Remove-Item blocked by policy). Manual cleanup needed.
+- Uncommitted test_cli_chat.py change is from another task, not #927.
+- Upstream commits verified: 83c9fed (test-writer), 0338332 (test-writer retry), 2ef13d0 (builder).
+
+### Confidence: .96
+### Action: archive

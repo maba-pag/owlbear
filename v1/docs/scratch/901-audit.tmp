@@ -1,0 +1,25 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| researcher.agent.md rejects TEMP-* and empty/unscoped bodies; no scope invention | critical_rules line 45: explicit rejection rule; boundaries: "Missing scoped body content alone is sufficient reason to refuse dispatch" | PASS |
+| research-workflow Step 1 fail-fast before askQuestions | Step 1 has "Fail fast on invalid inputs" block before askQuestions path (lines 40-43 of SKILL.md) | PASS |
+| Missing scoped body alone = refusal reason, not ambiguity | Both files state this clearly (researcher.agent.md boundaries + SKILL.md Step 1) | PASS |
+| Example uses TEMP-planner-test and links to planner-temp-task-hygiene.md | grep for 'TEMP-planner-test' and 'planner-temp-task-hygiene' in both files returns NO matches. Only agent-common.instructions.md has these. Both modified files use TEMP-* glob and cross-reference agent-common but do NOT include the concrete example. | FAIL |
+| Only two guidance files modified | Commit a9bdb6d confirms only .github/agents/researcher.agent.md and .github/skills/research-workflow/SKILL.md | PASS |
+
+### Test Results
+- pytest: 3751 passed, 97 failed, 20 skipped — all 97 failures are pre-existing (numpy compat, bootstrap signature, agent registry refactor). None related to #901 docs-only changes.
+- ruff: pre-existing issues only, none from #901.
+
+### Architect Quality
+- AC specificity: Good — all 5 AC items are concrete and mechanically verifiable.
+- Edge case coverage: Adequate — scope guard (AC5) prevents creep.
+- AC quality score: 4/5 — AC was specific and led to a mostly clean implementation. AC4 was clear; the builder missed it.
+
+### Upstream Quality Gap
+- Builder falsely claimed AC4 met ("TEMP-planner-test example in both files").
+- Reviewer marked AC4 PASS without verifying the string actually exists in the files. Reviewer cited line numbers but the content at those lines does not contain the required example.
+
+### Confidence: .85
+### Action: reject to review — AC4 (concrete TEMP-planner-test example with planner-temp-task-hygiene.md link) not present in either modified file. Fixable: add the example to at least one of the two files.

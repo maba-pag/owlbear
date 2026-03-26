@@ -1,0 +1,34 @@
+## Refined AC
+1. Superseding the 2026-03-21 04:42 tracker note, treat #541 as a historical parent only. Do not move this task to 	odo; the async journal behavior is already implemented and verified by archived task #841 plus live regression tests.
+2. The source-of-truth implementation remains in src/owlbear/daemon.py: _log_to_journal() is sync def and delegates journal.log(...) through wait asyncio.to_thread(...).
+3. _recover_from_error() in src/owlbear/daemon.py awaits _log_to_journal() at all six call sites, so daemon-side journal writes do not block the event loop directly.
+4. ErrorJournal, JsonlStore, and orchestrator/loop_detection.py::_log_to_journal() remain synchronous; async offload is isolated to the daemon call site and introduces no new third-party dependencies.
+5. The regression contract remains encoded in 	ests/test_daemon_journal_async.py and 	ests/test_daemon_async_contract.py. If this area regresses, create a new RED/GREEN pair for that regression instead of dispatching builder work from #541.
+
+## Architecture Review
+**Verdict:** REFINE
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Treat #541 as a historical parent or tracker only. Do not move this task to 	odo while the async journal contract is already satisfied in current source and archived task #841 holds the executable TDD evidence. | Correct direction, but it relies too heavily on archived task evidence and omits the live contract tests that now encode the behavior mechanically. | Superseded with tracker AC that points to live source and both current test files. |
+| 2. The source-of-truth implementation remains in src/owlbear/daemon.py: _log_to_journal() is an sync def and delegates journal.log(...) through wait asyncio.to_thread(...) instead of blocking the daemon loop directly. | Precise and verifiable in current source. | Kept. |
+| 3. The regression contract remains encoded in 	ests/test_daemon_journal_async.py: coverage verifies coroutine shape, journal=None early return, correct syncio.to_thread delegation, and best-effort exception swallowing. | Incomplete. It misses the companion contract tests that verify awaited daemon call sites, sync-only boundaries, and no-new-dependency guardrails. | Expanded to include 	ests/test_daemon_async_contract.py. |
+| 4. If this area regresses, create a new RED or GREEN pair for that regression rather than dispatching builder work from #541. | Architecturally sound. This avoids duplicate implementation work from a stale parent card. | Kept. |
+
+### Architecture Notes
+- Verified src/owlbear/daemon.py already satisfies the recommended call-site offload pattern from docs/research/error-journal-async.md: _log_to_journal() is async and uses wait asyncio.to_thread(journal.log, ...).
+- Verified _recover_from_error() awaits _log_to_journal() at each daemon call site, which contains the async boundary in the assembly layer where daemon.py belongs.
+- Verified src/owlbear/core/context_hook.py, src/owlbear/voice/tts.py, and src/owlbear/tools/web_search.py already use syncio.to_thread, so the implementation matches established codebase precedent.
+- Verified 	ests/test_daemon_journal_async.py and 	ests/test_daemon_async_contract.py both pass today (26 passed), so the tracker can point at live executable evidence rather than only archived notes.
+- Verified ErrorJournal and JsonlStore remain synchronous, keeping the async adaptation at the daemon call site and avoiding unnecessary API expansion or layer violations.
+- Moving #541 to 	odo would create a duplicate builder handoff for scope that already landed. The correct action is to keep it in acklog as a historical tracker with explicit superseding AC.
+
+### Changes Made
+- Claimed #541 as one-oaken
+- Appended superseding tracker AC that reflects current source and both regression files
+- Appended this ## Architecture Review
+- Left #541 in acklog
+
+### Dependencies
+- Added/Removed/Verified: verified docs/research/error-journal-async.md, src/owlbear/daemon.py, src/owlbear/core/context_hook.py, src/owlbear/voice/tts.py, src/owlbear/tools/web_search.py, 	ests/test_daemon_journal_async.py, 	ests/test_daemon_async_contract.py, and archived #841

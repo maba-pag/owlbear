@@ -1,0 +1,14 @@
+........................................................................ [ 52%]
+.................................................................        [100%]
+============================== warnings summary ===============================
+tests\conftest.py:104
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:104: UserWarning: Skipping test_qdrant_vector_store.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+tests\conftest.py:104
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:104: UserWarning: Skipping test_search_benchmark.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+137 passed, 2 warnings in 2.75s
+

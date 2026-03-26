@@ -1,0 +1,2 @@
+## Closure Note
+Umbrella retired: #955 carries HookReaction policy schema and bootstrap router wiring, #956 carries task-scoped retry reuse, #957 carries notification and escalation executor reuse; see docs/research/hookevent-reaction-routing.md as the source of truth for the split.

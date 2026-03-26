@@ -1,0 +1,8 @@
+## Builder Notes
+- Files changed: src/owlbear/core/retrospective_hook.py
+- Tests: RED check confirmed 4 failing TestFromAC cases before the fix; GREEN check showed those 4 now pass; full tests/test_retrospective_hook.py run: 58 passed, 2 warnings.
+- Coverage: src/owlbear/core/retrospective_hook.py at 94 percent in the scoped bare coverage run.
+- Lint: ruff clean for src/owlbear/core/retrospective_hook.py and tests/test_retrospective_hook.py.
+- Evidence: targeted TestFromAC run first failed with 4 failures and then passed with 4 passes after the fix; full tests/test_retrospective_hook.py run passed with 58 tests; scoped bare coverage run reported 94 percent for retrospective_hook.py; ruff check reported all checks passed.
+- Fixes applied: removed the inline default-helper eligibility fast path from RetrospectiveHook.__call__ so successful events always schedule background work, and eligibility filtering remains inside _run_retrospective_if_eligible.
+- Commit: 0d8a5be

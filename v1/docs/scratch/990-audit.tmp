@@ -1,0 +1,22 @@
+## Audit
+
+### AC Verification
+- AC1 PASS: TestFromAC classes exist in tests/test_schedule_task_retry.py.
+- AC2 PASS: 8 scheduling tests verify RetryEntry fields. Scoped run: 38 passed.
+- AC3 PASS: 4 exhaustion tests verify kanban block, retries pop, claimed discard.
+- AC4 PASS: 5 budget tests verify block call, claimed discard, no RetryEntry, stale cleanup.
+- AC5 PASS: Original same-attempt tests plus retry higher-attempt guard tests at lines 954-1033.
+- AC6 PASS: Original swallow tests plus retry logging tests at lines 1036-1097 verify logger.warning.
+- AC7 PASS: Historical RED evidence (21 ImportError failures) confirmed via git history.
+
+### Test Results
+- pytest scoped: 38 passed, 2 warnings.
+- pytest full suite: 4235 passed, 39 failed (pre-existing), 20 skipped.
+- ruff: All checks passed.
+
+### Architect Quality: 4/5
+### Confidence: .96
+### Action: archive
+
+## Commits
+- b9506af test: add schedule_task_retry standalone tests (#990, auditor)

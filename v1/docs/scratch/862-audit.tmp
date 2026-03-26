@@ -1,0 +1,29 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Replace bare D ignore with D1xx-only in pyproject.toml | pyproject.toml L66: D1 in ignore list; COM812/ISC001/S101 preserved | PASS |
+| Add [tool.ruff.lint.pydocstyle] convention = google | pyproject.toml L92-93: section + convention present | PASS |
+| ruff check src/ --select D --ignore D100-D107 exits 0 | Ran command: All checks passed | PASS |
+| Source edits limited to D205/D416/D301 docstring fixes | Commit 50d7354 reverted non-docstring hunks; reviewer retry 3 confirmed | PASS |
+| No executable logic/imports/signatures change | All diffs are docstring text/formatting and pyproject.toml config only | PASS |
+| No D1xx rule enabled | D1 in ignore list disables all D1xx; verified in pyproject.toml L66 | PASS |
+
+### Test Results
+- pytest full suite: 3779 passed, 88 failed (all pre-existing), 20 skipped. No regressions from 862.
+- ruff check src/: 2 pre-existing errors (BLE001 auth.py, E501 screenshot.py) unrelated.
+
+### Architect Quality
+- AC quality score: 4/5. Architect caught flawed AC3 and rewrote it, added no-logic-change guard.
+- Edge case: tests/ per-file-ignores gap found in retry cycle, not originally anticipated.
+
+### Commits (upstream, verified)
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 0c10649 | feat | pyproject.toml + 23 src/ | #862 |
+| b8ff0cf | chore | pyproject.toml | #862 |
+| 50d7354 | fix | 4 src/ files | #862 |
+| 9873ead | docs | python.instructions.md | #862 |
+
+### Confidence: .97
+### Action: archive

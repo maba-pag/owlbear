@@ -1,0 +1,7 @@
+## Builder Notes
+- Files changed: None. Green-on-arrival no-op; AC already satisfied in tests/test_conftest_helpers.py.
+- Tests: 49 passed, 4 warnings on tests/test_conftest_helpers.py.
+- Coverage: Scoped bare coverage run completed; project source total reported 2% because no source modules were exercised in this test-only task.
+- Lint: ruff clean on tests/test_conftest_helpers.py.
+- Evidence: pytest reported 49 passed in 0.46s; coverage run reported 49 passed in 2.32s; ruff reported All checks passed.
+- Fixes applied: None.

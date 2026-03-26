@@ -1,0 +1,22 @@
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Task adds a skill reference file; no project-wide behavior/API/convention change |
+| 2 | Docstrings | No | N/A | No Python application modules created or modified |
+| 3 | docs/sources/overview.md | Yes | Pass | Section exists at line 2029: pbakaus/impeccable, Anthropic, WCAG, NNGroup rows present |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Pass | docs/research/frontend-anti-pattern-taxonomy.md exists and linked in task body |
+
+### Files Updated
+- None (sources/overview.md already had #938 section from builder phase)
+
+### Scratch Files Cleaned
+- docs/scratch/938-ac.tmp
+- docs/scratch/938-builder.tmp
+- docs/scratch/938-ruff.txt
+
+### Uncommitted deliverables committed
+- tests/test_frontend_design_skill.py (AC4/AC5 updates from test-writer retry)
+- .github/skills/frontend-design/references/anti-patterns.md (trailing newline)
+- Commit 1a73fb3: docs: add frontend anti-pattern taxonomy (#938, writer)

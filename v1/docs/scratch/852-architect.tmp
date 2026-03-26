@@ -1,0 +1,27 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Closure note states the repo already satisfies the original import-hygiene contract and cites #854 plus tests/test_pydantic_ai_typing_imports.py | Precise, verifiable self-closure of a stale backlog task. | Keep |
+| The closure note cites #854 and tests/test_pydantic_ai_typing_imports.py | Preserves provenance for why the implementation card is now closure-only. | Keep |
+| Archive #852 after appending the closure note | Clear terminal state for the stale implementation card. | Keep |
+| No src/, tests/, or other kanban task files are modified | Keeps the task in a single board-cleanup domain and avoids duplicate code churn. | Keep |
+
+### Architecture Notes
+- Verified current repo state already satisfies the original implementation scope: src/owlbear/tools/hooked.py and src/owlbear/safety/gate.py import RunContext from the public pydantic_ai package, and src/owlbear/core/agent.py defines a local HistoryProcessor alias using public RunContext and ModelMessage types.
+- Verified a workspace search under src/owlbear finds no remaining TYPE_CHECKING imports from pydantic_ai._* modules.
+- Verified tests/test_pydantic_ai_typing_imports.py now contains both the original import-hygiene assertions and stricter callable-shape checks for the HistoryProcessor alias, while tests/test_agent.py still carries the runtime forwarding contract.
+- Verified #854 is archived, so the RED contract already exists and the live code/test state matches it.
+- The original #852 scope spans both core/safety and tools domains, and the requested code changes are already present in HEAD. Re-dispatching it as implementation work would duplicate shipped behavior and create avoidable board churn.
+- Rewriting #852 as a closure-only task is the narrowest correct action. No TDD predecessor is required because the rewritten task forbids src/ and test changes.
+
+### Changes Made
+- Claimed #852 as architect.
+- Rewrote #852 into a self-closure board-cleanup task because the original implementation is already present in the repository.
+- Appended this architecture review.
+- Prepared #852 for backlog -> todo handoff as a closure-only task.
+
+### Dependencies
+- Added/Removed/Verified: verified #854 is archived and tests/test_pydantic_ai_typing_imports.py exists; no new board dependency is required.

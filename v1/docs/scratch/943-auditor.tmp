@@ -1,0 +1,19 @@
+## Audit
+
+### AC Verification
+AC1: File exists with description-only frontmatter. PASS.
+AC2: Step 1 scans repo context, Step 2 asks only missing questions for all 6 categories. PASS.
+AC3: Step 3 template has all 7 sections (Users, Jobs, Tone, References, Anti-References, Accessibility, Design Principles). PASS.
+AC4: No .impeccable.md mention; copilot-instructions.md read only, editing explicitly forbidden in Rules. PASS.
+AC5: Line 61 references .github/skills/frontend-design/SKILL.md. PASS.
+
+### Test Results
+- Full suite: 4235 passed, 39 failed (all pre-existing), 20 skipped
+- ruff: All checks passed
+
+### Commit Verification
+- 2cda971 docs: add design-context onboarding prompt (#943, writer) -- 1 file, 113 insertions
+
+### AC Quality Score: 4/5
+### Confidence: .97
+### Action: archive

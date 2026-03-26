@@ -1,0 +1,18 @@
+J-2: ErrorJournal uses blocking file I/O (path.open(''a'')). In async daemon loop, rotation of 10K entries blocks event loop.
+
+Research complete (2026-03-07): asyncio.to_thread at call site is the recommended approach (.85 confidence). Make _log_to_journal async in daemon.py, wrap journal.log() in asyncio.to_thread(). Zero new deps, follows existing codebase pattern (3 prior uses). See docs/research/error-journal-async.md for full analysis.
+
+Research checklist:
+1. Theoretical validity: wrapping sync I/O in asyncio.to_thread is well-established
+2. Prior art: Python stdlib docs, aiofiles library, 3 existing uses in codebase
+3. Technical feasibility: asyncio.to_thread is stdlib since 3.9, we are on 3.12+
+4. Architecture fit: matches context_hook.py, tts.py, web_search.py patterns
+5. Implementation approach: ~15 line diff in daemon.py only
+
+[[2026-03-21]] Sat 05:05
+## Refined AC
+1. Treat #541 as a historical parent only. Do not move this task to `todo`; the async journal behavior is already implemented and verified by archived task #841 plus live regression tests.
+2. The source-of-truth implementation remains in `src/owlbear/daemon.py`: `_log_to_journal()` is `async def` and delegates `journal.log(...)` through `await asyncio.to_thread(...)`.
+3. `_recover_from_error()` in `src/owlbear/daemon.py` awaits `_log_to_journal()` at all six call sites, so daemon-side journal writes do not block the event loop directly.
+4. `ErrorJournal`, `JsonlStore`, and `src/owlbear/orchestrator/loop_detection.py::_log_to_journal()` remain synchronous; async offload is isolated to the daemon call site and introduces no new third-party dependencies.
+5. The regression contract remains encoded in `tests/test_daemon_journal_async.py` and `tests/test_daemon_async_contract.py`. If this area regresses, create a new RED/GREEN pair for that regression instead of dispatching builder work from #541.

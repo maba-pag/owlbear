@@ -1,0 +1,45 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AC1: CancelSlot in cancellation.py with set_source/is_set | Precise: class location, protocol conformance, late-binding semantics, unlinked default all specified | Refined: added method signatures and return semantics |
+| AC2: 3 toolsets accept cancel and forward to pipelines | Precise: named classes, methods, and passthrough targets; all pipeline methods already accept cancel= | Keep |
+| AC3: bootstrap creates CancelSlot, injects, stores on BootstrapResult | Refined: named specific _build_*_toolset helpers and build_toolsets; BootstrapResult.cancel_slot field | Refined |
+| AC4: run_daemon calls slot.set_source(LinkedCancelSignal(shutdown_event)) | Refined: added cancel_slot param on run_daemon signature | Refined |
+| AC5: Non-daemon callers unchanged | Clear behavioral constraint, testable by asserting is_set returns False | Keep |
+| AC6: All #1002 RED tests pass | Replaced vague "focused tests" with explicit reference to companion RED test task | Refined |
+
+### Architecture Notes
+- CancelSlot maps to .NET CancellationTokenSource/Token pattern (.90 confidence per research validation).
+- cancellation.py already owns CancelSignal + LinkedCancelSignal; adding CancelSlot keeps the concern co-located.
+- Toolset constructors follow optional-param pattern; adding cancel: CancelSignal | None = None is backward-compatible.
+- BootstrapResult is a non-frozen dataclass (bootstrap/_types.py:93); adding cancel_slot: CancelSlot | None = None is safe.
+- _build_*_toolset helpers in bootstrap/knowledge.py construct toolsets; each needs one extra kwarg.
+- run_daemon creates shutdown_event at daemon.py:1073; set_source call goes after that line.
+- Existing pattern precedent: RetrospectiveHook already receives LinkedCancelSignal from bootstrap (bootstrap/__init__.py:129-138).
+- No security surface introduced: CancelSlot is internal-only, read-only access, single-threaded event loop.
+
+### Failure Mode Map
+| CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
+|----------|--------------|-----------|----------|-------------|
+| CancelSlot.is_set() unlinked | No source set | N/A | Yes: returns False | Tool ops run without cancellation (same as today) |
+| CancelSlot.set_source() | Called after toolset already used | N/A | Yes: next is_set() reflects new source | None: transparent late binding |
+| _ingest_document with cancel set | Pipeline exits early | N/A (cooperative) | Yes: partial result returned | Ingest stops cleanly on shutdown |
+
+### TDD Dependency Fix
+- Added depends_on #1002 to #1001. #1002 (RED tests) must complete before #1001 (GREEN impl).
+- WARNING: #1002 currently has depends_on [1001, 870] which is backwards and creates a circular dependency. When #1002 is reviewed by the architect, remove the depends_on 1001 from #1002. #1002 should depend only on #870.
+
+### Changes Made
+- Refined AC1: added method signatures and return semantics
+- Refined AC3: named specific bootstrap helpers and BootstrapResult field
+- Refined AC4: added cancel_slot param on run_daemon
+- Replaced AC6: vague "focused tests" replaced with explicit #1002 reference
+- Added depends_on: 1002 (TDD compliance)
+
+### Dependencies
+- Verified: #870 (CancelSignal infrastructure) archived
+- Added: #1002 (RED tests) as dependency; must complete before implementation
+- Warning: #1002 has circular dep on #1001 that must be fixed when #1002 is reviewed

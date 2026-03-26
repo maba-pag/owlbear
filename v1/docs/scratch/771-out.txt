@@ -1,0 +1,14 @@
+kanban\kanban-md.exe : Warning: skipping malformed file 
+536-lazy-singleton-owlbearsettings-in-cli-py.md: parsing frontmatter in C:\User
+s\p362329\Coding\Projects\owlbear\kanban\tasks\536-lazy-singleton-owlbearsettin
+gs-in-cli-py.md: parsing time "" as "2006-01-02T15:04:05Z07:00": cannot parse 
+"" as "2006"
+In Zeile:1 Zeichen:6
++ $r = kanban\kanban-md.exe edit 771 --status done 2>&1 ; $r | Out-Stri ...
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Warning: skippi...se "" as "2006" 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Updated task #771: Wire BoardContextProvider into agent turn() instructions
+

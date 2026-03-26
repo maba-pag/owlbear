@@ -1,0 +1,31 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. OwlBearSettings.model_config includes env_nested_delimiter='__' and nested_model_default_partial_update=True | Current checkout already has env_nested_delimiter in src/owlbear/config.py; nested_model_default_partial_update is the remaining missing model-config piece. The requirement is precise. | Keep |
+| 2. OwlBearSettings has a browser: BrowserConfig = BrowserConfig() field | Current checkout already exposes a browser field in src/owlbear/config.py. The requirement is precise enough; implementation should preserve the existing Field(default_factory=BrowserConfig, ...) style. | Keep |
+| 3. Module layering preserved: config.py remains a leaf node. Move BrowserConfig class definition from tools/browser/config.py to config.py, re-export from tools/browser/config.py | Critical root-cause requirement. src/owlbear/config.py currently imports BrowserConfig from the tool layer, violating the config leaf-node rule and forcing parent-package import side effects through owlbear.tools. | Keep |
+| 4. OWLBEAR_BROWSER__HEADLESS=true correctly sets settings.browser.headless | Covered by archived RED task #843 and currently green in tests/test_config.py. | Keep |
+| 5. All 4 bootstrap call sites use settings.browser instead of BrowserConfig() | Current code still constructs BrowserConfig() in build_hooks, build_toolsets, _build_web_search_toolset, and _build_hydrator. The requirement is precise and the signature updates are implied by the listed call sites. | Keep |
+| 6. browser/manager.py and browser/toolset.py keep fallback defaults unchanged | Correct regression guard. Current BrowserManager and BrowserToolset still own their internal config-or-default fallback behavior. | Keep |
+| 7. Existing BrowserConfig unit tests still pass | Reasonable scoped regression gate after the class move and compatibility re-export. | Keep |
+| 8. env_nested_delimiter does not break existing flat OWLBEAR_* env vars | Already covered by the archived regression tests for #843; keep as an explicit contract. | Keep |
+| 9. Precondition: test task #843 completed first (TDD RED phase) | Already satisfied by depends_on metadata and archived task #843. No further architectural change needed. | Satisfied downstream |
+
+### Architecture Notes
+- src/owlbear/config.py already contains env_nested_delimiter='__' and a browser field, so #553 is now a finish-the-integration task rather than a from-scratch implementation.
+- The remaining architectural gap is the leaf-node violation: src/owlbear/config.py imports BrowserConfig from src/owlbear/tools/browser/config.py. Moving the class into config.py removes the forbidden config -> tools edge and stops import owlbear.config from preloading the parent owlbear.tools package through that path.
+- The four remaining BrowserConfig() constructions are in src/owlbear/bootstrap/hooks.py, src/owlbear/bootstrap/toolsets.py, src/owlbear/bootstrap/knowledge.py, and src/owlbear/bootstrap/__init__.py. _build_web_search_toolset and _build_hydrator will need signature updates to receive settings.
+- src/owlbear/tools/browser/manager.py and src/owlbear/tools/browser/toolset.py should keep their current local fallbacks (config or BrowserConfig()). That preserves direct-construction behavior outside bootstrap.
+- Do not widen scope into src/owlbear/tools/__init__.py. Any broader package side-effect cleanup stays with #857 and #859.
+
+### Changes Made
+- Verified the current src/ and tests/ state instead of relying on the older research doc alone.
+- Verified #843 exists, is archived, and already covers the RED-phase nested-env regression cases in tests/test_config.py.
+- Approved #553 to todo without rewriting the implementation contract; the existing implementation-facing AC lines remain mechanically verifiable.
+
+### Dependencies
+- Verified: #843 archived and dependency satisfied.
+- Verified impacted modules: src/owlbear/config.py, src/owlbear/bootstrap/hooks.py, src/owlbear/bootstrap/toolsets.py, src/owlbear/bootstrap/knowledge.py, src/owlbear/bootstrap/__init__.py, src/owlbear/tools/browser/config.py.

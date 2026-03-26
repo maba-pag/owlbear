@@ -1,0 +1,6 @@
+## Test-Writer Notes (retry)
+- Retry reason: reviewer FAIL was about weak tests / test quality / AC lifecycle mismatch, not missing tests for uncovered paths.
+- Gap 1 (logging): test_llm_error_logged_not_raised EXISTS but lacks caplog.records assertion. A caplog assertion cannot be made FAILING — consolidation.py already emits logger.warning at the patched path so any assertion would PASS immediately. This is an assertion-specificity fix for the builder.
+- Gap 2 (PydanticAI): AC says LLM mocked via PydanticAI test utilities but _run_llm is a hardcoded-string placeholder (no PydanticAI agent call). TestModel/FunctionModel do not apply. AC-vs-implementation discrepancy — architect or builder should clarify or update AC.
+- Gap 3 (GREEN suite): builder already implemented ConsolidationService in #723; cannot write new failing tests for already-implemented behavior without violating critical rule.
+- Existing tests preserved. Builder to: (a) strengthen caplog assertion in test_llm_error_logged_not_raised; (b) resolve PydanticAI AC clause given current _run_llm stub.

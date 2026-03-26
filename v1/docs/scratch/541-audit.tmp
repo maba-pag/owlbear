@@ -1,0 +1,29 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. _log_to_journal is async def | daemon.py:258 `async def _log_to_journal` | PASS |
+| 2. journal.log wrapped in asyncio.to_thread | daemon.py:272 `await asyncio.to_thread(journal.log, ...)` | PASS |
+| 3. All 6 call sites use await | AST count confirms exactly 6 `await _log_to_journal(...)` in _recover_from_error | PASS |
+| 4. ErrorJournal/JsonlStore unchanged | git diff HEAD -- error_journal.py jsonl_store.py: empty; log() at L63 is sync def | PASS |
+| 5. loop_detection.py untouched | _log_to_journal at L135 is sync def; no asyncio import in file | PASS |
+| 6. No new dependencies | git diff HEAD -- pyproject.toml: empty; daemon imports unchanged | PASS |
+| 7. Existing daemon tests pass | 146 passed, 0 failed (test_daemon + test_daemon_coverage_gaps + async tests) | PASS |
+
+### Test Results
+- daemon-scoped: 146 passed, 0 failed
+- full suite (excl unrelated broken tests): 3694 passed, 59 failed (all pre-existing: bootstrap/knowledge/intent routing), 2 skipped
+- ruff on task files: All checks passed
+
+### Quality Gaps
+- tests/test_daemon_async_contract.py was never committed by the builder (orphaned); committed by auditor as 3c40539
+- tests/test_daemon_journal_async.py has a local modification (import workaround removal) from another task's scope; left uncommitted
+
+### Confidence: .97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| aaebdfb | feat | src/owlbear/daemon.py, tests/test_daemon_journal_async.py | #841/#541 |
+| 3c40539 | test | tests/test_daemon_async_contract.py | #541 |

@@ -1,0 +1,29 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Rewrite the three `_default_web_read()` sys.modules patch sites in `tests/test_bookmark_pipeline.py` | SOUND - `tests/test_bookmark_pipeline.py` currently contains exactly three `_default_web_read()` fetch/extract cases that patch `sys.modules["trafilatura"]`. | Rewrote the AC to name those cases and the new module-local patch target explicitly. |
+| 2. Preserve Markdown pass-through behavior | PARTIAL - the prior task said Markdown behavior should be covered, but not what shape or invariant the test had to prove. | Rewrote the AC to require raw Markdown with link syntax and unchanged return behavior. |
+| 3. Update only the bookmark half of the contrast test in `tests/test_content_safety_integration.py` | SOUND - `src/owlbear/core/context_hydration.py` still lazy-imports `trafilatura` and wraps output, so only the bookmark half should move in this task. | Rewrote the AC to preserve the mixed seams intentionally: bookmark patches `extract_markdown`, `fetch_url()` still patches `trafilatura`. |
+| 4. Preserve the bookmark no-wrap contrast | SOUND - the existing integration test already encodes this invariant, but the task needed the exact wrap/no-wrap assertion stated directly. | Rewrote the AC to keep the explicit contrast that `fetch_url()` wraps while bookmark ingestion does not. |
+| 5. RED failure requirement | PARTIAL - the prior `scoped tests pass` wording contradicted a RED task and did not identify the intended pre-#825 failure mode. | Rewrote the AC to require failure against current HEAD at the `extract_markdown` seam, without alternate patch points that would let pre-#825 code pass. |
+
+### Architecture Notes
+- Current source evidence: `src/owlbear/memory/knowledge/bookmark_pipeline.py` still imports `trafilatura` inside `_default_web_read()`, so the RED tests must intentionally fail until #825 rewires that lookup to a module-local `extract_markdown`.
+- Current test evidence: `tests/test_bookmark_pipeline.py` contains the three `_default_web_read()` fetch/extract cases patching `sys.modules["trafilatura"]`, and `tests/test_content_safety_integration.py` contains the bookmark-vs-`fetch_url()` contrast test that should change only on the bookmark half.
+- Mixed seams are correct for now: `src/owlbear/core/context_hydration.py` still imports `trafilatura` and wraps via `wrap_untrusted_content()`, so changing its seam here would broaden scope into #873.
+- Atomicity: this remains one memory-domain RED task. The helper creation stays in #868 and the GREEN rewire stays in #825.
+- TDD and dependency check: #867 now depends on #868, and #825 already depends on both #867 and #868.
+
+### Changes Made
+- Rewrote #867 body with verifiable RED-phase AC tied to the module-local `extract_markdown` seam.
+- Added dependency on #868.
+- Changed the stale scope tag from `scope:core` to `scope:memory`.
+- Advanced #867 from `backlog` to `todo`.
+
+### Dependencies
+- Added: #868 - package-root helper prerequisite for the future bookmark seam.
+- Verified downstream: #825 depends on #867 and #868.
+- Verified out of scope: #873 still owns the `fetch_url()` helper migration.

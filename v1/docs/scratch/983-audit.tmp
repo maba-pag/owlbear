@@ -1,0 +1,26 @@
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 module + class | src/owlbear/core/audit_map_hook.py:42 defines AuditMapAdvisoryHook | PASS |
+| AC2 gate order | __call__ gates: outcome (L69), config flag (L72), tag via subprocess (L79) | PASS |
+| AC3 supervisor.schedule | _LazyCoroutine dispatched at L82 | PASS |
+| AC4 advisory template | _run_worker writes to docs/scratch/{id}-audit-map.md at L122-127 | PASS |
+| AC5 optional channel | channel.send guarded by None check at L130 | PASS |
+| AC6 no mutations | writes confined to docs/scratch, no board or src mutations | PASS |
+| AC7 config flag | audit_map_worker_enabled: bool = Field(default=False) at config.py:486 | PASS |
+| AC8 wiring | _wire_post_model_hooks accepts channel kwarg (L117), hook behind flag (L141-148), bootstrap threads channel (L228) | PASS |
+| AC9 RED tests pass | 43 passed in test_audit_map_hook.py | PASS |
+| AC10 ruff clean | All checks passed on changed files | PASS |
+
+### Test Results
+- pytest (task-specific): 43 passed, 0 failed
+- pytest (full suite): 4264 passed, 35 failed (all pre-existing, none related to #983)
+- ruff: clean on all changed files
+
+### AC Quality Score: 4
+AC was adequate with minor gaps refined by architect (wiring location, tag resolution, ruff).
+
+### Confidence: .96
+### Action: archive

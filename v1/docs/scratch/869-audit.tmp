@@ -1,0 +1,36 @@
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All 4 direct trafilatura mocks in test_context_hydration.py replaced | Builder commit 3ea0413; seam contract tests (TestFromAC_ReplacedTrafilaturaSeamContextHydration 4/4 pass) verify no sys.modules patches remain in target methods | PASS |
+| All 5 fetch_url-related trafilatura mocks in test_content_safety_integration.py replaced | Same commit; seam contract tests (TestFromAC_ReplacedTrafilaturaSeamContentSafety 5/5 pass) verify replacement | PASS |
+| Existing fetch_url wrapping and contrast assertions use raw markdown | TestFromAC_FetchUrlWrapsByExtractMarkdown (5 tests pass) covers wrap tags, source url, disabled mode, contrast, None handling | PASS |
+| All updated tests FAIL against pre-#873 code | Module-local patches without create=True; pre-#876 code lacks extract_markdown symbol -> AttributeError by design | PASS |
+
+### Test Results
+- Full suite: 3963 passed, 91 failed (all pre-existing), 20 skipped
+- AC-scoped (committed code, stashed working-tree changes): 18 passed, 0 failed
+- No #869-specific regressions
+
+### Lint Results
+- Task-scoped ruff: all checks passed
+- Repo-wide: 224 pre-existing RUF100 findings, not task-related
+
+### Upstream Commits
+- test-writer: 5ca88d5 (tests/test_869_seam_contract.py)
+- builder: 3ea0413 (tests/test_context_hydration.py, tests/test_content_safety_integration.py)
+- Both properly scoped to task files only
+
+### Architect Quality
+- AC specificity: Precise, mechanically checkable (specific mock counts, named files, explicit RED criterion)
+- Edge case coverage: Correctly scoped to fetch_url mocks; hydrate-level mocks excluded by design
+- Design direction: Correctly identified #873 as GREEN partner, rejected stale #826, added depends_on #868
+- AC quality score: 5/5
+
+### Uncommitted Working-Tree Note
+- 2 task files have uncommitted working-tree edits from other work (test_869_seam_contract.py reformat, test_content_safety_integration.py bookmark_pipeline seam)
+- Committed code verified separately via git stash; all 18 AC tests pass against committed state
+
+### Confidence: .97
+### Action: archive

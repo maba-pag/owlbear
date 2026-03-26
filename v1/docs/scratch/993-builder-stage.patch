@@ -1,0 +1,44 @@
+diff --git a/src/owlbear/daemon.py b/src/owlbear/daemon.py
+--- a/src/owlbear/daemon.py
++++ b/src/owlbear/daemon.py
+@@ -38,7 +38,6 @@ from rich.logging import RichHandler
+ from owlbear.core.delegation import DispatchContext, format_dispatch_context
+ from owlbear.core.deps import OwlBearDeps
+ from owlbear.core.errors import (
+-    BudgetExceededError,
+     ErrorCategory,
+     classify_error,
+     error_to_user_message,
+@@ -613,11 +612,9 @@ async def reconcile_tasks(  # noqa: PLR0913
+                     summary=summary[:_WIP_MAX_CHARS],
+                 )
+             if hooks is not None:
+-                outcome = (
+-                    "budget_exceeded"
+-                    if isinstance(exc, BudgetExceededError)
+-                    else "failure"
+-                )
++                from owlbear.core.errors import BudgetExceededError  # noqa: PLC0415
++
++                outcome = "budget_exceeded" if isinstance(exc, BudgetExceededError) else "failure"
+                 await hooks.emit(
+                     HookEvent.TASK_COMPLETE,
+                     {"task_id": tid, "outcome": outcome},
+diff --git a/src/owlbear/core/hooks.py b/src/owlbear/core/hooks.py
+--- a/src/owlbear/core/hooks.py
++++ b/src/owlbear/core/hooks.py
+@@ -120,7 +120,13 @@ class SubagentCompleteData(TypedDict):
+ 
+ 
+ class TaskCompleteData(TypedDict):
+-    """Payload for :attr:`HookEvent.TASK_COMPLETE`."""
++    """Payload for :attr:`HookEvent.TASK_COMPLETE`.
++
++    Valid ``outcome`` values:
++    - ``"success"``
++    - ``"failure"``
++    - ``"budget_exceeded"``
++    """
+ 
+     task_id: str
+     outcome: str

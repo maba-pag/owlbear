@@ -1,0 +1,7 @@
+## Builder Notes
+- Files changed: tests/conftest.py, tests/test_cli_board.py
+- Tests: 49 passed in tests/test_conftest_helpers.py; 33 passed in AC helper slice; 5 passed in TestFromAC_BoardFailurePaths; 4 passed in TestDetectGitHubRemote
+- Coverage: bare coverage run completed at 2 percent total project coverage from scoped tests, expected for a tests-only task
+- Lint: ruff clean on tests/conftest.py, tests/test_cli_board.py, tests/test_conftest_helpers.py, tests/test_cli_chat.py
+- Evidence: missing-binary seam tests moved from red to green after adding make_missing_binary_error and replacing inline FileNotFoundError construction in board failure-path tests
+- Fixes applied: added make_missing_binary_error helper and composed it in the TestFromAC_BoardFailurePaths missing-binary test

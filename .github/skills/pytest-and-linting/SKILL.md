@@ -118,6 +118,41 @@ from prior runs:
 Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
+## Rich Console: required flags for CLI ANSI tests
+
+When testing CLI commands that apply Rich styling (color, bold, etc.) with
+`CliRunner`, the console must be created **inside** the command function (not at
+module level) with both flags set explicitly:
+
+```python
+from rich.console import Console
+console = Console(force_terminal=True, color_system="256")
+```
+
+- `force_terminal=True` — required so CliRunner output isn't treated as a pipe
+- `color_system="256"` — required for 256-color sequences (`38;5;N`); without it
+  Rich may auto-detect truecolor (`38;2;R;G;B`) or emit no color codes at all
+
+A module-level `Console()` won't respect `FORCE_COLOR` injected by
+`CliRunner.invoke(env=...)` because module constants are evaluated at import.
+
+Tests asserting concrete ANSI sequences will fail if either flag is missing, even
+when the styling logic is correct.
+
+## pytest startup instability (Windows, scoped TDD runs)
+
+If scoped pytest runs show plugin-load errors or incorrect async behavior, disable
+auto-loading and explicitly list only the plugins you need:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
+uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin
+# With coverage:
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov
+```
+
+Restore before returning the terminal to foreground use: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
+
 ## Default flags
 
 | Tool      | Default flags                                               |

@@ -1,0 +1,9 @@
+## Test-Writer Notes
+- Green-on-arrival: all AC tests already exist in tests/test_conftest_helpers.py (committed in task #927).
+- Test file: tests/test_conftest_helpers.py
+- Class: TestFromAC_ZeroDuplicates
+- New test: test_no_duplicate_make_completed_process (parametrized: test_cli_board.py, test_cli_chat.py)
+- Follows _has_func_def pattern identical to 3 existing guards.
+- pytest: 14 passed, 2 warnings.
+- ruff: clean.
+- Overtaken RED: no new test files needed; builder should verify and fast-track.

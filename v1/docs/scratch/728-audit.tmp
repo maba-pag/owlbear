@@ -1,0 +1,22 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Handoff template includes `- What failed:` between `- Current state:` and `- Open questions:` | agent-common.instructions.md L34-36: `- Current state:` / `- What failed:` / `- Open questions:` confirmed via read_file | PASS |
+| Label purpose self-evident (no additional prose required) | L35 is exactly `- What failed:` with no explanatory text | PASS |
+| No other sections of agent-common.instructions.md changed | `git diff` returns empty; zero task-local diff this cycle | PASS |
+
+### Test Results
+- pytest: 84 passed, 3 warnings (test_agent_definitions.py); full suite has pre-existing collection errors and numpy/cli failures unrelated to #728 (docs-only task)
+- ruff: N/A (no Python source changes)
+
+### Architect Quality
+- AC specificity: Exact file, line range, and insertion point specified. Verifiable scope constraint (AC3). Score: **5/5**
+- Edge cases: N/A for single-bullet docs insertion
+- Design direction: Architecture notes correctly identified existing pattern and insertion point
+
+### Reviewer Evidence
+- Reviewer PASS at .92 confidence (retry cycle); all 3 AC items verified via Select-String and git diff
+
+### Confidence: .97
+### Action: archive

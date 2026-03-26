@@ -1,0 +1,7 @@
+## Builder Notes
+- Files changed: .github/prompts/frontend-polish.prompt.md
+- Tests: No task-specific tests were provided; sanity pytest run reported 22 passed in tests/test_945_frontend_normalize_prompt.py.
+- Coverage: Not applicable for markdown prompt-only change.
+- Lint: Ruff sanity check passed on tests/test_945_frontend_normalize_prompt.py.
+- Evidence: Prompt includes description-only frontmatter, optional scope input, docs/design-context.md reference, relative frontend-design skill links, six polish categories, redesign guardrails, and final verification steps.
+- Fixes applied: Added frontend-polish prompt as last-pass finishing workflow.

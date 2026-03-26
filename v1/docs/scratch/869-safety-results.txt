@@ -1,0 +1,23 @@
+﻿......FF.....F                                                           [100%]
+================================== FAILURES ===================================
+E   AttributeError: <module 'owlbear.tools.web_search' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\tools\\web_search.py'> does not have the attribute 'trafilatura'
+C:\Users\p362329\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:1437: AttributeError: <module 'owlbear.tools.web_search' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\tools\\web_search.py'> does not have the attribute 'trafilatura'
+E   AttributeError: <module 'owlbear.tools.web_search' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\tools\\web_search.py'> does not have the attribute 'trafilatura'
+C:\Users\p362329\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:1437: AttributeError: <module 'owlbear.tools.web_search' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\tools\\web_search.py'> does not have the attribute 'trafilatura'
+E   AttributeError: <module 'owlbear.memory.knowledge.bookmark_pipeline' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\memory\\knowledge\\bookmark_pipeline.py'> does not have the attribute 'extract_markdown'
+C:\Users\p362329\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:1437: AttributeError: <module 'owlbear.memory.knowledge.bookmark_pipeline' from 'C:\\Users\\p362329\\Coding\\Projects\\owlbear\\src\\owlbear\\memory\\knowledge\\bookmark_pipeline.py'> does not have the attribute 'extract_markdown'
+============================== warnings summary ===============================
+tests\conftest.py:58
+  c:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:58: UserWarning: Skipping test_qdrant_vector_store.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+tests\conftest.py:58
+  c:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:58: UserWarning: Skipping test_search_benchmark.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_content_safety_integration.py::TestFromACWebReadWrapping::test_wraps_return_value
+FAILED tests/test_content_safety_integration.py::TestFromACWebReadWrapping::test_skips_wrapping_when_disabled
+FAILED tests/test_content_safety_integration.py::TestFromAC_BookmarkExtractMarkdownContrast::test_bookmark_side_uses_extract_markdown_seam_and_returns_raw
+3 failed, 11 passed, 2 warnings in 1.22s

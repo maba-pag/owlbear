@@ -1,0 +1,8 @@
+DOC-F-05: The README already contains a Prerequisites section, so the remaining audit gap is to document the supported environment constraints precisely and without adding unsupported compatibility claims. Sources: docs/documentation-audit.md and docs/research/browser-automation.md.
+
+## AC
+
+- [ ] README's `Prerequisites` section explicitly states `Python >= 3.12` and `uv` as the supported local-development toolchain.
+- [ ] README's `Prerequisites` section explicitly states platform support: Windows is the primary development OS; Linux and macOS are expected to work but remain untested.
+- [ ] README adds a brief environment-constraints note, backed by docs/research/browser-automation.md, that browser automation is designed for corporate Windows laptops by attaching to an existing Edge session over CDP instead of requiring admin rights, browser extensions, or a separate unmanaged browser install.
+- [ ] README does not add broader hardware or cross-platform support claims that are not already supported elsewhere in the repository.

@@ -1,0 +1,8 @@
+AC:
+1. `RetrospectiveHook.__call__` must not call `_count_rejections` or `_get_priority` on the awaited hook path — neither supervisor nor `create_task` fallback path may invoke them before returning.
+2. Eligibility checks (`_count_rejections`, `_get_priority`) and the retrospective run (`_run_retrospective`) must all execute inside the supervisor-scheduled background task (or `asyncio.create_task` fallback). Ineligible tasks (zero rejections + priority < needed) are still filtered and skipped inside the background task.
+3. Existing behavior preserved: success-only gating, empty `task_id` guard, `_LazyCoroutine` wrapper for supervisor path, cancellation signal composition, supervisor `shutdown()` integration.
+4. Files: `src/owlbear/core/retrospective_hook.py`, `tests/test_retrospective_hook.py`.
+
+See docs/research/non-blocking-retrospective-hook-handoff.md for analysis.
+Merged from #964 (deleted — duplicate).

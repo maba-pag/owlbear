@@ -1,0 +1,35 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Clone/analyze ruflo repo and document its architecture: agent types, orchestration model, tool patterns, LLM wiring | Verifiable research deliverable. The existing research notes already record that raw repo files and directory pages were used when local clone failed in this environment. | Keep. |
+| Identify which of ruflo's ~60 agents overlap with OwlBear's planned or existing agents (map by function) | Concrete comparison requirement and directly supported by the overlap map in the research doc. | Keep. |
+| Assess whether ruflo agents can be used directly (import/dependency), adapted with minimal changes, or only referenced as design inspiration | Correct architecture decision axis for this task. | Keep. |
+| Evaluate licensing compatibility (can code be copied or referenced?) | Concrete and necessary because the task explicitly considers reuse. | Keep. |
+| Identify the top 3-5 highest-value patterns or agents to adopt first | Concrete prioritization requirement that is satisfied by the research doc's adoption list. | Keep. |
+| Document trade-offs: direct adoption vs. adaptation vs. inspiration-only | Concrete comparison framework and satisfied by the adoption-modes section. | Keep. |
+| Produce follow-up kanban tasks for any recommended adoptions or integrations | Concrete board output requirement. Follow-up tasks #949-#952 exist and point back to the research doc. | Keep. |
+| Write findings to docs/research/ruflo-analysis.md | Concrete deliverable; the research document exists. | Keep. |
+
+### Architecture Notes
+- Research-only docs task. No application code or runtime path is being approved here, so TDD is not required and the failure-mode map is N/A.
+- The recommended adaptation seams are real and already exist in OwlBear:
+  - src/owlbear/core/hooks.py defines HookEvent and HookRegistry surfaces and treats hooks as observational, so any future reaction engine must extend existing hook handling without turning hooks into blocking control flow.
+  - src/owlbear/bootstrap/hooks.py already centralizes hook assembly, including NotificationHook; future follow-ups should extend this bootstrap path rather than introducing a parallel registry.
+  - src/owlbear/core/agent.py, src/owlbear/core/board_context.py, and src/owlbear/memory/context.py already layer static instructions with per-turn board and knowledge context, which makes runtime prompt assembly an additive seam rather than a new subsystem.
+  - src/owlbear/core/notification_hook.py, src/owlbear/bootstrap/channel.py, and src/owlbear/config.py already provide ordered notification backends and channel configuration, so priority routing belongs as an extension of the current notifier and channel stack.
+  - src/owlbear/daemon.py already sorts work by priority and emits daemon/task lifecycle hooks, which is the correct anchor for Ruflo-inspired worker or reaction behavior.
+- Verified research artifacts exist: docs/research/ruflo-analysis.md and the attribution entries in docs/sources/overview.md.
+- Verified follow-up tasks #949, #950, #951, and #952 were created as ideation cards linked back to the research doc. Those cards are not implicitly approved by this review and must each pass their own architecture gate. #951 and #952 already show multi-domain scope and will likely need splitting or refinement when they reach backlog.
+
+### Changes Made
+- Appended this Architecture Review section.
+- Approved task #947 and moved it from backlog to todo.
+
+### Dependencies
+- Verified existing OwlBear seams: .github/agents/*.agent.md, src/owlbear/core/hooks.py, src/owlbear/bootstrap/hooks.py, src/owlbear/core/agent.py, src/owlbear/core/board_context.py, src/owlbear/memory/context.py, src/owlbear/core/notification_hook.py, src/owlbear/daemon.py, src/owlbear/bootstrap/channel.py.
+- Verified research outputs: docs/research/ruflo-analysis.md, docs/sources/overview.md.
+- Verified follow-up tasks created: #949, #950, #951, #952.
+- TDD predecessor not required because this task produces research, not implementation.

@@ -1,0 +1,13 @@
+## Test-Writer Notes
+- Test file: tests/test_845_daemon_usage_tracking.py
+- Classes: TestFromAC_RunBuilderWithContextSignature, TestFromAC_RunBuilderWithContextUsageNormalPath, TestFromAC_RunBuilderWithContextUsageFallbackPath, TestFromAC_PollTickUsageParams, TestFromAC_PollLoopUsageParams, TestFromAC_RunDaemonUsageThreading
+- Tests per category: happy 18, edge 5, error 6, boundary 5
+- Total: 34 tests, all FAIL
+- ruff: clean
+- AC coverage:
+  AC1 (_run_builder_with_context new params): Signature tests (4 tests)
+  AC2 (record in normal path): NormalPath tests (8 tests)
+  AC3 (record in fallback path): FallbackPath tests (5 tests)
+  AC4 (poll_tick threads tracker/model/provider): PollTick tests (7 tests)
+  AC5 (poll_loop threads to poll_tick): PollLoop tests (6 tests)
+  AC6 (run_daemon passes agent.tracker/settings.provider to poll_loop): RunDaemon tests (4 tests)

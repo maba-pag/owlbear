@@ -1,0 +1,30 @@
+Add `kanban-md` to the `skills` metadata for `src/owlbear/agents/researcher.md` and `src/owlbear/agents/curator.md` so both agents can load kanban guidance through `SkillRegistry`. This task is limited to skill metadata and the tests that assert that metadata or the resulting skill-integration contract. See `docs/research/cheat-sheet-tool.md` section 4.
+
+### Acceptance Criteria
+
+1. `tests/test_agent_definitions.py` is updated first so `EXPECTED_AGENTS["researcher"]["skills"]` and `EXPECTED_AGENTS["curator"]["skills"]` both equal `["kanban-md"]`, creating the expected RED state against the current agent definition files.
+2. `src/owlbear/agents/researcher.md` declares `kanban-md` as its only skill, using the same `skills` block-list format as other agents that load skills, with no changes to description, role, tools, or `max_delegation_depth`.
+3. `src/owlbear/agents/curator.md` declares `kanban-md` as its only skill, using the same `skills` block-list format as other agents that load skills, with no changes to description, role, tools, or `max_delegation_depth`.
+4. In `tests/test_pipeline_e2e.py`, `TestSkillsIntegration` no longer asserts `registry.definitions["researcher"].skills == []`; instead it asserts `registry.definitions["researcher"].skills == ["kanban-md"]` and `registry.definitions["curator"].skills == ["kanban-md"]` in the skills-enabled bootstrap scenario.
+5. After the definition updates, the researcher and curator `test_skills_match` cases in `tests/test_agent_definitions.py` and the `TestSkillsIntegration` cases in `tests/test_pipeline_e2e.py` pass.
+6. No `tools` entries are added or removed for researcher or curator in this task; enabling direct kanban or terminal execution is out of scope.
+
+[[2026-03-13]] Fri 14:24
+## Research
+N/A -- trivial config change. Fully analyzed in docs/research/cheat-sheet-tool.md (S3.3 gap analysis, S4 recommendation).
+
+### Checklist
+1. **Theoretical validity** -- Sound. Agents that interact with kanban ops should load format guidance. Parent research validated this.
+2. **Prior art** -- 7/9 agents already follow this pattern (builder, reviewer, auditor, etc. have skills: [kanban-md, ...]).
+3. **Technical feasibility** -- YAML edit in 2 .md files. AgentRegistry checks defn.skills truthiness to add SkillRegistry toolset (src/owlbear/core/agent_registry.py).
+4. **Architecture fit** -- Seamless. No new code. SkillRegistry already handles progressive loading.
+5. **Implementation approach** -- Update the researcher and curator skill metadata plus the tests that encode the old empty-skills contract.
+
+### Files to change
+- src/owlbear/agents/researcher.md
+- src/owlbear/agents/curator.md
+- tests/test_agent_definitions.py
+- tests/test_pipeline_e2e.py
+
+### Note
+Researcher still lacks kanban and terminal tools, so this task only enables skill loading (`list_skills` / `load_skill`) via SkillRegistry. Direct kanban execution remains a separate scope concern and is not part of this task.

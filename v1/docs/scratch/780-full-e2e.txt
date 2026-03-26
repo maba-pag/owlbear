@@ -1,0 +1,21 @@
+﻿....................FF.......F.FFF......                                 [100%]
+============================== warnings summary ===============================
+tests\conftest.py:57
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_qdrant_vector_store.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+tests\conftest.py:57
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_search_benchmark.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_pipeline_e2e.py::TestSkillsIntegration::test_researcher_declares_no_skills
+FAILED tests/test_pipeline_e2e.py::TestSkillsIntegration::test_skill_registry_provided_when_skills_dir_exists
+FAILED tests/test_pipeline_e2e.py::TestRolePolicies::test_builder_role_detected[writer]
+FAILED tests/test_pipeline_e2e.py::TestRolePolicies::test_validator_rebuilt_with_filtered_toolsets[reviewer]
+FAILED tests/test_pipeline_e2e.py::TestRolePolicies::test_validator_rebuilt_with_filtered_toolsets[architect]
+FAILED tests/test_pipeline_e2e.py::TestRolePolicies::test_validator_rebuilt_with_filtered_toolsets[auditor]
+6 failed, 34 passed, 4 warnings in 6.03s

@@ -1,0 +1,35 @@
+See docs/research/hookevent-reaction-routing.md section 5 and docs/research/hookreaction-schema-router-wiring.md. This task implements only the typed HookReaction schema and the router/bootstrap registration seam that downstream tasks reuse.
+
+## AC
+- [ ] Files: src/owlbear/config.py, src/owlbear/core/hook_reaction_router.py, src/owlbear/bootstrap/hooks.py
+- [ ] src/owlbear/config.py declares HookReactionRule and any supporting hook_reaction action/schema types with Pydantic validation for non-empty events, non-empty actions, optional shallow scalar match values only, and rejection of unknown keys
+- [ ] OwlBearSettings exposes hook_reactions with a default empty list, preserves configured rule and action order, and src/owlbear/config.py remains a true leaf module that does not import any owlbear module, including src/owlbear/core/hook_reaction_router.py, HookEvent, HookRegistry, daemon modules, loop_detection, or notification backends
+- [ ] Allowed action kinds in this task are exactly notify, retry, and escalate as typed config values; this task does not add a more general workflow DSL, regex matching, nested-path matching, or templating
+- [ ] src/owlbear/core/hook_reaction_router.py defines only a standalone HookReactionRouter plus injected executor protocol(s) or equivalent protocol-backed action mapping, consumes config-owned rule objects, and does not define a second HookReactionRule schema or import daemon.py, loop_detection.py, channel modules, or bootstrap code
+- [ ] Router matching is limited to emitted event name plus shallow top-level scalar equality against payload keys, and configured actions run in listed order only for matching rules
+- [ ] Router failures and executor exceptions are logged and swallowed without changing HookRegistry best-effort semantics and without recursively emitting HookEvent.ON_ERROR
+- [ ] src/owlbear/bootstrap/hooks.py validates configured event strings by resolving them to HookEvent during router registration, fails hook construction on invalid hook_reactions event names, and keeps existing NotificationHook registration behavior intact
+- [ ] build_hooks() keeps its current return contract, and default settings with no hook_reactions continue to build hooks successfully without requiring retry or escalation integrations from downstream tasks
+- [ ] This task does not implement daemon retry reuse (#956), notification or escalation executor reuse (#957), question_pending cleanup (#962), or notification deduplication (#963)
+- [ ] All tests from #965 and #969 pass
+- [ ] ruff clean
+
+## Scope Boundaries
+- Schema ownership for hook_reactions stays in src/owlbear/config.py so config.py remains a leaf module.
+- Retry executor reuse remains in #956.
+- Notification and escalation executor reuse remains in #957.
+- Remove dead question_pending defaults in #962.
+- Deduplicate notify delivery in #963.
+
+## Research
+- Recommendation (.91 confidence): keep hook_reactions as a minimal typed rule model with string event names validated during router registration; implement a standalone HookReactionRouter in core/ and register it from bootstrap/hooks.py; keep matching to shallow scalar equality rather than adding a workflow DSL.
+- Key findings:
+  - config.py is a leaf module, so hook_reactions should not import HookEvent; validate configured event strings at bootstrap registration, reusing the NotificationHook.register() seam.
+  - HookRegistry.emit() is observational and must stay unchanged; routing belongs in a separate handler object.
+  - question_pending exists in config defaults and HookEvent, but this research found no current emission site in src/.
+  - Router-driven notify can double-fire alongside the legacy NotificationHook path unless delivery is deduplicated.
+- Follow-up tasks created:
+  - #962 Remove dead question_pending default hook configuration
+  - #963 Deduplicate notify delivery between NotificationHook and HookReactionRouter
+  - #969 Test HookReaction config leaf boundary and schema ownership
+- Attribution updated: docs/sources/overview.md

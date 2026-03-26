@@ -1,0 +1,3 @@
+[61624.406] start
+[61624.406] sys.platform = 'win32'
+[61624.406] calling _wmi.exec_query...

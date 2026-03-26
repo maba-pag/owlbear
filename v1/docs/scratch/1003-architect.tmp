@@ -1,0 +1,22 @@
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | New .prompt.md instance; no convention or API change |
+| 2 | Docstrings | No | N/A | No Python modules created or modified |
+| 3 | docs/sources/overview.md | Yes | Updated | Task body claimed ledger updated but no entry existed; added section 'Frontend Normalize Prompt Design (Task #945)' with 3 external sources (pbakaus/impeccable /normalize SKILL.md, impeccable README, VS Code prompt file docs) |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Pass | docs/research/frontend-normalize-prompt.md exists and is linked in task body |
+
+### Files Updated
+- docs/sources/overview.md (added Task #945 section)
+
+### Scratch Files Cleaned
+- docs/scratch/945-ac.tmp
+- docs/scratch/945-builder.tmp
+- docs/scratch/945-pytest.txt
+- docs/scratch/945-research.tmp
+- docs/scratch/945-review.tmp
+- docs/scratch/945-show.txt
+- docs/scratch/945-test-writer2.tmp
+- docs/scratch/945-tw-run.txt

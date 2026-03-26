@@ -1,0 +1,8 @@
+## Test-Writer Notes
+- Overtaken RED (green-on-arrival): test task #890 was archived before #559 entered the pipeline.
+- Implementation register() already exists in src/owlbear/core/agent_registry.py.
+- Tests in TestFromAC_ProgrammaticRegistration (tests/test_agent_registry.py) already present and passing.
+- Test run: 33 passed, 5 failed (failures are TestFromAC_ValidatorDirectFiltering + TestFromAC_BuilderFilterBypass for unrelated task #897).
+- All 13 TestFromAC_ProgrammaticRegistration tests PASS (GREEN) covering every AC line from #890.
+- AC coverage: all behavioral AC lines verified by existing TestFromAC_ProgrammaticRegistration class.
+- No new tests written -- implementation already satisfies AC.

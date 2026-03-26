@@ -1,0 +1,28 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| test_context_hydration.py: extract_markdown called with html+url, raw return propagates | TestFromAC_FetchUrlExtractMarkdownForwarding at L553, assert_called_once_with at L594, distinctive marker at L631 | PASS |
+| test_content_safety_integration.py: seam + wrapping assertion | TestFromAC_FetchUrlExtractMarkdownSeam at L408, assert_called_once_with at L459, _OPEN_TAG at L461 | PASS |
+| Caller-boundary only (no helper-internal kwargs) | Reviewer patch scan confirmed no output_format/include_links in #876 tests | PASS |
+| Scoped tests fail pre-change, pass with delegation | Commits 566976d (RED) and b32ef27 (GREEN) confirm TDD cycle; test-writer notes record 0-call failures | PASS |
+
+### Test Results
+- Scoped: 67 passed, 3 failed (all 3 pre-existing out-of-scope: TestFromACWebReadWrapping patches missing trafilatura attr, TestFromAC_BookmarkExtractMarkdownContrast RED for #825)
+- ruff: clean on task-scoped files
+
+### Upstream Commits
+- 566976d test: add failing tests (#876, test-writer)
+- b32ef27 feat: delegate fetch_url to extract_markdown helper (#876, builder)
+
+### Uncommitted Changes
+- tests/test_content_safety_integration.py and tests/test_context_hydration.py have unstaged changes from other tasks (#867, #869, #825); NOT #876 scope
+
+### Architect Quality
+- AC specificity: 4/5 — clear per-file requirements after architect rewrite
+- Edge case coverage: adequate for test-only supplement
+- Design direction: correct caller-boundary focus
+- AC quality score: 4
+
+### Confidence: .97
+### Action: archive

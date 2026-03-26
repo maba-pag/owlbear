@@ -1,0 +1,23 @@
+﻿diff --git a/src/owlbear/core/hooks.py b/src/owlbear/core/hooks.py
+index 2c5be72..7fdc2c4 100644
+--- a/src/owlbear/core/hooks.py
++++ b/src/owlbear/core/hooks.py
+@@ -136,7 +136,9 @@ QuestionPendingData = TypedDict(  # noqa: UP013
+         "tool_name": NotRequired[str],
+     },
+ )
+-QuestionPendingData.__doc__ = "Payload for :attr:`HookEvent.QUESTION_PENDING`."  # class form not possible; see comment above
++QuestionPendingData.__doc__ = (
++    "Payload for :attr:`HookEvent.QUESTION_PENDING`."  # class form not possible; see comment above
++)
+ 
+ 
+ class DaemonStartupData(TypedDict):
+@@ -174,6 +176,7 @@ class HookRegistry:
+ 
+     def __init__(self) -> None:
+         self._handlers: dict[HookEvent, list[Handler]] = {}
++        self.reaction_executors: dict[str, Any] | None = None
+ 
+     # -- public API ----------------------------------------------------------
+ 

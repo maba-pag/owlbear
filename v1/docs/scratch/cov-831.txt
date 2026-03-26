@@ -1,0 +1,19 @@
+
+---STDERR---
+tic_settings\main.py:21: in <module>
+    from .sources import (
+.venv\Lib\site-packages\pydantic_settings\sources\__init__.py:3: in <module>
+    from .base import (
+.venv\Lib\site-packages\pydantic_settings\sources\base.py:23: in <module>
+    from .utils import (
+.venv\Lib\site-packages\pydantic_settings\sources\utils.py:11: in <module>
+    from pydantic import BaseModel, Json, RootModel, Secret
+.venv\Lib\site-packages\pydantic\__init__.py:446: in __getattr__
+    module = import_module(module_name, package=package)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\pydantic\root_model.py:32: in <module>
+    class RootModel(BaseModel, Generic[RootModelRootType], metaclass=_RootModelMetaclass):
+.venv\Lib\site-packages\pydantic\_internal\_model_construction.py:159: in __new__
+    if Generic in mro and mro.index(Generic) < mro.index(BaseModel_):
+                                               ^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: tuple.index(x): x not in tuple

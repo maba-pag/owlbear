@@ -1,0 +1,55 @@
+.................................FFFFF                                   [100%]
+================================== FAILURES ===================================
+_ TestFromAC_ValidatorDirectFiltering.test_validator_does_not_call_apply_role_policy _
+tests\test_agent_registry.py:629: in test_validator_does_not_call_apply_role_policy
+    mock_apply.assert_not_called()
+..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:910: in assert_not_called
+    raise AssertionError(msg)
+E   AssertionError: Expected 'apply_role_policy' to not have been called. Called 1 times.
+E   Calls: [call(<pydantic_ai.toolsets.function.FunctionToolset object at 0x000001E7220544A0>, RolePolicy(role=<AgentRole.VALIDATOR: 'validator'>, denied_tools=frozenset(), allowed_tools=frozenset({'git_diff', 'list_prs', 'git_log', 'kanban_edit', 'list_directory', 'list_projects', 'kanban_create', 'kanban_context', 'git_status', 'list_issues', 'browser_screenshot', 'list_sources', 'search_files', 'kanban_move', 'web_search', 'kanban_show', 'read_file', 'run_command', 'list_bookmarks', 'get_issue', 'browser_read_text', 'list_knowledge_sources', 'query_knowledge', 'web_read', 'kanban_list'})))].
+_ TestFromAC_ValidatorDirectFiltering.test_validator_filtered_called_when_role_policy_patched_out _
+tests\test_agent_registry.py:651: in test_validator_filtered_called_when_role_policy_patched_out
+    mock_ts.filtered.assert_called()
+..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:918: in assert_called
+    raise AssertionError(msg)
+E   AssertionError: Expected 'filtered' to have been called.
+_ TestFromAC_ValidatorDirectFiltering.test_validator_filtered_despite_empty_role_policies_dict _
+tests\test_agent_registry.py:671: in test_validator_filtered_despite_empty_role_policies_dict
+    mock_ts.filtered.assert_called()
+..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\unittest\mock.py:918: in assert_called
+    raise AssertionError(msg)
+E   AssertionError: Expected 'filtered' to have been called.
+___ TestFromAC_BuilderFilterBypass.test_agent_registry_no_core_roles_import ___
+tests\test_agent_registry.py:694: in test_agent_registry_no_core_roles_import
+    assert roles_imports == [], (
+E   AssertionError: agent_registry.py still imports 'owlbear.core.roles'; remove this dependency as part of #897
+E   assert [<ast.ImportF...01E7220C9350>] == []
+E     
+E     Left contains one more item: <ast.ImportFrom object at 0x000001E7220C9350>
+E     Use -v to get more diff
+__ TestFromAC_BuilderFilterBypass.test_agent_registry_no_role_policies_dict ___
+tests\test_agent_registry.py:713: in test_agent_registry_no_role_policies_dict
+    assert role_policies_defs == [], (
+E   AssertionError: _ROLE_POLICIES must be removed from agent_registry.py as part of #897
+E   assert [<ast.Assign ...01E722170290>] == []
+E     
+E     Left contains one more item: <ast.Assign object at 0x000001E722170290>
+E     Use -v to get more diff
+============================== warnings summary ===============================
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_qdrant_vector_store.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+tests\conftest.py:57
+  C:\Users\p362329\Coding\Projects\owlbear\tests\conftest.py:57: UserWarning: Skipping test_search_benchmark.py: qdrant_client not installed
+    collect_ignore_glob: list[str] = _detect_missing_optional_deps()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_agent_registry.py::TestFromAC_ValidatorDirectFiltering::test_validator_does_not_call_apply_role_policy
+FAILED tests/test_agent_registry.py::TestFromAC_ValidatorDirectFiltering::test_validator_filtered_called_when_role_policy_patched_out
+FAILED tests/test_agent_registry.py::TestFromAC_ValidatorDirectFiltering::test_validator_filtered_despite_empty_role_policies_dict
+FAILED tests/test_agent_registry.py::TestFromAC_BuilderFilterBypass::test_agent_registry_no_core_roles_import
+FAILED tests/test_agent_registry.py::TestFromAC_BuilderFilterBypass::test_agent_registry_no_role_policies_dict
+5 failed, 33 passed, 2 warnings in 1.51s
+

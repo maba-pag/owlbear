@@ -1,0 +1,37 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| put/get roundtrip returns html | test_put_and_get_roundtrip (L78) | PASS |
+| miss returns None | test_get_returns_none_on_miss (L86) | PASS |
+| ttl expiry returns None | test_returns_none_when_expired (L383) | PASS |
+| ttl=0 no expiry | test_ttl_zero_means_no_expiry (L398) | PASS |
+| corrupt/unreadable returns None+logs | test_get_returns_none_on_read_error (L452) + TestBuilderDiscovered caplog (L498) | PASS |
+| relative cache_dir raises | test_raises_valueerror_for_relative_path (L157) | PASS |
+| creates cache_dir | test_creates_cache_dir (L143) | PASS |
+| sha256 keying | test_file_uses_sha256_of_normalized_url (L114) | PASS |
+| CrawlConfig cache_ttl_seconds default | test_default_is_86400 (L176) | PASS |
+| negative ttl rejected | test_negative_value_rejected (L191) | PASS |
+| cache hit skips navigation | test_cache_hit_skips_page_goto (L241) | PASS |
+| cache miss stores html | test_cache_miss_stores_fetched_html (L325) | PASS |
+| no cache unchanged | test_no_cache_means_normal_navigation (L537) | PASS |
+| I/O failures silent+logged | test_put_does_not_raise_on_write_error (L467) + TestBuilderDiscovered caplog (L530, L548) | PASS |
+
+### Test Results
+- Scoped pytest: 37 passed in 0.51s
+- Full suite: 4411 passed, 80 failed (all pre-existing RED-phase), 2 skipped, no regressions from #834
+- Task-scoped ruff: all checks passed
+
+### AC Quality Score: 4/5
+AC was specific with 14 well-defined test scenarios covering edge cases (corrupt file, I/O errors, TTL=0, negative TTL). Minor gap: AC for corrupt/unreadable and I/O silent items did not explicitly require caplog verification, requiring builder improvisation to close the logging assertion gap flagged by reviewer.
+
+### Process Note
+No final reviewer PASS recorded after builder's fix cycle (Wed 19:14). Two prior reviewer FAILs (.78 env issue, .93 missing caplog+noqa). Builder addressed all FAIL findings. Auditor verified independently.
+
+### Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4be77c0 | fix | html_cache.py, test_html_cache.py | #834 |
+
+### Confidence: .96
+### Action: archive

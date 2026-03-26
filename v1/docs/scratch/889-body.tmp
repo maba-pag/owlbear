@@ -1,0 +1,12 @@
+## Context
+Task #572 defines the package-root API for owlbear.planning. src/owlbear/planning/__init__.py is currently empty, so there is no automated coverage for the package-root docstring or explicit export surface.
+
+## Acceptance Criteria
+
+- [ ] Create 	ests/test_planning_package_exports.py.
+- [ ] Add a test that import owlbear.planning as planning succeeds and that planning.__doc__ is a str whose .strip() value is non-empty.
+- [ ] Add a test that rom owlbear.planning import ProjectDefinition, ProjectDefinitionExtractor, Requirement, project_definition_to_markdown succeeds.
+- [ ] Add identity assertions showing each package-root symbol is the same object as its canonical definition from owlbear.planning.models, owlbear.planning.extractor, or owlbear.planning.markdown.
+- [ ] Add a test that owlbear.planning.__all__ == ["ProjectDefinition", "ProjectDefinitionExtractor", "Requirement", "project_definition_to_markdown"].
+- [ ] Add a negative export-surface test that "EXTRACTION_PROMPT" is not present in owlbear.planning.__all__; the exact __all__ assertion is the guard against any additional package-root exports.
+- [ ] Run the new test file on the current tree and verify it fails until task #572 is implemented.

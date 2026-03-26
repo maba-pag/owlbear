@@ -1,0 +1,19 @@
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+All 4 AC lines are already satisfied by commit 83c9fed (task #927).
+- Parametrized test at tests/test_conftest_helpers.py lines 390-400 covers test_cli_chat.py and test_cli_board.py.
+- Follows _has_func_def pattern identical to the 3 existing guards at lines 331-388.
+- Existing tests pass (scoped run confirmed).
+- Scope confined to tests/test_conftest_helpers.py.
+
+### Architecture Notes
+Green-on-arrival: the #927 test-writer implemented this guard before #975 was picked up. Downstream agents should verify and fast-track.
+No TDD test task needed: this IS the test task, and the tests already exist.
+
+### Changes Made
+- None.
+
+### Dependencies
+- No depends_on. No blocking dependencies.

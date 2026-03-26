@@ -1,0 +1,8 @@
+## Builder Notes
+- Files changed: src/owlbear/daemon.py
+- Tests: 12 passed in tests/test_992_run_daemon_retry_wiring.py and tests/test_retry_executor.py.
+- Daemon regression sweep: tests/test_daemon.py, tests/test_daemon_async_contract.py, tests/test_daemon_coverage_gaps.py, and tests/test_daemon_journal_async.py reported 185 passed and 1 pre-existing environment failure in test_transient_backoff_uses_jitter because numpy in this environment does not expose isscalar for pytest.approx.
+- Coverage: Scoped bare coverage run passed; src/owlbear/daemon.py reported 34 percent in this scoped run.
+- Lint: ruff clean on src/owlbear/daemon.py.
+- Evidence: RED baseline before edits was 3 failed in tests/test_992_run_daemon_retry_wiring.py due missing retry wiring; post-change runs reported 12 passed for wiring plus retry executor tests.
+- Fixes applied: Wired run_daemon autonomous setup to inject hooks.reaction_executors retry executor using make_retry_executor and runtime retry settings; aligned make_retry_executor return annotation to the shared Executor type alias.

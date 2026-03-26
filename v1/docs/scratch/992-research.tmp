@@ -1,0 +1,23 @@
+## Research
+Research validated from existing doc: docs/research/retry-executor-wiring.md (sections 3.4, 4).
+
+### Checklist
+1. Theoretical validity: Factory+closure pattern is sound. Executor type is Callable[[dict], Any] from hook_reaction_router.py. Delegates to existing schedule_task_retry.
+2. Prior art: Celery (centralized retry state), Temporal (scheduler-owned RetryPolicy), Prefect (event-driven action delegation). All documented in research doc.
+3. Technical feasibility: Pure Python, no new deps. schedule_task_retry exists. HookRegistry.reaction_executors wired (#991 done). reconcile_tasks emits budget_exceeded (#993 done).
+4. Architecture fit: make_retry_executor lives in daemon.py next to schedule_task_retry. run_daemon accesses agent.hooks.reaction_executors. Wiring point is after OrchestratorState creation, before TaskGroup.
+5. Implementation approach: Research doc section 3.4 provides pseudocode. Factory captures state, kanban, retry config. Closure validates task_id, skips budget_exceeded, creates RuntimeError, calls schedule_task_retry.
+6. Testing strategy: AC has 7 concrete points. AC6 integration test emits TASK_COMPLETE through hooks, verifies RetryEntry. AC7 idempotency via schedule_task_retry's existing guard (section 3.3).
+7. Documentation: docs/research/retry-executor-wiring.md. Sources logged in docs/sources/overview.md.
+
+### Prerequisites verified
+- #991 (HookRegistry.reaction_executors attribute): done
+- #993 (budget_exceeded outcome emission): done
+- schedule_task_retry: exists at daemon.py:510
+- _DEFAULT retry constants: exist at daemon.py:496-498
+
+### Implementation notes
+- Executor signature: async def executor(data: dict[str, Any]) -> None
+- Wiring: agent.hooks.reaction_executors['retry'] = make_retry_executor(...)
+- Insert after line state = OrchestratorState() (daemon.py:1098), before TaskGroup
+- Use settings.max_retry_attempts / backoff_base / backoff_max for config (or _DEFAULT constants)

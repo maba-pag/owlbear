@@ -1,0 +1,15 @@
+**Source:** #733 cooperative-cancellation research
+See docs/research/graphenricher-cancellation-draining.md for full analysis.
+
+**Depends on:** #870 (done), #1000 (TDD RED tests)
+
+Make GraphEnricher cancellation-aware, following the HookWorkerSupervisor pattern (core/hook_worker_supervisor.py).
+Target file: src/owlbear/memory/knowledge/enrichment.py
+
+**AC:**
+1. Add `_shutdown: bool = False` flag to `GraphEnricher.__init__`.
+2. `schedule_graph_enrichment` and `schedule_inter_doc_enrichment` accept optional `cancel: CancelSignal | None` parameter (from `owlbear.memory.knowledge.cancellation`); return early (no-op) when `_shutdown is True` or `cancel.is_set()` returns `True`.
+3. Add `async shutdown()` that sets `_shutdown = True`, cancels all tracked tasks via `task.cancel()`, gathers with `return_exceptions=True`, and leaves `_background_tasks` empty on return. Mirrors `HookWorkerSupervisor.shutdown()`.
+4. Add `async drain()` that sets `_shutdown = True`, awaits all tracked tasks **without** cancelling, and leaves `_background_tasks` empty on return. For graceful completion of in-flight enrichment.
+5. Subsequent `schedule_*` calls are no-ops after either `shutdown()` or `drain()` has been called.
+6. Preserve existing `_background_tasks` set bookkeeping, `_bg_semaphore` concurrency control, and `task.add_done_callback(self._background_tasks.discard)` pattern.

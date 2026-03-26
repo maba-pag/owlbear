@@ -1,0 +1,8 @@
+## Research
+See docs/research/daemon-usage-tracking-tests.md for full validation.
+
+All 7 ACs validated against existing daemon test patterns (test_daemon_coverage_gaps.py, test_usage_wiring.py). Each test maps to proven mock patterns. Clean RED failures expected: _run_builder_with_context and poll_tick lack tracker/model/provider params until #845 implements them.
+
+Recommended test file: tests/test_daemon_coverage_gaps.py, new class TestFromAC_1003_UsageTrackingDispatch.
+
+Added depends_on #1003 to #845 frontmatter for TDD ordering.

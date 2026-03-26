@@ -1,0 +1,7 @@
+## Builder Notes
+- Files changed: src/owlbear/core/retrospective_hook.py
+- Tests: 33 passed across scoped cancellation suites for test_cancellation, test_retrospective_hook cancellation classes, test_bootstrap shutdown wiring class, and #880 cancellation classes in refresh orchestrator, crawl integration, ingest, and bookmark pipeline.
+- Coverage: Bare coverage run completed on test_cancellation and test_retrospective_hook; retrospective_hook.py measured 95 percent line coverage.
+- Lint: ruff clean on src/owlbear/core/retrospective_hook.py.
+- Evidence: RED baseline reproduced with one failing test in TestFromAC_870_CoreLayerConstraint before the fix; all targeted suites passed after the fix.
+- Fixes applied: Removed top level runtime import from core retrospective hook into memory knowledge cancellation and resolved cancel signal selection by preferring injected cancel, then shutdown event, then a local unset asyncio event fallback.

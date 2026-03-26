@@ -1,0 +1,21 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. cancellation.py with CancelSignal + LinkedCancelSignal | src/owlbear/memory/knowledge/cancellation.py:9,20 verified | PASS |
+| 2. Thread optional cancel through listed surfaces | Reviewer mapped all 8 surfaces with line refs; spot-checked refresh.py, ingest.py | PASS |
+| 3. Boundary checks return partial work | Reviewer covered with result-count assertions | PASS |
+| 4. Outer CancelledError propagates | Reviewer: tests/test_knowledge_ingest.py:2114 explicit raises check | PASS |
+| 5. Compose only in daemon-owned path, no core runtime import | retrospective_hook.py:24,32 under TYPE_CHECKING; bootstrap/__init__.py:129,137 owns LinkedCancelSignal | PASS |
+| 6. #880 tests pass, coverage in allowed modules | Scoped suite 33 passed; builder commits touched only allowed files | PASS |
+
+### Test Results
+- pytest full suite: 37 failed (all pre-existing RED-phase or unrelated), 4339 passed, 2 skipped
+- Zero failures in #870 modules (cancellation, refresh, crawl, ingest, bookmark, retrospective_hook, bootstrap)
+- ruff: clean on all #870 source files
+
+### Architect Quality: 5/5
+AC was specific, complete, and led to clean implementation. Two-round refinement (SPLIT then APPROVED) produced precise surface list, explicit layering rules, and clear bootstrap composition guidance.
+
+### Confidence: .97
+### Action: archive

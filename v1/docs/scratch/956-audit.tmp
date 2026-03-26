@@ -1,0 +1,22 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: #984 is archived | kanban show 984 reports Status: archived | PASS |
+| AC2: #985 is archived | kanban show 985 reports Status: archived | PASS |
+| AC3: Together fulfill retry-delegation mandate | schedule_task_retry at daemon.py:502, make_retry_executor at daemon.py:572, wired at daemon.py:1143; 41 retry tests pass | PASS |
+| AC4: No src/tests changes from governance task | git log --grep=#956 -- src/ tests/ returns empty | PASS |
+
+### Test Results
+- pytest: 4359 passed, 61 pre-existing failures (unrelated RED-phase tests), 2 skipped
+- Targeted retry tests: 41 passed
+- ruff: All checks passed (daemon.py, bootstrap/hooks.py, hook_reaction_router.py)
+
+### Architect Quality
+- AC specificity: Excellent. Terminal conditions (archived status) are binary-verifiable.
+- Edge case coverage: N/A for governance parent; edge cases delegated to children.
+- Design direction: Research doc (Option A) led to clean decomposition into #984 and #985.
+- AC quality score: 5/5 (specific, complete, verifiable)
+
+### Confidence: .98
+### Action: archive

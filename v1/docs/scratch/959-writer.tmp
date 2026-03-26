@@ -1,0 +1,17 @@
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | Yes | Updated | Added 'frozen dataclass' qualifier and '#959' wiring note to DispatchContext entry in Agents table |
+| 2 | Docstrings | Yes | Updated | DispatchContext class docstring now says 'Immutable runtime context' and notes FrozenInstanceError on mutation; format_dispatch_context and DelegationToolset docstrings already accurate |
+| 3 | docs/sources/overview.md | No | N/A | No external patterns; change was a one-line decorator addition (frozen=True) |
+| 4 | README.md | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Pass | docs/research/dispatched-agent-runtime-context.md exists and is linked in the task body |
+| 6 | Scratch files | No | N/A | No docs/scratch/959-* files found |
+
+### Files Updated
+- .github/copilot-instructions.md (DispatchContext entry: added 'frozen dataclass' and '#959' reference)
+- src/owlbear/core/delegation.py (DispatchContext docstring: added immutability note)
+
+### Scratch Files Cleaned
+- None

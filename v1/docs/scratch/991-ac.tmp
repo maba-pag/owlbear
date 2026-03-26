@@ -1,0 +1,25 @@
+Expose the executors dict created in build_hooks() as a HookRegistry attribute so run_daemon() can access it via agent.hooks.reaction_executors without changing any function signatures.
+
+See docs/research/expose-reaction-executors.md and docs/research/retry-executor-wiring.md section 3.1 Option C.
+
+## Acceptance Criteria
+
+1. HookRegistry.__init__ sets self.reaction_executors: dict[str, Any] | None = None
+2. In build_hooks(), after constructing HookReactionRouter with the local executors dict, store hooks.reaction_executors = executors (same dict object, not a copy)
+3. build_hooks() return signature remains tuple[HookRegistry, ProgressReporter | None] (no extra return element)
+4. When settings.hook_reactions is empty (default), hooks.reaction_executors remains None
+5. Existing tests pass unchanged (no test modifications allowed)
+
+## Files
+- src/owlbear/core/hooks.py: 1 line in HookRegistry.__init__
+- src/owlbear/bootstrap/hooks.py: 1 line after HookReactionRouter(...) creation inside the if settings.hook_reactions: block
+
+## Architecture Notes
+- Any is already imported in hooks.py; no new imports needed in the core module
+- The attribute is optional (None by default); only the daemon wiring path (downstream #992) reads it
+- Router closures capture _executors by reference, so mutating the dict after construction propagates to all handlers
+- Pattern follows Flask app.extensions / Celery app.tasks (see research doc)
+- Stale depends_on: [985] in frontmatter (985 is archived/SPLIT). Planner should remove manually (kanban-md does not support editing depends_on via CLI).
+
+## Preceding test task
+- #994: Test: HookRegistry reaction_executors attribute (TDD RED)

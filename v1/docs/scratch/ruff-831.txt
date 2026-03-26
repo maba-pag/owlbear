@@ -1,0 +1,4 @@
+stdout: All checks passed!
+
+stderr: 
+exit: 0

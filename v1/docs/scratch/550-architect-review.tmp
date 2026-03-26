@@ -1,0 +1,28 @@
+## Architecture Review
+**Verdict:** BLOCK
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Do not send this task to implementation in its current form. The original trim work must not be re-implemented. | Correct. This confirms the task is not builder-ready and does not belong in backlog. | Keep; return task to ideation |
+| 2. Before this task can advance, rewrite it to a single unresolved concern with exact file targets, exact symbols or behavior to change, and exact proving tests. | Correct and verifiable. This is ideation or research work, not backlog-ready implementation scope. | Keep; move to ideation until rewritten |
+| 3. If the intended work was only the 14-symbol public-API trim, treat this task as duplicate or delivered work linked to commits 4afea6, 9fed9e2, and 77860d8 plus archived test task #839. | Verified against git history and archived task #839. The original scope is already delivered. | Keep |
+| 4. Any new implementation scope created from this task must have an explicit preceding test task linked as a dependency. | Correct TDD guard for any future rewrite. | Keep |
+
+### Architecture Notes
+- Backlog tasks must be builder-actionable. #550 is now a board triage item, not an implementation contract.
+- Live code evidence: src/owlbear/memory/knowledge/__init__.py already defines a 14-name __all__ and lazy import map; src/owlbear/bootstrap/knowledge.py already imports TextChunker from the chunker submodule.
+- Test evidence: 	ests/test_knowledge_public_api.py locks the retained 14-symbol API, 	ests/test_knowledge_init_trim.py locks removal of trimmed symbols, and 	ests/test_knowledge_exports.py reflects the post-trim lazy-import surface.
+- TDD evidence: archived task #839 provided the RED contract before the GREEN commits for #550.
+- Research evidence: docs/research/knowledge-init-trim.md is useful historical context but stale as a source of unresolved work, because its recommended implementation has already landed.
+- Failure Mode Map: N/A. This decision rejects stale backlog placement rather than approving a new codepath.
+
+### Changes Made
+- Rejected backlog placement and returned the task to ideation.
+- Preserved the current AC as re-scoping guidance instead of forcing a pseudo-implementation contract.
+- Verified the delivered scope against source files, tests, archived task #839, and git history for #550.
+
+### Dependencies
+- Verified: archived task #839 already satisfied the explicit RED dependency for the original scope.
+- Verified: no unresolved production dependency remains for the original trim.
+- Required before any future backlog return: a fresh unresolved concern plus a linked preceding test task.

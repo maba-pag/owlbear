@@ -1,0 +1,16 @@
+## Test-Writer Notes
+- Test file: tests/test_tools_lazy_exports.py
+- Classes modified/added: TestFromAC_NoNewDependencies (replaced test), TestFromAC_DirParity (new)
+- Tests per category: happy 2, edge 0, error 0, boundary 0
+- Total new tests: 2, all FAIL; 14 prior tests preserved and pass
+- ruff: clean (exit 0)
+- AC coverage:
+| AC Line | Test(s) | Category |
+|---------|---------|----------|
+| Replace no-custom-__dir__ assertion with positive parity | TestFromAC_NoNewDependencies::test_tools_module_has_custom_dir_for_parity | happy |
+| Add subprocess assertion: 10 curated names in dir() | TestFromAC_DirParity::test_dir_exposes_all_curated_names_subprocess | happy |
+| Same subprocess: no github_api/core.retry loaded | TestFromAC_DirParity::test_dir_exposes_all_curated_names_subprocess | happy |
+| Preserve #879 lazy-export coverage | All 14 prior tests pass unchanged | boundary |
+| no-lazy_loader guard preserved | TestFromAC_NoNewDependencies::test_lazy_loader_package_not_imported_by_tools | boundary |
+| pytest fails on current tree for dir() reason only | Confirmed: 2 FAIL, 14 pass | boundary |
+| ruff passes | Verified: exit 0 | boundary |

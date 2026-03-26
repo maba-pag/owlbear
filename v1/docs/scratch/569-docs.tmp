@@ -1,0 +1,16 @@
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | Research-only task; no behavior/API change |
+| 2 | Docstrings | No | N/A | No Python modules created or modified |
+| 3 | sources/overview.md | Yes | Pass | Task 569 section already present with 4 sources |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | consolidate-trafilatura-extras.md exists; follow-up 829 created |
+| 6 | No impact (1,2,4) | Yes | Pass | Research/docs task, no implementation deliverable |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found

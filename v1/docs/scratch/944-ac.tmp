@@ -1,0 +1,10 @@
+## Context
+Pilot the first user-facing command in the Impeccable-style workflow for OwlBear: a scoped frontend audit that uses OwlBear's own frontend-design guidance rather than importing Impeccable verbatim.
+See docs/research/impeccable-command-patterns.md.
+
+## Acceptance Criteria
+- [ ] Add `.github/prompts/frontend-audit.prompt.md` with description-only frontmatter (no `mode:`, `agent:`, or `applyTo:` keys) and an optional `${input:scope}` variable.
+- [ ] Prompt reads `docs/design-context.md` when present for project-specific context and references the `frontend-design` skill by relative path (`../skills/frontend-design/SKILL.md`).
+- [ ] Prompt produces a structured, severity-ranked audit using the two-tier classification from `references/anti-patterns.md` (blocker vs heuristic) across four categories: accessibility, responsive behavior, design-system consistency, and anti-patterns.
+- [ ] Prompt explicitly does not edit code; it reports findings and recommends next commands (`/frontend-normalize`, `/frontend-polish`) or follow-up tasks.
+- [ ] Prompt follows the same four-step structure as sibling prompts (Load context, Plan/scope, Execute audit, Verify/Guardrails).

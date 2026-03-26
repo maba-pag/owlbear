@@ -1,0 +1,13 @@
+## Research
+Research doc: docs/research/council-protocol-c-validation.md
+
+Key findings:
+- Technical feasibility confirmed (.85): asyncio.gather + PydanticAI structured output suffices; pydantic_graph beta is YAGNI.
+- Architecture fit clean (.75): new council.py module, tag-triggered, no pipeline changes.
+- Token cost still binding: 3 extra calls x 5 arch decisions = 15 calls per session (50 pct of Copilot rate-limit window).
+- No evidence of architect-gate quality failures that would justify the cost.
+- Three prior research docs independently rejected multi-persona deliberation.
+- Nothing material changed since parent research (#145).
+
+Recommendation: maintain deferral at .40 confidence. Trigger conditions in research doc section 4.
+No new follow-up tasks (this task IS the follow-up from #145).

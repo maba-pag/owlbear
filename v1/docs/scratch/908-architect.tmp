@@ -1,0 +1,29 @@
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. #908 remains parent tracker only; no builder/test-writer dispatch from this card | Clear governance constraint; mechanically verifiable by the planner and auditor | Keep |
+| 2. Executable benchmark-runner contract owned by #915, preceded by RED #940 | Correct TDD decomposition; #940 (backlog) is the RED task, #915 (ideation) is the GREEN task | Keep |
+| 3. Child runner work gated by #906 and #907; must compare baseline vs gleaning against same corpus and scorer | Matches codebase reality: tests/benchmarks/test_entity_extractor_corpus.py fails on missing corpus module (owned by #906); src/owlbear/memory/knowledge/extractor.py has single extract() path without gleaning variant (owned by #907) | Keep |
+| 4. Results publication owned by #916, depends on #915 output | Clean domain separation: #915 produces benchmark data, #916 publishes docs. Both in ideation awaiting child-level architect review | Keep |
+| 5. Any child move to todo requires child's own architect review for single-domain, dependency binding, and docs-only enforcement | Critical governance rule that catches known gaps: #915 missing depends_on #940, #915 corrupted AC text, #916 docs-only constraint. Defers resolution correctly to child reviews | Keep |
+
+### Architecture Notes
+- Codebase confirms prior review findings still hold: src/owlbear/memory/knowledge/extractor.py (EntityExtractor.extract()), src/owlbear/memory/usage.py (UsageTracker/record_agent_usage), tests/benchmarks/bench_graph_expansion.py and bench_encoding.py (benchmark precedents).
+- tests/benchmarks/test_entity_extractor_corpus.py still fails on missing entity_extractor_corpus import, confirming #906 corpus work is unresolved.
+- src/owlbear/bootstrap/knowledge.py still constructs EntityExtractor without benchmark tracker wiring, confirming #907 prototype work is unresolved.
+- Board state: #906 backlog (claimed by architect-906), #907 backlog, #911 in-progress (RED for #912), #912 ideation, #915 ideation, #916 ideation, #940 backlog.
+- This tracker is dependency-blocked on #906 and #907; approval to todo means the governance contract is architecturally sound and ready for auditor verification when children complete.
+- No failure mode map needed: tracker introduces no codepaths.
+
+### Changes Made
+- Claimed task #908 as architect-908.
+- Approved to todo. No body edits needed; prior REFINE pass produced clean tracker contract.
+
+### Dependencies
+- Verified: #906 (backlog, claimed) and #907 (backlog) remain unresolved upstream.
+- Verified: #940 (backlog) is RED predecessor for #915 (ideation).
+- Verified: #916 (ideation) is docs-only publication task depending on #915 output.
+- Known child gaps deferred to child-level reviews per AC5: #915 needs depends_on #940 binding and AC text cleanup.

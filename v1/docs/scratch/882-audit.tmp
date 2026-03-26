@@ -1,0 +1,20 @@
+## Audit
+### AC Verification
+| BC# | Requirement | Evidence | Status |
+|-----|-------------|----------|--------|
+| 1 | Subsection under section 8 | docs/architecture.md:462 heading | PASS |
+| 2 | Default is direct/eager re-exports | docs/architecture.md:463 | PASS |
+| 3 | Three allowed conditions stated | docs/architecture.md:468-473 | PASS |
+| 4 | __all__ is public contract | docs/architecture.md:475-476 | PASS |
+| 5 | lazy-loader out of scope, cites both packages | docs/architecture.md:478-480 | PASS |
+| 6 | __dir__ optional | docs/architecture.md:482-484 | PASS |
+| 7 | No hiding illegal deps | docs/architecture.md:486-488 | PASS |
+| 8 | Both repo examples cited | docs/architecture.md:490-498 | PASS |
+| 9 | No standalone file created | commit ce1b9b9 shows only M docs/architecture.md | PASS |
+
+### Test Results
+- pytest: 3689 passed, 105 failed (all pre-existing), 20 skipped
+- ruff: N/A (docs-only change)
+
+### Confidence: .97
+### Action: archive

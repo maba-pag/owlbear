@@ -1,0 +1,13 @@
+## Audit
+AC1 PASS: all 4 test classes use TestFromAC_ prefix at lines 100, 222, 319, 392.
+AC2 PASS: tests assert subprocess not called, proving immediate return.
+AC3 PASS: disabled flag test asserts subprocess not called before return.
+AC4 PASS: tag gate tests at lines 143, 155, 167.
+AC5 PASS: lazy schedule tests at lines 183, 195.
+AC6 PASS: scratch-only writes plus path traversal confinement at lines 331, 372.
+AC7 PASS: no subprocess or src writes during worker at lines 257, 265, 350.
+AC8 PASS: channel send at lines 277, 285.
+AC9 PASS: None channel completes at line 299.
+AC10 PASS: ruff clean, RED evidence preserved, git confirms introduction at 09f6dbb.
+Full suite: 36 pre-existing failures, 4238 passed, zero from test_audit_map_hook.py.
+Ruff: clean. AC quality score: 4 of 5. Confidence: .96. Action: archive.

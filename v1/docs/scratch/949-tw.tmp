@@ -1,0 +1,4 @@
+## Test-Writer Notes
+- Non-implementation task (board-cleanup only, AC explicitly forbids src/ and tests/ edits) — no tests applicable.
+- Architecture review confirms: 'No TDD predecessor is required because this task now forbids src/ and test edits.'
+- Passing through to builder.

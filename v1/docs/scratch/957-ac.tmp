@@ -1,0 +1,29 @@
+See docs/research/hookreaction-notify-escalate-executors.md for full research context.
+
+## Scope
+
+Files scoped: src/owlbear/bootstrap/hooks.py only (plus tests).
+Domain: bootstrap.
+
+## Acceptance Criteria
+
+- [ ] AC1: Add a `_make_notify_executor(backends: list[NotificationBackend]) -> Executor` private factory in `src/owlbear/bootstrap/hooks.py` that returns an async callable accepting `dict[str, Any]` data. The callable iterates `backends` in declared order, calling `backend.notify(message, event)` with a formatted message derived from the payload. The first backend returning `True` stops the chain. If all backends fail or return `False`, log a warning and return silently. The callable must satisfy the `Executor` type alias from `hook_reaction_router.py`.
+- [ ] AC2: Add a `_make_escalate_executor(channel: ChannelPlugin) -> Executor` private factory in `src/owlbear/bootstrap/hooks.py` that returns an async callable accepting `dict[str, Any]` data. The callable calls `channel.send()` with a formatted escalation message containing the event name and a payload summary. It must NOT call `channel.receive()` (non-blocking, observational only per architecture standards). Exceptions from `channel.send()` propagate to the router's handler, which logs and swallows them.
+- [ ] AC3: In `build_hooks()`, when `settings.hook_reactions` is non-empty, replace the noop `notify` executor with the result of `_make_notify_executor()` using the same backends list already constructed for `NotificationHook`. Replace the noop `escalate` executor with the result of `_make_escalate_executor(channel)` when `channel is not None`; if `channel is None`, log a warning at `logging.WARNING` level and keep the noop escalate executor. `retry` remains noop (deferred to #956).
+- [ ] AC4: The notify executor's per-backend exception handling: if `backend.notify()` raises, catch the exception, log a warning with the backend name and `exc_info=True`, and continue to the next backend (same isolation pattern as `NotificationHook`).
+- [ ] AC5: The escalate executor must format a message that includes `data.get("_hook_event")` value (if present) and a concise payload summary; exact format is builder's discretion but must contain the event name.
+- [ ] AC6: No new public API. Both factories are module-private (`_`-prefixed). No new imports added to `__init__.py` or `__all__`.
+- [ ] AC7: All #987 tests pass (GREEN). ruff clean on `src/owlbear/bootstrap/hooks.py`.
+
+## Dependencies
+
+- #955 (HookReaction policy schema and bootstrap) — archived
+- #987 (Test: HookReaction notify and escalate executor wiring) — must reach in-progress before this task starts
+- #956 (retry executor) — explicitly out of scope; retry stays noop
+
+## Architecture Notes
+
+- Module layering: bootstrap/hooks.py is the assembly layer, allowed to import from core/ (NotificationBackend) and channels/ (ChannelPlugin). No layering violation.
+- The executor closures capture backends/channel references at bootstrap time. If a backend or channel becomes unavailable later, the executor fails and the router's _make_handler swallows the exception. Same failure mode as existing NotificationHook.
+- The notify executor reuses the NotificationBackend protocol but NOT the NotificationHook class — no double-filtering of events (router already filters via match predicates).
+- The escalate executor is non-blocking (send-only). Interactive escalation (send+receive) remains owned by LoopDetector in the daemon loop.

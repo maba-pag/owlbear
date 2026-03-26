@@ -1,0 +1,45 @@
+#958 done/important Test dispatch-context carrier and delegation runtime instructions (agent,scope:core,type:test)
+#854 done/important Tests for public pydantic-ai typing imports (test,deps,agent,tooling)
+#962 todo/important Remove dead question_pending default hook configuration (agent,hooks,config,scope:core,type:build)
+#969 todo/important Test HookReaction config leaf boundary and schema ownership (agent,hooks,test,config,scope:core,type:test)
+#966 todo/important Test: Add tracked background worker supervision for hook-triggered daemon tasks (agent,daemon,hooks,scope:core,type:test,test)
+#959 backlog/important Implement dispatch-context carrier and delegation runtime instructions (agent,scope:core,type:build)
+#852 backlog/important Remove private pydantic-ai typing imports from OwlBear (deps,agent,tooling)
+#844 review/nice-to-have Wire UsageTracker to secondary LLM call sites (scope:core,phase-3)
+#869 review/nice-to-have Update context_hydration tests to mock extract_markdown instead of trafilatura (test,type:test,scope:core,phase-9,dry)
+#867 review/nice-to-have Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura (test,type:test,phase-9,dry,scope:memory)
+#911 in-progress/nice-to-have Test EntityExtractor benchmark corpus and gold schema (RED) (scope:core,knowledge,benchmark,test,type:test,phase-research) [!TW:MISSING]
+#847 in-progress/nice-to-have Test runtime security audit log for guard-gate-terminal (RED) (audit,security,observability,type:test) [!TW:MISSING]
+#777 todo/nice-to-have Implement bearclaw decisions list/show/resolve commands (cli,process)
+#789 todo/nice-to-have Tests for ConsolidationService (TDD RED) (scope:core,memory,knowledge,consolidation,type:test)
+#823 todo/nice-to-have Close #813 as won't-do per re-export research (audit,scope:core) [!AC:MISSING]
+#818 todo/nice-to-have Tests for kanban_list block_filter enum replacement (test,tools) [!AC:MISSING]
+#819 todo/nice-to-have Tests for kanban_list block_filter enum replacement (test,tools) [!AC:MISSING]
+#809 todo/nice-to-have Eliminate _run() by converting 27 test files to async def + pytest.mark.asyncio (test,audit,rigor:lean)
+#908 backlog/nice-to-have Evaluate EntityExtractor gleaning recall and cost delta (scope:core,knowledge,benchmark,docs,type:docs,phase-research)
+#907 backlog/nice-to-have Prototype feature-flagged EntityExtractor gleaning (scope:core,knowledge,benchmark,type:build,phase-research)
+#930 backlog/nice-to-have Research: Impeccable command patterns ÔÇö skill/agent reuse for OwlBear (research,agent,scope:copilot,tooling)
+#925 backlog/nice-to-have Test bearclaw board age-threshold styling contract (RED) (cli,tooling,phase-14,test,type:test,scope:cli)
+#948 backlog/nice-to-have Fix VoiceChannel to satisfy ChannelPlugin @runtime_checkable Protocol (audit,scope:core,type:build,voice)
+#870 backlog/nice-to-have Implement operation-scoped cancellation signal for knowledge pipelines (scope:core,type:build)
+#863 backlog/nice-to-have Convert remaining NumPy-style docstrings to Google-style in researched files (docs,code-quality)
+#886 backlog/nice-to-have Convert additional NumPy-style docstrings to Google-style in uncovered files (docs,code-quality)
+#906 backlog/nice-to-have Build EntityExtractor code-corpus recall benchmark harness (scope:core,knowledge,benchmark,test,type:test,phase-research)
+#938 ideation/nice-to-have Add OwlBear frontend anti-pattern taxonomy (ui,agent,scope:copilot,docs,type:docs)
+#937 ideation/nice-to-have Refactor frontend.instructions.md into lean guardrails plus skill handoff (ui,agent,scope:copilot,docs,type:docs)
+#942 ideation/nice-to-have Codify prompt-vs-skill-vs-agent rules for user-facing command surfaces (agent,scope:copilot,docs,type:docs)
+#875 ideation/nice-to-have Refactor content_extractor to reuse web_extract.extract_markdown (dry,type:build,scope:core,phase-9)
+#943 ideation/nice-to-have Add design-context onboarding prompt for frontend workflows (ui,agent,scope:copilot,docs,type:docs)
+#928 ideation/nice-to-have Implement shared CompletedProcess factory for BearClaw CLI tests (cli,test,tooling,phase-14,type:test,scope:cli)
+#927 ideation/nice-to-have Implement shared CompletedProcess factory for BearClaw CLI tests (cli,test,tooling,phase-14,type:test,scope:cli)
+#952 ideation/nice-to-have Add priority-routed notifications for daemon and pipeline events (agent,scope:core,scope:cli,slack,type:build)
+#936 ideation/nice-to-have Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED) (cli,test,tooling,phase-14,type:test,scope:cli)
+#935 ideation/nice-to-have Test board-specific kanban JSON payload helper for BearClaw board CLI tests (RED) (cli,test,tooling,phase-14,type:test,scope:cli)
+#893 in-progress/someday Test self-improvement proposal pipeline from observability metrics (phase-14,agent,analytics,test,type:test,scope:core) [!TW:MISSING]
+#834 todo/someday Tests for raw-HTML cache layer (TDD RED) (browser,phase-4,type:test)
+#734 todo/someday Research: Evaluate EdgeQuake gleaning for current LLM extraction paths (research,scope:core,phase-research)
+#892 todo/someday Test KnowledgeSourceStore _SELECT_COLS reuse (RED) (audit,dry,knowledge,type:test)
+#890 todo/someday Tests for AgentRegistry.register programmatic registration (test,scope:core,type:test)
+#145 ideation/someday Council system ÔÇö multi-agent structured debate with consensus (agent,phase-14)
+---
+43 candidates

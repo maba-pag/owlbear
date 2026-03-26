@@ -1,0 +1,27 @@
+## Audit
+### AC Verification
+All 8 AC items verified with evidence:
+- AC1 PASS: anti-patterns.md has 9 cited blockers with Citation/Rationale labels, 5 heuristic categories, warning framing. Retry tests (L588, L611, L634) pin semantics.
+- AC2 PASS: SKILL.md L38 places anti-patterns.md row after ux-writing.md L37.
+- AC3 PASS: anti-patterns.md L3-4 credits NOTICE.md, Impeccable, Anthropic.
+- AC4 PASS: _EXPECTED_REFERENCE_FILES includes anti-patterns.md at test L30.
+- AC5 PASS: Scope boundary test rewritten at test L383.
+- AC6 PASS: anti-patterns.md has 67 lines (>= 20).
+- AC7 PASS: 54 passed in scoped run.
+- AC8 PASS: ruff All checks passed.
+
+### Test Results
+- pytest (scoped): 54 passed
+- pytest (full suite): 4339 passed, 38 failed (pre-existing RED-phase), 2 skipped. No task-related regressions.
+- ruff: All checks passed
+
+### Architect Quality
+- AC quality score: 4/5. AC was measurable and complete. Minor gap: AC1 could have explicitly required per-item Citation/Rationale labels; reviewer caught this and retry cycle resolved it.
+
+### Commits Verified
+- 096ab45 docs: add frontend anti-pattern taxonomy reference (#938, builder)
+- 1a73fb3 docs: add frontend anti-pattern taxonomy (#938, writer)
+All deliverables committed, no uncommitted task files.
+
+### Confidence: .96
+### Action: archive

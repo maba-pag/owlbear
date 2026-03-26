@@ -1,0 +1,9 @@
+AC:
+1. Add `TestFromAC_981_NonBlockingEligibilityHandoff` class to `tests/test_retrospective_hook.py`.
+2. Tests must FAIL on current HEAD and prove:
+   (a) `__call__` does not call `_count_rejections` or `_get_priority` directly — patch both, call `__call__`, assert neither was called on the awaited path.
+   (b) The supervisor-scheduled background task calls `_count_rejections` and `_get_priority` — await the scheduled coroutine, assert both were invoked.
+   (c) Ineligible tasks (zero rejections + low priority) are filtered inside the background task — the scheduled coroutine returns early without calling `_run_retrospective`.
+   (d) `create_task` fallback path also defers eligibility to the background task — same assertions as (a)-(c) without supervisor.
+3. Existing `TestFromAC_RetrospectiveHookSupervisorSeam` tests must still pass.
+4. File: `tests/test_retrospective_hook.py`.

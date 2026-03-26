@@ -1,0 +1,19 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Contract tests in test_conftest_helpers.py | TestFromAC_MakeCompletedProcess (14 tests), all pass | PASS |
+| AC2: Replace duplicated setup in test_cli_chat.py | 4 TestDetectGitHubRemote tests use make_completed_process | PASS |
+| AC3: Board routing local, compose shared helper | _subproc_fail_list/_subproc_fail_log local, compose helper | PASS |
+| AC4: Missing-binary via FileNotFoundError seam | test present, no src/ abstraction | PASS |
+| AC5: Scope tests/ only, src/ unchanged | Commits 8c26993 + 5d23467 touch only tests/ | PASS |
+| AC6: Assertions fail before implementation | RED commit imports before helper exists | PASS |
+
+### Test Results
+- Scoped: 90 passed, 0 failed
+- Full suite: 3921 passed, 92 failed (all pre-existing, none in #926 files)
+- ruff: clean
+
+### Architect Quality: 4/5
+### Confidence: .97
+### Action: archive

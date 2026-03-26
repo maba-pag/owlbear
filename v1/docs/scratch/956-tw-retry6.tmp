@@ -1,0 +1,4 @@
+## Test-Writer Notes (retry 6)
+- Retry reason: reviewer FAIL was about governance prerequisites (successor task 992 still todo), not missing tests.
+- Governance parent task. AC explicitly states: No src/ or tests/ changes from this governance task itself.
+- No tests to write or modify. Passing through to builder.

@@ -1,0 +1,29 @@
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. operation field on UsageRecord | src/owlbear/memory/usage.py:43 operation: str = 'turn' | PASS |
+| 2. record_agent_usage helper | src/owlbear/memory/usage.py:117 accepts model: str or Model, resolves model_name internally | PASS |
+| 3. Constructor params tracker+provider='copilot' | Spot-checked condenser.py:68, retrospective_hook.py:139 both default provider='copilot' | PASS |
+| 4. Secondary components call with correct operations | Spot-checked retrospective_hook.py:289 passes raw self._model with operation='retrospective' | PASS |
+| 5. SessionMemoryHook closure | bootstrap/__init__.py:84-89 passes raw model with operation='session_summary' | PASS |
+| 6. Bootstrap wiring | Reviewer evidence shows 446 passed regression slice across bootstrap+knowledge modules | PASS |
+| 7. OwlBearAgent operation='turn' | core/agent.py:238 operation='turn' | PASS |
+| 8. All tests pass | Full suite 4279 passed, 160 pre-existing failures (async-plugin, value-unpack, export); 0 failures in task-touched modules | PASS |
+
+### Test Results
+- Full suite: 4279 passed, 160 failed (pre-existing), 2 skipped, 3 collection errors ignored (RED-phase)
+- Task suite: tests/test_usage_wiring.py 56 passed
+- ruff: clean on all 13 task-touched files
+
+### Architect Quality
+- AC specificity: 4/5. Precise field names, types, defaults, component lists, operation values. Missed model-fidelity edge case at call sites (str(model) vs raw model).
+- Edge case coverage: AC missed that call sites would pre-stringify model objects, requiring 2 retry cycles to fix.
+- Design direction: Architecture notes were helpful and accurate.
+- AC quality score: 4
+
+### Upstream Commit Gaps
+- tests/test_usage_wiring.py had 123 lines uncommitted (test-writer retry-2 model-fidelity tests). Committed by auditor as a4f6fd5.
+
+### Confidence: .96
+### Action: archive

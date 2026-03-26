@@ -1,0 +1,11 @@
+## Research
+Research doc: docs/research/frontend-audit-prompt-design.md
+
+Key findings:
+- 4 categories from AC validated (a11y, responsive, design-system consistency, anti-patterns). Performance dropped (KISS, needs runtime data).
+- P0-P3 severity scheme adopted from Impeccable. No numeric scoring (KISS, AC says severity-ranked not scored).
+- Prompt structure follows sibling pattern: load context, determine scope, execute audit, generate report, guardrails.
+- Output format: summary, findings by severity, systemic patterns, positive findings, recommended next steps.
+- Dependencies #934, #938, #943 all archived.
+
+Sources: docs/sources/overview.md (Task #944 section)
