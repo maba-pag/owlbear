@@ -29,6 +29,11 @@ try:
 except ImportError:  # openai is an optional dependency
     openai = None  # type: ignore[assignment]
 
+try:
+    from acp.exceptions import RequestError as AcpRequestError
+except ImportError:  # acp is an optional dependency
+    AcpRequestError = None  # type: ignore[assignment,misc]
+
 from owlbear.core.circuit_breaker import CircuitOpenError
 from owlbear.core.exceptions import BlockedURLError, OwlBearError
 
@@ -83,6 +88,17 @@ class ErrorCategory(StrEnum):
     TOOL_SEMANTIC = "tool_semantic"
 
 
+_ACP_ERROR_CODES: dict[int, ErrorCategory] = {
+    -32700: ErrorCategory.PERMANENT,
+    -32600: ErrorCategory.PERMANENT,
+    -32601: ErrorCategory.PERMANENT,
+    -32602: ErrorCategory.PERMANENT,
+    -32603: ErrorCategory.TRANSIENT,
+    -32000: ErrorCategory.AUTH,
+    -32002: ErrorCategory.TOOL_SEMANTIC,
+}
+
+
 # ---------------------------------------------------------------------------
 # Classifier
 # ---------------------------------------------------------------------------
@@ -108,6 +124,10 @@ def classify_error(exc: Exception) -> ErrorCategory:
     if isinstance(exc, httpx.HTTPStatusError):
         return _classify_http_status(exc.response.status_code)
 
+    # --- ACP request errors -------------------------------------------------
+    if AcpRequestError is not None and isinstance(exc, AcpRequestError):
+        return _ACP_ERROR_CODES.get(exc.code, ErrorCategory.PERMANENT)
+
     # --- Transient network / timeout errors --------------------------------
     if isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, TimeoutError, ConnectionError)):
         return ErrorCategory.TRANSIENT
@@ -120,7 +140,7 @@ def classify_error(exc: Exception) -> ErrorCategory:
     # pydantic.ValidationError is a ValueError subclass — check before
     # TOOL_SEMANTIC to avoid misclassification.
     # CircuitOpenError: fast-fail when Copilot API circuit breaker is open.
-    if isinstance(
+    is_permanent = isinstance(
         exc,
         (
             pydantic.ValidationError,
@@ -131,15 +151,16 @@ def classify_error(exc: Exception) -> ErrorCategory:
             CircuitOpenError,
             BudgetExceededError,
         ),
-    ):
+    )
+    if is_permanent:
         return ErrorCategory.PERMANENT
 
     # --- Tool-semantic (model can self-correct) ----------------------------
-    if isinstance(exc, (ValueError, KeyError, TypeError)):
-        return ErrorCategory.TOOL_SEMANTIC
-
-    # --- Default -----------------------------------------------------------
-    return ErrorCategory.PERMANENT
+    return (
+        ErrorCategory.TOOL_SEMANTIC
+        if isinstance(exc, (ValueError, KeyError, TypeError))
+        else ErrorCategory.PERMANENT
+    )
 
 
 # ---------------------------------------------------------------------------
