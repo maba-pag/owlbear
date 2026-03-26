@@ -16,12 +16,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# This import drives the RED phase — module does not exist yet.
-from owlbear.safety.audit_log import SecurityAuditLog, SecurityEvent
-
-# These modules exist; tests verify NEW audit_sink parameter support.
 from owlbear.core.command_guard import BlockedCommandError, CommandSafetyGuard
 from owlbear.core.hooks import HookRegistry
+from owlbear.safety.audit_log import SecurityAuditLog, SecurityEvent  # drives RED phase
 from owlbear.safety.gate import ApprovalGateToolset
 from owlbear.safety.policy import ApprovalPolicy, ApprovalRule, ApprovalSession
 from owlbear.tools.terminal import TerminalToolset
@@ -541,4 +538,188 @@ class TestFromAC_NoConcreteSafetyImport:
         assert "owlbear.safety.audit_log" not in imports, (
             "terminal.py must not import owlbear.safety.audit_log directly; "
             "use an injected sink or callback."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BootstrapAuditSinkWiring
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BootstrapAuditSinkWiring:
+    """Bootstrap wires one SecurityAuditLog instance into CommandSafetyGuard,
+    ApprovalGateToolset, and TerminalToolset (parent #525 AC4).
+
+    The component-level TestFromAC_* classes above verify each component *can*
+    accept an audit_sink — but they construct the components directly and never
+    touch the bootstrap assembly path.  These tests close that gap: they verify
+    that build_hooks() and build_toolsets() actually *pass* the sink down so
+    that a bootstrap regression cannot go undetected.
+    """
+
+    # ------------------------------------------------------------------
+    # Signature contracts
+    # ------------------------------------------------------------------
+
+    def test_build_hooks_signature_includes_audit_log(self) -> None:
+        """build_hooks() must declare an audit_log= keyword parameter."""
+        import inspect
+
+        from owlbear.bootstrap.hooks import build_hooks
+
+        sig = inspect.signature(build_hooks)
+        assert "audit_log" in sig.parameters, (
+            "build_hooks() must accept audit_log= so bootstrap can inject "
+            "the SecurityAuditLog into CommandSafetyGuard."
+        )
+
+    def test_build_toolsets_signature_includes_audit_log(self) -> None:
+        """build_toolsets() must declare an audit_log= keyword parameter."""
+        import inspect
+
+        from owlbear.bootstrap.toolsets import build_toolsets
+
+        sig = inspect.signature(build_toolsets)
+        assert "audit_log" in sig.parameters, (
+            "build_toolsets() must accept audit_log= so bootstrap can inject "
+            "the SecurityAuditLog into TerminalToolset and ApprovalGateToolset."
+        )
+
+    # ------------------------------------------------------------------
+    # Wiring contract — build_hooks → CommandSafetyGuard
+    # ------------------------------------------------------------------
+
+    def test_build_hooks_routes_blocked_command_to_audit_log(self, tmp_path: Path) -> None:
+        """After build_hooks(audit_log=...), a PRE_TOOL_USE blocked command writes to the log.
+
+        HookRegistry.emit() swallows handler exceptions, so no pytest.raises is needed;
+        the audit entry must still be appended before the BlockedCommandError is raised.
+        """
+        from owlbear.bootstrap.hooks import build_hooks
+        from owlbear.config import OwlBearSettings
+        from owlbear.core.hooks import HookEvent
+        from owlbear.safety.audit_log import SecurityAuditLog
+
+        audit_log = SecurityAuditLog(tmp_path)
+        hooks, _ = build_hooks(OwlBearSettings(), workspace_root=tmp_path, audit_log=audit_log)
+
+        # Exceptions from hook handlers are swallowed — emit will not raise.
+        _run(
+            hooks.emit(
+                HookEvent.PRE_TOOL_USE,
+                {"tool_name": "run_in_terminal", "args": {"command": "rm -rf /"}},
+            )
+        )
+
+        records = audit_log.load()
+        assert len(records) >= 1, "audit_log must receive at least one event"
+        assert any(r.event_type == "command_blocked" for r in records), (
+            "Expected command_blocked event in audit_log after blocked PRE_TOOL_USE"
+        )
+
+    # ------------------------------------------------------------------
+    # Wiring contracts — build_toolsets → TerminalToolset + ApprovalGateToolset
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_toolsets_with_mocks(
+        workspace: Path,
+        audit_log: object,
+        channel: MagicMock,
+        hooks: object,
+    ) -> list[object]:
+        """Call build_toolsets() with heavy deps (knowledge, web-search) mocked out."""
+        from unittest.mock import patch
+
+        from owlbear.bootstrap.toolsets import build_toolsets
+        from owlbear.config import OwlBearSettings
+
+        with (
+            patch(
+                "owlbear.bootstrap.toolsets._wire_knowledge_toolsets",
+                return_value=(None, None, None),
+            ),
+            patch("owlbear.bootstrap.toolsets._wire_web_search"),
+            patch(
+                "owlbear.bootstrap.toolsets._build_screenshot_components",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = build_toolsets(
+                OwlBearSettings(),
+                workspace,
+                hooks,
+                channel,
+                audit_log=audit_log,
+            )
+        return result[0]
+
+    def test_build_toolsets_routes_path_escape_to_audit_log(self, tmp_path: Path) -> None:
+        """After build_toolsets(audit_log=...), path-escape in TerminalToolset writes to the log."""
+        from owlbear.core.hooks import HookRegistry
+        from owlbear.safety.audit_log import SecurityAuditLog
+        from owlbear.tools.protocols import find_toolset
+        from owlbear.tools.terminal import TerminalToolset
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "kanban").mkdir()
+        audit_log = SecurityAuditLog(tmp_path)
+        toolsets = self._build_toolsets_with_mocks(
+            workspace, audit_log, _make_channel(), HookRegistry()
+        )
+
+        terminal = find_toolset(toolsets, TerminalToolset)
+        assert terminal is not None, "TerminalToolset must be present in built toolsets"
+
+        with pytest.raises(PermissionError):
+            _run(terminal.run_command("echo hi", working_dir="../../outside"))
+
+        records = audit_log.load()
+        assert any(r.event_type == "path_escape_blocked" for r in records), (
+            "Expected path_escape_blocked event in audit_log after TerminalToolset path escape"
+        )
+
+    def test_build_toolsets_routes_approval_denial_to_audit_log(self, tmp_path: Path) -> None:
+        """After build_toolsets(audit_log=...), an ApprovalGateToolset denial writes to the log.
+
+        The default OwlBearSettings.approval_policy includes run_command, so TerminalToolset
+        is wrapped in an ApprovalGateToolset.  Responding 'no' must emit approval_denied.
+        """
+        from owlbear.core.hooks import HookRegistry
+        from owlbear.safety.audit_log import SecurityAuditLog
+        from owlbear.safety.gate import ApprovalGateToolset
+        from owlbear.tools.protocols import unwrap
+        from owlbear.tools.terminal import TerminalToolset
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "kanban").mkdir()
+        audit_log = SecurityAuditLog(tmp_path)
+        channel = _make_channel(["no"])
+        toolsets = self._build_toolsets_with_mocks(
+            workspace, audit_log, channel, HookRegistry()
+        )
+
+        # Default approval_policy includes run_command, so TerminalToolset should be gated.
+        gate = next(
+            (
+                t
+                for t in toolsets
+                if isinstance(t, ApprovalGateToolset)
+                and isinstance(unwrap(t), TerminalToolset)
+            ),
+            None,
+        )
+        assert gate is not None, (
+            "ApprovalGateToolset wrapping TerminalToolset not found; "
+            "default approval_policy must include run_command."
+        )
+
+        ctx, tool_def = MagicMock(), MagicMock()
+        _run(gate.call_tool("run_command", {}, ctx, tool_def))
+
+        records = audit_log.load()
+        assert any(r.event_type == "approval_denied" for r in records), (
+            "Expected approval_denied event in audit_log after ApprovalGateToolset denial"
         )
