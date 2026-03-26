@@ -134,6 +134,10 @@ def _build_knowledge_toolset(  # noqa: PLR0913
     Returns ``None`` when the knowledge subsystem cannot be initialised.
     The fourth element is a :class:`ConsolidationService` when
     *consolidation_enabled* is ``True``, otherwise ``None``.
+
+    When *cleanup* is provided and a :class:`~owlbear.memory.knowledge.enrichment.GraphEnricher`
+    is created, ``enricher.shutdown`` is appended to *cleanup* so that the daemon
+    teardown path cancels all tracked background tasks.
     """
     try:
         from owlbear.memory.knowledge import IngestPipeline  # noqa: PLC0415
