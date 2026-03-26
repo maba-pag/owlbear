@@ -705,3 +705,141 @@ class TestFromAC_WindowPropagation:
         generate_proposals(store, window=None)
         store.load.assert_called()
         store.query.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Retry-4: Non-fallback _target_agent correctness — most-common agent selection
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TargetAgentSelection:
+    """Non-fallback target_agent: the most-common observed agent per tool is selected.
+
+    The existing suite proves target_agent is non-empty (field presence) and that the
+    fallback branch returns "builder" when no agent_name is present.  These tests cover
+    the non-fallback path: when real agent names are present, the most-common one is
+    chosen — not the first seen, not a global aggregate, and not always "builder".
+    """
+
+    def test_target_agent_is_most_common_not_first_seen(self, tmp_path: Path) -> None:
+        """Majority agent is selected even when a different agent appears first in the stream."""
+        # "auditor" appears 2x first; "researcher" appears 5x after.
+        # Counter.most_common must return "researcher", not "auditor" (first seen).
+        events = [
+            _event(
+                tool_name="contested_tool",
+                agent_name="auditor",
+                success=False,
+                error="err",
+                duration_ms=100.0,
+                minutes_ago=i,
+            )
+            for i in range(2)
+        ] + [
+            _event(
+                tool_name="contested_tool",
+                agent_name="researcher",
+                success=False,
+                error="err",
+                duration_ms=100.0,
+                minutes_ago=10 + i,
+            )
+            for i in range(5)
+        ] + [
+            _event(
+                tool_name="contested_tool",
+                agent_name="researcher",
+                success=True,
+                duration_ms=100.0,
+                minutes_ago=20,
+            )
+        ]
+        # 7 errors out of 8 calls → 87.5% error rate → proposal generated
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        relevant = [p for p in proposals if "contested_tool" in p.rationale]
+        assert relevant, "High-error tool must produce a proposal"
+        for p in relevant:
+            assert p.target_agent == "researcher", (
+                f"Most common agent is 'researcher' (5 of 8 events), not 'auditor' (2 events). "
+                f"Got: '{p.target_agent}'"
+            )
+
+    def test_target_agent_is_non_builder_when_other_agent_dominates(self, tmp_path: Path) -> None:
+        """target_agent must not default to 'builder' when a real non-builder agent dominates."""
+        events = [
+            _event(
+                tool_name="writer_tool",
+                agent_name="writer",
+                success=False,
+                error="err",
+                duration_ms=100.0,
+                minutes_ago=i,
+            )
+            for i in range(8)
+        ] + [
+            _event(
+                tool_name="writer_tool",
+                agent_name="writer",
+                success=True,
+                duration_ms=100.0,
+                minutes_ago=10 + i,
+            )
+            for i in range(2)
+        ]
+        # 8/10 error rate; all events from "writer"
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        relevant = [p for p in proposals if "writer_tool" in p.rationale]
+        assert relevant, "High-error tool with agent_name present must produce proposals"
+        for p in relevant:
+            assert p.target_agent == "writer", (
+                f"target_agent must be the observed agent 'writer' (non-fallback path). "
+                f"Got: '{p.target_agent}'"
+            )
+            assert p.target_agent != "builder", (
+                "target_agent must NOT fall back to 'builder' when observed agent is present"
+            )
+
+    def test_target_agent_is_per_tool_not_global(self, tmp_path: Path) -> None:
+        """Each proposal uses the per-tool most-common agent, not a global event aggregate."""
+        # tool_x: all 6 events from "reviewer"
+        # tool_y: all 6 events from "architect"
+        # Per-tool selection must pick "reviewer" for x and "architect" for y.
+        tool_x_events = [
+            _event(
+                tool_name="tool_x",
+                agent_name="reviewer",
+                success=False,
+                error="err",
+                duration_ms=100.0,
+                minutes_ago=i,
+            )
+            for i in range(6)
+        ]
+        tool_y_events = [
+            _event(
+                tool_name="tool_y",
+                agent_name="architect",
+                success=False,
+                error="err",
+                duration_ms=100.0,
+                minutes_ago=20 + i,
+            )
+            for i in range(6)
+        ]
+        # Both tools: 100% error rate on 6 calls each → both produce proposals
+        store = _store_with_events(tmp_path, tool_x_events + tool_y_events)
+        proposals = generate_proposals(store)
+        x_proposals = [p for p in proposals if "tool_x" in p.rationale]
+        y_proposals = [p for p in proposals if "tool_y" in p.rationale]
+        assert x_proposals, "tool_x with 100% error rate must produce proposals"
+        assert y_proposals, "tool_y with 100% error rate must produce proposals"
+        for p in x_proposals:
+            assert p.target_agent == "reviewer", (
+                f"tool_x proposals must target per-tool agent 'reviewer', got '{p.target_agent}'"
+            )
+        for p in y_proposals:
+            assert p.target_agent == "architect", (
+                f"tool_y proposals must target per-tool agent 'architect', got '{p.target_agent}'"
+            )
