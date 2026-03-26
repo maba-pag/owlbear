@@ -5,7 +5,7 @@ description: "Cross-agent rules that apply to all OwlBear agents"
 
 # Cross-Agent Rules
 
-All agents inherit project conventions from `.github/copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
+All agents inherit project conventions from `instructions/copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
 
 ## Task discipline
 
