@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import re
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
 
 _MAX_PORT = 65535
 _ALLOWED_ACTIONS: frozenset[str] = frozenset({"notify", "retry", "escalate"})
+_KNOWN_BACKENDS: frozenset[str] = frozenset({"bell", "sound", "slack"})
 _MATCH_SCALAR_TYPES: tuple[type[object], ...] = (str, int, float, bool)
 
 
@@ -312,11 +314,29 @@ class OwlBearSettings(BaseSettings):
     # --- Notifications ---
     notification_events: list[str] = Field(
         default=["task_complete", "on_error"],
+        deprecated="Use notification_urgent_events and notification_info_events instead.",
         description="Event names that trigger user notifications.",
     )
     notification_backends: list[str] = Field(
         default=["bell", "sound"],
+        deprecated="Use notification_urgent_backends and notification_info_backends instead.",
         description="Notification delivery backends in priority order.",
+    )
+    notification_urgent_events: list[str] = Field(
+        default=["on_error", "budget_warning", "question_pending"],
+        description="Urgent event names that trigger high-priority notifications.",
+    )
+    notification_urgent_backends: list[str] = Field(
+        default=["slack", "sound", "bell"],
+        description="Urgent notification backends in priority order.",
+    )
+    notification_info_events: list[str] = Field(
+        default=["task_complete"],
+        description="Informational event names that trigger low-priority notifications.",
+    )
+    notification_info_backends: list[str] = Field(
+        default=["bell"],
+        description="Informational notification backends in priority order.",
     )
     hook_reactions: list[HookReactionRule] = Field(
         default=[],
@@ -696,6 +716,36 @@ class OwlBearSettings(BaseSettings):
             msg = "ingest_bg_concurrency must be >= 1"
             raise ValueError(msg)
         return v
+
+    @field_validator("notification_urgent_backends", "notification_info_backends")
+    @classmethod
+    def _validate_known_notification_backends(cls, v: list[str]) -> list[str]:
+        """Backends in tiered notification fields must belong to _KNOWN_BACKENDS."""
+        unknown = set(v) - _KNOWN_BACKENDS
+        if unknown:
+            msg = (
+                f"Unknown notification backend(s): {sorted(unknown)}. "
+                f"Allowed: {sorted(_KNOWN_BACKENDS)}"
+            )
+            raise ValueError(msg)
+        return v
+
+    @model_validator(mode="after")
+    def _map_deprecated_notification_fields(self) -> OwlBearSettings:
+        """Map deprecated notification fields to urgent tier when new fields are unset."""
+        old_events_set = "notification_events" in self.model_fields_set
+        old_backends_set = "notification_backends" in self.model_fields_set
+        urgent_events_set = "notification_urgent_events" in self.model_fields_set
+        urgent_backends_set = "notification_urgent_backends" in self.model_fields_set
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            if old_events_set and not urgent_events_set:
+                self.notification_urgent_events = list(self.notification_events)
+            if old_backends_set and not urgent_backends_set:
+                self.notification_urgent_backends = list(self.notification_backends)
+
+        return self
 
     @model_validator(mode="after")
     def _validate_slack_all_or_nothing(self) -> OwlBearSettings:
