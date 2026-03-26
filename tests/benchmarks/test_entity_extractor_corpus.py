@@ -381,3 +381,32 @@ class TestFromAC_PureDataLoading:
             # Reaching here means load_corpus() made no crawl calls.
             result = load_corpus()
         assert result is not None
+
+    def test_load_corpus_does_not_read_live_files(self) -> None:
+        """load_corpus() must not perform any live filesystem reads.
+
+        AC4 requires corpus loading to be pure-data only with no live repo crawl.
+        A pure-data corpus must have its text statically embedded — calling
+        open(), Path.read_text(), or Path.read_bytes() at load time means the
+        loader is reading live repo files rather than using checked-in static data.
+        This closes the gap left by test_load_corpus_does_not_crawl_repo, which
+        only blocks directory-traversal calls but not direct file reads.
+        """
+        from unittest.mock import patch
+
+        def _fail_read(*_args: object, **_kwargs: object) -> object:
+            msg = (
+                "load_corpus() attempted a live file read (open/read_text/read_bytes); "
+                "corpus text must be pure checked-in static data, not read from "
+                "live repo files at load time"
+            )
+            raise AssertionError(msg)
+
+        with (
+            patch("builtins.open", side_effect=_fail_read),
+            patch("pathlib.Path.read_text", side_effect=_fail_read),
+            patch("pathlib.Path.read_bytes", side_effect=_fail_read),
+        ):
+            # Reaching here means load_corpus() made no direct file read calls.
+            result = load_corpus()
+        assert result is not None
