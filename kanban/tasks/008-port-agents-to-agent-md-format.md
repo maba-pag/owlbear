@@ -4,7 +4,7 @@ title: Port agents to .agent.md format
 status: ideation
 priority: needed
 created: 2026-03-26T17:19:41.2513734+01:00
-updated: 2026-03-26T17:56:02.5159936+01:00
+updated: 2026-03-26T18:09:17.2813211+01:00
 tags:
     - phase-1
     - scope:agents
@@ -39,3 +39,7 @@ Depends on R4 (.agent.md format validation) for the tool name mapping. V1 agents
 - [ ] Write v2 agents to agents/ at repo root (not .github/agents/)
 - [ ] Update .vscode/settings.json chat.agentFilesLocations to include agents/
 - [ ] After v2 agents verified working, delete .github/agents/ v1 copies
+
+[[2026-03-26]] Thu 18:09
+
+Note: v1 has 11 agents (not 9). Includes test-writer.agent.md and kanban-planner.agent.md. Port all 11.

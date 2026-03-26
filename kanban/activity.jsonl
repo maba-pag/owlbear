@@ -41,3 +41,4 @@
 {"timestamp":"2026-03-26T18:05:13.4853077+01:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
 {"timestamp":"2026-03-26T18:05:24.8358548+01:00","action":"create","task_id":30,"detail":"Research voice addon architecture"}
 {"timestamp":"2026-03-26T18:05:35.1143633+01:00","action":"create","task_id":31,"detail":"Self-improvement analysis pipeline"}
+{"timestamp":"2026-03-26T18:09:17.2824896+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
