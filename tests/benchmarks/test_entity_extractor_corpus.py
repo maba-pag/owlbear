@@ -463,3 +463,89 @@ class TestFromAC_PureDataLoading:
             patch("pathlib.Path.read_bytes", side_effect=_fail_io),
         ):
             exec(code, namespace)  # noqa: S102
+
+
+# ---------------------------------------------------------------------------
+# AC 1 (gap) — corpus provenance: origin_path files exist, text is verbatim
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CorpusProvenance:
+    """AC 1 gap — every sample origin_path must exist on disk and the text must
+    be a verbatim excerpt of that file's content.
+
+    The reviewer found that:
+    - 4 markdown samples reference tests/benchmarks/fixtures/*.md (nonexistent)
+    - Python sample texts are synthetic prose not found in the referenced files
+    - 1 Python sample references src/owlbear/tools/approval_gate.py (nonexistent)
+
+    These tests enforce that AC1's "trimmed OwlBear samples" requirement is
+    actually satisfied by the checked-in corpus data.
+
+    Retry-cycle addition: closes the LAX AC1 gap reported in Review Evidence.
+    """
+
+    def test_origin_path_files_exist_on_disk(self) -> None:
+        """Every origin_path must resolve to a file that actually exists in the workspace.
+
+        AC1 requires 'trimmed OwlBear samples' — each sample must be sourced
+        from a real, checked-in file.  A nonexistent origin_path indicates the
+        corpus was populated with synthetic data rather than actual excerpts from
+        the project source tree.
+        """
+        from pathlib import Path
+
+        root = Path(__file__).parent.parent.parent
+        samples = load_corpus()
+        missing: list[tuple[str, str]] = []
+        for sample in samples:
+            # Normalize path separators so tests pass on Windows and Linux.
+            rel = sample.origin_path.replace("\\", "/")
+            if not (root / rel).exists():
+                missing.append((sample.source_label, sample.origin_path))
+        assert not missing, (
+            "The following corpus samples have origin_path values that do not "
+            "resolve to an existing file in the workspace.\n"
+            "AC1 requires trimmed excerpts from real, checked-in OwlBear files.\n"
+            "Missing files:\n"
+            + "\n".join(f"  '{lbl}': {path}" for lbl, path in missing)
+        )
+
+    def test_sample_text_is_verbatim_excerpt_of_origin_file(self) -> None:
+        """Every sample.text must appear verbatim (as a substring) in origin_path.
+
+        AC1 requires 'trimmed OwlBear samples' — 'trimmed' means the text is an
+        actual excerpt of the referenced checked-in file.  Synthetic or paraphrased
+        prose that does not appear in the file content fails this contract.
+
+        Samples whose origin_path does not exist are reported as failures by
+        test_origin_path_files_exist_on_disk; this test also reports them so the
+        full set of violations is visible in a single run.
+        """
+        from pathlib import Path
+
+        root = Path(__file__).parent.parent.parent
+        samples = load_corpus()
+        failures: list[str] = []
+        for sample in samples:
+            rel = sample.origin_path.replace("\\", "/")
+            abs_path = root / rel
+            if not abs_path.exists():
+                failures.append(
+                    f"  '{sample.source_label}': origin_path '{sample.origin_path}' "
+                    "does not exist — cannot verify text provenance"
+                )
+                continue
+            file_content = abs_path.read_text(encoding="utf-8")
+            if sample.text not in file_content:
+                failures.append(
+                    f"  '{sample.source_label}': text not found verbatim in "
+                    f"'{sample.origin_path}'.\n"
+                    f"    Expected substring: {sample.text[:120]!r}..."
+                )
+        assert not failures, (
+            "The following corpus samples have text that is not a verbatim excerpt "
+            "of the referenced origin_path file.\n"
+            "AC1 requires trimmed OwlBear samples (real excerpts, not synthetic prose):\n"
+            + "\n".join(failures)
+        )
