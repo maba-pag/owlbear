@@ -725,35 +725,39 @@ class TestFromAC_TargetAgentSelection:
         """Majority agent is selected even when a different agent appears first in the stream."""
         # "auditor" appears 2x first; "researcher" appears 5x after.
         # Counter.most_common must return "researcher", not "auditor" (first seen).
-        events = [
-            _event(
-                tool_name="contested_tool",
-                agent_name="auditor",
-                success=False,
-                error="err",
-                duration_ms=100.0,
-                minutes_ago=i,
-            )
-            for i in range(2)
-        ] + [
-            _event(
-                tool_name="contested_tool",
-                agent_name="researcher",
-                success=False,
-                error="err",
-                duration_ms=100.0,
-                minutes_ago=10 + i,
-            )
-            for i in range(5)
-        ] + [
-            _event(
-                tool_name="contested_tool",
-                agent_name="researcher",
-                success=True,
-                duration_ms=100.0,
-                minutes_ago=20,
-            )
-        ]
+        events = (
+            [
+                _event(
+                    tool_name="contested_tool",
+                    agent_name="auditor",
+                    success=False,
+                    error="err",
+                    duration_ms=100.0,
+                    minutes_ago=i,
+                )
+                for i in range(2)
+            ]
+            + [
+                _event(
+                    tool_name="contested_tool",
+                    agent_name="researcher",
+                    success=False,
+                    error="err",
+                    duration_ms=100.0,
+                    minutes_ago=10 + i,
+                )
+                for i in range(5)
+            ]
+            + [
+                _event(
+                    tool_name="contested_tool",
+                    agent_name="researcher",
+                    success=True,
+                    duration_ms=100.0,
+                    minutes_ago=20,
+                )
+            ]
+        )
         # 7 errors out of 8 calls → 87.5% error rate → proposal generated
         store = _store_with_events(tmp_path, events)
         proposals = generate_proposals(store)

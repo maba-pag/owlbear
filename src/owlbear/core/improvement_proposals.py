@@ -131,9 +131,7 @@ def _target_agent(events: list[ObservabilityEvent], tool_name: str) -> str:
     agents = [
         event.agent_name
         for event in events
-        if event.event_type == "post_tool_use"
-        and event.tool_name == tool_name
-        and event.agent_name
+        if event.event_type == "post_tool_use" and event.tool_name == tool_name and event.agent_name
     ]
     if not agents:
         return "builder"
