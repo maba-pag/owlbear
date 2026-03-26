@@ -276,7 +276,7 @@ Downstream agents read this via `kanban\kanban-md.exe show {ID}`. The orchestrat
 
 | Agent          | Verdict tokens                            | Signal example                                       | Body section             |
 | -------------- | ----------------------------------------- | ---------------------------------------------------- | ------------------------ |
-| planner        | (JSON plan)                               | `{"dispatch":[...],"blocked":[...]}`                 | (none — no task body)    |
+| planner        | (JSON plan)                               | `{"dispatch":[...]}`                                 | (none — no task body)    |
 | test-writer    | `DONE` / `BLOCKED`                        | `DONE #480 -> in-progress \| tests written, 12 fail` | `## Test-Writer Notes`   |
 | builder        | `DONE` / `BLOCKED` / `BLOCK`              | `DONE #480 -> review \| 12 passed, ruff clean`       | `## Builder Notes`       |
 | reviewer       | `PASS` / `FAIL`                           | `PASS #480 -> docs \| confidence .95`                | `## Review Evidence`     |
@@ -306,6 +306,12 @@ $content = Get-Content "docs/scratch/$id-notes.tmp" -Raw
 kanban\kanban-md.exe edit $id -a $content -t
 Remove-Item "docs/scratch/$id-notes.tmp"
 ```
+
+Additional body-content gotchas (confirmed by multiple agents, #980–#990):
+
+- **`->` arrows** in body text are parsed by kanban-md as shorthand flag fragments — replace with prose (e.g., "returns" instead of `→`, "go to" instead of `->`, pipe-escaped `|` or descriptive text instead of table arrows).
+- **`--token` patterns** (e.g., `--cov`, `--tb`) embedded in body text are parsed as CLI flags — keep evidence summaries in prose, never paste raw CLI output containing flag-style tokens directly into body text.
+- **PS 5.1 here-strings** (`@"..."@`) passed via `Start-Process -ArgumentList` are split into separate args by the shell — always use the temp-file pattern above for multiline content.
 
 ### Reading rules
 
