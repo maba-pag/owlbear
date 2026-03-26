@@ -16,6 +16,7 @@ from owlbear.memory.error_journal import ErrorJournal
 from owlbear.memory.session import SessionStore
 from owlbear.memory.usage import UsageTracker
 from owlbear.providers.copilot import create_copilot_client, create_copilot_model  # noqa: F401
+from owlbear.safety.audit_log import SecurityAuditLog
 from owlbear.tools.mcp_servers import register_default_servers  # noqa: F401
 from owlbear.tools.protocols import find_toolset
 
@@ -187,6 +188,7 @@ async def bootstrap(  # noqa: PLR0915
 
     workspace = workspace_root or _Path.cwd()
     cleanup: list[Callable] = []
+    security_audit_log = SecurityAuditLog(workspace)
 
     error_journal = ErrorJournal(workspace)
     channel = create_channel(settings, channel_name)
@@ -194,6 +196,7 @@ async def bootstrap(  # noqa: PLR0915
         settings,
         workspace_root=workspace_root,
         channel=channel,
+        audit_log=security_audit_log,
     )
     if progress_reporter is not None:
         cleanup.append(progress_reporter.stop)
@@ -215,6 +218,7 @@ async def bootstrap(  # noqa: PLR0915
         chat_model=model,
         tracker=tracker,
         provider=settings.provider,
+        audit_log=security_audit_log,
         cleanup=cleanup,
         summary=component_statuses,
     )

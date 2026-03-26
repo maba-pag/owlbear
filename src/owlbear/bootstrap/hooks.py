@@ -15,6 +15,7 @@ from owlbear.core.test_hook import TestVerificationHook
 from owlbear.tools.browser.safety import URLSafetyGuard
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear.channels.base import ChannelPlugin
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from owlbear.core.hook_reaction_router import Executor
     from owlbear.core.notification_hook import NotificationBackend
     from owlbear.core.progress import ProgressReporter
+    from owlbear.safety.audit_log import SecurityAuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +97,44 @@ def _notification_events_for_hook(settings: OwlBearSettings) -> list[str]:
     return filtered_events
 
 
+def _build_security_audit_sink(
+    audit_log: SecurityAuditLog | None,
+) -> Callable[[object], None] | None:
+    """Return an adapter sink that writes runtime events to ``SecurityAuditLog``."""
+    if audit_log is None:
+        return None
+
+    def _sink(event: object) -> None:
+        metadata = getattr(event, "metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        raw_tool_name = getattr(event, "tool_name", None)
+        tool_name = str(raw_tool_name) if raw_tool_name is not None else None
+
+        raw_timestamp = getattr(event, "timestamp", None)
+        timestamp = str(raw_timestamp) if raw_timestamp else None
+
+        audit_log.log(
+            event_type=str(getattr(event, "event_type", "security_event")),
+            severity=str(getattr(event, "severity", "medium")),
+            actor=str(getattr(event, "actor", "agent")),
+            session_id=str(getattr(event, "session_id", "")),
+            tool_name=tool_name,
+            detail=str(getattr(event, "detail", "")),
+            metadata=metadata,
+            timestamp=timestamp,
+        )
+
+    return _sink
+
+
 def build_hooks(
     settings: OwlBearSettings,
     *,
     workspace_root: Path | None = None,
     channel: ChannelPlugin | None = None,
+    audit_log: SecurityAuditLog | None = None,
 ) -> tuple[HookRegistry, ProgressReporter | None]:
     """Create a :class:`HookRegistry` with all standard hooks registered.
 
@@ -117,7 +152,9 @@ def build_hooks(
     """
     hooks = HookRegistry()
 
-    CommandSafetyGuard().register(hooks)
+    audit_sink = _build_security_audit_sink(audit_log)
+
+    CommandSafetyGuard(audit_sink=audit_sink).register(hooks)
     URLSafetyGuard(config=settings.browser).register(hooks)
     AutoLintHook().register(hooks)
     SubagentVerificationHook().register(hooks)

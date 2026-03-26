@@ -39,8 +39,41 @@ if TYPE_CHECKING:
     from owlbear.memory.usage import UsageTracker
     from owlbear.projects.models import Project
     from owlbear.projects.store import ProjectStore
+    from owlbear.safety.audit_log import SecurityAuditLog
 
 logger = logging.getLogger(__name__)
+
+
+def _build_security_audit_sink(
+    audit_log: SecurityAuditLog | None,
+) -> Callable[[object], None] | None:
+    """Return an adapter sink that writes runtime events to ``SecurityAuditLog``."""
+    if audit_log is None:
+        return None
+
+    def _sink(event: object) -> None:
+        metadata = getattr(event, "metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        raw_tool_name = getattr(event, "tool_name", None)
+        tool_name = str(raw_tool_name) if raw_tool_name is not None else None
+
+        raw_timestamp = getattr(event, "timestamp", None)
+        timestamp = str(raw_timestamp) if raw_timestamp else None
+
+        audit_log.log(
+            event_type=str(getattr(event, "event_type", "security_event")),
+            severity=str(getattr(event, "severity", "medium")),
+            actor=str(getattr(event, "actor", "agent")),
+            session_id=str(getattr(event, "session_id", "")),
+            tool_name=tool_name,
+            detail=str(getattr(event, "detail", "")),
+            metadata=metadata,
+            timestamp=timestamp,
+        )
+
+    return _sink
 
 
 def _resolve_active_project(
@@ -256,6 +289,7 @@ def _wrap_toolsets(
     settings: OwlBearSettings,
     hooks: HookRegistry,
     channel: ChannelPlugin,
+    audit_sink: Callable[[object], None] | None = None,
 ) -> list[AbstractToolset]:
     """Wrap toolsets in HookedToolset and optionally ApprovalGateToolset."""
     wrapped: list[AbstractToolset] = [HookedToolset(wrapped=ts, hooks=hooks) for ts in raw]
@@ -287,6 +321,7 @@ def _wrap_toolsets(
                         session=session,
                         channel=channel,
                         hooks=hooks,
+                        audit_sink=audit_sink,
                     )
                 )
             else:
@@ -306,6 +341,7 @@ def build_toolsets(  # noqa: PLR0913
     chat_model: str | Model | None = None,
     tracker: UsageTracker | None = None,
     provider: str = "copilot",
+    audit_log: SecurityAuditLog | None = None,
     cleanup: list[Callable] | None = None,
     summary: list[ComponentStatus] | None = None,
 ) -> tuple[
@@ -325,11 +361,12 @@ def build_toolsets(  # noqa: PLR0913
     # Resolve _build_knowledge_infra through the package module so that
     # ``mock.patch("owlbear.bootstrap._build_knowledge_infra", ...)`` works.
     _pkg = sys.modules[__package__]
+    audit_sink = _build_security_audit_sink(audit_log)
 
     raw: list[AbstractToolset] = []
 
     raw.append(FileToolset(workspace_root=workspace))
-    raw.append(TerminalToolset(workspace_root=workspace, hooks=hooks))
+    raw.append(TerminalToolset(workspace_root=workspace, hooks=hooks, audit_sink=audit_sink))
     raw.append(AskUserToolset(channel, hooks=hooks))
     raw.append(GitLocalToolset(workspace_root=workspace, hooks=hooks))
     profile_dir = sandbox_path(workspace, "browser_profiles")
@@ -391,7 +428,7 @@ def build_toolsets(  # noqa: PLR0913
     _wire_web_search(raw, _summary, browser_config=settings.browser)
 
     # Wrap and gate
-    wrapped = _wrap_toolsets(raw, settings, hooks, channel)
+    wrapped = _wrap_toolsets(raw, settings, hooks, channel, audit_sink=audit_sink)
     return wrapped, knowledge_service, ingest_pipeline, consolidation_svc
 
 
