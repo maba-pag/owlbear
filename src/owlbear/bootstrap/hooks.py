@@ -70,6 +70,31 @@ def _make_escalate_executor(channel: ChannelPlugin) -> Executor:
     return _executor
 
 
+def _notification_events_for_hook(settings: OwlBearSettings) -> list[str]:
+    """Return NotificationHook events after unconditional-notify deduplication."""
+    configured_events = list(settings.notification_events)
+    if not settings.hook_reactions:
+        return configured_events
+
+    excluded_events = {
+        event_name
+        for rule in settings.hook_reactions
+        if "notify" in rule.actions and rule.match is None
+        for event_name in rule.events
+    }
+    if not excluded_events:
+        return configured_events
+
+    filtered_events = [
+        event_name for event_name in configured_events if event_name not in excluded_events
+    ]
+    logger.debug(
+        "Excluded NotificationHook events handled by unconditional notify reactions: %s",
+        sorted(set(configured_events) & excluded_events),
+    )
+    return filtered_events
+
+
 def build_hooks(
     settings: OwlBearSettings,
     *,
@@ -104,9 +129,10 @@ def build_hooks(
         LessonsInjectionHook().register(hooks)
 
     notification_backends = [ConsoleBellBackend(), WinSoundBackend()]
+    notification_events = _notification_events_for_hook(settings)
     NotificationHook(
         backends=notification_backends,
-        notification_events=settings.notification_events,
+        notification_events=notification_events,
     ).register(hooks)
 
     if settings.hook_reactions:
