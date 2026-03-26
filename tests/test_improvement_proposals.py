@@ -12,12 +12,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import TypeAdapter
+
 from owlbear.core.improvement_proposals import (  # type: ignore[import]
     ImprovementProposal,
     generate_proposals,
 )
-from pydantic import TypeAdapter
-
 from owlbear.core.observability import EventStore, ObservabilityEvent
 
 # ---------------------------------------------------------------------------
@@ -368,3 +368,292 @@ class TestFromAC_ProposalReviewArtifact:
             fields = set(inspect.get_annotations(ImprovementProposal))
         missing = required - fields
         assert not missing, f"ImprovementProposal is missing fields: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Retry AC1 enforcement: verify EventStore API delegation (not re-aggregation)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EntrypointContractStrong:
+    """Retry: stronger contract — generate_proposals delegates to EventStore APIs."""
+
+    def test_generate_proposals_calls_store_summary(self) -> None:
+        """generate_proposals must call store.summary() — not re-aggregate from store.load()."""
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = {
+            "total_tool_calls": 0,
+            "error_count": 0,
+            "avg_tool_duration_ms": 0.0,
+            "tools_by_frequency": {},
+            "agents_by_usage": {},
+        }
+        generate_proposals(store)
+        store.summary.assert_called_once_with(None)
+
+    def test_generate_proposals_calls_store_summary_with_window(self) -> None:
+        """generate_proposals(store, window=X) must pass the window to store.summary(X)."""
+        window = timedelta(hours=6)
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = {
+            "total_tool_calls": 0,
+            "error_count": 0,
+            "avg_tool_duration_ms": 0.0,
+            "tools_by_frequency": {},
+            "agents_by_usage": {},
+        }
+        generate_proposals(store, window=window)
+        store.summary.assert_called_once_with(window)
+
+    def test_generate_proposals_calls_store_tool_stats_when_threshold_met(self) -> None:
+        """generate_proposals must call store.tool_stats() when total_tool_calls >= threshold."""
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = {
+            "total_tool_calls": 10,
+            "error_count": 0,
+            "avg_tool_duration_ms": 50.0,
+            "tools_by_frequency": {"read_file": 10},
+            "agents_by_usage": {"builder": 10},
+        }
+        store.tool_stats.return_value = {}
+        generate_proposals(store)
+        store.tool_stats.assert_called_once_with(None)
+
+    def test_tool_stats_not_called_when_below_min_total_calls(self) -> None:
+        """generate_proposals short-circuits before calling tool_stats if total < 5."""
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = {
+            "total_tool_calls": 4,  # below _MIN_TOTAL_CALLS=5
+            "error_count": 0,
+            "avg_tool_duration_ms": 0.0,
+            "tools_by_frequency": {},
+            "agents_by_usage": {},
+        }
+        generate_proposals(store)
+        store.tool_stats.assert_not_called()
+
+    def test_empty_tool_stats_despite_sufficient_total_calls_returns_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """When summary reports >= 5 calls but all events lack tool_name, return []."""
+        # post_tool_use events with tool_name=None count toward total_tool_calls (summary)
+        # but produce an empty dict from tool_stats (which filters on tool_name)
+        events = [
+            _event(
+                event_type="post_tool_use",
+                tool_name=None,
+                success=True,
+                duration_ms=50.0,
+                minutes_ago=i,
+            )
+            for i in range(10)
+        ]
+        store = _store_with_events(tmp_path, events)
+        result = generate_proposals(store)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Retry AC3 enforcement: evidence must carry specific observed metric values
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EvidenceStructure:
+    """Retry: stronger enforcement that evidence payloads contain real observed metrics."""
+
+    def test_high_error_evidence_is_a_dict(self, tmp_path: Path) -> None:
+        """High-error proposal evidence must be a dict, not a generic string."""
+        store = _store_with_events(tmp_path, _high_error_events(total=10, error_count=8))
+        proposals = generate_proposals(store)
+        assert proposals
+        reliability = [p for p in proposals if p.change_category == "reliability"]
+        assert reliability
+        for p in reliability:
+            assert isinstance(p.evidence, dict), (
+                f"evidence must be a dict for reliability proposals, got {type(p.evidence)}"
+            )
+
+    def test_high_error_evidence_contains_error_rate_key(self, tmp_path: Path) -> None:
+        """High-error evidence dict must have 'error_rate' as a numeric value in (0, 1]."""
+        store = _store_with_events(tmp_path, _high_error_events(total=10, error_count=8))
+        proposals = generate_proposals(store)
+        assert proposals
+        for p in proposals:
+            if p.change_category == "reliability":
+                assert isinstance(p.evidence, dict)
+                assert "error_rate" in p.evidence, "evidence must contain 'error_rate'"
+                assert isinstance(p.evidence["error_rate"], float), "error_rate must be float"
+                assert 0 < p.evidence["error_rate"] <= 1.0, "error_rate must be a valid ratio"
+
+    def test_high_error_evidence_reflects_actual_observed_counts(self, tmp_path: Path) -> None:
+        """Evidence error_count and call_count must match the actual observed data."""
+        events = _high_error_events(total=10, error_count=8)
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        assert proposals
+        reliability = [p for p in proposals if p.change_category == "reliability"]
+        assert reliability
+        for p in reliability:
+            assert isinstance(p.evidence, dict)
+            assert p.evidence.get("error_count") == 8, (
+                f"evidence must report observed error_count=8, got {p.evidence.get('error_count')}"
+            )
+            assert p.evidence.get("call_count") == 10, (
+                f"evidence must report observed call_count=10, got {p.evidence.get('call_count')}"
+            )
+
+    def test_high_latency_evidence_is_a_dict(self, tmp_path: Path) -> None:
+        """High-latency proposal evidence must be a dict, not a generic string."""
+        store = _store_with_events(tmp_path, _high_latency_events(count=5))
+        proposals = generate_proposals(store)
+        assert proposals
+        perf = [p for p in proposals if p.change_category == "performance"]
+        assert perf
+        for p in perf:
+            assert isinstance(p.evidence, dict), (
+                f"evidence must be a dict for performance proposals, got {type(p.evidence)}"
+            )
+
+    def test_high_latency_evidence_contains_avg_duration_ms_key(self, tmp_path: Path) -> None:
+        """High-latency evidence dict must have 'avg_duration_ms' above the latency threshold."""
+        high_latency_ms = 3000.0
+        store = _store_with_events(tmp_path, _high_latency_events(count=5))
+        proposals = generate_proposals(store)
+        assert proposals
+        for p in proposals:
+            if p.change_category == "performance":
+                assert isinstance(p.evidence, dict)
+                assert "avg_duration_ms" in p.evidence, "evidence must contain 'avg_duration_ms'"
+                assert isinstance(p.evidence["avg_duration_ms"], float)
+                assert p.evidence["avg_duration_ms"] >= high_latency_ms, (
+                    "avg_duration_ms in evidence must be at or above the latency threshold"
+                )
+
+
+# ---------------------------------------------------------------------------
+# Retry: policy boundary conditions and previously uncovered code paths
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PolicyBoundaries:
+    """Retry: boundary values for thresholds and uncovered code paths (lines 57, 65, 137)."""
+
+    def test_tool_with_fewer_than_min_calls_is_skipped_even_at_high_error_rate(
+        self, tmp_path: Path
+    ) -> None:
+        """Tool with call_count < 3 is skipped even at 100% error rate (line 65 path)."""
+        # 2 events for tool_A (both fail) — below _MIN_TOOL_CALLS=3
+        # 3 healthy events for tool_B — meets minimum, zero errors
+        events_a = [
+            _event(
+                tool_name="tool_A",
+                success=False,
+                error="err",
+                duration_ms=50.0,
+                minutes_ago=i,
+            )
+            for i in range(2)
+        ]
+        events_b = [
+            _event(tool_name="tool_B", success=True, duration_ms=40.0, minutes_ago=10 + i)
+            for i in range(3)
+        ]
+        store = _store_with_events(tmp_path, events_a + events_b)
+        proposals = generate_proposals(store)
+        tool_a_proposals = [p for p in proposals if "tool_A" in str(p.rationale)]
+        assert not tool_a_proposals, (
+            "Tool with fewer than 3 calls must not produce proposals even at high error rate"
+        )
+
+    def test_error_rate_at_threshold_produces_proposal(self, tmp_path: Path) -> None:
+        """error_rate == 0.5 is exactly at the >= threshold and must produce a proposal."""
+        # 6 events: 3 fail, 3 succeed  → error_rate = 3/6 = 0.5 exactly
+        events = [
+            _event(
+                tool_name="threshold_tool",
+                success=(i >= 3),
+                error=None if i >= 3 else "err",
+                duration_ms=50.0,
+                minutes_ago=i,
+            )
+            for i in range(6)
+        ]
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        threshold_proposals = [p for p in proposals if "threshold_tool" in str(p.rationale)]
+        assert threshold_proposals, (
+            "error_rate == 0.5 is at the '>=' threshold and must produce a proposal"
+        )
+
+    def test_error_rate_just_below_threshold_produces_no_proposal(self, tmp_path: Path) -> None:
+        """error_rate < 0.5 must NOT trigger a reliability proposal."""
+        # 10 events: 4 fail, 6 succeed → error_rate = 0.4 (below threshold)
+        events = [
+            _event(
+                tool_name="subthreshold_tool",
+                success=(i >= 4),
+                error=None if i >= 4 else "err",
+                duration_ms=50.0,
+                minutes_ago=i,
+            )
+            for i in range(10)
+        ]
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        sub_proposals = [p for p in proposals if "subthreshold_tool" in str(p.rationale)]
+        assert not sub_proposals, (
+            "error_rate = 0.4 is below the threshold and must NOT produce a proposal"
+        )
+
+    def test_latency_at_threshold_produces_proposal(self, tmp_path: Path) -> None:
+        """avg_duration_ms == 3000.0 is exactly at the >= threshold and must produce a proposal."""
+        events = [
+            _event(tool_name="slow_tool", success=True, duration_ms=3000.0, minutes_ago=i)
+            for i in range(5)
+        ]
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        latency_proposals = [p for p in proposals if "slow_tool" in str(p.rationale)]
+        assert latency_proposals, (
+            "avg_duration_ms == 3000.0 is at the '>=' threshold and must produce a proposal"
+        )
+
+    def test_latency_below_threshold_produces_no_proposal(self, tmp_path: Path) -> None:
+        """avg_duration_ms < 3000.0 must NOT trigger a latency proposal."""
+        events = [
+            _event(
+                tool_name="fast_enough_tool", success=True, duration_ms=2999.0, minutes_ago=i
+            )
+            for i in range(5)
+        ]
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        fast_proposals = [p for p in proposals if "fast_enough_tool" in str(p.rationale)]
+        assert not fast_proposals, (
+            "avg_duration_ms = 2999.0 is below the threshold and must NOT produce a proposal"
+        )
+
+    def test_target_agent_defaults_to_builder_when_events_have_no_agent_name(
+        self, tmp_path: Path
+    ) -> None:
+        """When all high-error events lack agent_name, target_agent must default to 'builder'."""
+        events = [
+            _event(
+                tool_name="agentless_tool",
+                agent_name=None,
+                success=(i >= 8),
+                error=None if i >= 8 else "err",
+                duration_ms=50.0,
+                minutes_ago=i,
+            )
+            for i in range(10)
+        ]
+        store = _store_with_events(tmp_path, events)
+        proposals = generate_proposals(store)
+        agentless = [p for p in proposals if "agentless_tool" in str(p.rationale)]
+        assert agentless, "High-error tool with no agent_name should still produce proposals"
+        for p in agentless:
+            assert p.target_agent == "builder", (
+                f"target_agent must default to 'builder' when no agent_name present, "
+                f"got '{p.target_agent}'"
+            )
