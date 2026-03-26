@@ -201,6 +201,51 @@ class TestFromAC_SecurityAuditLogStore:
         store = SecurityAuditLog(tmp_path, max_entries=100)
         assert store.max_entries == 100
 
+    def test_security_event_has_exactly_eight_fields(self) -> None:
+        """SecurityEvent model has EXACTLY the 8 required fields — no more, no less.
+
+        Strengthens test_security_event_has_all_required_fields which only checks hasattr
+        and would pass if extra schema fields were added.
+        """
+        expected_fields = {
+            "timestamp",
+            "event_type",
+            "severity",
+            "actor",
+            "session_id",
+            "tool_name",
+            "detail",
+            "metadata",
+        }
+        actual_fields = set(SecurityEvent.model_fields.keys())
+        assert actual_fields == expected_fields, (
+            f"SecurityEvent must have exactly {sorted(expected_fields)} — "
+            f"got {sorted(actual_fields)}"
+        )
+
+    def test_log_auto_generates_iso8601_timestamp(self, tmp_path: Path) -> None:
+        """log() without an explicit timestamp auto-generates a valid ISO-8601 datetime string.
+
+        Strengthens test_audit_log_preserves_all_schema_fields which only checks that
+        timestamp is a non-empty string and would pass for malformed timestamps.
+        """
+        from datetime import datetime
+
+        store = SecurityAuditLog(tmp_path)
+        store.log(
+            event_type="command_blocked",
+            severity="high",
+            actor="agent",
+            session_id="iso-check-session",
+            tool_name=None,
+            detail="testing iso-8601 auto-timestamp",
+            metadata={},
+        )
+        event = store.load()[0]
+        # datetime.fromisoformat() raises ValueError for malformed strings
+        parsed = datetime.fromisoformat(event.timestamp)
+        assert parsed is not None
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_CommandBlockedAuditEvent
@@ -697,17 +742,14 @@ class TestFromAC_BootstrapAuditSinkWiring:
         (workspace / "kanban").mkdir()
         audit_log = SecurityAuditLog(tmp_path)
         channel = _make_channel(["no"])
-        toolsets = self._build_toolsets_with_mocks(
-            workspace, audit_log, channel, HookRegistry()
-        )
+        toolsets = self._build_toolsets_with_mocks(workspace, audit_log, channel, HookRegistry())
 
         # Default approval_policy includes run_command, so TerminalToolset should be gated.
         gate = next(
             (
                 t
                 for t in toolsets
-                if isinstance(t, ApprovalGateToolset)
-                and isinstance(unwrap(t), TerminalToolset)
+                if isinstance(t, ApprovalGateToolset) and isinstance(unwrap(t), TerminalToolset)
             ),
             None,
         )
