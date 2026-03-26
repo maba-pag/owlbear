@@ -1,4 +1,26 @@
-# OwlBear
+# OwlBear v1 Archive
+
+This directory contains the complete v1 codebase, preserved for reference during v2 development.
+
+## Useful for v2
+
+- **Test patterns:** `tests/` has testing patterns (mocked subprocess helpers,
+  fixture factories, TDD red/green examples) useful as reference for v2 tests.
+- **Knowledge engine:** `src/owlbear/memory/knowledge/` has the graph + vector
+  store code to be extracted into `packages/knowledge/` (task #15).
+- **Agent system prompts:** `src/owlbear/agents/` has agent definitions with
+  detailed system prompts that inform the v2 `.agent.md` ports.
+- **Research docs:** Authoritative research docs are at repo root `docs/research/`.
+
+## Not Active
+
+v1 code is not maintained. This directory is read-only reference.
+
+---
+
+*Original v1 README follows:*
+
+# OwlBear (v1)
 
 Always-on, laptop-resident AI development system.
 
