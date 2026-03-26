@@ -122,6 +122,7 @@ class GraphEnricher:
 
     async def drain(self) -> None:
         """Await all tracked tasks to completion and clear their tracking references."""
+        self._shutdown = True
         tasks = list(self._background_tasks)
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
