@@ -410,3 +410,56 @@ class TestFromAC_PureDataLoading:
             # Reaching here means load_corpus() made no direct file read calls.
             result = load_corpus()
         assert result is not None
+
+    def test_corpus_module_import_does_not_do_filesystem_io(self) -> None:
+        """Module-level code must not perform any filesystem IO at import time.
+
+        AC4 requires 'no live repo crawl is required' and pure-data only loading.
+        The corpus constant ENTITY_EXTRACTOR_CORPUS must be statically defined,
+        not built by reading live repo files during module initialisation
+        ("import-time IO").
+
+        This test covers the gap left by test_load_corpus_does_not_crawl_repo
+        and test_load_corpus_does_not_read_live_files: those tests patch IO calls
+        inside load_corpus(), but cannot detect IO done at import time because
+        the corpus module is already loaded at collection before any test method
+        runs.
+
+        Strategy: compile the module source before applying patches (so our own
+        file read is not intercepted), then exec the compiled bytecode in a
+        namespace where all filesystem IO functions raise AssertionError.  Any
+        import-time IO in the module body will trip the guard and fail the test.
+        """
+        from pathlib import Path
+        from unittest.mock import patch
+
+        corpus_path = Path(__file__).parent / "entity_extractor_corpus.py"
+        # Read + compile BEFORE patches are active so our own read is not
+        # intercepted by the guards below.
+        source = corpus_path.read_text(encoding="utf-8")
+        code = compile(source, str(corpus_path), "exec")
+
+        def _fail_io(*_args, **_kwargs):
+            msg = (
+                "entity_extractor_corpus performed filesystem IO at module import "
+                "time; all corpus data must be statically embedded, not read from "
+                "live repo files during module initialisation"
+            )
+            raise AssertionError(msg)
+
+        namespace = {
+            "__name__": "_test_import_io_purity",
+            "__file__": str(corpus_path),
+            "__package__": "tests.benchmarks",
+        }
+        with (
+            patch("os.walk", side_effect=_fail_io),
+            patch("os.scandir", side_effect=_fail_io),
+            patch("pathlib.Path.iterdir", side_effect=_fail_io),
+            patch("pathlib.Path.glob", side_effect=_fail_io),
+            patch("pathlib.Path.rglob", side_effect=_fail_io),
+            patch("builtins.open", side_effect=_fail_io),
+            patch("pathlib.Path.read_text", side_effect=_fail_io),
+            patch("pathlib.Path.read_bytes", side_effect=_fail_io),
+        ):
+            exec(code, namespace)  # noqa: S102
