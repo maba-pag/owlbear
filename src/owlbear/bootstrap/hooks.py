@@ -153,6 +153,12 @@ def build_hooks(
         ``reaction_executors["escalate"]``; the retry slot stays noop.
         When the escalate action is configured but *channel* is ``None``,
         a warning is logged and the escalate slot falls back to noop.
+
+        Assembly-time dedup: events already covered by unconditional notify
+        reactions (rules with ``match=None``) are excluded from the
+        :class:`NotificationHook` event list via
+        :func:`_notification_events_for_hook` to prevent double-firing.  A
+        DEBUG log is emitted listing any excluded events.
     """
     hooks = HookRegistry()
 
