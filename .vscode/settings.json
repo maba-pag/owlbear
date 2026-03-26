@@ -32,6 +32,7 @@
   },
   "github.copilot.chat.agent.autoFix": true,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
+  "github.copilot.chat.copilotMemory.enabled": false,
   "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
   "github.copilot.chat.anthropic.tools.websearch.maxUses": 20,
   "github.copilot.chat.executionSubagent.enabled": true,

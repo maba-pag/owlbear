@@ -32,11 +32,11 @@ OwlBear is an on-demand, laptop-resident AI development system built around Copi
 
 ## Command Surface Selection
 
-| Surface      | Choose this when                                                                                                                                | OwlBear example                             |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `.prompt.md` | You are defining a user-facing one-shot command that should run only when explicitly invoked.                                                   | `prompts/orchestrate.prompt.md`             |
-| `SKILL.md`   | You are defining reusable domain knowledge that should auto-load by relevance, or you need co-located resources (scripts, templates, examples). | `skills/research-workflow/SKILL.md`         |
-| `.agent.md`  | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, or handoff boundaries.        | `agents/reviewer.agent.md`                  |
+| Surface      | Choose this when                                                                                                                                | OwlBear example                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `.prompt.md` | You are defining a user-facing one-shot command that should run only when explicitly invoked.                                                   | `prompts/orchestrate.prompt.md`     |
+| `SKILL.md`   | You are defining reusable domain knowledge that should auto-load by relevance, or you need co-located resources (scripts, templates, examples). | `skills/research-workflow/SKILL.md` |
+| `.agent.md`  | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, or handoff boundaries.        | `agents/reviewer.agent.md`          |
 
 Default rule: user-facing one-shot commands use `.prompt.md` unless they need auto-loading or co-located resources.
 
@@ -47,20 +47,22 @@ Default rule: user-facing one-shot commands use `.prompt.md` unless they need au
 
 ## Tech stack
 
-| Component        | Technology                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Language         | Python 3.12+                               | `uv` package manager, never bare `pip`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Runtime          | On-demand Copilot CLI sessions             | No background process; work is executed when invoked through CLI commands and agent workflows. |
-| Agents           | VS Code / Copilot custom agents            | Agents are defined via `.agent.md` files and can delegate to nested subagents. |
-| LLM provider     | GitHub Copilot (flat-rate)                 | Copilot is the primary model/runtime for orchestration and implementation tasks. |
-| Orchestrator     | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout. |
-| MCP servers      | Custom MCP servers (3-4)                   | Core servers are `mcp-kanban`, `mcp-knowledge`, and `mcp-project`; built-in/community tools fill remaining gaps. |
-| Knowledge        | Graph + vector knowledge package           | Knowledge services live under `packages/knowledge/` and are exposed through MCP. |
-| Projects         | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server. |
-| Safety           | Git safety net + audit log                 | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement. |
-| Distribution     | Clone = install                            | Projects point to a shared `../owlbear/` installation and load agents/skills via workspace settings. |
-| Diagrams         | Kroki HTTP API                             | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs. |
-| Task board       | kanban-md (via MCP abstraction)            | `kanban-md` remains the board engine with MCP as the long-term integration boundary. |
+| Component    | Technology                                  | Notes                                                                                                            |
+| ------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Language     | Python 3.12+                                | `uv` package manager, never bare `pip`                                                                           |
+| Runtime      | On-demand Copilot CLI sessions              | No background process; work is executed when invoked through CLI commands and agent workflows.                   |
+| Agents       | VS Code / Copilot custom agents             | Agents are defined via `.agent.md` files and can delegate to nested subagents.                                   |
+| LLM provider | GitHub Copilot (flat-rate)                  | Copilot is the primary model/runtime for orchestration and implementation tasks.                                 |
+| Orchestrator | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout.                   |
+| MCP servers  | Custom MCP servers (3-4)                    | Core servers are `mcp-kanban`, `mcp-knowledge`, and `mcp-project`; built-in/community tools fill remaining gaps. |
+| Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                 |
+| Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                    |
+| Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.               |
+| Distribution | Clone = install                             | Projects point to a shared `../owlbear/` installation and load agents/skills via workspace settings.             |
+| Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                              |
+| Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                             |
+
+GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
 
 ## kanban-md usage
 
@@ -128,36 +130,36 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 
 ## Directory structure
 
-| Directory           | Purpose                                             |
-| ------------------- | --------------------------------------------------- |
+| Directory                 | Purpose                                                |
+| ------------------------- | ------------------------------------------------------ |
 | `packages/orchestrator/`  | ACP client, dispatch planning, orchestration CLI hooks |
-| `packages/knowledge/`     | Knowledge engine (graph + vector)                        |
-| `packages/mcp-kanban/`    | MCP server wrapping kanban operations                     |
-| `packages/mcp-knowledge/` | MCP server exposing knowledge operations                  |
-| `packages/mcp-project/`   | MCP server for project metadata and lifecycle             |
-| `agents/`                 | Agent definitions (`.agent.md`)                           |
-| `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)           |
-| `instructions/`           | Shared instruction files (`*.instructions.md`)            |
-| `docs/`                   | Research, decisions, sources, and supporting docs         |
-| `kanban/`                 | kanban board data and tooling                             |
-| `v1/`                     | Archived v1 codebase for reference                         |
+| `packages/knowledge/`     | Knowledge engine (graph + vector)                      |
+| `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
+| `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
+| `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
+| `agents/`                 | Agent definitions (`.agent.md`)                        |
+| `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
+| `instructions/`           | Shared instruction files (`*.instructions.md`)         |
+| `docs/`                   | Research, decisions, sources, and supporting docs      |
+| `kanban/`                 | kanban board data and tooling                          |
+| `v1/`                     | Archived v1 codebase for reference                     |
 
 ## File placement rules
 
 Keep the project root clean. Every file created during a task must go to the right location:
 
-| File type                | Location                  | Naming                               | Tracked?        |
-| ------------------------ | ------------------------- | ------------------------------------ | --------------- |
-| Temp/debug output        | `docs/scratch/`           | `{task-id}-{desc}.{ext}`             | No (gitignored) |
-| Research documents       | `docs/research/`          | `{slug}.md` with task ref in content | Yes             |
-| Cloned external repos    | `docs/scratch/research/`  | `{repo-name}/`                       | No (gitignored) |
-| Benchmark / eval scripts | `tests/benchmarks/`       | descriptive `.py` name               | Yes             |
-| Source code              | `packages/*/src/`         | follow package-local module structure| Yes             |
-| Tests                    | `tests/`                  | `test_{module}.py`                   | Yes             |
-| Agents                   | `agents/`                 | `{role}.agent.md`                    | Yes             |
-| Skills                   | `skills/`                 | `{skill}/SKILL.md`                   | Yes             |
-| Instructions             | `instructions/`           | `{name}.instructions.md`             | Yes             |
-| Decision requests        | `docs/decisions/pending/` | `{task-id}-{slug}.md`                | Yes             |
+| File type                | Location                  | Naming                                | Tracked?        |
+| ------------------------ | ------------------------- | ------------------------------------- | --------------- |
+| Temp/debug output        | `docs/scratch/`           | `{task-id}-{desc}.{ext}`              | No (gitignored) |
+| Research documents       | `docs/research/`          | `{slug}.md` with task ref in content  | Yes             |
+| Cloned external repos    | `docs/scratch/research/`  | `{repo-name}/`                        | No (gitignored) |
+| Benchmark / eval scripts | `tests/benchmarks/`       | descriptive `.py` name                | Yes             |
+| Source code              | `packages/*/src/`         | follow package-local module structure | Yes             |
+| Tests                    | `tests/`                  | `test_{module}.py`                    | Yes             |
+| Agents                   | `agents/`                 | `{role}.agent.md`                     | Yes             |
+| Skills                   | `skills/`                 | `{skill}/SKILL.md`                    | Yes             |
+| Instructions             | `instructions/`           | `{name}.instructions.md`              | Yes             |
+| Decision requests        | `docs/decisions/pending/` | `{task-id}-{slug}.md`                 | Yes             |
 
 Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task. See `docs/scratch/.instructions.md` for details.
 
