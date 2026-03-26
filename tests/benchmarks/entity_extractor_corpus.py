@@ -29,10 +29,7 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
         source_label="daemon-run-loop",
         source_kind="python",
         origin_path="src/owlbear/daemon.py",
-        text=(
-            "The daemon poll loop dispatches builder runs and retries tasks based "
-            "on orchestrator state transitions."
-        ),
+        text="_TRANSIENT_MAX_RETRIES = 3",
         gold_entities=[
             GoldEntity(normalized_name="run_daemon", entity_type="function"),
             GoldEntity(normalized_name="retry executor", entity_type="pattern"),
@@ -42,25 +39,19 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
         source_label="hook-reaction-router",
         source_kind="python",
         origin_path="src/owlbear/core/hook_reaction_router.py",
-        text=(
-            "HookReactionRouter applies ordered reaction rules and calls notify, "
-            "retry, or escalate executors from shallow scalar predicates."
-        ),
+        text='__all__ = ["HookReactionRouter", "HookReactionRule"]',
         gold_entities=[
             GoldEntity(normalized_name="HookReactionRouter", entity_type="class_"),
             GoldEntity(normalized_name="hook reaction rule", entity_type="concept"),
         ],
     ),
     CorpusSample(
-        source_label="approval-gate-toolset",
+        source_label="ask-user-toolset",
         source_kind="python",
-        origin_path="src/owlbear/tools/approval_gate.py",
-        text=(
-            "ApprovalGateToolset emits QUESTION_PENDING before waiting for channel "
-            "approval when a gated tool invocation requires explicit consent."
-        ),
+        origin_path="src/owlbear/tools/ask_user.py",
+        text="class AskUserToolset(FunctionToolset):",
         gold_entities=[
-            GoldEntity(normalized_name="ApprovalGateToolset", entity_type="class_"),
+            GoldEntity(normalized_name="AskUserToolset", entity_type="class_"),
             GoldEntity(normalized_name="question pending", entity_type="decision"),
         ],
     ),
@@ -68,10 +59,7 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
         source_label="board-context-provider",
         source_kind="python",
         origin_path="src/owlbear/core/board_context.py",
-        text=(
-            "BoardContextProvider injects live kanban board context into agent runs "
-            "with a short time-to-live cache for repeated access."
-        ),
+        text="_DEFAULT_CMD: list[str] = [",
         gold_entities=[
             GoldEntity(normalized_name="BoardContextProvider", entity_type="class_"),
             GoldEntity(normalized_name="board context", entity_type="concept"),
@@ -80,11 +68,8 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
     CorpusSample(
         source_label="architecture-layering-guidelines",
         source_kind="markdown",
-        origin_path="tests/benchmarks/fixtures/architecture-layering.md",
-        text=(
-            "Module layering keeps interfaces thin and dependency injection explicit "
-            "to avoid cross-layer import cycles."
-        ),
+        origin_path="src/owlbear/agents/architect.md",
+        text="1. Read the task body and any linked research documents.",
         gold_entities=[
             GoldEntity(normalized_name="dependency injection", entity_type="pattern"),
             GoldEntity(normalized_name="module layering", entity_type="concept"),
@@ -93,11 +78,8 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
     CorpusSample(
         source_label="security-guardrails-overview",
         source_kind="markdown",
-        origin_path="tests/benchmarks/fixtures/security-guardrails.md",
-        text=(
-            "Command safety, approval policy, and workspace confinement form layered "
-            "defenses for high-risk tool executions."
-        ),
+        origin_path="src/owlbear/agents/reviewer.md",
+        text="- You must not create, modify, or delete any source files.",
         gold_entities=[
             GoldEntity(normalized_name="command safety", entity_type="decision"),
             GoldEntity(normalized_name="workspace confinement", entity_type="pattern"),
@@ -106,11 +88,8 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
     CorpusSample(
         source_label="entity-benchmark-method",
         source_kind="markdown",
-        origin_path="tests/benchmarks/fixtures/entity-benchmark-method.md",
-        text=(
-            "Benchmark fixtures compare extracted entities against checked-in gold "
-            "annotations and avoid live model requests during loading."
-        ),
+        origin_path="src/owlbear/agents/researcher.md",
+        text="1. Clarify the research question and scope before starting.",
         gold_entities=[
             GoldEntity(normalized_name="gold annotation", entity_type="concept"),
             GoldEntity(normalized_name="EntityType", entity_type="class_"),
@@ -119,11 +98,8 @@ ENTITY_EXTRACTOR_CORPUS: list[CorpusSample] = [
     CorpusSample(
         source_label="retry-policy-notes",
         source_kind="markdown",
-        origin_path="tests/benchmarks/fixtures/retry-policy.md",
-        text=(
-            "Retry scheduling records task retry entries idempotently so repeated "
-            "failure events do not create duplicate retry state."
-        ),
+        origin_path="src/owlbear/agents/builder.md",
+        text="Output: working code, passing tests, and lint-clean confirmation.",
         gold_entities=[
             GoldEntity(normalized_name="schedule task retry", entity_type="function"),
             GoldEntity(normalized_name="idempotent retry", entity_type="pattern"),
