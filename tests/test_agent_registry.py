@@ -541,6 +541,47 @@ class TestFromAC_ProgrammaticRegistration:
 
         assert registry.definitions == {}
 
+    def test_scan_evicts_cached_agent_for_programmatic_registration(
+        self, agents_dir: Path
+    ) -> None:
+        """scan() must clear the cached Agent built from a programmatic registration.
+
+        Verifies that after register() + get() (which populates _cache) a
+        subsequent scan() makes get() raise KeyError rather than returning the
+        stale cached Agent — i.e. _cache as well as _definitions is cleared.
+        """
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        defn = _make_defn("temp_cached")
+        registry.register(defn)
+        # Populate _cache explicitly
+        _ = registry.get("temp_cached")
+
+        registry.scan()
+
+        # The definition was not on disk, so it must be gone from both stores.
+        assert "temp_cached" not in registry.definitions
+        with pytest.raises(KeyError):
+            registry.get("temp_cached")
+
+    def test_rescan_invalidates_cached_file_scanned_agent(
+        self, agents_dir: Path
+    ) -> None:
+        """scan() + get() + scan() must yield a fresh Agent instance on the next get().
+
+        Proves that _cache is cleared on every scan(), not just the first one.
+        A regression that skipped cache clearing after the first scan would allow
+        get() to return an Agent from the pre-second-scan snapshot.
+        """
+        registry = AgentRegistry(agents_dir, _dummy_resolver, default_model=_TEST_MODEL)
+        registry.scan()
+        first_agent = registry.get("builder")
+
+        # Second scan must evict the cached agent.
+        registry.scan()
+        second_agent = registry.get("builder")
+
+        assert first_agent is not second_agent
+
     # ------------------------------------------------------------------
     # AC: list_agents() and definitions include programmatic registrations
     # ------------------------------------------------------------------
