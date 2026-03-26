@@ -621,9 +621,7 @@ class TestFromAC_PolicyBoundaries:
     def test_latency_below_threshold_produces_no_proposal(self, tmp_path: Path) -> None:
         """avg_duration_ms < 3000.0 must NOT trigger a latency proposal."""
         events = [
-            _event(
-                tool_name="fast_enough_tool", success=True, duration_ms=2999.0, minutes_ago=i
-            )
+            _event(tool_name="fast_enough_tool", success=True, duration_ms=2999.0, minutes_ago=i)
             for i in range(5)
         ]
         store = _store_with_events(tmp_path, events)
@@ -657,3 +655,53 @@ class TestFromAC_PolicyBoundaries:
                 f"target_agent must default to 'builder' when no agent_name present, "
                 f"got '{p.target_agent}'"
             )
+
+
+# ---------------------------------------------------------------------------
+# Retry-3 AC1 window-propagation: tool_stats(window) and store.query(window)
+# ---------------------------------------------------------------------------
+
+_SUMMARY_WITH_CALLS: dict = {
+    "total_tool_calls": 10,
+    "error_count": 0,
+    "avg_tool_duration_ms": 50.0,
+    "tools_by_frequency": {"probe_tool": 10},
+    "agents_by_usage": {"builder": 10},
+}
+_NONEMPTY_TOOL_STATS: dict = {
+    "probe_tool": {"call_count": 5, "error_count": 0, "avg_duration_ms": 50.0},
+}
+
+
+class TestFromAC_WindowPropagation:
+    """AC1 final coverage: the window arg is propagated to store.tool_stats and store.query."""
+
+    def test_generate_proposals_calls_store_tool_stats_with_window(self) -> None:
+        """When window is provided, store.tool_stats must be called with that window, not None."""
+        window = timedelta(hours=6)
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = _SUMMARY_WITH_CALLS
+        store.tool_stats.return_value = _NONEMPTY_TOOL_STATS
+        store.query.return_value = []
+        generate_proposals(store, window=window)
+        store.tool_stats.assert_called_once_with(window)
+
+    def test_generate_proposals_calls_store_query_with_window_for_target_agent(self) -> None:
+        """When window is provided and tool_stats is non-empty, store.query(window) is called."""
+        window = timedelta(hours=6)
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = _SUMMARY_WITH_CALLS
+        store.tool_stats.return_value = _NONEMPTY_TOOL_STATS
+        store.query.return_value = []
+        generate_proposals(store, window=window)
+        store.query.assert_called_once_with(window)
+
+    def test_generate_proposals_calls_store_load_not_query_when_window_is_none(self) -> None:
+        """When window=None, store.load() is called for event loading, not store.query()."""
+        store = MagicMock(spec=EventStore)
+        store.summary.return_value = _SUMMARY_WITH_CALLS
+        store.tool_stats.return_value = _NONEMPTY_TOOL_STATS
+        store.load.return_value = []
+        generate_proposals(store, window=None)
+        store.load.assert_called()
+        store.query.assert_not_called()
