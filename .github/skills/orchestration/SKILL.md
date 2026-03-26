@@ -25,8 +25,8 @@ The orchestrator maintains constant-size context:
 See agent-common → **Inter-agent communication protocol** for the full Channel A/B spec.
 
 **Planner → Orchestrator:** JSON with `dispatch` array (extract `(id, agent)` tuples,
-priority-sorted) and `blocked` array (informational — report but don't act). If
-`dispatch` is empty, report blocked tasks and stop.
+priority-sorted). If `dispatch` is empty, report to the user that nothing is
+dispatchable and stop.
 
 **Subagent → Orchestrator:** Channel A diagnostic line. You do NOT parse this for
 routing. Only check: did the agent return normally (success) or crash (failure)?
@@ -59,11 +59,8 @@ Track `stale_retried` IDs across cycles: when the planner's dispatch includes a
 when the planner dispatches the task in the next cycle **without** a `retry_hint`
 — that signals the task moved and is no longer stale.
 
-Receive the JSON plan. If `dispatch` is empty (only blocked tasks), report the blocked
-tasks to the user and stop.
-
-If `blocked` mentions stale tasks (dispatched last cycle but unchanged), report
-those to the user as potential issues.
+Receive the JSON plan. If `dispatch` is empty, report to the user that nothing is
+dispatchable and stop.
 
 ## Configuration
 
@@ -92,10 +89,12 @@ no compatibility violations.**
 
 | Agent type | Category | May share wave with | Never with |
 | --- | --- | --- | --- |
-| auditor | restricted | light flex | builders, heavy flex, other auditors |
-| builder | restricted | light flex, heavy flex | auditors, other builders |
+| auditor | restricted | light flex | builders, heavy flex, other auditors* |
+| builder | restricted | light flex, heavy flex | auditors, other builders* |
 | researcher, writer, architect, kanban-planner, curator | light flex | any | — |
 | reviewer, test-writer | heavy flex | builders, other flex | auditors |
+
+\* Same-type exclusion is relaxed during consolidation (step 6) for solo waves only. Builders and auditors still never share a wave.
 
 **Safety criterion:** light flex agents never modify source/test files and never run the test suite → cannot interfere with the auditor's full-suite run.
 
@@ -108,11 +107,12 @@ no compatibility violations.**
 3. **Builder waves.** One builder per wave. Fill remaining slots with light flex first (if any remain), then heavy flex, priority order.
 4. **Overflow waves.** Remaining light + heavy flex → new waves (up to wave-size), priority order.
 5. **Periodic curator runs.** Every fifth cycle (in cycles 5, 10, 15...) → add a curator agent to the last wave with a remaining slot. If all waves are full, skip the curator for this cycle.
-6. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
+6. **Consolidation.** Collect all solo-task waves of the same restricted type (solo-builder waves, solo-auditor waves). Merge each group into combined waves (up to wave-size), relaxing the same-type exclusion within each group. Never mix builders and auditors in one wave. Priority order preserved.
+7. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
 
 **Phase 2 — Execute the plan:**
 
-7. Dispatch waves in order as drafted. No further reordering.
+8. Dispatch waves in order as drafted. No further reordering.
 
 #### Worked example
 
@@ -128,18 +128,23 @@ Light remaining: [#728]
 
 Step 3 — builder waves (fill with remaining light, then heavy):
 ```
-Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer),  ← 1+1 light+2 heavy (full)
-Wave 3: #934 (builder), #920 (test-writer)                                                 ← 1+1 heavy
-Wave 4–7: #521, #556, #733, #775 (builders)                                                ← solo each
+Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer)  ← 1+1 light+2 heavy (full)
+Wave 3: #934 (builder), #920 (test-writer)                               ← 1+1 heavy
+Wave 4–7: #521, #556, #733, #775 (builders)                              ← solo each
 ```
 
 Step 4 — overflow: nothing remaining.
 
 Step 5 — Not a cycle mod 5 → no curator.
 
-Step 6 — drop rule: Waves 4–7 solo non-auditor → **dropped.** Wave 3 has 2 tasks → kept.
+Step 6 — consolidation: Waves 4–7 are four solo-builder waves → merge into one wave:
+```
+Wave 4: #521 (builder), #556 (builder), #733 (builder), #775 (builder)   ← 4 builders (full)
+```
 
-**Final plan — 3 waves, 10 tasks.** 4 builders deferred.
+Step 7 — drop rule: no solo non-auditor waves remain → nothing dropped.
+
+**Final plan — 4 waves, 14 tasks.** 0 deferred.
 
 After all waves from this plan complete, proceed to Step 3.
 
@@ -230,6 +235,26 @@ After all dispatches from Step 2 complete:
 The loop continues until the planner has nothing to dispatch.
 **Do not stop for any reason other than an empty plan.**
 
+## Output format
+
+Announce each cycle and wave briefly during execution:
+
+```
+Cycle 1 (Plan): Dispatching planner with scope '{filter}'...
+Cycle 1 (Wave 1/3): #101 (architect), #103 (builder), #105 (reviewer)
+Cycle 1 (Wave 2/3): #110 (test-writer), #112 (researcher)
+Cycle 1 (Done): 4/5 succeeded, 1 crashed (#112)
+```
+
+At end of session:
+
+```
+Session complete:
+  Completed: #101, #103, #105, #110
+  Failed: #112 (crashed twice)
+  Cycles: 2
+```
+
 ## Self-critique checklist
 
 Before reporting session complete:
@@ -237,7 +262,7 @@ Before reporting session complete:
 - [ ] Planner was dispatched with the user's scope filter (not a hardcoded filter)
 - [ ] Every task in `dispatch` was dispatched (none silently dropped)
 - [ ] Waves respect wave-size limit from Configuration (unless in sequential mode)
-- [ ] Wave assembly uses agent-type compatibility rules (auditor + light flex only, max 1 builder per wave, heavy flex excluded from auditor waves)
+- [ ] Wave assembly uses agent-type compatibility rules (auditor + light flex only, max 1 builder per wave except consolidated waves, heavy flex excluded from auditor waves)
 - [ ] ONE task per subagent call — no batching multiple tasks into one call
 - [ ] Dispatch prompts contained ONLY task IDs — except `retry_hint` lines for stale retries
 - [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)

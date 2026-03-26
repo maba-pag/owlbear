@@ -65,8 +65,10 @@ Run before the Board Scan. Check for resolved decision requests:
 Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Select-Object -ExpandProperty FullName
 ```
 
-For each file found, read frontmatter. If `approved: true`, unblock the task and move the file to `docs/decisions/resolved/`. If
-`approved: false` and older than 5 days, auto-resolve with the agent's recommendation.
+For each file found, read frontmatter. If `approved: true`, unblock the task
+(`kanban\kanban-md.exe edit {id} --unblock`) and move the file to
+`docs/decisions/resolved/`. If `approved: false` and older than 5 days, auto-resolve
+with the agent's recommendation.
 
 ### Recipe 1 — Board Scan
 
@@ -159,7 +161,7 @@ Run **Recipe 1** (Board Scan) with the orchestrator's scope filter substituted f
 `{scope}`. This single command produces the full candidate list — sorted by priority
 and pipeline proximity, with gate markers for Gates 2, 4, 5, and 6 already applied.
 
-If the scan returns `(empty)`, output `{"dispatch":[],"blocked":[]}` and stop.
+If the scan returns `(empty)`, output `{"dispatch":[]}` and stop.
 
 Use `manage_todo_list` to track progress through the remaining steps.
 
@@ -254,15 +256,15 @@ Produce JSON as the final response. No prose preamble, no narrative, no markdown
 Format:
 
 ```json
-{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"blocked":[{"id":102,"reason":"dep #99 (review)"}]}
+{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}]}
 ```
 
-<good example why="Single-line JSON object with `dispatch` and `blocked` fields only. Agent names from mapping.">
-{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"blocked":[]}
+<good example why="Single-line JSON object with `dispatch` field. Agent names from mapping.">
+{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}]}
 </good example>
 <bad example why="Includes prose and markdown, not a single-line JSON object.">
 ```json
-excluded the gate failures, and I’m finalizing the capped 20-task dispatch list now.{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},...,{"id":853,"agent":"architect"}],"blocked":[]}
+excluded the gate failures, and I’m finalizing the capped 20-task dispatch list now.{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},...,{"id":853,"agent":"architect"}]}
 ```
 </bad example>
 
@@ -273,14 +275,12 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
   - `retry_hint` (optional string, ≤120 chars) — present only on first-stale tasks
     retried with guided context. Summarizes the prior failure extracted from the task
     body's last agent note section. Omit for normal dispatches.
-- `blocked` — Array of `{id, reason}` objects. Tasks with unmet dependencies, explicit
-  blocks, or stale flags. Short reason string (< 60 chars).
 
 **Rules:**
 
 - Output MUST be a single JSON object on one line (no pretty-printing)
-- No fields other than `dispatch` and `blocked`
-- Empty arrays are fine: `{"dispatch":[],"blocked":[]}`
+- The only field is `dispatch`
+- Empty array is fine: `{"dispatch":[]}`
 - Gate names do not appear in the output (gate failures = task not in dispatch, not mentioned at all)
 - If more than 20 tasks pass gates, include only the top 20 by priority
 
@@ -300,8 +300,8 @@ Before outputting:
 - [ ] Batch does not exceed 20 tasks
 - [ ] Agent names match the dispatch mapping
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
-- [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks are blocked
-- [ ] Output is a single-line JSON object with `dispatch` and `blocked` fields only
+- [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks excluded
+- [ ] Output is a single-line JSON object with `dispatch` field only
 - [ ] No prose preamble or narrative in the output
 - [ ] No `kanban-md move` commands were run
 - [ ] No subagents were dispatched
