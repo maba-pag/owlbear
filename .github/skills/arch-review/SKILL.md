@@ -1,6 +1,7 @@
 ---
 name: arch-review
 description: "Architecture review workflow: read task + research → analyze codebase → evaluate architecture → decide (approve/refine/split/merge/block) → produce report. Used by the architect agent."
+user-invocable: false
 ---
 
 # Architecture Review

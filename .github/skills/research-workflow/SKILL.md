@@ -1,6 +1,7 @@
 ---
 name: research-workflow
 description: "Structured research workflow: clarify scope → gather sources → analyze with trade-off matrices → write doc → create follow-up tasks. Used by the researcher agent."
+user-invocable: false
 ---
 
 # Research Workflow

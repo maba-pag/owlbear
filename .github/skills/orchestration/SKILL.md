@@ -1,6 +1,7 @@
 ---
 name: orchestration
 description: "Orchestration workflow: plan → dispatch → loop. Mechanical dispatch loop for the orchestrator agent."
+user-invocable: false
 ---
 
 # Orchestration Workflow
@@ -107,7 +108,7 @@ no compatibility violations.**
 3. **Builder waves.** One builder per wave. Fill remaining slots with light flex first (if any remain), then heavy flex, priority order.
 4. **Overflow waves.** Remaining light + heavy flex → new waves (up to wave-size), priority order.
 5. **Periodic curator runs.** Every fifth cycle (in cycles 5, 10, 15...) → add a curator agent to the last wave with a remaining slot. If all waves are full, skip the curator for this cycle.
-6. **Consolidation.** Collect all solo-task waves of the same restricted type (solo-builder waves, solo-auditor waves). Merge each group into combined waves (up to wave-size), relaxing the same-type exclusion within each group. Never mix builders and auditors in one wave. Priority order preserved.
+6. **Consolidation.** DEACTIVATED TEMPORARILY. SKIP THIS STEP. Collect all solo-task waves of the same restricted type (solo-builder waves, solo-auditor waves). Merge each group into combined waves (up to wave-size), relaxing the same-type exclusion within each group. Never mix builders and auditors in one wave. Priority order preserved.
 7. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
 
 **Phase 2 — Execute the plan:**

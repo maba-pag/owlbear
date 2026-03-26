@@ -1,6 +1,7 @@
 ---
 name: task-verification
 description: "Exit gate verification workflow: verify AC with evidence → score confidence → archive or reject → commit. Use when closing completed tasks."
+user-invocable: false
 ---
 
 # Task Verification Workflow

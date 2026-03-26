@@ -1,6 +1,7 @@
 ---
 name: task-decomposition
 description: "Task decomposition workflow: read plan → check board → decompose into atomic TDD-paired tasks → build dependency graph → assign priority/tags → generate kanban-md commands. Used by the kanban-planner agent."
+user-invocable: false
 ---
 
 # Task Decomposition

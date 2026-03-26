@@ -1,6 +1,7 @@
 ---
 name: tdd-red
 description: "TDD RED phase workflow: read AC → search codebase → plan test categories → write failing tests → verify all fail. Used by test-writer agent."
+user-invocable: false
 ---
 
 # TDD RED Phase Workflow

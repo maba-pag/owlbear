@@ -1,6 +1,7 @@
 ---
 name: tdd-workflow
 description: "TDD GREEN phase workflow: read existing tests → verify they fail → implement → verify → advance. Use when building features or fixing bugs with test-driven development."
+user-invocable: false
 ---
 
 # TDD Workflow

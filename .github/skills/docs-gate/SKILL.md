@@ -1,6 +1,7 @@
 ---
 name: docs-gate
 description: "Documentation gate checklist: verify and update docs before marking a task done. Use when a task reaches docs status."
+user-invocable: false
 ---
 
 # Docs Gate Workflow

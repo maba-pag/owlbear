@@ -1,6 +1,7 @@
 ---
 name: code-review
 description: "Evidence-based code review workflow: run tests → lint → read code → verify AC → verdict. Use when verifying implementation quality."
+user-invocable: false
 ---
 
 # Code Review Workflow

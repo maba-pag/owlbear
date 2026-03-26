@@ -1,6 +1,7 @@
 ---
 name: dispatch-planning
 description: "Dispatch planning workflow: read board → build DAG → gate checks → produce JSON dispatch plan. Used by the planner agent."
+user-invocable: false
 ---
 
 # Dispatch Planning

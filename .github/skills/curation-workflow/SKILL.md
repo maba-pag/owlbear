@@ -1,6 +1,7 @@
 ---
 name: curation-workflow
 description: "Knowledge curation workflow: gather recent entries → deduplicate → assess signal → promote/prune/flag → report. Used by the curator agent."
+user-invocable: false
 ---
 
 # Curation Workflow
