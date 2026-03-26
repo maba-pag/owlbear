@@ -32,3 +32,12 @@
 {"timestamp":"2026-03-26T17:25:19.5321583+01:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
 {"timestamp":"2026-03-26T17:25:19.8433688+01:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
 {"timestamp":"2026-03-26T17:38:30.4711695+01:00","action":"create","task_id":27,"detail":"Clean up instruction files for v2"}
+{"timestamp":"2026-03-26T17:43:30.1173641+01:00","action":"create","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-26T17:56:02.5177053+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-26T17:56:09.6629827+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-26T17:56:20.4035425+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-26T17:59:04.1845977+01:00","action":"create","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
+{"timestamp":"2026-03-26T18:05:05.6734596+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-26T18:05:13.4853077+01:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
+{"timestamp":"2026-03-26T18:05:24.8358548+01:00","action":"create","task_id":30,"detail":"Research voice addon architecture"}
+{"timestamp":"2026-03-26T18:05:35.1143633+01:00","action":"create","task_id":31,"detail":"Self-improvement analysis pipeline"}

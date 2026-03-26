@@ -4,7 +4,7 @@ title: Multi-project setup test
 status: ideation
 priority: important
 created: 2026-03-26T17:23:32.2827073+01:00
-updated: 2026-03-26T17:25:19.8416388+01:00
+updated: 2026-03-26T18:05:13.4837241+01:00
 tags:
     - phase-2
     - scope:build
@@ -32,3 +32,8 @@ Validate the multi-project model: create a test project, run setup, verify agent
 
 ## Context
 Depends on F6 (setup script) and M5 (MCP server registry). This validates the 'clone = install' distribution model end-to-end.
+
+[[2026-03-26]] Thu 18:05
+## Additional AC
+- [ ] Document the multi-project setup experience end-to-end
+- [ ] Write a brief 'How to share owlbear with others' guide

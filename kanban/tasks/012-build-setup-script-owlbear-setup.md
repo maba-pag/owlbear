@@ -4,7 +4,7 @@ title: Build setup script (owlbear setup)
 status: ideation
 priority: needed
 created: 2026-03-26T17:20:25.3978372+01:00
-updated: 2026-03-26T17:20:25.3978372+01:00
+updated: 2026-03-26T18:05:05.6710407+01:00
 tags:
     - phase-1
     - scope:cli
@@ -31,3 +31,8 @@ Build the setup script that initializes a project to use owlbear. Run from any p
 
 ## Context
 Depends on F1 (monorepo skeleton) for knowing the exact paths. This is the 'clone = install' entry point. Setup takes 30 seconds and a project is ready to use owlbear.
+
+[[2026-03-26]] Thu 18:05
+## Additional AC
+- [ ] Document the setup process for new users (friends, coworkers)
+- [ ] Include a 'Getting Started for New Projects' section in output or doc

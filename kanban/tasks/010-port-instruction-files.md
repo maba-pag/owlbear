@@ -4,7 +4,7 @@ title: Port instruction files
 status: ideation
 priority: important
 created: 2026-03-26T17:20:03.836269+01:00
-updated: 2026-03-26T17:20:03.836269+01:00
+updated: 2026-03-26T17:56:20.4019369+01:00
 tags:
     - phase-1
     - scope:docs
@@ -29,3 +29,8 @@ Copy and adapt v1 instruction files to v2 instructions/ directory.
 
 ## Context
 Depends on F1 (monorepo skeleton) for directory structure. Instruction files are mostly compatible but contain v1-specific references that need updating.
+
+[[2026-03-26]] Thu 17:56
+## Additional AC
+- [ ] Write v2 instructions to instructions/ at repo root (not .github/instructions/)
+- [ ] After v2 instructions verified working, delete .github/instructions/

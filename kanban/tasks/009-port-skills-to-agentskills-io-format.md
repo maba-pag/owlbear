@@ -4,7 +4,7 @@ title: Port skills to agentskills.io format
 status: ideation
 priority: needed
 created: 2026-03-26T17:19:53.9934892+01:00
-updated: 2026-03-26T17:19:53.9934892+01:00
+updated: 2026-03-26T17:56:09.6619586+01:00
 tags:
     - phase-1
     - scope:skills
@@ -37,3 +37,9 @@ Port v1 skills from .github/skills/ to v2 skills/ directory using the agentskill
 
 ## Context
 Depends on R3 (agentskills.io spec validation) for format requirements. V1 has 15+ skills. Some may need restructuring.
+
+[[2026-03-26]] Thu 17:56
+## Additional AC
+- [ ] Write v2 skills to skills/ at repo root (not .github/skills/)
+- [ ] Update .vscode/settings.json chat.agentSkillsLocations to include skills/
+- [ ] After v2 skills verified working, delete .github/skills/
