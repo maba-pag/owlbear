@@ -352,3 +352,82 @@ class TestClassifyErrorWithoutOpenai:
         mod = self._reload_without_openai()
         result = mod.error_to_user_message(httpx.ConnectError("fail"))
         assert result == "Connection failed"
+
+
+# ---------------------------------------------------------------------------
+# ACP RequestError → ErrorCategory contract (task #71)
+# ---------------------------------------------------------------------------
+
+try:
+    from acp.exceptions import RequestError as AcpRequestError
+
+    _ACP_AVAILABLE = True
+except ImportError:
+    AcpRequestError = None  # type: ignore[assignment,misc]
+    _ACP_AVAILABLE = False
+
+
+@pytest.mark.skipif(not _ACP_AVAILABLE, reason="acp package not installed")
+class TestFromAC_AcpErrors:
+    """ACP RequestError → ErrorCategory contract.
+
+    Tests the classify_error contract for ACP RequestError error codes.
+
+    RED state at time of writing (task #71): tests for TRANSIENT (-32603),
+    AUTH (-32000), TOOL_SEMANTIC (-32002), and graceful-degradation will FAIL
+    because classify_error has no ACP branch yet.  PERMANENT tests pass by
+    coincidence (the default fallback is PERMANENT).
+    """
+
+    def test_parse_error_is_permanent(self) -> None:
+        """RequestError(-32700) → PERMANENT: malformed JSON is an SDK/process bug."""
+        exc = AcpRequestError(-32700, "Parse error")
+        assert classify_error(exc) == ErrorCategory.PERMANENT
+
+    def test_invalid_request_is_permanent(self) -> None:
+        """RequestError(-32600) → PERMANENT: invalid RPC structure is an SDK bug."""
+        exc = AcpRequestError(-32600, "Invalid Request")
+        assert classify_error(exc) == ErrorCategory.PERMANENT
+
+    def test_method_not_found_is_permanent(self) -> None:
+        """RequestError(-32601) → PERMANENT: wrong method name is a code bug."""
+        exc = AcpRequestError(-32601, "Method not found")
+        assert classify_error(exc) == ErrorCategory.PERMANENT
+
+    def test_invalid_params_is_permanent(self) -> None:
+        """RequestError(-32602) → PERMANENT: wrong params is a code bug."""
+        exc = AcpRequestError(-32602, "Invalid params")
+        assert classify_error(exc) == ErrorCategory.PERMANENT
+
+    def test_internal_error_is_transient(self) -> None:
+        """RequestError(-32603) → TRANSIENT: agent internal failure may recover."""
+        exc = AcpRequestError(-32603, "Internal error")
+        assert classify_error(exc) == ErrorCategory.TRANSIENT
+
+    def test_auth_required_is_auth(self) -> None:
+        """RequestError(-32000) → AUTH: Copilot CLI needs re-authentication."""
+        exc = AcpRequestError(-32000, "Auth required")
+        assert classify_error(exc) == ErrorCategory.AUTH
+
+    def test_resource_not_found_is_tool_semantic(self) -> None:
+        """RequestError(-32002) → TOOL_SEMANTIC: stale session/resource, model can retry."""
+        exc = AcpRequestError(-32002, "Resource not found")
+        assert classify_error(exc) == ErrorCategory.TOOL_SEMANTIC
+
+    def test_unknown_code_is_permanent(self) -> None:
+        """RequestError with an unknown code → PERMANENT (safe default for undefined codes)."""
+        exc = AcpRequestError(-32099, "Unknown error code")
+        assert classify_error(exc) == ErrorCategory.PERMANENT
+
+    def test_broken_pipe_is_transient(self) -> None:
+        """BrokenPipeError → TRANSIENT via ConnectionError inheritance (existing behavior)."""
+        exc = BrokenPipeError("Connection reset by peer")
+        assert classify_error(exc) == ErrorCategory.TRANSIENT
+
+    def test_acp_not_installed_graceful_degradation(self) -> None:
+        """When AcpRequestError is None in the module, the isinstance branch is skipped."""
+        exc = AcpRequestError(-32603, "Internal error")
+        with unittest.mock.patch("owlbear.core.errors.AcpRequestError", None):
+            result = classify_error(exc)
+        # Without the ACP branch, RequestError falls through to default PERMANENT
+        assert result == ErrorCategory.PERMANENT
