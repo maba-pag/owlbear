@@ -70,7 +70,11 @@ class GraphEnricher:
         *,
         cancel: CancelSignal | None = None,
     ) -> None:
-        """Schedule non-blocking graph enrichment if graph_builder is available."""
+        """Schedule non-blocking intra-document graph enrichment.
+
+        No-op when ``_shutdown`` is ``True``, ``cancel.is_set()`` is ``True``,
+        no graph builder is configured, or the document has no entities.
+        """
         if self._shutdown:
             return
         if cancel is not None and cancel.is_set():
@@ -93,7 +97,12 @@ class GraphEnricher:
         *,
         cancel: CancelSignal | None = None,
     ) -> None:
-        """Schedule non-blocking inter-document graph enrichment if builder is available."""
+        """Schedule non-blocking inter-document graph enrichment.
+
+        No-op when ``_shutdown`` is ``True``, ``cancel.is_set()`` is ``True``,
+        no inter-doc builder is configured, there are no entities, or the scope
+        contains fewer than two documents.
+        """
         if self._shutdown:
             return
         if cancel is not None and cancel.is_set():
