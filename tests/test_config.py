@@ -896,3 +896,180 @@ class TestFromAC_ArchitectureDocQuestionPendingCleanup:
                     "NotificationHook event without a reserved/not-currently-emitted "
                     f"marker.  Offending line: {line!r}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# TDD RED: Two-tier priority notification config (#977 / #986)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TwoTierNotificationConfig:
+    """Two-tier priority notification config for OwlBearSettings.
+
+    Written for task #986 (TDD RED for #977).
+    All tests FAIL until #977 adds notification_urgent_* / notification_info_* fields
+    and marks the old notification_events / notification_backends fields deprecated.
+    """
+
+    # -- AC1: notification_urgent_events default --
+
+    def test_notification_urgent_events_default(self) -> None:
+        """notification_urgent_events defaults to [on_error, budget_warning, question_pending]."""
+        settings = OwlBearSettings()
+        assert settings.notification_urgent_events == [
+            "on_error",
+            "budget_warning",
+            "question_pending",
+        ]
+
+    # -- AC2: notification_urgent_backends default --
+
+    def test_notification_urgent_backends_default(self) -> None:
+        """notification_urgent_backends must default to [slack, sound, bell]."""
+        settings = OwlBearSettings()
+        assert settings.notification_urgent_backends == ["slack", "sound", "bell"]
+
+    # -- AC3: notification_info_events default --
+
+    def test_notification_info_events_default(self) -> None:
+        """notification_info_events must default to [task_complete]."""
+        settings = OwlBearSettings()
+        assert settings.notification_info_events == ["task_complete"]
+
+    # -- AC4: notification_info_backends default --
+
+    def test_notification_info_backends_default(self) -> None:
+        """notification_info_backends must default to [bell]."""
+        settings = OwlBearSettings()
+        assert settings.notification_info_backends == ["bell"]
+
+    # -- AC5: _KNOWN_BACKENDS frozenset --
+
+    def test_known_backends_frozenset_value(self) -> None:
+        """_KNOWN_BACKENDS must be a frozenset equal to {bell, sound, slack} in config module."""
+        from owlbear.config import _KNOWN_BACKENDS  # type: ignore[attr-defined]
+
+        assert isinstance(_KNOWN_BACKENDS, frozenset)
+        assert set(_KNOWN_BACKENDS) == {"bell", "sound", "slack"}
+
+    # -- AC6: notification_urgent_backends rejects unknown names --
+
+    def test_urgent_backends_rejects_unknown_backend_constructor(self) -> None:
+        """notification_urgent_backends rejects unknown backend names per _KNOWN_BACKENDS."""
+        assert "notification_urgent_backends" in OwlBearSettings.model_fields, (
+            "notification_urgent_backends must be a declared field on OwlBearSettings"
+        )
+        with pytest.raises(ValidationError):
+            OwlBearSettings(notification_urgent_backends=["unknown_backend"])
+
+    def test_urgent_backends_rejects_unknown_backend_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OWLBEAR_NOTIFICATION_URGENT_BACKENDS env rejects unknown backends."""
+        monkeypatch.setenv("OWLBEAR_NOTIFICATION_URGENT_BACKENDS", '["ghost_backend"]')
+        with pytest.raises(ValidationError):
+            OwlBearSettings()
+
+    # -- AC7: notification_info_backends rejects unknown names --
+
+    def test_info_backends_rejects_unknown_backend_constructor(self) -> None:
+        """notification_info_backends rejects unknown backend names per _KNOWN_BACKENDS."""
+        assert "notification_info_backends" in OwlBearSettings.model_fields, (
+            "notification_info_backends must be a declared field on OwlBearSettings"
+        )
+        with pytest.raises(ValidationError):
+            OwlBearSettings(notification_info_backends=["not_a_real_backend"])
+
+    def test_info_backends_rejects_unknown_backend_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """OWLBEAR_NOTIFICATION_INFO_BACKENDS rejects unknown backend names via ValidationError."""
+        monkeypatch.setenv("OWLBEAR_NOTIFICATION_INFO_BACKENDS", '["phantom"]')
+        with pytest.raises(ValidationError):
+            OwlBearSettings()
+
+    # -- AC8: old fields carry Field(deprecated=...) metadata --
+
+    def test_notification_events_field_has_deprecated_metadata(self) -> None:
+        """notification_events FieldInfo must carry Field(deprecated=...) metadata."""
+        field_info = OwlBearSettings.model_fields["notification_events"]
+        assert field_info.deprecated, (
+            "notification_events must be marked deprecated via Field(deprecated=...)"
+        )
+
+    def test_notification_backends_field_has_deprecated_metadata(self) -> None:
+        """notification_backends FieldInfo must carry Field(deprecated=...) metadata."""
+        field_info = OwlBearSettings.model_fields["notification_backends"]
+        assert field_info.deprecated, (
+            "notification_backends must be marked deprecated via Field(deprecated=...)"
+        )
+
+    # -- AC9: model_validator maps old fields to urgent tier --
+
+    def test_model_validator_maps_old_notification_events_to_urgent(self) -> None:
+        """When notification_events is explicitly set and notification_urgent_events is default,
+        the model_validator must forward notification_events into notification_urgent_events.
+        """
+        settings = OwlBearSettings(notification_events=["on_error", "custom_event"])
+        assert settings.notification_urgent_events == ["on_error", "custom_event"]
+
+    def test_model_validator_maps_old_notification_backends_to_urgent(self) -> None:
+        """When notification_backends is explicitly set and notification_urgent_backends is default,
+        the model_validator must forward notification_backends into notification_urgent_backends.
+        """
+        settings = OwlBearSettings(notification_backends=["bell", "slack"])
+        assert settings.notification_urgent_backends == ["bell", "slack"]
+
+    # -- AC10: model_validator ignores old fields when new fields explicitly set --
+
+    def test_model_validator_ignores_old_events_when_new_explicitly_set(self) -> None:
+        """When notification_urgent_events is explicitly set, notification_events is ignored."""
+        settings = OwlBearSettings(
+            notification_events=["old_event"],
+            notification_urgent_events=["new_urgent_event"],  # type: ignore[call-arg]
+        )
+        assert settings.notification_urgent_events == ["new_urgent_event"]
+
+    def test_model_validator_ignores_old_backends_when_new_explicitly_set(self) -> None:
+        """When notification_urgent_backends is explicitly set, notification_backends is ignored."""
+        settings = OwlBearSettings(
+            notification_backends=["sound"],
+            notification_urgent_backends=["bell"],  # type: ignore[call-arg]
+        )
+        assert settings.notification_urgent_backends == ["bell"]
+
+    # -- AC11: env vars override urgent tier defaults --
+
+    def test_urgent_events_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_NOTIFICATION_URGENT_EVENTS env var overrides notification_urgent_events."""
+        monkeypatch.setenv(
+            "OWLBEAR_NOTIFICATION_URGENT_EVENTS",
+            '["on_error", "custom_alert"]',
+        )
+        settings = OwlBearSettings()
+        assert settings.notification_urgent_events == ["on_error", "custom_alert"]
+
+    def test_urgent_backends_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OWLBEAR_NOTIFICATION_URGENT_BACKENDS env var overrides notification_urgent_backends."""
+        monkeypatch.setenv(
+            "OWLBEAR_NOTIFICATION_URGENT_BACKENDS",
+            '["slack", "bell"]',
+        )
+        settings = OwlBearSettings()
+        assert settings.notification_urgent_backends == ["slack", "bell"]
+
+    # -- AC12: no event-name validation at config time --
+
+    def test_arbitrary_event_names_accepted_in_urgent_events(self) -> None:
+        """Arbitrary event name strings are accepted in notification_urgent_events."""
+        settings = OwlBearSettings(  # type: ignore[call-arg]
+            notification_urgent_events=["totally_custom_event_name"],
+        )
+        assert settings.notification_urgent_events == ["totally_custom_event_name"]
+
+    def test_arbitrary_event_names_accepted_in_info_events(self) -> None:
+        """Arbitrary event name strings are accepted in notification_info_events."""
+        settings = OwlBearSettings(  # type: ignore[call-arg]
+            notification_info_events=["another_custom_event"],
+        )
+        assert settings.notification_info_events == ["another_custom_event"]
