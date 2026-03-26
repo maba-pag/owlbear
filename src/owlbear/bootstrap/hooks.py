@@ -90,9 +90,13 @@ def _notification_events_for_hook(settings: OwlBearSettings) -> list[str]:
     filtered_events = [
         event_name for event_name in configured_events if event_name not in excluded_events
     ]
+    removed_events = sorted(set(configured_events) & excluded_events)
+    if not removed_events:
+        return filtered_events
+
     logger.debug(
         "Excluded NotificationHook events handled by unconditional notify reactions: %s",
-        sorted(set(configured_events) & excluded_events),
+        removed_events,
     )
     return filtered_events
 
