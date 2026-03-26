@@ -14,6 +14,8 @@ tools:
     read/terminalLastCommand,
     read/problems,
     read/readFile,
+    read/viewImage,
+    agent,
     search,
     todo,
   ]

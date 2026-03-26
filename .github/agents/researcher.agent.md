@@ -4,7 +4,8 @@ description: "Thorough research agent that produces structured findings and foll
 argument-hint: "Research: {topic_or_question}"
 user-invocable: false
 model: Claude Opus 4.6 (copilot)
-tools: [
+tools:
+  [
     vscode/memory,
     execute/getTerminalOutput,
     execute/awaitTerminal,
@@ -13,7 +14,9 @@ tools: [
     read/terminalLastCommand,
     read/problems,
     read/readFile,
-    "microsoft/markitdown/*", # requires MarkItDown MCP server
+    read/viewImage,
+    agent,
+    "microsoft/markitdown/*",
     edit/createDirectory,
     edit/createFile,
     edit/editFiles,
