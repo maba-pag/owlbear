@@ -23,46 +23,74 @@ class TestFromAC_KanbanTaskRenames:
 
     def test_task_52_title_updated(self) -> None:
         """Task #52 title must say 'Create owlbear-voice workspace package'."""
-        path = ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        path = (
+            ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        )
         content = path.read_text(encoding="utf-8")
         assert "title: Create owlbear-voice workspace package" in content
 
     def test_task_52_body_scaffold_line_owlbear(self) -> None:
         """Task #52 body: 'Scaffold the owlbear-voice package' replaces bearclaw ref (line 18)."""
-        path = ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        path = (
+            ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        )
         content = path.read_text(encoding="utf-8")
         assert "Scaffold the bearclaw-voice package" not in content
         assert "Scaffold the owlbear-voice package" in content
 
     def test_task_52_body_findings_line_updated(self) -> None:
         """Task #52 body: research findings reference (line 31) must not say 'bearclaw-voice'."""
-        path = ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        path = (
+            ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        )
         content = path.read_text(encoding="utf-8")
         # The 'Key findings from ...' line should no longer reference bearclaw-voice
-        assert "Key findings from docs/research/bearclaw-voice-workspace-package.md:" not in content
+        assert (
+            "Key findings from docs/research/bearclaw-voice-workspace-package.md:"
+            not in content
+        )
 
     def test_task_52_body_followup_line_updated(self) -> None:
         """Task #52 body: follow-up task reference (line 40) must not say 'bearclaw-voice to owlbear-voice (ideation)'."""
-        path = ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        path = (
+            ROOT / "kanban" / "tasks" / "052-create-bearclaw-voice-workspace-package.md"
+        )
         content = path.read_text(encoding="utf-8")
         # After the rename task completes, this note should be updated
         assert "bearclaw-voice to owlbear-voice (ideation)" not in content
 
     def test_task_51_body_line32_updated(self) -> None:
         """Task #51 body line 32: dependency note must not say 'bearclaw-voice workspace package'."""
-        path = ROOT / "kanban" / "tasks" / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        path = (
+            ROOT
+            / "kanban"
+            / "tasks"
+            / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        )
         content = path.read_text(encoding="utf-8")
-        assert "Depends on #52 (bearclaw-voice workspace package scaffold)" not in content
+        assert (
+            "Depends on #52 (bearclaw-voice workspace package scaffold)" not in content
+        )
 
     def test_task_51_body_line32_owlbear(self) -> None:
         """Task #51 body line 32: dependency note uses owlbear-voice."""
-        path = ROOT / "kanban" / "tasks" / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        path = (
+            ROOT
+            / "kanban"
+            / "tasks"
+            / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        )
         content = path.read_text(encoding="utf-8")
         assert "Depends on #52 (owlbear-voice workspace package scaffold)" in content
 
     def test_task_51_body_line80_updated(self) -> None:
         """Task #51 body line 80: 'Added: #52 (bearclaw-voice workspace package scaffold)' replaced."""
-        path = ROOT / "kanban" / "tasks" / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        path = (
+            ROOT
+            / "kanban"
+            / "tasks"
+            / "051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md"
+        )
         content = path.read_text(encoding="utf-8")
         assert "Added: #52 (bearclaw-voice workspace package scaffold)" not in content
 
@@ -100,7 +128,10 @@ class TestFromAC_ResearchDocRenames:
         """bearclaw-voice-workspace-package.md: note header '>Note: Package renamed...' must be added."""
         doc = ROOT / "docs" / "research" / "bearclaw-voice-workspace-package.md"
         content = doc.read_text(encoding="utf-8")
-        assert "> Note: Package renamed to owlbear-voice per v2 convention (#64)." in content
+        assert (
+            "> Note: Package renamed to owlbear-voice per v2 convention (#64)."
+            in content
+        )
 
     def test_bearclaw_voice_pkg_doc_title_line1_updated(self) -> None:
         """bearclaw-voice-workspace-package.md: title (line 1) must use Owlbear-Voice not Bearclaw-Voice."""
@@ -182,19 +213,43 @@ class TestFromAC_ResearchDocRenames:
 
 
 class TestFromAC_SourcesDocRenames:
-    """AC: docs/sources/overview.md section header rename."""
+    """AC: docs/sources/overview.md section header and Where Used path refs rename."""
 
     def test_sources_section_header_updated(self) -> None:
         """docs/sources/overview.md: 'Bearclaw-Voice Package Scaffolding Research' section header removed."""
         doc = ROOT / "docs" / "sources" / "overview.md"
         content = doc.read_text(encoding="utf-8")
-        assert "## Bearclaw-Voice Package Scaffolding Research (Task #52)" not in content
+        assert (
+            "## Bearclaw-Voice Package Scaffolding Research (Task #52)" not in content
+        )
 
     def test_sources_section_header_owlbear(self) -> None:
         """docs/sources/overview.md: 'Owlbear-Voice Package Scaffolding Research' section header present."""
         doc = ROOT / "docs" / "sources" / "overview.md"
         content = doc.read_text(encoding="utf-8")
         assert "## Owlbear-Voice Package Scaffolding Research (Task #52)" in content
+
+    def test_sources_where_used_no_nonexistent_owlbear_path(self) -> None:
+        """docs/sources/overview.md: Where Used column must NOT reference the non-existent owlbear-voice-workspace-package.md.
+
+        The research doc filename was NOT renamed (scope exclusion). Referencing
+        a non-existent path in Where Used is broken documentation.
+        """
+        doc = ROOT / "docs" / "sources" / "overview.md"
+        content = doc.read_text(encoding="utf-8")
+        assert "docs/research/owlbear-voice-workspace-package.md" not in content
+
+    def test_sources_where_used_references_bearclaw_historical_doc(self) -> None:
+        """docs/sources/overview.md: Where Used column must reference bearclaw-voice-workspace-package.md.
+
+        The historical research doc filename is kept as-is per scope exclusion.
+        The four source rows in the Owlbear-Voice section must link to the
+        existing file docs/research/bearclaw-voice-workspace-package.md.
+        """
+        doc = ROOT / "docs" / "sources" / "overview.md"
+        content = doc.read_text(encoding="utf-8")
+        # Verify the historical filename is referenced as a Where Used path
+        assert "`docs/research/bearclaw-voice-workspace-package.md`" in content
 
 
 class TestFromAC_CompletenessCheck:
@@ -215,7 +270,9 @@ class TestFromAC_CompletenessCheck:
             for lineno, line in enumerate(content.splitlines(), start=1):
                 if self._PATTERN.search(line):
                     violators.append((task_file.name, lineno, line.strip()))
-        assert violators == [], f"Remaining bearclaw-voice refs in kanban/tasks/: {violators}"
+        assert violators == [], (
+            f"Remaining bearclaw-voice refs in kanban/tasks/: {violators}"
+        )
 
     def test_no_bearclaw_voice_in_research_docs(self) -> None:
         """Zero bearclaw-voice refs in docs/research/ (excluding cli-split.md and lines that are file-path references to the unchanged filename)."""
@@ -232,4 +289,6 @@ class TestFromAC_CompletenessCheck:
                     if self._UNCHANGED_FILENAME in line:
                         continue
                     violators.append((doc_file.name, lineno, line.strip()))
-        assert violators == [], f"Remaining bearclaw-voice refs in docs/research/: {violators}"
+        assert violators == [], (
+            f"Remaining bearclaw-voice refs in docs/research/: {violators}"
+        )
