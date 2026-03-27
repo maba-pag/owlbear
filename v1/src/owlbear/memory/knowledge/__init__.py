@@ -21,6 +21,7 @@ __all__ = [
     "IngestResult",
     "KnowledgeQueryService",
     "RelationType",
+    "StructuredSearchResult",
     "VectorStoreProtocol",
     "init_db",
 ]
@@ -40,6 +41,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "IngestResult": (".ingest", "IngestResult"),
     "KnowledgeQueryService": (".query_service", "KnowledgeQueryService"),
     "RelationType": (".models", "RelationType"),
+    "StructuredSearchResult": (".query_service", "StructuredSearchResult"),
     "VectorStoreProtocol": (".protocol", "VectorStoreProtocol"),
     "init_db": (".schema", "init_db"),
 }

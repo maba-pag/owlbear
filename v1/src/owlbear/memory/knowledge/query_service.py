@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, ConfigDict
+
 from owlbear.memory.knowledge.protocol import HybridEmbedding
 
 if TYPE_CHECKING:
@@ -29,6 +31,19 @@ logger = logging.getLogger(__name__)
 def _token_count(text: str) -> int:
     """Count tokens using a simple word-split heuristic (KISS — no tiktoken)."""
     return len(text.split())
+
+
+class StructuredSearchResult(BaseModel):
+    """Structured knowledge hit for consumers that need raw retrieval fields."""
+
+    model_config = ConfigDict(frozen=True)
+
+    doc_id: str
+    title: str
+    score: float
+    snippet: str
+    entity_type: str | None
+    scope: str
 
 
 class KnowledgeQueryService:
@@ -103,6 +118,61 @@ class KnowledgeQueryService:
                 exc_info=True,
             )
             return None
+
+    def search_structured(
+        self,
+        query: str,
+        *,
+        top_k: int = 5,
+    ) -> list[StructuredSearchResult]:
+        """Return structured retrieval results for *query*.
+
+        Returns an empty list when there are no matching results or when
+        the operation fails.
+
+        Args:
+            query: Natural-language query to embed and search.
+            top_k: Maximum number of structured hits to return.
+        """
+        if top_k <= 0:
+            return []
+
+        try:
+            results, _ = self._search_chunks(query, top_k=top_k)
+            filtered = [
+                (doc_id, score)
+                for doc_id, score in results
+                if score >= self._threshold
+            ][:top_k]
+
+            structured: list[StructuredSearchResult] = []
+            for doc_id, score in filtered:
+                doc = self._graph.get_document(doc_id)
+                if doc is None:
+                    continue
+
+                entities = self._graph.list_entities_for_document(doc_id)
+                entity_type = str(entities[0].entity_type) if entities else None
+
+                structured.append(
+                    StructuredSearchResult(
+                        doc_id=doc_id,
+                        title=doc.title,
+                        score=score,
+                        snippet=doc.content[:500],
+                        entity_type=entity_type,
+                        scope=doc.scope,
+                    )
+                )
+        except Exception:  # noqa: BLE001 — AC requires graceful degradation
+            logger.warning(
+                "Structured knowledge query failed for prompt: %s",
+                query[:100],
+                exc_info=True,
+            )
+            return []
+        else:
+            return structured
 
     # ------------------------------------------------------------------
     # Internal
