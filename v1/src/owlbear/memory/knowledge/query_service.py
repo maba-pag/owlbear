@@ -139,11 +139,9 @@ class KnowledgeQueryService:
 
         try:
             results, _ = self._search_chunks(query, top_k=top_k)
-            filtered = [
-                (doc_id, score)
-                for doc_id, score in results
-                if score >= self._threshold
-            ][:top_k]
+            filtered = [(doc_id, score) for doc_id, score in results if score >= self._threshold][
+                :top_k
+            ]
 
             structured: list[StructuredSearchResult] = []
             for doc_id, score in filtered:
@@ -213,12 +211,17 @@ class KnowledgeQueryService:
         return output
 
     def _search_chunks(
-        self, prompt: str, *, top_k: int,
+        self,
+        prompt: str,
+        *,
+        top_k: int,
     ) -> tuple[list[tuple[str, float]], str]:
         """Return (chunks, expansion_text) from retriever or direct search."""
         if self._retriever is not None:
             retrieval = self._retriever.retrieve(
-                prompt, top_k=top_k, scopes=self._scopes,
+                prompt,
+                top_k=top_k,
+                scopes=self._scopes,
             )
             return retrieval.chunks, retrieval.expansion_text
 
@@ -264,7 +267,9 @@ class KnowledgeQueryService:
         return header + "\n\n" + "\n".join(lines), budget
 
     def _append_consolidation_insights(
-        self, output: str, budget: int,
+        self,
+        output: str,
+        budget: int,
     ) -> tuple[str, int]:
         """Append consolidation insights to *output* within *budget*.
 
