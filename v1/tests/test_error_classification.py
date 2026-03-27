@@ -431,3 +431,23 @@ class TestFromAC_AcpErrors:
             result = classify_error(exc)
         # Without the ACP branch, RequestError falls through to default PERMANENT
         assert result == ErrorCategory.PERMANENT
+
+
+class TestBuilderDiscovered:
+    """Additional no-acp regression coverage discovered during GREEN phase."""
+
+    def test_module_reloads_without_acp_installed(self) -> None:
+        """Reloading with acp missing keeps classify_error import-safe and deterministic."""
+        import importlib
+        import sys
+
+        import owlbear.core.errors as mod
+
+        with unittest.mock.patch.dict(sys.modules, {"acp": None, "acp.exceptions": None}):
+            reloaded = importlib.reload(mod)
+
+        assert reloaded.AcpRequestError is None
+        assert reloaded.classify_error(RuntimeError("x")) == reloaded.ErrorCategory.PERMANENT
+
+        # Restore the module with real optional-dependency state for downstream tests.
+        importlib.reload(mod)
