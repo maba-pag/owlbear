@@ -3,22 +3,24 @@ name: reviewer
 description: "Read-only quality verification — never trusts self-reports"
 argument-hint: "Review: {task_id_or_file_paths}"
 user-invocable: false
-disable-model-invocation: true
-model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
+model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
   [
     vscode/memory,
+    execute/testFailure,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
+    execute/runTests,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
     search,
-    todos,
+    todo,
   ]
 ---
 

@@ -3,7 +3,6 @@ name: researcher
 description: "Thorough research agent that produces structured findings and follow-up kanban tasks"
 argument-hint: "Research: {topic_or_question}"
 user-invocable: false
-disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [
@@ -11,20 +10,21 @@ tools:
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
-    "microsoft/markitdown/*",
     edit/createDirectory,
     edit/createFile,
     edit/editFiles,
     edit/rename,
     search,
     web,
-    todos,
+    "microsoft/markitdown/*",
+    todo,
   ]
 ---
 

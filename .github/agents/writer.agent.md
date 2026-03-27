@@ -3,7 +3,6 @@ name: writer
 description: "Verify and update documentation for completed tasks — docs gate before done"
 argument-hint: "Docs Gate: {task_id_or_scope}"
 user-invocable: false
-disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
   [
@@ -11,18 +10,19 @@ tools:
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
     edit/createDirectory,
     edit/createFile,
     edit/editFiles,
     edit/rename,
     search,
-    todos,
+    todo,
   ]
 ---
 

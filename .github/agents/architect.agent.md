@@ -3,7 +3,6 @@ name: architect
 description: "Review researched tasks, refine acceptance criteria, ensure architectural soundness, approve for development"
 argument-hint: "Architect Review: {task_id_or_scope}"
 user-invocable: false
-disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [
@@ -11,14 +10,15 @@ tools:
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
     search,
-    todos,
+    todo,
   ]
 ---
 

@@ -3,26 +3,28 @@ name: builder
 description: "Code implementation from kanban tasks with TDD"
 argument-hint: "Build: {task_id_or_description}"
 user-invocable: false
-disable-model-invocation: true
 model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [
     vscode/memory,
+    execute/testFailure,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
+    execute/runTests,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
     edit/createDirectory,
     edit/createFile,
     edit/editFiles,
     edit/rename,
     search,
-    todos,
+    todo,
   ]
 ---
 

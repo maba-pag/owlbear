@@ -3,24 +3,26 @@ name: test-writer
 description: "Adversarial RED phase — writes failing tests from AC before the builder sees the task"
 argument-hint: "Write tests: {task_id}"
 user-invocable: false
-disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
   [
     vscode/memory,
+    execute/testFailure,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
     execute/runInTerminal,
-    read/terminalLastCommand,
+    execute/runTests,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
     agent,
     edit/createFile,
     edit/editFiles,
     search,
-    todos,
+    todo,
   ]
 ---
 
