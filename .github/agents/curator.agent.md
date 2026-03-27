@@ -7,10 +7,11 @@ model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
   [
     vscode/memory,
-    vscode/resolveMemoryFileUri,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
+    execute/runTask,
+    execute/createAndRunTask,
     execute/runInTerminal,
     read/terminalLastCommand,
     read/readFile,
@@ -19,7 +20,7 @@ tools:
     edit/createFile,
     edit/editFiles,
     search,
-    todos,
+    todo,
   ]
 ---
 

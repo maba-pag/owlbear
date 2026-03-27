@@ -64,7 +64,7 @@ map v1 tool references to VS Code built-in tools, and identify gaps for the v2 p
 | `web` | `web` (tool set) | YES — identical |
 | `todo` | `todos` | RENAME — `todo` → `todos` |
 | `vscode/memory` | `vscode/memory` | YES — identical |
-| `vscode/resolveMemoryFileUri` | — | NO — not documented in built-in tool registry |
+| `vscode/resolveMemoryFileUri` | — | REMOVED — deleted from curator agent, no replacement needed |
 | `microsoft/markitdown/*` | — | MCP — needs MCP server reference |
 
 **Key findings:**
@@ -136,12 +136,13 @@ No structural changes required. The format is validated and portable.
 - Command used: `kanban\kanban-md.exe create "Rename todo tool reference to todos in all .agent.md files" --priority nice-to-have --status ideation --tags phase-1,scope:agents`
 - Created task ID: `36`.
 
-2. **Evaluate agent-scoped hooks for pipeline enforcement** (`#37`)
+2. **Evaluate agent-scoped hooks for pipeline enforcement** (`#86`)
 - Priority rationale: improves governance and quality automation but not required for baseline compatibility.
 - Dependencies: none.
 - One-line AC: produce a documented recommendation for enabling hook types and rollout guardrails.
-- Command used: `kanban\kanban-md.exe create "Evaluate agent-scoped hooks for pipeline enforcement" --priority nice-to-have --status ideation --tags research,phase-1,scope:agents,hooks`
-- Created task ID: `37`.
+- Command used: `kanban\kanban-md.exe create "Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)" --priority nice-to-have --status backlog --tags research,phase-1,scope:agents,hooks`
+- Created task ID: `86`.
+- Note: original task `#37` remains as a blocked placeholder record and is superseded by `#86` for implementation-quality follow-up tracking.
 
 3. **Add `disable-model-invocation` to pipeline-only agents** (`#38`)
 - Priority rationale: reduces accidental autonomous invocation of non-user-facing pipeline agents.
