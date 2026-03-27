@@ -26,7 +26,7 @@ repos:
     rev: 1.9.3
     hooks:
       - id: bandit
-        args: [-c, pyproject.toml, -r, src/]
+        args: [-c, pyproject.toml, -r, packages/]
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.21.0

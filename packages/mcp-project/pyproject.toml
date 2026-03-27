@@ -1,0 +1,12 @@
+[project]
+name = "owlbear-mcp-project"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "OwlBear MCP server — project metadata and lifecycle"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/owlbear_mcp_project"]

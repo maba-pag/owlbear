@@ -73,3 +73,9 @@ v1/.ruff_cache/
 v1/__pycache__/
 v1/.coverage
 v1/htmlcov/
+
+# v2 package artifacts
+packages/*/dist/
+
+# Knowledge data
+data/knowledge/*.db
