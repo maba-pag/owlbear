@@ -3,6 +3,9 @@ name = "owlbear-mcp-project"
 version = "0.1.0"
 requires-python = ">=3.12"
 description = "OwlBear MCP server — project metadata and lifecycle"
+dependencies = [
+  "pydantic>=2.10.0",
+]
 
 [build-system]
 requires = ["hatchling"]
