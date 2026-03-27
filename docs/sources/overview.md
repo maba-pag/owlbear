@@ -2,6 +2,26 @@
 
 External repos and resources studied during OwlBear development.
 
+## Monorepo Tooling Research (Task #6)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| uv workspaces docs | <https://docs.astral.sh/uv/concepts/projects/workspaces/> | MIT | Workspace configuration, member globs, editable installs, single lockfile, requires-python intersection | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+| uv dependency management docs | <https://docs.astral.sh/uv/concepts/projects/dependencies/> | MIT | Dependency groups (PEP 735), workspace sources, dev dependency isolation, optional dependencies | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+| uv project init docs | <https://docs.astral.sh/uv/concepts/projects/init/> | MIT | uv_build backend as default for new packages, src layout, project.scripts for CLI entry points | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+| pydantic-ai monorepo | <https://github.com/pydantic/pydantic-ai> | MIT | Real-world uv workspace with 5+ members, workspace sources, hatchling backend, dependency-groups | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+| MCP Python SDK monorepo | <https://github.com/modelcontextprotocol/python-sdk> | MIT | MCP server workspace layout, project.scripts for server entry points, workspace sources | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+| pydantic/logfire monorepo | <https://github.com/pydantic/logfire> | MIT | Minimal uv workspace with 1 member, hatchling backend, workspace sources pattern | `docs/research/monorepo-tooling.md` | 2026-03-26 |
+
+## Monorepo Skeleton Implementation Research (Task #7)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| uv workspace docs | <https://docs.astral.sh/uv/concepts/projects/workspaces/> | MIT | Workspace layout, member glob, workspace sources | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
+| uv project init docs | <https://docs.astral.sh/uv/concepts/projects/init/> | MIT | uv_build backend, --package flag, src layout convention | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
+| VS Code Copilot settings ref | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | chat.agentFilesLocations, chat.agentSkillsLocations, chat.instructionsFilesLocations settings | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
+| VS Code customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Monorepo parent repository discovery, customization file conventions | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
+
 ## Impeccable Design Skill Research (Task #929)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -11,14 +31,51 @@ External repos and resources studied during OwlBear development.
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design skill that Impeccable extends | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skills vs custom instructions, progressive loading, and resource-backed skill structure for OwlBear adoption planning | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 
+## Expand mcp-kanban Tools Research (Task #56)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK README (v1) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP tool decorator patterns, lifespan context injection, subprocess-wrapping tool design | `docs/research/expand-mcp-kanban-tools.md` | 2026-03-26 |
+| kanban-md CLI v0.33.0 | Local binary (`kanban/kanban-md.exe --help`) | N/A | Full CLI command surface, flag comparison vs v1 KanbanToolset signatures | `docs/research/expand-mcp-kanban-tools.md` | 2026-03-26 |
+
 ## Frontend-Design Skill Implementation Gate (Task #934)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Raw `frontend-design` skill structure, reference-pack layout, and NOTICE-based attribution model to adapt rather than copy | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
 | Impeccable website | <https://impeccable.style> | N/A | Public command taxonomy and reference-pack framing used to bound what #934 should exclude | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+
+## Copilot Memory Research (Task #5)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code settings reference — Memory settings | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | Two memory systems (built-in tool vs GitHub-hosted), settings, default states | `docs/research/copilot-memory.md` | 2026-03-26 |
+| VS Code cheat sheet — Planning section | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Memory tool description, management command, three storage scopes | `docs/research/copilot-memory.md` | 2026-03-26 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design wording and design-direction guidance beneath the adapted OwlBear skill | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skill folder structure, default invocation behavior, and relative resource guidance for OwlBear packaging | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
+
+## ProcessSupervisor ACP Research (Task #58)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `gemini.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/gemini.py> | Apache-2.0 | `_shutdown` pattern (terminate/wait/kill), subprocess spawn with stdin/stdout PIPE, `shutil.which` binary resolution | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
+| mcp-copilot-acp `process-manager.ts` | <https://github.com/bsmi021/mcp-copilot-acp/blob/main/src/process-manager.ts> | MIT | ProcessManager class with restart budget (max 3), `ensure()`/`shutdown()` lifecycle, graceful shutdown grace period | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
+| Python asyncio subprocess docs | <https://docs.python.org/3/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` API, `Process.terminate()`/`kill()` semantics, Windows ProactorEventLoop notes | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
+
+## Real search_knowledge Tool Research (Task #54)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK v1 README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP lifespan context injection, tool decorator patterns, async tool execution | `docs/research/search-knowledge-tool-impl.md` | 2026-03-26 |
+| Qdrant MCP Server (v0.8.1) | <https://github.com/qdrant/mcp-server-qdrant> | Apache-2.0 | Real tool implementation with backend connector, result formatting (XML entry tags), find/store tool patterns | `docs/research/search-knowledge-tool-impl.md` | 2026-03-26 |
+
+## Classify Error ACP Extension Research (Task #60)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| JSON-RPC 2.0 specification | <https://www.jsonrpc.org/specification> | CC | Standard error codes (-32700 to -32603), reserved range -32000 to -32099 | `docs/research/classify-error-acp-extension.md` | 2026-03-26 |
+| ACP Python SDK `exceptions.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/exceptions.py> | Apache-2.0 | `RequestError(code, message, data)` interface, factory methods for 7 error codes | `docs/research/classify-error-acp-extension.md` | 2026-03-26 |
+| MCP Python SDK `exceptions.py` | <https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/shared/exceptions.py> | MIT | `MCPError.code` pattern confirming JSON-RPC `.code` attribute convention across SDKs | `docs/research/classify-error-acp-extension.md` | 2026-03-26 |
 
 ## Frontend-Design Skill RED Test Gate (Task #941)
 
@@ -32,15 +89,159 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Required skill directory layout, frontmatter contract, progressive loading, and co-located resource-file model that the RED tests should target | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+
+## mcp-kanban Integration Tests Research (Task #57)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK test suite (v1.26.0) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | `mcp.shared.memory.create_connected_server_and_client_session` in-memory testing pattern, `client_session(mcp._mcp_server)` idiom for tool testing without transport | `docs/research/mcp-kanban-integration-tests.md` | 2026-03-27 |
+| MCP Transports spec | <https://modelcontextprotocol.io/docs/concepts/transports> | CC-BY-4.0 | stdio transport model: client launches subprocess, newline-delimited JSON-RPC on stdin/stdout | `docs/research/mcp-kanban-integration-tests.md` | 2026-03-27 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Minimal `frontend-design` package precedent used to avoid over-asserting optional files beyond `SKILL.md` | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
 | pbakaus/impeccable | <https://github.com/pbakaus/impeccable> | Apache-2.0 | Reference-pack skill precedent used to justify asserting the seven required `references/*.md` files in the RED contract | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+
+## owlbear-project.json Schema Specification (Task #53)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| JSON Schema `$schema` keyword | <https://json-schema.org/understanding-json-schema/reference/schema> | Unknown | Schema dialect declaration, `$schema` keyword usage, vocabulary guidelines for extensibility patterns | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
+| npm package.json spec | <https://docs.npmjs.com/cli/v10/configuring-npm/package-json> | Artistic-2.0 | Project manifest field conventions (name, version, description), open-schema extensibility, versioning patterns | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
+| pyproject.toml spec (PEP 621) | <https://packaging.python.org/en/latest/specifications/pyproject-toml/> | CC0 | `[project]` table required vs optional fields, `[tool]` open namespace for unknown keys, dynamic metadata | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
+| Dev Container JSON reference | <https://containers.dev/implementors/json_reference/> | MIT | devcontainer.json schema structure, property categories, schema URL hosting pattern | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
+
+## OwlbearProjectFile Model Implementation (Task #68)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | `ConfigDict(extra='allow')` semantics, `model_validate_json()` for JSON-first validation | `docs/research/owlbear-project-file-model-impl.md` | 2026-03-26 |
+| Pydantic v2 Fields docs | <https://docs.pydantic.dev/latest/concepts/fields/> | MIT | `Field(ge=, le=, min_length=, max_length=)` constraint patterns for schema validation | `docs/research/owlbear-project-file-model-impl.md` | 2026-03-26 |
+| Pydantic v2 Standard Library Types — Datetimes | <https://docs.pydantic.dev/latest/api/standard_library_types/#datetime-types> | MIT | `AwareDatetime` type for enforcing timezone-aware datetimes without custom validators | `docs/research/owlbear-project-file-model-impl.md` | 2026-03-26 |
+
+## Argument-Hint for User-Invocable Skills (Task #43)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | `argument-hint` optional YAML frontmatter field — hint text shown in chat input when skill invoked as slash command | `docs/research/argument-hint-user-invocable-skills.md` | 2026-03-27 |
+| agentskills.io specification | <https://agentskills.io/specification> | Unknown | Confirmed `argument-hint` is VS Code-specific extension, not part of agentskills.io open spec | `docs/research/argument-hint-user-invocable-skills.md` | 2026-03-27 |
+
+## ACP Error Handling Strategy (Task #47)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| JSON-RPC 2.0 specification | <https://www.jsonrpc.org/specification> | CC-BY | Standard error codes (-32700 to -32603), error object structure, notification semantics | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+| ACP Python SDK `exceptions.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/exceptions.py> | Apache-2.0 | `RequestError` class with factory methods for all 7 ACP/JSON-RPC error codes | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+| ACP Python SDK `examples/gemini.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/gemini.py> | Apache-2.0 | Process shutdown pattern (terminate, wait_for 5s, kill), RequestError handling per method | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+| ACP Python SDK `examples/client.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/client.py> | Apache-2.0 | Subprocess spawn + cleanup pattern, returncode-based crash detection | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+| mcp-copilot-acp | <https://github.com/bsmi021/mcp-copilot-acp> | MIT | Timeout (300s default), max restarts (3), process recovery configuration | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+| ACP specification (architecture) | <https://agentclientprotocol.com/get-started/architecture> | N/A | Protocol architecture, stdio transport design, no built-in timeout | `docs/research/acp-error-handling-strategy.md` | 2026-03-26 |
+
+## Scaffold mcp-kanban Research (Task #39)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK README (v1 stable) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 `@mcp.tool()`, lifespan pattern, stdio transport, `mcp.run()` entry point | `docs/research/scaffold-mcp-kanban.md` | 2026-03-27 |
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server registration format in `.vscode/mcp.json`, dev watch mode | `docs/research/scaffold-mcp-kanban.md` | 2026-03-27 |
+| OwlBear KanbanToolset (v1) | `v1/src/owlbear/tools/kanban.py` | N/A (internal) | `_run_kanban()` subprocess helper, 7 tool signatures, hook emission pattern | `docs/research/scaffold-mcp-kanban.md` | 2026-03-27 |
+| modelcontextprotocol/servers | <https://github.com/modelcontextprotocol/servers> | MIT | Reference MCP server patterns, CLI-wrapping examples, ecosystem conventions | `docs/research/scaffold-mcp-kanban.md` | 2026-03-27 |
+
+## Ingest and Graph Tools mcp-knowledge Research (Task #55)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Qdrant MCP Server (v0.8.1) | <https://github.com/qdrant/mcp-server-qdrant> | Apache-2.0 | Two-tool surface (store/find), metadata parameter design, tool description patterns | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
+| MCP Official Memory Server | <https://github.com/modelcontextprotocol/servers/tree/main/src/memory> | MIT | 8-tool graph CRUD surface, entity/relation model, `read_graph` no-pagination pattern | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
+| FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | N/A | `@mcp.tool` decorator, `Annotated` param descriptions, `readOnlyHint` annotations, error handling | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
+
+## Scaffold mcp-knowledge Research (Task #40)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK README (v1 stable) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 lifespan pattern, decorator API, stdio transport, `mcp.run()` entry point | `docs/research/scaffold-mcp-knowledge.md` | 2026-03-26 |
+| Qdrant MCP Server | <https://github.com/qdrant/mcp-server-qdrant> | Apache-2.0 | Two-tool surface (store/find), env var config, lifespan with Qdrant client, VS Code registration pattern | `docs/research/scaffold-mcp-knowledge.md` | 2026-03-26 |
+| MCP Official Memory Server | <https://github.com/modelcontextprotocol/servers/tree/main/src/memory> | MIT | Knowledge graph MCP server with 8 tools, in-memory graph pattern, entity/relation model | `docs/research/scaffold-mcp-knowledge.md` | 2026-03-26 |
+| MCP Resources Spec | <https://modelcontextprotocol.io/docs/concepts/resources> | CC-BY-4.0 | Resource primitive definition, URI templates, read-only context data pattern | `docs/research/scaffold-mcp-knowledge.md` | 2026-03-26 |
+
+## Voice Addon STT with Moonshine (Task #50)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Moonshine Voice GitHub (v0.0.51) | <https://github.com/moonshine-ai/moonshine> | MIT | Full Python API: MicTranscriber, TranscriptEventListener, ModelArch, get_model_for_language() | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
+| Moonshine mic_transcriber.py source | <https://github.com/moonshine-ai/moonshine/blob/main/python/src/moonshine_voice/mic_transcriber.py> | MIT | MicTranscriber wraps Transcriber + sounddevice.InputStream, event dispatch on audio thread | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
+| Moonshine transcriber.py source | <https://github.com/moonshine-ai/moonshine/blob/main/python/src/moonshine_voice/transcriber.py> | MIT | Stream._emit() typed event dispatch, TranscriptEventListener ABC, ctypes C bindings | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
+| Moonshine Ollama voice example | <https://github.com/moonshine-ai/moonshine/blob/main/examples/python/ollama-voice/ollama_voice.py> | MIT | Real-world TranscriptEventListener subclass, on_line_completed for downstream processing | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
+| v1 StreamingSTT | `v1/src/owlbear/voice/streaming_stt.py` | N/A (internal) | Lazy creation, async bridge, start/stop/close lifecycle | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
+| v1 STTEngine (batch) | `v1/src/owlbear/voice/stt.py` | N/A (internal) | _ensure_transcriber() lazy loading pattern | `docs/research/voice-addon-stt-moonshine.md` | 2026-03-26 |
 
 ## Context Hydration Migration Re-Research (Task #826)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | Python unittest.mock docs | <https://docs.python.org/3/library/unittest.mock.html#where-to-patch> | PSF | Official module-local patch target guidance confirming correct seam after migration | `docs/research/context-hydration-migration-already-implemented.md` | 2026-03-26 |
+
+## Scaffold mcp-project Server Research (Task #41)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator patterns (@mcp.tool, @mcp.resource), stdio transport, entry point conventions | `docs/research/scaffold-mcp-project-server.md` | 2026-03-26 |
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | .vscode/mcp.json stdio server registration format, dev watch, naming conventions | `docs/research/scaffold-mcp-project-server.md` | 2026-03-26 |
+| modelcontextprotocol/servers | <https://github.com/modelcontextprotocol/servers> | MIT | Reference MCP server package structures, entry point patterns, uvx execution | `docs/research/scaffold-mcp-project-server.md` | 2026-03-26 |
 | Cosmic Python ch. 2 — Repository Pattern | <https://www.cosmicpython.com/book/chapter_02_repository.html> | CC-BY-NC-ND | Dependency-direction inversion prior art for keeping core logic free of adapter imports | `docs/research/context-hydration-migration-already-implemented.md` | 2026-03-26 |
+
+## ACP Protocol Deep-Dive (Task #1)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP specification (official) | <https://agentclientprotocol.com/> | Apache-2.0 | Protocol architecture, lifecycle, message types, capabilities negotiation | `docs/research/acp-protocol.md` | 2026-03-26 |
+| ACP GitHub (schema + repo) | <https://github.com/agentclientprotocol/agent-client-protocol> | Apache-2.0 | JSON schema (v0.11.3), all request/response/notification types, error codes | `docs/research/acp-protocol.md` | 2026-03-26 |
+| ACP Python SDK | <https://github.com/agentclientprotocol/python-sdk> | Apache-2.0 | Official client/agent library (v0.9.0), connect_to_agent flow, Pydantic models, examples | `docs/research/acp-protocol.md` | 2026-03-26 |
+| mcp-copilot-acp | <https://github.com/bsmi021/mcp-copilot-acp> | MIT | Real-world ACP client impl, session lifecycle, timeout patterns, YOLO mode | `docs/research/acp-protocol.md` | 2026-03-26 |
+| rest-acp | <https://github.com/iot2020/rest-acp> | MIT | Session management patterns, multi-turn context, process lifecycle | `docs/research/acp-protocol.md` | 2026-03-26 |
+
+## ACP Hello-World Script Research (Task #45)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK quickstart | <https://agentclientprotocol.github.io/python-sdk/quickstart/> | Apache-2.0 | spawn_agent_process helper, connect_to_agent pattern, Client interface requirements | `docs/research/acp-hello-world.md` | 2026-03-26 |
+| Copilot CLI ACP server docs | <https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server> | CC-BY-4.0 | Official --acp --stdio flags, TypeScript integration example, stdio transport details | `docs/research/acp-hello-world.md` | 2026-03-26 |
+| Copilot CLI about page | <https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli> | CC-BY-4.0 | --allow-all-tools flag, tool approval options, security considerations | `docs/research/acp-hello-world.md` | 2026-03-26 |
+| ACP SDK contrib docs | <https://agentclientprotocol.github.io/python-sdk/contrib/> | Apache-2.0 | SessionAccumulator, ToolCallTracker utility patterns for future use | `docs/research/acp-hello-world.md` | 2026-03-26 |
+
+## Setup Script Project JSON Generation (Task #69)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python os.path.relpath docs | <https://docs.python.org/3/library/os.path.html#os.path.relpath> | PSF-2.0 | Pure string-based relative path computation, cross-drive ValueError on Windows | `docs/research/setup-script-project-json-generation.md` | 2026-03-26 |
+| Python pathlib PurePath.as_posix docs | <https://docs.python.org/3/library/pathlib.html#pathlib.PurePath.as_posix> | PSF-2.0 | Forward-slash normalization for cross-platform JSON path storage | `docs/research/setup-script-project-json-generation.md` | 2026-03-26 |
+| npm init CLI reference | <https://docs.npmjs.com/cli/v10/commands/npm-init> | Artistic-2.0 | Default inference pattern (name from dirname), idempotency behavior | `docs/research/setup-script-project-json-generation.md` | 2026-03-26 |
+
+## Test: owlbear-project.json Generation Research (Task #75)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest tmp_path fixture docs | <https://docs.pytest.org/en/stable/how-to/tmp_path.html> | MIT | `tmp_path` fixture for filesystem isolation in tests, session-scoped `tmp_path_factory` | `docs/research/test-project-json-generation.md` | 2026-03-26 |
+| Pydantic v2 Serialization docs | <https://docs.pydantic.dev/latest/concepts/serialization/> | MIT | `model_dump_json(indent=2)` for JSON serialization, `model_validate_json()` for round-trip testing | `docs/research/test-project-json-generation.md` | 2026-03-26 |
+
+## search_structured Method Research (Task #70)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| LlamaIndex NodeWithScore schema | <https://developers.llamaindex.ai/python/framework-api-reference/schema/> | MIT | `NodeWithScore(node, score)` pattern — separating scored wrapper from data node, frozen Pydantic BaseModel result types | `docs/research/search-structured-method.md` | 2026-03-26 |
+| Qdrant MCP Server (v0.8.1) | <https://github.com/qdrant/mcp-server-qdrant> | Apache-2.0 | `qdrant-find` tool returns information as separate messages, XML-tagged entry format for structured results | `docs/research/search-structured-method.md` | 2026-03-26 |
+
+## Voice Addon Architecture Research (Task #30)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Moonshine Voice | <https://github.com/moonshine-ai/moonshine> | MIT (English) | Streaming STT models (26-245M params), live latency benchmarks, event-based API, built-in VAD+diarization | `docs/research/voice-addon-architecture.md` | 2026-03-26 |
+| OpenAI Whisper | <https://github.com/openai/whisper> | MIT | Reference STT model sizes (39M-1.5B), WER baselines, batch-only 30s fixed window architecture | `docs/research/voice-addon-architecture.md` | 2026-03-26 |
+| Kokoro TTS | <https://github.com/hexgrad/kokoro> | Apache-2.0 | 82M param neural TTS, generator-based streaming API, espeak-ng dependency, multi-language support | `docs/research/voice-addon-architecture.md` | 2026-03-26 |
+| Piper TTS (piper1-gpl) | <https://github.com/OHF-Voice/piper1-gpl> | GPL-3.0 | Fast local neural TTS, C++ core, license change from original MIT to GPL-3.0, maintenance status | `docs/research/voice-addon-architecture.md` | 2026-03-26 |
+| Silero VAD | <https://github.com/snakers4/silero-vad> | MIT | Voice Activity Detection, <1ms per chunk, 2MB model, ONNX Runtime support | `docs/research/voice-addon-architecture.md` | 2026-03-26 |
+
+## User-Invocable Skills Research (Task #42)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | `user-invocable` SKILL.md frontmatter property, slash-command visibility control, behavior matrix | `docs/research/user-invocable-skills.md` | 2026-03-26 |
 
 ## GraphEnricher Cancellation Test Approach (Task #1000)
 
@@ -156,6 +357,16 @@ External repos and resources studied during OwlBear development.
 | Celery task retry docs | <https://docs.celeryq.dev/en/stable/userguide/tasks.html#retrying> | BSD-3-Clause | `self.retry()` reuses task-owned counters; signals can trigger retry through the same mechanism; one retry counter per task pattern | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
 | Temporal Python failure detection docs | <https://docs.temporal.io/develop/python/failure-detection> | MIT | `RetryPolicy` owned by the scheduler, not the activity; retry state at orchestrator level, not executor level | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
 | Prefect automations triggers docs | <https://docs.prefect.io/v3/automate/events/automations-triggers> | N/A (docs) | Event-driven actions delegate to existing executors; action tracing for failure attribution | `docs/research/hook-reaction-retry-delegation.md` | 2026-03-24 |
+
+## Voice Addon Stdio Protocol Design (Task #49)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| NDJSON spec v1.0.0 | <https://github.com/ndjson/ndjson-spec> | Free (custom) | NDJSON framing standard: one JSON object per line, UTF-8, `\n` terminated, no embedded newlines | `docs/research/voice-stdio-protocol.md` | 2026-03-26 |
+| JSON Lines spec | <https://jsonlines.org/> | N/A | Complementary NDJSON spec: UTF-8, each line a valid JSON value, `\n` terminator | `docs/research/voice-stdio-protocol.md` | 2026-03-26 |
+| MCP stdio transport spec | <https://modelcontextprotocol.io/specification/2025-03-26/basic/transports> | CC-BY-4.0 | Gold-standard subprocess stdio protocol: NDJSON framing, client launches subprocess, shutdown sequence | `docs/research/voice-stdio-protocol.md` | 2026-03-26 |
+| MCP Python SDK stdio client | <https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/stdio.py> | MIT | Subprocess lifecycle management: spawn, stdin/stdout streams, three-phase shutdown (close stdin, terminate, kill) | `docs/research/voice-stdio-protocol.md` | 2026-03-26 |
+| ACP Python SDK `examples/client.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/client.py> | Apache-2.0 | asyncio subprocess spawn, returncode-based crash detection, terminate+wait cleanup pattern | `docs/research/voice-stdio-protocol.md` | 2026-03-26 |
 
 ## Retry Executor Wiring (Task #985)
 
@@ -1616,10 +1827,44 @@ External repos and resources studied during OwlBear development.
 | pbakaus/impeccable README | <https://github.com/pbakaus/impeccable> | Apache-2.0 | `audit → normalize → polish` pipeline, optional scope argument (`/normalize blog`), command UX precedent | `docs/research/frontend-normalize-prompt.md` | 2026-03-25 |
 | VS Code prompt file docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | `${input:scope}` optional-input syntax, description-only frontmatter contract, `.prompt.md` file placement | `.github/prompts/frontend-normalize.prompt.md` | 2026-03-25 |
 
+## .agent.md Format Validation (Task #4)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Complete .agent.md YAML frontmatter spec: tools, agents, model, handoffs, hooks, user-invocable, disable-model-invocation | `docs/research/agent-md-format.md` | 2026-03-26 |
+| VS Code Chat Tools Reference | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Full built-in tool name list for mapping v1 PydanticAI tool references to VS Code equivalents | `docs/research/agent-md-format.md` | 2026-03-26 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool sets, tool approval, terminal sandbox, MCP tool integration patterns | `docs/research/agent-md-format.md` | 2026-03-26 |
+| VS Code Hooks docs | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | Hook lifecycle events, agent-scoped hooks format, PreToolUse/PostToolUse patterns | `docs/research/agent-md-format.md` | 2026-03-26 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Orchestration patterns, agents field semantics, nested subagent settings, coordinator-worker pattern | `docs/research/agent-md-format.md` | 2026-03-26 |
+
+## Skills-Ref CI Validation Research (Task #44)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| agentskills.io specification | <https://agentskills.io/specification> | N/A | Authoritative frontmatter rules, 6 allowed fields, progressive disclosure tiers | `docs/research/skills-ref-ci-validation.md` | 2026-03-27 |
+| skills-ref PyPI package (v0.1.1) | <https://pypi.org/project/skills-ref/> | Apache-2.0 | Published CLI (`agentskills` entry point), dependencies (click, strictyaml), Python ≥3.11 | `docs/research/skills-ref-ci-validation.md` | 2026-03-27 |
+| skills-ref validator.py source | <https://github.com/agentskills/agentskills/blob/main/skills-ref/src/skills_ref/validator.py> | Apache-2.0 | Strict `ALLOWED_FIELDS` set (6 fields), `validate()` and `validate_metadata()` API | `docs/research/skills-ref-ci-validation.md` | 2026-03-27 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | VS Code vendor extensions (`user-invocable`, `argument-hint`, `disable-model-invocation`) read at top level | `docs/research/skills-ref-ci-validation.md` | 2026-03-27 |
+| skills-ref CLI source | <https://github.com/agentskills/agentskills/blob/main/skills-ref/src/skills_ref/cli.py> | Apache-2.0 | CLI entry point structure, validate command, no config/flag for extra fields | `docs/research/skills-ref-ci-validation.md` | 2026-03-27 |
+
+## Voice Protocol Pydantic Models Research (Task #61)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic v2 Unions docs | <https://docs.pydantic.dev/latest/concepts/unions/> | MIT | Literal discriminator + Field(discriminator=...) pattern for tagged message unions | `docs/research/voice-protocol-models.md` | 2026-03-27 |
+| Pydantic v2 TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/type_adapter/> | MIT | validate_json/dump_json API, create-once performance recommendation | `docs/research/voice-protocol-models.md` | 2026-03-27 |
+| MCP Python SDK types | <https://github.com/modelcontextprotocol/python-sdk> | MIT | type: Literal[...] on content models, module-level TypeAdapter union instances | `docs/research/voice-protocol-models.md` | 2026-03-27 |
+
 ## Source Discovery & Bookmarking Research (Task #304)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
+
+## Rename todo to todos (Task #36)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Cheat Sheet — Chat Tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `#todos` is the canonical built-in tool name; `chat.tools.todos.showWidget` setting confirms plural | `docs/research/rename-todo-to-todos.md` | 2026-03-27 |
 
 ## Expose reaction_executors via HookRegistry Attribute (Task #991)
 
@@ -2154,3 +2399,65 @@ External repos and resources studied during OwlBear development.
 | Python asyncio task cancellation docs | <https://docs.python.org/3/library/asyncio-task.html#task-cancellation> | PSF | `Task.cancel()` + `asyncio.gather(return_exceptions=True)` as the shutdown drain pattern for background task sets | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
 | Python asyncio `create_task` strong-ref pattern | <https://docs.python.org/3/library/asyncio-task.html#creating-tasks> | PSF | `background_tasks.add(task)` + `task.add_done_callback(background_tasks.discard)` — validates existing GraphEnricher bookkeeping | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
 | .NET CancellationToken docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC BY 4.0 | One token per cancelable operation; check before starting new work — model for per-schedule CancelSignal param | `docs/research/graphenricher-cancellation-draining.md` | 2026-03-25 |
+
+## MCP Python SDK Deep-Dive (Task #2)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK (v1 README) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP API, decorator patterns, transport options, lifespan pattern, structured output, Context injection | `docs/research/mcp-python-sdk.md` | 2026-03-26 |
+| MCP Python SDK (v2 README) | <https://github.com/modelcontextprotocol/python-sdk/blob/main/README.v2.md> | MIT | MCPServer rename, simplified Context type params, transport options moved to run() | `docs/research/mcp-python-sdk.md` | 2026-03-26 |
+| MCP Architecture Overview | <https://modelcontextprotocol.io/docs/concepts/architecture> | LF Projects | Protocol layers, client-server architecture, three primitives, capability negotiation, notifications | `docs/research/mcp-python-sdk.md` | 2026-03-26 |
+| MCP Lifecycle Specification | <https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle> | LF Projects | Initialization handshake, capability negotiation, shutdown sequences (stdio/HTTP), timeout handling, error cases | `docs/research/mcp-python-sdk.md` | 2026-03-26 |
+| VS Code MCP Configuration Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | Microsoft | mcp.json schema, stdio/HTTP server config, input variables, dev mode, sandbox config | `docs/research/mcp-python-sdk.md` | 2026-03-26 |
+
+## agentskills.io Spec Validation (Task #3)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| agentskills.io specification | <https://agentskills.io/specification> | Apache-2.0 | Complete skill format spec: frontmatter fields, naming constraints, directory structure, progressive disclosure, validation tooling | `docs/research/agentskills-io.md` | 2026-03-26 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | VS Code-specific extensions (user-invocable, argument-hint, disable-model-invocation), discovery paths, slash-command integration | `docs/research/agentskills-io.md` | 2026-03-26 |
+| agentskills/agentskills repo | <https://github.com/agentskills/agentskills> | Apache-2.0 | Reference SDK, skills-ref validation library, spec source of truth | `docs/research/agentskills-io.md` | 2026-03-26 |
+| anthropics/skills repo | <https://github.com/anthropics/skills> | Apache-2.0 | Example skills collection (100k+ stars), real-world skill patterns and directory structures | `docs/research/agentskills-io.md` | 2026-03-26 |
+| Client implementation guide | <https://agentskills.io/client-implementation/adding-skills-support> | Apache-2.0 | Progressive disclosure lifecycle, discovery scanning rules, activation patterns, context management | `docs/research/agentskills-io.md` | 2026-03-26 |
+
+## Disable Copilot Memory Research Validation (Task #48)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code settings reference — Memory settings | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | Confirmed `github.copilot.chat.copilotMemory.enabled` setting exists, default false (Preview), workspace-level supported | Task #48 body | 2026-03-26 |
+| GitHub Blog — Copilot Memory now on by default | <https://github.blog/changelog/2026-03-04-copilot-memory-now-on-by-default-for-pro-and-pro-users-in-public-preview> | N/A | Copilot Memory enabled by default for Pro/Pro+ as of March 4, 2026; opt-out via settings | Task #48 body | 2026-03-26 |
+| GitHub Docs — About agentic memory for Copilot | <https://docs.github.com/en/copilot/concepts/agents/copilot-memory> | CC-BY-4.0 | Memory is GitHub-hosted, repository-scoped, 28-day auto-expiry, cross-surface (coding agent, code review, CLI) | Task #48 body | 2026-03-26 |
+
+## Voice TTS Kokoro + pyttsx3 Research (Task #51)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Kokoro TTS GitHub | <https://github.com/hexgrad/kokoro> | Apache-2.0 | KPipeline generator API, Result.audio tensor @ 24kHz, voice loading, speed control, espeak-ng dependency | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+| Kokoro PyPI | <https://pypi.org/project/kokoro/> | Apache-2.0 | v0.9.4 install, usage examples, Windows espeak-ng installation instructions | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+| Kokoro pipeline.py source | <https://github.com/hexgrad/kokoro/blob/main/kokoro/pipeline.py> | Apache-2.0 | Result dataclass with .audio property, chunked generation, voice mixing, language code routing | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+| pyttsx3 PyPI | <https://pypi.org/project/pyttsx3/> | MIT | v2.99, init/say/runAndWait API, SAPI5+espeak+nsss backends, rate/volume/voice properties | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+| sounddevice docs | <https://python-sounddevice.readthedocs.io/en/latest/usage.html> | MIT | sd.play(array, rate) non-blocking playback, sd.wait() blocking, numpy array interface | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+| v1 TTSEngine | `v1/src/owlbear/voice/tts.py` | N/A (internal) | Lazy pyttsx3 init, asyncio.to_thread wrapper, rate/volume config pattern | `docs/research/voice-tts-kokoro-pyttsx3.md` | 2026-03-26 |
+
+## Owlbear-Voice Package Scaffolding Research (Task #52)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| uv workspace docs | <https://docs.astral.sh/uv/concepts/projects/workspaces/> | MIT | Workspace member config, requires-python intersection rules, member pyproject.toml patterns | `docs/research/bearclaw-voice-workspace-package.md` | 2026-03-26 |
+| moonshine-voice 0.0.51 PyPI | <https://pypi.org/project/moonshine-voice/> | MIT | Runtime deps (numpy, sounddevice, requests, tqdm, filelock, platformdirs), requires-python >=3.8, platform wheels | `docs/research/bearclaw-voice-workspace-package.md` | 2026-03-26 |
+| kokoro 0.9.4 PyPI | <https://pypi.org/project/kokoro/> | Apache-2.0 | Runtime deps (huggingface-hub, loguru, misaki[en], numpy, torch, transformers), requires-python <3.13,>=3.10 | `docs/research/bearclaw-voice-workspace-package.md` | 2026-03-26 |
+| pydantic-ai monorepo | <https://github.com/pydantic/pydantic-ai> | MIT | Workspace extras pattern, optional-dependencies in member packages | `docs/research/bearclaw-voice-workspace-package.md` | 2026-03-26 |
+
+## OwlbearProjectFile Test Research (Task #74)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic v2 AwareDatetime docs | <https://docs.pydantic.dev/latest/api/standard_library_types/#datetime-types> | MIT | AwareDatetime "requires the input to have a timezone" — validates test scenario for naive datetime rejection | `docs/research/owlbear-project-file-tests.md` | 2026-03-26 |
+| Pydantic v2 Literal validation | <https://docs.pydantic.dev/latest/api/standard_library_types/#literals> | MIT | Literal uses strict mode; invalid values raise clear error messages — confirms type enum test pattern | `docs/research/owlbear-project-file-tests.md` | 2026-03-26 |
+
+## disable-model-invocation Pipeline Agents Research (Task #38)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `disable-model-invocation` field definition: prevents subagent invocation (default false) | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Override behavior: explicit `agents` array overrides `disable-model-invocation: true` | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
