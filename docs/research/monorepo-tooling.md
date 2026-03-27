@@ -96,9 +96,10 @@ specific workspace member. Example:
 owlbear-mcp-kanban = "owlbear_mcp_kanban:main"
 ```
 
-Then: `uv run --package owlbear-mcp-kanban owlbear-mcp-kanban` or just
-`uv run owlbear-mcp-kanban` from the package directory. MCP SDK uses this
-exact pattern for its example servers. Validated by both uv docs and MCP SDK.
+Then: `uv run --package owlbear-mcp-kanban -- owlbear-mcp-kanban` or, from
+the package directory, `uv run -- owlbear-mcp-kanban`. The explicit `--`
+separator avoids argument parsing ambiguity and is the form used in practical
+validation below.
 
 Practical validation evidence is recorded in section 3.8.
 
@@ -140,8 +141,8 @@ All checks were run on 2026-03-27 from that workspace root.
 | Single lock location | PowerShell check for `uv.lock` files | Pass | Root `uv.lock` exists; package-level `uv.lock` count = `0` |
 | Editable member install | `uv run --package owlbear-mcp-knowledge python -c "import inspect, owlbear_knowledge as k; print(k.identity('editable-ok')); print(inspect.getfile(k))"` | Pass | Output: `editable-ok`; module path points to `packages/knowledge/src/owlbear_knowledge/__init__.py` |
 | Cross-package import | `uv run --package owlbear-mcp-knowledge python -c "from owlbear_mcp_knowledge import probe; print(probe())"` | Pass | Output: `ok` |
-| MCP standalone process (knowledge) | `uv run --package owlbear-mcp-knowledge owlbear-mcp-knowledge` | Pass | Output: `ok` |
-| MCP standalone process (kanban) | `uv run --package owlbear-mcp-kanban owlbear-mcp-kanban` | Pass | Output: `kanban-standalone-ok` |
+| MCP standalone process (knowledge) | `uv run --package owlbear-mcp-knowledge -- owlbear-mcp-knowledge` | Pass | Output: `ok` |
+| MCP standalone process (kanban) | `uv run --package owlbear-mcp-kanban -- owlbear-mcp-kanban` | Pass | Output: `kanban-standalone-ok` |
 
 Conclusion: the four previously-failed AC checks are now validated by executable
 workspace evidence in addition to documentation and prior-art research.
