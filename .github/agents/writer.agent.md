@@ -21,7 +21,7 @@ tools:
     edit/editFiles,
     edit/rename,
     search,
-    todo,
+    todos,
   ]
 ---
 

@@ -19,7 +19,7 @@ tools:
     edit/createFile,
     edit/editFiles,
     search,
-    todo,
+    todos,
   ]
 ---
 

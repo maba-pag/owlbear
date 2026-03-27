@@ -13,7 +13,7 @@ tools:
     read/readFile,
     read/viewImage,
     agent,
-    todo,
+    todos,
   ]
 ---
 

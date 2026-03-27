@@ -23,7 +23,7 @@ tools:
     edit/rename,
     search,
     web,
-    todo,
+    todos,
   ]
 ---
 

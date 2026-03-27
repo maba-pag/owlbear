@@ -17,7 +17,7 @@ tools:
     read/viewImage,
     agent,
     search,
-    todo,
+    todos,
   ]
 ---
 
