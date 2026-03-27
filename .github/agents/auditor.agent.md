@@ -3,6 +3,7 @@ name: auditor
 description: "Verify done tasks, archive confirmed, commit"
 argument-hint: "Audit: {task_id_or_scope}"
 user-invocable: false
+disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [

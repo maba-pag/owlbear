@@ -3,6 +3,7 @@ name: planner
 description: "Read the kanban board, build a dependency DAG, run gate checks, and produce a dispatch list for the orchestrator"
 argument-hint: "Plan: {scope_filter — e.g., 'tag:phase-3', 'status:todo', 'all'}"
 user-invocable: false
+disable-model-invocation: true
 model: [GPT-5.4 mini (copilot), Claude Haiku 4.5 (copilot)]
 tools:
   [

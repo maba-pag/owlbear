@@ -3,6 +3,7 @@ name: architect
 description: "Review researched tasks, refine acceptance criteria, ensure architectural soundness, approve for development"
 argument-hint: "Architect Review: {task_id_or_scope}"
 user-invocable: false
+disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [
