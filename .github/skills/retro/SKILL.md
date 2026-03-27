@@ -1,6 +1,7 @@
 ---
 name: retro
 description: "Development analytics retrospective: gather git metrics, session detection, commit classification, and kanban correlation. Use when generating a development retrospective or sprint report."
+argument-hint: "[date range or sprint name]"
 ---
 
 # Retro — Development Analytics
