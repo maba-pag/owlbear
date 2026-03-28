@@ -146,9 +146,26 @@ See [docs/sources.md](docs/sources.md) for full attribution.
 
 ```bash
 uv sync --all-extras           # install with dev dependencies
-uv run pytest tests/ -m "not api" --tb=short -q   # run tests
-uv run ruff check src/ tests/  # lint
-uv run ruff format --check     # format check
+```
+
+### Testing
+
+```bash
+# Run all tests (root tests/ and all packages/*/tests/)
+uv run pytest tests/ packages/ -m "not api" --tb=short -q
+
+# Run with coverage
+uv run pytest tests/ packages/ --cov --cov-report=term-missing -q
+
+# Run a specific package
+uv run pytest packages/orchestrator/tests/ -q
+```
+
+### Linting
+
+```bash
+uv run ruff check packages/ tests/   # lint all packages and tests
+uv run ruff format --check           # format check
 ```
 
 ## License
