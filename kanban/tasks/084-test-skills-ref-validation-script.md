@@ -1,10 +1,12 @@
 ---
 id: 84
 title: 'Test: skills-ref validation script'
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-03-27T05:24:29.868156+01:00
-updated: 2026-03-28T04:13:08.8225627+01:00
+updated: 2026-03-29T00:40:19.3196463+01:00
+started: 2026-03-29T00:40:13.8835716+01:00
+completed: 2026-03-29T00:40:13.8835716+01:00
 tags:
     - phase-1
     - scope:skills
@@ -109,3 +111,69 @@ Use pytest fixtures with temporary SKILL.md files (valid, vendor-field, spec-err
 - Lint: ruff clean on all 4 files
 - Evidence: python -m pytest tests/test_validate_skills.py -> 20 passed in 2.10s
 - Fixes: Implemented parse_frontmatter (strictyaml + delimiter parsing), validate_metadata (description required, name must match dir), fixed import order, replaced print with sys.stderr.write, added scripts INP001 ignore to pyproject.toml
+
+[[2026-03-28]] Sat 21:54
+## Review Evidence (cycle 2)
+
+### Test Results
+pytest tests/test_validate_skills.py: 20 passed, 0 failed
+
+### Lint Results
+ruff check scripts/validate_skills.py scripts/skills_ref/ tests/test_validate_skills.py: All checks passed!
+
+### Coverage
+Not run separately. validate_skill() is directly imported and all branches are exercised by unit tests. CLI main() is tested end-to-end via subprocess.run in TestFromAC_ExitCode.
+
+### Test-Writer AC Coverage
+
+AC1 tests: test_spec_compliant_required_fields_passes, test_spec_compliant_optional_fields_passes - both assert validate_skill() == []. Would fail if any required-field check broke. COVERED.
+
+AC2 tests: 4 tests for each vendor field and all three combined - all assert validate_skill() == []. Would fail if filter stopped working. COVERED.
+
+AC3 tests: Original 4 in TestFromAC_ValidateSkillFilter use assert len(errors) > 0 (LAX). Compensated by TestFromAC_AC3MessageSpecificity (2 tests) which assert message content contains 'description' or 'name'. Together: COVERED.
+
+AC4 tests: TestFromAC_ExitCode x4 - assert exact returncode 0 or 1. COVERED.
+
+### TestFromAC Integrity
+All 20 TestFromAC* methods verified against test-writer notes. No weakened, removed, or added-skip assertions found. Builder preserved all test-writer tests unchanged.
+
+### Security
+No issues. No hardcoded secrets. No injection vectors. subprocess.run uses list form (no shell=True). validate_skill() reads local files only - no external input paths.
+
+### Data Safety
+No issues. Local file reads only, no shared mutable state, no LLM output, no unbounded input.
+
+### AC Compliance
+
+AC1 - spec-compliant skill passes: tests_spec_compliant_required/optional_fields_passes PASSED. validate_skill() == [] confirmed. PASS.
+AC2 - vendor fields filtered: 4 vendor-filter tests PASSED. Each asserts == []. PASS.
+AC3 - real error survives filter: Original AC3 tests (LAX) compensated by TestFromAC_AC3MessageSpecificity confirming message content. All PASSED. PASS.
+AC4 - exit codes: All 4 TestFromAC_ExitCode tests PASSED asserting exact returncodes. PASS.
+
+### Implementation-Aware Gaps (Informational)
+Multiple-skill-dir aggregation in main() is not directly tested via subprocess. The accumulation logic is simple and single-dir tests indirectly validate the path. Not blocking.
+
+### Verdict: PASS - confidence .93
+
+[[2026-03-29]] Sun 00:40
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Spec-compliant skill passes | 2 tests (required+optional fields) assert validate_skill() == []; 20/20 pass | PASS |
+| Vendor fields pass after filtering | 4 tests (each field + combined) assert == []; _VENDOR_FIELDS frozenset strips before validate_metadata | PASS |
+| Real spec error fails after filtering | 4 filter tests + 2 message-specificity tests verify description/name errors survive; boundary tests confirm vendor errors absent | PASS |
+| Exit code 0/1 | 4 subprocess tests assert exact returncodes 0 and 1 | PASS |
+
+### Test Results
+- pytest tests/test_validate_skills.py: 20 passed, 0 failed
+- Full suite: 426 passed, 58 failed (all pre-existing, none in task scope)
+
+### Lint Results
+- ruff: All checks passed
+
+### AC Quality Score: 4
+AC was adequate and specific. Error-path gaps caught by reviewer on cycle 1 and filled by test-writer retry.
+
+### Confidence: .97
+### Action: archive
