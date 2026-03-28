@@ -53,15 +53,22 @@ megalinter-reports/
 *.log
 
 # Scratch / ad-hoc workspace (under docs/)
-docs/scratch/
+docs/scratch/*
 !docs/scratch/.gitkeep
+!docs/scratch/.instructions.md
 
 # Temp test/debug output
 *_output.txt
 *_result.txt
+*_err.txt
+*_out.txt
 *_test.txt
 *_run.txt
 *_run2.txt
+/kanban_show_*.txt
+/tasklist*.json
+/task-list*.json
+/builder-notes-*.md
 
 # Portable tools (downloaded binaries)
 kanban/*.exe
