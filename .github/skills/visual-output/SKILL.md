@@ -1,6 +1,7 @@
 ---
 name: visual-output
 description: "Generate styled HTML diagrams, tables, and architecture visuals. Covers workflow (think/structure/style/deliver), Mermaid routing, aesthetic constraints, and two delivery paths (HTML+Browser, Kroki). Use when producing visual output for the user."
+argument-hint: "[diagram or visual description]"
 ---
 
 # Visual Output Skill

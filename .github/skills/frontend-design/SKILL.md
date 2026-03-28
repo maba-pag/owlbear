@@ -1,6 +1,7 @@
 ---
 name: frontend-design
 description: "Frontend UI/UX design guidance — typography, color, spatial layout, motion, interaction, responsive design, and UX writing. Use when the user asks for design direction, component styling, accessibility improvements, or frontend quality improvements."
+argument-hint: "[component or design question]"
 ---
 
 # Frontend Design Skill

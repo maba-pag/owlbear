@@ -1,6 +1,7 @@
 ---
 name: excalidraw-diagram
 description: "Generate Excalidraw JSON diagrams with design methodology, element library, and layout patterns. Use when the user asks for hand-drawn style diagrams, architecture visuals, flowcharts, or sequence diagrams in Excalidraw format."
+argument-hint: "[diagram description]"
 ---
 
 # Excalidraw Diagram Skill
