@@ -3,6 +3,7 @@ name: researcher
 description: "Thorough research agent that produces structured findings and follow-up kanban tasks"
 argument-hint: "Research: {topic_or_question}"
 user-invocable: false
+disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [

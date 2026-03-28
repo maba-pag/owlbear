@@ -3,6 +3,7 @@ name: reviewer
 description: "Read-only quality verification — never trusts self-reports"
 argument-hint: "Review: {task_id_or_file_paths}"
 user-invocable: false
+disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
   [
