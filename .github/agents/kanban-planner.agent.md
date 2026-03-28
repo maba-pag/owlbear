@@ -11,13 +11,14 @@ tools:
     execute/awaitTerminal,
     execute/killTerminal,
     execute/runInTerminal,
-    read/terminalLastCommand,
     read/problems,
     read/readFile,
     read/viewImage,
+    read/terminalLastCommand,
+    read/getTaskOutput,
     agent,
     search,
-    todos,
+    todo,
   ]
 ---
 

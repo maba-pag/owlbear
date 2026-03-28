@@ -14,6 +14,7 @@ tools:
     read/readFile,
     read/viewImage,
     read/terminalLastCommand,
+    read/getTaskOutput,
     agent,
     todo,
   ]

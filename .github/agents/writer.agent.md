@@ -17,6 +17,7 @@ tools:
     read/readFile,
     read/viewImage,
     read/terminalLastCommand,
+    read/getTaskOutput,
     agent,
     edit/createDirectory,
     edit/createFile,

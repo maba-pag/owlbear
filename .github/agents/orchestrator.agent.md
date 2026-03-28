@@ -15,7 +15,7 @@ agents:
   - writer
   - auditor
   - curator
-tools: [vscode/memory, read/readFile, agent, todos]
+tools: [vscode/memory, read/readFile, agent, todo]
 ---
 
 <persona>
