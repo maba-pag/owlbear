@@ -1,0 +1,573 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.13, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\p362329\Coding\Projects\owlbear\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\p362329\Coding\Projects\owlbear
+configfile: pyproject.toml
+plugins: cov-7.1.0
+collecting ... collected 37 items
+
+tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_testpaths_includes_packages FAILED [  2%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_addopts_has_import_mode_importlib FAILED [  5%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_root_conftest_exists FAILED [  8%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_has_project_root_fixture FAILED [ 10%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_registers_markers FAILED [ 13%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_no_yagni_fixtures FAILED [ 16%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_dir_exists FAILED [ 18%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_init_exists FAILED [ 21%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_dir_exists FAILED [ 24%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_init_exists FAILED [ 27%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_dir_exists FAILED [ 29%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_init_exists FAILED [ 32%]
+tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_in_dev_deps FAILED [ 35%]
+tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_version_at_least_0_25 FAILED [ 37%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_section_exists FAILED [ 40%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_target_version_py312 FAILED [ 43%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_select_all FAILED [ 45%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_ignore_includes_required_rules FAILED [ 48%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_src_references_packages FAILED [ 51%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_tests FAILED [ 54%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_package_tests FAILED [ 56%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_section_exists FAILED [ 59%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_quote_style_double FAILED [ 62%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_pydocstyle_convention_google FAILED [ 64%]
+tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_section_exists FAILED [ 67%]
+tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_source_pkgs_all_five FAILED [ 70%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PytestDiscovery::test_pytest_collection_exits_zero FAILED [ 72%]
+tests/test_v2_test_infrastructure.py::TestFromAC_PytestDiscovery::test_pytest_collection_includes_package_tests PASSED [ 75%]
+tests/test_v2_test_infrastructure.py::TestFromAC_RuffLinting::test_ruff_check_clean PASSED [ 78%]
+tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_orchestrator_has_passing_test FAILED [ 81%]
+tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_knowledge_has_passing_test FAILED [ 83%]
+tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_kanban_has_passing_test FAILED [ 86%]
+tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_knowledge_has_passing_test PASSED [ 89%]
+tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_project_has_passing_test FAILED [ 91%]
+tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_pytest_command_covers_packages FAILED [ 94%]
+tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_has_coverage_command FAILED [ 97%]
+tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_ruff_check_covers_packages FAILED [100%]
+
+================================== FAILURES ===================================
+E   AssertionError: 'packages' missing from testpaths; got ['tests']
+    assert 'packages' in ['tests']
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:93: AssertionError: 'packages' missing from testpaths; got ['tests']
+E   AssertionError: --import-mode=importlib not found in addopts=''
+    assert '--import-mode=importlib' in ''
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:101: AssertionError: --import-mode=importlib not found in addopts=''
+E   AssertionError: conftest.py not found at repo root
+    assert False
+     +  where False = exists()
+     +    where exists = (WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'conftest.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:116: AssertionError: conftest.py not found at repo root
+E   AssertionError: conftest.py not found
+    assert False
+     +  where False = exists()
+     +    where exists = WindowsPath('C:/Users/p362329/Coding/Projects/owlbear/conftest.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:121: AssertionError: conftest.py not found
+E   AssertionError: conftest.py not found
+    assert False
+     +  where False = exists()
+     +    where exists = WindowsPath('C:/Users/p362329/Coding/Projects/owlbear/conftest.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:129: AssertionError: conftest.py not found
+E   AssertionError: conftest.py not found
+    assert False
+     +  where False = exists()
+     +    where exists = WindowsPath('C:/Users/p362329/Coding/Projects/owlbear/conftest.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:137: AssertionError: conftest.py not found
+E   AssertionError: packages/orchestrator/tests/ directory missing
+    assert False
+     +  where False = is_dir()
+     +    where is_dir = (((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'orchestrator') / 'tests').is_dir
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:156: AssertionError: packages/orchestrator/tests/ directory missing
+E   AssertionError: packages/orchestrator/tests/__init__.py missing
+    assert False
+     +  where False = exists()
+     +    where exists = ((((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'orchestrator') / 'tests') / '__init__.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:161: AssertionError: packages/orchestrator/tests/__init__.py missing
+E   AssertionError: packages/knowledge/tests/ directory missing
+    assert False
+     +  where False = is_dir()
+     +    where is_dir = (((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'knowledge') / 'tests').is_dir
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:166: AssertionError: packages/knowledge/tests/ directory missing
+E   AssertionError: packages/knowledge/tests/__init__.py missing
+    assert False
+     +  where False = exists()
+     +    where exists = ((((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'knowledge') / 'tests') / '__init__.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:171: AssertionError: packages/knowledge/tests/__init__.py missing
+E   AssertionError: packages/mcp-kanban/tests/ directory missing
+    assert False
+     +  where False = is_dir()
+     +    where is_dir = (((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'mcp-kanban') / 'tests').is_dir
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:176: AssertionError: packages/mcp-kanban/tests/ directory missing
+E   AssertionError: packages/mcp-kanban/tests/__init__.py missing
+    assert False
+     +  where False = exists()
+     +    where exists = ((((WindowsPath('C:/Users/p362329/Coding/Projects/owlbear') / 'packages') / 'mcp-kanban') / 'tests') / '__init__.py').exists
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:181: AssertionError: packages/mcp-kanban/tests/__init__.py missing
+E   AssertionError: pytest-asyncio not found in dev deps; current deps: ['pytest>=9.0', 'pytest-cov>=6.0', 'ruff>=0.15', 'strictyaml>=1.7']
+    assert None is not None
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:198: AssertionError: pytest-asyncio not found in dev deps; current deps: ['pytest>=9.0', 'pytest-cov>=6.0', 'ruff>=0.15', 'strictyaml>=1.7']
+E   AssertionError: pytest-asyncio must have a '>=' version constraint; got ''
+    assert None
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:207: AssertionError: pytest-asyncio must have a '>=' version constraint; got ''
+E   AssertionError: [tool.ruff] section missing from root pyproject.toml
+    assert {}
+     +  where {} = _ruff()
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:229: AssertionError: [tool.ruff] section missing from root pyproject.toml
+E   AssertionError: [tool.ruff] target-version must be 'py312', got None
+    assert None == 'py312'
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:234: AssertionError: [tool.ruff] target-version must be 'py312', got None
+E   AssertionError: [tool.ruff.lint] select must include 'ALL'; got []
+    assert 'ALL' in []
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:239: AssertionError: [tool.ruff.lint] select must include 'ALL'; got []
+E   AssertionError: Required ignore prefix 'D1' missing from ruff ignore=[]
+    assert False
+     +  where False = any(<generator object TestFromAC_RuffConfig.test_ruff_lint_ignore_includes_required_rules.<locals>.<genexpr> at 0x000001E96FDC2B20>)
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:248: AssertionError: Required ignore prefix 'D1' missing from ruff ignore=[]
+E   AssertionError: [tool.ruff] src not set; needed for first-party import detection
+    assert []
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:255: AssertionError: [tool.ruff] src not set; needed for first-party import detection
+E   AssertionError: [tool.ruff.lint] per-file-ignores not configured
+    assert {}
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:264: AssertionError: [tool.ruff.lint] per-file-ignores not configured
+E   AssertionError: [tool.ruff.lint] per-file-ignores not configured
+    assert {}
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:273: AssertionError: [tool.ruff.lint] per-file-ignores not configured
+E   AssertionError: [tool.ruff.format] section missing from root pyproject.toml
+    assert {}
+     +  where {} = _ruff_format()
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:291: AssertionError: [tool.ruff.format] section missing from root pyproject.toml
+E   AssertionError: [tool.ruff.format] quote-style must be 'double', got None
+    assert None == 'double'
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:296: AssertionError: [tool.ruff.format] quote-style must be 'double', got None
+E   AssertionError: [tool.ruff.lint.pydocstyle] convention must be 'google', got None
+    assert None == 'google'
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:301: AssertionError: [tool.ruff.lint.pydocstyle] convention must be 'google', got None
+E   AssertionError: [tool.coverage.run] section missing from root pyproject.toml
+    assert {}
+     +  where {} = _coverage_run()
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:316: AssertionError: [tool.coverage.run] section missing from root pyproject.toml
+E   AssertionError: 'owlbear' missing from [tool.coverage.run] source_pkgs=[]
+    assert 'owlbear' in []
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:322: AssertionError: 'owlbear' missing from [tool.coverage.run] source_pkgs=[]
+E   AssertionError: pytest collection failed (exit 2):
+      stdout:
+      tests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_key_present
+      tests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_value_correct
+      tests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_value_no_extra_brackets
+      tests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_in_frontmatter_not_body
+      tests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_key_present
+      tests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_value_correct
+      tests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_value_no_extra_brackets
+      tests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_in_frontmatter_not_body
+      tests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_argument_hint_key_present
+      tests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_argument_hint_value_correct
+      tests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_argument_hint_value_no_extra_brackets
+      tests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_argument_hint_in_frontmatter_not_body
+      tests/test_argument_hint_skills.py::TestFromAC_VisualOutputArgumentHint::test_argument_hint_key_present
+      tests/test_argument_hint_skills.py::TestFromAC_VisualOutputArgumentHint::test_argument_hint_value_correct
+      tests/test_argument_hint_skills.py::TestFromAC_VisualOutputArgumentHint::test_argument_hint_value_no_extra_brackets
+      tests/test_argument_hint_skills.py::TestFromAC_VisualOutputArgumentHint::test_argument_hint_in_frontmatter_not_body
+      tests/test_argument_hint_skills.py::TestFromAC_FrontendDesignArgumentHint::test_argument_hint_key_present
+      tests/test_argument_hint_skills.py::TestFromAC_FrontendDesignArgumentHint::test_argument_hint_value_correct
+      tests/test_argument_hint_skills.py::TestFromAC_FrontendDesignArgumentHint::test_argument_hint_value_no_extra_brackets
+      tests/test_argument_hint_skills.py::TestFromAC_FrontendDesignArgumentHint::test_argument_hint_in_frontmatter_not_body
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_planner_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_researcher_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_architect_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_test_writer_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_builder_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_reviewer_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_writer_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_auditor_has_disable_model_invocation_true
+      tests/test_disable_model_invocation.py::TestFromAC_PipelineAgentsHaveFlag::test_total_pipeline_agents_with_flag_equals_eight
+      tests/test_disable_model_invocation.py::TestFromAC_NonPipelineAgentsNoFlag::test_orchestrator_does_not_have_flag
+      tests/test_disable_model_invocation.py::TestFromAC_NonPipelineAgentsNoFlag::test_kanban_planner_does_not_have_flag
+      tests/test_disable_model_invocation.py::TestFromAC_NonPipelineAgentsNoFlag::test_curator_does_not_have_flag
+      tests/test_disable_model_invocation.py::TestFromAC_NonPipelineAgentsNoFlag::test_no_non_pipeline_agent_has_flag
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_planner_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_planner_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_researcher_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_researcher_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_architect_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_architect_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_test_writer_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_test_writer_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_builder_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_builder_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_reviewer_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_reviewer_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_writer_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_writer_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_auditor_preserves_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_auditor_preserves_user_invocable_false
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_orchestrator_preserves_user_invocable_true
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_kanban_planner_preserves_user_invocable_true
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_curator_preserves_user_invocable_true
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_all_agents_have_name_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_all_agents_have_description_field
+      tests/test_disable_model_invocation.py::TestFromAC_NoExtraChanges::test_flag_value_is_boolean_true_not_string
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_agents_block_present
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_kanban_planner
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_planner
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_researcher
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_architect
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_test_writer
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_builder
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_reviewer
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_writer
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_auditor
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_curator
+      tests/test_disable_model_invocation.py::TestFromAC_OrchestratorAgentsArrayUnchanged::test_orchestrator_lists_exactly_ten_subagents
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_root_pyproject_toml_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_root_pyproject_declares_workspace_members
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_orchestrator_pyproject_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_orchestrator_init_stub_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_knowledge_pyproject_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_knowledge_init_stub_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_kanban_pyproject_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_kanban_init_stub_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_knowledge_pyproject_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_knowledge_init_stub_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_project_pyproject_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_PackageStructure::test_mcp_project_init_stub_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_DirectoryStructure::test_agents_dir_has_readme
+      tests/test_monorepo_skeleton.py::TestFromAC_DirectoryStructure::test_skills_dir_has_readme
+      tests/test_monorepo_skeleton.py::TestFromAC_DirectoryStructure::test_instructions_dir_has_readme
+      tests/test_monorepo_skeleton.py::TestFromAC_DirectoryStructure::test_scripts_setup_placeholder_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_DirectoryStructure::test_data_knowledge_general_gitkeep_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_uv_lock_exists
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_uv_sync_succeeds
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_package_importable[owlbear]
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_package_importable[owlbear_knowledge]
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_package_importable[owlbear_mcp_kanban]
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_package_importable[owlbear_mcp_knowledge]
+      tests/test_monorepo_skeleton.py::TestFromAC_BuildVerification::test_package_importable[owlbear_mcp_project]
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_gitignore_has_packages_dist_pattern
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_gitignore_has_data_knowledge_db_pattern
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_precommit_bandit_targets_packages_not_src
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_agent_files_locations_github_agents
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_agent_files_locations_root_agents
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_agent_skills_locations_github_skills
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_agent_skills_locations_root_skills
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_instructions_files_locations_github
+      tests/test_monorepo_skeleton.py::TestFromAC_ConfigUpdates::test_vscode_settings_instructions_files_locations_root
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_52_title_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_52_body_scaffold_line_owlbear
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_52_body_findings_line_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_52_body_followup_line_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_51_body_line32_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_51_body_line32_owlbear
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_51_body_line80_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_30_body_line45_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_KanbanTaskRenames::test_task_30_body_line45_owlbear
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_addon_architecture_line104_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_addon_architecture_line117_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_note_header_present
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_title_line1_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_task_ref_line3_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_python_constraint_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_base_install_line_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_changes_needed_line_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_line57_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_bearclaw_voice_pkg_doc_table_row_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_addon_stt_line96_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_stdio_protocol_line62_subprocess_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_stdio_protocol_line96_entry_point_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_tts_line104_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_ResearchDocRenames::test_voice_io_line142_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_SourcesDocRenames::test_sources_section_header_updated
+      tests/test_rename_bearclaw_voice.py::TestFromAC_SourcesDocRenames::test_sources_section_header_owlbear
+      tests/test_rename_bearclaw_voice.py::TestFromAC_SourcesDocRenames::test_sources_where_used_no_nonexistent_owlbear_path
+      tests/test_rename_bearclaw_voice.py::TestFromAC_SourcesDocRenames::test_sources_where_used_references_bearclaw_historical_doc
+      tests/test_rename_bearclaw_voice.py::TestFromAC_CompletenessCheck::test_no_bearclaw_voice_in_kanban_tasks
+      tests/test_rename_bearclaw_voice.py::TestFromAC_CompletenessCheck::test_no_bearclaw_voice_in_research_docs
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[architect.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[auditor.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[builder.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[curator.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[kanban-planner.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[orchestrator.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[planner.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[researcher.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[reviewer.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[test-writer.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_contains_todos[writer.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[architect.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[auditor.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[builder.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[curator.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[kanban-planner.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[orchestrator.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[planner.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[researcher.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[reviewer.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[test-writer.agent.md]
+      tests/test_rename_todo_to_todos.py::TestFromAC_AgentMdToolRename::test_tools_list_has_no_bare_todo[writer.agent.md]
+      tests/test_resolve_memory_file_uri_removal.py::TestFromAC_CuratorToolListCleanup::test_curator_agent_md_tool_list_excludes_resolve_memory_file_uri
+      tests/test_resolve_memory_file_uri_removal.py::TestFromAC_CuratorToolListCleanup::test_no_agent_md_file_references_resolve_memory_file_uri
+      tests/test_resolve_memory_file_uri_removal.py::TestFromAC_AgentMdFormatDocUpdate::test_section4_table_row_shows_removed_status
+      tests/test_resolve_memory_file_uri_removal.py::TestFromAC_AgentMdFormatDocUpdate::test_section4_table_row_not_still_marked_no
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[builder-notes-task6.md]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[kanban_show_30.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[kanban_show_57.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[pytest_err.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[pytest_out.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[pytest_output.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[task-list.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[tasklist.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_StaleRootFilesDeleted::test_stale_file_does_not_exist[tasklist2.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_ScratchInstructionsFile::test_file_exists
+      tests/test_scratch_dir_enforcement.py::TestFromAC_ScratchInstructionsFile::test_contains_placement_rule
+      tests/test_scratch_dir_enforcement.py::TestFromAC_ScratchInstructionsFile::test_contains_cleanup_rule
+      tests/test_scratch_dir_enforcement.py::TestFromAC_ScratchInstructionsFile::test_contains_at_least_two_naming_examples
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignoreException::test_gitignore_has_instructions_exception
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_gitignore_has_err_txt_pattern
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_gitignore_has_out_txt_pattern
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_gitignore_has_kanban_show_pattern
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_gitignore_has_tasklist_json_pattern
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_gitignore_has_task_list_json_pattern
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[builder-notes-task6.md]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[kanban_show_30.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[kanban_show_57.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[pytest_err.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[pytest_out.txt]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[task-list.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[tasklist.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_GitignorePatterns::test_git_check_ignore_covers_stale_file[tasklist2.json]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[README.md]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[SECURITY.md]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[pyproject.toml]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[.gitignore]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[Owlbear.code-profile]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[kanban/config.yml]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[docs/research]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[packages]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[agents]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[skills]
+      tests/test_scratch_dir_enforcement.py::TestFromAC_SafeFilesUnchanged::test_safe_path_still_exists[instructions]
+      tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_testpaths_includes_packages
+      tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_addopts_has_import_mode_importlib
+      tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_root_conftest_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_has_project_root_fixture
+      tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_registers_markers
+      tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_no_yagni_fixtures
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_dir_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_init_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_dir_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_init_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_dir_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_init_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_in_dev_deps
+      tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_version_at_least_0_25
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_section_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_target_version_py312
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_select_all
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_ignore_includes_required_rules
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_src_references_packages
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_tests
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_package_tests
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_section_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_quote_style_double
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_pydocstyle_convention_google
+      tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_section_exists
+      tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_source_pkgs_all_five
+      tests/test_v2_test_infrastructure.py::TestFromAC_PytestDiscovery::test_pytest_collection_exits_zero
+      tests/test_v2_test_infrastructure.py::TestFromAC_PytestDiscovery::test_pytest_collection_includes_package_tests
+      tests/test_v2_test_infrastructure.py::TestFromAC_RuffLinting::test_ruff_check_clean
+      tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_orchestrator_has_passing_test
+      tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_knowledge_has_passing_test
+      tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_kanban_has_passing_test
+      tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_knowledge_has_passing_test
+      tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_project_has_passing_test
+      tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_pytest_command_covers_packages
+      tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_has_coverage_command
+      tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_ruff_check_covers_packages
+      
+      =================================== ERRORS ====================================
+      ______________ ERROR collecting tests/test_process_supervisor.py ______________
+      ImportError while importing test module 'C:\Users\p362329\Coding\Projects\owlbear\tests\test_process_supervisor.py'.
+      Hint: make sure your test modules/packages have valid Python names.
+      Traceback:
+      ..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\importlib\__init__.py:90: in import_module
+          return _bootstrap._gcd_import(name[level:], package, level)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      tests\test_process_supervisor.py:20: in <module>
+          from owlbear_orchestrator.process_supervisor import (
+      E   ModuleNotFoundError: No module named 'owlbear_orchestrator'
+      _______________ ERROR collecting tests/test_validate_skills.py ________________
+      ImportError while importing test module 'C:\Users\p362329\Coding\Projects\owlbear\tests\test_validate_skills.py'.
+      Hint: make sure your test modules/packages have valid Python names.
+      Traceback:
+      ..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\importlib\__init__.py:90: in import_module
+          return _bootstrap._gcd_import(name[level:], package, level)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      tests\test_validate_skills.py:30: in <module>
+          from validate_skills import validate_skill  # noqa: E402  # type: ignore[import]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      scripts\validate_skills.py:16: in <module>
+          from skills_ref.parser import find_skill_md, parse_frontmatter
+      E   ModuleNotFoundError: No module named 'skills_ref'
+      ___ ERROR collecting packages/mcp-knowledge/tests/test_search_knowledge.py ____
+      ImportError while importing test module 'C:\Users\p362329\Coding\Projects\owlbear\packages\mcp-knowledge\tests\test_search_knowledge.py'.
+      Hint: make sure your test modules/packages have valid Python names.
+      Traceback:
+      ..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\importlib\__init__.py:90: in import_module
+          return _bootstrap._gcd_import(name[level:], package, level)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      E   ModuleNotFoundError: No module named 'tests.test_search_knowledge'
+      _________ ERROR collecting packages/mcp-project/tests/test_models.py __________
+      ImportError while importing test module 'C:\Users\p362329\Coding\Projects\owlbear\packages\mcp-project\tests\test_models.py'.
+      Hint: make sure your test modules/packages have valid Python names.
+      Traceback:
+      ..\..\..\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\importlib\__init__.py:90: in import_module
+          return _bootstrap._gcd_import(name[level:], package, level)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      E   ModuleNotFoundError: No module named 'tests.test_models'
+      ============================== warnings summary ===============================
+      .venv\Lib\site-packages\_pytest\config\__init__.py:1428
+        C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+        
+          self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+      
+      -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+      =========================== short test summary info ===========================
+      ERROR tests/test_process_supervisor.py
+      ERROR tests/test_validate_skills.py
+      ERROR packages/mcp-knowledge/tests/test_search_knowledge.py
+      ERROR packages/mcp-project/tests/test_models.py
+      !!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!
+      231 tests collected, 4 errors in 0.33s
+      
+      stderr:
+      
+    assert 2 == 0
+     +  where 2 = CompletedProcess(args=['uv', 'run', 'pytest', 'tests/', 'packages/', '--co', '-q', '--tb=short'], returncode=2, stdout='tests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_key_present\ntests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_value_correct\ntests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_value_no_extra_brackets\ntests/test_argument_hint_skills.py::TestFromAC_ProjectDefinitionArgumentHint::test_argument_hint_in_frontmatter_not_body\ntests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_key_present\ntests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_value_correct\ntests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_value_no_extra_brackets\ntests/test_argument_hint_skills.py::TestFromAC_RetroArgumentHint::test_argument_hint_in_frontmatter_not_body\ntests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_argument_hint_key_present\ntests/test_argument_hint_skills.py::TestFromAC_ExcalidrawDiagramArgumentHint::test_a...s.\nTraceback:\n..\\..\\..\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\Lib\\importlib\\__init__.py:90: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   ModuleNotFoundError: No module named \'tests.test_models\'\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nERROR tests/test_process_supervisor.py\nERROR tests/test_validate_skills.py\nERROR packages/mcp-knowledge/tests/test_search_knowledge.py\nERROR packages/mcp-project/tests/test_models.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 4 errors during collection !!!!!!!!!!!!!!!!!!!\n231 tests collected, 4 errors in 0.33s\n', stderr='').returncode
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:344: AssertionError: pytest collection failed (exit 2):
+E   AssertionError: No passing tests found in packages/orchestrator/tests/.
+      stdout:
+      
+      ============================== warnings summary ===============================
+      .venv\Lib\site-packages\_pytest\config\__init__.py:1428
+        C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+        
+          self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+      
+      -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+      1 warning in 0.00s
+      
+      stderr:
+      ERROR: file or directory not found: packages/orchestrator/tests/
+      
+      
+    assert 'passed' in '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n'
+     +  where '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n' = CompletedProcess(args=['uv', 'run', 'pytest', 'packages/orchestrator/tests/', '--tb=no', '-q', '--no-header'], returncode=4, stdout='\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n', stderr='ERROR: file or directory not found: packages/orchestrator/tests/\n\n').stdout
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:408: AssertionError: No passing tests found in packages/orchestrator/tests/.
+E   AssertionError: No passing tests found in packages/knowledge/tests/.
+      stdout:
+      
+      ============================== warnings summary ===============================
+      .venv\Lib\site-packages\_pytest\config\__init__.py:1428
+        C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+        
+          self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+      
+      -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+      1 warning in 0.00s
+      
+      stderr:
+      ERROR: file or directory not found: packages/knowledge/tests/
+      
+      
+    assert 'passed' in '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n'
+     +  where '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n' = CompletedProcess(args=['uv', 'run', 'pytest', 'packages/knowledge/tests/', '--tb=no', '-q', '--no-header'], returncode=4, stdout='\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n', stderr='ERROR: file or directory not found: packages/knowledge/tests/\n\n').stdout
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:408: AssertionError: No passing tests found in packages/knowledge/tests/.
+E   AssertionError: No passing tests found in packages/mcp-kanban/tests/.
+      stdout:
+      
+      ============================== warnings summary ===============================
+      .venv\Lib\site-packages\_pytest\config\__init__.py:1428
+        C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+        
+          self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+      
+      -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+      1 warning in 0.00s
+      
+      stderr:
+      ERROR: file or directory not found: packages/mcp-kanban/tests/
+      
+      
+    assert 'passed' in '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n'
+     +  where '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n' = CompletedProcess(args=['uv', 'run', 'pytest', 'packages/mcp-kanban/tests/', '--tb=no', '-q', '--no-header'], returncode=4, stdout='\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 warning in 0.00s\n', stderr='ERROR: file or directory not found: packages/mcp-kanban/tests/\n\n').stdout
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:408: AssertionError: No passing tests found in packages/mcp-kanban/tests/.
+E   AssertionError: No passing tests found in packages/mcp-project/tests/.
+      stdout:
+      
+      ============================== warnings summary ===============================
+      .venv\Lib\site-packages\_pytest\config\__init__.py:1428
+        C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+        
+          self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+      
+      -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+      =========================== short test summary info ===========================
+      ERROR packages/mcp-project/tests/test_models.py
+      !!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+      1 warning, 1 error in 0.25s
+      
+      stderr:
+      
+    assert 'passed' in '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nERROR packages/mcp-project/tests/test_models.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 warning, 1 error in 0.25s\n'
+     +  where '\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nERROR packages/mcp-project/tests/test_models.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 warning, 1 error in 0.25s\n' = CompletedProcess(args=['uv', 'run', 'pytest', 'packages/mcp-project/tests/', '--tb=no', '-q', '--no-header'], returncode=2, stdout='\n============================== warnings summary ===============================\n.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428\n  C:\\Users\\p362329\\Coding\\Projects\\owlbear\\.venv\\Lib\\site-packages\\_pytest\\config\\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f"Unknown config option: {key}\\n")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nERROR packages/mcp-project/tests/test_models.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 warning, 1 error in 0.25s\n', stderr='').stdout
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:408: AssertionError: No passing tests found in packages/mcp-project/tests/.
+E   AssertionError: README.md must document 'uv run pytest ... packages' command.
+      Existing pytest lines: ['uv run pytest tests/ -m "not api" --tb=short -q   # run tests']
+    assert False
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:448: AssertionError: README.md must document 'uv run pytest ... packages' command.
+E   AssertionError: README.md must document a coverage command (e.g., uv run pytest --cov or coverage run)
+    assert False
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:461: AssertionError: README.md must document a coverage command (e.g., uv run pytest --cov or coverage run)
+E   AssertionError: ruff check command must cover packages/; found: ['uv run ruff check src/ tests/  # lint']
+    assert False
+c:\Users\p362329\Coding\Projects\owlbear\tests\test_v2_test_infrastructure.py:473: AssertionError: ruff check command must cover packages/; found: ['uv run ruff check src/ tests/  # lint']
+============================== warnings summary ===============================
+.venv\Lib\site-packages\_pytest\config\__init__.py:1428
+  C:\Users\p362329\Coding\Projects\owlbear\.venv\Lib\site-packages\_pytest\config\__init__.py:1428: PytestConfigWarning: Unknown config option: asyncio_mode
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_testpaths_includes_packages
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PytestIniOptions::test_addopts_has_import_mode_importlib
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_root_conftest_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_has_project_root_fixture
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_registers_markers
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RootConftest::test_conftest_no_yagni_fixtures
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_dir_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_orchestrator_tests_init_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_dir_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_knowledge_tests_init_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_dir_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PerPackageTestDirs::test_mcp_kanban_tests_init_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_in_dev_deps
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_DevDependencies::test_pytest_asyncio_version_at_least_0_25
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_section_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_target_version_py312
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_select_all
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_lint_ignore_includes_required_rules
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_src_references_packages
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_tests
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffConfig::test_ruff_per_file_ignores_covers_package_tests
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_section_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_format_quote_style_double
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_RuffFormatConfig::test_ruff_pydocstyle_convention_google
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_section_exists
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_CoverageConfig::test_coverage_run_source_pkgs_all_five
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_PytestDiscovery::test_pytest_collection_exits_zero
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_orchestrator_has_passing_test
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_knowledge_has_passing_test
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_kanban_has_passing_test
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_TrivialPassingTests::test_mcp_project_has_passing_test
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_pytest_command_covers_packages
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_has_coverage_command
+FAILED tests/test_v2_test_infrastructure.py::TestFromAC_CIDocumentation::test_readme_ruff_check_covers_packages
+=================== 34 failed, 3 passed, 1 warning in 6.93s ===================

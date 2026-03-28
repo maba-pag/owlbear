@@ -42,3 +42,66 @@
 {"timestamp":"2026-03-26T18:05:24.8358548+01:00","action":"create","task_id":30,"detail":"Research voice addon architecture"}
 {"timestamp":"2026-03-26T18:05:35.1143633+01:00","action":"create","task_id":31,"detail":"Self-improvement analysis pipeline"}
 {"timestamp":"2026-03-26T18:09:17.2824896+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T04:09:16.7483867+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:09:16.7665522+01:00","action":"claim","task_id":52,"detail":"architect"}
+{"timestamp":"2026-03-28T04:09:27.0326645+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:09:50.8298338+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:09:58.3591971+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:10:07.8291062+01:00","action":"create","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T04:10:13.1172896+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:10:26.1323199+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:10:31.7163873+01:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-28T04:10:31.7179841+01:00","action":"release","task_id":52,"detail":"architect"}
+{"timestamp":"2026-03-28T04:13:04.6935303+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T04:13:08.8237787+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T04:13:08.8253514+01:00","action":"release","task_id":84,"detail":"builder"}
+{"timestamp":"2026-03-28T04:13:46.0013687+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:13:46.0030542+01:00","action":"claim","task_id":72,"detail":"reviewer"}
+{"timestamp":"2026-03-28T04:13:53.2019902+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T04:13:53.2035696+01:00","action":"claim","task_id":38,"detail":"builder"}
+{"timestamp":"2026-03-28T04:13:53.7016088+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T04:13:53.7028885+01:00","action":"claim","task_id":46,"detail":"test-writer"}
+{"timestamp":"2026-03-28T04:14:39.4818486+01:00","action":"move","task_id":35,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T04:14:45.3029588+01:00","action":"edit","task_id":35,"detail":"Create v2 test infrastructure"}
+{"timestamp":"2026-03-28T04:14:45.3050925+01:00","action":"release","task_id":35,"detail":"auditor"}
+{"timestamp":"2026-03-28T04:14:53.6951568+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T04:14:53.6961837+01:00","action":"claim","task_id":80,"detail":"test-writer"}
+{"timestamp":"2026-03-28T04:15:08.6904658+01:00","action":"edit","task_id":35,"detail":"Create v2 test infrastructure"}
+{"timestamp":"2026-03-28T04:15:10.5538952+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T04:15:10.5559071+01:00","action":"release","task_id":46,"detail":"test-writer"}
+{"timestamp":"2026-03-28T04:15:14.3627303+01:00","action":"edit","task_id":35,"detail":"Create v2 test infrastructure"}
+{"timestamp":"2026-03-28T04:15:18.7020667+01:00","action":"edit","task_id":35,"detail":"Create v2 test infrastructure"}
+{"timestamp":"2026-03-28T04:15:44.8797404+01:00","action":"edit","task_id":35,"detail":"Create v2 test infrastructure"}
+{"timestamp":"2026-03-28T04:16:04.1406054+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T04:16:07.6212958+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T04:16:07.6228056+01:00","action":"release","task_id":80,"detail":"test-writer"}
+{"timestamp":"2026-03-28T04:17:26.8690629+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:17:38.1959518+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:17:38.1980895+01:00","action":"release","task_id":72,"detail":"reviewer"}
+{"timestamp":"2026-03-28T04:18:06.8627259+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T04:18:06.8637913+01:00","action":"release","task_id":38,"detail":"builder"}
+{"timestamp":"2026-03-28T04:18:15.9445074+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T04:18:15.9455588+01:00","action":"claim","task_id":38,"detail":"builder"}
+{"timestamp":"2026-03-28T04:18:18.3560531+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T04:18:18.3570845+01:00","action":"release","task_id":38,"detail":"builder"}
+{"timestamp":"2026-03-28T04:21:29.4440185+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T04:21:29.4450502+01:00","action":"claim","task_id":94,"detail":"architect"}
+{"timestamp":"2026-03-28T04:21:30.3969667+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:21:30.3986376+01:00","action":"claim","task_id":92,"detail":"architect"}
+{"timestamp":"2026-03-28T04:21:43.537568+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:21:43.5391635+01:00","action":"claim","task_id":72,"detail":"writer"}
+{"timestamp":"2026-03-28T04:21:59.3239595+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T04:21:59.3250924+01:00","action":"claim","task_id":46,"detail":"builder"}
+{"timestamp":"2026-03-28T04:22:45.4244451+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:22:48.574996+01:00","action":"edit","task_id":72,"detail":"Test: Implement real search_knowledge tool"}
+{"timestamp":"2026-03-28T04:22:48.5770404+01:00","action":"release","task_id":72,"detail":"writer"}
+{"timestamp":"2026-03-28T04:23:00.7155275+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:23:24.6443905+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:23:39.3802383+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T04:23:46.2628354+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:23:46.2639161+01:00","action":"release","task_id":92,"detail":"architect"}
+{"timestamp":"2026-03-28T04:23:53.9306735+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:23:55.0737503+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T04:24:20.5704461+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T04:24:25.0539147+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T04:24:25.0554835+01:00","action":"release","task_id":94,"detail":"architect"}

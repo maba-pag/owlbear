@@ -4,7 +4,7 @@ title: Create v2 test infrastructure
 status: archived
 priority: critical
 created: 2026-03-26T18:34:45.6659768+01:00
-updated: 2026-03-28T04:15:18.7005435+01:00
+updated: 2026-03-28T04:15:44.8781655+01:00
 started: 2026-03-28T04:14:39.4802747+01:00
 completed: 2026-03-28T04:14:39.4802747+01:00
 tags:
@@ -215,3 +215,9 @@ AC was specific and verifiable (11 items). Minor imprecision: convention=google 
 
 ### Confidence: .95
 ### Action: archived
+
+[[2026-03-28]] Sat 04:15
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7ed32c9 | chore | kanban/tasks/035-*.md | #35 |

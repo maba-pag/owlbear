@@ -24,8 +24,6 @@ def validate_metadata(metadata: dict, skill_dir: Path) -> list[str]:
         name = str(metadata["name"])
         dir_name = Path(skill_dir).name
         if name != dir_name:
-            errors.append(
-                f"name field '{name}' does not match directory name '{dir_name}'"
-            )
+            errors.append(f"name field '{name}' does not match directory name '{dir_name}'")
 
     return errors

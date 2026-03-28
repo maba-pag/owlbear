@@ -90,9 +90,7 @@ class TestFromAC_PytestIniOptions:
         """testpaths must list 'packages' alongside 'tests'."""
         opts = _pytest_ini_options()
         testpaths = opts.get("testpaths", [])
-        assert "packages" in testpaths, (
-            f"'packages' missing from testpaths; got {testpaths!r}"
-        )
+        assert "packages" in testpaths, f"'packages' missing from testpaths; got {testpaths!r}"
 
     def test_addopts_has_import_mode_importlib(self) -> None:
         """addopts must include --import-mode=importlib."""
@@ -158,9 +156,9 @@ class TestFromAC_PerPackageTestDirs:
         )
 
     def test_orchestrator_tests_init_exists(self) -> None:
-        assert (
-            ROOT / "packages" / "orchestrator" / "tests" / "__init__.py"
-        ).exists(), "packages/orchestrator/tests/__init__.py missing"
+        assert (ROOT / "packages" / "orchestrator" / "tests" / "__init__.py").exists(), (
+            "packages/orchestrator/tests/__init__.py missing"
+        )
 
     def test_knowledge_tests_dir_exists(self) -> None:
         assert (ROOT / "packages" / "knowledge" / "tests").is_dir(), (
@@ -195,18 +193,14 @@ class TestFromAC_DevDependencies:
         """pytest-asyncio must be listed in [dependency-groups] dev."""
         deps = _dev_deps()
         match = next((d for d in deps if "pytest-asyncio" in d), None)
-        assert match is not None, (
-            f"pytest-asyncio not found in dev deps; current deps: {deps}"
-        )
+        assert match is not None, f"pytest-asyncio not found in dev deps; current deps: {deps}"
 
     def test_pytest_asyncio_version_at_least_0_25(self) -> None:
         """pytest-asyncio version constraint must be >=0.25."""
         deps = _dev_deps()
         dep_str = next((d for d in deps if "pytest-asyncio" in d), "")
         version_match = re.search(r">=([\d.]+)", dep_str)
-        assert version_match, (
-            f"pytest-asyncio must have a '>=' version constraint; got {dep_str!r}"
-        )
+        assert version_match, f"pytest-asyncio must have a '>=' version constraint; got {dep_str!r}"
         parts = [int(x) for x in version_match.group(1).split(".")]
         # Pad to at least (major, minor)
         while len(parts) < 2:  # noqa: PERF203
@@ -236,9 +230,7 @@ class TestFromAC_RuffConfig:
     def test_ruff_lint_select_all(self) -> None:
         """[tool.ruff.lint] select must include 'ALL'."""
         select = _ruff_lint().get("select", [])
-        assert "ALL" in select, (
-            f"[tool.ruff.lint] select must include 'ALL'; got {select!r}"
-        )
+        assert "ALL" in select, f"[tool.ruff.lint] select must include 'ALL'; got {select!r}"
 
     def test_ruff_lint_ignore_includes_required_rules(self) -> None:
         """ruff ignore must include v1-compatible rules: D1xx, COM812, ISC001, S101."""
@@ -254,9 +246,7 @@ class TestFromAC_RuffConfig:
         src = _ruff().get("src", [])
         assert src, "[tool.ruff] src not set; needed for first-party import detection"
         src_str = " ".join(str(s) for s in src)
-        assert "packages" in src_str, (
-            f"[tool.ruff] src must reference packages/; got src={src!r}"
-        )
+        assert "packages" in src_str, f"[tool.ruff] src must reference packages/; got src={src!r}"
 
     def test_ruff_per_file_ignores_covers_tests(self) -> None:
         """per-file-ignores must include a pattern for tests/**/*.py."""
@@ -288,16 +278,12 @@ class TestFromAC_RuffFormatConfig:
 
     def test_ruff_format_section_exists(self) -> None:
         """[tool.ruff.format] section must exist."""
-        assert _ruff_format(), (
-            "[tool.ruff.format] section missing from root pyproject.toml"
-        )
+        assert _ruff_format(), "[tool.ruff.format] section missing from root pyproject.toml"
 
     def test_ruff_format_quote_style_double(self) -> None:
         """[tool.ruff.format] quote-style must be 'double'."""
         qs = _ruff_format().get("quote-style")
-        assert qs == "double", (
-            f"[tool.ruff.format] quote-style must be 'double', got {qs!r}"
-        )
+        assert qs == "double", f"[tool.ruff.format] quote-style must be 'double', got {qs!r}"
 
     def test_ruff_pydocstyle_convention_google(self) -> None:
         """[tool.ruff.lint.pydocstyle] convention must be 'google'."""
@@ -317,9 +303,7 @@ class TestFromAC_CoverageConfig:
 
     def test_coverage_run_section_exists(self) -> None:
         """[tool.coverage.run] section must exist in root pyproject.toml."""
-        assert _coverage_run(), (
-            "[tool.coverage.run] section missing from root pyproject.toml"
-        )
+        assert _coverage_run(), "[tool.coverage.run] section missing from root pyproject.toml"
 
     def test_coverage_run_source_pkgs_all_five(self) -> None:
         """source_pkgs must list all 5 installed package names."""
@@ -392,8 +376,7 @@ class TestFromAC_RuffLinting:
             timeout=120,
         )
         assert result.returncode == 0, (
-            f"ruff check failed (exit {result.returncode}):\n"
-            f"{result.stdout}\n{result.stderr}"
+            f"ruff check failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}"
         )
 
 
@@ -454,9 +437,7 @@ class TestFromAC_CIDocumentation:
         """README must document a pytest command that covers packages/."""
         readme = self._readme()
         pytest_lines = [
-            line
-            for line in readme.splitlines()
-            if "pytest" in line and "uv run" in line
+            line for line in readme.splitlines() if "pytest" in line and "uv run" in line
         ]
         has_packages = any("packages" in line for line in pytest_lines)
         assert has_packages, (
@@ -467,12 +448,9 @@ class TestFromAC_CIDocumentation:
     def test_readme_has_coverage_command(self) -> None:
         """README must document a coverage command."""
         readme = self._readme()
-        has_cov = (
-            "--cov" in readme or "coverage run" in readme or "uv run coverage" in readme
-        )
+        has_cov = "--cov" in readme or "coverage run" in readme or "uv run coverage" in readme
         assert has_cov, (
-            "README.md must document a coverage command "
-            "(e.g., uv run pytest --cov or coverage run)"
+            "README.md must document a coverage command (e.g., uv run pytest --cov or coverage run)"
         )
 
     def test_readme_ruff_check_covers_packages(self) -> None:
@@ -482,6 +460,4 @@ class TestFromAC_CIDocumentation:
         assert ruff_lines, "README.md must document a 'ruff check' command"
         # The command must cover packages/ (not just src/)
         has_packages = any("packages" in line for line in ruff_lines)
-        assert has_packages, (
-            f"ruff check command must cover packages/; found: {ruff_lines}"
-        )
+        assert has_packages, f"ruff check command must cover packages/; found: {ruff_lines}"

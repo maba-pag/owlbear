@@ -2567,5 +2567,5 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | pytest Good Integration Practices | <https://docs.pytest.org/en/stable/explanation/goodpractices.html> | MIT | testpaths, import-mode=importlib recommendation for src layout | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
 | ruff Configuration docs | <https://docs.astral.sh/ruff/configuration/> | MIT | select=ALL with targeted ignores, src for isort first-party detection, per-file-ignores patterns | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
-| hynek — Testing in a Python Project | <https://hynek.me/articles/testing-packaging/> | CC-BY-4.0 | source_pkgs over source paths for installed-package coverage in monorepos | `docs/research/v2-test-infrastructure.md`, `pyproject.toml` | 2026-03-28 |
+| hynek ï¿½ Testing in a Python Project | <https://hynek.me/articles/testing-packaging/> | CC-BY-4.0 | source_pkgs over source paths for installed-package coverage in monorepos | `docs/research/v2-test-infrastructure.md`, `pyproject.toml` | 2026-03-28 |
 | pydantic-ai pyproject.toml | <https://github.com/pydantic/pydantic-ai> | MIT | asyncio_mode=strict convention, per-package test layout in a uv monorepo | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |

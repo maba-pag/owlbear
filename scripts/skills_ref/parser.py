@@ -40,7 +40,7 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
         raise ParseError(_ERR_UNCLOSED)
 
     yaml_text = after_open[:close_idx]
-    body = after_open[close_idx + 4:]
+    body = after_open[close_idx + 4 :]
 
     try:
         data = strictyaml.load(yaml_text).data

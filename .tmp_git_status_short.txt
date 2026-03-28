@@ -1,0 +1,174 @@
+ M .github/agents/curator.agent.md
+ M .github/agents/kanban-planner.agent.md
+ M .github/agents/orchestrator.agent.md
+ M .github/skills/code-review/SKILL.md
+ M .github/skills/research-workflow/SKILL.md
+ M .gitignore
+ M .vscode/mcp.json
+ M agents/README.md
+ M docs/decisions/resolved/v2-architecture.md
+ M docs/research/voice-addon-architecture.md
+ M docs/research/voice-io.md
+ M docs/sources/overview.md
+ M instructions/README.md
+ M kanban/activity.jsonl
+ M kanban/config.yml
+ M kanban/tasks/001-acp-protocol-deep-dive.md
+ M kanban/tasks/003-agentskills-io-spec-validation.md
+ M kanban/tasks/004-agent-md-format-validation.md
+ M kanban/tasks/005-copilot-memory-boundary-testing.md
+ M kanban/tasks/006-monorepo-tooling-research.md
+ M kanban/tasks/007-create-monorepo-skeleton.md
+ M kanban/tasks/008-port-agents-to-agent-md-format.md
+ M kanban/tasks/009-port-skills-to-agentskills-io-format.md
+ M kanban/tasks/010-port-instruction-files.md
+ M kanban/tasks/011-write-copilot-memory-boundary-instructions.md
+ M kanban/tasks/012-build-setup-script-owlbear-setup.md
+ M kanban/tasks/013-copy-v1-docs-to-v2.md
+ M kanban/tasks/014-build-mcp-kanban-server.md
+ M kanban/tasks/015-extract-knowledge-engine-from-v1.md
+ M kanban/tasks/016-build-mcp-knowledge-server.md
+ M kanban/tasks/017-build-mcp-project-server.md
+ M kanban/tasks/018-configure-mcp-server-registry.md
+ M kanban/tasks/019-build-acp-client-library.md
+ M kanban/tasks/020-build-dispatch-planner.md
+ M kanban/tasks/024-general-kb-initial-data-load.md
+ M kanban/tasks/025-multi-project-setup-test.md
+ M kanban/tasks/026-slack-notification-integration.md
+ M kanban/tasks/027-clean-up-instruction-files-for-v2.md
+ M kanban/tasks/028-update-readme-md-for-v2.md
+ M kanban/tasks/029-clean-up-github-v1-prompts-and-residual-files.md
+ M kanban/tasks/030-research-voice-addon-architecture.md
+ M kanban/tasks/036-rename-todo-tool-reference-to-todos-in-all-agent.md
+ M kanban/tasks/043-add-argument-hint-to-user-invocable-skills.md
+ M kanban/tasks/048-disable-copilot-memory-github-hosted-in-workspace.md
+ M kanban/tasks/053-define-owlbear-project-json-schema-specification.md
+ M kanban/tasks/060-extend-classify-error-for-acp-requesterror-codes.md
+ M kanban/tasks/071-test-extend-classify-error-for-acp-requesterror.md
+ M packages/knowledge/pyproject.toml
+ M packages/knowledge/src/owlbear_knowledge/__init__.py
+ M packages/mcp-kanban/pyproject.toml
+ M packages/mcp-kanban/src/owlbear_mcp_kanban/__init__.py
+ M packages/mcp-knowledge/pyproject.toml
+ M packages/mcp-knowledge/src/owlbear_mcp_knowledge/__init__.py
+ M packages/mcp-knowledge/tests/test_search_knowledge.py
+ M packages/mcp-project/src/owlbear_mcp_project/__init__.py
+ M packages/mcp-project/tests/test_models.py
+ M packages/orchestrator/pyproject.toml
+ M packages/orchestrator/src/owlbear/__init__.py
+ M pyproject.toml
+ M scripts/setup.py
+ M scripts/validate_skills.py
+ M skills/README.md
+ M tests/test_argument_hint_skills.py
+ M tests/test_disable_model_invocation.py
+ M tests/test_process_supervisor.py
+ M tests/test_rename_todo_to_todos.py
+ M tests/test_resolve_memory_file_uri_removal.py
+ M tests/test_scratch_dir_enforcement.py
+ M uv.lock
+ M v1/tests/test_error_classification.py
+ M v1/tests/test_knowledge_structured_result_contract.py
+ M v1/tests/test_skill_frontmatter.py
+ M v1/uv.lock
+?? .tools/
+?? docs/decisions/pending/42-ac3-slash-command-menu-verification.md
+?? docs/research/acp-client-library-decomposition.md
+?? docs/research/acp-hello-world.md
+?? docs/research/agentskills-io.md
+?? docs/research/argument-hint-user-invocable-skills.md
+?? docs/research/bearclaw-voice-workspace-package.md
+?? docs/research/build-mcp-kanban-server.md
+?? docs/research/classify-error-acp-extension.md
+?? docs/research/disable-model-invocation-pipeline-agents.md
+?? docs/research/expand-mcp-kanban-tools.md
+?? docs/research/extract-knowledge-engine-v1.md
+?? docs/research/ingest-graph-tools-mcp-knowledge.md
+?? docs/research/instruction-file-porting.md
+?? docs/research/instruction-files-v2-cleanup.md
+?? docs/research/mcp-kanban-integration-tests.md
+?? docs/research/mcp-kanban-unit-test-strategy.md
+?? docs/research/monorepo-skeleton.md
+?? docs/research/owlbear-project-file-model-impl.md
+?? docs/research/owlbear-project-file-tests.md
+?? docs/research/readme-v2-rewrite.md
+?? docs/research/rename-todo-to-todos.md
+?? docs/research/scaffold-mcp-kanban.md
+?? docs/research/scaffold-mcp-knowledge.md
+?? docs/research/scaffold-mcp-project-server.md
+?? docs/research/search-knowledge-tool-impl.md
+?? docs/research/search-structured-method.md
+?? docs/research/search-structured-tests.md
+?? docs/research/setup-script-project-json-generation.md
+?? docs/research/setup-script.md
+?? docs/research/skills-ref-ci-validation.md
+?? docs/research/test-project-json-generation.md
+?? docs/research/user-invocable-skills.md
+?? docs/research/v2-test-infrastructure.md
+?? docs/research/voice-addon-stt-moonshine.md
+?? docs/research/voice-process-manager.md
+?? docs/research/voice-protocol-models.md
+?? docs/research/voice-stdio-protocol.md
+?? docs/research/voice-tts-kokoro-pyttsx3.md
+?? docs/research/voicechannel-adapter.md
+?? docs/scratch/
+?? kanban/tasks/032-extract-vector-store-embedding-pipeline.md
+?? kanban/tasks/033-extract-entity-extraction-graph-builders.md
+?? kanban/tasks/034-knowledge-package-integration-hybrid-search.md
+?? kanban/tasks/035-create-v2-test-infrastructure.md
+?? kanban/tasks/037-evaluate-agent-scoped-hooks-for-pipeline.md
+?? kanban/tasks/038-add-disable-model-invocation-to-pipeline-only.md
+?? kanban/tasks/039-scaffold-mcp-kanban-mcp-server-package.md
+?? kanban/tasks/040-scaffold-mcp-knowledge-mcp-server-package.md
+?? kanban/tasks/041-scaffold-mcp-project-mcp-server-package.md
+?? kanban/tasks/042-add-user-invocable-false-to-pipeline-only-skills.md
+?? kanban/tasks/044-add-skills-ref-validation-to-ci.md
+?? kanban/tasks/045-build-acp-hello-world-script.md
+?? kanban/tasks/046-add-agent-client-protocol-to-orchestrator-deps.md
+?? kanban/tasks/047-document-acp-error-handling-strategy.md
+?? kanban/tasks/049-implement-voice-addon-stdio-protocol.md
+?? kanban/tasks/050-implement-voice-addon-stt-with-moonshine.md
+?? kanban/tasks/051-implement-voice-addon-tts-with-kokoro-and-pyttsx3.md
+?? kanban/tasks/052-create-bearclaw-voice-workspace-package.md
+?? kanban/tasks/054-implement-real-search-knowledge-tool-in-mcp.md
+?? kanban/tasks/055-add-ingest-and-graph-tools-to-mcp-knowledge-server.md
+?? kanban/tasks/056-expand-mcp-kanban-to-full-kanban-md-tool-set.md
+?? kanban/tasks/057-add-mcp-kanban-integration-tests-with-real-kanban.md
+?? kanban/tasks/058-implement-processsupervisor-for-acp-subprocess.md
+?? kanban/tasks/059-implement-acpclient-wrapper-with-timeouts-and.md
+?? kanban/tasks/061-implement-voice-protocol-pydantic-models.md
+?? kanban/tasks/062-implement-voice-process-manager.md
+?? kanban/tasks/063-implement-voicechannel-adapter.md
+?? kanban/tasks/064-rename-bearclaw-voice-to-owlbear-voice-across.md
+?? kanban/tasks/065-test-scaffold-mcp-kanban-mcp-server-package.md
+?? kanban/tasks/066-test-scaffold-mcp-knowledge-mcp-server-package.md
+?? kanban/tasks/067-test-scaffold-mcp-project-mcp-server-package.md
+?? kanban/tasks/068-implement-owlbearprojectfile-pydantic-model-in-mcp.md
+?? kanban/tasks/069-add-owlbear-project-json-generation-to-setup.md
+?? kanban/tasks/070-add-search-structured-method-to.md
+?? kanban/tasks/072-test-implement-real-search-knowledge-tool.md
+?? kanban/tasks/073-test-processsupervisor-for-acp-subprocess.md
+?? kanban/tasks/074-test-owlbearprojectfile-pydantic-model.md
+?? kanban/tasks/075-test-owlbear-project-json-generation-in-setup.md
+?? kanban/tasks/077-test-add-ingest-and-graph-tools-to-mcp-knowledge.md
+?? kanban/tasks/078-test-voice-addon-tts-backends-and-factory.md
+?? kanban/tasks/079-add-argument-hint-to-remaining-user-invoked-skills.md
+?? kanban/tasks/080-replace-unsupported-vscode-resolvememoryfileuri.md
+?? kanban/tasks/081-set-disable-model-invocation-true-on-8-pipeline.md
+?? kanban/tasks/082-set-disable-model-invocation-true-on-8-pipeline.md
+?? kanban/tasks/083-add-skills-ref-dev-dependency-and-pre-commit.md
+?? kanban/tasks/084-test-skills-ref-validation-script.md
+?? kanban/tasks/085-test-add-argument-hint-to-remaining-user-invoked.md
+?? kanban/tasks/086-evaluate-agent-scoped-hooks-for-pipeline.md
+?? kanban/tasks/087-fix-pytest-collecting-v1-archive-tests.md
+?? kanban/tasks/088-enforce-scratch-dir-for-agent-temp-files.md
+?? kanban/tasks/089-test-mcp-kanban-full-tool-set.md
+?? kanban/tasks/090-update-pytest-and-linting-skill-for-v2-paths.md
+?? kanban/tasks/091-update-python-instructions-md-for-v2-layout.md
+?? kanban/tasks/092-test-setup-script-core-functions-settings-mcp.md
+?? kanban/tasks/093-rewrite-readme-md-for-v2-architecture.md
+?? kanban/tasks/094-test-acpclient-wrapper-with-timeouts-and-error.md
+?? package-lock.json
+?? pytest_76.txt
+?? v1/.ai_probe_tmp
+?? v1/coverage_task60.txt
