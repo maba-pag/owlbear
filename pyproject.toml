@@ -45,6 +45,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = [
+  "INP001", # scripts/ is not a package — direct-run files are expected here
+]
 "tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests

@@ -13,8 +13,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from skills_ref.parser import find_skill_md, parse_frontmatter
 from skills_ref.errors import ParseError
+from skills_ref.parser import find_skill_md, parse_frontmatter
 from skills_ref.validator import validate_metadata
 
 # OwlBear-specific VS Code vendor fields — not part of the Agent Skills Spec.
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
 
     if not args:
-        print("Usage: validate_skills.py <skill_dir> [<skill_dir> ...]", file=sys.stderr)
+        sys.stderr.write("Usage: validate_skills.py <skill_dir> [<skill_dir> ...]\n")
         return 1
 
     has_errors = False
@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         if errors:
             has_errors = True
             for error in errors:
-                print(f"[{skill_dir.name}] {error}", file=sys.stderr)
+                sys.stderr.write(f"[{skill_dir.name}] {error}\n")
 
     return 1 if has_errors else 0
 
