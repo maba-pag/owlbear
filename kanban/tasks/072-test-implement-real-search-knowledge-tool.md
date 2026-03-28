@@ -1,10 +1,12 @@
 ---
 id: 72
 title: 'Test: Implement real search_knowledge tool'
-status: done
+status: archived
 priority: needed
 created: 2026-03-26T20:18:53.0419904+01:00
-updated: 2026-03-28T04:22:48.5739962+01:00
+updated: 2026-03-28T13:57:43.7666643+01:00
+started: 2026-03-28T13:57:39.5357441+01:00
+completed: 2026-03-28T13:57:39.5357441+01:00
 tags:
     - phase-2
     - scope:mcp
@@ -117,3 +119,35 @@ See docs/scratch/72-reviewer.md for full evidence.
 
 ### Scratch Files Cleaned
 - None (docs/scratch/72-* — no files found)
+
+[[2026-03-28]] Sat 13:57
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: test file exists | packages/mcp-knowledge/tests/test_search_knowledge.py collected 12 tests | PASS |
+| AC2: valid query returns str | test_valid_query_returns_string, test_valid_query_result_contains_service_text both pass | PASS |
+| AC3: asyncio.to_thread wrapping | tools.py L44-48, test_uses_asyncio_to_thread verifies call_args | PASS |
+| AC4: limit maps to top_k | tools.py L47 top_k=limit, 3 tests verify explicit values | PASS |
+| AC5: None returns friendly msg | tools.py L49-50, test_none_result_returns_no_knowledge_message checks substring | PASS |
+| AC6: missing service msg | tools.py L42-43, test_missing_query_service_returns_unavailable_message checks substring | PASS |
+| AC7: RED phase | Test-writer/builder notes confirm ModuleNotFoundError before impl | NOTED |
+| AC8: pytest-asyncio + mocks | STRICT mode confirmed, _make_app_context/_make_query_service helpers | PASS |
+
+### Test Results
+- pytest (task-scoped): 12 passed, 0 failed
+- pytest (full suite): 248 passed, 78 failed (all pre-existing from other tasks: agent-port-v2, rename-todo, monorepo-skeleton network, bearclaw-voice, scratch-dir)
+- ruff: All checks passed
+
+### Upstream Commits
+- 154f258 test: add failing tests for search_knowledge tool (#72, test-writer)
+- 1899087 feat: implement search_knowledge MCP tool (#72, builder)
+
+### Reviewer Evidence
+Detailed review in docs/scratch/72-reviewer.md. Confidence .95 PASS. All AC lines mapped. Security clean. Test quality ADEQUATE-STRONG.
+
+### Architect Quality: 5/5
+AC was specific, testable, and complete. Every AC line mapped cleanly to implementation and tests. Architecture review correctly identified package naming and dependency ordering.
+
+### Confidence: .97
+### Action: archive
