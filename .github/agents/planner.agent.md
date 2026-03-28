@@ -9,12 +9,10 @@ tools:
   [
     vscode/memory,
     execute/getTerminalOutput,
-    execute/runTask,
     execute/runInTerminal,
     read/readFile,
     read/viewImage,
     read/terminalLastCommand,
-    read/getTaskOutput,
     agent,
     todo,
   ]
