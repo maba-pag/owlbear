@@ -58,17 +58,17 @@ def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
     rel = compute_owlbear_relpath(owlbear_dir, project_dir)
     config = {
         "servers": {
-            "owlbear-kanban": {
+            "owlbearKanban": {
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--project", rel, "-m", "mcp_kanban"],
             },
-            "owlbear-knowledge": {
+            "owlbearKnowledge": {
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--project", rel, "-m", "mcp_knowledge"],
             },
-            "owlbear-project": {
+            "owlbearProject": {
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--project", rel, "-m", "mcp_project"],
