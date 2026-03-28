@@ -36,28 +36,51 @@ OwlBear v1 has 21 skills in `.github/skills/`. The agentskills.io open standard 
 
 ### 3b. VS Code Extensions (non-standard but supported)
 
-| Field | Purpose | v1 usage | Recommendation |
-|-------|---------|----------|----------------|
-| `argument-hint` | Slash-command hint text | Not used | Add to user-invocable skills (project-definition, retro) |
-| `user-invocable` | Show in `/` menu (default: true) | Not used | Set `false` on pipeline-only skills (11 skills) that agents auto-load |
-| `disable-model-invocation` | Block auto-loading (default: false) | Not used | No need — all skills should remain auto-loadable |
+| Field | Purpose | Current usage | Remaining action |
+|-------|---------|---------------|------------------|
+| `user-invocable: false` | Hide from `/` menu; agents still auto-load | 11 skills (arch-review, code-review, curation-workflow, dispatch-planning, docs-gate, orchestration, research-workflow, task-decomposition, task-verification, tdd-red, tdd-workflow) ✅ | None — all pipeline-only skills already set |
+| `argument-hint` | Slash-command hint text | 5 skills (excalidraw-diagram, frontend-design, project-definition, retro, visual-output) ✅ | Task #79: remaining user-invocable skills without a hint |
+| `disable-model-invocation` | Block auto-loading (default: false) | Not used | Not needed — all skills should remain auto-loadable |
 
-### 3c. Directory Structure
+**10 skills remain user-invocable (default: true):** architecture-standards, decision-requests, excalidraw-diagram, frontend-design, kanban-md, knowledge-ops, project-definition, pytest-and-linting, retro, visual-output.
 
-| Spec convention | v1 status | Notes |
-|-----------------|-----------|-------|
-| `SKILL.md` present | All 21 ✅ | — |
-| `scripts/` | None | OK — OwlBear skills are procedural knowledge, not executable |
-| `references/` | 3 skills use it (excalidraw-diagram, frontend-design, kanban-md) ✅ | Already compliant |
-| `assets/` | None | visual-output uses `templates/` — spec allows arbitrary dirs |
+### 3c. Per-skill Directory Structure and Required Changes
 
-### 3d. Progressive Disclosure
+| Skill | Lines | `user-invocable` | `argument-hint` | `references/` | Required changes |
+|-------|-------|-----------------|----------------|---------------|-----------------|
+| arch-review | 120 | `false` ✅ | — | ❌ | None |
+| architecture-standards | 102 | — (default true) | — | ❌ | None |
+| code-review | 366 | `false` ✅ | — | ❌ | None |
+| curation-workflow | 98 | `false` ✅ | — | ❌ | None |
+| decision-requests | 162 | — (default true) | — | ❌ | None |
+| dispatch-planning | 309 | `false` ✅ | — | ❌ | None |
+| docs-gate | 125 | `false` ✅ | — | ❌ | None |
+| excalidraw-diagram | 141 | — (default true) | ✅ | ✅ | Optional: add `compatibility` note (OwlBear-specific tools) |
+| frontend-design | 65 | — (default true) | ✅ | ✅ | None |
+| kanban-md | 49 | — (default true) | — | ✅ | None |
+| knowledge-ops | 140 | — (default true) | — | ❌ | Optional: add `compatibility` note (OwlBear-specific tools) |
+| orchestration | 273 | `false` ✅ | — | ❌ | None |
+| project-definition | 111 | — (default true) | ✅ | ❌ | None |
+| pytest-and-linting | 161 | — (default true) | — | ❌ | None |
+| research-workflow | 125 | `false` ✅ | — | ❌ | None |
+| retro | 223 | — (default true) | ✅ | ❌ | None |
+| task-decomposition | 126 | `false` ✅ | — | ❌ | None |
+| task-verification | 145 | `false` ✅ | — | ❌ | None |
+| tdd-red | 188 | `false` ✅ | — | ❌ | None |
+| tdd-workflow | 175 | `false` ✅ | — | ❌ | None |
+| visual-output | 93 | — (default true) | ✅ | ❌ | None |
 
-| Tier | Spec guidance | v1 status |
+**Summary:** 19 of 21 skills need zero structural changes. 2 skills (excalidraw-diagram, knowledge-ops) optionally benefit from a `compatibility` note for OwlBear-specific toolsets. No `scripts/` or `assets/` directories are needed — OwlBear skills are procedural knowledge, not executable.
+
+### 3d. Progressive Disclosure — Tier Compliance for All 21 Skills
+
+| Tier | Spec guidance | Compliance |
 |------|--------------|-----------|
-| 1. Metadata (~100 tokens) | `name` + `description` | ✅ All skills |
-| 2. Instructions (<5000 tokens, <500 lines) | SKILL.md body on activation | ✅ All ≤365 lines, well under 500 |
-| 3. Resources (on demand) | scripts/, references/, assets/ | ✅ 3 skills use references/ |
+| 1. Metadata (~100 tokens) | `name` + `description` (required) | ✅ All 21 — both fields present |
+| 2. Instructions (<5000 tokens, <500 lines) | SKILL.md body on activation | ✅ All 21 — range 49–366 lines, max 366 (code-review), well under 500 |
+| 3. Resources (on demand) | `scripts/`, `references/`, `assets/` | ✅ 3 of 21 use `references/` (excalidraw-diagram, frontend-design, kanban-md); none need `scripts/` or `assets/` |
+
+All 21 skills are tier-3 compatible today — any that add `references/` in future will be automatically compliant.
 
 ### 3e. Skill Discovery Paths
 
@@ -71,18 +94,27 @@ OwlBear v1 has 21 skills in `.github/skills/`. The agentskills.io open standard 
 
 The `skills-ref` Python library (agentskills/agentskills repo) provides `skills-ref validate ./my-skill` to check frontmatter validity and naming conventions. Not yet integrated into our workflow.
 
-## 4. Recommendation (.90 confidence)
+## 4. Recommendation (.92 confidence)
 
-**Port with minimal changes.** All 21 v1 skills are already compliant with the agentskills.io spec on required fields. The porting work is additive, not breaking:
+**All 21 skills are already agentskills.io compliant.** The porting has been completed — required fields are present, directory structure is correct, and VS Code extensions (`user-invocable`, `argument-hint`) are applied to the appropriate skills. Remaining work is additive and low-risk:
 
-1. **Add `user-invocable: false`** to 11 pipeline-only skills so they don't clutter the `/` slash-command menu but remain auto-loadable by agents
-2. **Add `argument-hint`** to the 2 user-invocable skills (project-definition, retro) for better UX
-3. **Optionally add `compatibility`** to 2 skills that reference OwlBear runtime tools
-4. **Run `skills-ref validate`** on all skills as a CI/lint step after porting
+1. **Task #79 open:** Add `argument-hint` to remaining user-invocable skills still missing it (architecture-standards, decision-requests, kanban-md, knowledge-ops, pytest-and-linting)
+2. **Task #44 open:** Integrate `skills-ref validate` as a CI/lint step to catch regressions
+3. **Optional:** Add `compatibility` notes to 2 skills (excalidraw-diagram, knowledge-ops) that reference OwlBear-specific runtime tools
 
 Risk: VS Code extensions (`user-invocable`, `argument-hint`, `disable-model-invocation`) are not part of the open spec — they're VS Code-specific. Other clients will ignore them harmlessly.
 
 ## 5. Follow-up Tasks
+
+Follow-up tasks created from this research:
+
+| Task | Title | Status |
+|------|-------|--------|
+| #42 | Add user-invocable: false to pipeline-only skills | in-progress |
+| #79 | Add argument-hint to remaining user-invocable skills | todo |
+| #44 | Add skills-ref validation to CI | todo |
+
+Original `kanban-md create` commands (reference only — tasks already created):
 
 ```
 kanban\kanban-md.exe create "Add user-invocable: false to pipeline-only skills" --priority important --status ideation --tags "phase-1,scope:skills,type:build" --body "## Objective\nAdd user-invocable: false to pipeline-only skills that should not appear in the / slash-command menu.\n\n## Acceptance Criteria\n- [ ] Add user-invocable: false to: arch-review, code-review, curation-workflow, dispatch-planning, docs-gate, orchestration, research-workflow, task-decomposition, task-verification, tdd-red, tdd-workflow\n- [ ] Verify remaining 10 skills keep default (true): architecture-standards, decision-requests, excalidraw-diagram, frontend-design, kanban-md, knowledge-ops, project-definition, pytest-and-linting, retro, visual-output\n- [ ] Test slash-command menu shows only user-invocable skills"
