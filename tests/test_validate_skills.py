@@ -206,3 +206,82 @@ class TestFromAC_ExitCode:
             capture_output=True,
         )
         assert result.returncode == 1
+
+    def test_exit_code_one_no_arguments(self) -> None:
+        """AC4: exit 1 when script is invoked with no arguments (usage error)."""
+        result = subprocess.run(
+            [sys.executable, str(_SCRIPT)],
+            capture_output=True,
+        )
+        assert result.returncode == 1
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ErrorPaths
+# (retry) covers implementation-aware gaps flagged by reviewer:
+#   nonexistent path, non-directory, missing SKILL.md, parse error
+# ---------------------------------------------------------------------------
+class TestFromAC_ErrorPaths:
+    """Error-path contracts for validate_skill: bad inputs return descriptive errors."""
+
+    def test_nonexistent_path_returns_descriptive_error(self, tmp_path: Path) -> None:
+        """validate_skill returns a descriptive error for a path that does not exist."""
+        missing = tmp_path / "no-such-dir"
+        errors = validate_skill(missing)
+        assert errors
+        assert any(
+            "exist" in e.lower() or "not found" in e.lower() or "no such" in e.lower()
+            for e in errors
+        )
+
+    def test_non_directory_path_returns_descriptive_error(self, tmp_path: Path) -> None:
+        """validate_skill returns a descriptive error when given a file path, not a dir."""
+        not_a_dir = tmp_path / "file.txt"
+        not_a_dir.write_text("content", encoding="utf-8")
+        errors = validate_skill(not_a_dir)
+        assert errors
+        assert any("director" in e.lower() for e in errors)
+
+    def test_missing_skill_md_returns_descriptive_error(self, tmp_path: Path) -> None:
+        """validate_skill returns a descriptive error for a directory without SKILL.md."""
+        empty_dir = tmp_path / "empty-skill-dir"
+        empty_dir.mkdir()
+        errors = validate_skill(empty_dir)
+        assert errors
+        assert any("skill.md" in e.lower() for e in errors)
+
+    def test_parse_error_returns_error(self, tmp_path: Path) -> None:
+        """validate_skill returns an error when SKILL.md has no parseable frontmatter."""
+        bad_dir = tmp_path / "bad-frontmatter"
+        bad_dir.mkdir()
+        # Raw text with no YAML frontmatter delimiters — must produce an error
+        (bad_dir / "SKILL.md").write_text(
+            "this is not a frontmatter block\n# Body\n",
+            encoding="utf-8",
+        )
+        errors = validate_skill(bad_dir)
+        assert errors
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AC3MessageSpecificity
+# (retry) strengthens lax AC3 assertions — errors must name the actual problem
+# ---------------------------------------------------------------------------
+class TestFromAC_AC3MessageSpecificity:
+    """AC3 message content: error messages must reference the specific failed check."""
+
+    def test_missing_description_error_mentions_description(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: missing-description error message contains the word 'description'."""
+        skill_dir = tmp_path / "no-desc-msg"
+        _write_skill(skill_dir, "name: no-desc-msg")
+        errors = validate_skill(skill_dir)
+        assert any("description" in e.lower() for e in errors)
+
+    def test_name_mismatch_error_references_name(self, tmp_path: Path) -> None:
+        """AC3: name-mismatch error message references the 'name' field."""
+        skill_dir = tmp_path / "dir-name"
+        _write_skill(skill_dir, "name: completely-different\ndescription: A skill.")
+        errors = validate_skill(skill_dir)
+        assert any("name" in e.lower() for e in errors)
