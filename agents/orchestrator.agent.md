@@ -16,7 +16,7 @@ agents:
   - auditor
   - curator
   - Explore
-tools: [vscode/memory, read/readFile, agent, todos]
+tools: [vscode/memory, vscode/askQuestions, read/readFile, agent, todos]
 ---
 
 <persona>

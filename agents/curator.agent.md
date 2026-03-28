@@ -7,6 +7,7 @@ model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
   [
     vscode/memory,
+    vscode/askQuestions,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,

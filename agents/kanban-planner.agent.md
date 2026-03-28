@@ -7,6 +7,7 @@ model: Claude Opus 4.6 (copilot)
 tools:
   [
     vscode/memory,
+    vscode/askQuestions,
     execute/getTerminalOutput,
     execute/awaitTerminal,
     execute/killTerminal,
