@@ -4,7 +4,7 @@ title: Research voice addon architecture
 status: archived
 priority: nice-to-have
 created: 2026-03-26T18:05:24.8333451+01:00
-updated: 2026-03-27T12:39:03.937613+01:00
+updated: 2026-03-27T12:40:23.5994841+01:00
 started: 2026-03-27T12:38:58.653198+01:00
 completed: 2026-03-27T12:38:58.653198+01:00
 tags:
@@ -169,6 +169,7 @@ Research is thorough. Good catch on Piper GPL-3.0 license exclusion. Stdio pipes
 - Fixes applied: normalized follow-up handoff format and cleaned task-body contamination from unrelated review content
 
 [[2026-03-27]] Fri 10:22
+
 ## Review Evidence
 
 ## Review: #30 - Research voice addon architecture
@@ -176,12 +177,12 @@ Research is thorough. Good catch on Piper GPL-3.0 license exclusion. Stdio pipes
 ### Test Results
 
 - Scoped pytest on the existing rename regression slice reported 4 passed, 24 deselected in 0.03s.
-- The executed tests directly covered the two files changed in this review cycle: the task 30 body rename entries and the voice-addon-architecture research doc rename entries in tests/test_rename_bearclaw_voice.py.
+- The executed tests directly covered the two files changed in this review cycle: the task 30 body rename entries and the voice-addon-architecture research doc rename entries in the task-64 rename regression test module.
 - No task-scoped TestFromAC classes exist for task 30; this is a research-only card.
 
 ### Lint Results
 
-- Scoped ruff on tests/test_rename_bearclaw_voice.py passed.
+- Scoped ruff on the task-64 rename regression test module passed.
 
 ### Coverage
 
@@ -221,12 +222,17 @@ Research is thorough. Good catch on Piper GPL-3.0 license exclusion. Stdio pipes
 - Advancing task 30 to docs.
 
 [[2026-03-27]] Fri 12:38
+
 ## Audit
+
 Confidence: .97 Action: archive
 
 [[2026-03-27]] Fri 12:38
+
 ### AC Verification
+
 All 7 AC items PASS:
+
 1. Research local voice models: Doc 3.1 STT (Moonshine/Whisper), 3.2 TTS (Kokoro/pyttsx3/Piper) with trade-off matrices
 2. Decide standalone vs independent: Doc 3.3 evaluates 4 architectures, selects stdio pipes (.85)
 3. Design interface: Doc 3.3 + 4 specify line-delimited JSON on stdio
@@ -236,24 +242,31 @@ All 7 AC items PASS:
 7. Create follow-up tasks: #49 (ideation), #50 (todo), #51 (backlog), #52 (backlog) all exist with backlinks
 
 ### Research Task Checklist
+
 - Research doc exists: PASS
 - Follow-up tasks created on board: PASS (#49-#52)
 - Follow-up tasks link back: PASS (reviewer Pass 1 confirmed)
 - Follow-up section format: PASS (numbered, priority/deps/AC/commands/IDs)
 
 ### Test Results
+
 - pytest: 82 passed, 36 failed, 2 collection errors. All failures from other tasks. No task-30-related failures.
 - ruff: not applicable (no Python source deliverable)
 
 ### AC Quality Score: 4/5
+
 AC specific with 7 clear items. Could have specified evaluation criteria more granularly but intent was clear.
 
 ### Confidence: .97
+
 ### Action: archive
 
 [[2026-03-27]] Fri 12:38
+
 ### AC Verification
+
 All 7 AC items PASS:
+
 1. Research local voice models: Doc 3.1 STT (Moonshine/Whisper), 3.2 TTS (Kokoro/pyttsx3/Piper) with trade-off matrices
 2. Decide standalone vs independent: Doc 3.3 evaluates 4 architectures, selects stdio pipes (.85)
 3. Design interface: Doc 3.3 + 4 specify line-delimited JSON on stdio
@@ -263,17 +276,27 @@ All 7 AC items PASS:
 7. Create follow-up tasks: #49 (ideation), #50 (todo), #51 (backlog), #52 (backlog) all exist with backlinks
 
 ### Research Task Checklist
+
 - Research doc exists: PASS
 - Follow-up tasks created on board: PASS (#49-#52)
 - Follow-up tasks link back: PASS (reviewer Pass 1 confirmed)
 - Follow-up section format: PASS (numbered, priority/deps/AC/commands/IDs)
 
 ### Test Results
+
 - pytest: 82 passed, 36 failed, 2 collection errors. All failures from other tasks. No task-30-related failures.
 - ruff: not applicable (no Python source deliverable)
 
 ### AC Quality Score: 4/5
+
 AC specific with 7 clear items. Could have specified evaluation criteria more granularly but intent was clear.
 
 ### Confidence: .97
+
 ### Action: archive
+
+[[2026-03-27]] Fri 12:40
+
+## Commits
+
+3d1709e chore: archive task #30 voice addon research (kanban board file)
