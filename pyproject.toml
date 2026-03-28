@@ -108,6 +108,7 @@ quote-style = "double"
 [tool.coverage.run]
 source_pkgs = [
   "owlbear",
+  "owlbear_orchestrator",
   "owlbear_knowledge",
   "owlbear_mcp_kanban",
   "owlbear_mcp_knowledge",
