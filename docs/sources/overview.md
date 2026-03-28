@@ -2,6 +2,20 @@
 
 External repos and resources studied during OwlBear development.
 
+## Instruction File Porting Research (Task #10)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | `chat.instructionsFilesLocations` setting, `.instructions.md` file format, discovery locations, applyTo patterns | `docs/research/instruction-file-porting.md` | 2026-03-28 |
+| VS Code Customization overview | <https://code.visualstudio.com/docs/copilot/customization/overview> | CC-BY-4.0 | Parent repository discovery, monorepo instruction patterns, Chat Customizations editor | `docs/research/instruction-file-porting.md` | 2026-03-28 |
+
+## ACP Client Library Decomposition Validation (Task #19)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `interfaces.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/interfaces.py> | Apache-2.0 | Full `Client` protocol interface: 10 required async methods, `@param_model` decorators, session_update union types | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
+| ACP Python SDK `core.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/core.py> | Apache-2.0 | `connect_to_agent()` implementation, 50MB stdio buffer, `ClientSideConnection` wiring confirms NDJSON is SDK-handled | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
+
 ## Monorepo Tooling Research (Task #6)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -22,6 +36,15 @@ External repos and resources studied during OwlBear development.
 | VS Code Copilot settings ref | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | chat.agentFilesLocations, chat.agentSkillsLocations, chat.instructionsFilesLocations settings | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
 | VS Code customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Monorepo parent repository discovery, customization file conventions | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
 
+## v2 Test Infrastructure Research (Task #35)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest Good Integration Practices | <https://docs.pytest.org/en/stable/explanation/goodpractices.html> | MIT | testpaths, import-mode, src layout, test discovery conventions | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+| pydantic-ai pyproject.toml | <https://github.com/pydantic/pydantic-ai> | MIT | Real-world uv workspace pytest/ruff/coverage config, testpaths approach, filterwarnings | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+| ruff Configuration docs | <https://docs.astral.sh/ruff/configuration/> | MIT | Hierarchical config, src setting for import sorting, per-file-ignores patterns | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+| hynek Testing & Packaging | <https://hynek.me/articles/testing-packaging/> | CC | src layout benefits, combined coverage with paths config, source_pkgs approach | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+
 ## Impeccable Design Skill Research (Task #929)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -30,6 +53,13 @@ External repos and resources studied during OwlBear development.
 | Impeccable website | <https://impeccable.style> | N/A | Public positioning of anti-pattern examples, command taxonomy, and provider support including VS Code Copilot | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design skill that Impeccable extends | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skills vs custom instructions, progressive loading, and resource-backed skill structure for OwlBear adoption planning | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+
+## Build mcp-project Server Research (Task #17)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK v1 README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 resource/tool decorators, lifespan pattern, Context injection, `mcp.run()` entry point | `docs/research/build-mcp-project-server.md` | 2026-03-28 |
+| MCP Resources Spec (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/resources> | CC-BY-4.0 | Custom URI scheme rules (Â§6.4), resource data types, error handling, annotations | `docs/research/build-mcp-project-server.md` | 2026-03-28 |
 
 ## Expand mcp-kanban Tools Research (Task #56)
 
@@ -89,6 +119,14 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Required skill directory layout, frontmatter contract, progressive loading, and co-located resource-file model that the RED tests should target | `docs/research/frontend-design-skill-red-test-gate.md` | 2026-03-22 |
+
+## README v2 Rewrite Research (Task #28)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Claude Code README | <https://github.com/anthropics/claude-code> | BSD-3-Clause | Concise README structure: one-liner, get started, plugins, links | `docs/research/readme-v2-rewrite.md` | 2026-03-28 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `.agent.md` format, workspace discovery, agent picker behavior, prerequisites | `docs/research/readme-v2-rewrite.md` | 2026-03-28 |
+| VS Code MCP Servers docs | <https://code.visualstudio.com/docs/copilot/customization/mcp-servers> | CC-BY-4.0 | MCP server configuration via `.vscode/mcp.json`, tool discovery, server management | `docs/research/readme-v2-rewrite.md` | 2026-03-28 |
 
 ## mcp-kanban Integration Tests Research (Task #57)
 
@@ -150,6 +188,13 @@ External repos and resources studied during OwlBear development.
 | Qdrant MCP Server (v0.8.1) | <https://github.com/qdrant/mcp-server-qdrant> | Apache-2.0 | Two-tool surface (store/find), metadata parameter design, tool description patterns | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
 | MCP Official Memory Server | <https://github.com/modelcontextprotocol/servers/tree/main/src/memory> | MIT | 8-tool graph CRUD surface, entity/relation model, `read_graph` no-pagination pattern | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
 | FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | N/A | `@mcp.tool` decorator, `Annotated` param descriptions, `readOnlyHint` annotations, error handling | `docs/research/ingest-graph-tools-mcp-knowledge.md` | 2026-03-26 |
+
+## AcpClient Test Strategy Research (Task #94)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `client/connection.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/client/connection.py> | Apache-2.0 | `ClientSideConnection` API surface: `initialize`, `new_session`, `prompt`, `cancel`, `close` method signatures and return types | `docs/research/acp-client-test-strategy.md` | 2026-03-28 |
+| ACP Python SDK `exceptions.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/exceptions.py> | Apache-2.0 | `RequestError(code, message, data)` constructor and factory methods for mocking | `docs/research/acp-client-test-strategy.md` | 2026-03-28 |
 
 ## Scaffold mcp-knowledge Research (Task #40)
 
@@ -1853,7 +1898,43 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Pydantic v2 Unions docs | <https://docs.pydantic.dev/latest/concepts/unions/> | MIT | Literal discriminator + Field(discriminator=...) pattern for tagged message unions | `docs/research/voice-protocol-models.md` | 2026-03-27 |
 | Pydantic v2 TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/type_adapter/> | MIT | validate_json/dump_json API, create-once performance recommendation | `docs/research/voice-protocol-models.md` | 2026-03-27 |
+
+## Extract Knowledge Engine from v1 (Task #15)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG v3 | <https://github.com/microsoft/graphrag> | MIT | Multi-package monorepo structure (packages/), foundation-vs-layer separation pattern, uv workspace usage | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| PrivateGPT (Zylon) | <https://github.com/zylon-ai/private-gpt> | Apache-2.0 | Component-based DI, abstraction-first storage, LlamaIndex base abstraction usage | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
 | MCP Python SDK types | <https://github.com/modelcontextprotocol/python-sdk> | MIT | type: Literal[...] on content models, module-level TypeAdapter union instances | `docs/research/voice-protocol-models.md` | 2026-03-27 |
+
+## Build mcp-kanban Server Research (Task #14)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK (v1.26.0) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator patterns, lifespan context, `mcp.run()` stdio transport, `create_connected_server_and_client_session` testing | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | `.vscode/mcp.json` stdio server registration format, `uv run` command pattern | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| MCP Tools Spec (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | CC-BY-4.0 | Tool definition schema, `isError` field semantics, input schema annotations | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+
+## mcp-kanban Unit Test Strategy (Task #89)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| v1 KanbanToolset tests | `v1/tests/test_kanban_tools.py` | N/A (internal) | Mock subprocess pattern for 7 kanban tools, CLI arg verification, error string testing | `docs/research/mcp-kanban-unit-test-strategy.md` | 2026-03-28 |
+
+## Agent Port to v2 Research (Task #8)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `.agent.md` frontmatter spec, tool/agents fields, handoffs, hooks | `docs/research/agent-port-v2.md` | 2026-03-28 |
+| VS Code Chat Tools Reference | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Complete built-in tool list including tool sets, `todos` naming | `docs/research/agent-port-v2.md` | 2026-03-28 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | `agents:` field semantics, restriction patterns, nested subagent config | `docs/research/agent-port-v2.md` | 2026-03-28 |
+| mcp-knowledge unit tests | `packages/mcp-knowledge/tests/test_search_knowledge.py` | N/A (internal) | Sister MCP package test pattern: direct function call with mocked AppContext | `docs/research/mcp-kanban-unit-test-strategy.md` | 2026-03-28 |
+| MCP Python SDK README (v1) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | `@mcp.tool()` context injection, lifespan pattern, typed `Context[ServerSession, AppContext]` | `docs/research/mcp-kanban-unit-test-strategy.md` | 2026-03-28 |
+| kanban-md CLI v0.33.0 | Local binary (`kanban/kanban-md.exe --help`) | N/A | Full subcommand surface (list/show/create/edit/move/board), `--json` flag support, filter flags | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| v1 KanbanToolset | `v1/src/owlbear/tools/kanban.py` | N/A | Subprocess wrapper pattern (`_run_kanban`), `--no-color`/`--dir` conventions, error handling approach | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| OwlBear MCP SDK deep-dive | `docs/research/mcp-python-sdk.md` | N/A | 3 MCP primitives, transport trade-offs, lifecycle, recommended 3-server architecture | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| OwlBear scaffold research | `docs/research/scaffold-mcp-kanban.md` | N/A | Package layout, lifespan pattern, binary path resolution, VS Code registration, minimal tool surface | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| OwlBear integration test research | `docs/research/mcp-kanban-integration-tests.md` | N/A | In-memory MCP testing, board isolation via tmp_path, binary availability strategy, test scenarios | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 
 ## Source Discovery & Bookmarking Research (Task #304)
 
@@ -2461,3 +2542,30 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `disable-model-invocation` field definition: prevents subagent invocation (default false) | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
 | VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Override behavior: explicit `agents` array overrides `disable-model-invocation: true` | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
+
+## Build Setup Script Research (Task #12)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| v1 ProjectWorkspace | `v1/src/owlbear/projects/workspace.py` | N/A (internal) | Project scaffolding pattern: template dispatch, directory creation, git init, kanban-md init | `docs/research/setup-script.md` | 2026-03-28 |
+| VS Code Copilot customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Parent repository discovery, chat.agentFilesLocations/agentSkillsLocations/instructionsFilesLocations formats | `docs/research/setup-script.md` | 2026-03-28 |
+| VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | mcp.json schema: stdio server config (type, command, args, env), camelCase naming conventions | `docs/research/setup-script.md` | 2026-03-28 |
+| Copier project scaffolder | <https://github.com/copier-org/copier> | MIT | Template-based project scaffolding with Jinja2, update support, questionnaires (evaluated, not adopted) | `docs/research/setup-script.md` | 2026-03-28 |
+| Cookiecutter docs | <https://cookiecutter.readthedocs.io/en/stable/overview.html> | BSD-3 | Template directory structure with JSON config, pre/post hooks (evaluated, not adopted) | `docs/research/setup-script.md` | 2026-03-28 |
+
+## Test Setup Script Core Functions Research (Task #92)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest tmp_path fixture docs | <https://docs.pytest.org/en/stable/how-to/tmp_path.html> | MIT | Filesystem isolation for scaffold tests, sibling directory layout pattern | `docs/research/test-setup-script-core.md` | 2026-03-28 |
+| pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | monkeypatch.chdir for auto-detection tests, monkeypatch.setattr for path resolution | `docs/research/test-setup-script-core.md` | 2026-03-28 |
+| v1 test_project_workspace.py | `v1/tests/test_project_workspace.py` | N/A (internal) | Scaffold test pattern: tmp_path fixtures, MagicMock for subprocess, direct filesystem assertions | `docs/research/test-setup-script-core.md` | 2026-03-28 |
+
+## v2 Test Infrastructure Research (Task #35)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest Good Integration Practices | <https://docs.pytest.org/en/stable/explanation/goodpractices.html> | MIT | testpaths, import-mode=importlib recommendation for src layout | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+| ruff Configuration docs | <https://docs.astral.sh/ruff/configuration/> | MIT | select=ALL with targeted ignores, src for isort first-party detection, per-file-ignores patterns | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+| hynek — Testing in a Python Project | <https://hynek.me/articles/testing-packaging/> | CC-BY-4.0 | source_pkgs over source paths for installed-package coverage in monorepos | `docs/research/v2-test-infrastructure.md`, `pyproject.toml` | 2026-03-28 |
+| pydantic-ai pyproject.toml | <https://github.com/pydantic/pydantic-ai> | MIT | asyncio_mode=strict convention, per-package test layout in a uv monorepo | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
