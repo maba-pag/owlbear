@@ -1,10 +1,12 @@
 ---
 id: 73
 title: 'Test: ProcessSupervisor for ACP subprocess lifecycle'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-26T20:23:24.4133263+01:00
-updated: 2026-03-27T03:32:01.948802+01:00
+updated: 2026-03-28T16:20:21.7853537+01:00
+started: 2026-03-28T16:20:21.4622906+01:00
+completed: 2026-03-28T16:20:21.4622906+01:00
 tags:
     - phase-1
     - scope:orchestrator
@@ -67,3 +69,54 @@ Precedes: #58. See docs/research/process-supervisor-acp.md SS3.7.
 ### Dependencies
 - Verified: #58 depends_on #73 (already set)
 - No new dependencies needed
+
+[[2026-03-28]] Sat 14:54
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | RED-phase test task; no behavior, API, or convention change |
+| 2 | Docstrings | No | N/A | Test file only; module docstring accurate (covers scope + notes impl absent) |
+| 3 | docs/sources/overview.md | No | N/A | Patterns from internal v1 test files, not external sources |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | No | N/A | No research doc produced; task references pre-existing acp-client-library-decomposition.md |
+| 6 | Scratch files | No | N/A | No docs/scratch/73-* files found |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None
+
+[[2026-03-28]] Sat 16:20
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| __aenter__ spawns with stdin=PIPE, stdout=PIPE, stderr=None | 3 tests: test_spawns_with_stdin_pipe, _stdout_pipe, _stderr_none | PASS |
+| __aenter__ raises FileNotFoundError when binary missing | test_raises_file_not_found_when_binary_missing | PASS |
+| __aenter__ verifies proc.stdin/stdout not None | test_raises_when_proc_stdin_is_none, _stdout_is_none | PASS |
+| __aexit__ terminate/wait/kill sequence | test_aexit_calls_terminate, _kills_if_not_terminated, _does_not_kill_clean | PASS |
+| __aexit__ suppresses ProcessLookupError | test_aexit_suppresses_process_lookup_error_on_terminate, _on_kill | PASS |
+| shutdown() explicit call | test_shutdown_explicit_calls_terminate, _kills_if_timeout, _suppresses_error | PASS |
+| is_alive True/False | test_is_alive_true_when_running, _false_when_exited | PASS |
+| ensure_running returns pipes | test_returns_stdin_stdout_tuple, _correct_stdin_and_stdout | PASS |
+| ensure_running respawns dead | test_respawns_dead_process, _returns_new_pipes_after_respawn | PASS |
+| Budget exhausted after 3 | test_raises_budget_exhausted_after_max_restarts | PASS |
+| mark_healthy resets counter | test_mark_healthy_resets_restart_counter | PASS |
+| counter reset allows restarts | test_counter_reset_allows_full_budget_after_mark_healthy | PASS |
+| All mocked (no real process) | All tests use _patch_spawn (patches asyncio.create_subprocess_exec) | PASS |
+
+### Test Results
+- pytest: 23 passed, 0 failed, 3 warnings (coroutine never awaited in mock teardown)
+- ruff: All checks passed
+
+### AC Quality Score: 5/5
+AC was specific, complete, each line maps 1:1 to concrete tests.
+
+### Quality Notes
+- No Review Evidence section in task body (reviewer protocol gap, non-blocking)
+- 4 pre-existing failures in test_disable_model_invocation.py (unrelated, agents path)
+
+### Confidence: .97
+### Action: archive
