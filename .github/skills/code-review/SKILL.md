@@ -49,10 +49,10 @@ Record: errors/warnings or "All checks passed!"
 
 ## Step 4 — Run coverage (if applicable)
 
-Run coverage per the `pytest-and-linting` skill (read it with `read_file` if not already loaded)
-(bare `--cov`, `--cov-fail-under=0`, run plain — never pipe). Replace
-`{module_path}` with a substring matching the source files under review
-(e.g., `intake` or `memory\knowledge`).
+> **Prerequisite:** Load the `pytest-and-linting` skill with `read_file` before running coverage commands. It defines the exact flags, output handling approach, and known pitfalls.
+
+Use bare `--cov` with `--cov-fail-under=0`. Replace `{module_path}` with a substring
+matching the source files under review (e.g., `intake` or `memory\knowledge`).
 
 Verify touched modules have ≥ 90% coverage.
 

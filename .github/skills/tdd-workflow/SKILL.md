@@ -126,10 +126,9 @@ uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-
 uv run ruff check src/ tests/
 ```
 
-Run plain — never pipe through PS cmdlets. See the `pytest-and-linting` skill
-(read it with `read_file` if not already loaded)
-for the full rules. If coverage measurement fails,
-re-read that section before retrying — do NOT iterate through flag variations.
+> **Prerequisite:** Load the `pytest-and-linting` skill with `read_file` before running these commands. It defines the exact flags, output handling approach, and known pitfalls.
+
+If coverage measurement fails, re-read that skill before retrying — do NOT iterate through flag variations.
 
 All must pass. Target ≥ 90% coverage on touched modules.
 
