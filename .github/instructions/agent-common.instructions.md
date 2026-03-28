@@ -206,18 +206,48 @@ These apply to ALL agents:
 - You are about to skip a step because "it's obvious"
 - You hit a decision point with multiple valid options but are about to proceed without user input — create a decision request (see defer-to-user triggers above)
 
-## Terminal discipline
+## Tool and terminal discipline
 
-These rules apply to ALL agents that use the terminal (most of them).
+Built-in tools are the primary interface for workspace interaction. They handle encoding, output capture, and environment context reliably. Terminal is for operations that genuinely require it: `git`, `kanban-md`, and Python tool invocations via `uv run`.
 
-- **First-call discipline.** Get the invocation right the first time. Never re-run a command just to see different output or try a different piping strategy.
+### Use built-in tools for workspace interaction
+
+`read_file` is the primary tool for reading file contents — source code, configuration, skill files, test files. It handles encoding, line ranges, and large files reliably.
+
+`grep_search` and `semantic_search` are the primary tools for finding content across files. They index the workspace and return precise matches.
+
+Terminal file-reading commands (`Get-Content`, `type`, `cat`) and search commands (`Select-String`, `findstr`) are redundant when these tools are available.
+
+### Use `uv run` for all Python tool invocations
+
+`uv run` is the standard prefix for pytest, ruff, coverage, and Python scripts. It resolves the virtual environment and dependencies from `pyproject.toml` automatically.
+
+```powershell
+uv run pytest tests/test_module.py -q --tb=short
+uv run ruff check src/ tests/
+```
+
+### Run terminal commands plain
+
+The terminal tool captures stdout and stderr automatically (60 KB limit). Commands run plain without output redirection or piping. The `pytest-and-linting` skill documents the full output-handling approach and file-capture fallback for truncated output.
+
+### Load referenced skills before running their commands
+
+Skills define exact command syntax, flags, and known pitfalls. When a workflow step references a skill (e.g., "See the `pytest-and-linting` skill"), load it with `read_file` before running any commands from that step. Exact flags matter — commands reproduced from memory drift.
+
+### Cache task context
+
+Read kanban task details once with `kanban-md show` at the start of your workflow. Reference that output for subsequent steps — the task doesn't change while you're working on it.
+
+### Terminal command mechanics
+
+These rules apply to all terminal usage:
+
+- **First-call discipline.** Get the invocation right the first time. Load the relevant skill first if unsure of the exact syntax.
 - **No brute-force retries.** If a command fails, read the error and diagnose before retrying. Maximum 2 attempts at the same logical operation before reassessing.
 - **No Write-Host fencing.** The terminal tool reports exit codes automatically. Don't wrap commands in `Write-Host` markers.
 - **Chain with `;`** — never `&&` (PowerShell 5.1).
 - **Command decomposition.** Break complex multi-step operations into separate terminal calls rather than long chained pipelines. Each call is independently reviewable and reduces approval friction. Use `;`-chaining for closely related commands within one logical operation (e.g., `cd dir ; run cmd`), but separate distinct logical steps into their own calls.
-
-Agents that run pytest/ruff/coverage: read the `pytest-and-linting` skill for
-correct commands and PS 5.1 piping pitfalls.
 
 ## Defense-in-depth verification model
 
