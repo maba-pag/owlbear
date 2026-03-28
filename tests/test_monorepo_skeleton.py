@@ -288,11 +288,11 @@ class TestFromAC_ConfigUpdates:
         )
 
     def test_vscode_settings_instructions_files_locations_github(self) -> None:
-        """chat.instructionsFilesLocations must include .github/instructions."""
+        """chat.instructionsFilesLocations must NOT include .github/instructions after migration."""
         settings = self._read_vscode_settings()
-        locations = settings.get("chat.instructionsFilesLocations", [])
-        assert any(".github/instructions" in str(loc) for loc in locations), (
-            ".github/instructions not listed in chat.instructionsFilesLocations"
+        locations = settings.get("chat.instructionsFilesLocations", {})
+        assert not any(".github/instructions" in str(loc) for loc in locations), (
+            ".github/instructions must be removed from chat.instructionsFilesLocations"
         )
 
     def test_vscode_settings_instructions_files_locations_root(self) -> None:
