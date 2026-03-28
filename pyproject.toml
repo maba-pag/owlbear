@@ -8,3 +8,12 @@ dev = [
   "ruff>=0.15",
   "strictyaml>=1.7",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["v1"]
+asyncio_mode = "strict"
+markers = [
+  "api: tests that require API integrations or network services",
+  "slow: tests that are long-running",
+]
