@@ -101,7 +101,7 @@ Moonshine+pyttsx3 is the minimal config (~350MB, negligible idle cost). Kokoro a
 - **TTS fallback:** pyttsx3 — zero-dep offline fallback for when torch is unavailable
 - **Interface:** Line-delimited JSON on stdin/stdout. Messages: `{"type":"transcript","text":"..."}` outbound, `{"type":"speak","text":"..."}` inbound
 - **Lifecycle:** Owlbear spawns voice process on demand (`subprocess.Popen`), monitors health, kills on shutdown. Voice process is optional — owlbear works fine without it
-- **Package:** Separate `bearclaw-voice` package in the uv workspace (optional dependency)
+- **Package:** Separate `owlbear-voice` package in the uv workspace (optional dependency)
 
 **Risks:**
 - Moonshine non-English models use community license (non-commercial) — English-only for now
@@ -149,7 +149,7 @@ kanban\kanban-md.exe create "Implement voice addon TTS with Kokoro + pyttsx3 fal
 
 Created task ID: `#51`.
 
-4. Create bearclaw-voice workspace package
+4. Create owlbear-voice workspace package
 
 Priority rationale: `nice-to-have` because package scaffolding enables clean workspace boundaries for later voice implementation.
 Dependencies: none.
@@ -157,7 +157,7 @@ One-line AC: scaffold a dedicated workspace package for voice runtime dependenci
 Create command:
 
 ```powershell
-kanban\kanban-md.exe create "Create bearclaw-voice workspace package" --priority nice-to-have --status ideation --tags phase-3,scope:voice,config --body "## Objective\nScaffold the bearclaw-voice package as a uv workspace member.\n\n## Acceptance Criteria\n- [ ] pyproject.toml with moonshine-voice, kokoro, sounddevice deps\n- [ ] Optional extras: [kokoro] for quality TTS, base has pyttsx3 only\n- [ ] Entry point script for voice process\n- [ ] Package importable from owlbear workspace\n\n## Context\nSee docs/research/voice-addon-architecture.md and docs/research/monorepo-tooling.md"
+kanban\kanban-md.exe create "Create owlbear-voice workspace package" --priority nice-to-have --status ideation --tags phase-3,scope:voice,config --body "## Objective\nScaffold the owlbear-voice package as a uv workspace member.\n\n## Acceptance Criteria\n- [ ] pyproject.toml with moonshine-voice, kokoro, sounddevice deps\n- [ ] Optional extras: [kokoro] for quality TTS, base has pyttsx3 only\n- [ ] Entry point script for voice process\n- [ ] Package importable from owlbear workspace\n\n## Context\nSee docs/research/voice-addon-architecture.md and docs/research/monorepo-tooling.md"
 ```
 
 Created task ID: `#52`.

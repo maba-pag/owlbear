@@ -139,4 +139,4 @@ Risks and mitigations:
 4. Create `src/owlbear/voice/channel.py` — VoiceChannel implementing ChannelPlugin
 5. Add `[voice]` optional dependency group to pyproject.toml
 6. Write tests for all voice components (mock audio streams, mock pyttsx3 engine)
-7. Add `bearclaw voice` CLI subcommand for testing voice I/O
+7. Add `owlbear voice` CLI subcommand for testing voice I/O
