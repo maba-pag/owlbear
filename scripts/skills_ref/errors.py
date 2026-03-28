@@ -1,4 +1,4 @@
-"""Stub: skills_ref.errors — not yet implemented (task #84)."""
+"""skills_ref.errors — custom exception types for skills_ref."""
 
 from __future__ import annotations
 

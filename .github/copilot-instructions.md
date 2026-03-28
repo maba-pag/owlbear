@@ -47,20 +47,20 @@ Default rule: user-facing one-shot commands use `.prompt.md` unless they need au
 
 ## Tech stack
 
-| Component    | Technology                                  | Notes                                                                                                            |
-| ------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Language     | Python 3.12+                                | `uv` package manager, never bare `pip`                                                                           |
-| Runtime      | On-demand Copilot CLI sessions              | No background process; work is executed when invoked through CLI commands and agent workflows.                   |
-| Agents       | VS Code / Copilot custom agents             | Agents are defined via `.agent.md` files and can delegate to nested subagents.                                   |
-| LLM provider | GitHub Copilot (flat-rate)                  | Copilot is the primary model/runtime for orchestration and implementation tasks.                                 |
-| Orchestrator | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout.                   |
-| MCP servers  | Custom MCP servers (3-4)                    | Core servers are `mcp-kanban`, `mcp-knowledge`, and `mcp-project`; built-in/community tools fill remaining gaps. |
-| Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                 |
-| Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                    |
-| Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.               |
+| Component    | Technology                                  | Notes                                                                                                                                                                                         |
+| ------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language     | Python 3.12+                                | `uv` package manager, never bare `pip`                                                                                                                                                        |
+| Runtime      | On-demand Copilot CLI sessions              | No background process; work is executed when invoked through CLI commands and agent workflows.                                                                                                |
+| Agents       | VS Code / Copilot custom agents             | Agents are defined via `.agent.md` files and can delegate to nested subagents.                                                                                                                |
+| LLM provider | GitHub Copilot (flat-rate)                  | Copilot is the primary model/runtime for orchestration and implementation tasks.                                                                                                              |
+| Orchestrator | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout.                                                                                                |
+| MCP servers  | Custom MCP servers (3-4)                    | Core servers are `mcp-kanban`, `mcp-knowledge`, and `mcp-project`; built-in/community tools fill remaining gaps.                                                                              |
+| Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                                                                                              |
+| Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                                                                                                 |
+| Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.                                                                                            |
 | Distribution | Clone = install                             | Run `scripts/setup.py` from a new project dir to wire `.vscode/settings.json`, `.vscode/mcp.json`, `kanban/`, and `.github/copilot-instructions.md` to the shared `../owlbear/` installation. |
-| Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                              |
-| Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                             |
+| Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                                                                                                           |
+| Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                                                                                                          |
 
 GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
 
@@ -141,8 +141,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | kanban board data and tooling                          |
-| `v1/`                     | Archived v1 codebase for reference                     |
+| `kanban/`                 | kanban board data and tooling                          || `scripts/`                | Project tooling scripts (`setup.py`, `validate_skills.py`, `skills_ref/`) || `v1/`                     | Archived v1 codebase for reference                     |
 
 ## File placement rules
 

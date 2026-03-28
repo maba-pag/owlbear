@@ -56,6 +56,7 @@ MCP servers are configured in `.vscode/mcp.json`.
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
 | `kanban/`                 | Kanban board data and tooling                          |
+| `scripts/`                | Project tooling scripts (setup, skill validation)      |
 | `v1/`                     | Archived v1 codebase for reference                     |
 
 ## Usage
