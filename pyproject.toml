@@ -49,6 +49,11 @@ ignore = [
   "INP001", # scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
+"packages/*/examples/**/*.py" = [
+  "INP001", # examples/ is a script-style directory, not a package
+  "T201",   # print() is intentional in example output
+  "EM101",  # string literals in stub raises are acceptable in examples
+]
 "tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
