@@ -25,8 +25,18 @@ _SESSION_ID = "test-session-abc123"
 
 
 def _make_conn() -> AsyncMock:
-    """Return a mock ClientSideConnection with all methods as AsyncMocks."""
-    return AsyncMock(spec=ClientSideConnection)
+    """Return a mock ClientSideConnection with all methods as AsyncMocks.
+
+    Note: ClientSideConnection.initialize, .prompt, and .cancel are wrapped by
+    @param_model/@compatible_class decorators, causing iscoroutinefunction() to
+    return False. AsyncMock(spec=...) would create MagicMock children for those.
+    We explicitly override them so all methods are AsyncMock as the docstring states.
+    """
+    conn = AsyncMock(spec=ClientSideConnection)
+    conn.initialize = AsyncMock()
+    conn.prompt = AsyncMock()
+    conn.cancel = AsyncMock()
+    return conn
 
 
 # ---------------------------------------------------------------------------
