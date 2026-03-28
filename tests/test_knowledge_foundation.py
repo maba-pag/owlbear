@@ -49,7 +49,9 @@ def _make_entity(name: str = "test-entity", scope: str = "global", **kwargs: obj
 
 
 def _make_edge(source_id: str, target_id: str, scope: str = "global") -> Edge:
-    return Edge(source_id=source_id, target_id=target_id, relation=RelationType.RELATED_TO, scope=scope)
+    return Edge(
+        source_id=source_id, target_id=target_id, relation=RelationType.RELATED_TO, scope=scope
+    )
 
 
 def _make_document(title: str = "test-doc", scope: str = "global") -> Document:
@@ -252,8 +254,12 @@ class TestFromAC_GraphStoreEdges:  # noqa: N801
         e2 = _make_entity("e2")
         store.insert_entity(e1)
         store.insert_entity(e2)
-        edge_global = Edge(source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="global")
-        edge_local = Edge(source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="local")
+        edge_global = Edge(
+            source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="global"
+        )
+        edge_local = Edge(
+            source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="local"
+        )
         store.insert_edge(edge_global)
         store.insert_edge(edge_local)
         results = store.list_edges(scopes=["local"])
@@ -645,17 +651,110 @@ class TestFromAC_PublicExports:  # noqa: N801
 
     def test_graph_store_importable_from_owlbear_knowledge(self) -> None:
         from owlbear_knowledge import GraphStore as GraphStore_  # noqa: PLC0415
+
         assert GraphStore_ is not None
 
     def test_knowledge_source_store_importable_from_owlbear_knowledge(self) -> None:
         from owlbear_knowledge import KnowledgeSourceStore as KnowledgeSourceStore_  # noqa: PLC0415
+
         assert KnowledgeSourceStore_ is not None
 
     def test_status_store_importable_from_owlbear_knowledge(self) -> None:
         from owlbear_knowledge import StatusStore as StatusStore_  # noqa: PLC0415
+
         assert StatusStore_ is not None
 
     def test_init_db_importable_from_owlbear_knowledge(self) -> None:
         from owlbear_knowledge import init_db as idb  # noqa: PLC0415
+
         assert idb is not None
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases and migration paths discovered during implementation."""
+
+    def test_init_db_migrates_v1_schema_to_v8(self) -> None:
+        """Full migration path v1 -> v8: all migration helpers and dispatch branches run."""
+        conn = sqlite3.connect(":memory:")
+        # Create a minimal v1 schema (no scope columns, no chunks/document_status)
+        conn.execute(
+            "CREATE TABLE documents ("
+            "id TEXT PRIMARY KEY, title TEXT, content TEXT, metadata TEXT, created_at TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE entities ("
+            "id TEXT PRIMARY KEY, name TEXT, entity_type TEXT,"
+            " description TEXT, metadata TEXT, created_at TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE edges ("
+            "id TEXT PRIMARY KEY, source_id TEXT, target_id TEXT,"
+            " relation TEXT, weight REAL, metadata TEXT, created_at TEXT)"
+        )
+        conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
+        conn.execute(
+            "INSERT INTO schema_version (version, applied_at) VALUES (1, '2024-01-01T00:00:00+00:00')"
+        )
+        conn.commit()
+
+        init_db(conn)
+
+        row = conn.execute("SELECT version FROM schema_version").fetchone()
+        assert row is not None
+        assert row[0] == 8
+
+        # Verify that migration-added tables now exist
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert "chunks" in tables
+        assert "document_status" in tables
+        assert "knowledge_sources" in tables
+        assert "bookmarks" in tables
+        assert "consolidations" in tables
+
+    def test_list_entities_with_empty_scopes_returns_empty(self) -> None:
+        """list_entities with scopes=[] short-circuits to return empty list."""
+        store = GraphStore(_make_db())
+        store.insert_entity(_make_entity(name="e1"))
+        assert store.list_entities(scopes=[]) == []
+
+    def test_list_edges_with_empty_scopes_returns_empty(self) -> None:
+        """list_edges with scopes=[] short-circuits to return empty list."""
+        store = GraphStore(_make_db())
+        e1, e2 = _make_entity("e1"), _make_entity("e2")
+        store.insert_entity(e1)
+        store.insert_entity(e2)
+        store.insert_edge(_make_edge(source_id=e1.id, target_id=e2.id))
+        assert store.list_edges(scopes=[]) == []
+
+    def test_list_documents_with_empty_scopes_returns_empty(self) -> None:
+        """list_documents with scopes=[] short-circuits to return empty list."""
+        store = GraphStore(_make_db())
+        store.insert_document(_make_document())
+        assert store.list_documents(scopes=[]) == []
+
+    def test_status_store_set_status_update_path(self) -> None:
+        """set_status on existing doc_id follows UPDATE path (not INSERT)."""
+        store = StatusStore(_make_db())
+        store.set_status("doc-x", "pending", source="http://x.com")
+        store.set_status("doc-x", "ingested")  # triggers UPDATE path
+        result = store.find_status_by_source("http://x.com")
+        assert result is not None
+        assert result.status == "ingested"
+
+    def test_check_content_changed_new_source_returns_true_none(self) -> None:
+        """check_content_changed on unknown source returns (True, None)."""
+        store = StatusStore(_make_db())
+        changed, doc_id = store.check_content_changed("http://new.example.com", "content")
+        assert changed is True
+        assert doc_id is None
 
