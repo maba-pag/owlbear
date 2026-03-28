@@ -28,6 +28,29 @@ uv run bearclaw --help         # show CLI help
 uv run bearclaw auth login     # start Copilot OAuth device flow
 ```
 
+## Bootstrap a New Project
+
+`scripts/setup.py` wires an existing project directory to OwlBear. Run it once
+from inside the target project — it auto-detects the owlbear installation from
+the script's own location:
+
+```bash
+# From the target project directory (owlbear cloned at ../owlbear):
+cd my-project
+python ../owlbear/scripts/setup.py
+```
+
+What it creates:
+
+| Artifact | Behaviour |
+|---|---|
+| `.vscode/settings.json` | Adds agent, skill, and instruction discovery paths pointing to owlbear. Merges with any existing keys. |
+| `.vscode/mcp.json` | Registers the three owlbear MCP servers (kanban, knowledge, project). Skipped if already exists. |
+| `kanban/config.yml` + `kanban/tasks/` | Copies config from owlbear with `next_id` reset to 1. Skipped if config already exists. |
+| `kanban/setup.ps1` | Copied from owlbear so you can download `kanban-md.exe` in the new project. |
+| `data/knowledge/` | Creates the knowledge directory. |
+| `.github/copilot-instructions.md` | Stub instructions file pre-filled with the project name. Skipped if already exists. |
+
 ## CLI — BearClaw
 
 BearClaw is the command-line interface for OwlBear. All user interaction starts

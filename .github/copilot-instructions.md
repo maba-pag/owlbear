@@ -58,7 +58,7 @@ Default rule: user-facing one-shot commands use `.prompt.md` unless they need au
 | Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                 |
 | Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                    |
 | Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.               |
-| Distribution | Clone = install                             | Projects point to a shared `../owlbear/` installation and load agents/skills via workspace settings.             |
+| Distribution | Clone = install                             | Run `scripts/setup.py` from a new project dir to wire `.vscode/settings.json`, `.vscode/mcp.json`, `kanban/`, and `.github/copilot-instructions.md` to the shared `../owlbear/` installation. |
 | Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                              |
 | Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                             |
 
