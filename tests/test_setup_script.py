@@ -199,7 +199,7 @@ class TestFromAC_McpConfig:
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert len(data["servers"]) == 3, f"Expected 3 MCP servers, got {len(data['servers'])}"
+        assert len(data["servers"]) == 4, f"Expected 4 MCP servers, got {len(data['servers'])}"
 
     def test_mcp_args_contain_mcp_kanban_module(self, tmp_path: Path) -> None:
         project_dir = _project_dir(tmp_path)
@@ -415,7 +415,7 @@ class TestFromAC_McpServerNames:
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         server_names = set(data["servers"].keys())
-        expected = {"owlbearKanban", "owlbearKnowledge", "owlbearProject"}
+        expected = {"github", "owlbearKanban", "owlbearKnowledge", "owlbearProject"}
         assert server_names == expected, (
             f"MCP server names must be camelCase per AC. Expected {expected}, got {server_names}"
         )

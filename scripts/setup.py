@@ -58,6 +58,10 @@ def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
     rel = compute_owlbear_relpath(owlbear_dir, project_dir)
     config = {
         "servers": {
+            "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+            },
             "owlbearKanban": {
                 "type": "stdio",
                 "command": "uv",
