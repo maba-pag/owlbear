@@ -113,17 +113,15 @@ class TestFromAC_VscodeSettings:
         assert has_root, f"agentFilesLocations missing {{rel}}/agents — got: {paths}"
         assert has_github, f"agentFilesLocations missing {{rel}}/.github/agents — got: {paths}"
 
-    def test_agent_skills_locations_has_root_and_github_paths(self, tmp_path: Path) -> None:
-        """agentSkillsLocations must map both {rel}/skills and {rel}/.github/skills."""
+    def test_agent_skills_locations_has_root_path(self, tmp_path: Path) -> None:
+        """agentSkillsLocations must map {rel}/skills."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_vscode_settings(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "settings.json").read_text())
         paths = list(data["chat.agentSkillsLocations"].keys())
         has_root = any(p.endswith("/skills") and "/.github/" not in p for p in paths)
-        has_github = any("/.github/skills" in p for p in paths)
         assert has_root, f"agentSkillsLocations missing {{rel}}/skills — got: {paths}"
-        assert has_github, f"agentSkillsLocations missing {{rel}}/.github/skills — got: {paths}"
 
     def test_instructions_locations_has_root_and_github_paths(self, tmp_path: Path) -> None:
         """instructionsFilesLocations must map both {rel}/instructions and {rel}/.github/instructions."""

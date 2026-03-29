@@ -34,7 +34,6 @@
     "agents": true
   },
   "chat.agentSkillsLocations": {
-    ".github/skills": true,
     "skills": true
   },
   "chat.autopilot.enabled": true,

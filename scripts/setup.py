@@ -33,7 +33,6 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
         },
         "chat.agentSkillsLocations": {
             f"{rel}/skills": "OwlBear Skills",
-            f"{rel}/.github/skills": "OwlBear GitHub Skills",
         },
         "chat.instructionsFilesLocations": {
             f"{rel}/instructions": "OwlBear Instructions",

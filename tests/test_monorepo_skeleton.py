@@ -270,14 +270,6 @@ class TestFromAC_ConfigUpdates:
             "root 'agents/' not listed in chat.agentFilesLocations"
         )
 
-    def test_vscode_settings_agent_skills_locations_github_skills(self) -> None:
-        """chat.agentSkillsLocations must include a path referencing .github/skills."""
-        settings = self._read_vscode_settings()
-        locations = settings.get("chat.agentSkillsLocations", [])
-        assert any(".github/skills" in str(loc) for loc in locations), (
-            ".github/skills not listed in chat.agentSkillsLocations"
-        )
-
     def test_vscode_settings_agent_skills_locations_root_skills(self) -> None:
         """chat.agentSkillsLocations must include the root skills/ path."""
         settings = self._read_vscode_settings()
