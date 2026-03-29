@@ -39,6 +39,8 @@ OwlBear is an on-demand, laptop-resident AI development system built around Copi
 
 Default rule: user-facing one-shot commands use `.prompt.md` unless they need auto-loading or co-located resources.
 
+Pipeline-only skills (owned by orchestrator pipeline agents — researcher, architect, test-writer, builder, reviewer, writer, auditor) must add `user-invocable: false` to their SKILL.md frontmatter so they are hidden from the `/` slash-command menu but remain auto-loadable by agents. See `docs/research/user-invocable-skills.md` for the full 11/10 categorization.
+
 ## Formatting rules for writing files
 
 - **No backtick wrappers around `.agent.md` or `.instructions.md` content.** When the `read_file` tool returns agent/instruction files, it wraps them in ` ```chatagent ` or ` ```instructions ` fencing. These fences are **added by the tool, not part of the file**. Never write them back when creating or editing these files. The file must start directly with `---` (YAML frontmatter).
