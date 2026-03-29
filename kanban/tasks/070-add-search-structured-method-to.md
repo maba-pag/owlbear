@@ -1,10 +1,12 @@
 ---
 id: 70
 title: Add search_structured method to KnowledgeQueryService
-status: review
+status: archived
 priority: important
 created: 2026-03-26T20:13:07.2317587+01:00
-updated: 2026-03-28T04:02:01.7932587+01:00
+updated: 2026-03-29T09:21:54.4462186+02:00
+started: 2026-03-29T09:21:50.167023+02:00
+completed: 2026-03-29T09:21:50.167023+02:00
 tags:
     - phase-2
     - scope:knowledge
@@ -107,3 +109,32 @@ Original AC had 3 lines; refined to 8 precise, testable lines:
 - Lint: ruff clean on touched files
 - Evidence: 48 passed in 1.00s; pre-existing expansion bootstrap failures (TestBootstrapRetrieverWiring) unrelated to #70
 - Fixes applied: None â€” implementation was committed at feat: implement structured knowledge search (#76, builder)
+
+[[2026-03-29]] Sun 09:21
+## Audit
+### AC Verification
+All 8 AC items verified with code evidence (spot-check, 3rd-line):
+- AC1-AC6: Implementation in query_service.py L38-169 matches all criteria
+- AC7: query_for_context() untouched (L96-121)
+- AC8: StructuredSearchResult in __all__ and _LAZY_IMPORTS in __init__.py
+
+### Test Results
+- pytest (task-scoped): 48 passed in 0.61s
+- pytest (full suite): 649 passed, 91 failed (all pre-existing, unrelated to #70)
+- ruff: All checks passed
+
+### Architect Quality
+- Score: 5/5 -- AC refined from 3 vague to 8 precise testable lines
+- Entity resolution corrected to targeted list_entities_for_document
+- Clear architecture notes
+
+### Process Gap
+- No Review Evidence section in task body (reviewer stage may have been skipped or reviewer did not write Channel B). Deliverable quality unaffected.
+
+### Upstream Commits Verified
+- 9b3eb73 test: add contract tests (#70, test-writer)
+- 0db7535 test: normalize test file line endings (#70, builder)
+- eef4844 feat: implement structured knowledge search (#76, builder)
+
+### Confidence: .95
+### Action: archive
