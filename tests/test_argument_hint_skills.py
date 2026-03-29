@@ -5,8 +5,8 @@ Covers: argument-hint key present in frontmatter, exact value, field placement
 project-definition and retro skill files.
 
 All tests fail on current HEAD because neither
-  .github/skills/project-definition/SKILL.md
-  .github/skills/retro/SKILL.md
+  skills/project-definition/SKILL.md
+  skills/retro/SKILL.md
 has an ``argument-hint`` key in its YAML frontmatter.
 """
 
@@ -18,9 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 PROJECT_DEF_SKILL = ROOT / "skills" / "project-definition" / "SKILL.md"
 RETRO_SKILL = ROOT / "skills" / "retro" / "SKILL.md"
-EXCALIDRAW_SKILL = ROOT / ".github" / "skills" / "excalidraw-diagram" / "SKILL.md"
-VISUAL_OUTPUT_SKILL = ROOT / ".github" / "skills" / "visual-output" / "SKILL.md"
-FRONTEND_DESIGN_SKILL = ROOT / ".github" / "skills" / "frontend-design" / "SKILL.md"
+EXCALIDRAW_SKILL = ROOT / "skills" / "excalidraw-diagram" / "SKILL.md"
+VISUAL_OUTPUT_SKILL = ROOT / "skills" / "visual-output" / "SKILL.md"
+FRONTEND_DESIGN_SKILL = ROOT / "skills" / "frontend-design" / "SKILL.md"
 
 
 def _get_frontmatter(path: Path) -> str:
