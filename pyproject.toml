@@ -122,4 +122,5 @@ source_pkgs = [
   "owlbear_mcp_kanban",
   "owlbear_mcp_knowledge",
   "owlbear_mcp_project",
+  "owlbear_voice",
 ]

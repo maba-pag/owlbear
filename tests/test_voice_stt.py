@@ -59,14 +59,37 @@ def mock_moonshine() -> MagicMock:
 
 
 @pytest.fixture()
-def captured_stdout(monkeypatch: pytest.MonkeyPatch) -> BytesIO:
-    """Replace sys.stdout.buffer so tests can inspect NDJSON writes."""
+def captured_stdout(monkeypatch: pytest.MonkeyPatch) -> BytesIO:  # noqa: ARG001
+    """Replace sys.stdout so tests can inspect NDJSON writes.
+
+    Patches the ``sys`` binding inside ``owlbear_voice.stt`` (not the global
+    ``sys.stdout``) because ``TextIOWrapper.buffer`` is a readonly property
+    on Python 3.12+ and cannot be patched via setattr.
+
+    stderr writes look up sys.stderr AT CALL TIME so capsys can capture them.
+
+    The ``monkeypatch`` parameter is kept for signature compatibility but the
+    actual patching uses ``unittest.mock.patch.object`` instead.
+    """
+    import owlbear_voice.stt as _stt  # noqa: PLC0415
+
     buf = BytesIO()
     mock_buf = MagicMock()
     mock_buf.write = MagicMock(side_effect=buf.write)
     mock_buf.flush = MagicMock()
-    monkeypatch.setattr(sys.stdout, "buffer", mock_buf)
-    return buf
+    mock_sys = MagicMock()
+    mock_sys.stdout.buffer = mock_buf
+
+    # Use a dynamic lookup so capsys captures the write (not a saved reference)
+    def _dynamic_stderr_write(msg: str) -> None:
+        import sys as _cur_sys  # noqa: PLC0415
+
+        _cur_sys.stderr.write(msg)
+
+    mock_sys.stderr.write = MagicMock(side_effect=_dynamic_stderr_write)
+
+    with patch.object(_stt, "sys", mock_sys):
+        yield buf
 
 
 def _read_ndjson(buf: BytesIO) -> list[dict]:
