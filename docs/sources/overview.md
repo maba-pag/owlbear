@@ -2724,3 +2724,10 @@ External repos and resources studied during OwlBear development.
 | VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | .instructions.md format, applyTo glob patterns, instruction priority model, file locations | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
 | VS Code Settings Reference — Memory | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | Built-in memory tool setting, GitHub-hosted memory setting, memory settings section | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
 | GitHub Copilot Memory docs | <https://docs.github.com/en/copilot/concepts/agents/copilot-memory> | CC-BY-4.0 | Repo-scoped memory, citation validation, 28-day auto-expiry, enabling model | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
+
+## MCP Server Customization Docs (Task #128)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio vs http server types, env vars, input variables (`${input:}`), IntelliSense in mcp.json | `README.md` — Adding MCP Servers section | 2026-03-29 |
+| VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | Remote server config format, http type semantics, user-facing setup guidance | `docs/research/mcp-server-customization-docs.md` | 2026-03-29 |
