@@ -6,7 +6,10 @@ import json
 import os
 import re
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
+
+from owlbear_mcp_project.models import OwlbearProjectFile
 
 
 def compute_owlbear_relpath(owlbear_dir: Path, project_dir: Path) -> str:
@@ -109,6 +112,30 @@ def create_knowledge_dir(project_dir: Path) -> None:
     (project_dir / "data" / "knowledge").mkdir(parents=True, exist_ok=True)
 
 
+def create_project_json(
+    project_dir: Path,
+    owlbear_dir: Path,
+    *,
+    name: str | None = None,
+    project_type: str = "bare",
+) -> None:
+    """Write owlbear-project.json to project_dir. Skips if already exists."""
+    dest = project_dir / "owlbear-project.json"
+    if dest.exists():
+        print(f"owlbear-project.json already exists in '{project_dir.name}', skipping.")
+        return
+
+    resolved_name = name if name is not None else project_dir.name
+    model = OwlbearProjectFile(
+        schema_version=1,
+        name=resolved_name,
+        type=project_type,
+        owlbear_path=compute_owlbear_relpath(owlbear_dir, project_dir),
+        created_at=datetime.now(tz=UTC),
+    )
+    dest.write_text(model.model_dump_json(indent=2), encoding="utf-8")
+
+
 def create_copilot_instructions(project_dir: Path, name: str) -> None:
     """Create .github/copilot-instructions.md with project name. Skips if already exists."""
     github_dir = project_dir / ".github"
@@ -144,6 +171,7 @@ def setup(
     create_kanban_dir(project_dir, owlbear_dir)
     create_knowledge_dir(project_dir)
     create_copilot_instructions(project_dir, name=name)
+    create_project_json(project_dir, owlbear_dir, name=name)
 
     print(f"\nOwlBear workspace setup complete for '{name}'.")
     print("Next steps:")
