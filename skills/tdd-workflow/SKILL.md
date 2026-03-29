@@ -26,7 +26,6 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
 3. Verify task is in `in-progress` status (the test-writer already moved it here)
 4. Read referenced source files to understand existing code
-5. Initialize `manage_todo_list` with implementation steps
 
 ### Step 1a — Pass-through for non-implementation tasks
 

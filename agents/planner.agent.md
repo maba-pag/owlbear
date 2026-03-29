@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/viewImage, read/terminalLastCommand, agent, 'owlbear-kanban/*', todos]
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/viewImage, read/terminalLastCommand, agent, 'owlbear-kanban/*']
 agents: []
 ---
 

@@ -222,8 +222,6 @@ After all dispatches complete (including any retries), collect:
 - **Successes:** tasks where the agent returned normally (regardless of what it said)
 - **Failures:** tasks where the agent crashed twice
 
-Update `manage_todo_list` with results.
-
 ## Step 3 — Loop
 
 After all dispatches from Step 2 complete:
@@ -269,5 +267,4 @@ Before reporting session complete:
 - [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)
 - [ ] Rate-limit sequential fallback applied correctly (≥ 3 sequential dispatches, reset on new cycle)
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
-- [ ] `manage_todo_list` updated at every step transition
 - [ ] I did not stop the loop early for any reason — only an empty plan should end the session

@@ -164,8 +164,6 @@ and pipeline proximity, with gate markers for Gates 2, 4, 5, and 6 already appli
 
 If the scan returns `(empty)`, output `{"dispatch":[]}` and stop.
 
-Use `manage_todo_list` to track progress through the remaining steps.
-
 **Failure context:** If the orchestrator reports tasks that failed in the previous cycle,
 note them. Failures come in two flavors:
 

@@ -44,8 +44,6 @@ Read the single task dispatched to you:
 4. Note each AC line for evaluation
 5. **Reject placeholder inputs.** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), do not proceed to Step 2. Block back to `ideation` (see Step 4). See agent-common → **Placeholder and unscoped task rejection**.
 
-Initialize `manage_todo_list` with steps to complete.
-
 ## Step 2 — Analyze codebase context
 
 1. Use `search` to find related modules, interfaces, patterns

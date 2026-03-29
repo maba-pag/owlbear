@@ -96,8 +96,6 @@ Map each AC line to test categories:
 - **Error paths** — invalid inputs, missing dependencies, expected exceptions
 - **Boundary conditions** — limits, thresholds, off-by-one scenarios
 
-Use `manage_todo_list` to track AC-to-test mapping and progress.
-
 ## Step 4 — Write tests
 
 Create or extend `tests/test_{module}.py` with class `TestFromAC_{Feature}`:
