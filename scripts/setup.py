@@ -145,3 +145,7 @@ def setup(
     print("  2. Run `kanban/setup.ps1` to download kanban-md.")
     print("  3. Start orchestrating with the OwlBear agents.")
     print()
+
+
+if __name__ == "__main__":
+    setup()
