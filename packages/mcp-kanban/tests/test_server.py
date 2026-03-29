@@ -286,6 +286,71 @@ class TestFromAC_Tools:
         # timestamp=True maps to --timestamp
         assert "--timestamp" in args_used
 
+    # ------------------------------------------------------------------ edit_task boolean flags (retry: LAX coverage)
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_unblock_flag_when_true(self) -> None:
+        """edit_task passes --unblock to _run_kanban when unblock=True (not False)."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await edit_task(mcp_ctx, task_id="42", unblock=True)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--unblock" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_omits_unblock_flag_when_false(self) -> None:
+        """edit_task does NOT include --unblock when unblock=False."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await edit_task(mcp_ctx, task_id="42", unblock=False)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--unblock" not in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_release_flag_when_true(self) -> None:
+        """edit_task passes --release to _run_kanban when release=True (not False)."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await edit_task(mcp_ctx, task_id="42", release=True)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--release" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_omits_release_flag_when_false(self) -> None:
+        """edit_task does NOT include --release when release=False."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await edit_task(mcp_ctx, task_id="42", release=False)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--release" not in args_used
+
+    # ------------------------------------------------------------------ list_tasks block_filter branches (retry: LAX coverage)
+    @pytest.mark.asyncio
+    async def test_list_tasks_not_blocked_filter(self) -> None:
+        """list_tasks passes --not-blocked to _run_kanban when block_filter='not-blocked'."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            result = await list_tasks(mcp_ctx, block_filter="not-blocked")
+
+        assert result == _FAKE_STDOUT
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--not-blocked" in args_used
+        assert "--blocked" not in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_blocked_filter_does_not_pass_not_blocked(self) -> None:
+        """list_tasks passes --blocked (not --not-blocked) when block_filter='blocked'."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, block_filter="blocked")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--blocked" in args_used
+        assert "--not-blocked" not in args_used
+
     # ------------------------------------------------------------------ pick_task
     @pytest.mark.asyncio
     async def test_pick_task_success_passes_args(self) -> None:
