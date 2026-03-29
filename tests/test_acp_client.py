@@ -195,3 +195,101 @@ class TestFromAC_Cancellation:  # noqa: N801
         with patch(f"{_MODULE}.asyncio.wait_for", new=AsyncMock(return_value=MagicMock())):
             await client.prompt(session_id=_SESSION_ID)
         conn.cancel.assert_not_awaited()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cancel_signal_set_raises_cancelled_error(self) -> None:
+        """CancelSignal.is_set() == True → asyncio.CancelledError is raised."""
+        conn = _make_conn()
+        cancel_signal = MagicMock()
+        cancel_signal.is_set.return_value = True
+        client = AcpClient(conn, cancel_signal=cancel_signal)
+        with pytest.raises(asyncio.CancelledError):
+            await client.prompt(session_id=_SESSION_ID)
+
+
+# ---------------------------------------------------------------------------
+# Full 7-code JSON-RPC coverage (AC2 explicit requirement)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AllSevenErrorCodes:  # noqa: N801
+    """_ACP_ERROR_CODES must map all 7 JSON-RPC error codes; unknown codes default to PERMANENT."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_request_error_invalid_request_classified_permanent(self) -> None:
+        """RequestError(-32600) invalid request → ErrorCategory.PERMANENT."""
+        conn = _make_conn()
+        conn.prompt.side_effect = RequestError(-32600, "Invalid request")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.prompt(session_id=_SESSION_ID)
+        assert exc_info.value.category == ErrorCategory.PERMANENT
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_request_error_invalid_params_classified_permanent(self) -> None:
+        """RequestError(-32602) invalid params → ErrorCategory.PERMANENT."""
+        conn = _make_conn()
+        conn.initialize.side_effect = RequestError(-32602, "Invalid params")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.initialize()
+        assert exc_info.value.category == ErrorCategory.PERMANENT
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_request_error_unknown_code_defaults_to_permanent(self) -> None:
+        """RequestError with code not in _ACP_ERROR_CODES → ErrorCategory.PERMANENT (conservative default)."""
+        conn = _make_conn()
+        conn.new_session.side_effect = RequestError(-99999, "Unknown error")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.new_session()
+        assert exc_info.value.category == ErrorCategory.PERMANENT
+
+
+# ---------------------------------------------------------------------------
+# Connection-error classification — all three methods (AC4)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
+    """BrokenPipeError and ConnectionError must be classified TRANSIENT on every method."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_broken_pipe_on_initialize_classified_transient(self) -> None:
+        """BrokenPipeError on initialize → AcpClientError with TRANSIENT category."""
+        conn = _make_conn()
+        conn.initialize.side_effect = BrokenPipeError("pipe broken")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.initialize()
+        assert exc_info.value.category == ErrorCategory.TRANSIENT
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_connection_error_on_initialize_classified_transient(self) -> None:
+        """ConnectionError (EOF) on initialize → AcpClientError with TRANSIENT category."""
+        conn = _make_conn()
+        conn.initialize.side_effect = ConnectionError("EOF")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.initialize()
+        assert exc_info.value.category == ErrorCategory.TRANSIENT
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_broken_pipe_on_new_session_classified_transient(self) -> None:
+        """BrokenPipeError on new_session → AcpClientError with TRANSIENT category."""
+        conn = _make_conn()
+        conn.new_session.side_effect = BrokenPipeError("pipe broken")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.new_session()
+        assert exc_info.value.category == ErrorCategory.TRANSIENT
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_connection_error_on_new_session_classified_transient(self) -> None:
+        """ConnectionError (EOF) on new_session → AcpClientError with TRANSIENT category."""
+        conn = _make_conn()
+        conn.new_session.side_effect = ConnectionError("EOF")
+        client = AcpClient(conn)
+        with pytest.raises(AcpClientError) as exc_info:
+            await client.new_session()
+        assert exc_info.value.category == ErrorCategory.TRANSIENT
