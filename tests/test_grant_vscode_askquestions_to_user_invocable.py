@@ -1,26 +1,28 @@
-"""Failing tests for task #108: Grant vscode/askQuestions to user-invocable agents.
+"""Failing tests for task #123: Revert vscode/askQuestions from all agents.
 
 Covers:
-  - orchestrator.agent.md tools list includes vscode/askQuestions
-  - kanban-planner.agent.md tools list includes vscode/askQuestions
-  - curator.agent.md tools list includes vscode/askQuestions
-  - No pipeline-only agent (builder, reviewer, writer, test-writer, auditor,
-    planner, architect, researcher) has vscode/askQuestions in its tools list
+  - No .agent.md file in agents/ contains vscode/askQuestions in YAML frontmatter
+    tools (broad guard — AC1)
+  - orchestrator.agent.md specifically excludes vscode/askQuestions (AC2)
+  - kanban-planner.agent.md specifically excludes vscode/askQuestions (AC2)
+  - curator.agent.md specifically excludes vscode/askQuestions (AC2)
 
-AC1-AC3 tests fail on current HEAD: none of the user-invocable agents list
-vscode/askQuestions yet.
-AC4 exclusivity tests pass on current HEAD (guardrail: pipeline agents must
-never gain this tool, even after the builder adds it to user-invocable agents).
+Tests fail on current HEAD: kanban-planner.agent.md and curator.agent.md still
+list vscode/askQuestions in their frontmatter tools.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parent.parent
 AGENTS_DIR = ROOT / "agents"
 
 TOOL_NAME = "vscode/askQuestions"
+
+_all_agent_files = sorted(AGENTS_DIR.glob("*.agent.md"))
 
 
 def _read_frontmatter(path: Path) -> str:
@@ -41,109 +43,60 @@ def _read_frontmatter(path: Path) -> str:
     return content[3:end]
 
 
-class TestFromAC_UserInvocableAgentsHaveAskQuestions:
-    """AC1-AC3: orchestrator, kanban-planner, and curator must list vscode/askQuestions."""
+class TestFromAC_NoAgentHasAskQuestions:
+    """AC1: No .agent.md file in agents/ may contain vscode/askQuestions in its tools."""
 
-    def test_orchestrator_tools_include_ask_questions(self) -> None:
-        """orchestrator.agent.md must include vscode/askQuestions in its tools block.
+    @pytest.mark.parametrize(
+        "agent_file",
+        _all_agent_files,
+        ids=[f.name for f in _all_agent_files],
+    )
+    def test_no_agent_has_ask_questions(self, agent_file: Path) -> None:
+        """Every agent file must not list vscode/askQuestions in YAML frontmatter tools.
 
-        Fails until the builder adds vscode/askQuestions to tools in
-        agents/orchestrator.agent.md frontmatter.
+        Fails on current HEAD for kanban-planner.agent.md and curator.agent.md,
+        which still contain vscode/askQuestions.
+        """
+        frontmatter = _read_frontmatter(agent_file)
+        assert TOOL_NAME not in frontmatter, (
+            f"{agent_file.name} must not list {TOOL_NAME!r} in its tools block. "
+            "vscode/askQuestions must be removed from all agents (revert of #108)."
+        )
+
+
+class TestFromAC_SpecificAgentsExcludeAskQuestions:
+    """AC2: orchestrator, kanban-planner, and curator specifically exclude askQuestions."""
+
+    def test_orchestrator_does_not_have_ask_questions(self) -> None:
+        """orchestrator.agent.md must not include vscode/askQuestions in its tools block.
+
+        Regression guard: orchestrator.agent.md already has askQuestions removed;
+        this test ensures it is never re-introduced.
         """
         frontmatter = _read_frontmatter(AGENTS_DIR / "orchestrator.agent.md")
-        assert TOOL_NAME in frontmatter, (
-            f"orchestrator.agent.md does not list {TOOL_NAME!r} in its tools block. "
-            "Add it to allow the orchestrator to ask the user questions."
+        assert TOOL_NAME not in frontmatter, (
+            f"orchestrator.agent.md must not list {TOOL_NAME!r} in its tools block. "
+            "Remove it to complete the revert of #108."
         )
 
-    def test_kanban_planner_tools_include_ask_questions(self) -> None:
-        """kanban-planner.agent.md must include vscode/askQuestions in its tools block.
+    def test_kanban_planner_does_not_have_ask_questions(self) -> None:
+        """kanban-planner.agent.md must not include vscode/askQuestions in its tools block.
 
-        Fails until the builder adds vscode/askQuestions to tools in
-        agents/kanban-planner.agent.md frontmatter.
+        Fails on current HEAD: kanban-planner.agent.md still lists vscode/askQuestions.
         """
         frontmatter = _read_frontmatter(AGENTS_DIR / "kanban-planner.agent.md")
-        assert TOOL_NAME in frontmatter, (
-            f"kanban-planner.agent.md does not list {TOOL_NAME!r} in its tools block. "
-            "Add it to allow the kanban-planner to ask the user questions."
+        assert TOOL_NAME not in frontmatter, (
+            f"kanban-planner.agent.md must not list {TOOL_NAME!r} in its tools block. "
+            "Remove it to complete the revert of #108."
         )
 
-    def test_curator_tools_include_ask_questions(self) -> None:
-        """curator.agent.md must include vscode/askQuestions in its tools block.
+    def test_curator_does_not_have_ask_questions(self) -> None:
+        """curator.agent.md must not include vscode/askQuestions in its tools block.
 
-        Fails until the builder adds vscode/askQuestions to tools in
-        agents/curator.agent.md frontmatter.
+        Fails on current HEAD: curator.agent.md still lists vscode/askQuestions.
         """
         frontmatter = _read_frontmatter(AGENTS_DIR / "curator.agent.md")
-        assert TOOL_NAME in frontmatter, (
-            f"curator.agent.md does not list {TOOL_NAME!r} in its tools block. "
-            "Add it to allow the curator to ask the user questions."
-        )
-
-
-class TestFromAC_PipelineAgentsExcludeAskQuestions:
-    """AC4: No pipeline-only agent may include vscode/askQuestions in its tools list."""
-
-    def test_builder_does_not_have_ask_questions(self) -> None:
-        """builder.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "builder.agent.md")
         assert TOOL_NAME not in frontmatter, (
-            f"builder.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_reviewer_does_not_have_ask_questions(self) -> None:
-        """reviewer.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "reviewer.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"reviewer.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_writer_does_not_have_ask_questions(self) -> None:
-        """writer.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "writer.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"writer.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_test_writer_does_not_have_ask_questions(self) -> None:
-        """test-writer.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "test-writer.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"test-writer.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_auditor_does_not_have_ask_questions(self) -> None:
-        """auditor.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "auditor.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"auditor.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_planner_does_not_have_ask_questions(self) -> None:
-        """planner.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "planner.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"planner.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_architect_does_not_have_ask_questions(self) -> None:
-        """architect.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "architect.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"architect.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
-        )
-
-    def test_researcher_does_not_have_ask_questions(self) -> None:
-        """researcher.agent.md must not list vscode/askQuestions."""
-        frontmatter = _read_frontmatter(AGENTS_DIR / "researcher.agent.md")
-        assert TOOL_NAME not in frontmatter, (
-            f"researcher.agent.md must not list {TOOL_NAME!r}. "
-            "Pipeline agents are not permitted to ask user questions."
+            f"curator.agent.md must not list {TOOL_NAME!r} in its tools block. "
+            "Remove it to complete the revert of #108."
         )
