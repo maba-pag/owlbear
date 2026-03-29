@@ -105,8 +105,8 @@ class TestFromAC_VscodeSettings:
         data = json.loads((project_dir / ".vscode" / "settings.json").read_text())
         assert "chat.instructionsFilesLocations" in data
 
-    def test_agent_files_locations_has_root_and_github_paths(self, tmp_path: Path) -> None:
-        """agentFilesLocations must map both {rel}/agents and {rel}/.github/agents."""
+    def test_agent_files_locations_has_root_path_only(self, tmp_path: Path) -> None:
+        """agentFilesLocations must map {rel}/agents only — .github/agents must be absent."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_vscode_settings(project_dir, owlbear_dir)
@@ -115,7 +115,7 @@ class TestFromAC_VscodeSettings:
         has_root = any(p.endswith("/agents") and "/.github/" not in p for p in paths)
         has_github = any("/.github/agents" in p for p in paths)
         assert has_root, f"agentFilesLocations missing {{rel}}/agents — got: {paths}"
-        assert has_github, f"agentFilesLocations missing {{rel}}/.github/agents — got: {paths}"
+        assert not has_github, f"agentFilesLocations must NOT contain {{rel}}/.github/agents — got: {paths}"
 
     def test_agent_skills_locations_has_root_path(self, tmp_path: Path) -> None:
         """agentSkillsLocations must map {rel}/skills."""
@@ -127,8 +127,8 @@ class TestFromAC_VscodeSettings:
         has_root = any(p.endswith("/skills") and "/.github/" not in p for p in paths)
         assert has_root, f"agentSkillsLocations missing {{rel}}/skills — got: {paths}"
 
-    def test_instructions_locations_has_root_and_github_paths(self, tmp_path: Path) -> None:
-        """instructionsFilesLocations must map both {rel}/instructions and {rel}/.github/instructions."""
+    def test_instructions_locations_has_root_path_only(self, tmp_path: Path) -> None:
+        """instructionsFilesLocations must map {rel}/instructions only — .github/instructions must be absent."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_vscode_settings(project_dir, owlbear_dir)
@@ -137,8 +137,8 @@ class TestFromAC_VscodeSettings:
         has_root = any(p.endswith("/instructions") and "/.github/" not in p for p in paths)
         has_github = any("/.github/instructions" in p for p in paths)
         assert has_root, f"instructionsFilesLocations missing {{rel}}/instructions — got: {paths}"
-        assert has_github, (
-            f"instructionsFilesLocations missing {{rel}}/.github/instructions — got: {paths}"
+        assert not has_github, (
+            f"instructionsFilesLocations must NOT contain {{rel}}/.github/instructions — got: {paths}"
         )
 
     def test_location_paths_use_forward_slashes(self, tmp_path: Path) -> None:
