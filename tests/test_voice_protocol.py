@@ -193,3 +193,47 @@ class TestFromAC_MissingRequiredField:  # noqa: N801
         # SpeakMsg requires interrupt — omit it
         with pytest.raises(ValidationError):
             in_adapter.validate_json('{"type":"speak","text":"hello"}')
+
+
+# ---------------------------------------------------------------------------
+# Frozen immutability tests (7): AC requires frozen=True on all models
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_FrozenImmutability:  # noqa: N801
+    """All 7 models use frozen=True — mutation of any field raises ValidationError."""
+
+    def test_transcript_msg_is_frozen(self) -> None:
+        msg = TranscriptMsg(text="hello", line_idx=0, final=False)
+        with pytest.raises(ValidationError):
+            msg.text = "mutated"  # type: ignore[misc]
+
+    def test_partial_msg_is_frozen(self) -> None:
+        msg = PartialMsg(text="hel", line_idx=1)
+        with pytest.raises(ValidationError):
+            msg.line_idx = 99  # type: ignore[misc]
+
+    def test_status_msg_is_frozen(self) -> None:
+        msg = StatusMsg(state="ready")
+        with pytest.raises(ValidationError):
+            msg.state = "idle"  # type: ignore[misc]
+
+    def test_error_msg_is_frozen(self) -> None:
+        msg = ErrorMsg(code="ERR", message="fail")
+        with pytest.raises(ValidationError):
+            msg.code = "OTHER"  # type: ignore[misc]
+
+    def test_speak_msg_is_frozen(self) -> None:
+        msg = SpeakMsg(text="say this", interrupt=True)
+        with pytest.raises(ValidationError):
+            msg.interrupt = False  # type: ignore[misc]
+
+    def test_config_msg_is_frozen(self) -> None:
+        msg = ConfigMsg(settings={"vol": 1.0})
+        with pytest.raises(ValidationError):
+            msg.settings = {}  # type: ignore[misc]
+
+    def test_shutdown_msg_is_frozen(self) -> None:
+        msg = ShutdownMsg()
+        with pytest.raises(ValidationError):
+            msg.type = "other"  # type: ignore[misc]
