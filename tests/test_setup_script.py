@@ -1,24 +1,24 @@
-"""Failing tests for task #92: setup script core functions.
+"""Failing tests for task #92 (core functions) and task #12 (AC gaps) for setup script.
 
 Covers:
   - VS Code settings.json: all three location types, both paths per type,
     forward slashes, idempotent merge
   - VS Code mcp.json: three server entries, correct module names, relative
     owlbear path, idempotent skip-if-exists
+  - MCP server key names must be camelCase: owlbearKanban, owlbearKnowledge, owlbearProject
   - kanban/ setup: config.yml, tasks/, setup.ps1 copy, clean next_id,
     idempotent skip-if-exists
   - data/knowledge/ directory creation
   - .github/copilot-instructions.md: project name inclusion, idempotent skip
   - Path auto-detection from script __file__ location
   - Success message output (capsys)
-
-All tests fail on current HEAD because scripts/setup.py is a 3-line stub
-with no callable functions.
+  - setup() orchestrates ALL create_* functions (all artifacts created in one call)
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -277,14 +277,17 @@ class TestFromAC_KanbanSetup:
         assert (project_dir / "kanban" / "tasks").is_dir()
 
     def test_copied_config_yml_has_clean_next_id(self, tmp_path: Path) -> None:
-        """Copied config.yml must NOT carry over the owlbear source next_id (42)."""
+        """Copied config.yml must reset next_id to exactly 1 (not just strip source value)."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        # _make_owlbear_dir sets next_id: 42; the copy must reset it
+        # _make_owlbear_dir sets next_id: 42; the copy must reset it to exactly 1
         create_kanban_dir(project_dir, owlbear_dir)
         content = (project_dir / "kanban" / "config.yml").read_text()
         assert "42" not in content, (
             "next_id was not reset — copied config still contains owlbear source value 42"
+        )
+        assert "next_id: 1" in content, (
+            "next_id was not reset to 1 — AC requires clean next_id reset to 1"
         )
 
     def test_kanban_setup_ps1_copied(self, tmp_path: Path) -> None:
@@ -380,3 +383,144 @@ class TestFromAC_PathDetectionAndOutput:
         setup(project_dir=project_dir, owlbear_dir=owlbear_dir)
         captured = capsys.readouterr()
         assert captured.out.strip(), "No success message printed — expected next-steps output"
+
+    def test_setup_creates_all_expected_artifacts(self, tmp_path: Path) -> None:
+        """setup() must call ALL create_* functions — every artifact must exist after one call."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        setup(project_dir=project_dir, owlbear_dir=owlbear_dir)
+        assert (project_dir / ".vscode" / "settings.json").exists(), "settings.json not created"
+        assert (project_dir / ".vscode" / "mcp.json").exists(), "mcp.json not created"
+        assert (project_dir / "kanban" / "config.yml").exists(), "kanban/config.yml not created"
+        assert (project_dir / "kanban" / "tasks").is_dir(), "kanban/tasks/ not created"
+        assert (project_dir / "data" / "knowledge").is_dir(), "data/knowledge/ not created"
+        assert (project_dir / ".github" / "copilot-instructions.md").exists(), (
+            ".github/copilot-instructions.md not created"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC: MCP server names must be camelCase (task #12 gap — not in task #92 tests)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_McpServerNames:
+    """AC: server keys must be owlbearKanban, owlbearKnowledge, owlbearProject (camelCase)."""
+
+    def test_mcp_server_names_are_camelcase(self, tmp_path: Path) -> None:
+        """Server entry keys must be camelCase per AC — not kebab-case."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        server_names = set(data["servers"].keys())
+        expected = {"owlbearKanban", "owlbearKnowledge", "owlbearProject"}
+        assert server_names == expected, (
+            f"MCP server names must be camelCase per AC. Expected {expected}, got {server_names}"
+        )
+
+    def test_mcp_server_name_owlbear_kanban_exists(self, tmp_path: Path) -> None:
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert "owlbearKanban" in data["servers"], (
+            f"owlbearKanban not in server keys: {list(data['servers'].keys())}"
+        )
+
+    def test_mcp_server_name_owlbear_knowledge_exists(self, tmp_path: Path) -> None:
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert "owlbearKnowledge" in data["servers"], (
+            f"owlbearKnowledge not in server keys: {list(data['servers'].keys())}"
+        )
+
+    def test_mcp_server_name_owlbear_project_exists(self, tmp_path: Path) -> None:
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert "owlbearProject" in data["servers"], (
+            f"owlbearProject not in server keys: {list(data['servers'].keys())}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC: Script runnable as standalone script (task #12 retry — __main__ gap)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StandaloneInvocation:
+    """AC: Can be run as: python ../owlbear/scripts/setup.py"""
+
+    def test_script_has_main_guard(self) -> None:
+        """scripts/setup.py must have if __name__ == '__main__' guard to be runnable directly."""
+        script = Path(__file__).parent.parent / "scripts" / "setup.py"
+        content = script.read_text(encoding="utf-8")
+        assert '__name__ == "__main__"' in content, (
+            "scripts/setup.py has no if __name__ == '__main__' guard — "
+            "running `python scripts/setup.py` is a no-op (defines functions only)"
+        )
+
+    def test_direct_invocation_creates_vscode_settings(self, tmp_path: Path) -> None:
+        """Running the script directly must create .vscode/settings.json."""
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        script = Path(__file__).parent.parent / "scripts" / "setup.py"
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Script exited non-zero: {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert (project_dir / ".vscode" / "settings.json").exists(), (
+            f"Direct invocation did not create .vscode/settings.json\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+    def test_direct_invocation_creates_mcp_config(self, tmp_path: Path) -> None:
+        """Running the script directly must create .vscode/mcp.json."""
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        script = Path(__file__).parent.parent / "scripts" / "setup.py"
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Script exited non-zero: {result.returncode}\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert (project_dir / ".vscode" / "mcp.json").exists(), (
+            f"Direct invocation did not create .vscode/mcp.json\n"
+            f"stdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+    def test_direct_invocation_prints_success_message(self, tmp_path: Path) -> None:
+        """Running the script directly must print a success message to stdout."""
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        script = Path(__file__).parent.parent / "scripts" / "setup.py"
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"Script exited non-zero: {result.returncode}\nstderr: {result.stderr}"
+        )
+        assert result.stdout.strip(), (
+            "Direct invocation produced no stdout — expected a success message with next steps"
+        )
