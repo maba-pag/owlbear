@@ -2650,3 +2650,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Claude Code README | <https://github.com/anthropics/claude-code> | Unknown | Minimal README structure: title, get-started, plugins, bugs, data policy | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
 | Aider README | <https://github.com/Aider-AI/aider> | Apache-2.0 | Feature-focused README, setup details kept external to main README | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
+
+## MCP Server Documentation Research (Task #122)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio/http server config format, `${input:var-id}` secret handling, `"inputs"` array, IntelliSense autocomplete, naming conventions | `README.md` (Adding MCP Servers section), `docs/research/mcp-server-docs.md` | 2026-03-29 |
+| VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | HTTP Stream vs SSE transport fallback, server lifecycle management | `docs/research/mcp-server-docs.md` | 2026-03-29 |
