@@ -207,7 +207,7 @@ class TestFromAC_McpConfig:
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         all_args = [str(a) for s in data["servers"].values() for a in s.get("args", [])]
-        assert "mcp_kanban" in all_args, f"mcp_kanban not in MCP args: {all_args}"
+        assert "owlbear_mcp_kanban" in all_args, f"owlbear_mcp_kanban not in MCP args: {all_args}"
 
     def test_mcp_args_contain_mcp_knowledge_module(self, tmp_path: Path) -> None:
         project_dir = _project_dir(tmp_path)
@@ -215,7 +215,7 @@ class TestFromAC_McpConfig:
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         all_args = [str(a) for s in data["servers"].values() for a in s.get("args", [])]
-        assert "mcp_knowledge" in all_args, f"mcp_knowledge not in MCP args: {all_args}"
+        assert "owlbear_mcp_knowledge" in all_args, f"owlbear_mcp_knowledge not in MCP args: {all_args}"
 
     def test_mcp_args_contain_mcp_project_module(self, tmp_path: Path) -> None:
         project_dir = _project_dir(tmp_path)
@@ -223,7 +223,7 @@ class TestFromAC_McpConfig:
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         all_args = [str(a) for s in data["servers"].values() for a in s.get("args", [])]
-        assert "mcp_project" in all_args, f"mcp_project not in MCP args: {all_args}"
+        assert "owlbear_mcp_project" in all_args, f"owlbear_mcp_project not in MCP args: {all_args}"
 
     def test_mcp_server_args_reference_relative_path_to_owlbear(self, tmp_path: Path) -> None:
         """At least one server arg must be a relative path pointing toward owlbear."""
