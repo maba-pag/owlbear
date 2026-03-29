@@ -612,42 +612,49 @@ class TestFromAC_GitHubMcpServer:
 
 
 # ---------------------------------------------------------------------------
-# AC: owlbear-project.json generation (#75)
+# AC: create_project_json() — owlbear-project.json generation (task #69)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_ProjectJsonGeneration:
-    """AC: generate_project_json writes owlbear-project.json with the correct schema.
+    """AC-driven tests for create_project_json() in scripts/setup.py (task #69).
+
+    Function signature (AC): create_project_json(project_dir, owlbear_dir, *, name=None, project_type='bare') -> None
 
     All tests use a deferred import so ImportError is contained to this class
     only, preserving the existing test suite while the builder implements the
     function.
 
-    Covered scenarios:
-      AC1  — Generates valid owlbear-project.json with all 5 required fields
+    Covered AC lines:
+      AC1  — Writes owlbear-project.json with all 5 fields
       AC2  — schema_version is 1
-      AC3  — owlbear_path is a forward-slash relative path (even on Windows)
-      AC4  — created_at is timezone-aware UTC ISO 8601
-      AC5  — Idempotent: does not overwrite existing file
-      AC6  — Output validates against OwlbearProjectFile model
-      AC7  — Name defaults to directory name when not provided
-      AC8  — Type defaults to bare when not provided
-      AC9  — Explicit name and type override defaults
+      AC3  — owlbear_path uses compute_owlbear_relpath() (POSIX forward slashes)
+      AC4  — name defaults to project_dir.name; project_type defaults to 'bare'
+      AC5  — created_at is timezone-aware UTC (datetime.now(tz=UTC))
+      AC6  — Constructs OwlbearProjectFile for validation; round-trip validates
+      AC7  — Idempotent: skips if file already exists (print message, no overwrite)
+      AC8  — Called from setup() function
     """
 
     # ------------------------------------------------------------------
-    # AC1: Generates valid owlbear-project.json with all 5 required fields
+    # AC1: Writes owlbear-project.json with all 5 required fields
     # ------------------------------------------------------------------
 
-    def test_generates_file_with_all_five_required_fields(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+    def test_creates_owlbear_project_json_file(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]  # ImportError until builder adds it
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
-        outfile = project_dir / "owlbear-project.json"
-        assert outfile.exists(), "owlbear-project.json was not created"
-        data = json.loads(outfile.read_text(encoding="utf-8"))
+        create_project_json(project_dir, owlbear_dir)
+        assert (project_dir / "owlbear-project.json").exists(), "owlbear-project.json was not created"
+
+    def test_written_json_has_all_five_required_fields(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
+
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_project_json(project_dir, owlbear_dir)
+        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         for field in ("schema_version", "name", "type", "owlbear_path", "created_at"):
             assert field in data, f"Missing required field: {field!r}"
 
@@ -656,172 +663,173 @@ class TestFromAC_ProjectJsonGeneration:
     # ------------------------------------------------------------------
 
     def test_schema_version_is_one(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
+        create_project_json(project_dir, owlbear_dir)
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["schema_version"] == 1, (
             f"Expected schema_version=1, got {data['schema_version']!r}"
         )
 
     # ------------------------------------------------------------------
-    # AC3: owlbear_path is a forward-slash relative path (even on Windows)
+    # AC3: owlbear_path uses compute_owlbear_relpath() -- POSIX forward slashes
     # ------------------------------------------------------------------
 
     def test_owlbear_path_uses_forward_slashes(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
+        create_project_json(project_dir, owlbear_dir)
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         owlbear_path = data["owlbear_path"]
         assert "\\" not in owlbear_path, (
-            f"owlbear_path must use forward slashes only, got: {owlbear_path!r}"
+            f"owlbear_path must use forward slashes only (POSIX), got: {owlbear_path!r}"
         )
 
     def test_owlbear_path_is_relative_not_absolute(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
+        create_project_json(project_dir, owlbear_dir)
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         owlbear_path = data["owlbear_path"]
         assert not Path(owlbear_path).is_absolute(), (
-            f"owlbear_path must be relative, got absolute: {owlbear_path!r}"
+            f"owlbear_path must be relative (via compute_owlbear_relpath), got absolute: {owlbear_path!r}"
         )
 
     # ------------------------------------------------------------------
-    # AC4: created_at is timezone-aware UTC ISO 8601
+    # AC4: name defaults to project_dir.name; project_type defaults to 'bare'
     # ------------------------------------------------------------------
 
-    def test_created_at_is_timezone_aware(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
-
-        project_dir = _project_dir(tmp_path)
-        owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
-        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
-        dt = datetime.fromisoformat(data["created_at"])
-        assert dt.tzinfo is not None, (
-            f"created_at must be timezone-aware, got: {data['created_at']!r}"
-        )
-
-    def test_created_at_is_valid_iso8601_string(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
-
-        project_dir = _project_dir(tmp_path)
-        owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
-        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
-        dt_str = data["created_at"]
-        try:
-            datetime.fromisoformat(dt_str)
-        except ValueError as exc:
-            pytest.fail(f"created_at is not valid ISO 8601: {dt_str!r} — {exc}")
-
-    # ------------------------------------------------------------------
-    # AC5: Idempotent: does not overwrite existing file
-    # ------------------------------------------------------------------
-
-    def test_idempotent_does_not_overwrite_existing_file(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
-
-        project_dir = _project_dir(tmp_path)
-        owlbear_dir = _make_owlbear_dir(tmp_path)
-        sentinel = '{"SENTINEL_PROJECT": true}'
-        (project_dir / "owlbear-project.json").write_text(sentinel, encoding="utf-8")
-        generate_project_json(project_dir, owlbear_dir)
-        content = (project_dir / "owlbear-project.json").read_text(encoding="utf-8")
-        assert "SENTINEL_PROJECT" in content, (
-            "owlbear-project.json was overwritten despite already existing"
-        )
-
-    # ------------------------------------------------------------------
-    # AC6: Output validates against OwlbearProjectFile model
-    # ------------------------------------------------------------------
-
-    def test_file_validates_against_owlbear_project_file_model(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
-
-        project_dir = _project_dir(tmp_path)
-        owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
-        raw = (project_dir / "owlbear-project.json").read_text(encoding="utf-8")
-        OwlbearProjectFile.model_validate_json(raw)  # must not raise
-
-    # ------------------------------------------------------------------
-    # AC7: Name defaults to directory name when not provided
-    # ------------------------------------------------------------------
-
-    def test_name_defaults_to_directory_name(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+    def test_name_defaults_to_project_dir_name(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = tmp_path / "my-owlbear-project"
         project_dir.mkdir()
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
+        create_project_json(project_dir, owlbear_dir)
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["name"] == "my-owlbear-project", (
             f"Expected name to default to directory name 'my-owlbear-project', got {data['name']!r}"
         )
 
-    # ------------------------------------------------------------------
-    # AC8: Type defaults to bare when not provided
-    # ------------------------------------------------------------------
-
-    def test_type_defaults_to_bare(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+    def test_project_type_defaults_to_bare(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir)
+        create_project_json(project_dir, owlbear_dir)
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["type"] == "bare", (
             f"Expected type to default to 'bare', got {data['type']!r}"
         )
 
-    # ------------------------------------------------------------------
-    # AC9: Explicit name and type override defaults
-    # ------------------------------------------------------------------
-
     def test_explicit_name_overrides_default(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir, name="my-custom-name")
+        create_project_json(project_dir, owlbear_dir, name="my-custom-name")
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["name"] == "my-custom-name", (
             f"Expected explicit name 'my-custom-name', got {data['name']!r}"
         )
 
     def test_explicit_project_type_overrides_default(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        generate_project_json(project_dir, owlbear_dir, project_type="python-uv")
+        create_project_json(project_dir, owlbear_dir, project_type="python-uv")
         data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["type"] == "python-uv", (
             f"Expected explicit type 'python-uv', got {data['type']!r}"
         )
 
     # ------------------------------------------------------------------
-    # Boundary: return value is a Path pointing to the generated file
+    # AC5: created_at is timezone-aware UTC (datetime.now(tz=UTC))
     # ------------------------------------------------------------------
 
-    def test_returns_path_to_generated_file(self, tmp_path: Path) -> None:
-        from setup import generate_project_json  # type: ignore[import]
+    def test_created_at_is_timezone_aware(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
 
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
-        result = generate_project_json(project_dir, owlbear_dir)
-        assert isinstance(result, Path), f"Expected Path return type, got {type(result)}"
-        assert result == project_dir / "owlbear-project.json", (
-            f"Returned path {result!r} does not match expected "
-            f"{project_dir / 'owlbear-project.json'!r}"
+        create_project_json(project_dir, owlbear_dir)
+        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
+        dt = datetime.fromisoformat(data["created_at"])
+        assert dt.tzinfo is not None, (
+            f"created_at must be timezone-aware (UTC), got naive: {data['created_at']!r}"
+        )
+
+    def test_created_at_is_utc_offset_zero(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
+
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_project_json(project_dir, owlbear_dir)
+        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
+        dt = datetime.fromisoformat(data["created_at"])
+        assert dt.tzinfo is not None, "created_at is naive -- cannot check UTC offset"
+        assert dt.utcoffset().total_seconds() == 0, (  # type: ignore[union-attr]
+            f"created_at must be UTC (offset=0s), got offset: {dt.utcoffset()}"
+        )
+
+    def test_created_at_is_valid_iso8601(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
+
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_project_json(project_dir, owlbear_dir)
+        data = json.loads((project_dir / "owlbear-project.json").read_text(encoding="utf-8"))
+        try:
+            datetime.fromisoformat(data["created_at"])
+        except ValueError as exc:
+            pytest.fail(f"created_at is not valid ISO 8601: {data['created_at']!r} -- {exc}")
+
+    # ------------------------------------------------------------------
+    # AC6: Constructs OwlbearProjectFile for validation; round-trip validates
+    # ------------------------------------------------------------------
+
+    def test_output_validates_against_owlbear_project_file_model(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
+
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_project_json(project_dir, owlbear_dir)
+        raw = (project_dir / "owlbear-project.json").read_text(encoding="utf-8")
+        OwlbearProjectFile.model_validate_json(raw)  # must not raise
+
+    # ------------------------------------------------------------------
+    # AC7: Idempotent: skips if file already exists (no overwrite)
+    # ------------------------------------------------------------------
+
+    def test_idempotent_skips_if_file_exists(self, tmp_path: Path) -> None:
+        from setup import create_project_json  # type: ignore[import]
+
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        sentinel = '{"SENTINEL_PROJECT": true}'
+        (project_dir / "owlbear-project.json").write_text(sentinel, encoding="utf-8")
+        create_project_json(project_dir, owlbear_dir)
+        content = (project_dir / "owlbear-project.json").read_text(encoding="utf-8")
+        assert "SENTINEL_PROJECT" in content, (
+            "owlbear-project.json was overwritten despite already existing -- idempotency broken"
+        )
+
+    # ------------------------------------------------------------------
+    # AC8: Called from setup() function
+    # ------------------------------------------------------------------
+
+    def test_setup_creates_owlbear_project_json(self, tmp_path: Path) -> None:
+        """setup() must call create_project_json -- owlbear-project.json must exist after setup()."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        setup(project_dir=project_dir, owlbear_dir=owlbear_dir)
+        assert (project_dir / "owlbear-project.json").exists(), (
+            "setup() did not create owlbear-project.json -- create_project_json not called from setup()"
         )
