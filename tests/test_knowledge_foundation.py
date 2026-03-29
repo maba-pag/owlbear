@@ -354,6 +354,38 @@ class TestFromAC_GraphStoreMergeTraversal:  # noqa: N801
         assert store.get_entity(dup2.id) is None
         assert store.get_entity(canonical.id) is not None
 
+    def test_merge_entities_edges_redirected_to_canonical(self) -> None:
+        """AC: merge_entities 'redirects edges' — both target and source edges point to canonical after merge."""
+        store = GraphStore(_make_db())
+        canonical = _make_entity(name="canonical")
+        dup1 = _make_entity(name="dup1")
+        dup2 = _make_entity(name="dup2")
+        other = _make_entity(name="other")
+        for e in (canonical, dup1, dup2, other):
+            store.insert_entity(e)
+        # Edge where dup1 is the target (incoming edge to dup1)
+        incoming = _make_edge(source_id=other.id, target_id=dup1.id)
+        # Edge where dup2 is the source (outgoing edge from dup2)
+        outgoing = _make_edge(source_id=dup2.id, target_id=other.id)
+        store.insert_edge(incoming)
+        store.insert_edge(outgoing)
+
+        store.merge_entities(canonical.id, [dup1.id, dup2.id], {})
+
+        # Target redirect: edge that pointed TO dup1 must now point TO canonical
+        target_edges = store.list_edges(target_id=canonical.id)
+        assert len(target_edges) == 1, "incoming edge to dup1 must be redirected to canonical"
+        assert target_edges[0].source_id == other.id
+
+        # Source redirect: edge that originated FROM dup2 must now originate FROM canonical
+        source_edges = store.list_edges(source_id=canonical.id)
+        assert len(source_edges) == 1, "outgoing edge from dup2 must be redirected to canonical"
+        assert source_edges[0].target_id == other.id
+
+        # No edges remain pointing to or from the duplicates
+        assert store.list_edges(target_id=dup1.id) == []
+        assert store.list_edges(source_id=dup2.id) == []
+
     def test_get_neighbors_bfs_returns_direct_neighbors_with_edges(self) -> None:
         store = GraphStore(_make_db())
         center = _make_entity(name="center")
@@ -711,9 +743,7 @@ class TestBuilderDiscovered:
         # Verify that migration-added tables now exist
         tables = {
             r[0]
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         assert "chunks" in tables
         assert "document_status" in tables
@@ -757,4 +787,3 @@ class TestBuilderDiscovered:
         changed, doc_id = store.check_content_changed("http://new.example.com", "content")
         assert changed is True
         assert doc_id is None
-
