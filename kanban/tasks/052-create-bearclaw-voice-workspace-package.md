@@ -1,10 +1,12 @@
 ---
 id: 52
 title: Create owlbear-voice workspace package
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-26T18:57:37.151058+01:00
-updated: 2026-03-28T04:10:31.7148767+01:00
+updated: 2026-03-29T15:27:03.4339472+02:00
+started: 2026-03-29T15:26:58.6159762+02:00
+completed: 2026-03-29T15:26:58.6159762+02:00
 tags:
     - phase-3
     - scope:voice
@@ -73,3 +75,62 @@ All four original AC lines were vague. Rewrote into 13 testable lines across Pac
 - Verified: #7 (monorepo skeleton) archived
 - Verified: #64 (rename to owlbear-voice) archived
 - Added: #100 (TDD RED test task) at backlog
+
+[[2026-03-29]] Sun 12:29
+## Test-Writer Notes
+- Test file: tests/test_voice_workspace_package.py
+- Classes: TestFromAC_VoiceDepVersionConstraints, TestFromAC_VoiceKokoroVersionConstraint, TestFromAC_VoiceEntryPointTarget, TestFromAC_VoiceWorkspaceMembership
+- Tests per category: happy 8, edge 0, error 0, boundary 0
+- Total: 8 tests (+ 21 in tests/test_voice_package_scaffolding.py for task #100)
+- ruff: clean
+- Pre-built scaffold: voice package was scaffolded before TDD phase ran; all 8 tests PASS on HEAD (expected). No RED state achievable without removing implementation.
+- AC coverage:
+  - AC1-4 (files, metadata, build backend, wheel config): covered by test_voice_package_scaffolding.py (#100)
+  - AC5 (base dep version pins): TestFromAC_VoiceDepVersionConstraints (4 tests)
+  - AC6 (kokoro version pin): TestFromAC_VoiceKokoroVersionConstraint (1 test)
+  - AC7 (exact entry point target): TestFromAC_VoiceEntryPointTarget (1 test)
+  - AC8-10 (stubs, tests dir): covered by test_voice_package_scaffolding.py (#100)
+  - AC11 (ruff src): covered by test_voice_package_scaffolding.py (#100)
+  - Workspace integration: TestFromAC_VoiceWorkspaceMembership (2 tests) â€” was missing from file despite docstring reference
+  - AC12 (import): covered by test_voice_package_scaffolding.py (#100)
+
+[[2026-03-29]] Sun 15:16
+## Docs Gate
+### Checklist
+All 6 items evaluated with evidence.
+- Item 1 (.github/copilot-instructions.md): N/A - packages/voice/ already in directory table line 144; scaffolding only, no behavior change
+- Item 2 (Docstrings): Pass - __init__.py and main.py both have module and function docstrings
+- Item 3 (sources/overview.md): Pass - pydantic-ai monorepo cited at line 2669 referencing bearclaw-voice-workspace-package.md
+- Item 4 (README.md CLI): N/A - no existing CLI commands section in README; owlbear-voice is a no-op stub
+- Item 5 (Research doc): Pass - docs/research/bearclaw-voice-workspace-package.md exists and linked from task body
+- Item 6 (Scratch files): Pass - no docs/scratch/52-* files found
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None
+
+[[2026-03-29]] Sun 15:26
+## Audit
+### AC Verification
+All 12 AC lines verified against source files and test results.
+- Package structure (AC1-9): pyproject.toml fields, stubs, tests dir all confirmed
+- Workspace integration (AC10-12): ruff src list, imports, workspace resolution confirmed
+- Constraints: hatchling backend, stubs only, kokoro behind optional extra
+
+### Test Results
+- Task-specific: 29 passed (test_voice_workspace_package.py + test_voice_package_scaffolding.py)
+- Full suite: 568 passed, 82 failed (pre-existing, 8 unrelated test modules)
+- ruff: clean
+
+### Upstream Commits
+- 73942da test: workspace membership + entry-point tests (#52, test-writer)
+- 9f5306e feat: add version pins to owlbear-voice dependencies (#52, builder)
+- 4cdde41 test: failing tests for voice package version constraints (#52, test-writer)
+
+### Architect Quality
+AC rewritten from 4 vague lines to 13 testable items + 3 constraints. Corrected build backend from uv_build to hatchling. Score: 5/5.
+
+### Confidence: .97
+### Action: archive
