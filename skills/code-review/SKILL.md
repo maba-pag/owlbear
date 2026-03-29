@@ -32,6 +32,8 @@ Use `get_changed_files` to list files changed by the builder before proceeding.
 Call with `sourceControlState: ["staged", "unstaged"]` to capture all local changes.
 Record the changed file list — use it to scope subsequent steps (tests, lint, code reading).
 
+For any changed function or class signatures, use `vscode_listCodeUsages` to trace all callers and assess downstream impact before proceeding. Note: the tool does not find dynamic calls (e.g., `getattr`).
+
 ## Step 3 — Run tests independently
 
 Do NOT rely on what the builder reported. Run yourself.
