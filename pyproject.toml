@@ -22,6 +22,7 @@ asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
   "slow: tests that are long-running",
+  "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
 ]
 
 [tool.ruff]
