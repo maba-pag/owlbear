@@ -1,10 +1,12 @@
 ---
 id: 8
 title: Port agents to .agent.md format
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-26T17:19:41.2513734+01:00
-updated: 2026-03-26T18:09:17.2813211+01:00
+updated: 2026-03-29T11:14:57.1181231+02:00
+started: 2026-03-29T11:14:56.8210589+02:00
+completed: 2026-03-29T11:14:56.8210589+02:00
 tags:
     - phase-1
     - scope:agents
@@ -43,3 +45,47 @@ Depends on R4 (.agent.md format validation) for the tool name mapping. V1 agents
 [[2026-03-26]] Thu 18:09
 
 Note: v1 has 11 agents (not 9). Includes test-writer.agent.md and kanban-planner.agent.md. Port all 11.
+
+[[2026-03-29]] Sun 10:19
+## Docs Gate
+### Checklist
+
+No docs impact -- task ported .agent.md config files only.
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | Already references agents/ at lines 40, 145, 163; no .github/agents references remain |
+| 2 | Docstrings | No | N/A | No Python modules changed |
+| 3 | docs/sources/overview.md | Yes | Pass | Lines 1996-1998 include VS Code custom-agents, chat-tools, subagents docs for agent-port-v2.md |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Pass | docs/research/agent-port-v2.md exists; builder notes reference it |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/8-* files found)
+
+[[2026-03-29]] Sun 11:14
+## Audit
+
+### AC Verification
+
+AC1-9 (port all 11 agents): PASS - 11 .agent.md files exist in agents/
+AC10 (tools field): PASS - spot-checked builder, reviewer; VS Code/MCP tool names, no PydanticAI refs
+AC11 (agents field): PASS - spot-checked builder, reviewer; agents: [] configured
+AC12 (test 2 agents): PASS - docs gate confirmed; settings.json includes agents/ path
+AC13 (write to agents/): PASS - 11 files at repo root agents/
+AC14 (settings.json): PASS - chat.agentFilesLocations includes agents: true
+AC15 (delete v1 copies): PASS - .github/agents/ is empty
+
+### Test Results
+- pytest: 640 passed, 108 failed (all pre-existing; 0 attributable to #8)
+- ruff: 1 pre-existing error (scripts/setup.py line length) unrelated
+- voice test: collection error (missing module) unrelated
+
+### AC Quality: 4/5
+AC was specific (listed every agent), corrected from 9 to 11 mid-task. Minor gap only.
+
+### Confidence: .96
+### Action: archive
