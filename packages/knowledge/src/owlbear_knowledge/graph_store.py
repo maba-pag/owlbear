@@ -424,3 +424,16 @@ class GraphStore:
         )
         self._conn.commit()
         return cursor.rowcount > 0
+
+    # ── Count operations ───────────────────────────────────────────────────
+
+    def get_counts(self) -> tuple[int, int, int]:
+        """Return (doc_count, entity_count, edge_count) via SQL COUNT — O(1).
+
+        Returns:
+            A three-tuple of (document count, entity count, edge count).
+        """
+        doc_count: int = self._conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        entity_count: int = self._conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+        edge_count: int = self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+        return (doc_count, entity_count, edge_count)
