@@ -6,24 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [
-    vscode/memory,
-    execute/testFailure,
-    execute/getTerminalOutput,
-    execute/awaitTerminal,
-    execute/killTerminal,
-    execute/runInTerminal,
-    execute/runTests,
-    read/problems,
-    read/readFile,
-    read/viewImage,
-    read/terminalLastCommand,
-    agent,
-    edit/createFile,
-    edit/editFiles,
-    search,
-    todos,
-  ]
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runTests, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*', todo]
 agents: []
 ---
 

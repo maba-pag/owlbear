@@ -5,21 +5,7 @@ argument-hint: "Plan: {feature_or_plan_description}"
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [
-    vscode/memory,
-    vscode/askQuestions,
-    execute/getTerminalOutput,
-    execute/awaitTerminal,
-    execute/killTerminal,
-    execute/runInTerminal,
-    read/problems,
-    read/readFile,
-    read/viewImage,
-    read/terminalLastCommand,
-    agent,
-    search,
-    todos,
-  ]
+  [vscode/memory, vscode/askQuestions, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*', todo]
 agents: []
 ---
 
