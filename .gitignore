@@ -87,5 +87,8 @@ packages/*/dist/
 # Knowledge data
 data/knowledge/*.db
 
+# Audit log data
+data/audit/
+
 # VS Code Copilot auto-generates built-in skill templates here — not part of the repo
 .github/skills/
