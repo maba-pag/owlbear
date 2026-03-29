@@ -132,3 +132,13 @@ class TestFromAC_PortInstructionFiles:
             assert not any(".github/instructions" in str(loc) for loc in locations), (
                 ".github/instructions still listed in chat.instructionsFilesLocations"
             )
+
+    # ---------------------------------------------------------------------------
+    # AC6: .github/copilot-instructions.md must still exist after migration
+    # ---------------------------------------------------------------------------
+
+    def test_copilot_instructions_still_exists(self) -> None:
+        """.github/copilot-instructions.md must not be removed during the migration."""
+        assert (ROOT / ".github" / "copilot-instructions.md").exists(), (
+            ".github/copilot-instructions.md was removed during migration — it must be preserved"
+        )
