@@ -32,6 +32,22 @@ uv run pytest tests/ packages/ -m "not api" -q --tb=short
 
 `testpaths` in `pyproject.toml` is `["tests", "packages"]`, so bare `uv run pytest` also discovers `packages/`. Passing both paths explicitly is preferred for clarity and to avoid relying on implicit config when running from a subdir.
 
+### asyncio_mode = strict
+
+`asyncio_mode = "strict"` is set in `pyproject.toml`. Every async test **must** carry an explicit `@pytest.mark.asyncio` decorator — bare `async def test_*` functions will not be collected:
+
+```python
+import pytest
+
+@pytest.mark.asyncio
+async def test_something():
+    ...
+```
+
+### norecursedirs = ["v1"]
+
+`norecursedirs = ["v1"]` in `pyproject.toml` excludes the `v1/` directory from test discovery. Tests under `v1/` are never collected or run — this is intentional to keep the legacy codebase isolated.
+
 The terminal tool captures stdout + stderr automatically (60 KB limit).
 No piping needed.
 
@@ -156,6 +172,29 @@ uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-
 ```
 
 Restore before returning the terminal to foreground use: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
+
+## Test markers
+
+OwlBear defines three project-level markers in `pyproject.toml`:
+
+| Marker        | Meaning                                                                    |
+| ------------- | -------------------------------------------------------------------------- |
+| `api`         | Requires live API integrations or network services — skip in offline runs  |
+| `slow`        | Long-running test — skip in fast-feedback loops                            |
+| `integration` | Requires the `kanban-md` binary — deselect when it is not installed        |
+
+**Common `-m` filter flags:**
+
+```powershell
+# Skip API tests (standard CI / builder run)
+uv run pytest tests/ packages/ -m "not api" -q --tb=short
+
+# Skip API and slow tests
+uv run pytest tests/ packages/ -m "not api and not slow" -q --tb=short
+
+# Run only integration tests
+uv run pytest tests/ packages/ -m "integration" -q --tb=short
+```
 
 ## Default flags
 
