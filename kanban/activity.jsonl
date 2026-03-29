@@ -1441,3 +1441,359 @@
 {"timestamp":"2026-03-29T06:14:52.9487138+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
 {"timestamp":"2026-03-29T06:14:52.9502402+02:00","action":"release","task_id":115,"detail":"auditor"}
 {"timestamp":"2026-03-29T06:15:15.6607623+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T07:35:09.1276323+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T07:35:09.4437265+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T07:35:09.4447612+02:00","action":"release","task_id":103,"detail":"builder"}
+{"timestamp":"2026-03-29T07:38:53.9317251+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T07:38:53.9327744+02:00","action":"release","task_id":116,"detail":"reviewer"}
+{"timestamp":"2026-03-29T07:39:04.3964847+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T07:39:04.7103612+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T07:39:52.9238656+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-29T07:39:52.9254126+02:00","action":"claim","task_id":57,"detail":"reviewer"}
+{"timestamp":"2026-03-29T07:40:40.9436091+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T07:40:40.9456983+02:00","action":"claim","task_id":123,"detail":"test-writer"}
+{"timestamp":"2026-03-29T07:42:37.1441822+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T07:42:49.3196577+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T07:42:49.3213265+02:00","action":"release","task_id":123,"detail":"test-writer"}
+{"timestamp":"2026-03-29T07:44:02.2493172+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-29T07:44:02.2534674+02:00","action":"release","task_id":57,"detail":"reviewer"}
+{"timestamp":"2026-03-29T07:44:47.0967722+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-29T07:44:47.0984231+02:00","action":"unblock","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-29T07:47:29.9319738+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T07:47:29.9337922+02:00","action":"claim","task_id":104,"detail":"writer"}
+{"timestamp":"2026-03-29T07:47:31.3584741+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-29T07:47:31.3619684+02:00","action":"claim","task_id":97,"detail":"architect"}
+{"timestamp":"2026-03-29T07:47:32.3344195+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T07:47:32.335504+02:00","action":"claim","task_id":106,"detail":"auditor"}
+{"timestamp":"2026-03-29T07:47:48.4969184+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T07:47:52.132604+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T07:47:52.1341473+02:00","action":"release","task_id":104,"detail":"writer"}
+{"timestamp":"2026-03-29T07:50:51.3978089+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T07:50:56.6346013+02:00","action":"move","task_id":106,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T07:50:56.9543902+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T07:50:56.9565108+02:00","action":"release","task_id":106,"detail":"auditor"}
+{"timestamp":"2026-03-29T07:51:04.4504038+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-29T07:51:14.1095309+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-29T07:51:14.1110618+02:00","action":"block","task_id":97,"detail":"Duplicate of archived #107. All work completed under #107. Recommend deletion."}
+{"timestamp":"2026-03-29T07:51:18.3857485+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-29T07:51:18.3873008+02:00","action":"release","task_id":97,"detail":"architect"}
+{"timestamp":"2026-03-29T07:51:57.3317838+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-29T07:51:57.333664+02:00","action":"claim","task_id":54,"detail":"architect"}
+{"timestamp":"2026-03-29T07:52:59.9527589+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-29T07:53:17.6301782+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-29T07:53:37.3498239+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-29T07:53:41.8770639+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-29T07:53:41.8786225+02:00","action":"release","task_id":54,"detail":"architect"}
+{"timestamp":"2026-03-29T07:54:29.5613193+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T07:54:29.5642487+02:00","action":"claim","task_id":127,"detail":"architect"}
+{"timestamp":"2026-03-29T07:54:31.0493176+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T07:54:31.0509276+02:00","action":"claim","task_id":126,"detail":"architect"}
+{"timestamp":"2026-03-29T07:55:01.2726542+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T07:55:04.3167838+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T07:55:19.0238907+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T07:55:19.0266956+02:00","action":"claim","task_id":93,"detail":"researcher"}
+{"timestamp":"2026-03-29T07:55:27.991736+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T07:55:31.8339423+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T07:55:31.8359602+02:00","action":"release","task_id":127,"detail":"architect"}
+{"timestamp":"2026-03-29T07:55:47.4110034+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T07:55:47.4125075+02:00","action":"release","task_id":126,"detail":"architect"}
+{"timestamp":"2026-03-29T07:58:52.0684782+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T07:58:58.0716274+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T07:59:36.9940166+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T07:59:37.2802544+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T07:59:37.2826263+02:00","action":"release","task_id":93,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:00:19.9161139+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:00:19.9171478+02:00","action":"claim","task_id":1,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:00:22.9067579+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:00:22.9083452+02:00","action":"claim","task_id":123,"detail":"builder"}
+{"timestamp":"2026-03-29T08:00:25.4588826+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:00:25.4599915+02:00","action":"claim","task_id":15,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:00:38.7351969+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:00:38.7362072+02:00","action":"claim","task_id":9,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:01:44.9786329+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:01:59.5324429+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:01:59.8360224+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:01:59.8376225+02:00","action":"release","task_id":123,"detail":"builder"}
+{"timestamp":"2026-03-29T08:02:29.4823077+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:02:39.6991488+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:02:40.036992+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:02:40.0385879+02:00","action":"release","task_id":1,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:06:41.4154198+02:00","action":"create","task_id":130,"detail":"Extract knowledge secondary features (consolidation, evaluator, bookmark pipeline, refresh)"}
+{"timestamp":"2026-03-29T08:06:55.3158484+02:00","action":"create","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:07:55.0531218+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:08:05.7352093+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:08:10.695383+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:08:10.6966996+02:00","action":"release","task_id":9,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:08:14.0863543+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:08:14.0881766+02:00","action":"release","task_id":15,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:08:56.0120727+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:09:52.2644977+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:09:52.2661011+02:00","action":"claim","task_id":125,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:09:53.9267062+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:09:53.9287823+02:00","action":"claim","task_id":8,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:09:55.5840537+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:09:55.5855985+02:00","action":"claim","task_id":58,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:10:00.066537+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:10:03.0499637+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:10:03.0509882+02:00","action":"release","task_id":125,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:10:21.7339129+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:10:21.7349276+02:00","action":"claim","task_id":74,"detail":"builder"}
+{"timestamp":"2026-03-29T08:11:25.1166064+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:11:32.6770787+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:11:37.4687735+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:11:37.4703199+02:00","action":"release","task_id":74,"detail":"builder"}
+{"timestamp":"2026-03-29T08:14:08.8355895+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:14:18.0918263+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:14:18.0934004+02:00","action":"release","task_id":58,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:15:13.0546218+02:00","action":"create","task_id":132,"detail":"Add pre-commit guard against agent tool name regression"}
+{"timestamp":"2026-03-29T08:15:42.1491943+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:15:52.930781+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:15:58.1153037+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:15:58.1168499+02:00","action":"release","task_id":8,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:16:47.1857227+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:16:47.1873914+02:00","action":"claim","task_id":96,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:17:01.5965329+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:17:01.5981137+02:00","action":"claim","task_id":116,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:17:11.7698752+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:17:17.9504996+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:17:17.9528217+02:00","action":"claim","task_id":119,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:17:19.6374445+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:17:23.9854722+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:17:23.9881685+02:00","action":"release","task_id":116,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:17:26.2466956+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:17:26.2484681+02:00","action":"claim","task_id":94,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:18:32.5109615+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:18:36.3319108+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:18:36.3335012+02:00","action":"release","task_id":119,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:20:50.5495418+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:20:58.4544252+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:20:58.4560424+02:00","action":"release","task_id":96,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:21:56.1993234+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:22:10.5137752+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:22:10.5158937+02:00","action":"release","task_id":94,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:24:01.5649333+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T08:24:01.5681914+02:00","action":"claim","task_id":104,"detail":"auditor"}
+{"timestamp":"2026-03-29T08:24:03.4517559+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:24:03.4538334+02:00","action":"claim","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T08:24:04.5206964+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:24:04.5228097+02:00","action":"claim","task_id":9,"detail":"architect"}
+{"timestamp":"2026-03-29T08:25:01.0834577+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:25:01.085685+02:00","action":"release","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T08:25:14.6726403+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:25:14.6743079+02:00","action":"claim","task_id":8,"detail":"architect"}
+{"timestamp":"2026-03-29T08:25:16.5260982+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:25:16.5276469+02:00","action":"claim","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T08:25:23.0550941+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:25:31.9819731+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:25:32.6936966+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:25:48.1504426+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:25:52.0209103+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:25:52.0219436+02:00","action":"release","task_id":8,"detail":"architect"}
+{"timestamp":"2026-03-29T08:25:59.0966565+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:26:02.8465117+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T08:26:02.8491307+02:00","action":"release","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T08:26:35.026328+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:26:58.0497593+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:27:14.632817+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:27:16.4857594+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T08:27:20.2516998+02:00","action":"move","task_id":104,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T08:27:24.4335155+02:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-29T08:27:24.4350673+02:00","action":"release","task_id":104,"detail":"auditor"}
+{"timestamp":"2026-03-29T08:27:25.8024317+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T08:27:25.804028+02:00","action":"release","task_id":9,"detail":"architect"}
+{"timestamp":"2026-03-29T08:28:01.645607+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:28:01.6477199+02:00","action":"claim","task_id":15,"detail":"architect"}
+{"timestamp":"2026-03-29T08:28:05.5079272+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:28:05.509576+02:00","action":"claim","task_id":131,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:28:17.1104523+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:28:17.1130035+02:00","action":"claim","task_id":96,"detail":"builder"}
+{"timestamp":"2026-03-29T08:29:00.3583907+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:29:05.4802788+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:29:05.4818357+02:00","action":"release","task_id":131,"detail":"researcher"}
+{"timestamp":"2026-03-29T08:29:09.2052384+02:00","action":"move","task_id":131,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-29T08:29:13.2722547+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:30:02.551364+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:30:06.6355887+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:30:06.6376272+02:00","action":"release","task_id":96,"detail":"builder"}
+{"timestamp":"2026-03-29T08:30:43.9862236+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:30:48.9182514+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:31:14.5063327+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:31:25.5982524+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:31:25.5998693+02:00","action":"release","task_id":15,"detail":"architect"}
+{"timestamp":"2026-03-29T08:31:56.4171785+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:31:56.4197818+02:00","action":"claim","task_id":123,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:31:58.0268969+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:31:58.0285411+02:00","action":"claim","task_id":74,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:31:59.5655111+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T08:31:59.567128+02:00","action":"claim","task_id":46,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:32:12.0996471+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:32:12.1025502+02:00","action":"claim","task_id":94,"detail":"builder"}
+{"timestamp":"2026-03-29T08:33:18.7368785+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T08:33:18.7404924+02:00","action":"release","task_id":46,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:33:30.3213213+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:33:30.3241469+02:00","action":"release","task_id":74,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:33:47.5798282+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:33:47.5819318+02:00","action":"release","task_id":123,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:33:54.8001122+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:34:02.3725099+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:34:02.3747107+02:00","action":"release","task_id":94,"detail":"builder"}
+{"timestamp":"2026-03-29T08:34:27.1112664+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:34:27.1135451+02:00","action":"claim","task_id":126,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:34:29.0834108+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:34:29.0850336+02:00","action":"claim","task_id":127,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:34:33.4524439+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:34:36.537168+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:34:36.5390041+02:00","action":"release","task_id":126,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:34:36.9424513+02:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-29T08:34:36.9445335+02:00","action":"claim","task_id":70,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:34:49.7849536+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:34:49.7865148+02:00","action":"claim","task_id":58,"detail":"builder"}
+{"timestamp":"2026-03-29T08:34:51.5141375+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:34:55.2102275+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:34:55.2128489+02:00","action":"release","task_id":127,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:37:46.1213925+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:38:03.7798096+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:38:03.7815824+02:00","action":"release","task_id":58,"detail":"builder"}
+{"timestamp":"2026-03-29T08:39:49.1434995+02:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-29T08:39:49.1445597+02:00","action":"release","task_id":70,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:40:16.4474103+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:40:16.4499593+02:00","action":"claim","task_id":125,"detail":"builder"}
+{"timestamp":"2026-03-29T08:40:25.5862767+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T08:40:25.5878153+02:00","action":"claim","task_id":122,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:40:30.9230518+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:40:37.8365513+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:40:37.8375876+02:00","action":"release","task_id":125,"detail":"builder"}
+{"timestamp":"2026-03-29T08:40:45.3866085+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T08:40:53.0192088+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T08:40:56.8851679+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T08:40:56.8873973+02:00","action":"release","task_id":122,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:42:54.8177045+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:42:54.8196988+02:00","action":"claim","task_id":123,"detail":"writer"}
+{"timestamp":"2026-03-29T08:42:55.4308004+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T08:42:55.4329044+02:00","action":"claim","task_id":46,"detail":"writer"}
+{"timestamp":"2026-03-29T08:42:56.5636793+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:42:56.5659745+02:00","action":"claim","task_id":74,"detail":"writer"}
+{"timestamp":"2026-03-29T08:43:41.9578668+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T08:44:10.0014825+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T08:44:10.0030347+02:00","action":"release","task_id":123,"detail":"writer"}
+{"timestamp":"2026-03-29T08:44:15.3369607+02:00","action":"move","task_id":46,"detail":"docs -\u003e done"}
+{"timestamp":"2026-03-29T08:44:23.6067474+02:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-29T08:44:23.6101736+02:00","action":"release","task_id":46,"detail":"writer"}
+{"timestamp":"2026-03-29T08:45:11.8443318+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:45:15.5570632+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T08:45:15.5608448+02:00","action":"release","task_id":74,"detail":"writer"}
+{"timestamp":"2026-03-29T08:45:39.0080647+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:45:39.009099+02:00","action":"claim","task_id":116,"detail":"builder"}
+{"timestamp":"2026-03-29T08:46:21.2583938+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:46:21.2628086+02:00","action":"release","task_id":116,"detail":"builder"}
+{"timestamp":"2026-03-29T08:46:26.7436466+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T08:46:55.687708+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:46:55.6892568+02:00","action":"claim","task_id":119,"detail":"builder"}
+{"timestamp":"2026-03-29T08:47:01.5859324+02:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-29T08:47:01.5880178+02:00","action":"claim","task_id":70,"detail":"writer"}
+{"timestamp":"2026-03-29T08:47:01.9459415+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:47:01.9480453+02:00","action":"claim","task_id":131,"detail":"architect"}
+{"timestamp":"2026-03-29T08:47:15.4378808+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:47:15.4394961+02:00","action":"claim","task_id":1,"detail":"architect"}
+{"timestamp":"2026-03-29T08:48:04.7858274+02:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-29T08:48:04.7879633+02:00","action":"release","task_id":70,"detail":"writer"}
+{"timestamp":"2026-03-29T08:48:06.2826528+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:48:10.0056244+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T08:48:10.0067955+02:00","action":"release","task_id":1,"detail":"architect"}
+{"timestamp":"2026-03-29T08:48:12.874954+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:48:16.1222618+02:00","action":"edit","task_id":119,"detail":"Fix MCP module names in setup.py (mcp_kanban -\u003e owlbear_mcp_kanban)"}
+{"timestamp":"2026-03-29T08:48:16.1243214+02:00","action":"release","task_id":119,"detail":"builder"}
+{"timestamp":"2026-03-29T08:48:45.3777851+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:48:51.2123559+02:00","action":"edit","task_id":131,"detail":"Sync drifted skill content before .github/skills/ deletion"}
+{"timestamp":"2026-03-29T08:48:51.2140155+02:00","action":"release","task_id":131,"detail":"architect"}
+{"timestamp":"2026-03-29T08:49:28.7398506+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:49:28.7415279+02:00","action":"claim","task_id":96,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:49:31.1033053+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:49:31.105391+02:00","action":"claim","task_id":58,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:49:31.3087866+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:49:31.31823+02:00","action":"claim","task_id":125,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:49:39.4014245+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:49:39.4030176+02:00","action":"claim","task_id":127,"detail":"builder"}
+{"timestamp":"2026-03-29T08:50:30.6268093+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:50:34.5578344+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
+{"timestamp":"2026-03-29T08:50:34.5612289+02:00","action":"release","task_id":127,"detail":"builder"}
+{"timestamp":"2026-03-29T08:51:03.5804892+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T08:51:03.5820456+02:00","action":"release","task_id":125,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:51:19.5452206+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T08:51:19.5468204+02:00","action":"release","task_id":96,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:55:01.1541845+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:55:13.7189877+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:55:18.3090311+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T08:55:18.3111776+02:00","action":"release","task_id":58,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:55:55.0906158+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T08:55:55.0931929+02:00","action":"claim","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:55:59.8540765+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:55:59.8569178+02:00","action":"claim","task_id":94,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:56:02.9587737+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:56:02.9603245+02:00","action":"claim","task_id":126,"detail":"builder"}
+{"timestamp":"2026-03-29T08:56:38.2614747+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:56:38.2636706+02:00","action":"claim","task_id":8,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:58:38.7238611+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:58:46.5474168+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:58:46.8376525+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T08:58:46.8396887+02:00","action":"release","task_id":94,"detail":"reviewer"}
+{"timestamp":"2026-03-29T08:59:10.9279269+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:59:20.4576372+02:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-29T08:59:20.4598608+02:00","action":"release","task_id":8,"detail":"test-writer"}
+{"timestamp":"2026-03-29T08:59:25.054393+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:59:32.4248524+02:00","action":"edit","task_id":126,"detail":"Rewrite askQuestions behavioral references to tool-agnostic language"}
+{"timestamp":"2026-03-29T08:59:32.4264084+02:00","action":"release","task_id":126,"detail":"builder"}
+{"timestamp":"2026-03-29T09:02:02.9427752+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T09:02:02.9443167+02:00","action":"release","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:02:15.0094501+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T09:02:43.3934148+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T09:02:43.3949912+02:00","action":"claim","task_id":93,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:02:44.074651+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T09:02:44.0767754+02:00","action":"claim","task_id":122,"detail":"builder"}
+{"timestamp":"2026-03-29T09:02:51.7626967+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T09:02:59.2786111+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T09:03:03.2811911+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T09:03:03.2828924+02:00","action":"release","task_id":93,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:03:49.1211804+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
+{"timestamp":"2026-03-29T09:03:49.1233741+02:00","action":"claim","task_id":121,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:04:02.9011183+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-29T09:04:02.9031755+02:00","action":"claim","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:04:28.3722265+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-29T09:04:33.1211625+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-29T09:04:33.1229798+02:00","action":"release","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:05:22.5831762+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
+{"timestamp":"2026-03-29T09:05:26.5761611+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
+{"timestamp":"2026-03-29T09:05:26.5777202+02:00","action":"release","task_id":121,"detail":"test-writer"}
+{"timestamp":"2026-03-29T09:05:29.8536672+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
+{"timestamp":"2026-03-29T09:05:30.1439703+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
+{"timestamp":"2026-03-29T09:06:48.2546772+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T09:06:55.825494+02:00","action":"edit","task_id":122,"detail":"Document adding project-specific MCP servers"}
+{"timestamp":"2026-03-29T09:06:55.8265692+02:00","action":"release","task_id":122,"detail":"builder"}
+{"timestamp":"2026-03-29T09:08:35.720565+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T09:08:35.7224352+02:00","action":"claim","task_id":125,"detail":"writer"}
+{"timestamp":"2026-03-29T09:08:38.3964611+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T09:08:38.3980419+02:00","action":"claim","task_id":123,"detail":"auditor"}
+{"timestamp":"2026-03-29T09:08:39.4914115+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T09:08:39.4929865+02:00","action":"claim","task_id":58,"detail":"writer"}
+{"timestamp":"2026-03-29T09:08:42.8771755+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T09:08:42.8794135+02:00","action":"claim","task_id":94,"detail":"writer"}
+{"timestamp":"2026-03-29T09:09:35.1129428+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T09:09:35.1145122+02:00","action":"release","task_id":94,"detail":"writer"}
+{"timestamp":"2026-03-29T09:10:40.831162+02:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-29T09:10:40.8327174+02:00","action":"release","task_id":58,"detail":"writer"}
+{"timestamp":"2026-03-29T09:10:54.0656497+02:00","action":"edit","task_id":125,"detail":"Clean up askQuestions references: decouple confidence patterns from tool usage"}
+{"timestamp":"2026-03-29T09:10:54.0671944+02:00","action":"release","task_id":125,"detail":"writer"}
+{"timestamp":"2026-03-29T09:11:24.7241454+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T09:11:28.7274029+02:00","action":"move","task_id":123,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T09:11:33.2334868+02:00","action":"edit","task_id":123,"detail":"Test: Revert askQuestions from all agents"}
+{"timestamp":"2026-03-29T09:11:33.2359135+02:00","action":"release","task_id":123,"detail":"auditor"}
+{"timestamp":"2026-03-29T09:12:03.4803339+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-29T09:12:03.4818726+02:00","action":"claim","task_id":96,"detail":"writer"}
+{"timestamp":"2026-03-29T09:12:07.7363953+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T09:12:07.7394342+02:00","action":"claim","task_id":74,"detail":"auditor"}
+{"timestamp":"2026-03-29T09:12:08.1633222+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
+{"timestamp":"2026-03-29T09:12:08.1667967+02:00","action":"claim","task_id":68,"detail":"architect"}
+{"timestamp":"2026-03-29T09:15:12.6305746+02:00","action":"move","task_id":74,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T09:15:17.0548169+02:00","action":"edit","task_id":74,"detail":"Test: OwlbearProjectFile Pydantic model"}
+{"timestamp":"2026-03-29T09:15:17.0563923+02:00","action":"release","task_id":74,"detail":"auditor"}
+{"timestamp":"2026-03-29T09:15:18.6663094+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}

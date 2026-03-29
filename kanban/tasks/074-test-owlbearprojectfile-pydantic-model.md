@@ -1,10 +1,12 @@
 ---
 id: 74
 title: 'Test: OwlbearProjectFile Pydantic model'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-26T20:30:19.6232649+01:00
-updated: 2026-03-28T01:13:38.3674958+01:00
+updated: 2026-03-29T09:15:17.053764+02:00
+started: 2026-03-29T09:15:12.628466+02:00
+completed: 2026-03-29T09:15:12.628466+02:00
 tags:
     - phase-1
     - scope:mcp
@@ -54,3 +56,29 @@ Key findings:
 - v1 prior art patterns validated (test_project_model.py, test_project_definition_models.py)
 
 Total test scenarios: 11 (was 9, added 2)
+
+[[2026-03-29]] Sun 08:11
+## Builder Notes
+- Files changed: packages/mcp-project/src/owlbear_mcp_project/models.py
+- Tests: 37 passed, coverage 100% on models.py
+- Lint: ruff clean
+- Evidence: 37 FAILED (stub) turned GREEN after implementation
+- Fixes applied: Full OwlbearProjectFile model with Literal[1], name Field constraints, Literal type enum, AwareDatetime, ConfigDict extra=allow
+
+[[2026-03-29]] Sun 08:45
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Package already listed; no behavior/convention change |
+| 2 | Docstrings complete | Yes | Pass | models.py: module docstring + OwlbearProjectFile class docstring covering behavior and extra='allow'; __init__.py: module docstring |
+| 3 | docs/sources/overview.md | Yes | Updated | Added Pydantic v2 Models, Fields, AwareDatetime, Literal docs — 4 rows under new section for Tasks #68/#74 |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research docs linked | Yes | Pass | owlbear-project-file-tests.md and owlbear-project-file-model-impl.md both exist and linked in task body |
+| 6 | Scratch files | None | Pass | No docs/scratch/74-* files found |
+
+### Files Updated
+- docs/sources/overview.md (committed db9d07a)
+
+### Scratch Files Cleaned
+- None
