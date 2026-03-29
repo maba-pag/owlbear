@@ -20,13 +20,17 @@ run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", isBac
 
 For scoped runs (builder, reviewer, test-writer), foreground is fine:
 
+`--import-mode=importlib` is set in `addopts` in `pyproject.toml` — no manual flag needed.
+
 ```powershell
 # Scoped (builder, reviewer, test-writer)
 uv run pytest tests/test_{module}.py -q --tb=short
 
 # Full suite (auditor only)
-uv run pytest tests/ -m "not api" -q --tb=short
+uv run pytest tests/ packages/ -m "not api" -q --tb=short
 ```
+
+`testpaths` in `pyproject.toml` is `["tests", "packages"]`, so bare `uv run pytest` also discovers `packages/`. Passing both paths explicitly is preferred for clarity and to avoid relying on implicit config when running from a subdir.
 
 The terminal tool captures stdout + stderr automatically (60 KB limit).
 No piping needed.
@@ -74,7 +78,7 @@ Then `read_file` on `docs/scratch/pytest-output.txt`. Delete after use.
 ## ruff — also run plain
 
 ```powershell
-uv run ruff check src/ tests/
+uv run ruff check packages/ tests/
 ```
 
 ## Coverage — bare `--cov` only
@@ -89,10 +93,10 @@ Target >= 90% on touched modules.
 **Flags that DO NOT WORK in this project:**
 
 - `--cov=dotted.module.name` — pydantic MRO crash
-- `--cov=src/owlbear/{dir}/` — reports 0% (src-layout)
+- `--cov=packages/mcp-kanban/src/` — reports 0% (src-layout; use bare `--cov` instead)
 - `coverage run --source=...` — incompatible with pytest-cov config
 
-Only bare `--cov` works. It picks up `[tool.coverage.run] source` from `pyproject.toml`.
+Only bare `--cov` works. It picks up `[tool.coverage.run] source_pkgs` from `pyproject.toml`, which lists all 6 installed package names: `owlbear`, `owlbear_orchestrator`, `owlbear_knowledge`, `owlbear_mcp_kanban`, `owlbear_mcp_knowledge`, `owlbear_mcp_project`. Coverage is measured across all of them automatically.
 
 ## Known hang: WMI + logfire pydantic plugin on Windows
 
