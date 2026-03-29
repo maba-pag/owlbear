@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from owlbear_knowledge.bookmark_store import Bookmark, BookmarkStore
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 from owlbear_knowledge.status_store import DocumentStatus, StatusStore, compute_content_hash
 
 __all__ = [
+    "Bookmark",
+    "BookmarkStore",
     "DocumentStatus",
     "GraphStore",
     "KnowledgeSourceStore",
