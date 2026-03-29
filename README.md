@@ -71,8 +71,8 @@ through a shared kanban board in `kanban/`.
 
 ```bash
 uv sync --all-extras
-uv run pytest tests/ -m "not api" -q --tb=short
-uv run ruff check src/ tests/
+uv run pytest tests/ packages/ -m "not api" -q --tb=short
+uv run ruff check packages/ tests/
 ```
 
 ## License
