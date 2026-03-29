@@ -95,6 +95,7 @@ ideation → (researcher) → backlog → (architect) → todo → (test-writer 
 ```
 
 Each agent's `.agent.md` defines its gate ownership, exit criteria, and rejection paths.
+Pipeline-only agents (planner, researcher, architect, test-writer, builder, reviewer, writer, auditor) use `disable-model-invocation: true` in their frontmatter to prevent unintended invocation by arbitrary callers; the orchestrator's explicit `agents` array overrides this flag.
 See `agent-common.instructions.md` → **Task coordination** for claiming and handoff workflow.
 
 Research gate (ideation → backlog): see researcher agent for the full checklist.
@@ -131,7 +132,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 ## Directory structure
 
 | Directory                 | Purpose                                                |
-| ------------------------- | ------------------------------------------------------ |
+| ------------------------- | ------------------------------------------------------ | --- | ---------- | ------------------------------------------------------------------------- | --- | ----- | ---------------------------------- |
 | `packages/orchestrator/`  | ACP client, dispatch planning, orchestration CLI hooks |
 | `packages/knowledge/`     | Knowledge engine (graph + vector)                      |
 | `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
@@ -141,7 +142,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | kanban board data and tooling                          || `scripts/`                | Project tooling scripts (`setup.py`, `validate_skills.py`, `skills_ref/`) || `v1/`                     | Archived v1 codebase for reference                     |
+| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `skills_ref/`) |     | `v1/` | Archived v1 codebase for reference |
 
 ## File placement rules
 
