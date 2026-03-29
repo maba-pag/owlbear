@@ -1,16 +1,12 @@
 # OwlBear
 
-On-demand, laptop-resident AI development system built around GitHub Copilot CLI.
+On-demand AI development system built on GitHub Copilot.
 
 ## Overview
 
-OwlBear receives user intent, plans work, executes it through Copilot CLI agent
-workflows, and delivers results through shared workspace artifacts (code, kanban
-board, sessions). It is not a daemon — it runs on demand when invoked through
-VS Code or CLI commands.
-
-VS Code is the IDE for interactive work. OwlBear and VS Code share the filesystem
-as the integration point.
+OwlBear receives user intent, plans work, and executes it through Copilot agent
+workflows. VS Code is the IDE; OwlBear and VS Code share the filesystem as the
+integration point.
 
 ## Prerequisites
 
@@ -19,28 +15,25 @@ as the integration point.
 - **[VS Code](https://code.visualstudio.com/)** with the GitHub Copilot extension
 - **[Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli)** (`gh extension install gh-copilot`)
 
-## Setup
+## Quick Start
 
 ```bash
 git clone https://github.com/your-org/owlbear.git
 cd owlbear
-uv sync                        # install dependencies
+uv sync
 ```
 
-Download the kanban-md binary (PowerShell):
+Download the kanban-md binary:
 
 ```powershell
 kanban\setup.ps1
 ```
 
-Open the project in VS Code:
+Open VS Code — agents and MCP servers auto-discover:
 
 ```bash
 code .
 ```
-
-Agents, skills, and instructions auto-load from their respective directories.
-MCP servers are configured in `.vscode/mcp.json`.
 
 ## Directory Layout
 
@@ -59,35 +52,26 @@ MCP servers are configured in `.vscode/mcp.json`.
 | `scripts/`                | Project tooling scripts (setup, skill validation)      |
 | `v1/`                     | Archived v1 codebase for reference                     |
 
-## Usage
+## How It Works
 
-1. Open VS Code: `code .`
-2. Open Copilot Chat and select an agent from `agents/`
-3. Skills from `skills/` auto-load by relevance
-4. MCP servers (kanban, knowledge, project) are available via `.vscode/mcp.json`
+**Agents** in `agents/` appear in VS Code's agent picker, each owning a pipeline
+stage (research → architect → test-writer → builder → reviewer → writer → auditor).
 
-For task management, use `kanban\kanban-md.exe` (see `kanban/README.md`).
+**Skills** in `skills/` auto-load by relevance, carrying domain knowledge and
+reusable workflows for each agent role.
+
+**MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`) expose the kanban
+board, knowledge base, and project metadata as tools inside VS Code.
+
+**Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
+through a shared kanban board in `kanban/`.
 
 ## Development
 
 ```bash
-uv sync --all-extras           # install with dev dependencies
-```
-
-### Testing
-
-```bash
+uv sync --all-extras
 uv run pytest tests/ -m "not api" -q --tb=short
-
-# With coverage
-uv run pytest tests/ --cov --cov-report=term-missing -q
-```
-
-### Linting
-
-```bash
 uv run ruff check src/ tests/
-uv run ruff format --check
 ```
 
 ## License
