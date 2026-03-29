@@ -65,6 +65,22 @@ uv run pytest tests/ packages/ -m "not api" -q --tb=short
 uv run ruff check packages/ tests/
 ```
 
+## Pre-commit Hooks
+
+Two local hooks guard agent and skill file quality:
+
+- **`validate-skills`** — runs on every commit, validates all `skills/*/SKILL.md` frontmatter.
+- **`validate-agents`** — runs when any `agents/*.agent.md` file is staged, checking for:
+  - Bare `todo` (instead of `todos`) in the `tools:` list
+  - Stale `resolveMemoryFileUri` tool references anywhere in the file
+
+### VS Code auto-staging trap
+
+VS Code silently re-serializes and re-stages `.agent.md` files when it detects new
+tool capabilities (e.g. `execute/runTask`, `execute/testFailure`). This can revert
+manual edits before commit. Always run `git diff --cached agents/` before committing
+and unstage any auto-generated reverts with `git reset HEAD <file>`.
+
 ## License
 
 MIT

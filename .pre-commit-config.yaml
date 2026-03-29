@@ -41,3 +41,9 @@ repos:
         entry: python scripts/validate_skills.py
         pass_filenames: false
         always_run: true
+      - id: validate-agents
+        name: Validate Agent Tool Names
+        language: system
+        entry: python scripts/validate_agents.py
+        files: ^agents/.*\.agent\.md$
+        pass_filenames: true
