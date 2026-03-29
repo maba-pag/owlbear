@@ -105,3 +105,1339 @@
 {"timestamp":"2026-03-28T04:24:20.5704461+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
 {"timestamp":"2026-03-28T04:24:25.0539147+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
 {"timestamp":"2026-03-28T04:24:25.0554835+01:00","action":"release","task_id":94,"detail":"architect"}
+{"timestamp":"2026-03-28T14:20:14.3055065+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T14:20:18.6773701+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T14:20:57.4679311+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T14:20:57.470045+01:00","action":"claim","task_id":15,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:20:58.3030077+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T14:20:58.3043043+01:00","action":"claim","task_id":101,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:21:21.8164396+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:21:21.8184734+01:00","action":"claim","task_id":73,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:21:51.1116408+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T14:21:51.1116408+01:00","action":"claim","task_id":96,"detail":"builder"}
+{"timestamp":"2026-03-28T14:24:10.0636673+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T14:24:10.064696+01:00","action":"release","task_id":101,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:25:00.21398+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:25:00.21398+01:00","action":"release","task_id":73,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:25:03.8387176+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:26:03.4627134+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T14:26:18.972816+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T14:26:44.1508192+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T14:26:44.1524118+01:00","action":"release","task_id":15,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:26:52.4424453+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T14:26:56.519586+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T14:26:56.5210956+01:00","action":"release","task_id":96,"detail":"builder"}
+{"timestamp":"2026-03-28T14:27:44.3551024+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:27:44.3568869+01:00","action":"claim","task_id":8,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:27:47.9650411+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:27:48.7255878+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T14:27:48.7276175+01:00","action":"claim","task_id":80,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:27:53.1275727+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T14:27:53.1285737+01:00","action":"claim","task_id":28,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:30:35.2368375+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T14:30:35.2368375+01:00","action":"release","task_id":28,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:30:45.0855163+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T14:30:53.862317+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T14:30:58.1796106+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T14:30:58.1796106+01:00","action":"release","task_id":80,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:31:04.6695168+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:31:04.6711041+01:00","action":"claim","task_id":92,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:32:55.8799381+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:33:00.2154457+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:33:00.2164455+01:00","action":"release","task_id":92,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:33:43.0629427+01:00","action":"create","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-28T14:34:08.1493529+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:34:08.150941+01:00","action":"release","task_id":8,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:34:57.3664447+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T14:34:57.3664447+01:00","action":"claim","task_id":70,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:34:58.9184684+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T14:34:58.9202973+01:00","action":"claim","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:35:11.6703118+01:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-28T14:35:11.6719002+01:00","action":"claim","task_id":89,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:36:15.3553078+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T14:36:15.3553078+01:00","action":"claim","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:36:33.671534+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T14:36:33.6735407+01:00","action":"release","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:39:32.4957647+01:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-28T14:39:32.4973825+01:00","action":"release","task_id":89,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:41:15.3696997+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T14:41:15.3696997+01:00","action":"release","task_id":70,"detail":"reviewer"}
+{"timestamp":"2026-03-28T14:41:20.8165834+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T14:41:26.7696081+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T14:41:44.9355902+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T14:41:44.9355902+01:00","action":"release","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-28T14:42:20.2141423+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:42:20.2160447+01:00","action":"claim","task_id":12,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:46:29.7853725+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:46:29.7869508+01:00","action":"release","task_id":12,"detail":"researcher"}
+{"timestamp":"2026-03-28T14:48:13.5917142+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T14:48:13.5917142+01:00","action":"unblock","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T14:52:58.3793512+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:52:58.3814918+01:00","action":"claim","task_id":73,"detail":"writer"}
+{"timestamp":"2026-03-28T14:52:58.964256+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:52:58.9676251+01:00","action":"claim","task_id":12,"detail":"architect"}
+{"timestamp":"2026-03-28T14:53:23.0554926+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:53:23.0564939+01:00","action":"claim","task_id":8,"detail":"architect"}
+{"timestamp":"2026-03-28T14:54:54.8969079+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:55:13.5899267+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T14:55:13.5899267+01:00","action":"release","task_id":73,"detail":"writer"}
+{"timestamp":"2026-03-28T14:55:22.6021882+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:55:22.6052018+01:00","action":"claim","task_id":92,"detail":"builder"}
+{"timestamp":"2026-03-28T14:55:23.8614407+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:56:01.2150865+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:56:10.8473189+01:00","action":"create","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-28T14:56:25.6481213+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:56:31.2795923+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:57:16.4106761+01:00","action":"edit","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:57:16.4116762+01:00","action":"release","task_id":8,"detail":"architect"}
+{"timestamp":"2026-03-28T14:57:22.0903029+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:57:27.811886+01:00","action":"delete","task_id":8,"detail":"Port agents to .agent.md format"}
+{"timestamp":"2026-03-28T14:57:33.9066821+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T14:57:33.9076819+01:00","action":"release","task_id":12,"detail":"architect"}
+{"timestamp":"2026-03-28T14:57:38.5702803+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:57:52.404383+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:57:52.8337308+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T14:57:52.8354061+01:00","action":"release","task_id":92,"detail":"builder"}
+{"timestamp":"2026-03-28T14:58:43.6591854+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T14:58:43.6601959+01:00","action":"claim","task_id":15,"detail":"architect"}
+{"timestamp":"2026-03-28T14:58:53.6570054+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T14:58:53.6591333+01:00","action":"claim","task_id":28,"detail":"architect"}
+{"timestamp":"2026-03-28T14:59:29.5012091+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T14:59:29.5012091+01:00","action":"claim","task_id":42,"detail":"builder"}
+{"timestamp":"2026-03-28T15:00:14.8463437+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T15:00:24.2745337+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T15:00:38.6467551+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T15:01:48.792816+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T15:01:53.4328995+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T15:01:53.4350481+01:00","action":"release","task_id":28,"detail":"architect"}
+{"timestamp":"2026-03-28T15:02:10.0245339+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T15:02:10.0261152+01:00","action":"release","task_id":42,"detail":"builder"}
+{"timestamp":"2026-03-28T15:03:14.9428332+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:03:14.9444623+01:00","action":"claim","task_id":54,"detail":"architect"}
+{"timestamp":"2026-03-28T15:03:40.4044773+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:04:00.8850336+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:04:21.133685+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:04:31.8799029+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:04:38.2372648+01:00","action":"create","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T15:05:09.0908142+01:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
+{"timestamp":"2026-03-28T15:05:09.0918155+01:00","action":"release","task_id":54,"detail":"architect"}
+{"timestamp":"2026-03-28T15:05:09.5668686+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T15:05:45.8515481+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T15:06:56.7151236+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T15:07:27.9838015+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T15:07:33.4884534+01:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-28T15:07:33.4884534+01:00","action":"release","task_id":15,"detail":"architect"}
+{"timestamp":"2026-03-28T15:08:32.9009959+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T15:08:32.9019951+01:00","action":"claim","task_id":101,"detail":"architect"}
+{"timestamp":"2026-03-28T15:08:33.4240755+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T15:08:33.4250813+01:00","action":"claim","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-28T15:08:38.7749542+01:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-28T15:08:38.7749542+01:00","action":"claim","task_id":97,"detail":"architect"}
+{"timestamp":"2026-03-28T15:08:45.9716746+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T15:09:09.9312186+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T15:09:09.9331906+01:00","action":"claim","task_id":46,"detail":"reviewer"}
+{"timestamp":"2026-03-28T15:10:25.0761876+01:00","action":"create","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T15:11:06.8275961+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T15:12:28.363437+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T15:13:24.4869328+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T15:13:24.4884155+01:00","action":"claim","task_id":107,"detail":"architect"}
+{"timestamp":"2026-03-28T15:13:29.9753102+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T15:14:45.096707+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-28T15:14:45.1029675+01:00","action":"release","task_id":101,"detail":"architect"}
+{"timestamp":"2026-03-28T15:15:32.2385591+01:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-28T15:15:38.4472797+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T15:15:38.4472797+01:00","action":"release","task_id":107,"detail":"architect"}
+{"timestamp":"2026-03-28T15:16:02.3701646+01:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-28T15:16:02.3811842+01:00","action":"release","task_id":97,"detail":"architect"}
+{"timestamp":"2026-03-28T15:16:02.8612296+01:00","action":"delete","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
+{"timestamp":"2026-03-28T15:16:20.8348424+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T15:21:59.4307558+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T15:22:30.8959358+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T15:22:30.8983493+01:00","action":"release","task_id":46,"detail":"reviewer"}
+{"timestamp":"2026-03-28T15:23:37.8117085+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T15:23:37.8137205+01:00","action":"claim","task_id":3,"detail":"researcher"}
+{"timestamp":"2026-03-28T15:23:44.8160686+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T15:23:44.8240768+01:00","action":"claim","task_id":1,"detail":"researcher"}
+{"timestamp":"2026-03-28T15:23:52.4926769+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T15:23:52.4942745+01:00","action":"claim","task_id":104,"detail":"architect"}
+{"timestamp":"2026-03-28T15:23:53.653079+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T15:23:53.6540819+01:00","action":"claim","task_id":14,"detail":"researcher"}
+{"timestamp":"2026-03-28T15:26:16.3472593+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T15:26:16.3472593+01:00","action":"release","task_id":3,"detail":"researcher"}
+{"timestamp":"2026-03-28T15:26:25.1090384+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T15:27:16.9793013+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T15:27:16.9793013+01:00","action":"release","task_id":104,"detail":"architect"}
+{"timestamp":"2026-03-28T16:18:04.6846029+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:18:04.6861517+01:00","action":"claim","task_id":73,"detail":"auditor"}
+{"timestamp":"2026-03-28T16:18:08.8612148+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T16:18:08.8622782+01:00","action":"claim","task_id":46,"detail":"writer"}
+{"timestamp":"2026-03-28T16:18:10.9483302+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T16:18:10.9505914+01:00","action":"claim","task_id":3,"detail":"architect"}
+{"timestamp":"2026-03-28T16:18:18.7341203+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T16:18:18.735179+01:00","action":"claim","task_id":70,"detail":"writer"}
+{"timestamp":"2026-03-28T16:19:01.8996031+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T16:19:01.9006292+01:00","action":"release","task_id":46,"detail":"writer"}
+{"timestamp":"2026-03-28T16:20:16.6795115+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:20:21.4633451+01:00","action":"move","task_id":73,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T16:20:21.7869698+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:20:21.7887143+01:00","action":"release","task_id":73,"detail":"auditor"}
+{"timestamp":"2026-03-28T16:20:46.2798893+01:00","action":"edit","task_id":73,"detail":"Test: ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:21:30.6716529+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T16:21:30.6771768+01:00","action":"release","task_id":70,"detail":"writer"}
+{"timestamp":"2026-03-28T16:21:57.9272875+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T16:22:18.5549489+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-28T16:22:42.4766323+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T16:22:42.478261+01:00","action":"release","task_id":3,"detail":"architect"}
+{"timestamp":"2026-03-28T16:23:38.488856+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T16:23:38.4924468+01:00","action":"claim","task_id":92,"detail":"reviewer"}
+{"timestamp":"2026-03-28T16:23:45.319445+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T16:23:45.3204643+01:00","action":"claim","task_id":96,"detail":"reviewer"}
+{"timestamp":"2026-03-28T16:23:54.602735+01:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:23:54.6043026+01:00","action":"claim","task_id":58,"detail":"test-writer"}
+{"timestamp":"2026-03-28T16:23:59.4944789+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T16:23:59.495514+01:00","action":"claim","task_id":108,"detail":"test-writer"}
+{"timestamp":"2026-03-28T16:25:16.7030825+01:00","action":"edit","task_id":58,"detail":"Implement ProcessSupervisor for ACP subprocess lifecycle"}
+{"timestamp":"2026-03-28T16:25:16.7041481+01:00","action":"release","task_id":58,"detail":"test-writer"}
+{"timestamp":"2026-03-28T16:26:02.5951681+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T16:26:02.5962474+01:00","action":"release","task_id":92,"detail":"reviewer"}
+{"timestamp":"2026-03-28T16:26:16.9177133+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T16:26:22.2751751+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T16:26:22.2767371+01:00","action":"release","task_id":108,"detail":"test-writer"}
+{"timestamp":"2026-03-28T16:27:11.7433345+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T16:27:16.9688992+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T16:27:16.970981+01:00","action":"release","task_id":96,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:01:57.3211732+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:01:57.3454542+01:00","action":"claim","task_id":46,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:02:01.4266039+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:02:15.6218987+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:02:15.6234745+01:00","action":"claim","task_id":1,"detail":"architect"}
+{"timestamp":"2026-03-28T21:02:16.402894+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:02:16.404169+01:00","action":"claim","task_id":96,"detail":"writer"}
+{"timestamp":"2026-03-28T21:02:17.368459+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:02:17.3711961+01:00","action":"claim","task_id":92,"detail":"writer"}
+{"timestamp":"2026-03-28T21:03:10.1743805+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:03:15.2929661+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:03:19.8847791+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:03:31.8560784+01:00","action":"move","task_id":46,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T21:03:36.4037443+01:00","action":"edit","task_id":46,"detail":"Add agent-client-protocol to orchestrator deps"}
+{"timestamp":"2026-03-28T21:03:36.4076768+01:00","action":"release","task_id":46,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:03:39.4860981+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:03:44.1148142+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:03:48.6792547+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:03:48.6815148+01:00","action":"release","task_id":1,"detail":"architect"}
+{"timestamp":"2026-03-28T21:03:49.3153091+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:04:00.2922793+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:04:08.4436029+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:04:08.4475004+01:00","action":"release","task_id":96,"detail":"writer"}
+{"timestamp":"2026-03-28T21:05:24.7546479+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:05:24.7557727+01:00","action":"release","task_id":92,"detail":"writer"}
+{"timestamp":"2026-03-28T21:05:54.9845637+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:05:54.9861108+01:00","action":"claim","task_id":45,"detail":"architect"}
+{"timestamp":"2026-03-28T21:05:58.8167846+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T21:05:58.819053+01:00","action":"claim","task_id":70,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:05:59.3022011+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:06:03.1404444+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:06:06.9586979+01:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-28T21:06:06.9592061+01:00","action":"claim","task_id":106,"detail":"architect"}
+{"timestamp":"2026-03-28T21:09:06.1790337+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:09:23.0438344+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:09:26.9683567+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:09:26.9701007+01:00","action":"release","task_id":45,"detail":"architect"}
+{"timestamp":"2026-03-28T21:09:31.6712242+01:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-28T21:11:51.5967011+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:11:57.3101858+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:12:03.4266175+01:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-28T21:12:20.4753199+01:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-28T21:12:20.4758964+01:00","action":"release","task_id":106,"detail":"architect"}
+{"timestamp":"2026-03-28T21:13:03.3179387+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T21:13:16.5660169+01:00","action":"move","task_id":70,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T21:13:21.1848407+01:00","action":"edit","task_id":70,"detail":"Add search_structured method to KnowledgeQueryService"}
+{"timestamp":"2026-03-28T21:13:21.1848407+01:00","action":"release","task_id":70,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:13:53.710925+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:13:53.7119638+01:00","action":"claim","task_id":17,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:13:56.78423+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:13:56.7852631+01:00","action":"claim","task_id":5,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:14:11.9317696+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:14:11.9329899+01:00","action":"claim","task_id":102,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:14:28.3502841+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:14:28.3514191+01:00","action":"claim","task_id":108,"detail":"builder"}
+{"timestamp":"2026-03-28T21:15:06.9399191+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:15:20.1092561+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:15:30.2346841+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:15:33.5479401+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:15:33.5490619+01:00","action":"release","task_id":108,"detail":"builder"}
+{"timestamp":"2026-03-28T21:17:28.019008+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:17:39.8119134+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:17:40.2044488+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:17:40.2060861+01:00","action":"release","task_id":5,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:17:45.1969095+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:17:50.4198293+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:18:08.9874421+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:18:09.9801815+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:18:09.98182+01:00","action":"release","task_id":17,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:18:15.2931087+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:18:15.2941667+01:00","action":"release","task_id":102,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:18:24.8979485+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:18:24.8989764+01:00","action":"claim","task_id":17,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:18:39.277896+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:18:39.6073206+01:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-28T21:18:39.6083586+01:00","action":"release","task_id":17,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:19:37.3100257+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T21:19:37.3121249+01:00","action":"claim","task_id":94,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:19:49.2759193+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T21:19:49.2775446+01:00","action":"release","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-28T21:19:51.7946125+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:19:51.7966732+01:00","action":"claim","task_id":3,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:20:02.4024299+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:20:11.167939+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:20:23.4324343+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:20:23.4334657+01:00","action":"release","task_id":3,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:21:13.029348+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T21:21:13.0304019+01:00","action":"claim","task_id":104,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:21:22.1748722+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T21:22:53.8545512+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T21:22:53.8553068+01:00","action":"release","task_id":104,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:23:30.2446004+01:00","action":"edit","task_id":104,"detail":"Test: FastMCP server and lifespan wiring for mcp-knowledge"}
+{"timestamp":"2026-03-28T21:24:03.4425532+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T21:24:08.2829255+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T21:24:08.2859579+01:00","action":"release","task_id":94,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:24:50.4040709+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T21:24:50.4051031+01:00","action":"claim","task_id":107,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:25:11.4596565+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:25:11.4612956+01:00","action":"claim","task_id":28,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:25:30.7513855+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:25:34.4954275+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:25:34.4964583+01:00","action":"release","task_id":28,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:25:50.5751253+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T21:25:50.5762446+01:00","action":"claim","task_id":80,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:25:52.2246707+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:25:52.2262433+01:00","action":"claim","task_id":42,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:28:59.0452284+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:28:59.0478264+01:00","action":"release","task_id":42,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:29:06.4450211+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T21:29:10.4839162+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T21:29:10.4854888+01:00","action":"release","task_id":80,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:29:52.0555832+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:30:35.392368+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T21:30:39.1404657+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T21:30:39.1420708+01:00","action":"release","task_id":107,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:33:57.8580721+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:33:57.8594699+01:00","action":"claim","task_id":96,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:33:58.9068724+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:33:58.9080448+01:00","action":"claim","task_id":14,"detail":"architect"}
+{"timestamp":"2026-03-28T21:34:14.3469705+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T21:34:14.3505895+01:00","action":"claim","task_id":12,"detail":"architect"}
+{"timestamp":"2026-03-28T21:34:16.715278+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:34:16.7163109+01:00","action":"claim","task_id":5,"detail":"architect"}
+{"timestamp":"2026-03-28T21:35:44.476829+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:35:48.9411289+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T21:35:48.942166+01:00","action":"release","task_id":5,"detail":"architect"}
+{"timestamp":"2026-03-28T21:37:14.7985971+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:37:18.8100535+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:37:20.8627195+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T21:37:23.8627746+01:00","action":"move","task_id":96,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T21:37:24.1722136+01:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
+{"timestamp":"2026-03-28T21:37:24.1737689+01:00","action":"release","task_id":96,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:37:25.013962+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T21:37:25.0155435+01:00","action":"release","task_id":12,"detail":"architect"}
+{"timestamp":"2026-03-28T21:39:53.3467772+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:40:17.3953427+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:40:26.2094449+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T21:40:26.2104692+01:00","action":"release","task_id":14,"detail":"architect"}
+{"timestamp":"2026-03-28T21:41:05.0457577+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T21:41:05.0473337+01:00","action":"claim","task_id":100,"detail":"architect"}
+{"timestamp":"2026-03-28T21:41:05.5021818+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:41:05.5043342+01:00","action":"claim","task_id":102,"detail":"architect"}
+{"timestamp":"2026-03-28T21:41:05.9890647+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T21:41:05.9904711+01:00","action":"claim","task_id":10,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:41:11.6970623+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T21:41:11.7001155+01:00","action":"release","task_id":100,"detail":"architect"}
+{"timestamp":"2026-03-28T21:41:12.01594+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:41:12.882123+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:41:12.8836944+01:00","action":"claim","task_id":92,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:42:38.2513173+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:42:54.5650366+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:42:57.2027563+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T21:42:57.2043554+01:00","action":"claim","task_id":100,"detail":"architect"}
+{"timestamp":"2026-03-28T21:43:14.380715+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:43:21.5480816+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T21:43:22.965847+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T21:43:22.967199+01:00","action":"release","task_id":102,"detail":"architect"}
+{"timestamp":"2026-03-28T21:43:30.1687785+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T21:43:30.1698347+01:00","action":"release","task_id":100,"detail":"architect"}
+{"timestamp":"2026-03-28T21:43:35.7288866+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:43:45.1397811+01:00","action":"move","task_id":92,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-28T21:43:50.2076899+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:43:50.208917+01:00","action":"release","task_id":92,"detail":"auditor"}
+{"timestamp":"2026-03-28T21:44:26.8284769+01:00","action":"edit","task_id":92,"detail":"Test: setup script core functions (settings, mcp, kanban, idempotency)"}
+{"timestamp":"2026-03-28T21:46:19.0393146+01:00","action":"create","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T21:46:34.6310617+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T21:46:44.6667016+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T21:46:49.2596018+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T21:46:49.2611417+01:00","action":"release","task_id":10,"detail":"researcher"}
+{"timestamp":"2026-03-28T21:47:51.830224+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:47:51.8312991+01:00","action":"claim","task_id":1,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:47:57.1572103+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:48:00.3132683+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:48:00.3163413+01:00","action":"claim","task_id":45,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:48:06.8918745+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:48:10.8166655+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:48:19.9028628+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:48:19.9044812+01:00","action":"claim","task_id":28,"detail":"builder"}
+{"timestamp":"2026-03-28T21:48:20.3827142+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:48:20.3837611+01:00","action":"claim","task_id":108,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:48:35.7154907+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:48:36.1620248+01:00","action":"move","task_id":45,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-03-28T21:48:47.7314642+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T21:48:47.7330719+01:00","action":"release","task_id":45,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:48:58.9036426+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T21:48:58.9050834+01:00","action":"release","task_id":1,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:50:31.8599579+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:50:33.4703556+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:50:35.7512781+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T21:50:35.7525375+01:00","action":"release","task_id":28,"detail":"builder"}
+{"timestamp":"2026-03-28T21:50:55.8190881+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T21:50:55.8211174+01:00","action":"release","task_id":108,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:51:23.4171741+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:51:23.4187243+01:00","action":"claim","task_id":3,"detail":"builder"}
+{"timestamp":"2026-03-28T21:51:25.0163005+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T21:51:25.0178863+01:00","action":"claim","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:51:30.2258454+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T21:51:30.2269771+01:00","action":"claim","task_id":84,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:52:05.6355802+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:52:05.6366154+01:00","action":"claim","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:52:12.1480211+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:52:32.6601769+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:52:55.0112541+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:53:02.5031725+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:53:23.7827944+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:53:28.0713882+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:53:28.0724867+01:00","action":"release","task_id":42,"detail":"test-writer"}
+{"timestamp":"2026-03-28T21:53:39.3306828+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:53:51.174433+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T21:54:43.4227819+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T21:54:47.5089497+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T21:54:47.5100229+01:00","action":"release","task_id":84,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:56:08.8788554+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T21:56:17.916208+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T21:56:17.9177521+01:00","action":"release","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:56:54.0300942+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:56:58.6284175+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T21:56:58.6309106+01:00","action":"release","task_id":3,"detail":"builder"}
+{"timestamp":"2026-03-28T21:57:20.3401567+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T21:57:20.3422615+01:00","action":"claim","task_id":38,"detail":"reviewer"}
+{"timestamp":"2026-03-28T21:58:08.8264206+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T21:58:08.8299714+01:00","action":"claim","task_id":107,"detail":"builder"}
+{"timestamp":"2026-03-28T21:59:30.6731255+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T21:59:30.6752559+01:00","action":"release","task_id":38,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:07:32.334903+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T22:07:32.3381123+01:00","action":"release","task_id":107,"detail":"builder"}
+{"timestamp":"2026-03-28T22:07:57.6604703+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T22:10:48.1357255+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T22:10:48.1382572+01:00","action":"claim","task_id":10,"detail":"architect"}
+{"timestamp":"2026-03-28T22:10:53.961982+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T22:10:53.9640695+01:00","action":"claim","task_id":108,"detail":"writer"}
+{"timestamp":"2026-03-28T22:10:57.028352+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T22:10:57.0294206+01:00","action":"claim","task_id":45,"detail":"builder"}
+{"timestamp":"2026-03-28T22:11:05.0265858+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T22:11:05.0276133+01:00","action":"claim","task_id":84,"detail":"writer"}
+{"timestamp":"2026-03-28T22:12:07.4831731+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T22:12:07.4878397+01:00","action":"release","task_id":108,"detail":"writer"}
+{"timestamp":"2026-03-28T22:12:30.0575892+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-28T22:13:26.8777603+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T22:13:33.4107745+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T22:14:18.2486395+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T22:14:25.5653198+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T22:14:25.5653198+01:00","action":"release","task_id":84,"detail":"writer"}
+{"timestamp":"2026-03-28T22:14:28.9215528+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-28T22:14:32.6248058+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-28T22:14:32.6263678+01:00","action":"release","task_id":10,"detail":"architect"}
+{"timestamp":"2026-03-28T22:20:49.7827797+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T22:20:58.9732505+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-28T22:20:58.9743408+01:00","action":"release","task_id":45,"detail":"builder"}
+{"timestamp":"2026-03-28T22:22:01.5363792+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T22:22:01.5379281+01:00","action":"claim","task_id":109,"detail":"researcher"}
+{"timestamp":"2026-03-28T22:22:05.7992202+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T22:22:06.5227798+01:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:22:06.5259413+01:00","action":"claim","task_id":61,"detail":"architect"}
+{"timestamp":"2026-03-28T22:22:10.3299269+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T22:22:10.3315258+01:00","action":"claim","task_id":28,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:23:30.2558672+01:00","action":"create","task_id":110,"detail":"Implement: update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T22:23:34.2153212+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-28T22:23:34.2180758+01:00","action":"release","task_id":28,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:23:44.9956083+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T22:23:45.0003701+01:00","action":"claim","task_id":94,"detail":"builder"}
+{"timestamp":"2026-03-28T22:24:22.9364205+01:00","action":"create","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-28T22:25:19.219734+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T22:25:33.0863943+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-28T22:25:33.088476+01:00","action":"release","task_id":109,"detail":"researcher"}
+{"timestamp":"2026-03-28T22:26:21.7009238+01:00","action":"create","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:27:06.5946861+01:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:27:31.0730229+01:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:27:58.1423146+01:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:28:10.8321071+01:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-28T22:28:10.8342204+01:00","action":"release","task_id":61,"detail":"architect"}
+{"timestamp":"2026-03-28T22:34:17.4195856+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-28T22:34:17.4219302+01:00","action":"release","task_id":94,"detail":"builder"}
+{"timestamp":"2026-03-28T22:35:22.1049754+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T22:35:22.1065402+01:00","action":"claim","task_id":1,"detail":"builder"}
+{"timestamp":"2026-03-28T22:35:22.6352563+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T22:35:22.6373437+01:00","action":"claim","task_id":107,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:35:45.9245148+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T22:35:51.1206876+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T22:36:07.9423061+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T22:36:07.9442954+01:00","action":"claim","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:36:13.2213655+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T22:36:13.2229243+01:00","action":"claim","task_id":3,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:36:41.7981085+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T22:36:47.7216494+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-28T22:36:47.7232003+01:00","action":"release","task_id":1,"detail":"builder"}
+{"timestamp":"2026-03-28T22:37:04.3349598+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T22:38:47.3301477+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T22:38:47.3327666+01:00","action":"release","task_id":3,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:39:17.3678392+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-28T22:40:10.3620342+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T22:40:16.2171965+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-28T22:40:16.219286+01:00","action":"release","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:41:39.1671751+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T22:41:59.0480576+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-28T22:41:59.0491071+01:00","action":"release","task_id":107,"detail":"reviewer"}
+{"timestamp":"2026-03-28T22:43:07.4875457+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T22:43:07.4890971+01:00","action":"claim","task_id":102,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:43:27.4594026+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T22:43:27.4614916+01:00","action":"claim","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:43:33.4926794+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T22:43:40.860535+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T22:43:40.8645258+01:00","action":"claim","task_id":42,"detail":"builder"}
+{"timestamp":"2026-03-28T22:43:47.2852618+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T22:43:47.7274481+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-28T22:43:47.7284813+01:00","action":"release","task_id":102,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:44:38.4498896+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:44:38.450918+01:00","action":"claim","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:45:02.1057557+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:45:16.7500775+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:45:23.4771048+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T22:45:35.4747728+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T22:45:41.8398289+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-28T22:45:41.8428248+01:00","action":"release","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:46:01.6629104+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T22:46:01.6650407+01:00","action":"block","task_id":42,"detail":"Decision pending: docs/decisions/pending/42-ac3-slash-command-menu-verification.md"}
+{"timestamp":"2026-03-28T22:46:01.666606+01:00","action":"release","task_id":42,"detail":"builder"}
+{"timestamp":"2026-03-28T22:46:08.6973602+01:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
+{"timestamp":"2026-03-28T22:50:47.5680129+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:51:00.4123673+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:51:07.332891+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-28T22:51:07.3339346+01:00","action":"release","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:51:56.409893+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T22:51:56.4114608+01:00","action":"claim","task_id":80,"detail":"builder"}
+{"timestamp":"2026-03-28T22:52:02.8672118+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T22:52:03.3823917+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T22:52:03.3843488+01:00","action":"claim","task_id":38,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:52:03.8973119+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T22:52:03.8985414+01:00","action":"claim","task_id":5,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:52:24.0279078+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T22:52:24.0294641+01:00","action":"claim","task_id":100,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:52:44.1856355+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-28T22:54:21.7156191+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T22:54:44.2864516+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T22:55:32.3497406+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-28T22:55:32.351864+01:00","action":"release","task_id":80,"detail":"builder"}
+{"timestamp":"2026-03-28T22:56:43.8979088+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T22:57:27.7639544+01:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-28T22:57:27.7655266+01:00","action":"release","task_id":100,"detail":"test-writer"}
+{"timestamp":"2026-03-28T22:59:13.4517941+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-28T22:59:13.4534297+01:00","action":"release","task_id":38,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:36:01.1900682+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T00:36:01.1928274+01:00","action":"claim","task_id":90,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:36:06.0965388+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T00:36:06.0981178+01:00","action":"claim","task_id":3,"detail":"writer"}
+{"timestamp":"2026-03-29T00:36:10.9395097+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-29T00:36:10.9410725+01:00","action":"claim","task_id":84,"detail":"auditor"}
+{"timestamp":"2026-03-29T00:36:16.8674468+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T00:36:16.8734444+01:00","action":"claim","task_id":28,"detail":"writer"}
+{"timestamp":"2026-03-29T00:36:52.8050481+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T00:36:52.8071414+01:00","action":"release","task_id":3,"detail":"writer"}
+{"timestamp":"2026-03-29T00:37:20.4301538+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T00:37:28.3898411+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T00:37:28.3914878+01:00","action":"release","task_id":28,"detail":"writer"}
+{"timestamp":"2026-03-29T00:37:29.3294885+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T00:38:45.4064766+01:00","action":"create","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T00:39:15.0082981+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T00:39:15.0093436+01:00","action":"release","task_id":90,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:40:08.5470504+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-29T00:40:13.8855468+01:00","action":"move","task_id":84,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T00:40:19.3196463+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-29T00:40:19.3221584+01:00","action":"release","task_id":84,"detail":"auditor"}
+{"timestamp":"2026-03-29T00:40:43.3033527+01:00","action":"edit","task_id":84,"detail":"Test: skills-ref validation script"}
+{"timestamp":"2026-03-29T00:41:13.8873944+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T00:41:13.8889477+01:00","action":"claim","task_id":91,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:41:26.0784036+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T00:41:26.0804409+01:00","action":"claim","task_id":5,"detail":"builder"}
+{"timestamp":"2026-03-29T00:41:42.851647+01:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-29T00:41:42.8537584+01:00","action":"claim","task_id":95,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:41:49.7199389+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T00:41:53.3760141+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T00:41:53.3770486+01:00","action":"release","task_id":5,"detail":"builder"}
+{"timestamp":"2026-03-29T00:42:20.0576724+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T00:42:20.0587604+01:00","action":"claim","task_id":1,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:43:57.1860205+01:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-29T00:43:57.1870373+01:00","action":"release","task_id":95,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:44:08.4036074+01:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T00:44:20.6002002+01:00","action":"create","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T00:44:25.9550364+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T00:44:25.9565917+01:00","action":"release","task_id":91,"detail":"researcher"}
+{"timestamp":"2026-03-29T00:44:44.7344417+01:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-29T00:44:44.7354852+01:00","action":"block","task_id":1,"detail":"Reviewer FAIL: AC items 3-4 not delivered (build script and send-prompt delegated to #45 but not removed from this task AC). Architect must remove items 3-4 from task 1 AC before re-review."}
+{"timestamp":"2026-03-29T00:44:44.7365144+01:00","action":"release","task_id":1,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:45:53.2954571+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T00:45:53.2969889+01:00","action":"claim","task_id":45,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:46:03.8164036+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T00:46:06.2759372+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T00:46:06.2770083+01:00","action":"claim","task_id":12,"detail":"builder"}
+{"timestamp":"2026-03-29T00:46:09.4124666+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T00:46:12.8626626+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T00:47:19.6861981+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T00:47:23.1299722+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T00:47:23.1309968+01:00","action":"release","task_id":12,"detail":"builder"}
+{"timestamp":"2026-03-29T00:47:39.2328657+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T00:47:39.2345192+01:00","action":"claim","task_id":10,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:47:42.4896133+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T00:47:42.4911389+01:00","action":"release","task_id":45,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:47:45.8567475+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T00:47:56.9616964+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T00:48:00.8525197+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T00:48:00.853537+01:00","action":"release","task_id":10,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:49:44.1823169+01:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T00:49:44.183391+01:00","action":"claim","task_id":44,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:52:53.0200701+01:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T00:52:56.6581352+01:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T00:52:56.6614969+01:00","action":"release","task_id":44,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:53:32.7830106+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T00:53:32.7846102+01:00","action":"claim","task_id":94,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:54:02.6879688+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T00:54:02.6890178+01:00","action":"claim","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T00:54:03.892775+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T00:54:03.8948389+01:00","action":"claim","task_id":80,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:55:09.0138292+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T00:55:09.0148635+01:00","action":"claim","task_id":101,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:55:25.2466308+01:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T00:55:25.2506913+01:00","action":"release","task_id":101,"detail":"test-writer"}
+{"timestamp":"2026-03-29T00:56:30.1160467+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T00:56:30.1176725+01:00","action":"release","task_id":80,"detail":"reviewer"}
+{"timestamp":"2026-03-29T00:58:02.5823756+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T00:58:02.5834181+01:00","action":"release","task_id":94,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:11:08.4855186+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:11:12.5963016+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:11:12.5983123+01:00","action":"release","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T01:13:35.9482558+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T01:13:35.9492882+01:00","action":"claim","task_id":94,"detail":"writer"}
+{"timestamp":"2026-03-29T01:13:38.7972957+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:13:38.7984079+01:00","action":"claim","task_id":112,"detail":"architect"}
+{"timestamp":"2026-03-29T01:14:38.318423+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T01:14:38.3194907+01:00","action":"release","task_id":94,"detail":"writer"}
+{"timestamp":"2026-03-29T01:14:50.9882206+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:14:54.9913577+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:15:18.3272852+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:15:22.5949868+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:15:26.7731518+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:15:26.7741868+01:00","action":"release","task_id":112,"detail":"architect"}
+{"timestamp":"2026-03-29T01:17:26.0450596+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-29T01:17:26.0466231+01:00","action":"claim","task_id":108,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:17:30.9228892+01:00","action":"move","task_id":108,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T01:17:31.2203763+01:00","action":"edit","task_id":108,"detail":"Test: Grant vscode/askQuestions to user-invocable agents"}
+{"timestamp":"2026-03-29T01:17:31.2219584+01:00","action":"release","task_id":108,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:18:00.2044961+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:18:00.2055476+01:00","action":"claim","task_id":91,"detail":"architect"}
+{"timestamp":"2026-03-29T01:18:03.4999222+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:18:03.5012998+01:00","action":"claim","task_id":109,"detail":"architect"}
+{"timestamp":"2026-03-29T01:18:04.4178016+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:18:04.4193864+01:00","action":"claim","task_id":90,"detail":"architect"}
+{"timestamp":"2026-03-29T01:18:09.6043527+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:18:10.854749+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T01:18:10.8557809+01:00","action":"claim","task_id":28,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:18:59.7093539+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:19:04.5402945+01:00","action":"delete","task_id":110,"detail":"Implement: update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:19:08.0249976+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:19:15.9529518+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:19:21.0708802+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:19:21.0719158+01:00","action":"release","task_id":109,"detail":"architect"}
+{"timestamp":"2026-03-29T01:19:22.3514306+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:19:24.5524312+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:19:32.671913+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:19:32.6729613+01:00","action":"release","task_id":91,"detail":"architect"}
+{"timestamp":"2026-03-29T01:19:43.9434047+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:20:00.6414689+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:20:08.1647718+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:20:08.1662263+01:00","action":"release","task_id":90,"detail":"architect"}
+{"timestamp":"2026-03-29T01:21:32.5150166+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T01:21:41.6575444+01:00","action":"move","task_id":28,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T01:21:46.2755682+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T01:21:46.2771152+01:00","action":"release","task_id":28,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:22:02.7850307+01:00","action":"edit","task_id":28,"detail":"Update README.md for v2"}
+{"timestamp":"2026-03-29T01:22:40.3185187+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T01:22:40.3197846+01:00","action":"claim","task_id":3,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:22:52.9523215+01:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-29T01:22:52.9537327+01:00","action":"claim","task_id":95,"detail":"architect"}
+{"timestamp":"2026-03-29T01:23:08.2263109+01:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-29T01:23:08.227373+01:00","action":"block","task_id":95,"detail":"Empty body: no AC, no description, no research pointers. Needs scoped requirements before architect review."}
+{"timestamp":"2026-03-29T01:23:08.2281559+01:00","action":"release","task_id":95,"detail":"architect"}
+{"timestamp":"2026-03-29T01:25:06.7821051+01:00","action":"move","task_id":3,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T01:25:07.0788306+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T01:25:07.0798923+01:00","action":"release","task_id":3,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:25:22.4770487+01:00","action":"edit","task_id":3,"detail":"agentskills.io spec validation"}
+{"timestamp":"2026-03-29T01:25:45.2509064+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:25:45.2519924+01:00","action":"claim","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:25:45.6780165+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:25:45.6808102+01:00","action":"claim","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:25:56.363084+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T01:25:56.3646571+01:00","action":"claim","task_id":102,"detail":"builder"}
+{"timestamp":"2026-03-29T01:26:11.1882602+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:26:11.1893094+01:00","action":"claim","task_id":5,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:27:26.6331837+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:27:26.6342732+01:00","action":"release","task_id":5,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:29:41.5508691+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:29:41.5526751+01:00","action":"release","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:30:18.4803382+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:30:18.4813282+01:00","action":"release","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:30:25.5969147+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:30:38.76511+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T01:30:42.517716+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T01:30:42.5187634+01:00","action":"release","task_id":102,"detail":"builder"}
+{"timestamp":"2026-03-29T01:31:13.8503066+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:31:13.851365+01:00","action":"claim","task_id":10,"detail":"builder"}
+{"timestamp":"2026-03-29T01:31:20.978383+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:31:20.9798874+01:00","action":"claim","task_id":107,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:32:20.2987764+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:32:20.2998291+01:00","action":"release","task_id":10,"detail":"builder"}
+{"timestamp":"2026-03-29T01:34:24.4133347+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:34:28.0644932+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:34:28.0659507+01:00","action":"release","task_id":107,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:36:47.1784785+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T01:36:47.1818667+01:00","action":"claim","task_id":9,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:36:50.0070944+01:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T01:36:50.0086626+01:00","action":"claim","task_id":93,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:37:00.2247147+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:37:00.2262518+01:00","action":"claim","task_id":5,"detail":"writer"}
+{"timestamp":"2026-03-29T01:37:05.3935428+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T01:37:05.3946814+01:00","action":"claim","task_id":94,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:37:46.1814913+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:37:53.4446616+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:37:58.9203757+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:37:58.9222699+01:00","action":"release","task_id":5,"detail":"writer"}
+{"timestamp":"2026-03-29T01:38:00.6752309+01:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T01:38:02.8386177+01:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T01:38:02.8396635+01:00","action":"release","task_id":93,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:40:43.4731346+01:00","action":"create","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T01:40:51.0074525+01:00","action":"create","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T01:40:59.194567+01:00","action":"create","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
+{"timestamp":"2026-03-29T01:41:14.6655656+01:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T01:41:14.9540865+01:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
+{"timestamp":"2026-03-29T01:42:10.5041983+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T01:42:46.7945631+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T01:42:47.0948209+01:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T01:42:47.0958589+01:00","action":"release","task_id":9,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:43:24.665766+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T01:43:36.0802459+01:00","action":"move","task_id":94,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T01:43:40.2882351+01:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
+{"timestamp":"2026-03-29T01:43:40.2892888+01:00","action":"release","task_id":94,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:44:17.5711094+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:44:17.5726464+01:00","action":"claim","task_id":80,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:44:23.5433025+01:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T01:44:23.5443618+01:00","action":"claim","task_id":114,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:45:11.1066317+01:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T01:46:10.9930907+01:00","action":"move","task_id":114,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-29T01:46:15.4306381+01:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T01:46:15.4322516+01:00","action":"release","task_id":114,"detail":"researcher"}
+{"timestamp":"2026-03-29T01:47:24.1658925+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:47:27.9453801+01:00","action":"move","task_id":80,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T01:47:32.277217+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:47:32.2787693+01:00","action":"release","task_id":80,"detail":"auditor"}
+{"timestamp":"2026-03-29T01:47:47.4477134+01:00","action":"edit","task_id":80,"detail":"Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent"}
+{"timestamp":"2026-03-29T01:48:20.9302698+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:48:20.931467+01:00","action":"claim","task_id":107,"detail":"builder"}
+{"timestamp":"2026-03-29T01:48:29.1376067+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T01:48:29.1395619+01:00","action":"claim","task_id":45,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:48:38.9101692+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T01:48:45.8760699+01:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T01:48:45.8771243+01:00","action":"release","task_id":45,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:49:23.9499692+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:49:23.9520343+01:00","action":"claim","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:49:35.0573548+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:49:49.6207581+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:49:53.2529592+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:50:02.3589363+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:50:07.6613722+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:50:07.6629355+01:00","action":"claim","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:50:09.8818691+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:50:14.7851837+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:50:22.1703718+01:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T01:50:22.1724015+01:00","action":"release","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:50:24.1859046+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:50:28.8519825+01:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T01:50:28.853048+01:00","action":"release","task_id":107,"detail":"builder"}
+{"timestamp":"2026-03-29T01:51:20.2269548+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:51:24.210926+01:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T01:51:24.2129861+01:00","action":"release","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:51:50.1914871+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T01:51:50.1927781+01:00","action":"claim","task_id":102,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:52:12.4629676+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T01:52:12.4639889+01:00","action":"claim","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-29T01:52:19.7018919+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:52:19.703508+01:00","action":"claim","task_id":109,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:52:33.5161688+01:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-29T01:52:33.5172268+01:00","action":"release","task_id":109,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:52:35.2120754+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:52:35.2133866+01:00","action":"claim","task_id":10,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:52:43.8308815+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:53:12.195127+01:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T01:53:12.1969424+01:00","action":"release","task_id":102,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:54:46.5270301+01:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T01:54:46.5286177+01:00","action":"release","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-29T01:55:24.7937842+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:55:49.1973221+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:55:59.72044+01:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T01:55:59.7220924+01:00","action":"release","task_id":10,"detail":"reviewer"}
+{"timestamp":"2026-03-29T01:56:25.3741294+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:56:25.3751621+01:00","action":"claim","task_id":112,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:56:27.1264114+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:56:27.1274965+01:00","action":"claim","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:56:31.1188921+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:56:31.1199585+01:00","action":"claim","task_id":91,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:56:49.7716266+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:56:56.8014427+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:57:01.243241+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:57:03.4570146+01:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T01:57:03.4580645+01:00","action":"release","task_id":91,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:57:04.8967907+01:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T01:57:04.8987182+01:00","action":"release","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-29T01:57:09.3740274+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T01:57:16.4934469+01:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T01:58:17.7171016+01:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-29T01:58:17.7181329+01:00","action":"release","task_id":112,"detail":"test-writer"}
+{"timestamp":"2026-03-29T03:00:10.5640077+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:00:10.5657525+02:00","action":"claim","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T03:00:13.4054445+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T03:00:13.4069869+02:00","action":"claim","task_id":9,"detail":"architect"}
+{"timestamp":"2026-03-29T03:00:28.140132+02:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T03:00:28.1427816+02:00","action":"claim","task_id":5,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:00:37.946657+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:00:37.9482097+02:00","action":"claim","task_id":115,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:01:17.4090303+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:01:22.3541957+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:01:22.3552488+02:00","action":"release","task_id":93,"detail":"architect"}
+{"timestamp":"2026-03-29T03:03:08.2376228+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:03:12.9588072+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T03:03:17.8915507+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:03:22.5064863+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:03:22.5085415+02:00","action":"release","task_id":115,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:03:24.1676658+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
+{"timestamp":"2026-03-29T03:04:23.0771263+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T03:04:29.4712567+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T03:04:43.4242336+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T03:04:43.4257527+02:00","action":"release","task_id":9,"detail":"architect"}
+{"timestamp":"2026-03-29T03:04:43.7810197+02:00","action":"delete","task_id":9,"detail":"Port skills to agentskills.io format"}
+{"timestamp":"2026-03-29T03:04:55.8517487+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
+{"timestamp":"2026-03-29T03:16:00.2383025+02:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T03:16:08.9865424+02:00","action":"move","task_id":5,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T03:16:13.4188296+02:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T03:16:13.4198635+02:00","action":"release","task_id":5,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:16:41.6692358+02:00","action":"edit","task_id":5,"detail":"Copilot Memory boundary testing"}
+{"timestamp":"2026-03-29T03:17:27.2256678+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:17:27.2256678+02:00","action":"claim","task_id":102,"detail":"writer"}
+{"timestamp":"2026-03-29T03:17:28.0787403+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T03:17:28.080318+02:00","action":"claim","task_id":45,"detail":"builder"}
+{"timestamp":"2026-03-29T03:17:32.4550707+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:17:32.4561272+02:00","action":"claim","task_id":10,"detail":"writer"}
+{"timestamp":"2026-03-29T03:17:46.4486595+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:17:46.4517598+02:00","action":"claim","task_id":11,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:18:09.1624238+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:18:09.1634893+02:00","action":"release","task_id":102,"detail":"writer"}
+{"timestamp":"2026-03-29T03:18:22.9482775+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T03:18:22.9499195+02:00","action":"release","task_id":45,"detail":"builder"}
+{"timestamp":"2026-03-29T03:19:32.8241176+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:19:32.8251847+02:00","action":"release","task_id":10,"detail":"writer"}
+{"timestamp":"2026-03-29T03:24:19.2576221+02:00","action":"create","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T03:25:10.3729142+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:25:20.4145755+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:25:20.4156056+02:00","action":"release","task_id":11,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:25:53.7129951+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:25:53.7155503+02:00","action":"claim","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T03:25:59.4008028+02:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T03:25:59.4018161+02:00","action":"claim","task_id":114,"detail":"architect"}
+{"timestamp":"2026-03-29T03:26:06.0463511+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:26:06.0474149+02:00","action":"claim","task_id":103,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:26:24.939307+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:26:37.6912576+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:26:41.3210743+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:26:41.322106+02:00","action":"release","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T03:26:43.7056697+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:26:43.7072475+02:00","action":"claim","task_id":113,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:26:51.6342727+02:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T03:27:03.8940588+02:00","action":"edit","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T03:27:03.8951137+02:00","action":"release","task_id":114,"detail":"architect"}
+{"timestamp":"2026-03-29T03:27:04.2101026+02:00","action":"delete","task_id":114,"detail":"Apply python.instructions.md v2 layout edits"}
+{"timestamp":"2026-03-29T03:27:09.457614+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:27:18.967577+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:27:23.8651491+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:27:23.8667137+02:00","action":"release","task_id":113,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:29:20.0557419+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:29:25.0634296+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:29:25.0644785+02:00","action":"release","task_id":103,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:30:06.9718493+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T03:30:06.97288+02:00","action":"claim","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:30:10.0573499+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:30:10.0584091+02:00","action":"claim","task_id":107,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:31:32.3740258+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T03:31:35.8543165+02:00","action":"move","task_id":12,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-29T03:32:45.1595613+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T03:32:45.1611259+02:00","action":"claim","task_id":38,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:33:12.0033876+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T03:33:12.0049543+02:00","action":"release","task_id":38,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:35:25.2162192+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:35:29.7711947+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T03:35:29.7722298+02:00","action":"release","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:35:45.0486816+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:35:49.3280843+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:35:49.3291186+02:00","action":"release","task_id":107,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:37:39.8478476+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:37:39.8493895+02:00","action":"claim","task_id":102,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:37:41.2680824+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T03:37:41.2721274+02:00","action":"claim","task_id":118,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:37:46.4611091+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:37:46.4626997+02:00","action":"claim","task_id":115,"detail":"architect"}
+{"timestamp":"2026-03-29T03:38:00.7030157+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:38:00.7045597+02:00","action":"claim","task_id":107,"detail":"writer"}
+{"timestamp":"2026-03-29T03:39:38.3178215+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T03:39:38.3189758+02:00","action":"release","task_id":118,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:39:58.0373044+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:39:59.0258847+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T03:39:59.0269648+02:00","action":"release","task_id":107,"detail":"writer"}
+{"timestamp":"2026-03-29T03:40:01.532213+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T03:40:02.172323+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T03:40:02.1739122+02:00","action":"release","task_id":115,"detail":"architect"}
+{"timestamp":"2026-03-29T03:41:03.2996107+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:41:07.9298752+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:41:19.4035394+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:41:23.2068558+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:41:27.8400671+02:00","action":"move","task_id":102,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T03:41:32.7026434+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:41:32.7037839+02:00","action":"release","task_id":102,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:41:50.2294779+02:00","action":"edit","task_id":102,"detail":"Add search/changes usage to reviewer and auditor skill workflows"}
+{"timestamp":"2026-03-29T03:42:13.2563483+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:42:13.2589582+02:00","action":"claim","task_id":11,"detail":"architect"}
+{"timestamp":"2026-03-29T03:42:14.4048253+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:42:14.4058614+02:00","action":"claim","task_id":10,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:42:17.0846257+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T03:42:17.0876799+02:00","action":"claim","task_id":38,"detail":"writer"}
+{"timestamp":"2026-03-29T03:42:18.9890381+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:42:18.9901039+02:00","action":"claim","task_id":113,"detail":"architect"}
+{"timestamp":"2026-03-29T03:43:34.6058322+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:43:40.0619125+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T03:43:40.0629289+02:00","action":"release","task_id":38,"detail":"writer"}
+{"timestamp":"2026-03-29T03:43:54.2702162+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:44:07.0962312+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:44:22.3396784+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:44:44.0631476+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:44:45.8759963+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T03:44:45.8772843+02:00","action":"release","task_id":113,"detail":"architect"}
+{"timestamp":"2026-03-29T03:44:49.048034+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T03:44:49.0495909+02:00","action":"release","task_id":11,"detail":"architect"}
+{"timestamp":"2026-03-29T03:45:22.0828649+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:45:26.4495364+02:00","action":"move","task_id":10,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T03:45:30.9273645+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:45:30.9284412+02:00","action":"release","task_id":10,"detail":"auditor"}
+{"timestamp":"2026-03-29T03:45:50.6274898+02:00","action":"edit","task_id":10,"detail":"Port instruction files"}
+{"timestamp":"2026-03-29T03:46:21.3800148+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:46:21.3816482+02:00","action":"claim","task_id":103,"detail":"architect"}
+{"timestamp":"2026-03-29T03:46:24.0485959+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T03:46:24.0501531+02:00","action":"claim","task_id":111,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:46:33.9238195+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T03:46:33.9248402+02:00","action":"claim","task_id":100,"detail":"builder"}
+{"timestamp":"2026-03-29T03:46:52.360654+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T03:46:52.3632149+02:00","action":"claim","task_id":105,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:47:11.728798+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:47:27.6877426+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:47:35.8962718+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:47:58.4167623+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:47:58.4178277+02:00","action":"release","task_id":103,"detail":"architect"}
+{"timestamp":"2026-03-29T03:48:22.9278016+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:48:27.005728+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:48:32.7201033+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:48:38.6162832+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:48:45.2874538+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:49:11.7536634+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T03:49:36.0137186+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T03:49:54.5096906+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T03:50:03.0194748+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T03:50:03.7826185+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T03:50:03.784196+02:00","action":"release","task_id":105,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:50:13.3841708+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T03:50:13.7641759+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T03:50:13.7657757+02:00","action":"release","task_id":111,"detail":"researcher"}
+{"timestamp":"2026-03-29T03:50:16.330105+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T03:50:20.3167873+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T03:50:20.3188914+02:00","action":"release","task_id":100,"detail":"builder"}
+{"timestamp":"2026-03-29T03:50:53.7156564+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:50:53.7172528+02:00","action":"claim","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:51:01.8398977+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T03:51:01.8409736+02:00","action":"claim","task_id":45,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:51:02.7533095+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T03:51:02.7548915+02:00","action":"claim","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:51:12.4127663+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T03:51:20.7868362+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T03:51:20.7889611+02:00","action":"claim","task_id":90,"detail":"builder"}
+{"timestamp":"2026-03-29T03:53:21.0031908+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T03:53:25.3330577+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T03:53:25.3346324+02:00","action":"release","task_id":90,"detail":"builder"}
+{"timestamp":"2026-03-29T03:53:45.2673045+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T03:53:49.8795307+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T03:53:49.8816557+02:00","action":"release","task_id":45,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:54:58.4738128+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T03:54:58.4753632+02:00","action":"release","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:55:07.1833149+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T03:55:10.7736752+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T03:55:10.7759174+02:00","action":"release","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T03:55:43.5177346+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T03:55:43.5212708+02:00","action":"claim","task_id":91,"detail":"builder"}
+{"timestamp":"2026-03-29T03:55:45.3831662+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:55:45.3841925+02:00","action":"claim","task_id":93,"detail":"test-writer"}
+{"timestamp":"2026-03-29T03:56:06.2789126+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:56:09.7852749+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T03:56:09.7868034+02:00","action":"release","task_id":93,"detail":"test-writer"}
+{"timestamp":"2026-03-29T03:56:30.4586205+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T03:56:30.4596706+02:00","action":"release","task_id":91,"detail":"builder"}
+{"timestamp":"2026-03-29T03:57:15.2324359+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T03:57:15.2340235+02:00","action":"claim","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-29T03:58:12.2884344+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T03:58:15.8807262+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T03:58:15.881814+02:00","action":"release","task_id":98,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:05:44.6663086+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:05:44.667877+02:00","action":"claim","task_id":118,"detail":"architect"}
+{"timestamp":"2026-03-29T04:05:47.9894035+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T04:05:47.9894035+02:00","action":"claim","task_id":107,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:05:56.3941984+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:05:56.3957397+02:00","action":"claim","task_id":45,"detail":"writer"}
+{"timestamp":"2026-03-29T04:06:07.5206112+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:06:30.4483361+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:06:38.228317+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T04:06:38.2293385+02:00","action":"claim","task_id":105,"detail":"architect"}
+{"timestamp":"2026-03-29T04:06:46.2574014+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:06:46.2584972+02:00","action":"release","task_id":118,"detail":"architect"}
+{"timestamp":"2026-03-29T04:06:47.2756428+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T04:07:05.262323+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:07:09.150487+02:00","action":"edit","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T04:07:09.1520312+02:00","action":"release","task_id":105,"detail":"architect"}
+{"timestamp":"2026-03-29T04:07:09.5819421+02:00","action":"delete","task_id":105,"detail":"Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits"}
+{"timestamp":"2026-03-29T04:07:15.0479261+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:07:15.0494704+02:00","action":"release","task_id":45,"detail":"writer"}
+{"timestamp":"2026-03-29T04:16:39.2272343+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T04:16:46.0011198+02:00","action":"move","task_id":107,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T04:16:46.3301318+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T04:16:46.3319751+02:00","action":"release","task_id":107,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:17:11.1421811+02:00","action":"edit","task_id":107,"detail":"Test: Knowledge engine foundation (#15)"}
+{"timestamp":"2026-03-29T04:17:51.9512856+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:17:51.9534343+02:00","action":"claim","task_id":111,"detail":"architect"}
+{"timestamp":"2026-03-29T04:17:56.5044818+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T04:17:56.5055232+02:00","action":"claim","task_id":38,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:18:58.9383993+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:19:15.3460391+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:19:24.1028879+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:19:24.1064465+02:00","action":"release","task_id":111,"detail":"architect"}
+{"timestamp":"2026-03-29T04:19:38.267195+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T04:19:42.259265+02:00","action":"move","task_id":38,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T04:19:46.7378126+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T04:19:46.7410247+02:00","action":"release","task_id":38,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:20:05.4792506+02:00","action":"edit","task_id":38,"detail":"Add disable-model-invocation to pipeline-only agents"}
+{"timestamp":"2026-03-29T04:20:25.2431051+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:20:25.2447229+02:00","action":"claim","task_id":93,"detail":"builder"}
+{"timestamp":"2026-03-29T04:20:56.7840028+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T04:20:56.7866641+02:00","action":"claim","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:21:05.5904065+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:21:05.5954401+02:00","action":"claim","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:21:08.5468266+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T04:21:08.548938+02:00","action":"claim","task_id":115,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:21:19.3452096+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:21:24.2984792+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:21:24.299537+02:00","action":"release","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:23:39.5550869+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T04:23:43.5673097+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T04:23:43.5694623+02:00","action":"release","task_id":115,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:23:53.2651299+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:24:14.0807772+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:24:35.3805708+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:24:35.3805708+02:00","action":"release","task_id":93,"detail":"builder"}
+{"timestamp":"2026-03-29T04:25:17.0928674+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T04:25:21.3648377+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T04:25:21.3663937+02:00","action":"release","task_id":12,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:25:53.2921041+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T04:25:53.2938363+02:00","action":"claim","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:25:58.3078423+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:25:58.3099635+02:00","action":"claim","task_id":91,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:26:05.7383773+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-29T04:26:05.7394408+02:00","action":"release","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:26:24.077481+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:26:24.0818329+02:00","action":"claim","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-29T04:26:52.5881227+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:26:56.5084206+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:26:56.5116969+02:00","action":"release","task_id":98,"detail":"builder"}
+{"timestamp":"2026-03-29T04:27:20.2432096+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:20.246373+02:00","action":"claim","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:27:31.0338393+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:34.1083159+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:41.3615314+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:47.9673887+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:27:47.9695469+02:00","action":"release","task_id":91,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:27:50.3950634+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:50.8341856+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:27:50.8364367+02:00","action":"release","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:27:53.9439795+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:27:53.9466619+02:00","action":"claim","task_id":91,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:27:57.8389698+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:27:57.8416351+02:00","action":"release","task_id":91,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:28:29.446374+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:28:29.4479813+02:00","action":"claim","task_id":100,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:28:41.7432856+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T04:28:41.7443352+02:00","action":"claim","task_id":103,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:28:43.5006082+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:28:43.5036819+02:00","action":"claim","task_id":90,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:28:49.5880288+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T04:28:53.40116+02:00","action":"edit","task_id":103,"detail":"Add search/usages guidance to reviewer and builder skill workflows"}
+{"timestamp":"2026-03-29T04:28:53.4038258+02:00","action":"release","task_id":103,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:29:16.3824915+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:29:16.3846205+02:00","action":"claim","task_id":44,"detail":"builder"}
+{"timestamp":"2026-03-29T04:30:27.4479853+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:30:27.4510943+02:00","action":"release","task_id":90,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:31:51.0181995+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:31:59.5754705+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:31:59.5775876+02:00","action":"release","task_id":100,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:32:02.9970596+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:32:16.088904+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:34:22.120948+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:34:25.9270988+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:34:25.9286409+02:00","action":"release","task_id":44,"detail":"builder"}
+{"timestamp":"2026-03-29T04:37:26.2335552+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:37:26.2345858+02:00","action":"claim","task_id":45,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:37:28.9580561+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:37:28.9601239+02:00","action":"claim","task_id":100,"detail":"writer"}
+{"timestamp":"2026-03-29T04:37:32.3909162+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:37:32.3932745+02:00","action":"claim","task_id":90,"detail":"writer"}
+{"timestamp":"2026-03-29T04:37:47.6494541+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:37:47.652059+02:00","action":"claim","task_id":91,"detail":"writer"}
+{"timestamp":"2026-03-29T04:39:04.9567719+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:39:04.9580778+02:00","action":"release","task_id":100,"detail":"writer"}
+{"timestamp":"2026-03-29T04:39:31.5223863+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:39:31.5229037+02:00","action":"release","task_id":90,"detail":"writer"}
+{"timestamp":"2026-03-29T04:39:41.1582174+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:39:45.4653425+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T04:39:55.9077842+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T04:39:55.90989+02:00","action":"release","task_id":91,"detail":"writer"}
+{"timestamp":"2026-03-29T04:40:13.8092548+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:40:19.2178339+02:00","action":"move","task_id":45,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T04:40:24.5806771+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:40:24.5817087+02:00","action":"release","task_id":45,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:40:48.0128076+02:00","action":"edit","task_id":45,"detail":"Build ACP hello-world script"}
+{"timestamp":"2026-03-29T04:41:15.5725394+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:41:15.5736066+02:00","action":"claim","task_id":15,"detail":"builder"}
+{"timestamp":"2026-03-29T04:41:31.8453984+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:41:31.846992+02:00","action":"claim","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:41:51.4233801+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:41:51.4244396+02:00","action":"claim","task_id":93,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:41:57.0771037+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:41:57.0786837+02:00","action":"claim","task_id":118,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:43:12.8375219+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:43:19.4723223+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T04:43:19.4738801+02:00","action":"release","task_id":15,"detail":"builder"}
+{"timestamp":"2026-03-29T04:43:47.4083829+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:43:57.7210653+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:44:10.0906253+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:44:13.7820872+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T04:44:13.783678+02:00","action":"release","task_id":93,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:44:53.182497+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:44:53.1860395+02:00","action":"release","task_id":98,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:46:36.2347994+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:46:59.7552241+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T04:46:59.7557832+02:00","action":"release","task_id":118,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:47:40.8761038+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:47:40.8777032+02:00","action":"claim","task_id":111,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:47:49.3377091+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:47:49.3398665+02:00","action":"claim","task_id":44,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:47:54.7229645+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:48:02.8691302+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:48:02.8706893+02:00","action":"claim","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T04:48:06.2560275+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:48:09.8463239+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-29T04:48:09.847875+02:00","action":"release","task_id":111,"detail":"test-writer"}
+{"timestamp":"2026-03-29T04:50:13.7837552+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:50:20.7255003+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T04:50:20.7270364+02:00","action":"release","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T04:53:25.715716+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:53:29.9467915+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T04:53:29.9483687+02:00","action":"release","task_id":44,"detail":"reviewer"}
+{"timestamp":"2026-03-29T04:55:49.5344033+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:55:49.5359345+02:00","action":"claim","task_id":98,"detail":"writer"}
+{"timestamp":"2026-03-29T04:55:53.6868123+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T04:55:53.6891713+02:00","action":"claim","task_id":113,"detail":"architect"}
+{"timestamp":"2026-03-29T04:55:55.5397026+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:55:55.5413141+02:00","action":"claim","task_id":100,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:56:42.3347306+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T04:56:42.3363866+02:00","action":"release","task_id":113,"detail":"architect"}
+{"timestamp":"2026-03-29T04:58:16.5996538+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:58:23.5277988+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T04:58:23.5288187+02:00","action":"release","task_id":98,"detail":"writer"}
+{"timestamp":"2026-03-29T04:59:20.4744579+02:00","action":"move","task_id":100,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T04:59:25.291287+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T04:59:25.2923469+02:00","action":"release","task_id":100,"detail":"auditor"}
+{"timestamp":"2026-03-29T04:59:50.0128124+02:00","action":"edit","task_id":100,"detail":"Test: owlbear-voice workspace package scaffolding"}
+{"timestamp":"2026-03-29T05:00:11.8351669+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:00:11.8372355+02:00","action":"claim","task_id":91,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:03:17.377771+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:03:22.6778355+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:03:26.7627336+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:03:35.7371241+02:00","action":"move","task_id":91,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T05:03:40.0827129+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:03:40.0842923+02:00","action":"release","task_id":91,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:03:54.2960799+02:00","action":"edit","task_id":91,"detail":"Update python.instructions.md for v2 layout"}
+{"timestamp":"2026-03-29T05:04:19.9396917+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T05:04:19.9407487+02:00","action":"claim","task_id":90,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:06:56.2054307+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T05:07:04.2359995+02:00","action":"move","task_id":90,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T05:07:08.5091764+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-29T05:07:08.5111913+02:00","action":"release","task_id":90,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:07:44.0807668+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T05:07:44.0823483+02:00","action":"claim","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:07:45.0022694+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:07:45.0033471+02:00","action":"claim","task_id":15,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:07:46.6789919+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T05:07:46.6800476+02:00","action":"claim","task_id":93,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:10:00.100577+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:10:03.6890833+02:00","action":"move","task_id":118,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-03-29T05:12:02.3775326+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:12:02.3795736+02:00","action":"release","task_id":15,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:12:38.7582541+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T05:12:43.2156134+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T05:12:43.2171552+02:00","action":"release","task_id":14,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:13:23.3822426+02:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-29T05:13:23.3839648+02:00","action":"claim","task_id":52,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:14:10.43804+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:14:10.4396393+02:00","action":"claim","task_id":12,"detail":"builder"}
+{"timestamp":"2026-03-29T05:15:44.3161356+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T05:15:44.3171776+02:00","action":"claim","task_id":44,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:15:46.7088124+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:15:55.0980487+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:15:55.1007486+02:00","action":"release","task_id":12,"detail":"builder"}
+{"timestamp":"2026-03-29T05:17:26.0461751+02:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-29T05:17:30.1823843+02:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
+{"timestamp":"2026-03-29T05:17:30.1835019+02:00","action":"release","task_id":52,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:17:53.7285427+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-03-29T05:17:53.7295989+02:00","action":"release","task_id":44,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:19:45.2344578+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T05:19:45.2410883+02:00","action":"claim","task_id":98,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:22:44.1126127+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T05:22:49.1068216+02:00","action":"move","task_id":98,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T05:22:53.7399737+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T05:22:53.7410315+02:00","action":"release","task_id":98,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:23:20.5108636+02:00","action":"edit","task_id":98,"detail":"Test: Port instruction files"}
+{"timestamp":"2026-03-29T05:23:51.0331429+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T05:23:51.0341564+02:00","action":"claim","task_id":93,"detail":"builder"}
+{"timestamp":"2026-03-29T05:23:52.3072682+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:23:52.3083235+02:00","action":"claim","task_id":118,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:24:02.002941+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T05:24:02.0046429+02:00","action":"claim","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:24:09.6449691+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:24:09.647043+02:00","action":"claim","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:24:53.1387778+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T05:24:55.1658258+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:24:55.1673563+02:00","action":"release","task_id":118,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:25:00.8158722+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
+{"timestamp":"2026-03-29T05:26:34.8178898+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T05:26:34.8189297+02:00","action":"release","task_id":14,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:27:41.9628459+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:27:46.102415+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:27:46.1039831+02:00","action":"release","task_id":12,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:28:10.6521223+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T05:28:10.6531886+02:00","action":"claim","task_id":113,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:28:31.3658534+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:28:31.3674323+02:00","action":"claim","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:28:46.7696568+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
+{"timestamp":"2026-03-29T05:28:46.7713715+02:00","action":"release","task_id":113,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:29:03.1168588+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:29:03.4042487+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:29:25.0680783+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:29:29.4403858+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:29:29.4429854+02:00","action":"release","task_id":15,"detail":"test-writer"}
+{"timestamp":"2026-03-29T05:31:18.1501379+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:31:18.151731+02:00","action":"claim","task_id":115,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:31:22.8827364+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:31:22.8843434+02:00","action":"claim","task_id":118,"detail":"writer"}
+{"timestamp":"2026-03-29T05:31:32.2149278+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:31:32.2195281+02:00","action":"claim","task_id":12,"detail":"writer"}
+{"timestamp":"2026-03-29T05:32:35.9716599+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:32:35.972712+02:00","action":"release","task_id":118,"detail":"writer"}
+{"timestamp":"2026-03-29T05:33:03.0293572+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:33:03.5724626+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T05:33:03.5741133+02:00","action":"claim","task_id":101,"detail":"builder"}
+{"timestamp":"2026-03-29T05:33:07.2632867+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:33:07.2658087+02:00","action":"release","task_id":115,"detail":"reviewer"}
+{"timestamp":"2026-03-29T05:33:09.6627124+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:33:09.6652396+02:00","action":"release","task_id":12,"detail":"writer"}
+{"timestamp":"2026-03-29T05:33:12.7894211+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:38:19.7824001+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T05:38:29.6722515+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T05:38:32.5773202+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T05:38:32.579362+02:00","action":"release","task_id":101,"detail":"builder"}
+{"timestamp":"2026-03-29T05:39:02.6482825+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:39:02.6498433+02:00","action":"claim","task_id":15,"detail":"builder"}
+{"timestamp":"2026-03-29T05:40:14.0209645+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:40:18.0445137+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T05:40:18.0460486+02:00","action":"release","task_id":15,"detail":"builder"}
+{"timestamp":"2026-03-29T05:53:05.7464867+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:53:05.7480626+02:00","action":"claim","task_id":115,"detail":"writer"}
+{"timestamp":"2026-03-29T05:53:17.6754176+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:53:17.6775042+02:00","action":"claim","task_id":12,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:54:18.6475101+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:54:25.6830567+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T05:54:25.6847239+02:00","action":"release","task_id":115,"detail":"writer"}
+{"timestamp":"2026-03-29T05:56:24.5278198+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:56:28.9837484+02:00","action":"move","task_id":12,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T05:56:33.4457335+02:00","action":"edit","task_id":12,"detail":"Build setup script (owlbear setup)"}
+{"timestamp":"2026-03-29T05:56:33.4475265+02:00","action":"release","task_id":12,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:57:11.8169563+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:57:11.8190723+02:00","action":"claim","task_id":118,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:59:29.5971237+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:59:33.2677122+02:00","action":"move","task_id":118,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T05:59:38.0752688+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T05:59:38.0783713+02:00","action":"release","task_id":118,"detail":"auditor"}
+{"timestamp":"2026-03-29T05:59:57.6136252+02:00","action":"edit","task_id":118,"detail":"Fix copilotMemory.enabled discrepancy in workspace settings"}
+{"timestamp":"2026-03-29T06:00:27.5069212+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T06:00:27.5092332+02:00","action":"claim","task_id":106,"detail":"test-writer"}
+{"timestamp":"2026-03-29T06:00:29.6933503+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T06:00:29.6954638+02:00","action":"claim","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T06:00:33.08863+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T06:00:33.0912959+02:00","action":"claim","task_id":15,"detail":"reviewer"}
+{"timestamp":"2026-03-29T06:00:45.9739301+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T06:00:51.8498948+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T06:00:55.6393384+02:00","action":"edit","task_id":106,"detail":"Document setup process for new users"}
+{"timestamp":"2026-03-29T06:00:55.6418435+02:00","action":"release","task_id":106,"detail":"test-writer"}
+{"timestamp":"2026-03-29T06:01:49.5106835+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T06:01:55.4007192+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T06:03:32.6640354+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T06:03:39.1270706+02:00","action":"edit","task_id":14,"detail":"Build mcp-kanban server"}
+{"timestamp":"2026-03-29T06:03:39.1285761+02:00","action":"release","task_id":14,"detail":"builder"}
+{"timestamp":"2026-03-29T06:05:07.844259+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T06:05:16.8666432+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T06:05:24.5684658+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
+{"timestamp":"2026-03-29T06:05:24.5710894+02:00","action":"release","task_id":15,"detail":"reviewer"}
+{"timestamp":"2026-03-29T06:11:01.1434572+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T06:11:01.1455222+02:00","action":"claim","task_id":115,"detail":"auditor"}
+{"timestamp":"2026-03-29T06:11:03.8035685+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T06:11:03.8051486+02:00","action":"claim","task_id":101,"detail":"writer"}
+{"timestamp":"2026-03-29T06:11:07.5000584+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T06:11:07.50159+02:00","action":"claim","task_id":116,"detail":"researcher"}
+{"timestamp":"2026-03-29T06:11:56.2980001+02:00","action":"edit","task_id":101,"detail":"Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)"}
+{"timestamp":"2026-03-29T06:11:56.2995601+02:00","action":"release","task_id":101,"detail":"writer"}
+{"timestamp":"2026-03-29T06:13:31.813073+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
+{"timestamp":"2026-03-29T06:13:31.8152779+02:00","action":"release","task_id":116,"detail":"researcher"}
+{"timestamp":"2026-03-29T06:14:48.1257418+02:00","action":"move","task_id":115,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-29T06:14:52.9487138+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
+{"timestamp":"2026-03-29T06:14:52.9502402+02:00","action":"release","task_id":115,"detail":"auditor"}
+{"timestamp":"2026-03-29T06:15:15.6607623+02:00","action":"edit","task_id":115,"detail":"Copy 21 skills from .github/skills/ to skills/"}
