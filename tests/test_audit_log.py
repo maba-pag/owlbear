@@ -1,11 +1,15 @@
-"""Failing tests for audit log module (task #185).
+"""Failing tests for audit log module (task #163, derived from #185).
 
-Covers: DispatchEvent model (5), CompletionEvent model (7),
+Covers: exports (3), DispatchEvent model (5), CompletionEvent model (7),
 AuditEvent TypeAdapter (5), AuditLog init (2), log_dispatch (3),
-log_completion (2), query (6).
+log_completion (2), query (6), gitignore (1) = 34 tests total.
 
 All tests fail on current HEAD because
 ``packages/orchestrator/src/owlbear/audit/`` does not exist yet.
+
+Interface per AC #163:
+  log_dispatch(self, event: DispatchEvent, session_id: str) -> None
+  log_completion(self, event: CompletionEvent, session_id: str) -> None
 """
 
 from __future__ import annotations
@@ -13,11 +17,17 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
 
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
-from owlbear.audit import AuditLog, CompletionEvent, DispatchEvent, audit_adapter
+from owlbear.audit import AuditLog, CompletionEvent, DispatchEvent
+
+# Construct local TypeAdapter matching the module-level TypeAdapter[AuditEvent] in models.py.
+# Discriminated union on the 'type' field per AC #163 models.py AuditEvent type alias.
+_AuditEvent = Annotated[DispatchEvent | CompletionEvent, Field(discriminator="type")]
+audit_adapter: TypeAdapter[DispatchEvent | CompletionEvent] = TypeAdapter(_AuditEvent)
 
 
 # ---------------------------------------------------------------------------
@@ -301,10 +311,14 @@ class TestFromAC_LogDispatch:  # noqa: N801
         audit_dir = tmp_path / "audit"
         log = AuditLog(audit_dir)
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=10,
+                agent="researcher",
+                prompt_summary="do research",
+                session_id="sess-x",
+            ),
             session_id="sess-x",
-            task_id=10,
-            agent="researcher",
-            prompt_summary="do research",
         )
         session_file = audit_dir / "sess-x.jsonl"
         assert session_file.exists()
@@ -314,10 +328,14 @@ class TestFromAC_LogDispatch:  # noqa: N801
         assert not audit_dir.exists()
         log = AuditLog(audit_dir)
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=11,
+                agent="architect",
+                prompt_summary="design",
+                session_id="sess-y",
+            ),
             session_id="sess-y",
-            task_id=11,
-            agent="architect",
-            prompt_summary="design",
         )
         assert audit_dir.exists()
 
@@ -325,10 +343,14 @@ class TestFromAC_LogDispatch:  # noqa: N801
         audit_dir = tmp_path / "audit"
         log = AuditLog(audit_dir)
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=12,
+                agent="builder",
+                prompt_summary="implement it",
+                session_id="sess-z",
+            ),
             session_id="sess-z",
-            task_id=12,
-            agent="builder",
-            prompt_summary="implement it",
         )
         session_file = audit_dir / "sess-z.jsonl"
         line = session_file.read_text(encoding="utf-8").strip()
@@ -351,19 +373,26 @@ class TestFromAC_LogCompletion:  # noqa: N801
         audit_dir = tmp_path / "audit"
         log = AuditLog(audit_dir)
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=20,
+                agent="builder",
+                prompt_summary="first",
+                session_id="sess-c",
+            ),
             session_id="sess-c",
-            task_id=20,
-            agent="builder",
-            prompt_summary="first",
         )
         log.log_completion(
+            CompletionEvent(
+                timestamp="2026-03-29T10:01:00Z",
+                task_id=20,
+                agent="builder",
+                outcome="success",
+                duration_ms=100,
+                files_changed=["src/x.py"],
+                error=None,
+            ),
             session_id="sess-c",
-            task_id=20,
-            agent="builder",
-            outcome="success",
-            duration_ms=100,
-            files_changed=["src/x.py"],
-            error=None,
         )
         session_file = audit_dir / "sess-c.jsonl"
         lines = session_file.read_text(encoding="utf-8").strip().splitlines()
@@ -373,13 +402,16 @@ class TestFromAC_LogCompletion:  # noqa: N801
         audit_dir = tmp_path / "audit"
         log = AuditLog(audit_dir)
         log.log_completion(
+            CompletionEvent(
+                timestamp="2026-03-29T10:01:00Z",
+                task_id=21,
+                agent="writer",
+                outcome="failure",
+                duration_ms=300,
+                files_changed=[],
+                error="timed out",
+            ),
             session_id="sess-d",
-            task_id=21,
-            agent="writer",
-            outcome="failure",
-            duration_ms=300,
-            files_changed=[],
-            error="timed out",
         )
         session_file = audit_dir / "sess-d.jsonl"
         line = session_file.read_text(encoding="utf-8").strip()
@@ -400,19 +432,26 @@ class TestFromAC_Query:  # noqa: N801
     def _populate(self, log: AuditLog, session_id: str) -> None:
         """Write one dispatch + one completion event to a session."""
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=99,
+                agent="reviewer",
+                prompt_summary="review this",
+                session_id=session_id,
+            ),
             session_id=session_id,
-            task_id=99,
-            agent="reviewer",
-            prompt_summary="review this",
         )
         log.log_completion(
+            CompletionEvent(
+                timestamp="2026-03-29T10:01:00Z",
+                task_id=99,
+                agent="reviewer",
+                outcome="success",
+                duration_ms=500,
+                files_changed=[],
+                error=None,
+            ),
             session_id=session_id,
-            task_id=99,
-            agent="reviewer",
-            outcome="success",
-            duration_ms=500,
-            files_changed=[],
-            error=None,
         )
 
     def test_empty_dir_returns_empty_list(self, tmp_path: Path) -> None:
@@ -435,10 +474,14 @@ class TestFromAC_Query:  # noqa: N801
         log = AuditLog(audit_dir)
         self._populate(log, "sess-a")  # reviewer events
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=50,
+                agent="auditor",
+                prompt_summary="audit task",
+                session_id="sess-b",
+            ),
             session_id="sess-b",
-            task_id=50,
-            agent="auditor",
-            prompt_summary="audit task",
         )
         events = log.query(agent="reviewer")
         assert all(e.agent == "reviewer" for e in events)
@@ -448,28 +491,38 @@ class TestFromAC_Query:  # noqa: N801
         audit_dir = tmp_path / "audit"
         log = AuditLog(audit_dir)
         log.log_dispatch(
+            DispatchEvent(
+                timestamp="2026-03-29T10:00:00Z",
+                task_id=30,
+                agent="builder",
+                prompt_summary="build",
+                session_id="sess-o",
+            ),
             session_id="sess-o",
-            task_id=30,
-            agent="builder",
-            prompt_summary="build",
         )
         log.log_completion(
+            CompletionEvent(
+                timestamp="2026-03-29T10:01:00Z",
+                task_id=30,
+                agent="builder",
+                outcome="failure",
+                duration_ms=100,
+                files_changed=[],
+                error="broken",
+            ),
             session_id="sess-o",
-            task_id=30,
-            agent="builder",
-            outcome="failure",
-            duration_ms=100,
-            files_changed=[],
-            error="broken",
         )
         log.log_completion(
+            CompletionEvent(
+                timestamp="2026-03-29T10:02:00Z",
+                task_id=31,
+                agent="builder",
+                outcome="success",
+                duration_ms=200,
+                files_changed=[],
+                error=None,
+            ),
             session_id="sess-o",
-            task_id=31,
-            agent="builder",
-            outcome="success",
-            duration_ms=200,
-            files_changed=[],
-            error=None,
         )
         failures = log.query(outcome="failure")
         assert all(isinstance(e, CompletionEvent) for e in failures)
@@ -497,3 +550,42 @@ class TestFromAC_Query:  # noqa: N801
         end = "1990-12-31T23:59:59Z"
         events = log.query(date_range=(start, end))
         assert events == []
+
+
+# ---------------------------------------------------------------------------
+# __init__.py exports
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_Exports:  # noqa: N801
+    """__init__.py exports AuditLog, DispatchEvent, CompletionEvent (AC #163 line 1)."""
+
+    def test_auditlog_exported(self) -> None:
+        import owlbear.audit as _audit
+
+        assert hasattr(_audit, "AuditLog")
+
+    def test_dispatchevent_exported(self) -> None:
+        import owlbear.audit as _audit
+
+        assert hasattr(_audit, "DispatchEvent")
+
+    def test_completionevent_exported(self) -> None:
+        import owlbear.audit as _audit
+
+        assert hasattr(_audit, "CompletionEvent")
+
+
+# ---------------------------------------------------------------------------
+# .gitignore check
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GitIgnore:  # noqa: N801
+    """data/audit/ is listed in .gitignore (AC #163 line 10)."""
+
+    def test_data_audit_in_gitignore(self, project_root: Path) -> None:
+        gitignore = project_root / ".gitignore"
+        assert gitignore.exists(), ".gitignore not found at project root"
+        content = gitignore.read_text(encoding="utf-8")
+        assert "data/audit" in content, "data/audit/ missing from .gitignore"
