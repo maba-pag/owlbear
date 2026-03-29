@@ -61,17 +61,17 @@ def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
             "owlbearKanban": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "mcp_kanban"],
+                "args": ["run", "--project", rel, "-m", "owlbear_mcp_kanban"],
             },
             "owlbearKnowledge": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "mcp_knowledge"],
+                "args": ["run", "--project", rel, "-m", "owlbear_mcp_knowledge"],
             },
             "owlbearProject": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "mcp_project"],
+                "args": ["run", "--project", rel, "-m", "owlbear_mcp_project"],
             },
         }
     }
