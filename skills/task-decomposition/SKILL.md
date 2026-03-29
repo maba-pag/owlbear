@@ -71,7 +71,7 @@ Build explicit graph:
 ## Step 5a — Validate planned tasks (fail-fast)
 
 Before emitting any `kanban-md create` command, validate every planned task against
-the canonical placeholder-task rule in `.github/agents/kanban-planner.agent.md`.
+the canonical placeholder-task rule in `agents/kanban-planner.agent.md`.
 
 **Reject if any of the following are true:**
 
@@ -84,7 +84,7 @@ the canonical placeholder-task rule in `.github/agents/kanban-planner.agent.md`.
 and report the issue — do NOT emit a `kanban-md create` command for a placeholder
 task, and do NOT leave a placeholder artifact on the board.
 
-> Policy source: `.github/agents/kanban-planner.agent.md` contains the canonical
+> Policy source: `agents/kanban-planner.agent.md` contains the canonical
 > placeholder-task rule. This step mirrors it procedurally — policy is defined
 > there, not here.
 

@@ -110,7 +110,7 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 - **One logical commit per agent per task.** Don't split into micro-commits or batch multiple tasks.
 - **Do not push.** The user pushes manually.
 
-> **VS Code auto-staging trap:** VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities (execute/runTask, execute/testFailure, etc.). Any task that writes `.agent.md` frontmatter is at risk of having those edits silently reverted before commit. Always run `git diff --cached agents/` (or `.github/agents/`) before committing and unstage any auto-generated reverts with `git reset HEAD <file>` before the final commit.
+> **VS Code auto-staging trap:** VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities (execute/runTask, execute/testFailure, etc.). Any task that writes `.agent.md` frontmatter is at risk of having those edits silently reverted before commit. Always run `git diff --cached agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>` before the final commit.
 
 ## Evidence over claims
 
