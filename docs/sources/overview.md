@@ -2,6 +2,21 @@
 
 External repos and resources studied during OwlBear development.
 
+## Knowledge Engine Extraction Research (Task #15)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG v3 | <https://github.com/microsoft/graphrag> | MIT | Multi-package monorepo layout, foundation-vs-layer separation, package boundary patterns | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| PrivateGPT (Zylon) | <https://github.com/zylon-ai/private-gpt> | Apache-2.0 | Component-based DI, abstraction-first storage patterns | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen models, ConfigDict patterns used in knowledge models | `packages/knowledge/src/owlbear_knowledge/models.py` | 2026-03-28 |
+
+## README v2 Trim Assessment (Tasks #28, #93)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Claude Code README | <https://github.com/anthropics/claude-code> | Proprietary | Concise README structure: one-liner, get started, plugins, links | `docs/research/readme-v2-rewrite.md`, `docs/research/readme-trim-assessment.md` | 2026-03-28 |
+| Aider README | <https://github.com/Aider-AI/aider> | Apache-2.0 | Features + getting-started + docs links; secondary setup kept external | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
+
 ## GitHub Remote MCP Server Integration (Task #121)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -33,6 +48,13 @@ External repos and resources studied during OwlBear development.
 | VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `#search/changes` tool description, `#search` tool set membership, runtime tool names | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
 | VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool set grouping, `search` set contents including `search/changes`, tool set JSON example | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
 
+## search/usages Skill Integration Research (Task #103)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `search/usages` tool description, runtime name `vscode_listCodeUsages`, supported language types, caller-tracing capability, `getattr` dynamic-call limitation | `docs/research/search-usages-skill-integration.md`, `.github/skills/code-review/SKILL.md`, `.github/skills/tdd-workflow/SKILL.md` | 2026-03-29 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool set JSON example confirming `search/usages` membership in `search` tool set | `docs/research/search-usages-skill-integration.md` | 2026-03-29 |
+
 ## Instruction File Porting Research (Task #10)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -62,6 +84,15 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | `.instructions.md` format, `applyTo` patterns, YAML frontmatter schema | `docs/research/instructions-readme-update.md` | 2026-03-28 |
+
+## MCP Server Registry Research (Task #18)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | Config schema, stdio/http types, camelCase naming, sandbox/dev mode, input variables | `docs/research/mcp-server-registry.md` | 2026-03-29 |
+| VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | Remote server config, gallery install flow, server trust model, troubleshooting | `docs/research/mcp-server-registry.md` | 2026-03-29 |
+| GitHub MCP Server README | <https://github.com/github/github-mcp-server> | MIT | Canonical `type:http` config for VS Code mcp.json, OAuth via Copilot | `scripts/setup.py` — `create_mcp_config()` | 2026-03-29 |
+| Playwright MCP Server | <https://github.com/microsoft/playwright-mcp> | Apache-2.0 | Evaluated for inclusion; excluded (YAGNI — Node.js dep, not core) | `docs/research/mcp-server-registry.md` | 2026-03-29 |
 
 ## Monorepo Tooling Research (Task #6)
 
@@ -2589,6 +2620,13 @@ External repos and resources studied during OwlBear development.
 | anthropics/skills repo | <https://github.com/anthropics/skills> | Apache-2.0 | Example skills collection (100k+ stars), real-world skill patterns and directory structures | `docs/research/agentskills-io.md` | 2026-03-26 |
 | Client implementation guide | <https://agentskills.io/client-implementation/adding-skills-support> | Apache-2.0 | Progressive disclosure lifecycle, discovery scanning rules, activation patterns, context management | `docs/research/agentskills-io.md` | 2026-03-26 |
 
+## Port Skills to agentskills.io Format (Task #9)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| agentskills.io specification | <https://agentskills.io/specification> | Apache-2.0 | Validated spec unchanged since #3 research: required fields (name, description), directory structure, progressive disclosure tiers | `docs/research/port-skills-to-v2.md` | 2026-03-29 |
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Discovery paths, `chat.agentSkillsLocations` custom path config, empirical auto-loading confirmation | `docs/research/port-skills-to-v2.md` | 2026-03-29 |
+
 ## Disable Copilot Memory Research Validation (Task #48)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -2678,3 +2716,11 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Native auto-discovery paths (`.github/skills/`), `chat.agentSkillsLocations` for custom paths, deduplication behavior when both paths active | `docs/research/delete-github-skills-117.md` | 2026-03-29 |
 | agentskills.io specification | <https://agentskills.io/specification> | Apache-2.0 | Skill location not mandated by spec; any directory works if properly configured | `docs/research/delete-github-skills-117.md` | 2026-03-29 |
+
+## Memory Boundary Instructions Research (Task #11)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | .instructions.md format, applyTo glob patterns, instruction priority model, file locations | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
+| VS Code Settings Reference — Memory | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | Built-in memory tool setting, GitHub-hosted memory setting, memory settings section | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
+| GitHub Copilot Memory docs | <https://docs.github.com/en/copilot/concepts/agents/copilot-memory> | CC-BY-4.0 | Repo-scoped memory, citation validation, 28-day auto-expiry, enabling model | `docs/research/memory-boundary-instructions.md` | 2026-03-29 |
