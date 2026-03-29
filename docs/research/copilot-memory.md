@@ -16,6 +16,7 @@ OwlBear v2 defines a three-layer knowledge architecture (decision #8): Copilot M
 | S3 | Direct observation — memory tool in this session | (hands-on testing) | 1.0 |
 | S4 | OwlBear v2 architecture decision | docs/decisions/resolved/v2-architecture.md | 1.0 |
 | S5 | OwlBear agent-common.instructions.md memory patterns | .github/instructions/agent-common.instructions.md | .95 |
+| S6 | GitHub Docs — About agentic memory for Copilot | docs.github.com/en/copilot/concepts/agents/copilot-memory | .85 |
 
 ## 3. Analysis: Two Distinct Memory Systems
 
@@ -44,9 +45,9 @@ VS Code exposes **two separate memory systems** via independent settings. This d
 
 **Boundary control:** The `memoryInstructions` block is injected into every agent's system prompt. Custom instructions in `copilot-instructions.md` and `.instructions.md` files can further constrain how agents use memory. Verified in this session: agents follow memory guidelines when explicitly stated.
 
-### 3b. Copilot Memory (GitHub-hosted) — Behavior (S1)
+### 3b. Copilot Memory (GitHub-hosted) — Behavior (S1, S6)
 
-Disabled by default. When enabled, retains "repository-specific insights across multiple Copilot surfaces." No granular control — it's on or off. No instruction-based boundary control. Data goes to GitHub cloud.
+Disabled by default in VS Code settings. When enabled, retains "repository-specific insights across multiple Copilot surfaces." No granular control — it's on or off. No instruction-based boundary control. Data goes to GitHub cloud. Memories auto-expire after 28 days and are validated against current codebase citations before use (S6). Used by coding agent, code review, and CLI. Pro/Pro+ users: enabled by default on the GitHub side since March 2026 — workspace setting override is essential.
 
 **Recommendation (.90): Keep disabled.** The built-in memory tool provides everything we need for the agent-learning layer, with full local control and instruction-based boundaries. The GitHub-hosted system adds cloud dependency and privacy concerns with no meaningful benefit for a local-first system.
 
