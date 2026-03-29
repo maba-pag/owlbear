@@ -44,6 +44,7 @@ code .
 | `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
 | `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
 | `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
+| `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
 | `agents/`                 | Agent definitions (`.agent.md`)                        |
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
