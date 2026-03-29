@@ -55,6 +55,12 @@ External repos and resources studied during OwlBear development.
 | VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `search/usages` tool description, runtime name `vscode_listCodeUsages`, supported language types, caller-tracing capability, `getattr` dynamic-call limitation | `docs/research/search-usages-skill-integration.md`, `.github/skills/code-review/SKILL.md`, `.github/skills/tdd-workflow/SKILL.md` | 2026-03-29 |
 | VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool set JSON example confirming `search/usages` membership in `search` tool set | `docs/research/search-usages-skill-integration.md` | 2026-03-29 |
 
+## Bookmark Pipeline & Refresh Extraction Research (Task #136)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| FastMCP Tools docs | <https://gofastmcp.com/servers/tools> | MIT | `@mcp.tool` decorator registration, `readOnlyHint` annotations, `Annotated` param descriptions, async tool support | `docs/research/extract-bookmark-refresh-mcp.md` | 2026-03-29 |
+
 ## Instruction File Porting Research (Task #10)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -190,9 +196,9 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| ACP Python SDK `gemini.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/gemini.py> | Apache-2.0 | `_shutdown` pattern (terminate/wait/kill), subprocess spawn with stdin/stdout PIPE, `shutil.which` binary resolution | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
-| mcp-copilot-acp `process-manager.ts` | <https://github.com/bsmi021/mcp-copilot-acp/blob/main/src/process-manager.ts> | MIT | ProcessManager class with restart budget (max 3), `ensure()`/`shutdown()` lifecycle, graceful shutdown grace period | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
-| Python asyncio subprocess docs | <https://docs.python.org/3/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` API, `Process.terminate()`/`kill()` semantics, Windows ProactorEventLoop notes | `docs/research/process-supervisor-acp.md` | 2026-03-26 |
+| ACP Python SDK `gemini.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/gemini.py> | Apache-2.0 | `_shutdown` pattern (terminate/wait/kill), subprocess spawn with stdin/stdout PIPE, `shutil.which` binary resolution | `packages/orchestrator/src/owlbear_orchestrator/process_supervisor.py` | 2026-03-26 |
+| mcp-copilot-acp `process-manager.ts` | <https://github.com/bsmi021/mcp-copilot-acp/blob/main/src/process-manager.ts> | MIT | ProcessManager class with restart budget (max 3), `ensure()`/`shutdown()` lifecycle, graceful shutdown grace period | `packages/orchestrator/src/owlbear_orchestrator/process_supervisor.py` | 2026-03-26 |
+| Python asyncio subprocess docs | <https://docs.python.org/3/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` API, `Process.terminate()`/`kill()` semantics, Windows ProactorEventLoop notes | `packages/orchestrator/src/owlbear_orchestrator/process_supervisor.py` | 2026-03-26 |
 
 ## Real search_knowledge Tool Research (Task #54)
 
@@ -2731,3 +2737,9 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio vs http server types, env vars, input variables (`${input:}`), IntelliSense in mcp.json | `README.md` — Adding MCP Servers section | 2026-03-29 |
 | VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | Remote server config format, http type semantics, user-facing setup guidance | `docs/research/mcp-server-customization-docs.md` | 2026-03-29 |
+
+## Memory Boundary Instructions Research Validation (Task #137)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| awesome-copilot memory-bank.instructions.md | <https://github.com/github/awesome-copilot/blob/main/instructions/memory-bank.instructions.md> | MIT | Community pattern using .instructions.md for memory management; different scope (full project memory bank) but validates the file-based approach | Task #137 research validation | 2026-03-29 |
