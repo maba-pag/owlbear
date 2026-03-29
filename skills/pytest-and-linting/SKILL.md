@@ -86,7 +86,7 @@ uv run pytest ... 2>&1 > file.txt
 If the terminal truncates output, use Python as the I/O layer:
 
 ```powershell
-uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('docs/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
+uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','packages/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('docs/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
 
 Then `read_file` on `docs/scratch/pytest-output.txt`. Delete after use.
