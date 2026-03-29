@@ -32,6 +32,7 @@ src = [
   "packages/mcp-kanban/src",
   "packages/mcp-knowledge/src",
   "packages/mcp-project/src",
+  "packages/voice/src",
 ]
 
 [tool.ruff.lint]
