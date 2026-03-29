@@ -67,6 +67,28 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 
 GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
 
+## Memory governance
+
+**Built-in memory tool** (`/memories/`) stores agent-centric learning only. This prevents duplication with the general KB and project KB layers.
+
+**User memory** (`/memories/`) — store:
+
+- Tool usage patterns and CLI flag recipes (e.g., "use bare `--cov` for scoped pytest")
+- Agent behavior observations (what worked, what failed, effective workflows)
+- Process pitfalls to avoid (e.g., "PS 5.1 here-strings split in ArgumentList")
+
+**User memory** — do NOT store:
+
+- Architecture decisions (use `docs/decisions/`)
+- Research findings (use `docs/research/`)
+- Domain knowledge or project conventions (use project KB via MCP)
+- Code snippets or implementation details
+- Task-specific context (use session memory — auto-cleared)
+
+**Repo memory** (`/memories/repo/`) follows the built-in `repoMemoryInstructions` constraints. Agents write lessons-learned to `/memories/repo/inbox/` per `agent-common.instructions.md`.
+
+**Management:** Run `Chat: Show Memory Files` to view stored memories. Delete stale entries with the `memory delete` command. GitHub-hosted Copilot Memory stays disabled — see the paragraph above.
+
 ## kanban-md usage
 
 The project uses [kanban-md](https://github.com/antopolskiy/kanban-md) (v0.33.0) for file-based task management. The binary lives at `kanban/kanban-md.exe` (gitignored); run `kanban/setup.ps1` to download it.
