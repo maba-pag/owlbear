@@ -10,6 +10,7 @@ dev = [
   "pytest-asyncio>=0.25",
   "pytest-cov>=6.0",
   "ruff>=0.15",
+  "skills-ref==0.1.1",
   "strictyaml>=1.7",
 ]
 

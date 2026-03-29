@@ -32,3 +32,12 @@ repos:
     rev: v0.21.0
     hooks:
       - id: markdownlint-cli2
+
+  - repo: local
+    hooks:
+      - id: validate-skills
+        name: Validate Agent Skills
+        language: system
+        entry: python scripts/validate_skills.py
+        pass_filenames: false
+        always_run: true
