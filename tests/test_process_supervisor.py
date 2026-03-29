@@ -323,3 +323,51 @@ class TestFromAC_RestartBudget:  # noqa: N801
                 # Second exhaust (another 1-restart budget) — should also exhaust
                 with pytest.raises(ProcessRestartBudgetExhausted):
                     await _exhaust_budget(supervisor, n=10)
+
+
+# ---------------------------------------------------------------------------
+# shutdown_timeout constructor parameter  (AC #58 gap — not in task #73 scope)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ShutdownTimeout:  # noqa: N801
+    """__init__ exposes shutdown_timeout: float = 5.0 used by shutdown()."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_accepts_shutdown_timeout_parameter(self) -> None:
+        """Constructor must accept a shutdown_timeout keyword argument."""
+        proc = _make_proc()
+        with _patch_spawn(proc), _patch_which():
+            async with ProcessSupervisor(_COMMAND, shutdown_timeout=2.0):
+                pass  # must not raise TypeError
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_shutdown_uses_configured_timeout(self) -> None:
+        """shutdown() passes shutdown_timeout to asyncio.wait_for, not a hardcoded value."""
+        proc = _make_proc()
+        wait_mock = AsyncMock(return_value=0)
+        with (
+            _patch_spawn(proc),
+            _patch_which(),
+            patch(f"{_MODULE}.asyncio.wait_for", new=wait_mock),
+        ):
+            supervisor = ProcessSupervisor(_COMMAND, shutdown_timeout=2.0)
+            await supervisor.__aenter__()
+            await supervisor.shutdown()
+        _, kwargs = wait_mock.call_args
+        assert kwargs.get("timeout") == 2.0  # noqa: PLR2004
+
+
+# ---------------------------------------------------------------------------
+# ProcessRestartBudgetExhausted base class  (AC #58 gap — not in task #73 scope)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExceptionBase:  # noqa: N801
+    """ProcessRestartBudgetExhausted must inherit from OwlBearError."""
+
+    def test_restart_budget_exhausted_inherits_owlbear_error(self) -> None:
+        """ProcessRestartBudgetExhausted(OwlBearError) — part of OwlBear error taxonomy."""
+        from owlbear.errors import OwlBearError  # noqa: PLC0415
+
+        assert issubclass(ProcessRestartBudgetExhausted, OwlBearError)
