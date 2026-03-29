@@ -1,10 +1,12 @@
 ---
 id: 38
 title: Add disable-model-invocation to pipeline-only agents
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-03-26T18:45:14.9415651+01:00
-updated: 2026-03-28T04:18:18.3547868+01:00
+updated: 2026-03-29T04:19:46.7373058+02:00
+started: 2026-03-29T04:19:42.2551086+02:00
+completed: 2026-03-29T04:19:42.2551086+02:00
 tags:
     - phase-1
     - scope:agents
@@ -81,3 +83,33 @@ Config-only change. No module layering, no new interfaces. Aligns with least-pri
 - Lint: ruff passed for tests/test_disable_model_invocation.py
 - Evidence: Test file includes assertions that orchestrator, kanban-planner, and curator do not have the flag, and all tests passed
 - Fixes applied: Added disable-model-invocation true to the 8 pipeline-only agent frontmatters
+
+[[2026-03-29]] Sun 01:57
+## Builder Notes (cycle 3)
+- Files changed: agents/planner.agent.md, agents/researcher.agent.md, agents/architect.agent.md, agents/test-writer.agent.md, agents/builder.agent.md, agents/reviewer.agent.md, agents/writer.agent.md, agents/auditor.agent.md (already applied by prior builder pass)
+- Tests: 47 passed (tests/test_disable_model_invocation.py)
+- Lint: ruff clean
+- AC1: 8 pipeline agents verified HAS FLAG (architect, auditor, builder, planner, researcher, reviewer, test-writer, writer)
+- AC2: 3 non-pipeline agents verified NO FLAG (orchestrator, kanban-planner, curator)
+- Fixes applied: None - implementation was complete from prior builder pass
+
+[[2026-03-29]] Sun 04:19
+## Audit
+### AC Verification
+AC1 (8 pipeline agents have flag): Spot-checked all 8 agent frontmatters via read_file. All confirmed. PASS
+AC2 (3 non-pipeline agents no flag): Verified orchestrator, kanban-planner, curator frontmatters. None have the field. PASS
+AC3 (no other changes): Builder notes confirm only frontmatter additions. 47 tests include field preservation guards. PASS
+AC4 (orchestrator agents array unchanged): Verified agents array in orchestrator.agent.md - all subagents listed. PASS
+
+### Test Results
+- pytest: 224 passed, 0 failed (full suite, --ignore=tests/test_voice_protocol.py for pre-existing import error)
+- ruff: All checks passed (tests/test_disable_model_invocation.py)
+
+### AC Quality Score: 5/5
+AC was precise (named agents, named exclusions, scope guard, integration guard). Led to clean implementation with 47 comprehensive tests.
+
+### Reviewer Evidence
+No formal Review Evidence section in task body. Builder notes from 3 cycles provide sufficient evidence for this config-only task. Minor gap noted.
+
+### Confidence: .95
+### Action: archive
