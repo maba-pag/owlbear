@@ -7,8 +7,10 @@ import contextlib
 import shutil
 from typing import TYPE_CHECKING, Self
 
+from owlbear.errors import OwlBearError
 
-class ProcessRestartBudgetExhausted(Exception):
+
+class ProcessRestartBudgetExhausted(OwlBearError):
     """Raised when the process restart budget is exhausted."""
 
 
@@ -21,9 +23,15 @@ class ProcessSupervisor:
             stdin, stdout = await sup.ensure_running()
     """
 
-    def __init__(self, command: list[str], max_restarts: int = 3) -> None:
+    def __init__(
+        self,
+        command: list[str],
+        max_restarts: int = 3,
+        shutdown_timeout: float = 5.0,
+    ) -> None:
         self._command = command
         self._max_restarts = max_restarts
+        self._shutdown_timeout = shutdown_timeout
         self._proc: asyncio.subprocess.Process | None = None
         self._restart_count = 0
 
@@ -60,7 +68,7 @@ class ProcessSupervisor:
         with contextlib.suppress(ProcessLookupError):
             self._proc.terminate()
         try:
-            await asyncio.wait_for(self._proc.wait(), timeout=5.0)
+            await asyncio.wait_for(self._proc.wait(), timeout=self._shutdown_timeout)
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 self._proc.kill()
