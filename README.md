@@ -35,6 +35,26 @@ Open VS Code — agents and MCP servers auto-discover:
 code .
 ```
 
+## New Project Setup
+
+To wire OwlBear into an existing project, run `scripts/setup.py` from the target
+project directory:
+
+```bash
+cd /path/to/your-project
+python ../owlbear/scripts/setup.py
+```
+
+This creates:
+
+- `.vscode/settings.json` — agent, skill, and instruction file locations pointing to OwlBear
+- `.vscode/mcp.json` — MCP server entries for kanban, knowledge, and project servers
+- `kanban/` — kanban board directory with a fresh config and `tasks/` subfolder
+- `data/knowledge/` — knowledge base directory
+- `.github/copilot-instructions.md` — minimal project instructions file
+
+The script is idempotent: re-running it merges settings without overwriting existing files.
+
 ## Directory Layout
 
 | Directory                 | Purpose                                                |
@@ -76,4 +96,5 @@ uv run ruff check packages/ tests/
 ```
 
 ## License
+
 MIT
