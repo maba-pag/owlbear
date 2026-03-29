@@ -703,6 +703,50 @@ class TestFromAC_PublicExports:  # noqa: N801
 
 
 # ---------------------------------------------------------------------------
+# pyproject.toml manifest (AC: pydantic>=2.10.0 as sole dependency)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PackageManifest:  # noqa: N801
+    """pyproject.toml must declare pydantic>=2.10.0 as the sole runtime dependency."""
+
+    def _load_pyproject(self) -> dict:
+        import pathlib
+        import tomllib
+
+        path = pathlib.Path(__file__).parent.parent / "packages" / "knowledge" / "pyproject.toml"
+        with path.open("rb") as f:
+            return tomllib.load(f)
+
+    def test_pydantic_declared_as_dependency(self) -> None:
+        """packages/knowledge/pyproject.toml must list pydantic as a runtime dep."""
+        data = self._load_pyproject()
+        deps: list[str] = data.get("project", {}).get("dependencies", [])
+        pydantic_deps = [d for d in deps if d.lower().startswith("pydantic")]
+        assert pydantic_deps, (
+            "pydantic not found in [project].dependencies of packages/knowledge/pyproject.toml"
+        )
+
+    def test_pydantic_version_constraint_gte_2_10_0(self) -> None:
+        """Declared pydantic dependency must specify >=2.10.0."""
+        data = self._load_pyproject()
+        deps: list[str] = data.get("project", {}).get("dependencies", [])
+        pydantic_deps = [d for d in deps if d.lower().startswith("pydantic")]
+        assert pydantic_deps, "pydantic not declared — run test_pydantic_declared_as_dependency first"
+        assert any(">=2.10.0" in d for d in pydantic_deps), (
+            f"Expected pydantic>=2.10.0 in dependencies, found: {pydantic_deps}"
+        )
+
+    def test_pydantic_is_sole_runtime_dependency(self) -> None:
+        """pydantic must be the ONLY entry in [project].dependencies."""
+        data = self._load_pyproject()
+        deps: list[str] = data.get("project", {}).get("dependencies", [])
+        assert len(deps) == 1, (
+            f"Expected exactly 1 runtime dependency (pydantic), found {len(deps)}: {deps}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Builder-discovered tests
 # ---------------------------------------------------------------------------
 
