@@ -37,6 +37,8 @@ code .
 
 ## New Project Setup
 
+Requires Python 3.12+ and uv — see [Prerequisites](#prerequisites).
+
 To wire OwlBear into an existing project, run `scripts/setup.py` from the target
 project directory:
 
@@ -54,6 +56,12 @@ This creates:
 - `.github/copilot-instructions.md` — minimal project instructions file
 
 The script is idempotent: re-running it merges settings without overwriting existing files.
+
+### Next Steps
+
+1. Open the project in VS Code: `code /path/to/your-project`
+2. Run `kanban/setup.ps1` to download the kanban-md binary
+3. Verify agent discovery by opening Copilot Chat — agents and skills should appear in the agent picker
 
 ## Directory Layout
 
