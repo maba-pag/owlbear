@@ -62,6 +62,35 @@ The script is idempotent: re-running it merges settings without overwriting exis
 1. Open the project in VS Code: `code /path/to/your-project`
 2. Run `kanban/setup.ps1` to download the kanban-md binary
 3. Verify agent discovery by opening Copilot Chat — agents and skills should appear in the agent picker
+4. Edit `.vscode/mcp.json` to add project-specific MCP servers (see below)
+
+### Adding MCP Servers
+
+Open `.vscode/mcp.json` and add server entries. VS Code provides IntelliSense autocomplete in this file.
+
+**stdio** (local Python tool via `uv run`):
+
+```json
+{ "servers": { "myTool": { "type": "stdio", "command": "uv", "args": ["run", "my-tool"] } } }
+```
+
+**http** (remote URL):
+
+```json
+{ "servers": { "myRemote": { "type": "http", "url": "https://my-mcp-server.example.com/mcp" } } }
+```
+
+**Secrets** — use `${input:variable-id}` with an `"inputs"` array; VS Code prompts once and stores securely:
+
+```json
+{
+  "inputs": [{ "id": "myKey", "type": "promptString", "description": "API key" }],
+  "servers": { "myService": { "type": "stdio", "command": "uv", "args": ["run", "my-svc"],
+    "env": { "API_KEY": "${input:myKey}" } } }
+}
+```
+
+See the [VS Code MCP Configuration Reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration).
 
 ## Directory Layout
 
