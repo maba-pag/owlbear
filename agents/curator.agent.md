@@ -5,7 +5,7 @@ argument-hint: "Curate: {scope — e.g., 'all', 'last 10 tasks', 'tag:phase-3'}"
 user-invocable: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, vscode/resolveMemoryFileUri, vscode/askQuestions, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*', todo]
+  [vscode/memory, vscode/resolveMemoryFileUri, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*', todo]
 agents: []
 ---
 
