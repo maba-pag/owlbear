@@ -33,17 +33,13 @@
     ".github/agents": true,
     "agents": true
   },
-  "chat.agentSessionProjection.enabled": true,
   "chat.agentSkillsLocations": {
     ".github/skills": true,
     "skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
-  "chat.editing.autoAcceptDelay": 15,
-  "chat.editing.explainChanges.enabled": true,
   "chat.instructionsFilesLocations": {
-    ".github/instructions": true,
     "instructions": true
   },
   "chat.mcp.gallery.enabled": true,
@@ -71,15 +67,14 @@
   "chat.tools.terminal.autoReplyToPrompts": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.tools.terminal.preventShellHistory": false,
-  "chat.tools.terminal.sandbox.enabled": true,
   "chat.tools.urls.autoApprove": {
     "*": true
   },
   "chat.viewSessions.orientation": "stacked",
-  "diffEditor.hideUnchangedRegions.enabled": true,
+  "diffEditor.hideUnchangedRegions.enabled": false,
   "editor.defaultFormatter": "charliermarsh.ruff",
-  "editor.formatOnPaste": true,
-  "editor.formatOnSave": true,
+  "editor.formatOnPaste": false,
+  "editor.formatOnSave": false,
   "extensions.experimental.affinity": {
     "charliermarsh.ruff": 3,
     "ms-python.vscode-pylance": 2
@@ -99,7 +94,7 @@
   "github.copilot.chat.anthropic.tools.websearch.maxUses": 20,
   "github.copilot.chat.cli.forkSessions.enabled": true,
   "github.copilot.chat.cli.sessionController.enabled": true,
-  "github.copilot.chat.copilotMemory.enabled": true,
+  "github.copilot.chat.copilotMemory.enabled": false,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
   "github.copilot.chat.githubMcpServer.enabled": true,
@@ -108,7 +103,7 @@
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
   "github.copilot.chat.tools.memory.enabled": true,
   "github.copilot.enable": {
-    "*": true,
+    "*": false,
     "markdown": true,
     "plaintext": true,
     "scminput": true
