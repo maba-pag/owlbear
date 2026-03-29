@@ -1,13 +1,14 @@
-"""Failing tests for task #52: Create owlbear-voice workspace package.
+"""Tests for task #52: Create owlbear-voice workspace package.
 
 Covers AC items NOT covered by tests/test_voice_package_scaffolding.py (task #100):
   - Base dependency minimum version constraints (moonshine-voice>=0.0.49, numpy>=1.26,
     pyttsx3>=2.90, sounddevice>=0.4)
   - Kokoro optional-extra minimum version constraint (kokoro>=0.9.4)
   - uv workspace membership: packages/voice is declared as a workspace member
+  - Exact entry point target: scripts['owlbear-voice'] == 'owlbear_voice.main:main'
 
-All tests fail on current HEAD because packages/voice/pyproject.toml specifies bare
-dependencies without version pins (e.g., "moonshine-voice" instead of "moonshine-voice>=0.0.49").
+NOTE: Implementation was scaffolded before the TDD workflow ran. Tests verify the
+AC contract is met; all pass on current HEAD (expected for a pre-built scaffold).
 """
 
 from __future__ import annotations
@@ -83,4 +84,58 @@ class TestFromAC_VoiceKokoroVersionConstraint:
         )
         assert any("kokoro>=0.9.4" in d for d in kokoro_deps), (
             f"Expected 'kokoro>=0.9.4' in [kokoro] optional-dependencies, found: {kokoro_deps}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC7 strict: entry point exact target
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_VoiceEntryPointTarget:
+    """[project.scripts] owlbear-voice must point to the exact target owlbear_voice.main:main."""
+
+    def test_entry_point_target_is_owlbear_voice_main_main(self) -> None:
+        """AC7: scripts['owlbear-voice'] must equal 'owlbear_voice.main:main'."""
+        data = _load_voice_pyproject()
+        scripts = data.get("project", {}).get("scripts", {})
+        target = scripts.get("owlbear-voice")
+        assert target == "owlbear_voice.main:main", (
+            f"Expected scripts['owlbear-voice'] == 'owlbear_voice.main:main', got {target!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Workspace integration: uv workspace membership
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_VoiceWorkspaceMembership:
+    """Root pyproject.toml [tool.uv.workspace] must cover packages/voice as a member."""
+
+    def test_root_workspace_members_key_exists(self) -> None:
+        """Workspace integration: [tool.uv.workspace].members must be declared."""
+        root_pyproject = ROOT / "pyproject.toml"
+        assert root_pyproject.exists(), "ROOT/pyproject.toml not found"
+        with root_pyproject.open("rb") as fh:
+            data = tomllib.load(fh)
+        members = data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+        assert members, "[tool.uv.workspace] members not declared in root pyproject.toml"
+
+    def test_workspace_members_pattern_covers_voice_package(self) -> None:
+        """Workspace integration: workspace members pattern must cover packages/voice."""
+        import fnmatch
+
+        root_pyproject = ROOT / "pyproject.toml"
+        with root_pyproject.open("rb") as fh:
+            data = tomllib.load(fh)
+        members = data.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+        voice_rel = "packages/voice"
+        matched = any(
+            fnmatch.fnmatch(voice_rel, pattern) or voice_rel == pattern
+            for pattern in members
+        )
+        assert matched, (
+            f"packages/voice not covered by workspace members: {members}. "
+            "Add 'packages/voice' or 'packages/*' to [tool.uv.workspace] members."
         )
