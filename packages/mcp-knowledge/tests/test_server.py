@@ -112,17 +112,17 @@ class TestFromAC_ServerLifespan:
         ):
             fake_server = MagicMock()
 
-        async def _raise() -> None:
-            msg = "body error"
-            raise RuntimeError(msg)
+            async def _raise() -> None:
+                msg = "body error"
+                raise RuntimeError(msg)
 
-        try:
-            async with app_lifespan(fake_server):
-                await _raise()
-        except RuntimeError:
-            pass
+            try:
+                async with app_lifespan(fake_server):
+                    await _raise()
+            except RuntimeError:
+                pass
 
-        mock_conn.close.assert_called_once()
+            mock_conn.close.assert_called_once()
 
     # ------------------------------------------------------------------
     # AC4: app_lifespan reads OWLBEAR_KB_PATH env var for DB path
@@ -186,15 +186,15 @@ class TestFromAC_ServerWiring:
         # Try _tool_manager first (FastMCP v1 internal); fall back to list_tools if needed
         if hasattr(mcp, "_tool_manager"):
             tool_names = list(mcp._tool_manager.list_tools())  # noqa: SLF001
-            assert any(
-                getattr(t, "name", t) == "search_knowledge" for t in tool_names
-            ), f"Expected 'search_knowledge' in tools, got: {tool_names}"
+            assert any(getattr(t, "name", t) == "search_knowledge" for t in tool_names), (
+                f"Expected 'search_knowledge' in tools, got: {tool_names}"
+            )
         else:
             # FastMCP v2 / alternate API
             tools = mcp.list_tools()  # type: ignore[call-arg]
-            assert any(
-                getattr(t, "name", str(t)) == "search_knowledge" for t in tools
-            ), f"Expected 'search_knowledge' in tools, got: {tools}"
+            assert any(getattr(t, "name", str(t)) == "search_knowledge" for t in tools), (
+                f"Expected 'search_knowledge' in tools, got: {tools}"
+            )
 
     # ------------------------------------------------------------------
     # AC6: __main__ module is importable
