@@ -23,41 +23,7 @@ cd owlbear
 uv sync
 ```
 
-Download the kanban-md binary, then open VS Code:
-
-```powershell
-kanban\setup.ps1
-code .
-```
-
-## Adding MCP Servers
-
-Edit `.vscode/mcp.json` to add project-specific servers. VS Code provides IntelliSense (autocomplete) in `mcp.json`.
-
-**Stdio server** (local Python tool with uv):
-
-```json
-"servers": {
-  "my-tool": { "type": "stdio", "command": "uv", "args": ["run", "python", "-m", "my_pkg.server"] }
-}
-```
-
-**HTTP server, env vars, and input variables** (`${input:id}` references a declared `inputs` entry):
-
-```json
-"servers": {
-  "api": { "type": "http", "url": "https://api.example.com/mcp/" },
-  "tool": {
-    "type": "stdio", "command": "uv", "args": ["run", "python", "-m", "my_pkg.server"],
-    "env": { "LOG_LEVEL": "info", "API_KEY": "${input:api-key}" },
-    "inputs": [{ "id": "api-key", "type": "promptString", "description": "API key" }]
-  }
-}
-```
-
-See the [VS Code MCP Config Reference][mcp-ref] for the full schema.
-
-[mcp-ref]: https://code.visualstudio.com/docs/copilot/reference/mcp-configuration
+Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with `code .`.
 
 ## Directory Layout
 
