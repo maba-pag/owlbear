@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, web, 'microsoft/markitdown/*', 'owlbear-kanban/*', todo]
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, web, 'microsoft/markitdown/*', 'owlbear-kanban/*', todos]
 agents: [Explore]
 ---
 
