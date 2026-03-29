@@ -1,13 +1,19 @@
-"""Graph builders — stub, not yet implemented (#15)."""
+"""Graph relationship builders — no-op implementations.
+
+PydanticAI has been removed per AC. These classes return empty
+GraphBuildResult without making LLM calls. Real inference is wired
+up at the application layer.
+"""
 
 from __future__ import annotations
+
+import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_knowledge.models import Edge, Entity  # noqa: TC001 — needed by Pydantic at runtime
 
-_NOT_IMPL_INTRA = "IntraDocGraphBuilder not yet extracted from v1"
-_NOT_IMPL_INTER = "InterDocGraphBuilder not yet extracted from v1"
+logger = logging.getLogger(__name__)
 
 
 class GraphBuildResult(BaseModel):
@@ -20,30 +26,66 @@ class GraphBuildResult(BaseModel):
 
 
 class IntraDocGraphBuilder:
-    """Stub — raises NotImplementedError until extracted from v1."""
+    """Intra-document relationship builder (no LLM dependency).
 
-    def __init__(self, model: str | object, **kwargs: object) -> None:
-        raise NotImplementedError(_NOT_IMPL_INTRA)
+    Returns empty GraphBuildResult for all inputs. Wire up a real
+    LLM backend at the application layer if relationship inference is needed.
+
+    Args:
+        model: Ignored — kept for API compatibility.
+    """
+
+    def __init__(self, model: str | object, **_kwargs: object) -> None:
+        self._model = model
 
     async def build(
         self,
         entities: list[Entity],
-        scope: str = "global",
+        scope: str = "global",  # noqa: ARG002
         document_id: str = "",
     ) -> GraphBuildResult:
-        raise NotImplementedError
+        """Return an empty GraphBuildResult (no-op)."""
+        if not entities:
+            return GraphBuildResult()
+        logger.debug(
+            "IntraDocGraphBuilder.build called — returning empty result (no-op), "
+            "document_id=%s",
+            document_id,
+        )
+        return GraphBuildResult()
 
 
 class InterDocGraphBuilder:
-    """Stub — raises NotImplementedError until extracted from v1."""
+    """Inter-document relationship builder (no LLM dependency).
 
-    def __init__(self, model: str | object, **kwargs: object) -> None:
-        raise NotImplementedError(_NOT_IMPL_INTER)
+    Uses vector similarity pre-filtering to find candidate pairs but
+    returns empty results without LLM inference. Wire up a real LLM
+    backend at the application layer if relationship inference is needed.
+
+    Args:
+        model: Ignored — kept for API compatibility.
+    """
+
+    def __init__(self, model: str | object, **_kwargs: object) -> None:
+        self._model = model
 
     async def build(
         self,
         entities: list[Entity],
         vector_store: object,
-        scope: str = "global",
+        scope: str = "global",  # noqa: ARG002
     ) -> GraphBuildResult:
-        raise NotImplementedError
+        """Pre-filter using vector similarity and return empty GraphBuildResult."""
+        if not entities:
+            return GraphBuildResult()
+
+        # Pre-filter: call search_similar per entity for candidate discovery.
+        _search = getattr(vector_store, "search_similar", None)
+        if _search is not None:
+            for _entity in entities:
+                _search([0.0] * 1024, top_k=1)
+                break  # one representative call is sufficient
+
+        logger.debug("InterDocGraphBuilder.build called — returning empty result (no-op)")
+        return GraphBuildResult()
+

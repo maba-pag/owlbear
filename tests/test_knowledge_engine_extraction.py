@@ -367,3 +367,85 @@ class TestFromAC_PackageDependencies:  # noqa: N801
             "pyproject.toml must declare an embedding library "
             "(FlagEmbedding, fastembed, or sentence-transformers)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests — edge cases found during implementation
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases and coverage gaps found during implementation of #15."""
+
+    # -- chunker: structural separator and overlap paths --------------------
+
+    def test_chunker_splits_on_structural_separator(self) -> None:
+        """TextChunker uses double-newline separator, producing multi-chunk output."""
+        chunker = TextChunker(target_tokens=3, overlap_tokens=0)
+        text = "one two three\n\nfour five six\n\nseven eight nine"
+        chunks = chunker.chunk(text)
+        assert len(chunks) >= 2
+        combined = " ".join(c.text for c in chunks)
+        assert "one" in combined
+        assert "four" in combined
+        assert "seven" in combined
+
+    def test_chunker_overlap_prepends_tokens_to_next_chunk(self) -> None:
+        """With overlap_tokens > 0, each chunk after the first starts with previous tail."""
+        chunker = TextChunker(target_tokens=4, overlap_tokens=2)
+        words = [f"w{i}" for i in range(20)]
+        text = " ".join(words)
+        chunks = chunker.chunk(text)
+        assert len(chunks) > 1
+        # All words appear somewhere in the chunks
+        combined = " ".join(c.text for c in chunks)
+        for w in words:
+            assert w in combined
+
+    def test_chunker_base_case_single_word_no_separators(self) -> None:
+        """A single word with custom separators that never match falls through to base case."""
+        chunker = TextChunker(target_tokens=100, overlap_tokens=0, separators=["||"])
+        text = "singleword"
+        chunks = chunker.chunk(text)
+        assert len(chunks) == 1
+        assert chunks[0].text == "singleword"
+
+    def test_chunker_empty_text_returns_empty_list(self) -> None:
+        """chunk() returns [] for whitespace-only text."""
+        chunker = TextChunker()
+        assert chunker.chunk("   ") == []
+        assert chunker.chunk("") == []
+
+    def test_chunker_metadata_is_propagated_to_chunks(self) -> None:
+        """Custom metadata dict is propagated and chunk_index is added."""
+        chunker = TextChunker(target_tokens=5, overlap_tokens=0)
+        text = " ".join(["x"] * 10)
+        chunks = chunker.chunk(text, metadata={"source": "test"})
+        for c in chunks:
+            assert c.metadata["source"] == "test"
+            assert "chunk_index" in c.metadata
+
+    # -- embeddings: unload path -------------------------------------------
+
+    def test_bgem3_unload_does_not_raise_when_no_model_loaded(self) -> None:
+        """unload() on a fresh provider (no model loaded) completes without error."""
+        provider = BgeM3EmbeddingProvider(idle_timeout=0)
+        provider.unload()  # must not raise
+
+    # -- query_service: empty embedding result path ------------------------
+
+    @pytest.mark.asyncio
+    async def test_query_service_returns_empty_when_embed_returns_empty(self) -> None:
+        """query() returns [] when the embedding provider returns no vectors."""
+        mock_vec = MagicMock()
+        mock_vec.embed.return_value = []
+        mock_store = MagicMock()
+        gs = _make_graph_store()
+        service = KnowledgeQueryService(
+            vector_store=mock_store,
+            graph_store=gs,
+            embedding_provider=mock_vec,
+        )
+        results = await service.query("anything")
+        assert results == []
+        mock_store.search_similar.assert_not_called()

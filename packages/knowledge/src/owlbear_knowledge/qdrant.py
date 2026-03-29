@@ -1,27 +1,75 @@
-"""Qdrant-backed vector storage — stub, not yet implemented (#15)."""
+"""Qdrant-backed vector storage for hybrid search."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+import uuid
+from datetime import UTC, datetime
+from typing import Literal
 
-if TYPE_CHECKING:
-    from owlbear_knowledge.protocol import HybridEmbedding
+from owlbear_knowledge.protocol import HybridEmbedding
+
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client import models as qmodels
+except ImportError:
+    QdrantClient = None  # type: ignore[assignment,misc]
+    qmodels = None  # type: ignore[assignment]
 
 COLLECTION_NAME = "owlbear_vectors"
 DENSE_DIM = 1024
 
-_NOT_IMPL = "QdrantVectorStore not yet extracted from v1"
+
+def _point_id(entity_or_doc_id: str) -> str:
+    """Deterministic UUID5 string from entity/document ID."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, entity_or_doc_id))
 
 
 class QdrantVectorStore:
-    """Stub — raises NotImplementedError until extracted from v1."""
+    """Qdrant-backed vector store implementing VectorStoreProtocol.
+
+    Args:
+        location: Qdrant storage location — ``':memory:'`` for in-memory
+            or a filesystem path for persistent storage.
+        collection_name: Name of the Qdrant collection.
+    """
 
     def __init__(
         self,
         location: str = ":memory:",
         collection_name: str = COLLECTION_NAME,
     ) -> None:
-        raise NotImplementedError(_NOT_IMPL)
+        if QdrantClient is None:
+            msg = (
+                "qdrant-client is required for QdrantVectorStore. "
+                "Install with: uv pip install 'owlbear-knowledge[qdrant]'"
+            )
+            raise ImportError(msg)
+
+        if location == ":memory:" or location.startswith(("http://", "https://")):
+            self._client: QdrantClient = QdrantClient(location=location)  # type: ignore[misc]
+        else:
+            self._client: QdrantClient = QdrantClient(path=location)  # type: ignore[misc]
+        self._collection = collection_name
+        self._initialized = False
+
+    def _ensure_collection(self) -> None:
+        """Create the Qdrant collection if it doesn't exist yet."""
+        if self._initialized:
+            return
+        if not self._client.collection_exists(self._collection):
+            self._client.create_collection(
+                collection_name=self._collection,
+                vectors_config={
+                    "dense": qmodels.VectorParams(
+                        size=DENSE_DIM,
+                        distance=qmodels.Distance.COSINE,
+                    ),
+                },
+                sparse_vectors_config={
+                    "sparse": qmodels.SparseVectorParams(),
+                },
+            )
+        self._initialized = True
 
     def store_embedding(
         self,
@@ -30,10 +78,54 @@ class QdrantVectorStore:
         embedding_type: Literal["entity", "document"],
         scope: str = "global",
     ) -> None:
-        raise NotImplementedError
+        """Store (or upsert) an embedding for the given ID."""
+        self._ensure_collection()
+        point_id = _point_id(entity_or_doc_id)
+        now = datetime.now(UTC).isoformat()
+        payload = {
+            "entity_or_doc_id": entity_or_doc_id,
+            "embedding_type": embedding_type,
+            "scope": scope,
+            "created_at": now,
+        }
+        if isinstance(embedding, HybridEmbedding):
+            vectors: dict = {"dense": embedding.dense}
+            if embedding.sparse is not None:
+                vectors["sparse"] = qmodels.SparseVector(
+                    indices=embedding.sparse.indices,
+                    values=embedding.sparse.values,
+                )
+        else:
+            vectors = {"dense": embedding}
+
+        self._client.upsert(
+            collection_name=self._collection,
+            points=[
+                qmodels.PointStruct(
+                    id=point_id,
+                    vector=vectors,
+                    payload=payload,
+                ),
+            ],
+        )
 
     def get_embedding(self, entity_or_doc_id: str) -> list[float] | None:
-        raise NotImplementedError
+        """Return the stored dense vector for *entity_or_doc_id*, or None."""
+        self._ensure_collection()
+        point_id = _point_id(entity_or_doc_id)
+        results = self._client.retrieve(
+            collection_name=self._collection,
+            ids=[point_id],
+            with_vectors=["dense"],
+        )
+        if not results:
+            return None
+        vector = results[0].vector
+        if isinstance(vector, dict):
+            dense = vector.get("dense")
+            if isinstance(dense, list):
+                return dense
+        return None
 
     def search_similar(  # noqa: PLR0913
         self,
@@ -42,10 +134,62 @@ class QdrantVectorStore:
         embedding_type: Literal["entity", "document"] | None = None,
         *,
         scopes: list[str] | None = None,
-        recency_weight: float = 0.0,
-        decay_rate: float = 0.001,
+        recency_weight: float = 0.0,  # noqa: ARG002
+        decay_rate: float = 0.001,  # noqa: ARG002
     ) -> list[tuple[str, float]]:
-        raise NotImplementedError
+        """Find the most similar embeddings to *query_embedding*."""
+        self._ensure_collection()
+
+        must_conditions: list = []
+        if embedding_type is not None:
+            must_conditions.append(
+                qmodels.FieldCondition(
+                    key="embedding_type",
+                    match=qmodels.MatchValue(value=embedding_type),
+                ),
+            )
+        if scopes is not None:
+            must_conditions.append(
+                qmodels.FieldCondition(
+                    key="scope",
+                    match=qmodels.MatchAny(any=scopes),
+                ),
+            )
+        query_filter = qmodels.Filter(must=must_conditions) if must_conditions else None
+
+        dense_vec = (
+            query_embedding.dense
+            if isinstance(query_embedding, HybridEmbedding)
+            else query_embedding
+        )
+        response = self._client.query_points(
+            collection_name=self._collection,
+            query=dense_vec,
+            using="dense",
+            limit=top_k,
+            query_filter=query_filter,
+            with_payload=True,
+        )
+        return [
+            (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
+            for point in response.points
+        ]
 
     def delete_embedding(self, entity_or_doc_id: str) -> bool:
-        raise NotImplementedError
+        """Delete the embedding for *entity_or_doc_id*.
+
+        Returns True if found and deleted, False otherwise.
+        """
+        self._ensure_collection()
+        point_id = _point_id(entity_or_doc_id)
+        existing = self._client.retrieve(
+            collection_name=self._collection,
+            ids=[point_id],
+        )
+        if not existing:
+            return False
+        self._client.delete(
+            collection_name=self._collection,
+            points_selector=qmodels.PointIdsList(points=[point_id]),
+        )
+        return True
