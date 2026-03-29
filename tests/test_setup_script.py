@@ -383,6 +383,7 @@ class TestFromAC_PathDetectionAndOutput:
         setup(project_dir=project_dir, owlbear_dir=owlbear_dir)
         captured = capsys.readouterr()
         assert captured.out.strip(), "No success message printed — expected next-steps output"
+        assert "mcp.json" in captured.out, "Expected mcp.json customization hint in next-steps output"
 
     def test_setup_creates_all_expected_artifacts(self, tmp_path: Path) -> None:
         """setup() must call ALL create_* functions — every artifact must exist after one call."""
@@ -524,3 +525,84 @@ class TestFromAC_StandaloneInvocation:
         assert result.stdout.strip(), (
             "Direct invocation produced no stdout — expected a success message with next steps"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC: GitHub remote MCP server entry (task #121)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GitHubMcpServer:
+    """AC: create_mcp_config() includes github http server; first entry; 4 servers total; idempotent preserved."""
+
+    def test_github_server_entry_exists(self, tmp_path: Path) -> None:
+        """AC: create_mcp_config() must include a 'github' key in the servers dict."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert "github" in data["servers"], (
+            f"'github' server entry missing. Found servers: {list(data['servers'].keys())}"
+        )
+
+    def test_github_server_has_type_http(self, tmp_path: Path) -> None:
+        """AC: github server entry must have type: http."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        github = data["servers"].get("github", {})
+        assert github.get("type") == "http", (
+            f"github server type must be 'http', got: {github.get('type')!r}"
+        )
+
+    def test_github_server_has_correct_url(self, tmp_path: Path) -> None:
+        """AC: github server must have url: https://api.githubcopilot.com/mcp/"""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        github = data["servers"].get("github", {})
+        assert github.get("url") == "https://api.githubcopilot.com/mcp/", (
+            f"github server url must be 'https://api.githubcopilot.com/mcp/', got: {github.get('url')!r}"
+        )
+
+    def test_github_server_is_first_in_servers_dict(self, tmp_path: Path) -> None:
+        """AC: github entry must appear first in the servers dict (zero-dep, immediately useful)."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        server_keys = list(data["servers"].keys())
+        assert server_keys[0] == "github", (
+            f"github must be the first server entry, but found first={server_keys[0]!r}. "
+            f"Full order: {server_keys}"
+        )
+
+    def test_mcp_json_has_exactly_four_server_entries(self, tmp_path: Path) -> None:
+        """AC: mcp.json must contain exactly 4 servers (github + 3 owlbear stdio servers)."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert len(data["servers"]) == 4, (
+            f"Expected exactly 4 MCP server entries (github + 3 owlbear), "
+            f"got {len(data['servers'])}: {list(data['servers'].keys())}"
+        )
+
+    def test_three_owlbear_servers_still_present_alongside_github(self, tmp_path: Path) -> None:
+        """AC: adding github must not remove the 3 owlbear stdio servers."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        servers = data["servers"]
+        # Verify github is co-present (this test validates the "alongside" contract)
+        assert "github" in servers, (
+            f"github entry absent — cannot verify co-existence. Found: {list(servers.keys())}"
+        )
+        for key in ("owlbearKanban", "owlbearKnowledge", "owlbearProject"):
+            assert key in servers, (
+                f"Expected owlbear server '{key}' to remain present alongside github entry. "
+                f"Found: {list(servers.keys())}"
+            )
