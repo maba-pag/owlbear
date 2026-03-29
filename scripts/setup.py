@@ -47,7 +47,7 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
 
 
 def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
-    """Create .vscode/mcp.json with three owlbear MCP server entries. Skips if already exists."""
+    """Create .vscode/mcp.json with four MCP server entries: github remote + three owlbear stdio servers. Skips if already exists."""
     vscode_dir = project_dir / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
     mcp_file = vscode_dir / "mcp.json"

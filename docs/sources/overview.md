@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## GitHub Remote MCP Server Integration (Task #121)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub MCP Server README | <https://github.com/github/github-mcp-server> | MIT | Canonical `type:http` + URL config for VS Code mcp.json | `scripts/setup.py` — `create_mcp_config()` | 2026-03-29 |
+| VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | Remote server config format, `http` type semantics, VS Code mcp.json schema | `scripts/setup.py` — `create_mcp_config()` | 2026-03-29 |
+
 ## OwlbearProjectFile Pydantic Model (Tasks #68, #74)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -108,6 +115,13 @@ External repos and resources studied during OwlBear development.
 | Impeccable website | <https://impeccable.style> | N/A | Public positioning of anti-pattern examples, command taxonomy, and provider support including VS Code Copilot | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design skill that Impeccable extends | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skills vs custom instructions, progressive loading, and resource-backed skill structure for OwlBear adoption planning | `docs/research/impeccable-design-skills.md` | 2026-03-22 |
+
+## MCP Entry Points Overlap Analysis (Task #120)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK v1 README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP entry point pattern, `mcp.run()` stdio default, `__main__.py` convention | `docs/research/mcp-entry-points-overlap.md` | 2026-03-29 |
+| MCP Quickstart (server) | <https://modelcontextprotocol.io/quickstart/server> | CC-BY-4.0 | Direct execution pattern, `if __name__ == "__main__": mcp.run()` | `docs/research/mcp-entry-points-overlap.md` | 2026-03-29 |
 
 ## Build mcp-project Server Research (Task #17)
 
@@ -2657,3 +2671,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio/http server config format, `${input:var-id}` secret handling, `"inputs"` array, IntelliSense autocomplete, naming conventions | `README.md` (Adding MCP Servers section), `docs/research/mcp-server-docs.md` | 2026-03-29 |
 | VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | HTTP Stream vs SSE transport fallback, server lifecycle management | `docs/research/mcp-server-docs.md` | 2026-03-29 |
+
+## Skills Path Migration Cleanup (Task #117)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Native auto-discovery paths (`.github/skills/`), `chat.agentSkillsLocations` for custom paths, deduplication behavior when both paths active | `docs/research/delete-github-skills-117.md` | 2026-03-29 |
+| agentskills.io specification | <https://agentskills.io/specification> | Apache-2.0 | Skill location not mandated by spec; any directory works if properly configured | `docs/research/delete-github-skills-117.md` | 2026-03-29 |

@@ -30,32 +30,6 @@ kanban\setup.ps1
 code .
 ```
 
-## Adding MCP Servers
-
-Edit `.vscode/mcp.json` to add project-specific servers. VS Code provides IntelliSense autocomplete for all fields.
-
-**stdio** (local Python tool via `uv run`):
-
-```json
-"my-tool": { "type": "stdio", "command": "uv", "args": ["run", "my_package/server.py"] }
-```
-
-**http** (remote endpoint):
-
-```json
-"remote-tool": { "type": "http", "url": "https://example.com/mcp" }
-```
-
-**Secrets**: use `${input:var-id}` references in `"env"` and declare an `"inputs"` array at the
-top level. VS Code prompts once and stores securely. Never hardcode API keys in `mcp.json`.
-
-```json
-"inputs": [{ "id": "api-key", "type": "promptString", "description": "API Key" }],
-"env": { "API_KEY": "${input:api-key}" }
-```
-
-See the [VS Code MCP Configuration Reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration).
-
 ## Directory Layout
 
 | Directory                 | Purpose                                                |
