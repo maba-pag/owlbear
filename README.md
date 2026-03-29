@@ -76,5 +76,4 @@ uv run ruff check packages/ tests/
 ```
 
 ## License
-
 MIT
