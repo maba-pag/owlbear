@@ -50,6 +50,7 @@ Before writing any code, articulate:
 - **What will change** — which files, functions, interfaces
 - **Expected behavior** — what the code should do when complete
 - **What could go wrong** — edge cases, breaking changes, import cycles
+- **Before modifying function signatures or interfaces**, use `vscode_listCodeUsages` to find all callers and verify the change won't break downstream consumers. Note: the tool does not find dynamic calls (e.g., `getattr`).
 
 ## Step 3 — Read existing tests
 

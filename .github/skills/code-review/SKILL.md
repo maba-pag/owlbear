@@ -32,6 +32,8 @@ Use `get_changed_files` to list files changed by the builder before proceeding.
 Call with `sourceControlState: ["staged", "unstaged"]` to capture all local changes.
 Record the changed file list — use it to scope subsequent steps (tests, lint, code reading).
 
+For any changed function or class signatures, use `vscode_listCodeUsages` to trace all callers and assess downstream impact before proceeding. Note: the tool does not find dynamic calls (e.g., `getattr`).
+
 ## Step 3 — Run tests independently
 
 Do NOT rely on what the builder reported. Run yourself.
@@ -277,6 +279,8 @@ DO NOT flag these patterns — they are intentional or harmless:
 9. **Coverage gaps in code not touched by the task** — out of scope for task-scoped review; coverage is only evaluated on modules changed by the task.
 
 ## Step 8 — Verify AC compliance
+
+> **Research-task evidence:** When reviewing a research or documentation task (no TestFromAC classes, no source code changes), any AC line that includes "test", "validate", "verify", or "confirm" requires a recorded command run log or observable artifact — not just prose in a research doc or a citation to external documentation. If the only evidence is "According to docs…", treat that AC line as **FAIL**.
 
 Build an evidence table — every AC line needs specific proof:
 
