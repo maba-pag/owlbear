@@ -10,7 +10,7 @@ argument-hint: "[project name or idea]"
 > pipeline. Invoked directly by the user in VS Code chat for ad-hoc project scoping.
 
 > **Tool note:** This skill uses `ask_user` (PydanticAI runtime tool) for interactive
-> refinement. In VS Code agent mode, use `askQuestions` instead. Both are appropriate
+> refinement. In VS Code agent mode, present structured options to the user instead. Both are appropriate
 > for iterative project scoping — do not use decision requests for this frequent
 > back-and-forth.
 
@@ -20,14 +20,14 @@ producing a `ProjectDefinition` that can be decomposed into kanban tasks.
 
 ## Workflow Template
 
-Follow these six steps in order. Do not skip steps. Use `askQuestions` liberally
-to keep the user in the loop and avoid building on assumptions.
+Follow these six steps in order. Do not skip steps. Present structured options to the user
+at each step to keep them in the loop and avoid building on assumptions.
 
 1. **Receive idea** — Accept the user's initial description. Restate it in
    your own words to confirm understanding. Identify the core problem or
    opportunity the project addresses.
 
-2. **Clarify via askQuestions** — Ask targeted clarifying questions to remove
+2. **Clarify** — Ask targeted clarifying questions to remove
    ambiguity. Focus on scope boundaries, target users, constraints, and
    non-goals. Present options when multiple valid interpretations exist
    (see the example interaction below). Continue until no open questions
@@ -46,7 +46,7 @@ to keep the user in the loop and avoid building on assumptions.
 
 5. **Iterate with user** — Ask the user to review the proposed definition.
    Incorporate feedback, resolve open questions, and refine until the user
-   approves. Use `askQuestions` for each feedback round.
+   approves. Present structured options to the user for each feedback round.
 
 6. **Finalize** — Lock the approved definition. Write it as a markdown
    document to the workspace (via `create_file`). The definition is
@@ -83,23 +83,23 @@ When multiple valid approaches exist, present them as numbered options with
 confidence scores so the user can make an informed choice:
 
 ```
-askQuestions(
-    question=(
-        "The project could store data in two ways. Which do you prefer?\n\n"
-        "Option 1 (.75) — SQLite local database\n"
-        "  Pros: zero setup, fast for small datasets, portable\n"
-        "  Cons: no concurrent writes, limited to single machine\n\n"
-        "Option 2 (.60) — PostgreSQL via Docker\n"
-        "  Pros: concurrent access, scales to large datasets\n"
-        "  Cons: requires Docker, more complex setup\n\n"
-        "Option 3 (.40) — Flat JSON files\n"
-        "  Pros: simplest possible, human-readable\n"
-        "  Cons: no querying, slow at scale, no integrity checks\n\n"
-        "Recommendation: Option 1 — matches KISS principle and the "
-        "project's single-user scope.\n\n"
-        "Pick a number, or describe a different approach."
-    )
-)
+The project could store data in two ways. Which do you prefer?
+
+Option 1 (.75) — SQLite local database
+  Pros: zero setup, fast for small datasets, portable
+  Cons: no concurrent writes, limited to single machine
+
+Option 2 (.60) — PostgreSQL via Docker
+  Pros: concurrent access, scales to large datasets
+  Cons: requires Docker, more complex setup
+
+Option 3 (.40) — Flat JSON files
+  Pros: simplest possible, human-readable
+  Cons: no querying, slow at scale, no integrity checks
+
+Recommendation: Option 1 — matches KISS principle and the project's single-user scope.
+
+Pick a number, or describe a different approach.
 ```
 
 Key patterns in this example:

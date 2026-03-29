@@ -46,7 +46,7 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
-**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+**For async deferral (agents running unsupervised),** use the **decision request** process. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
 
 **Per-role triggers — when to create a decision request:**
 
