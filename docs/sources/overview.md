@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## OwlbearProjectFile Pydantic Model (Tasks #68, #74)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | BaseModel, ConfigDict extra='allow', model_validate_json | `packages/mcp-project/src/owlbear_mcp_project/models.py` | 2026-03-26 |
+| Pydantic v2 Fields docs | <https://docs.pydantic.dev/latest/concepts/fields/> | MIT | Field(min_length, max_length) constraints for name and owlbear_path | `packages/mcp-project/src/owlbear_mcp_project/models.py` | 2026-03-26 |
+| Pydantic v2 Standard Library Types — Datetimes | <https://docs.pydantic.dev/latest/api/standard_library_types/#datetime-types> | MIT | AwareDatetime rejects naive datetimes; requires timezone info | `packages/mcp-project/src/owlbear_mcp_project/models.py` | 2026-03-26 |
+| Pydantic v2 Literal validation | <https://docs.pydantic.dev/latest/api/standard_library_types/#literals> | MIT | Literal type for schema_version and type enum validation patterns | `packages/mcp-project/tests/test_models.py` | 2026-03-26 |
+
 ## VS Code Tools Evaluation (Task #95)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -1995,13 +2004,11 @@ External repos and resources studied during OwlBear development.
 | OwlBear scaffold research | `docs/research/scaffold-mcp-kanban.md` | N/A | Package layout, lifespan pattern, binary path resolution, VS Code registration, minimal tool surface | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | OwlBear integration test research | `docs/research/mcp-kanban-integration-tests.md` | N/A | In-memory MCP testing, board isolation via tmp_path, binary availability strategy, test scenarios | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 
-## Extract Knowledge Engine from v1 (Task #15)
+## Knowledge Engine Extraction Research — Module Audit (Task #15, update)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| Microsoft GraphRAG v3 | <https://github.com/microsoft/graphrag> | MIT | Multi-package monorepo layout, uv workspace, foundation-vs-layer separation pattern | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
-| PrivateGPT (Zylon) | <https://github.com/zylon-ai/private-gpt> | Apache-2.0 | Component-based DI, abstraction-first storage layer pattern | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
-| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen models, ConfigDict patterns used in v1 knowledge models | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| v1 knowledge module inventory | `v1/src/owlbear/memory/knowledge/` (24 modules) | N/A (internal) | Complete module audit: 8 orphaned modules not covered by #15/#32/#33/#34 decomposition | `docs/research/extract-knowledge-engine-v1.md` §3.7 | 2026-03-29 |
 
 ## Source Discovery & Bookmarking Research (Task #304)
 
@@ -2636,3 +2643,10 @@ External repos and resources studied during OwlBear development.
 | ruff Configuration docs | <https://docs.astral.sh/ruff/configuration/> | MIT | select=ALL with targeted ignores, src for isort first-party detection, per-file-ignores patterns | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
 | hynek � Testing in a Python Project | <https://hynek.me/articles/testing-packaging/> | CC-BY-4.0 | source_pkgs over source paths for installed-package coverage in monorepos | `docs/research/v2-test-infrastructure.md`, `pyproject.toml` | 2026-03-28 |
 | pydantic-ai pyproject.toml | <https://github.com/pydantic/pydantic-ai> | MIT | asyncio_mode=strict convention, per-package test layout in a uv monorepo | `docs/research/v2-test-infrastructure.md` | 2026-03-28 |
+
+## README Trim Assessment (Task #93)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Claude Code README | <https://github.com/anthropics/claude-code> | Unknown | Minimal README structure: title, get-started, plugins, bugs, data policy | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
+| Aider README | <https://github.com/Aider-AI/aider> | Apache-2.0 | Feature-focused README, setup details kept external to main README | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
