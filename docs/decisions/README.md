@@ -46,4 +46,4 @@ recommendation to prevent permanent blockage.
 
 ## For agents
 
-See `.github/instructions/decision-requests.instructions.md` for the full format and workflow.
+See `.github/skills/decision-requests/SKILL.md` for the full format and workflow.

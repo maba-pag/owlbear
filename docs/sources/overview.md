@@ -2,12 +2,37 @@
 
 External repos and resources studied during OwlBear development.
 
+## VS Code Tools Evaluation (Task #95)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Complete built-in tool list, `search/usages`, `search/changes`, `vscode/askQuestions` descriptions, Autopilot behavior | `docs/research/vs-code-new-tools-evaluation.md` | 2026-03-28 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool sets, approval model, tool set grouping, `search` set contents | `docs/research/vs-code-new-tools-evaluation.md` | 2026-03-28 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `tools` field semantics: explicit list restricts; missing tool is ignored silently | `docs/research/vs-code-new-tools-evaluation.md` | 2026-03-28 |
+
+## search/changes Skill Integration Research (Task #102)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `#search/changes` tool description, `#search` tool set membership, runtime tool names | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool set grouping, `search` set contents including `search/changes`, tool set JSON example | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
+
 ## Instruction File Porting Research (Task #10)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | `chat.instructionsFilesLocations` setting, `.instructions.md` file format, discovery locations, applyTo patterns | `docs/research/instruction-file-porting.md` | 2026-03-28 |
-| VS Code Customization overview | <https://code.visualstudio.com/docs/copilot/customization/overview> | CC-BY-4.0 | Parent repository discovery, monorepo instruction patterns, Chat Customizations editor | `docs/research/instruction-file-porting.md` | 2026-03-28 |
+| VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | `chat.instructionsFilesLocations` setting, `.instructions.md` file format, discovery locations, applyTo patterns | `instructions/*.instructions.md` | 2026-03-28 |
+| VS Code Customization overview | <https://code.visualstudio.com/docs/copilot/customization/overview> | CC-BY-4.0 | Parent repository discovery, monorepo instruction patterns, Chat Customizations editor | `instructions/*.instructions.md` | 2026-03-28 |
+
+## ACP Protocol Deep-Dive (Task #1)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP specification (official) | <https://agentclientprotocol.com/> | Unknown | Protocol overview, message types, session lifecycle, error codes, capability negotiation | `docs/research/acp-protocol.md` | 2026-03-26 |
+| ACP GitHub (schema + repo) | <https://github.com/agentclientprotocol/agent-client-protocol> | Apache-2.0 | JSON schema (v0.11.3), message type definitions, transport details | `docs/research/acp-protocol.md` | 2026-03-26 |
+| ACP Python SDK | <https://github.com/agentclientprotocol/python-sdk> | Apache-2.0 | Official client library (v0.9.0), connect_to_agent API, Pydantic models, examples | `docs/research/acp-protocol.md` | 2026-03-26 |
+| mcp-copilot-acp (TypeScript bridge) | <https://github.com/bsmi021/mcp-copilot-acp> | MIT | Real-world ACP client implementation, session management, timeout patterns | `docs/research/acp-protocol.md` | 2026-03-26 |
+| rest-acp (OpenAI-compat wrapper) | <https://github.com/iot2020/rest-acp> | Unknown | Session management patterns, ACP-to-OpenAI bridging approach | `docs/research/acp-protocol.md` | 2026-03-26 |
 
 ## ACP Client Library Decomposition Validation (Task #19)
 
@@ -15,6 +40,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | ACP Python SDK `interfaces.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/interfaces.py> | Apache-2.0 | Full `Client` protocol interface: 10 required async methods, `@param_model` decorators, session_update union types | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
 | ACP Python SDK `core.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/core.py> | Apache-2.0 | `connect_to_agent()` implementation, 50MB stdio buffer, `ClientSideConnection` wiring confirms NDJSON is SDK-handled | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
+
+## Instructions README Update Research (Task #109)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | `.instructions.md` format, `applyTo` patterns, YAML frontmatter schema | `docs/research/instructions-readme-update.md` | 2026-03-28 |
 
 ## Monorepo Tooling Research (Task #6)
 
@@ -35,6 +66,21 @@ External repos and resources studied during OwlBear development.
 | uv project init docs | <https://docs.astral.sh/uv/concepts/projects/init/> | MIT | uv_build backend, --package flag, src layout convention | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
 | VS Code Copilot settings ref | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | chat.agentFilesLocations, chat.agentSkillsLocations, chat.instructionsFilesLocations settings | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
 | VS Code customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Monorepo parent repository discovery, customization file conventions | `docs/research/monorepo-skeleton.md` | 2026-03-27 |
+
+## python.instructions.md v2 Update Research (Task #91)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest — Good Integration Practices | <https://docs.pytest.org/en/stable/explanation/goodpractices.html> | MIT | `--import-mode=importlib` rationale, src-layout test discovery, recommended config | `docs/research/python-instructions-v2-update.md` | 2026-03-29 |
+| pytest — Import mechanisms and sys.path | <https://docs.pytest.org/en/stable/explanation/pythonpath.html> | MIT | importlib mode semantics, sys.path non-mutation, duplicate test name support | `docs/research/python-instructions-v2-update.md` | 2026-03-29 |
+
+## pytest-and-linting Skill v2 Paths Research (Task #90)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pytest — Good Integration Practices | <https://docs.pytest.org/en/stable/explanation/goodpractices.html> | MIT | `--import-mode=importlib` rationale, `testpaths` config, src-layout test discovery | `docs/research/pytest-linting-skill-v2-paths.md` | 2026-03-29 |
+| coverage.py configuration reference | <https://coverage.readthedocs.io/en/latest/config.html> | Apache-2.0 | `source_pkgs` vs `source` semantics, TOML config syntax | `docs/research/pytest-linting-skill-v2-paths.md` | 2026-03-29 |
+| pytest-cov configuration docs | <https://pytest-cov.readthedocs.io/en/latest/config.html> | MIT | Bare `--cov` picks up `source_pkgs` from config file | `docs/research/pytest-linting-skill-v2-paths.md` | 2026-03-29 |
 
 ## v2 Test Infrastructure Research (Task #35)
 
@@ -60,6 +106,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | MCP Python SDK v1 README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 resource/tool decorators, lifespan pattern, Context injection, `mcp.run()` entry point | `docs/research/build-mcp-project-server.md` | 2026-03-28 |
 | MCP Resources Spec (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/resources> | CC-BY-4.0 | Custom URI scheme rules (§6.4), resource data types, error handling, annotations | `docs/research/build-mcp-project-server.md` | 2026-03-28 |
+| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server registration in `.vscode/mcp.json`, dev watch, naming conventions | `docs/research/build-mcp-project-server.md` | 2026-03-28 |
 
 ## Expand mcp-kanban Tools Research (Task #56)
 
@@ -81,6 +128,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code settings reference — Memory settings | <https://code.visualstudio.com/docs/copilot/reference/copilot-settings> | CC-BY-4.0 | Two memory systems (built-in tool vs GitHub-hosted), settings, default states | `docs/research/copilot-memory.md` | 2026-03-26 |
 | VS Code cheat sheet — Planning section | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Memory tool description, management command, three storage scopes | `docs/research/copilot-memory.md` | 2026-03-26 |
+| GitHub Docs — About agentic memory for Copilot | <https://docs.github.com/en/copilot/concepts/agents/copilot-memory> | CC-BY-4.0 | 28-day auto-expiry, citation-based validation, repository-scoped memories, Pro/Pro+ default enabled | `docs/research/copilot-memory.md` | 2026-03-28 |
 | Anthropic frontend-design skill | <https://github.com/anthropics/skills/tree/main/skills/frontend-design> | Apache-2.0 | Baseline frontend-design wording and design-direction guidance beneath the adapted OwlBear skill | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
 | VS Code Agent Skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | Skill folder structure, default invocation behavior, and relative resource guidance for OwlBear packaging | `docs/research/frontend-design-skill-implementation-gate.md` | 2026-03-22 |
 
@@ -145,6 +193,17 @@ External repos and resources studied during OwlBear development.
 | npm package.json spec | <https://docs.npmjs.com/cli/v10/configuring-npm/package-json> | Artistic-2.0 | Project manifest field conventions (name, version, description), open-schema extensibility, versioning patterns | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
 | pyproject.toml spec (PEP 621) | <https://packaging.python.org/en/latest/specifications/pyproject-toml/> | CC0 | `[project]` table required vs optional fields, `[tool]` open namespace for unknown keys, dynamic metadata | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
 | Dev Container JSON reference | <https://containers.dev/implementors/json_reference/> | MIT | devcontainer.json schema structure, property categories, schema URL hosting pattern | `docs/research/owlbear-project-json-schema.md` | 2026-03-26 |
+
+## Build Setup Script Research (Task #12)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Agent/skill/instruction location settings format, dict-based path mapping | `docs/research/setup-script.md` | 2026-03-28 |
+| VS Code MCP config reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | `.vscode/mcp.json` format, stdio server configuration, camelCase naming | `docs/research/setup-script.md` | 2026-03-28 |
+| Copier project scaffolder | <https://github.com/copier-org/copier> | MIT | Template engine approach evaluated as alternative to single-script architecture | `docs/research/setup-script.md` | 2026-03-28 |
+| Cookiecutter docs | <https://cookiecutter.readthedocs.io/en/stable/overview.html> | BSD-3-Clause | Template scaffolding approach evaluated as alternative | `docs/research/setup-script.md` | 2026-03-28 |
+| Python os.path.relpath docs | <https://docs.python.org/3/library/os.path.html#os.path.relpath> | PSF-2.0 | Cross-platform relative path computation, ValueError on cross-drive Windows paths | `docs/research/setup-script.md` | 2026-03-28 |
+| npm init behavior | <https://docs.npmjs.com/cli/v10/commands/npm-init> | Artistic-2.0 | Idempotency pattern (infer defaults, skip existing), per-file skip approach | `docs/research/setup-script.md` | 2026-03-28 |
 
 ## OwlbearProjectFile Model Implementation (Task #68)
 
@@ -1935,6 +1994,14 @@ External repos and resources studied during OwlBear development.
 | OwlBear MCP SDK deep-dive | `docs/research/mcp-python-sdk.md` | N/A | 3 MCP primitives, transport trade-offs, lifecycle, recommended 3-server architecture | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | OwlBear scaffold research | `docs/research/scaffold-mcp-kanban.md` | N/A | Package layout, lifespan pattern, binary path resolution, VS Code registration, minimal tool surface | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | OwlBear integration test research | `docs/research/mcp-kanban-integration-tests.md` | N/A | In-memory MCP testing, board isolation via tmp_path, binary availability strategy, test scenarios | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+
+## Extract Knowledge Engine from v1 (Task #15)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Microsoft GraphRAG v3 | <https://github.com/microsoft/graphrag> | MIT | Multi-package monorepo layout, uv workspace, foundation-vs-layer separation pattern | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| PrivateGPT (Zylon) | <https://github.com/zylon-ai/private-gpt> | Apache-2.0 | Component-based DI, abstraction-first storage layer pattern | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen models, ConfigDict patterns used in v1 knowledge models | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
 
 ## Source Discovery & Bookmarking Research (Task #304)
 
