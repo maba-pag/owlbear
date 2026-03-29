@@ -55,7 +55,7 @@ class TestFromAC_CuratorToolListCleanup:
         )
 
     def test_no_agent_md_file_references_resolve_memory_file_uri(self) -> None:
-        """No .agent.md file in .github/agents/ may reference vscode/resolveMemoryFileUri.
+        """No .agent.md file in agents/ may reference vscode/resolveMemoryFileUri.
 
         Verifies AC2: grep across the agents directory returns zero matches.
         Fails as long as curator.agent.md (or any other agent) contains the tool name.

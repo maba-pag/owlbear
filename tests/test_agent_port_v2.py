@@ -15,7 +15,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 AGENTS_DIR = ROOT / "agents"
-GITHUB_AGENTS_DIR = ROOT / ".github" / "agents"
 
 # The 9 leaf agents — no sub-agents of their own
 LEAF_AGENTS = [
@@ -303,16 +302,3 @@ class TestFromAC_LeafAgentsEmptyList:
         self._assert_agents_empty("writer")
 
 
-# ---------------------------------------------------------------------------
-# AC: .github/agents/ contains no .agent.md files (v1 cleanup complete)
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_V1Cleanup:
-    """After the port, .github/agents/ must be cleared of all .agent.md files."""
-
-    def test_github_agents_no_agent_md_files(self) -> None:
-        found = list(GITHUB_AGENTS_DIR.glob("*.agent.md"))
-        assert found == [], (
-            f".github/agents/ still contains .agent.md files: {[f.name for f in found]}"
-        )

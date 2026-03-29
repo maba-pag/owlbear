@@ -253,14 +253,6 @@ class TestFromAC_ConfigUpdates:
             (ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8")
         )
 
-    def test_vscode_settings_agent_files_locations_github_agents(self) -> None:
-        """chat.agentFilesLocations must include a path referencing .github/agents."""
-        settings = self._read_vscode_settings()
-        locations = settings.get("chat.agentFilesLocations", [])
-        assert any(".github/agents" in str(loc) for loc in locations), (
-            ".github/agents not listed in chat.agentFilesLocations"
-        )
-
     def test_vscode_settings_agent_files_locations_root_agents(self) -> None:
         """chat.agentFilesLocations must include the root agents/ path."""
         settings = self._read_vscode_settings()

@@ -1,6 +1,6 @@
 """Failing tests for task #36: Rename todo tool reference to todos in all .agent.md files.
 
-Covers AC1: all 11 .github/agents/*.agent.md files must list 'todos' (not 'todo')
+Covers AC1: all 11 agents/*.agent.md files must list 'todos' (not 'todo')
 in their YAML frontmatter tools key. Tests handle both inline and multi-line array
 formats found in the codebase.
 
@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / ".github" / "agents"
+AGENTS_DIR = ROOT / "agents"
 
-# All 11 agent files in .github/agents/ — full list per AC
+# All 11 agent files in agents/ — full list per AC
 AGENT_MD_FILES: list[str] = [
     "architect.agent.md",
     "auditor.agent.md",
@@ -56,7 +56,7 @@ def _extract_frontmatter_tools(file_path: Path) -> list[str]:
 
 
 class TestFromAC_AgentMdToolRename:
-    """AC: All 11 .agent.md files in .github/agents/ reference 'todos' (not 'todo') in tools list."""
+    """AC: All 11 .agent.md files in agents/ reference 'todos' (not 'todo') in tools list."""
 
     @pytest.mark.parametrize("filename", AGENT_MD_FILES)
     def test_tools_list_contains_todos(self, filename: str) -> None:
