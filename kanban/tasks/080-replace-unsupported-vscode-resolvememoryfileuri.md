@@ -1,10 +1,12 @@
 ---
 id: 80
 title: Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent
-status: in-progress
+status: archived
 priority: important
 created: 2026-03-27T04:44:24.8807515+01:00
-updated: 2026-03-28T04:16:07.6202698+01:00
+updated: 2026-03-29T01:47:32.2753756+01:00
+started: 2026-03-29T01:47:27.9424086+01:00
+completed: 2026-03-29T01:47:27.9424086+01:00
 tags:
     - phase-1
     - scope:agents
@@ -149,3 +151,110 @@ Root cause: curator.agent.md line 10 still contains vscode/resolveMemoryFileUri 
 - curator.agent.md no longer contains vscode/resolveMemoryFileUri.
 - docs/research/agent-md-format.md already shows REMOVED.
 - Existing tests preserved. Builder to verify and advance to review.
+
+[[2026-03-28]] Sat 14:30
+## Review Evidence (3rd cycle, 2026-03-28)
+
+### Test Results
+- pytest tests/test_resolve_memory_file_uri_removal.py: 1 FAILED, 3 passed
+- FAILED TestFromAC_CuratorToolListCleanup::test_curator_agent_md_tool_list_excludes_resolve_memory_file_uri
+  - Failure: FileNotFoundError for .github/agents/curator.agent.md (path does not exist on disk)
+  - Root cause: test hardcodes ROOT / .github / agents / curator.agent.md, but agents live at root agents/ not .github/agents/. The .github/agents/ directory is empty.
+- PASSED test_no_agent_md_file_references_resolve_memory_file_uri -- VACUOUS PASS: checks empty .github/agents/ directory (glob returns 0 files), not the real agents/ directory.
+
+### Lint Results
+- ruff tests/test_resolve_memory_file_uri_removal.py: All checks passed!
+
+### Test-Writer AC Coverage Table
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: Remove from curator.agent.md | test_curator_agent_md_tool_list_excludes_resolve_memory_file_uri | Yes -- but WRONG PATH, file not found | BROKEN |
+| AC2: No other .agent.md references it | test_no_agent_md_file_references_resolve_memory_file_uri | No -- checks empty .github/agents/ dir | LAX (vacuous) |
+| AC3: No replacement needed | (not testable, skipped) | n/a | n/a |
+| AC4: Doc table REMOVED | test_section4_table_row_shows_removed_status, test_section4_table_row_not_still_marked_no | Yes | COVERED |
+
+### TestFromAC Comparison
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| test_curator_agent_md_tool_list_excludes_resolve_memory_file_uri | Path unchanged (.github/agents/) but .github/agents/curator.agent.md does not exist on disk | BROKEN (FileNotFoundError) |
+| test_no_agent_md_file_references_resolve_memory_file_uri | Path unchanged (.github/agents/) -- dir is empty | VACUOUS -- not actually testing anything |
+| test_section4_table_row_shows_removed_status | No change | PRESERVED |
+| test_section4_table_row_not_still_marked_no | No change | PRESERVED |
+
+### Security
+No security issues found.
+
+### AC Compliance
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: Remove from .github/agents/curator.agent.md | File does not exist at that path; test FAILS with FileNotFoundError; actual change applied to agents/curator.agent.md (root) | FAIL |
+| AC2: No other .agent.md references it | agents/curator.agent.md: no resolveMemoryFileUri (grep clean); test passes VACUOUSLY (checks empty dir) | PARTIAL |
+| AC3: No replacement needed | Correct by design | PASS |
+| AC4: Doc table shows REMOVED | docs/research/agent-md-format.md line 67 confirmed REMOVED; tests PASS | PASS |
+
+### Implementation Note
+The actual change to agents/curator.agent.md (root v2 directory) is correct -- vscode/resolveMemoryFileUri is absent. However, the test file uses .github/agents/ (old v1 path) which is an empty directory. The test for AC1 cannot pass until the path in test_resolve_memory_file_uri_removal.py is updated from ROOT/.github/agents/curator.agent.md to ROOT/agents/curator.agent.md. The test for AC2 must also be updated to glob agents/ instead of .github/agents/.
+
+Prior test-writer retry note claiming all 4 tests PASS is FALSE -- pytest run confirms 1 FAIL.
+
+### Verdict: FAIL confidence .99
+
+[[2026-03-28]] Sat 21:29
+## Test-Writer Notes (retry)
+- Retry reason: auditor rejection -- original tests used .github/agents/ path; agents were ported to agents/ by task #96 (agent-port-v2).
+- Path fix applied: CURATOR_AGENT and AGENTS_DIR now reference agents/ (not .github/agents/).
+- After path fix: all 4 existing tests PASS -- implementation was subsumed and completed by task #96.
+- ruff: clean
+- Note for builder: no implementation changes needed. AC1-AC4 are all satisfied. Verify tests pass and advance through pipeline.
+
+[[2026-03-28]] Sat 22:54
+## Builder Notes (re-verify)
+- Files changed: agents/curator.agent.md, docs/research/agent-md-format.md
+- Tests: 4 passed, ruff clean
+- Evidence: All 4 TestFromAC_ tests green. resolveMemoryFileUri absent from all agent files. Doc table shows REMOVED.
+- Fixes applied: None needed - prior implementation was correct.
+
+[[2026-03-28]] Sat 22:54
+## Builder Notes (re-verify)
+- Files changed: agents/curator.agent.md, docs/research/agent-md-format.md
+- Tests: 4 passed, ruff clean
+- Evidence: All 4 TestFromAC_ tests green. resolveMemoryFileUri absent from all agent files. Doc table shows REMOVED.
+- Fixes applied: None needed - prior implementation was correct.
+
+[[2026-03-29]] Sun 01:14
+All 5 checklist items evaluated.
+1 copilot-instructions: No change (agent config cleanup)
+2 Docstrings: No .py files changed
+3 sources: No external patterns
+4 README: No CLI changes
+5 Research doc: Pass - agent-md-format.md line 67 REMOVED, task linked line 154
+
+Files Updated: None
+Scratch cleaned: None (prior cycle cleaned 80-reviewer.md)
+
+[[2026-03-29]] Sun 01:47
+## Audit (4th cycle, 2026-03-29)
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Remove resolveMemoryFileUri from curator.agent.md | grep across agents/*.agent.md returns 0 matches; test passes; read_file confirms tool absent from frontmatter | PASS |
+| AC2: No other .agent.md references it | grep across agents/ returns 0 hits; test passes (agents/ dir, not .github/agents/) | PASS |
+| AC3: No functional replacement needed | Correct by design. curation-workflow skill uses vscode/memory only | PASS |
+| AC4: Update agent-md-format.md table to REMOVED | Line 67 shows REMOVED; both AC4 tests pass | PASS |
+
+### Test Results
+- task tests: 4 passed, 0 failed
+- broader suite (7 test files): 64 passed, 0 failed
+- ruff tests/test_resolve_memory_file_uri_removal.py: All checks passed
+
+### AC Quality Score: 4
+AC was specific with file/line references. Multiple rejection cycles were caused by .github/agents/ vs agents/ path confusion (project-wide port issue from task #96), not AC vagueness.
+
+### Upstream Commits Verified
+- 30f28dd test: fix agent path in test_resolve_memory_file_uri_removal (#80, test-writer)
+- 4f2969f chore: remove unsupported resolveMemoryFileUri tool (#80, builder)
+- c7c7cc6 test: add failing tests for resolveMemoryFileUri removal (#80, test-writer)
+
+### Confidence: .97
+### Action: archive
