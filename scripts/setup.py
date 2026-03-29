@@ -148,7 +148,7 @@ def setup(
     print("  1. Open the project in VS Code.")
     print("  2. Run `kanban/setup.ps1` to download kanban-md.")
     print("  3. Start orchestrating with the OwlBear agents.")
-    print("  4. Edit .vscode/mcp.json to add project-specific MCP servers.")
+    print("  4. Edit .vscode/mcp.json to add project-specific MCP servers (see README.md).")
     print()
 
 

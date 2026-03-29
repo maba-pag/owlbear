@@ -384,6 +384,7 @@ class TestFromAC_PathDetectionAndOutput:
         captured = capsys.readouterr()
         assert captured.out.strip(), "No success message printed — expected next-steps output"
         assert "mcp.json" in captured.out, "Expected mcp.json customization hint in next-steps output"
+        assert "README" in captured.out, "Expected README reference in next-steps output"
 
     def test_setup_creates_all_expected_artifacts(self, tmp_path: Path) -> None:
         """setup() must call ALL create_* functions — every artifact must exist after one call."""
