@@ -96,7 +96,7 @@ Generate `kanban-md create` commands for every actionable finding.
 **Execute them** to create tasks at `ideation` status — the architect still gates them before `todo`.
 
 If a finding requires a user decision with no clear winner, create a **decision request**
-in `docs/decisions/pending/` instead. See the `decision-requests` skill (`.github/skills/decision-requests/SKILL.md`) for the format.
+in `docs/decisions/pending/` instead. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the format.
 Block the current task and move on to other work if available.
 
 ## Step 6 — Finalize

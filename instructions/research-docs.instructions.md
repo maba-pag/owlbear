@@ -17,7 +17,7 @@ Use this file for document-specific guardrails. For the complete research proced
 
 ### When a finding requires a user decision
 
-If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See the `decision-requests` skill (`.github/skills/decision-requests/SKILL.md`) for the format and workflow.
+If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the format and workflow.
 
 Block the current task with a reference to the decision request:
 

@@ -46,7 +46,7 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
-**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`.github/skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+**For async deferral (agents running unsupervised),** use the **decision request** process instead of `askQuestions`. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
 
 **Per-role triggers — when to create a decision request:**
 
@@ -109,6 +109,8 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 - **Commit only files touched by your current task.** Run `git status --short` and `git diff --cached` before committing to avoid staging other tasks' changes.
 - **One logical commit per agent per task.** Don't split into micro-commits or batch multiple tasks.
 - **Do not push.** The user pushes manually.
+
+> **VS Code auto-staging trap:** VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities (execute/runTask, execute/testFailure, etc.). Any task that writes `.agent.md` frontmatter is at risk of having those edits silently reverted before commit. Always run `git diff --cached agents/` (or `.github/agents/`) before committing and unstage any auto-generated reverts with `git reset HEAD <file>` before the final commit.
 
 ## Evidence over claims
 

@@ -14,7 +14,7 @@ Read ALL of these files before forming any conclusions:
 
 - `.github/instructions/*.instructions.md` — all shared instruction files
 - `.github/agents/*.agent.md` — all agent files
-- `.github/skills/*/SKILL.md` — all skill files
+- `skills/*/SKILL.md` — all skill files
 - `.github/copilot-instructions.md` — project-wide copilot instructions
 
 Use `file_search` to discover the current set. Do not assume a fixed count — agents,
@@ -298,8 +298,10 @@ If a recognized best practice applies, cite it:
 
 ### 4. Ask for approval
 
-Use `askQuestions` to present the options and collect the user's choice. Include a
+- Use `askQuestions` to present the options and collect the user's choice. Include a
 free-text field so the user can provide feedback or propose a different approach.
+- **askQuestions liberally.** Use the askQuestions tool at every decision point. Never assume — when in doubt, ask. Include `(bp:)` for best practice and `(rec:)` for recommendation per mcp.instructions.md conventions.
+- **Show Confidence scores.** When presenting proposals via askQuestions, prefix each option label with a confidence score on a scale of `.0`–`1.0` (no leading zero). Example: `.85 Accept — matches precedent X`. Mark the recommendation separately — it may differ from the highest-confidence option.
 
 If the user provides feedback that changes the approach, revise the plan for that
 finding and re-present before implementing.

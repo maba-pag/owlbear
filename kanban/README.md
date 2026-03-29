@@ -29,4 +29,4 @@ kanban\kanban-md.exe show <id>        # Show task details
 kanban\kanban-md.exe move <id> <status>  # Move task to status
 ```
 
-For the full CLI reference, see [.github/skills/kanban-md/SKILL.md](../.github/skills/kanban-md/SKILL.md).
+For the full CLI reference, see [skills/kanban-md/SKILL.md](../skills/kanban-md/SKILL.md).

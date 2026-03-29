@@ -16,8 +16,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-PROJECT_DEF_SKILL = ROOT / ".github" / "skills" / "project-definition" / "SKILL.md"
-RETRO_SKILL = ROOT / ".github" / "skills" / "retro" / "SKILL.md"
+PROJECT_DEF_SKILL = ROOT / "skills" / "project-definition" / "SKILL.md"
+RETRO_SKILL = ROOT / "skills" / "retro" / "SKILL.md"
 EXCALIDRAW_SKILL = ROOT / ".github" / "skills" / "excalidraw-diagram" / "SKILL.md"
 VISUAL_OUTPUT_SKILL = ROOT / ".github" / "skills" / "visual-output" / "SKILL.md"
 FRONTEND_DESIGN_SKILL = ROOT / ".github" / "skills" / "frontend-design" / "SKILL.md"

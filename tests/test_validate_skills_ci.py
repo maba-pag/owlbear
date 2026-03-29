@@ -3,7 +3,7 @@
 Covers:
   - AC1: skills-ref==0.1.1 listed in dependency-groups.dev in pyproject.toml
   - AC3: repo: local pre-commit hook with id: validate-skills in .pre-commit-config.yaml
-  - AC4: all .github/skills/*/ directories pass the filtered validator (exit 0)
+  - AC4: all skills/*/ directories pass the filtered validator (exit 0)
 
 These tests fail on current HEAD because:
   - AC1: skills-ref is absent from pyproject.toml [dependency-groups.dev]
@@ -25,7 +25,7 @@ _REPO_ROOT = Path(__file__).parent.parent
 _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 _PRECOMMIT_CONFIG = _REPO_ROOT / ".pre-commit-config.yaml"
 _SCRIPT = _REPO_ROOT / "scripts" / "validate_skills.py"
-_SKILLS_DIR = _REPO_ROOT / ".github" / "skills"
+_SKILLS_DIR = _REPO_ROOT / "skills"
 
 
 # ---------------------------------------------------------------------------
@@ -104,15 +104,15 @@ class TestFromAC_PreCommitHook:
 # TestFromAC_IntegrationAllSkills
 # ---------------------------------------------------------------------------
 class TestFromAC_IntegrationAllSkills:
-    """AC4: all .github/skills/*/ directories pass the filtered validator (exit 0).
+    """AC4: all skills/*/ directories pass the filtered validator (exit 0).
 
     This test is gated on the pre-commit hook being configured (AC3).
     Until the hook entry is added, it fails at the AC3 assertion.
-    Once AC3 is done, it verifies the 21 real skills all pass the script.
+    Once AC3 is done, it verifies the 22 real skills all pass the script.
     """
 
     def test_all_current_skills_pass_with_hook_configured(self) -> None:
-        """AC4: hook is configured AND all 21 .github/skills/ dirs pass with exit 0."""
+        """AC4: hook is configured AND all 22 skills/ dirs pass with exit 0."""
         # Gate: pre-commit config must have the hook (AC3 must be done first)
         content = _PRECOMMIT_CONFIG.read_text(encoding="utf-8")
         assert "validate-skills" in content, (
@@ -121,8 +121,8 @@ class TestFromAC_IntegrationAllSkills:
         )
         # Integration: script must exit 0 on all real skill dirs
         skill_dirs = sorted(d for d in _SKILLS_DIR.iterdir() if d.is_dir())
-        assert len(skill_dirs) >= 21, (
-            f"Expected at least 21 skill dirs, found {len(skill_dirs)}"
+        assert len(skill_dirs) >= 22, (
+            f"Expected at least 22 skill dirs, found {len(skill_dirs)}"
         )
         result = subprocess.run(
             [sys.executable, str(_SCRIPT), *[str(d) for d in skill_dirs]],
@@ -139,7 +139,7 @@ class TestFromAC_IntegrationAllSkills:
 # TestFromAC_AutoDiscovery  (retry: AC2a gap — no auto-discovery test existed)
 # ---------------------------------------------------------------------------
 class TestFromAC_AutoDiscovery:
-    """AC2a: script invoked with no args discovers .github/skills/*/ dirs automatically."""
+    """AC2a: script invoked with no args discovers skills/*/ dirs automatically."""
 
     def test_script_auto_discovers_skill_directories(self) -> None:
         """AC2a: no-arg invocation uses auto-discovery — not a usage error."""

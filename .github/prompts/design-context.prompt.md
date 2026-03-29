@@ -58,7 +58,7 @@ single conversation turn if possible.
 7. **Design Principles** — 3–5 product-specific rules that override generic
    best practice when they conflict. These emerge from the answers above and
    from the frontend-design skill (see
-   `.github/skills/frontend-design/SKILL.md` for guidance on deriving
+   `skills/frontend-design/SKILL.md` for guidance on deriving
    principles from values, tone, and constraints).
 
 ## Step 3 — Write docs/design-context.md

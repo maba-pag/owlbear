@@ -24,7 +24,6 @@ OwlBear is an on-demand, laptop-resident AI development system built around Copi
 
 ### Process habits
 
-- **askQuestions liberally.** Use the askQuestions tool at every decision point. Never assume — when in doubt, ask. Include `(bp:)` for best practice and `(rec:)` for recommendation per mcp.instructions.md conventions.
 - **manage_todo_list extensively.** Track progress, create checkpoints, add a reflection step at the end.
 - **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90 % coverage per phase gate.
 - **Deliverables are kanban tasks and working code, not documents.** Research documents are _supporting artifacts_ — they have value, but writing a doc is never the end goal. After completing a research or analysis task, always create the follow-up kanban tasks that the research recommends. A research task is not done until its findings are actionable items on the board. Link the kanban task body to the research doc (e.g., `See docs/research/{slug}.md for details`).
@@ -126,7 +125,7 @@ Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,
 
 ### Research tasks
 
-Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see the `decision-requests` skill at `.github/skills/decision-requests/SKILL.md`).
+Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see the `decision-requests` skill at `skills/decision-requests/SKILL.md`).
 It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
 
 ## Directory structure
@@ -163,10 +162,6 @@ Keep the project root clean. Every file created during a task must go to the rig
 | Decision requests        | `docs/decisions/pending/` | `{task-id}-{slug}.md`                 | Yes             |
 
 Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task. See `docs/scratch/.instructions.md` for details.
-
-## Confidence scores
-
-When presenting proposals via askQuestions, prefix each option label with a confidence score on a scale of `.0`–`1.0` (no leading zero). Example: `.85 Accept — matches precedent X`. Mark the recommendation separately — it may differ from the highest-confidence option.
 
 ## Attribution
 
