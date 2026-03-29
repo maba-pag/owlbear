@@ -33,7 +33,11 @@ class HelloWorldClient(Client):
             print(update.content.text, end="", flush=True)
 
     async def request_permission(
-        self, _options: Any, _session_id: str, _tool_call: Any, **_kwargs: object  # noqa: ANN401
+        self,
+        _options: object,
+        _session_id: str,
+        _tool_call: object,
+        **_kwargs: object,
     ) -> RequestPermissionResponse:
         return RequestPermissionResponse(outcome=DeniedOutcome(outcome="cancelled"))
 
