@@ -27,9 +27,7 @@ except ImportError:
     _pick_task = None  # type: ignore[assignment]
 
 
-_MCP_KANBAN_PYPROJECT = (
-    Path(__file__).parent.parent / "packages" / "mcp-kanban" / "pyproject.toml"
-)
+_MCP_KANBAN_PYPROJECT = Path(__file__).parent.parent / "packages" / "mcp-kanban" / "pyproject.toml"
 
 
 class TestFromAC_McpKanbanServer:
