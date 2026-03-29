@@ -12,7 +12,7 @@ Optional scope input: ${input:scope}
 ## Step 1 - Load context
 
 1. Read `docs/design-context.md` if it exists for project-specific design direction.
-2. Read `../skills/frontend-design/SKILL.md` for normalization guidance.
+2. Read `../../skills/frontend-design/SKILL.md` for normalization guidance.
 3. Determine the target surface:
    - Use `${input:scope}` when provided.
    - If no scope is provided, identify one page, route, or component and state it.
