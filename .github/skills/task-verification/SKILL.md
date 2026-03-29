@@ -41,6 +41,7 @@ verdict and spot-check rather than re-verify:
   If the reviewer produced a detailed evidence table with PASS verdict, accept its
   code-level findings. If the section is missing or thin, escalate confidence penalty.
 - **File exists:** `read_file` — quick sanity check that deliverables exist
+- **Changed files align with AC scope:** Use `get_changed_files` with `sourceControlState: ["staged", "unstaged"]` to list files changed by the builder and writer. Verify every changed file is within the task's domain. Flag unexpected files outside the task's domain as potential scope creep.
 - **Code matches AC (spot-check):** Verify 1–2 key AC items rather than every line.
   The reviewer already mapped every AC item to evidence.
 - **Tests pass (FULL suite):** Run the full suite plain (see `pytest-and-linting` skill):

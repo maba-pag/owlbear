@@ -26,7 +26,13 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
 3. Note every AC line — each will be verified individually
 
-## Step 2 — Run tests independently
+## Step 2 — Check source control changes
+
+Use `get_changed_files` to list files changed by the builder before proceeding.
+Call with `sourceControlState: ["staged", "unstaged"]` to capture all local changes.
+Record the changed file list — use it to scope subsequent steps (tests, lint, code reading).
+
+## Step 3 — Run tests independently
 
 Do NOT rely on what the builder reported. Run yourself.
 
@@ -39,7 +45,7 @@ uv run pytest tests/test_{module}.py -q --tb=short
 
 Record: passed/failed counts, any failures, any warnings.
 
-## Step 3 — Run lint
+## Step 4 — Run lint
 
 ```powershell
 uv run ruff check src/ tests/
@@ -47,7 +53,7 @@ uv run ruff check src/ tests/
 
 Record: errors/warnings or "All checks passed!"
 
-## Step 4 — Run coverage (if applicable)
+## Step 5 — Run coverage (if applicable)
 
 > **Prerequisite:** Load the `pytest-and-linting` skill with `read_file` before running coverage commands. It defines the exact flags, output handling approach, and known pitfalls.
 
@@ -56,11 +62,11 @@ matching the source files under review (e.g., `intake` or `memory\knowledge`).
 
 Verify touched modules have ≥ 90% coverage.
 
-## Step 5 — Pass 1: CRITICAL checks
+## Step 6 — Pass 1: CRITICAL checks
 
 Any finding in Pass 1 = automatic FAIL verdict. These are non-negotiable.
 
-### 5.0 Test-writer audit — AC-to-test coverage
+### 6.0 Test-writer audit — AC-to-test coverage
 
 Before evaluating the builder's work, verify the test-writer did its job correctly.
 The test-writer wrote tests from the AC before the builder implemented — did it cover
@@ -89,7 +95,7 @@ escalate to FAIL.
 
 > **Conditional:** Skip this step when no `TestFromAC_*` classes exist (older tasks).
 
-### 5.1 Security review
+### 6.1 Security review
 
 Check the changed code for common security vulnerabilities. This is not an exhaustive
 audit — it targets the OWASP Top 10 patterns most likely to appear in Python code.
@@ -112,7 +118,7 @@ audit — it targets the OWASP Top 10 patterns most likely to appear in Python c
 
 Any vulnerability found = FAIL. Security issues are non-negotiable.
 
-### 5.2 Test integrity — TestFromAC comparison
+### 6.2 Test integrity — TestFromAC comparison
 
 > **Conditional:** Only perform this step when `TestFromAC_*` classes exist in the
 > test file. If no such classes are present (e.g., older single-agent TDD tasks),
@@ -156,7 +162,7 @@ rejection naming the specific test methods and the nature of the weakening.
 The builder must restore the original test-writer assertions or file a BLOCK
 if the interface is genuinely infeasible.
 
-### 5.3 Test quality
+### 6.3 Test quality
 
 **Your job is to find weak tests, not confirm they exist.** A test suite that passes
 is worthless if it would also pass with a broken implementation.
@@ -180,7 +186,7 @@ Read every test file for the task and evaluate:
 Rate each dimension: **STRONG** / **ADEQUATE** / **WEAK**.
 Any WEAK rating = automatic FAIL verdict (builder must improve tests before re-review).
 
-### 5.4 Data safety
+### 6.4 Data safety
 
 Check the changed code for data integrity risks:
 
@@ -195,7 +201,7 @@ Check the changed code for data integrity risks:
 
 Any data safety issue found = FAIL.
 
-### 5.5 Implementation-aware test gap analysis
+### 6.5 Implementation-aware test gap analysis
 
 Go beyond the AC. The builder's implementation may introduce complexity that the AC
 didn't anticipate and the test-writer couldn't have known about. Read the builder's
@@ -221,12 +227,12 @@ must add `TestBuilderDiscovered` tests to cover these paths.
 that could mask bugs. Don't flag missing tests for trivial getters or obvious
 pass-through code.
 
-## Step 6 — Pass 2: INFORMATIONAL checks
+## Step 7 — Pass 2: INFORMATIONAL checks
 
 Findings in Pass 2 are noted in the review but do NOT block a PASS verdict.
 Include them as suggestions for the builder to consider in future work.
 
-### 6.1 Code reading
+### 7.1 Code reading
 
 Use `read_file` to examine the actual code for style and convention adherence:
 
@@ -238,19 +244,19 @@ Use `read_file` to examine the actual code for style and convention adherence:
 
 For agent/prompt files: valid YAML frontmatter, required sections present.
 
-### 6.2 Documentation
+### 7.2 Documentation
 
 - Missing or stale docstrings on public classes and functions
 - Comments that contradict the code
 - Missing module-level docstring
 
-### 6.3 Minor test improvements
+### 7.3 Minor test improvements
 
 - Could-be-tighter assertions that already cover behavior adequately
 - Redundant test setup that could be simplified
 - Test helper extraction opportunities
 
-### 6.4 Code structure
+### 7.4 Code structure
 
 - Flat-vs-nested suggestions
 - Function length (>50 lines)
@@ -270,7 +276,7 @@ DO NOT flag these patterns — they are intentional or harmless:
 8. **Agent/skill markdown formatting nits** — formatting is fluid during active development; minor markdown style differences are not defects.
 9. **Coverage gaps in code not touched by the task** — out of scope for task-scoped review; coverage is only evaluated on modules changed by the task.
 
-## Step 7 — Verify AC compliance
+## Step 8 — Verify AC compliance
 
 Build an evidence table — every AC line needs specific proof:
 
@@ -288,7 +294,7 @@ Additionally, verify that every AC line maps to at least one **specific, meaning
 General coverage is not enough — if AC says "reject negative numbers", show the exact test
 that supplies a negative number and asserts on the rejection.
 
-## Step 8 — Produce verdict
+## Step 9 — Produce verdict
 
 Confidence threshold: ≥ .90 = PASS (see agent-common → **Confidence thresholds**).
 
