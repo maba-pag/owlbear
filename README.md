@@ -23,74 +23,12 @@ cd owlbear
 uv sync
 ```
 
-Download the kanban-md binary:
+Download the kanban-md binary, then open VS Code:
 
 ```powershell
 kanban\setup.ps1
-```
-
-Open VS Code — agents and MCP servers auto-discover:
-
-```bash
 code .
 ```
-
-## New Project Setup
-
-Requires Python 3.12+ and uv — see [Prerequisites](#prerequisites).
-
-To wire OwlBear into an existing project, run `scripts/setup.py` from the target
-project directory:
-
-```bash
-cd /path/to/your-project
-python ../owlbear/scripts/setup.py
-```
-
-This creates:
-
-- `.vscode/settings.json` — agent, skill, and instruction file locations pointing to OwlBear
-- `.vscode/mcp.json` — MCP server entries for kanban, knowledge, and project servers
-- `kanban/` — kanban board directory with a fresh config and `tasks/` subfolder
-- `data/knowledge/` — knowledge base directory
-- `.github/copilot-instructions.md` — minimal project instructions file
-
-The script is idempotent: re-running it merges settings without overwriting existing files.
-
-### Next Steps
-
-1. Open the project in VS Code: `code /path/to/your-project`
-2. Run `kanban/setup.ps1` to download the kanban-md binary
-3. Verify agent discovery by opening Copilot Chat — agents and skills should appear in the agent picker
-4. Edit `.vscode/mcp.json` to add project-specific MCP servers (see below)
-
-### Adding MCP Servers
-
-Open `.vscode/mcp.json` and add server entries. VS Code provides IntelliSense autocomplete in this file.
-
-**stdio** (local Python tool via `uv run`):
-
-```json
-{ "servers": { "myTool": { "type": "stdio", "command": "uv", "args": ["run", "my-tool"] } } }
-```
-
-**http** (remote URL):
-
-```json
-{ "servers": { "myRemote": { "type": "http", "url": "https://my-mcp-server.example.com/mcp" } } }
-```
-
-**Secrets** — use `${input:variable-id}` with an `"inputs"` array; VS Code prompts once and stores securely:
-
-```json
-{
-  "inputs": [{ "id": "myKey", "type": "promptString", "description": "API key" }],
-  "servers": { "myService": { "type": "stdio", "command": "uv", "args": ["run", "my-svc"],
-    "env": { "API_KEY": "${input:myKey}" } } }
-}
-```
-
-See the [VS Code MCP Configuration Reference](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration).
 
 ## Directory Layout
 
