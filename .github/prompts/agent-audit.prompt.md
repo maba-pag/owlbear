@@ -12,7 +12,7 @@ agent definitions (.agent.md), skills (SKILL.md), and shared instruction files
 
 Read ALL of these files before forming any conclusions:
 
-- `.github/instructions/*.instructions.md` — all shared instruction files
+- `instructions/*.instructions.md` — all shared instruction files
 - `.github/agents/*.agent.md` — all agent files
 - `skills/*/SKILL.md` — all skill files
 - `.github/copilot-instructions.md` — project-wide copilot instructions
