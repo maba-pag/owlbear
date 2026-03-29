@@ -21,7 +21,8 @@ description: "Python coding conventions for this workspace."
 ## Project layout
 
 - Source: `packages/*/src/` (monorepo workspace packages, each with `__init__.py`).
-- Tests: `tests/` at workspace root, named `test_{module}.py`.
+- Tests (root): `tests/` at workspace root, named `test_{module}.py`.
+- Tests (package-local): `packages/*/tests/` for package-scoped test suites.
 
 ## Testing
 
@@ -29,6 +30,8 @@ description: "Python coding conventions for this workspace."
 - TDD by default — write the test first.
 - Target >= 90 % coverage per phase gate.
 - Use `unittest.mock.patch` / `MagicMock` for external dependencies (LLM calls, DB).
+- **`testpaths`:** `["tests", "packages"]` — pytest discovers tests in both root `tests/` and all `packages/*/tests/` directories.
+- **`--import-mode=importlib`:** set via `addopts` in `pyproject.toml`; required for monorepo layout to avoid import collisions between packages.
 - For pytest/ruff/coverage **commands**, see the `pytest-and-linting` skill.
 
 ### Known gotchas
