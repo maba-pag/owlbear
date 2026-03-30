@@ -179,9 +179,24 @@ async def knowledge_stats(ctx: Context) -> str:
 
 
 @mcp.resource("knowledge://stats")
-async def knowledge_stats_resource() -> str:
-    """Return knowledge base statistics as MCP resource."""
+async def _knowledge_stats_bridge() -> str:
+    """MCP-registered concrete resource for knowledge://stats (zero-arg for FastMCP compat)."""
     doc_count, entity_count, edge_count = await asyncio.to_thread(lambda: (0, 0, 0))
+    return (
+        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
+        f"{edge_count} edges"
+    )
+
+
+async def knowledge_stats_resource(ctx: Context | None = None) -> str:
+    """Return knowledge base statistics; accepts optional ctx for direct invocation."""
+    if ctx is not None:
+        app_ctx: AppContext = ctx.request_context.lifespan_context
+        gs = app_ctx.graph_store
+        counts_fn = gs.get_counts
+    else:
+        counts_fn = lambda: (0, 0, 0)  # noqa: E731
+    doc_count, entity_count, edge_count = await asyncio.to_thread(counts_fn)
     return (
         f"Knowledge base: {doc_count} documents, {entity_count} entities, "
         f"{edge_count} edges"
