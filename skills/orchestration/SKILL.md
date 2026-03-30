@@ -16,8 +16,9 @@ The orchestrator maintains constant-size context:
 
 - **No board state.** The planner reads the board each cycle. You never call `kanban-md list` or `kanban-md show`.
 - **No signal interpretation.** Subagents return a short Channel A diagnostic line. You check only: did the agent return normally, or did it error/crash? You do not parse verdicts or route based on signals.
-- **No retry tracking state — except stale_retried and sequential_remaining.** If an agent crashes, you retry once in another wave. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
+- **No retry tracking state — except stale_retried, gate_warned, and sequential_remaining.** If an agent crashes, you retry once in another wave. If it crashes again, you note the failure and pass it to the planner in the next cycle. The planner sees the task hasn't moved and handles it.
 - **Stale-retried tracking.** When the planner's dispatch includes a `retry_hint` for a task, add that task ID to a `stale_retried` set. Pass these IDs in the failure context so the planner can block them if they remain stale. Clear an ID when the task moves to a new status.
+- **Gate-warned tracking.** When the planner's JSON includes a `gate_warnings` array, maintain a `gate_warned` dict (task_id → count). Each cycle, increment the count for every task ID in `gate_warnings`, then clear any ID that no longer appears in `gate_warnings`. When a task's count reaches 2 or more, log a structured warning at end of cycle (see Output format).
 - **Rate-limit sequential counter.** Track `sequential_remaining` (integer, starts at 0). When a rate-limit crash triggers sequential mode, set this to 3. Decrement by 1 after each sequential dispatch. When it reaches 0, resume parallel waves.
 - **Prior cycle results discarded.** After each plan→dispatch cycle, all results are gone. The next cycle starts fresh with only the scope filter, crash failure IDs, and `stale_retried` IDs from the current cycle.
 
@@ -62,6 +63,16 @@ when the planner dispatches the task in the next cycle **without** a `retry_hint
 
 Receive the JSON plan. If `dispatch` is empty, report to the user that nothing is
 dispatchable and stop.
+
+After receiving the plan, process `gate_warnings` (if present in the JSON):
+1. For each task ID in `gate_warnings`, increment its count in the `gate_warned` dict.
+2. Remove any ID from `gate_warned` that no longer appears in `gate_warnings`.
+
+Optionally pass gate_warned context to the planner (future use — include only if gate_warned is non-empty):
+
+```
+runSubagent("planner", "Plan: {scope_filter}\n\nGate-warned tasks: #{id} (N cycles)", "Plan dispatch")
+```
 
 ## Configuration
 
@@ -109,7 +120,7 @@ no compatibility violations.**
 4. **Overflow waves.** Remaining light + heavy flex → new waves (up to wave-size), priority order.
 5. **Periodic curator runs.** Every fifth cycle (in cycles 5, 10, 15...) → add a curator agent to the last wave with a remaining slot. If all waves are full, skip the curator for this cycle.
 6. **Consolidation.** DEACTIVATED TEMPORARILY. SKIP THIS STEP. Collect all solo-task waves of the same restricted type (solo-builder waves, solo-auditor waves). Merge each group into combined waves (up to wave-size), relaxing the same-type exclusion within each group. Never mix builders and auditors in one wave. Priority order preserved.
-7. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
+7. **Drop rule.** Any wave with exactly one task where that task is **not** an auditor or a retry → drop. Deferred to next cycle. **Exception:** if dropping would eliminate all non-auditor waves, keep the first one.
 
 **Phase 2 — Execute the plan:**
 
@@ -243,7 +254,10 @@ Cycle 1 (Plan): Dispatching planner with scope '{filter}'...
 Cycle 1 (Wave 1/3): #101 (architect), #103 (builder), #105 (reviewer)
 Cycle 1 (Wave 2/3): #110 (test-writer), #112 (researcher)
 Cycle 1 (Done): 4/5 succeeded, 1 crashed (#112)
+Cycle 1 (Gate Warning): #205 stuck at review gate for 2 cycles — may need manual intervention
 ```
+
+Gate warning lines appear only when at least one task in `gate_warned` has a count >= 2. Include one line per warned task.
 
 At end of session:
 
@@ -267,4 +281,6 @@ Before reporting session complete:
 - [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)
 - [ ] Rate-limit sequential fallback applied correctly (≥ 3 sequential dispatches, reset on new cycle)
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
+- [ ] gate_warned counts updated from gate_warnings each cycle — IDs cleared when task exits gate_warnings
+- [ ] Gate warnings logged to output when any task count >= 2
 - [ ] I did not stop the loop early for any reason — only an empty plan should end the session
