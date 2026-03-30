@@ -37,6 +37,7 @@ class DispatchEntry(BaseModel):
     task_id: int
     agent: str
     target_status: str
+    retry_hint: str = ""
 
 
 class DispatchPlan(BaseModel):
