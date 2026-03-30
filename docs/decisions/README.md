@@ -44,6 +44,22 @@ files yourself.
 If no decision is made within 5 days, the planner auto-approves the agent's
 recommendation to prevent permanent blockage.
 
+## Action requests
+
+Action requests ask you to **do something** rather than make a choice. A file in `pending/`
+with `request_type: action` contains a checklist of steps.
+
+### Mark as complete
+
+1. Open the file in `pending/`
+2. Read `## Context` to understand why the action is needed
+3. Work through the `## Steps` checklist — check off each item as you complete it
+4. Set `completed: false` → `completed: true` in the YAML header
+5. Save. Done.
+
+The planner detects `completed: true` on its next cycle and automatically unblocks the
+task and moves the file to `resolved/`.
+
 ## For agents
 
 See `skills/decision-requests/SKILL.md` for the full format and workflow.

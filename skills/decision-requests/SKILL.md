@@ -22,7 +22,22 @@ Do NOT create a decision request for:
 - Bug fixes or refactors with an obvious correct approach
 - Decisions the agent can make with high confidence (≥ .85)
 
-## Option presentation conventions
+## When to create an action request
+
+Create an action request when you need the user to **do something** rather than **decide something**:
+
+- Manual testing or GUI verification that cannot be automated
+- Credential setup, access grants, or authentication configuration
+- Deployments, releases, or operations requiring human authorization
+- External actions (submitting forms, contacting third parties, etc.)
+- Any step that requires direct user interaction with a system or interface
+
+Do NOT create an action request for:
+
+- Decisions between multiple options (use a decision request instead)
+- Work the agent can perform autonomously (no user interaction required)
+
+## Option presentation conventions (decision type only)
 
 When presenting options in a decision request:
 
@@ -37,6 +52,8 @@ When presenting options in a decision request:
 **Location:** `docs/decisions/pending/{task-id}-{slug}.md`
 
 **Naming:** Use the owning task ID and a short kebab-case slug describing the decision.
+
+### Decision request
 
 ```markdown
 ---
@@ -92,25 +109,60 @@ auto-resolve with the recommended option (A). No downstream tasks are affected
 until this is unblocked.
 ```
 
+### Action request
+
+```markdown
+---
+# >> Your action: check off all steps below, then set completed to true
+completed: false
+notes: ""
+# >> Agent metadata (do not edit)
+request_type: action
+task_id: 456
+agent: builder
+created: 2026-03-30
+urgency: blocking
+---
+
+# Action Request: {title}
+
+## Context
+
+Why this action is needed and what task is blocked. Link to relevant task or documentation.
+
+## Steps
+
+- [ ] Step 1 description
+- [ ] Step 2 description with expected outcome
+- [ ] Step 3 — verify X shows Y
+
+## Completion instructions
+
+When all steps above are checked off, set `completed: true` in the YAML header and save.
+The planner will unblock the task automatically on its next cycle.
+```
+
 ## Frontmatter fields
 
 ### User fields (top of frontmatter)
 
-| Field      | Values                                                                   | Set by     |
-| ---------- | ------------------------------------------------------------------------ | ---------- |
-| `approved` | `false` (pending) / `true` (user approved) / `auto` (5-day auto-resolve) | User       |
-| `decision` | Pre-filled with agent recommendation; user edits if they disagree        | Agent/User |
-| `notes`    | Empty string; user may add caveats, conditions, or reasoning             | User       |
+| Field          | Values                                                                   | Applies to | Set by     |
+| -------------- | ------------------------------------------------------------------------ | ---------- | ---------- |
+| `request_type` | `decision` (default, may be omitted) / `action`                          | all        | Agent      |
+| `approved`     | `false` (pending) / `true` (user approved) / `auto` (5-day auto-resolve) | decision   | User       |
+| `decision`     | Pre-filled with agent recommendation; user edits if they disagree        | decision   | Agent/User |
+| `completed`    | `false` (pending) / `true` (user completed all steps)                    | action     | User       |
+| `notes`        | Empty string; user may add caveats, conditions, or reasoning             | all        | User       |
 
 ### Agent metadata (bottom of frontmatter — user should not edit)
 
-| Field           | Values                                                                          | Set by |
-| --------------- | ------------------------------------------------------------------------------- | ------ |
-| `task_id`       | Kanban task ID that is blocked                                                  | Agent  |
-| `agent`         | Agent that created the request                                                  | Agent  |
-| `created`       | ISO date (YYYY-MM-DD)                                                           | Agent  |
-| `urgency`       | `blocking` (task is parked) or `advisory` (agent continued with recommendation) | Agent  |
-| `decision_type` | `feature-gate` / `approach-selection` / `scope-decision` / `priority-call`      | Agent  |
+| Field           | Values                                                                          | Applies to | Set by |
+| --------------- | ------------------------------------------------------------------------------- | ---------- | ------ |
+| `task_id`       | Kanban task ID that is blocked                                                  | all        | Agent  |
+| `agent`         | Agent that created the request                                                  | all        | Agent  |
+| `created`       | ISO date (YYYY-MM-DD)                                                           | all        | Agent  |
+| `urgency`       | `blocking` (task is parked) or `advisory` (agent continued with recommendation) | all        | Agent  |
+| `decision_type` | `feature-gate` / `approach-selection` / `scope-decision` / `priority-call`      | decision   | Agent  |
 
 ## Blocking behavior
 
@@ -143,7 +195,7 @@ That's it. The planner handles the rest.
 
 **Alternatively**, use the CLI: `bearclaw decisions resolve {task_id}` — it prompts for choice, notes, and updates the file automatically.
 
-**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true`. For each:
+**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true` (decisions) or `completed: true` (action requests). For each:
 
 - Unblock the task: `kanban\kanban-md.exe edit {task_id} --unblock`
 - Move the file to `docs/decisions/resolved/`
@@ -153,6 +205,17 @@ The user never moves files — the planner does this automatically.
 **Auto-resolution (5-day timeout):** If a decision stays `approved: false` for 5+ days, the planner auto-resolves with the agent's pre-filled recommendation to prevent permanent blockage. The file is updated with `approved: auto` and the task is unblocked.
 
 > **Legacy files:** Files using the old `status: pending/resolved` format are treated equivalently: `status: resolved` is handled the same as `approved: true`.
+
+### Action requests
+
+**User completes the steps:**
+
+1. Open `docs/decisions/pending/{id}-{slug}.md`
+2. Check off each completed step in the `## Steps` section
+3. Set `completed: false` → `completed: true` in the YAML header
+4. Save. Done.
+
+The planner treats `completed: true` the same as `approved: true` — it unblocks the task and moves the file to `resolved/`.
 
 ## Integration with existing processes
 
