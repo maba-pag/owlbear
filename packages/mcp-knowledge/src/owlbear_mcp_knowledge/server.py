@@ -13,10 +13,11 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
-from owlbear_knowledge.ingest import DocumentStore, IngestPipeline
+from owlbear_knowledge.ingest import IngestPipeline
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -55,7 +56,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
         qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb)
-        doc_store = DocumentStore(gs)
+        doc_store = DocumentStore(conn, gs, vs, emb)
         model = os.environ.get("OWLBEAR_MODEL", _DEFAULT_MODEL)
         extractor = EntityExtractor(model)
         chunker = TextChunker()

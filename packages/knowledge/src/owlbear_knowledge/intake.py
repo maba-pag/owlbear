@@ -1,0 +1,92 @@
+"""Content intake: read files, URLs, or plain text into IntakeResult."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+import httpx
+from pydantic import BaseModel, ConfigDict
+
+from owlbear_knowledge._paths import sandbox_path
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+class IntakeResult(BaseModel):
+    """Result of a content intake operation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    content: str
+    source: str
+    metadata: dict[str, Any]
+
+
+async def read_file(path: Path, *, workspace_root: Path) -> IntakeResult:
+    """Read a file asynchronously after sandbox validation.
+
+    Args:
+        path: Path to the file (relative or absolute).
+        workspace_root: The root directory files must reside within.
+
+    Returns:
+        IntakeResult with the file content and file metadata.
+
+    Raises:
+        PermissionError: If *path* escapes *workspace_root*.
+        FileNotFoundError: If the file does not exist.
+    """
+    resolved = sandbox_path(workspace_root, path)
+    text = await asyncio.to_thread(resolved.read_text, encoding="utf-8")
+    return IntakeResult(
+        content=text,
+        source=str(resolved),
+        metadata={
+            "source_type": "file",
+            "fetched_at": datetime.now(tz=UTC).isoformat(),
+        },
+    )
+
+
+async def read_url(url: str) -> IntakeResult:
+    """Fetch a URL asynchronously and return content as IntakeResult.
+
+    Args:
+        url: The URL to fetch.
+
+    Returns:
+        IntakeResult with the response body and URL metadata.
+
+    Raises:
+        httpx.HTTPStatusError: On non-2xx HTTP responses.
+    """
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+    return IntakeResult(
+        content=response.text,
+        source=url,
+        metadata={
+            "source_type": "url",
+            "fetched_at": datetime.now(tz=UTC).isoformat(),
+        },
+    )
+
+
+def read_text(text: str) -> IntakeResult:
+    """Synchronous intake for plain text strings.
+
+    Args:
+        text: Raw text content to wrap.
+
+    Returns:
+        IntakeResult with source_type='text'.
+    """
+    return IntakeResult(
+        content=text,
+        source="text://inline",
+        metadata={"source_type": "text"},
+    )
