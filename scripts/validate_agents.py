@@ -1,7 +1,9 @@
 """Validate OwlBear agent files against known tool-name regressions.
 
 Checks each agents/*.agent.md file for:
-  - Bare 'todo' (not 'todos') on the tools: line (word-boundary matched)
+  - Bare 'todo' on the tools: line (word-boundary matched) — tool is disabled for subagents
+  - 'todos' on the tools: line — tool is disabled for subagents
+  - Presence of 'manage_todo_list' anywhere in the file — tool is disabled for subagents
   - Presence of 'resolveMemoryFileUri' anywhere in the file
 
 Usage:
@@ -15,7 +17,9 @@ import sys
 from pathlib import Path
 
 _BARE_TODO_RE = re.compile(r"\btodo\b")
+_TODOS_RE = re.compile(r"\btodos\b")
 _RESOLVE_URI = "resolveMemoryFileUri"
+_MANAGE_TODO_LIST = "manage_todo_list"
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -57,14 +61,24 @@ def validate_agent(agent_file: Path) -> list[str]:
     content = Path(agent_file).read_text(encoding="utf-8")
     errors: list[str] = []
 
-    # AC2: full-file check for deprecated tool name
+    # Full-file checks for disabled tools
     if _RESOLVE_URI in content:
         errors.append(f"{agent_file}: contains '{_RESOLVE_URI}'")
+    if _MANAGE_TODO_LIST in content:
+        errors.append(
+            f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents"
+        )
 
-    # AC1: tools: line — word-boundary check for bare 'todo'
+    # tools: line checks — word-boundary checks for banned tool names
     tools = _tools_text(_frontmatter_lines(content))
+    if tools and _TODOS_RE.search(tools):
+        errors.append(
+            f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents"
+        )
     if tools and _BARE_TODO_RE.search(tools):
-        errors.append(f"{agent_file}: tools: contains bare 'todo' (should be 'todos')")
+        errors.append(
+            f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents"
+        )
 
     return errors
 

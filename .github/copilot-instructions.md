@@ -24,7 +24,6 @@ OwlBear is an on-demand, laptop-resident AI development system built around Copi
 
 ### Process habits
 
-- **manage_todo_list extensively.** Track progress, create checkpoints, add a reflection step at the end.
 - **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90 % coverage per phase gate.
 - **State confidence at decision points.** When deriving a decision from source material, state confidence as a score (0.0–1.0). When multiple valid approaches exist, present them with trade-offs using `(bp:)` for best-practice options and `(rec:)` for your recommendation, per the decision-requests skill convention. Never assume — surface the choice.
 - **Agent-specific verdict thresholds** (reviewer ≥ .90, auditor ≥ .95) are defined in `agent-common.instructions.md` and remain the authority for pipeline gate decisions.
