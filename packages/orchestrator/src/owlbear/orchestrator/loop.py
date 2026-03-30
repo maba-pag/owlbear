@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
+import subprocess
+import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from owlbear.audit.models import CompletionEvent, DispatchEvent
 from owlbear.orchestrator.waves import Wave, assemble_waves
 from owlbear.planner.board import read_board
 from owlbear.planner.selector import select_tasks
@@ -14,6 +19,7 @@ from owlbear_orchestrator.acp_client import AcpClient, AcpClientError
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear.audit import AuditLog
     from owlbear.planner.models import DispatchEntry
 
 # Prompt prefix per agent type.  Used by format_prompt() to build dispatch prompts.
@@ -71,25 +77,86 @@ def _is_rate_limit(exc: BaseException) -> bool:
     return any(pattern in msg for pattern in _RATE_LIMIT_PATTERNS)
 
 
-async def dispatch_entry(entry: DispatchEntry, client: AcpClient) -> bool:
+def _git_diff_names() -> list[str]:
+    """Return file names currently modified relative to HEAD via git diff."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return [f for f in result.stdout.splitlines() if f]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+async def dispatch_entry(
+    entry: DispatchEntry,
+    client: AcpClient,
+    *,
+    audit_log: AuditLog | None = None,
+) -> bool:
     """Dispatch a single entry via ACP.
 
     Args:
         entry: The dispatch entry to execute.
         client: ACP client to use for the session.
+        audit_log: Optional audit logger for DispatchEvent and CompletionEvent.
 
     Returns:
         True on success, False on AcpClientError or TimeoutError.
         Other exceptions propagate to the caller.
     """
+    before_files = _git_diff_names()
+
     try:
         session_resp = await client.new_session(
             session_name=f"owlbear-{entry.agent}-{entry.task_id}"
         )
-        await client.prompt(session_id=session_resp.session_id)
-        return True  # noqa: TRY300
     except (AcpClientError, TimeoutError):
         return False
+
+    session_id = session_resp.session_id
+    prompt_text = format_prompt(entry)
+    dispatch_event = DispatchEvent(
+        timestamp=datetime.now(tz=UTC).isoformat(),
+        task_id=entry.task_id,
+        agent=entry.agent,
+        prompt_summary=prompt_text[:100],
+        session_id=session_id,
+    )
+
+    if audit_log is not None:
+        with contextlib.suppress(OSError):
+            audit_log.log_dispatch(dispatch_event, session_id)
+
+    t_start = time.monotonic()
+    try:
+        await client.prompt(session_id=session_id)
+    except (AcpClientError, TimeoutError):
+        return False
+    t_end = time.monotonic()
+
+    after_files = _git_diff_names()
+    before_set = set(before_files)
+    duration_ms = int((t_end - t_start) * 1000)
+    files_changed = [f for f in after_files if f not in before_set]
+
+    completion_event = CompletionEvent(
+        timestamp=datetime.now(tz=UTC).isoformat(),
+        task_id=entry.task_id,
+        agent=entry.agent,
+        outcome="success",
+        duration_ms=duration_ms,
+        files_changed=files_changed,
+    )
+
+    if audit_log is not None:
+        with contextlib.suppress(OSError):
+            audit_log.log_completion(completion_event, session_id)
+
+    return True
 
 
 def _apply_wave_result(
@@ -112,18 +179,20 @@ def _apply_wave_result(
     return False
 
 
-async def _dispatch_sequential(
+async def _dispatch_sequential(  # noqa: PLR0913
     wave: Wave,
     client: AcpClient,
     state: LoopState,
     successes: list[int],
     failures: list[int],
+    *,
+    audit_log: AuditLog | None = None,
 ) -> bool:
     """Dispatch wave entries one at a time, decrementing sequential_remaining each call."""
     rate_limited = False
     for entry in wave.entries:
         try:
-            ok = await dispatch_entry(entry, client)
+            ok = await dispatch_entry(entry, client, audit_log=audit_log)
         except Exception as exc:  # noqa: BLE001
             rl = _apply_wave_result(entry, exc, successes, failures, state)
         else:
@@ -135,16 +204,18 @@ async def _dispatch_sequential(
     return rate_limited
 
 
-async def _dispatch_parallel(
+async def _dispatch_parallel(  # noqa: PLR0913
     wave: Wave,
     client: AcpClient,
     state: LoopState,
     successes: list[int],
     failures: list[int],
+    *,
+    audit_log: AuditLog | None = None,
 ) -> bool:
     """Dispatch all wave entries concurrently via asyncio.gather."""
     results = await asyncio.gather(
-        *[dispatch_entry(e, client) for e in wave.entries],
+        *[dispatch_entry(e, client, audit_log=audit_log) for e in wave.entries],
         return_exceptions=True,
     )
     rate_limited = False
@@ -159,6 +230,8 @@ async def dispatch_wave(
     wave: Wave,
     client: AcpClient,
     state: LoopState,
+    *,
+    audit_log: AuditLog | None = None,
 ) -> CycleResult:
     """Dispatch all entries in a wave, respecting sequential/parallel mode.
 
@@ -166,6 +239,7 @@ async def dispatch_wave(
         wave: The wave of entries to dispatch.
         client: ACP client.
         state: Mutable loop state (sequential_remaining updated in-place).
+        audit_log: Optional audit logger passed through to dispatch_entry.
 
     Returns:
         CycleResult summarising successes, failures, and rate-limit status.
@@ -174,9 +248,13 @@ async def dispatch_wave(
     failures: list[int] = []
 
     if state.sequential_remaining > 0:
-        rate_limited = await _dispatch_sequential(wave, client, state, successes, failures)
+        rate_limited = await _dispatch_sequential(
+            wave, client, state, successes, failures, audit_log=audit_log
+        )
     else:
-        rate_limited = await _dispatch_parallel(wave, client, state, successes, failures)
+        rate_limited = await _dispatch_parallel(
+            wave, client, state, successes, failures, audit_log=audit_log
+        )
 
     return CycleResult(successes=successes, failures=failures, rate_limited=rate_limited)
 
@@ -187,6 +265,7 @@ async def run_loop(
     client: AcpClient,
     *,
     wave_size: int = 4,
+    audit_log: AuditLog | None = None,
 ) -> None:
     """Run the orchestrator dispatch loop until the board is empty.
 
@@ -195,6 +274,7 @@ async def run_loop(
         kanban_dir: Path to the kanban directory.
         client: ACP client for dispatching agents.
         wave_size: Maximum entries per dispatch wave.
+        audit_log: Optional audit logger injected into each dispatch.
     """
     state = LoopState()
 
@@ -218,7 +298,7 @@ async def run_loop(
 
         cycle_failures: set[int] = set()
         for wave in waves:
-            result = await dispatch_wave(wave, client, state)
+            result = await dispatch_wave(wave, client, state, audit_log=audit_log)
             cycle_failures |= set(result.failures)
 
         state.crash_failures = cycle_failures
