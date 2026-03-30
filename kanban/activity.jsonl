@@ -4672,3 +4672,56 @@
 {"timestamp":"2026-03-30T04:52:29.5649565+02:00","action":"move","task_id":138,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-30T04:52:34.4735206+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
 {"timestamp":"2026-03-30T04:52:34.4766658+02:00","action":"release","task_id":138,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:52:57.3353971+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T04:52:57.3402712+02:00","action":"release","task_id":197,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:53:08.5479402+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T04:53:26.7865699+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T04:53:26.7887624+02:00","action":"release","task_id":167,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:54:54.6033596+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:54:54.6064185+02:00","action":"claim","task_id":194,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:54:59.8292466+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T04:54:59.8318648+02:00","action":"release","task_id":190,"detail":"builder"}
+{"timestamp":"2026-03-30T04:55:03.5423347+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T04:57:07.5713845+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T04:57:07.5746069+02:00","action":"claim","task_id":197,"detail":"writer"}
+{"timestamp":"2026-03-30T04:57:12.8635328+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T04:57:12.866146+02:00","action":"claim","task_id":198,"detail":"architect"}
+{"timestamp":"2026-03-30T04:57:14.7808199+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:57:14.7839548+02:00","action":"claim","task_id":11,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:58:29.3122981+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T04:58:29.3143792+02:00","action":"release","task_id":197,"detail":"writer"}
+{"timestamp":"2026-03-30T04:59:00.7232925+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T05:00:29.3814316+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T05:00:33.8432517+02:00","action":"move","task_id":194,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T05:00:38.5372286+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T05:00:38.5399582+02:00","action":"release","task_id":194,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:00:59.5561845+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T05:01:22.8324005+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:01:27.0422243+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:01:31.6697627+02:00","action":"move","task_id":11,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T05:01:36.1110122+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:01:36.1154716+02:00","action":"release","task_id":11,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:01:57.7563622+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:01:58.1872452+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:02:11.3605137+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:02:16.2405011+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:02:21.9015433+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:02:21.903615+02:00","action":"release","task_id":198,"detail":"architect"}
+{"timestamp":"2026-03-30T05:03:46.212489+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T05:03:46.2161913+02:00","action":"claim","task_id":177,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:05:39.6886199+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:05:44.6191917+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:06:04.0513002+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T05:06:04.3628939+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T05:06:09.694658+02:00","action":"move","task_id":177,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T05:06:16.1612902+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T05:06:16.1639198+02:00","action":"release","task_id":177,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:06:44.2405788+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T05:06:57.2793396+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:06:57.2819415+02:00","action":"claim","task_id":166,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:12:55.208393+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:13:15.7974458+02:00","action":"move","task_id":166,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T05:13:20.4445193+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:13:20.4478209+02:00","action":"release","task_id":166,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:13:38.7407237+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:13:44.1606016+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
