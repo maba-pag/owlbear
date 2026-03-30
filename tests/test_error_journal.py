@@ -347,3 +347,18 @@ class TestFromAC_ErrorJournalLogV2:  # noqa: N801
         loaded = journal.load()
         assert len(loaded) == max_e
         assert loaded[-1].message == f"err {max_e}"  # most recent entry kept
+
+    def test_log_positional_entry_object_raises_type_error(self, tmp_path: Path) -> None:
+        """AC4: log(self, *, ...) — the * means NO positional args after self.
+        Passing an ErrorEntry positionally must raise TypeError."""
+        log_file = tmp_path / "errors.jsonl"
+        journal = ErrorJournal(path=log_file)
+        entry = ErrorEntry(
+            timestamp="2026-01-01T00:00:00Z",
+            category="transient",
+            method="call_agent",
+            message="err",
+            session_id="sess-001",
+        )
+        with pytest.raises(TypeError):
+            journal.log(entry)  # type: ignore[call-arg]  # positional — must raise
