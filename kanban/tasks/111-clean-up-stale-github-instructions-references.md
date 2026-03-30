@@ -4,7 +4,7 @@ title: Clean up stale .github/instructions/ references
 status: archived
 priority: nice-to-have
 created: 2026-03-28T22:24:22.9333309+01:00
-updated: 2026-03-30T04:47:07.9660175+02:00
+updated: 2026-03-30T04:49:40.3693984+02:00
 started: 2026-03-30T04:47:07.5506987+02:00
 completed: 2026-03-30T04:47:07.5506987+02:00
 tags:
@@ -88,5 +88,32 @@ This is a docs-only cleanup task (type:docs, scope:docs). The only change is a p
 - AC quality score: 5/5
 
 ### Deduction breakdown: none - both AC items verified with evidence
+### Confidence: 1.0
+### Action: archive
+
+[[2026-03-30]] Mon 04:47
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ea927df | chore | kanban task+activity | #111 |
+
+[[2026-03-30]] Mon 04:49
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| agent-audit.prompt.md L15 fix | L15 reads instructions/*.instructions.md, commit 0adf2f7 | PASS |
+| Grep verify no remaining refs | All matches in gitignored board snapshots (board.json, board_state.json, etc.), not active files | PASS |
+
+### Test Results
+- pytest: 889 passed, 136 failed (all pre-existing, none in task scope), 3 collection errors (planner/voice modules)
+- ruff: N/A (no Python changes)
+
+### Architect Quality
+- AC specificity: Exact file, line, change specified. Proper grep exclusion clause.
+- Edge case coverage: N/A (single-line docs fix)
+- AC quality score: 5/5
+
+### Deduction breakdown: none
 ### Confidence: 1.0
 ### Action: archive
