@@ -174,3 +174,16 @@ class TestFromAC_SearchKnowledgeV2:
         await search_knowledge(ctx, query="bounded", limit=7)
 
         qs.query.assert_awaited_once_with("bounded", top_k=7)
+
+    # ------------------------------------------------------------------
+    # AC: returns "Knowledge service not available." when query_service is None
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_qs_is_none_returns_service_unavailable(self) -> None:
+        """search_knowledge returns 'Knowledge service not available.' when query_service is None."""
+        ctx = _make_ctx(query_service=None)
+
+        result = await search_knowledge(ctx, query="anything")
+
+        assert result == "Knowledge service not available."

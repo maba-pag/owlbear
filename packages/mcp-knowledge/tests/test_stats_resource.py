@@ -75,3 +75,29 @@ class TestFromAC_KnowledgeStatsResource:
         assert "5 documents" in result
         assert "10 entities" in result
         assert "15 edges" in result
+
+    # ------------------------------------------------------------------
+    # AC: registered knowledge_stats_resource handler queries the graph store
+    # (not a hardcoded stub)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_stats_resource_handler_queries_graph_store(self) -> None:
+        """knowledge_stats_resource() returns counts from graph_store, not hardcoded zeros."""
+        from owlbear_mcp_knowledge.server import knowledge_stats_resource
+
+        with patch(
+            "owlbear_mcp_knowledge.server.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=(7, 42, 99),
+        ):
+            result = await knowledge_stats_resource()
+
+        assert isinstance(result, str)
+        assert "7 documents" in result, (
+            f"Expected '7 documents' in result but got: {result!r}. "
+            "knowledge_stats_resource() must query the graph_store instead of "
+            "returning hardcoded zeros."
+        )
+        assert "42 entities" in result
+        assert "99 edges" in result
