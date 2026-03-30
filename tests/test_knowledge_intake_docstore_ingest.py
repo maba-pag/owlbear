@@ -163,7 +163,7 @@ class TestFromAC_ReadUrl:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("owlbear_knowledge.intake.httpx.AsyncClient", return_value=mock_client):
+        with patch("owlbear_knowledge.intake._httpx.AsyncClient", return_value=mock_client):
             result = await read_url("https://example.com/doc")
 
         assert isinstance(result, IntakeResult)
@@ -183,7 +183,7 @@ class TestFromAC_ReadUrl:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("owlbear_knowledge.intake.httpx.AsyncClient", return_value=mock_client):
+        with patch("owlbear_knowledge.intake._httpx.AsyncClient", return_value=mock_client):
             result = await read_url("https://example.com/doc")
 
         assert result.metadata.get("source_type") == "url"
@@ -208,7 +208,7 @@ class TestFromAC_ReadUrl:
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("owlbear_knowledge.intake.httpx.AsyncClient", return_value=mock_client),
+            patch("owlbear_knowledge.intake._httpx.AsyncClient", return_value=mock_client),
             pytest.raises(httpx.HTTPStatusError),
         ):
             await read_url("https://example.com/missing")

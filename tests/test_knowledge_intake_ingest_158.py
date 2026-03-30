@@ -613,3 +613,231 @@ class TestFromAC_PyprojectHttpxDep:
         assert has_httpx or has_intake_ref, (
             "full dep group must include httpx>=0.27 or reference the intake group"
         )
+
+
+# ---------------------------------------------------------------------------
+# RETRY CYCLE — gaps identified by reviewer:
+#   1. store_extractions provenance stamping: lax assertion (assert not None)
+#   2. httpx as a true optional dep (conditional import, base install safe)
+#   3. ingest() does not pass scope to check_content_changed
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# document_store.py — store_extractions MUST stamp provenance on entities
+# AC: "stamps provenance metadata" — scope, document_id, pipeline_name must be set
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_StoreExtractionsProvenance:
+    """store_extractions must stamp provenance metadata on each entity before inserting.
+
+    The existing test_store_extractions_stamps_provenance_on_entities only checks
+    'assert inserted_entity is not None', which passes trivially even when all four
+    provenance params (scope, document_id, chunk_ids, pipeline_name) are unused (ARG002).
+    These tests verify the provenance fields ARE actually applied to the entity.
+    """
+
+    def _make_capturing_store(self) -> tuple[object, list[object]]:
+        """Return (DocumentStore, captured_entities_list)."""
+        from owlbear_knowledge.document_store import DocumentStore
+
+        captured: list[object] = []
+        mock_graph = MagicMock()
+        mock_graph.insert_entity.side_effect = captured.append
+        conn = _make_db()
+        return DocumentStore(conn, mock_graph, MagicMock(), MagicMock()), captured
+
+    def test_store_extractions_stamps_scope_on_inserted_entity(self) -> None:
+        """Entity passed to GraphStore.insert_entity must have scope == store_extractions scope arg."""
+        from owlbear_knowledge.extractor import ExtractionResult
+        from owlbear_knowledge.models import Entity, EntityType
+
+        store, captured = self._make_capturing_store()
+        entity = Entity(name="ScopeEntity", entity_type=EntityType.CONCEPT)
+        store.store_extractions(  # type: ignore[union-attr]
+            [ExtractionResult(entities=[entity], edges=[])],
+            scope="project-scope",
+            document_id="doc-scope-check",
+            chunk_ids=["cid-scope"],
+        )
+        assert len(captured) == 1
+        inserted = captured[0]
+        # Provenance: scope must be stamped — Entity has a first-class scope field
+        assert hasattr(inserted, "scope"), "inserted entity must have a scope attribute"
+        assert inserted.scope == "project-scope", (  # type: ignore[union-attr]
+            f"entity.scope must equal 'project-scope', got {inserted.scope!r}"  # type: ignore[union-attr]
+        )
+
+    def test_store_extractions_stamps_document_id_on_inserted_entity(self) -> None:
+        """Entity passed to GraphStore.insert_entity must have document_id == the provenance arg."""
+        from owlbear_knowledge.extractor import ExtractionResult
+        from owlbear_knowledge.models import Entity, EntityType
+
+        store, captured = self._make_capturing_store()
+        entity = Entity(name="DocIdEntity", entity_type=EntityType.CONCEPT)
+        store.store_extractions(  # type: ignore[union-attr]
+            [ExtractionResult(entities=[entity], edges=[])],
+            scope="global",
+            document_id="doc-provenance-test",
+            chunk_ids=["cid-docid"],
+        )
+        assert len(captured) == 1
+        inserted = captured[0]
+        # Provenance: document_id must be stamped — Entity has a first-class document_id field
+        assert hasattr(inserted, "document_id"), "inserted entity must have a document_id attribute"
+        assert inserted.document_id == "doc-provenance-test", (  # type: ignore[union-attr]
+            f"entity.document_id must equal 'doc-provenance-test', got {inserted.document_id!r}"  # type: ignore[union-attr]
+        )
+
+    def test_store_extractions_stamps_pipeline_name_on_entity_metadata(self) -> None:
+        """Entity metadata must include pipeline_name provenance from the call argument."""
+        from owlbear_knowledge.extractor import ExtractionResult
+        from owlbear_knowledge.models import Entity, EntityType
+
+        store, captured = self._make_capturing_store()
+        entity = Entity(name="PipelineEntity", entity_type=EntityType.CONCEPT)
+        store.store_extractions(  # type: ignore[union-attr]
+            [ExtractionResult(entities=[entity], edges=[])],
+            scope="global",
+            document_id="doc-pipeline-prov",
+            chunk_ids=["cid-pipeline"],
+            pipeline_name="custom-pipeline",
+        )
+        assert len(captured) == 1
+        inserted = captured[0]
+        # pipeline_name is not a first-class Entity field; it must go into metadata
+        assert hasattr(inserted, "metadata"), "inserted entity must have metadata"
+        assert "pipeline_name" in inserted.metadata, (  # type: ignore[union-attr]
+            "entity.metadata must contain 'pipeline_name' provenance key"
+        )
+        assert inserted.metadata["pipeline_name"] == "custom-pipeline", (  # type: ignore[union-attr]
+            f"entity.metadata['pipeline_name'] must equal 'custom-pipeline', "
+            f"got {inserted.metadata.get('pipeline_name')!r}"  # type: ignore[union-attr]
+        )
+
+
+# ---------------------------------------------------------------------------
+# intake.py — httpx is a TRUE optional dependency
+# AC: add httpx as optional dep group `intake = ["httpx>=0.27"]`
+# Contract: read_text (and read_file) must work without httpx installed
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_HttpxOptionalImport:
+    """httpx must be an optional dependency — base imports must not require it.
+
+    AC declares httpx in [project.optional-dependencies.intake].  A base install
+    (without that group) must be able to import read_text without error.
+    read_url specifically needs httpx and must raise ImportError (not AttributeError)
+    when httpx is absent.
+    """
+
+    def _evict_owlbear_and_httpx(self) -> dict[str, object]:
+        """Remove owlbear_knowledge + httpx from sys.modules; return saved snapshot."""
+        import sys
+
+        saved = {
+            k: v
+            for k, v in sys.modules.items()
+            if k == "httpx" or k.startswith("owlbear_knowledge")
+        }
+        for k in saved:
+            del sys.modules[k]
+        sys.modules["httpx"] = None  # type: ignore[assignment]  # simulate absent httpx
+        return saved
+
+    def _restore_modules(self, saved: dict[str, object]) -> None:
+        """Restore sys.modules from snapshot; clean up any partial owlbear loads."""
+        import sys
+
+        # Remove any partially-loaded owlbear or httpx entries
+        for k in list(sys.modules.keys()):
+            if k == "httpx" or k.startswith("owlbear_knowledge"):
+                del sys.modules[k]
+        # Restore snapshot
+        sys.modules.update(saved)
+
+    def test_read_text_works_without_httpx(self) -> None:
+        """read_text must be importable and callable when httpx is not installed.
+
+        The intake module must use conditional (try/except) httpx import so that
+        read_text (which does not need httpx) is available in base installs.
+        """
+        saved = self._evict_owlbear_and_httpx()
+        try:
+            # Must NOT raise ImportError — httpx absence only affects read_url
+            from owlbear_knowledge.intake import read_text  # noqa: PLC0415
+
+            result = read_text("works without httpx")
+            assert result.content == "works without httpx", (
+                "read_text must return content even when httpx is absent"
+            )
+        finally:
+            self._restore_modules(saved)
+
+    @pytest.mark.asyncio
+    async def test_read_url_raises_import_error_without_httpx(self) -> None:
+        """read_url must raise ImportError (not AttributeError) when httpx is absent.
+
+        The error message must mention 'httpx' so the user knows what to install.
+        """
+        saved = self._evict_owlbear_and_httpx()
+        try:
+            from owlbear_knowledge.intake import read_url  # noqa: PLC0415
+
+            with pytest.raises(ImportError, match="httpx"):
+                await read_url("https://example.com")
+        finally:
+            self._restore_modules(saved)
+
+
+# ---------------------------------------------------------------------------
+# ingest.py — ingest() must pass scope to check_content_changed
+# Reviewer Step 6.5 gap: check_content_changed called without scope
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_IngestCheckContentChangedScope:
+    """ingest() must forward its scope argument to check_content_changed.
+
+    The delta detection must operate within the same scope — otherwise content
+    ingested in scope 'A' could cause a false 'skipped' for scope 'B'.
+    The current implementation calls check_content_changed(source, content) without
+    passing scope, so it always defaults to 'global'.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ingest_passes_scope_to_check_content_changed(self) -> None:
+        """ingest(intake, scope='project') must call check_content_changed with scope='project'."""
+        from owlbear_knowledge.chunker import TextChunker
+        from owlbear_knowledge.extractor import EntityExtractor
+        from owlbear_knowledge.ingest import IngestPipeline
+        from owlbear_knowledge.intake import IntakeResult
+
+        doc_store = MagicMock()
+        doc_store.check_content_changed.return_value = (True, None)
+        doc_store.store_chunks.return_value = ["cid-scope-delta"]
+        doc_store.store_extractions.return_value = (0, 0)
+        pipeline = IngestPipeline(
+            document_store=doc_store,
+            entity_extractor=EntityExtractor("stub"),
+            text_chunker=TextChunker(),
+        )
+        intake = IntakeResult(
+            content="delta content",
+            source="src://delta-scope-check",
+            metadata={},
+        )
+        await pipeline.ingest(intake, scope="project-scope")
+
+        doc_store.check_content_changed.assert_called_once()
+        call = doc_store.check_content_changed.call_args
+        # scope must be passed as 3rd positional arg or as keyword arg
+        called_scope = call.kwargs.get("scope") or (
+            call.args[2] if len(call.args) > 2 else None
+        )
+        assert called_scope == "project-scope", (
+            f"check_content_changed must be called with scope='project-scope', "
+            f"got: args={call.args!r}, kwargs={call.kwargs!r}"
+        )
