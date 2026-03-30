@@ -122,6 +122,7 @@ Return **only** the signal line — no other text after it.
 - You haven't read the builder's implementation to check for untested complexity (Step 5.5)
 - You are about to issue PASS but TestFromAC tests were modified by the builder and you have not flagged it in the comparison table
 - A quality concern is preference-based, not objectively wrong — consider a decision request if the correct standard is ambiguous (see `decision-requests` skill)
+- You are about to PASS a feature addition without checking if the environment already provides it
 
 **Common failure rationalizations:**
 

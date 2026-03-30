@@ -229,6 +229,25 @@ must add `TestBuilderDiscovered` tests to cover these paths.
 that could mask bugs. Don't flag missing tests for trivial getters or obvious
 pass-through code.
 
+### 6.6 Necessity check
+
+> **Conditional:** Only perform this step when the task adds a new dependency,
+> integration, tool, server, or external capability. Skip for bug fixes, refactors,
+> renames, config tweaks, or test improvements.
+
+Before verifying *how* a feature was built, ask whether it *needed to be built at all*.
+Answer these three questions:
+
+1. **Already provided?** Does the IDE, runtime, or an installed extension already
+   provide this capability without additional code?
+2. **Tooling overlap?** Does existing project tooling (libraries, utilities, MCP
+   servers, scripts) already solve this need?
+3. **Presumptive feature?** Is this building for a speculated future need rather than
+   a confirmed current requirement?
+
+If yes to any question: FAIL with evidence citing the existing provider or the
+absence of a confirmed requirement. Document the specific overlap found.
+
 ## Step 7 — Pass 2: INFORMATIONAL checks
 
 Findings in Pass 2 are noted in the review but do NOT block a PASS verdict.
