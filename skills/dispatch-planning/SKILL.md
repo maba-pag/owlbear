@@ -18,18 +18,18 @@ The planner assigns agents based on task status:
 | ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
 | `ideation`    | `researcher`   | Research investigation → move to `backlog`               | No                     |
 | `backlog`     | `architect`    | Architecture review → move to `todo`                     | No                     |
-| `todo`        | `test-writer`  | Write failing tests (RED phase) → move to `in-progress`  | Yes — tags `research`, `docs`, `type:config`, `type:docs` |
+| `todo`        | `test-writer`  | Write failing tests (RED phase) → move to `in-progress`  | Yes — tags `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality` |
 | `in-progress` | `builder`      | GREEN phase → move to `review`                           | Yes — if test-writer passed through |
 | `review`      | `reviewer`     | Quality verification → move to `docs`                    | No                     |
 | `docs`        | `writer`       | Documentation gate → move to `done`                      | No                     |
 | `done`        | `auditor`      | Exit gate verification → archive                         | No                     |
 
-**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`, or
-`type:docs` still flow through the standard pipeline (`todo → test-writer → in-progress
-→ builder`). The test-writer recognizes them and passes them through without writing
-tests (see tdd-red skill, Step 1a). This keeps the dispatch table simple and avoids
-special-case routing. The architect is responsible for tagging tasks correctly during
-backlog → todo approval.
+**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`,
+`type:docs`, `test`, `type:test`, `agent`, or `quality` still flow through the standard
+pipeline (`todo → test-writer → in-progress → builder`). The test-writer recognizes
+them and passes them through without writing tests (see tdd-red skill, Step 1a). This
+keeps the dispatch table simple and avoids special-case routing. The architect is
+responsible for tagging tasks correctly during backlog → todo approval.
 
 ### Non-status-triggered agents
 
@@ -85,7 +85,8 @@ $tasks = $raw | ConvertFrom-Json
 if (-not $tasks) { '(empty)'; return }
 $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
   $w=@()
-  if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes') {$w+='TW:MISSING'}
+  if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes' -and
+      $_.tags -notcontains 'test' -and $_.tags -notcontains 'type:test') {$w+='TW:MISSING'}
   if ($_.status -in @('todo','in-progress','review','docs','done') -and
       $_.body -notmatch '(?m)^\s*(-\s|\d+\.\s)') {$w+='AC:MISSING'}
   if ($_.body -match 'Needs decomposition:') {$w+='DECOMP'}
@@ -111,6 +112,7 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 - Dual-key sort: priority rank (critical first) → pipeline proximity (done first,
   ideation last). **= Step 5 ordering.**
 - `TW:MISSING` flag: `in-progress` task without `## Test-Writer Notes`. **= Gate 4.**
+  Exempt: tasks tagged `test` or `type:test` (they are TW output — requiring TW notes is circular).
 - `AC:MISSING` flag: `todo+` task without bullet (`- `) or numbered (`1. `) AC items.
   **= Gate 5.** Not flagged for ideation/backlog — those tasks don't need AC yet
   (the researcher/architect adds it).
@@ -220,6 +222,8 @@ Check the Board Scan output for `[!TW:MISSING]` marker. This appears on `in-prog
 tasks whose body lacks `## Test-Writer Notes`. If the marker is present → exclude the
 task from dispatch (it reached `in-progress` without proper test-writer processing).
 As a fallback, a linked test task in `done` status also satisfies this gate.
+**Exemption:** Tasks tagged `test` or `type:test` are exempt from this gate — they are
+test-writer output themselves, so requiring TW notes on them is circular.
 
 **Gate 5 — Clarity gate:**
 Check the Board Scan output for `[!AC:MISSING]` marker. This appears on `todo+` tasks

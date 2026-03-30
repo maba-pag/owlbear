@@ -104,11 +104,11 @@ Verify that: (a) every dispatchable status has an assigned agent, (b) no two age
 move the same transition, (c) non-pipeline agents (orchestrator, planner, curator,
 kanban-planner) never run `kanban-md move`.
 
-**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`, or
-`type:docs` still flow through the full pipeline. The test-writer and builder recognize
-these tags and pass through without writing tests or code (see tdd-red skill Step 1a,
-tdd-workflow skill Step 1a). Verify the dispatch mapping documents this pass-through
-behavior in its table.
+**Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`,
+`type:docs`, `test`, `type:test`, `agent`, or `quality` still flow through the full
+pipeline. The test-writer and builder recognize these tags and pass through without
+writing tests or code (see tdd-red skill Step 1a, tdd-workflow skill Step 1a). Verify
+the dispatch mapping documents this pass-through behavior in its table.
 
 ## The orchestrator's role
 
