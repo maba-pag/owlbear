@@ -1,10 +1,12 @@
 ---
 id: 55
 title: Add ingest and graph tools to mcp-knowledge server
-status: review
+status: archived
 priority: important
 created: 2026-03-26T19:12:49.2923419+01:00
-updated: 2026-03-30T10:16:17.1336047+02:00
+updated: 2026-03-30T14:34:46.4573121+02:00
+started: 2026-03-30T14:34:39.3610306+02:00
+completed: 2026-03-30T14:34:39.3610306+02:00
 tags:
     - phase-2
     - scope:mcp
@@ -193,3 +195,63 @@ FAIL: TestFromAC_ListEntities::test_entity_type_filter_passed_when_provided is L
 - Tests: 39 passed (38 existing + 1 new TestBuilderDiscovered)
 - Lint: ruff clean on changed file
 - Commit: 75bfa8a
+
+[[2026-03-30]] Mon 13:21
+## Review Evidence
+See docs/scratch/55-reviewer.md for full evidence (previous cycles).
+
+**Retry #3 Review (2026-03-30)**
+- pytest: 48 passed (39 test_ingest_graph_tools.py + 9 test_graph_store_counts.py), 0 failed
+- ruff: All checks passed
+
+**Test-Writer AC Coverage**
+All 9 AC lines COVERED. TestBuilderDiscovered::test_entity_type_kwarg_forwarded_as_enum_to_to_thread compensates for LAX test_entity_type_filter_passed_when_provided.
+
+**Security**: Clean. No hardcoded credentials, enum-validated entity_type, no SQL injection vectors.
+
+**TestFromAC Integrity**: All original TestFromAC tests preserved. Builder only added TestBuilderDiscovered class.
+
+**Test Quality**: Assertion specificity ADEQUATE, error paths STRONG, descriptive names STRONG.
+
+**AC Compliance**: All 10 AC lines PASS including readOnlyHint for all 3 tools, entity_type enum kwarg forwarding, real SQLite COUNT verification.
+
+**Pass 2 (Informational)**: Unreachable knowledge_stats() function in server.py (same logic as get_stats but no @mcp.tool decorator) â€” dead code, not a defect.
+
+**Verdict: PASS. Confidence: .92**
+
+[[2026-03-30]] Mon 13:21
+## Review Evidence (Retry #3, 2026-03-30)
+
+pytest: 48 passed (39 test_ingest_graph_tools.py + 9 test_graph_store_counts.py), 0 failed. ruff: clean.
+
+AC Coverage: All 9 AC lines COVERED. TestBuilderDiscovered::test_entity_type_kwarg_forwarded_as_enum_to_to_thread compensates for LAX test_entity_type_filter_passed_when_provided (checks entity_type kwarg == EntityType('concept')).
+
+TestFromAC Integrity: All original TestFromAC tests preserved unchanged. Builder added only TestBuilderDiscovered.
+
+Security: Clean. Enum-validated entity_type, no SQL injection, no hardcoded secrets, no traceback leakage.
+
+Test Quality: Assertion specificity ADEQUATE, error paths STRONG, names STRONG.
+
+AC Compliance: All 10 AC lines PASS including readOnlyHint for all 3 tools, entity_type enum kwarg forwarding, real SQLite COUNT verification, IngestPipeline lifespan wiring.
+
+Informational: Unreachable knowledge_stats() in server.py (dead code, same logic as get_stats but no decorator). Not a defect.
+
+Verdict: PASS. Confidence .92
+
+[[2026-03-30]] Mon 14:05
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | mcp-knowledge described as 'MCP server exposing knowledge operations' - still accurate |
+| 2 | Docstrings | Yes | Pass | server.py module + 5 tools have docstrings; graph_store.get_counts() documented; ingest.py IngestPipeline/IngestResult/ingest_text() documented |
+| 3 | docs/sources/overview.md | Yes | Pass | Section for Task #55 present with 3 entries: Qdrant MCP, MCP Memory, FastMCP Tools |
+| 4 | README.md | No | N/A | No CLI commands changed |
+| 5 | Research doc | Yes | Pass | docs/research/ingest-graph-tools-mcp-knowledge.md exists and linked in task body |
+| 6 | Scratch files | None | Pass | docs/scratch/55-reviewer.md absent; no scratch files remain |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (already absent)
