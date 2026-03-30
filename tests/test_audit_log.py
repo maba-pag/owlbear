@@ -1,13 +1,13 @@
-"""Failing tests for audit log module (task #163, derived from #185).
+"""Tests for the audit log module (task #185, implementation #163).
 
 Covers: exports (3), DispatchEvent model (5), CompletionEvent model (7),
 AuditEvent TypeAdapter (5), AuditLog init (2), log_dispatch (3),
-log_completion (2), query (6), gitignore (1) = 34 tests total.
+log_completion (2), query (6), gitignore (1) = 34 TestFromAC tests.
+Plus 2 builder-discovered edge cases = 36 tests total.
 
-All tests fail on current HEAD because
-``packages/orchestrator/src/owlbear/audit/`` does not exist yet.
+Module: ``packages/orchestrator/src/owlbear/audit/``
 
-Interface per AC #163:
+Interface:
   log_dispatch(self, event: DispatchEvent, session_id: str) -> None
   log_completion(self, event: CompletionEvent, session_id: str) -> None
 """
