@@ -20,7 +20,6 @@ All tests fail on current HEAD because
 from __future__ import annotations
 
 import json
-import sys
 import threading
 from io import BytesIO
 from unittest.mock import MagicMock, patch
@@ -341,11 +340,10 @@ class TestFromAC_NdjsonOutput:
 class TestFromAC_ThreadSafeStdout:
     """stdout.buffer writes must be guarded by threading.Lock to prevent interleaving."""
 
-    def test_concurrent_callbacks_produce_valid_json_lines(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_concurrent_callbacks_produce_valid_json_lines(self) -> None:
         """AC6: Concurrent on_text_changed calls must each produce a complete JSON line."""
+        import owlbear_voice.stt as _stt  # noqa: PLC0415
+
         lines_received: list[bytes] = []
         partial: list[bytes] = [b""]
         collect_lock = threading.Lock()
@@ -362,19 +360,21 @@ class TestFromAC_ThreadSafeStdout:
         mock_buf = MagicMock()
         mock_buf.write = write_side_effect
         mock_buf.flush = MagicMock()
-        monkeypatch.setattr(sys.stdout, "buffer", mock_buf)
+        mock_sys = MagicMock()
+        mock_sys.stdout.buffer = mock_buf
 
-        lock = threading.Lock()
-        listener = TranscriptJsonListener(lock)
+        with patch.object(_stt, "sys", mock_sys):
+            lock = threading.Lock()
+            listener = TranscriptJsonListener(lock)
 
-        def fire(idx: int) -> None:
-            listener.on_text_changed(idx, f"word{idx}")
+            def fire(idx: int) -> None:
+                listener.on_text_changed(idx, f"word{idx}")
 
-        threads = [threading.Thread(target=fire, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+            threads = [threading.Thread(target=fire, args=(i,)) for i in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
         # Every received line must be valid JSON with a type field
         for line in lines_received:
@@ -383,20 +383,17 @@ class TestFromAC_ThreadSafeStdout:
 
     def test_listener_uses_lock_for_writes(
         self,
-        monkeypatch: pytest.MonkeyPatch,
+        captured_stdout: BytesIO,
     ) -> None:
         """AC6: TranscriptJsonListener constructor accepts a threading.Lock."""
         lock = threading.Lock()
-        buf = BytesIO()
-        mock_buf = MagicMock()
-        mock_buf.write = MagicMock(side_effect=buf.write)
-        mock_buf.flush = MagicMock()
-        monkeypatch.setattr(sys.stdout, "buffer", mock_buf)
 
         # Must not raise — listener must accept a lock and use it for writes
         listener = TranscriptJsonListener(lock)
         listener.on_text_changed(0, "locked write")
-        mock_buf.write.assert_called()
+        messages = _read_ndjson(captured_stdout)
+        assert len(messages) >= 1
+        assert messages[0].get("type") == "partial"
 
 
 # ---------------------------------------------------------------------------
