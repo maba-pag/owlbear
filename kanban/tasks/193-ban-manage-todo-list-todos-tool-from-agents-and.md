@@ -1,17 +1,17 @@
 ---
 id: 193
 title: Ban manage_todo_list/todos tool from agents and validator
-status: todo
+status: archived
 priority: needed
 created: 2026-03-29T22:56:35.3736143+02:00
-updated: 2026-03-30T05:27:25.9683324+02:00
+updated: 2026-03-30T19:30:51.3006323+02:00
+started: 2026-03-30T19:30:33.1029097+02:00
+completed: 2026-03-30T19:30:33.1029097+02:00
 tags:
     - phase-1
     - tooling
     - agent
     - config
-blocked: true
-block_reason: 'TestFromAC conflict: TestFromAC_ValidateAgentsTodoCheck.test_tools_todos_passes (task #134) asserts tools:[todos,read/readFile] returns [] (no errors); TestFromAC_BanTodosToolCheck.test_todos_with_other_tools_still_errors (task #193) asserts the same input produces errors. Identical input, contradictory assertions. Also test_multiline_tools_todos_passes expects todos in tools: to be clean. Test-writer must update/remove the now-contradicted TestFromAC_ValidateAgentsTodoCheck tests (test_tools_todos_passes and test_multiline_tools_todos_passes) before this can be implemented.'
 class: standard
 ---
 
@@ -154,3 +154,42 @@ validate_skills.py has no tool name validation and is out of scope. #198 (broade
 - Conflict: TestFromAC_BanTodosToolCheck.test_todos_with_other_tools_still_errors (task #193) asserts same input produces errors
 - Also: test_multiline_tools_todos_passes expects todos in tools: to pass cleanly
 - Resolution needed: Test-writer must remove or update the now-contradicted tests in TestFromAC_ValidateAgentsTodoCheck (test_tools_todos_passes and test_multiline_tools_todos_passes) before implementation can proceed
+
+[[2026-03-30]] Mon 16:06
+## Test-Writer Notes (retry)
+- Retry reason: Builder BLOCK -- contradicted TestFromAC_* from prior task #134
+- Removed: test_tools_todos_passes, test_multiline_tools_todos_passes (asserted todos in tools: returns empty -- directly contradicts #193 AC)
+- Updated 3 fixture tests to use read/readFile instead of todos
+- 10 target tests FAIL: BanTodosToolCheck x3, BanManageTodoListCheck x4, DeprecatedTodoMessage x2, CopilotInstructionsCleanup x1
+- 17 pre-existing tests PASS, 20 pre-existing #198 tests FAIL (unchanged)
+- ruff: clean -- commit: 3203734
+
+[[2026-03-30]] Mon 17:13
+## Builder Notes
+- Files changed: scripts/validate_agents.py, .github/copilot-instructions.md, agents/test-assign.agent.md
+- Tests: 27 passed (17 pre-existing + 10 new #193); 20 pre-existing #198 tests still fail (unchanged)
+- Lint: ruff clean
+- Coverage: N/A -- scripts/validate_agents.py is not an installed package
+- Fixes applied: Added _TODOS_RE + _MANAGE_TODO_LIST checks; updated bare-todo error message; removed manage_todo_list line from copilot-instructions.md; removed bare todo from test-assign.agent.md tools list
+
+[[2026-03-30]] Mon 17:59
+## Review Evidence\nSee docs/scratch/193-reviewer.md for full evidence.
+
+[[2026-03-30]] Mon 18:26
+## Docs Gate
+
+[[2026-03-30]] Mon 18:26
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | Yes | PASS | manage_todo_list line removed by builder (commit 3203734); grep confirms absent |
+| 2 | Docstrings | Yes | PASS | validate_agents.py: module docstring + all 4 public functions have docstrings |
+| 3 | sources/overview.md | No | N/A | Internal patterns only (resolveMemoryFileUri); no external sources |
+| 4 | README.md | No | N/A | No CLI commands added or changed |
+| 5 | Research doc | Yes | PASS | docs/research/manage-todo-list-subagent-removal.md exists and linked in task body |
+
+### Files Updated
+- None (all docs changes were committed by builder; no new gaps found)
+
+### Scratch Files Cleaned
+- Deleted docs/scratch/193-reviewer.md
