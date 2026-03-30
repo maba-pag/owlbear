@@ -103,8 +103,8 @@
   "github.copilot.chat.tools.memory.enabled": true,
   "github.copilot.enable": {
     "*": false,
-    "markdown": true,
     "plaintext": true,
+    "markdown": false,
     "scminput": true
   },
   "github.copilot.nextEditSuggestions.enabled": true,
