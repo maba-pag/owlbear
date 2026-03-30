@@ -2,6 +2,124 @@
 
 External repos and resources studied during OwlBear development.
 
+## Canonical Tool Registry Validation (Task #198)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Cheat Sheet (2026-03-25) | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Canonical built-in tool list (7 tool sets + 31 individual tools) | `docs/research/canonical-tool-registry-validation.md` | 2026-03-30 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool sets concept, MCP tool format, tool type taxonomy | `docs/research/canonical-tool-registry-validation.md` | 2026-03-30 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `tools:` field spec, `<server>/*` MCP format, tool set references | `docs/research/canonical-tool-registry-validation.md` | 2026-03-30 |
+
+## Validate Multi-Project Setup (Task #167)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code custom agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `chat.agentFilesLocations` resolution, agent picker source tooltips, Configure Custom Agents menu | `docs/research/validate-multi-project-setup.md` | 2026-03-30 |
+| VS Code customization overview | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Chat Customizations editor (Preview), parent repository discovery, troubleshooting customizations | `docs/research/validate-multi-project-setup.md` | 2026-03-30 |
+| VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server config, `MCP: List Servers` command, server naming conventions | `docs/research/validate-multi-project-setup.md` | 2026-03-30 |
+
+## Pipeline Quality Audit (Task #192)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Du et al. 2023 — Multi-agent Debate | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Multi-agent debate improves factuality only when agents reason independently; sequential pipelines inherit upstream errors | `docs/research/pipeline-quality-audit.md` | 2026-03-29 |
+| VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | MCP server configuration, Copilot extension built-in server provision, duplicate server behavior | `docs/research/pipeline-quality-audit.md` | 2026-03-29 |
+
+## Arch-Review Premise Challenge (Task #195)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Klein 2007 — Performing a Project Premortem | <https://hbr.org/2007/09/performing-a-project-premortem> | N/A | Pre-mortem technique: assume failure and work backward to identify causes; breaks groupthink and anchoring bias | `docs/research/arch-review-premise-challenge.md` | 2026-03-29 |
+| Chesterton 1929 — The Drift from Domesticity | <https://en.wikipedia.org/wiki/G._K._Chesterton#Chesterton's_fence> | N/A | Chesterton's fence: understand why something exists (or doesn't) before changing it; inverse applied to feature additions | `docs/research/arch-review-premise-challenge.md` | 2026-03-29 |
+
+## General KB Initial Data Load Research (Task #24)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GraphRAG quickstart | <https://microsoft.github.io/graphrag/get_started/> | MIT | Bulk indexing from `input/` directory, `graphrag index` pipeline | `docs/research/general-kb-initial-data-load.md` | 2026-03-29 |
+| LightRAG insert API | <https://github.com/HKUDS/LightRAG> | MIT | `rag.ainsert()` incremental ingestion, workspace isolation pattern | `docs/research/general-kb-initial-data-load.md` | 2026-03-29 |
+| Mem0 memory layer | <https://github.com/mem0ai/mem0> | Apache-2.0 | `memory.add()` incremental pattern, multi-level memory scoping | `docs/research/general-kb-initial-data-load.md` | 2026-03-29 |
+
+## Wire Audit Log into Dispatch Loop (Task #164)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| CrewAI Event Listeners | <https://docs.crewai.com/concepts/event-listener> | N/A | Event bus architecture with BaseEventListener, Started/Completed/Failed triplets, singleton CrewAIEventsBus pattern — evaluated as over-engineering for single-consumer audit | `docs/research/wire-audit-log-dispatch-loop.md` | 2026-03-30 |
+| AutoGen `logging.py` event classes | <https://github.com/microsoft/autogen/blob/main/python/packages/autogen-core/src/autogen_core/logging.py> | MIT | Typed event classes with JSON serialization via stdlib logging — evaluated as untyped at handler level | `docs/research/wire-audit-log-dispatch-loop.md` | 2026-03-30 |
+| OWASP Logging Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html> | CC-BY-SA-4.0 | Monotonic clock recommendation for duration measurement, append-only audit integrity | `docs/research/wire-audit-log-dispatch-loop.md` | 2026-03-30 |
+
+## Orchestrator Audit Log Research (Task #21)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| AutoGen `logging.py` event classes | <https://github.com/microsoft/autogen/blob/main/python/packages/autogen-core/src/autogen_core/logging.py> | MIT | Typed event classes (LLMCallEvent, ToolCallEvent) with JSON `__str__`, stdlib logger pattern | `docs/research/orchestrator-audit-log.md` | 2026-03-29 |
+| OWASP Logging Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html> | CC-BY-SA-4.0 | When/where/who/what event schema, append-only storage, separate audit logs from app logs | `docs/research/orchestrator-audit-log.md` | 2026-03-29 |
+| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/type_adapter/> | MIT | TypeAdapter for JSONL serialization pattern | `docs/research/orchestrator-audit-log.md` | 2026-03-29 |
+
+## manage_todo_list Subagent Removal (Task #193)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Cheat Sheet (2026-03-25) | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `todos` tool description, canonical built-in tool list | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Subagent context isolation, tool inheritance, collapsed execution model | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
+| VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool enabling, tool type taxonomy | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `tools:` frontmatter spec, unavailable tool behavior | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
+
+## E2E Dispatch Test Research (Task #23)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `test_rpc.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/test_rpc.py> | Apache-2.0 | `spawn_agent_process` E2E roundtrip test, in-memory agent/client harness, TestClient/TestAgent patterns | `docs/research/e2e-dispatch-test.md` | 2026-03-29 |
+| ACP Python SDK `conftest.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/conftest.py> | Apache-2.0 | TestClient/TestAgent mock helpers, asyncio TCP loopback test server pattern | `docs/research/e2e-dispatch-test.md` | 2026-03-29 |
+| ACP Python SDK `duet.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/duet.py> | Apache-2.0 | Two-process spawn pattern: client spawns agent subprocess, interactive loop | `docs/research/e2e-dispatch-test.md` | 2026-03-29 |
+| ACP Architecture Spec | <https://agentclientprotocol.com/get-started/architecture> | N/A | ACP design philosophy, stdio setup, MCP forwarding architecture | `docs/research/e2e-dispatch-test.md` | 2026-03-29 |
+
+## AcpClient Wrapper Validation (Task #59)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `exceptions.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/exceptions.py> | Apache-2.0 | RequestError factory methods, 7 JSON-RPC error codes | `docs/research/acp-client-wrapper-validation.md` | 2026-03-29 |
+| ACP Python SDK `client/connection.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/client/connection.py> | Apache-2.0 | ClientSideConnection method signatures, required params | `docs/research/acp-client-wrapper-validation.md` | 2026-03-29 |
+| ACP Python SDK `utils.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/utils.py> | Apache-2.0 | `@param_model` is a no-op marker, `@compatible_class` wraps methods | `docs/research/acp-client-wrapper-validation.md` | 2026-03-29 |
+
+## Necessity Check Code-Review (Task #196)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Google Eng-Practices: What to Look For in a Code Review | <https://google.github.io/eng-practices/review/reviewer/looking-for.html> | CC-BY-4.0 | Design section asks "Does this change belong in your codebase?"; Complexity warns against over-engineering | `docs/research/necessity-check-code-review.md` | 2026-03-29 |
+| Martin Fowler — Yagni | <https://martinfowler.com/bliki/Yagni.html> | N/A | YAGNI principle; Kohavi et al. ⅔ of features don't improve metrics; cost-of-carry analysis | `docs/research/necessity-check-code-review.md` | 2026-03-29 |
+| SmartBear — Best Practices for Peer Code Review | <https://smartbear.com/learn/code-review/best-practices-for-peer-code-review/> | N/A | Checklists are the most effective way to eliminate omission-type errors | `docs/research/necessity-check-code-review.md` | 2026-03-29 |
+
+## Environment Audit Research-Workflow (Task #194)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Google Eng-Practices: What to Look For in a Code Review | <https://google.github.io/eng-practices/review/reviewer/looking-for.html> | CC-BY-4.0 | Design section asks "Does this change belong in your codebase?" — prior art for environment necessity checks | `docs/research/environment-audit-research-workflow.md` | 2026-03-29 |
+| Du et al. 2023 — Multi-agent Debate | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Sequential pipeline anchoring — agents inherit upstream assumptions without independent verification | `docs/research/environment-audit-research-workflow.md` | 2026-03-29 |
+
+## Self-Improvement Analysis Pipeline (Task #31)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| v1 `improvement_proposals.py` | `v1/src/owlbear/core/improvement_proposals.py` | (internal) | Threshold-based pattern detection from EventStore, ImprovementProposal Pydantic model, generate_proposals() API | `docs/research/self-improvement-analysis-pipeline.md` | 2026-03-29 |
+| v1 `observability.py` (EventStore) | `v1/src/owlbear/core/observability.py` | (internal) | EventStore.summary(), tool_stats() aggregation APIs consumed by analysis | `docs/research/self-improvement-analysis-pipeline.md` | 2026-03-29 |
+| AutoGen event logging | <https://github.com/microsoft/autogen/blob/main/python/packages/autogen-core/src/autogen_core/logging.py> | MIT | Typed event classes (LLMCallEvent, ToolCallEvent), per-agent attribution | `docs/research/self-improvement-analysis-pipeline.md` | 2026-03-29 |
+| LangSmith evaluation concepts | <https://docs.langchain.com/langsmith/evaluation-concepts> | N/A | Code vs LLM-as-judge evaluators, offline/online evaluation patterns | `docs/research/self-improvement-analysis-pipeline.md` | 2026-03-29 |
+
+## AcpClient Parameter Forwarding (Task #147)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK `meta.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/meta.py> | Apache-2.0 | `PROTOCOL_VERSION = 1` constant, schema version v0.11.2 | `docs/research/acp-client-param-forwarding.md` | 2026-03-29 |
+| ACP Python SDK `helpers.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/helpers.py> | Apache-2.0 | `text_block` helper, `ContentBlock` type alias for prompt content | `docs/research/acp-client-param-forwarding.md` | 2026-03-29 |
+
+## Stale Tool Names Audit (Task #193)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Cheat Sheet — Chat Tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features#_chat-tools> | N/A | Canonical built-in tool list: `todos` confirmed as current name | `docs/research/stale-tool-names.md` | 2026-03-29 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | N/A | tools field spec, Claude agent format mapping | `docs/research/stale-tool-names.md` | 2026-03-29 |
+
 ## Knowledge Engine Extraction Research (Task #15)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -10,6 +128,16 @@ External repos and resources studied during OwlBear development.
 | PrivateGPT (Zylon) | <https://github.com/zylon-ai/private-gpt> | Apache-2.0 | Component-based DI, abstraction-first storage patterns | `docs/research/extract-knowledge-engine-v1.md` | 2026-03-28 |
 | Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen models, ConfigDict patterns used in knowledge models | `packages/knowledge/src/owlbear_knowledge/models.py` | 2026-03-28 |
 
+## Multi-Project Setup Test Research (Task #25)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot customization docs | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Parent repository discovery, customization settings, resolution mechanisms | `docs/research/multi-project-setup-test.md` | 2026-03-29 |
+| VS Code custom agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agentFilesLocations setting, agent file locations, agent override behavior | `docs/research/multi-project-setup-test.md` | 2026-03-29 |
+| VS Code agent skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | agentSkillsLocations setting, skill discovery, SKILL.md resolution | `docs/research/multi-project-setup-test.md` | 2026-03-29 |
+| VS Code custom instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | instructionsFilesLocations setting, copilot-instructions.md priority | `docs/research/multi-project-setup-test.md` | 2026-03-29 |
+| VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server config, naming conventions, on-demand lifecycle | `docs/research/multi-project-setup-test.md` | 2026-03-29 |
+
 ## README v2 Trim Assessment (Tasks #28, #93)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -17,12 +145,45 @@ External repos and resources studied during OwlBear development.
 | Claude Code README | <https://github.com/anthropics/claude-code> | Proprietary | Concise README structure: one-liner, get started, plugins, links | `docs/research/readme-v2-rewrite.md`, `docs/research/readme-trim-assessment.md` | 2026-03-28 |
 | Aider README | <https://github.com/Aider-AI/aider> | Apache-2.0 | Features + getting-started + docs links; secondary setup kept external | `docs/research/readme-trim-assessment.md` | 2026-03-29 |
 
+## v2 ErrorJournal Module Research (Task #184)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic TypeAdapter docs | <https://docs.pydantic.dev/latest/concepts/type_adapter/> | MIT | TypeAdapter dump_json/validate_json for JSONL serialization, create-once-reuse pattern | `docs/research/v2-errorjournal-module.md` | 2026-03-29 |
+| jsonlines library docs | <https://jsonlines.readthedocs.io/en/latest/> | BSD-3 | JSONL append/read patterns, line-oriented persistence conventions | `docs/research/v2-errorjournal-module.md` | 2026-03-29 |
+
+## Entity Extraction + Graph Builders Research (Task #33)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| fast-graphrag BaseLLMService | <https://github.com/circlemind-ai/fast-graphrag/blob/main/fast_graphrag/_llm/_base.py> | MIT | Protocol-based LLM abstraction, `send_message(response_model=)` pattern for structured output | `docs/research/extract-entity-extraction-graph-builders.md` | 2026-03-29 |
+| nano-graphrag LLM functions | <https://github.com/gusye1234/nano-graphrag/blob/main/nano_graphrag/_llm.py> | MIT | Plain async callable pattern for LLM integration, no class hierarchy | `docs/research/extract-entity-extraction-graph-builders.md` | 2026-03-29 |
+| Python Protocol PEP 544 | <https://docs.python.org/3/library/typing.html#typing.Protocol> | PSF | Runtime-checkable Protocol for structural subtyping (used for StructuredExtractor design) | `docs/research/extract-entity-extraction-graph-builders.md` | 2026-03-29 |
+
+## Task #143 TDD RED Scope Validation (Task #143)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| v1 cancellation.py | `v1/src/owlbear/memory/knowledge/cancellation.py` | (internal) | CancelSignal Protocol + LinkedCancelSignal implementation (29 LOC) | `docs/research/task-143-tdd-red-scope-validation.md` | 2026-03-29 |
+| v1 paths.py | `v1/src/owlbear/paths.py` | (internal) | sandbox_path() null-byte + traversal guard (36 LOC) | `docs/research/task-143-tdd-red-scope-validation.md` | 2026-03-29 |
+| v1 consolidation.py | `v1/src/owlbear/memory/knowledge/consolidation.py` | (internal) | ConsolidationService constructor + PydanticAI Agent usage (114 LOC) | `docs/research/task-143-tdd-red-scope-validation.md` | 2026-03-29 |
+| v1 evaluator.py | `v1/src/owlbear/memory/knowledge/evaluator.py` | (internal) | SourceEvaluator + EvaluationResult + PydanticAI Agent usage (167 LOC) | `docs/research/task-143-tdd-red-scope-validation.md` | 2026-03-29 |
+
 ## GitHub Remote MCP Server Integration (Task #121)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | GitHub MCP Server README | <https://github.com/github/github-mcp-server> | MIT | Canonical `type:http` + URL config for VS Code mcp.json | `scripts/setup.py` — `create_mcp_config()` | 2026-03-29 |
 | VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | Remote server config format, `http` type semantics, VS Code mcp.json schema | `scripts/setup.py` — `create_mcp_config()` | 2026-03-29 |
+
+## Orchestrator Dispatch Loop Research (Task #146)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK quickstart | <https://agentclientprotocol.github.io/python-sdk/quickstart/> | Apache-2.0 | `spawn_agent_process` lifecycle, `connect_to_agent`, session API (initialize/new_session/prompt) | `docs/research/orchestrator-dispatch-loop.md` | 2026-03-29 |
+| ACP Python SDK `duet.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/duet.py> | Apache-2.0 | Two-process spawn pattern, interactive session loop | `docs/research/orchestrator-dispatch-loop.md` | 2026-03-29 |
+| ACP Python SDK `client.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/client.py> | Apache-2.0 | Full ExampleClient implementation, interactive_loop, conn.prompt() with text_block | `docs/research/orchestrator-dispatch-loop.md` | 2026-03-29 |
+| OpenAI Symphony poll-dispatch-reconcile | <https://github.com/openai/symphony> | MIT | Daemon poll loop, reconciliation tick, stale detection, retry with backoff | `docs/research/orchestrator-dispatch-loop.md` | 2026-03-29 |
 
 ## OwlbearProjectFile Pydantic Model (Tasks #68, #74)
 
@@ -32,6 +193,22 @@ External repos and resources studied during OwlBear development.
 | Pydantic v2 Fields docs | <https://docs.pydantic.dev/latest/concepts/fields/> | MIT | Field(min_length, max_length) constraints for name and owlbear_path | `packages/mcp-project/src/owlbear_mcp_project/models.py` | 2026-03-26 |
 | Pydantic v2 Standard Library Types — Datetimes | <https://docs.pydantic.dev/latest/api/standard_library_types/#datetime-types> | MIT | AwareDatetime rejects naive datetimes; requires timezone info | `packages/mcp-project/src/owlbear_mcp_project/models.py` | 2026-03-26 |
 | Pydantic v2 Literal validation | <https://docs.pydantic.dev/latest/api/standard_library_types/#literals> | MIT | Literal type for schema_version and type enum validation patterns | `packages/mcp-project/tests/test_models.py` | 2026-03-26 |
+
+## CLI Trigger Commands Research (Task #22)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Typer docs (main + testing + subcommands) | <https://typer.tiangolo.com/> | MIT | Type-hint CLI framework, CliRunner testing, subcommand patterns | `docs/research/cli-trigger-commands.md` | 2026-03-29 |
+| Click docs (main + testing) | <https://click.palletsprojects.com/en/stable/> | BSD-3 | Comparison framework, CliRunner testing, decorator-based CLI | `docs/research/cli-trigger-commands.md` | 2026-03-29 |
+| Typer PyPI (v0.24.1) | <https://pypi.org/project/typer/> | MIT | Dependency chain (click + rich + shellingham), version info | `docs/research/cli-trigger-commands.md` | 2026-03-29 |
+
+## Planner Gate Checker & Selector Research (Task #145)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python 3.12 `re` module docs | <https://docs.python.org/3.12/library/re.html> | PSF-2.0 | Word-boundary regex for atomicity gate, multiline AC pattern matching | `docs/research/planner-gate-checker-selector.md` | 2026-03-29 |
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen model reuse for DispatchPlan construction in selector | `docs/research/planner-gate-checker-selector.md` | 2026-03-29 |
+| Click PyPI (v8.3.1) | <https://pypi.org/project/click/> | BSD-3 | Version info, zero-dep footprint | `docs/research/cli-trigger-commands.md` | 2026-03-29 |
 
 ## VS Code Tools Evaluation (Task #95)
 
@@ -46,6 +223,15 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Copilot Cheat Sheet | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | `#search/changes` tool description, `#search` tool set membership, runtime tool names | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
+
+## Multi-Project Documentation Guide Research (Task #172)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot customization docs (Mar 2026) | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Parent repository discovery, Chat Customizations editor, Agent Debug Logs — new features since #25 research | `docs/research/multi-project-doc-guide.md` | 2026-03-29 |
+| VS Code custom agents docs (Mar 2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Organization-level agent sharing, `chat.agentFilesLocations` settings, agent override behavior updates | `docs/research/multi-project-doc-guide.md` | 2026-03-29 |
+| Aider installation guide | <https://aider.chat/docs/install.html> | Apache-2.0 | Setup guide structure: prerequisites, quick start, verification, troubleshooting | `docs/research/multi-project-doc-guide.md` | 2026-03-29 |
+| Claude Code getting-started guide | <https://code.claude.com/docs/en/getting-started> | Proprietary | Setup guide structure: system requirements, install, verify, authenticate | `docs/research/multi-project-doc-guide.md` | 2026-03-29 |
 | VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool set grouping, `search` set contents including `search/changes`, tool set JSON example | `docs/research/search-changes-skill-integration.md` | 2026-03-28 |
 
 ## search/usages Skill Integration Research (Task #103)
@@ -61,12 +247,29 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | FastMCP Tools docs | <https://gofastmcp.com/servers/tools> | MIT | `@mcp.tool` decorator registration, `readOnlyHint` annotations, `Annotated` param descriptions, async tool support | `docs/research/extract-bookmark-refresh-mcp.md` | 2026-03-29 |
 
+## Build mcp-knowledge Server Research (Task #16)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator API, lifespan pattern, resource decorators, Context injection | `docs/research/build-mcp-knowledge-server.md` | 2026-03-29 |
+| MCP Reference Memory Server | <https://github.com/modelcontextprotocol/servers/tree/main/src/memory> | MIT | Knowledge-graph-based MCP server prior art, tool/resource patterns | `docs/research/build-mcp-knowledge-server.md` | 2026-03-29 |
+
 ## Instruction File Porting Research (Task #10)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Custom Instructions docs | <https://code.visualstudio.com/docs/copilot/customization/custom-instructions> | CC-BY-4.0 | `chat.instructionsFilesLocations` setting, `.instructions.md` file format, discovery locations, applyTo patterns | `instructions/*.instructions.md` | 2026-03-28 |
 | VS Code Customization overview | <https://code.visualstudio.com/docs/copilot/customization/overview> | CC-BY-4.0 | Parent repository discovery, monorepo instruction patterns, Chat Customizations editor | `instructions/*.instructions.md` | 2026-03-28 |
+
+## Multi-Project Setup Documentation Research (Task #175)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot customization overview | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Parent repository discovery, customization scenarios, get-started steps | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
+| VS Code custom agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agentFilesLocations setting, Diagnostics view access, agent override behavior | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
+| VS Code agent skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | agentSkillsLocations setting, skill discovery mechanisms | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
+| VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server config, MCP: List Servers command, troubleshooting steps | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
+| VS Code troubleshooting docs | <https://code.visualstudio.com/docs/copilot/troubleshooting> | CC-BY-4.0 | Agent Debug Log panel, Chat Debug View, MCP server troubleshooting | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
 
 ## ACP Protocol Deep-Dive (Task #1)
 
@@ -78,12 +281,40 @@ External repos and resources studied during OwlBear development.
 | mcp-copilot-acp (TypeScript bridge) | <https://github.com/bsmi021/mcp-copilot-acp> | MIT | Real-world ACP client implementation, session management, timeout patterns | `docs/research/acp-protocol.md` | 2026-03-26 |
 | rest-acp (OpenAI-compat wrapper) | <https://github.com/iot2020/rest-acp> | Unknown | Session management patterns, ACP-to-OpenAI bridging approach | `docs/research/acp-protocol.md` | 2026-03-26 |
 
+## Vector Store + Embedding Pipeline Extraction Research (Task #32)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Qdrant Python client docs | <https://python-client.qdrant.tech/> | Apache-2.0 | Local mode API (`path=` constructor), prefetch/rescore, multivector config | `docs/research/extract-vector-store-embedding-pipeline.md` | 2026-03-29 |
+| BGE-M3 model card (BAAI) | <https://huggingface.co/BAAI/bge-m3> | MIT | Model specs (1024-d, 8192 tokens, ~3 GB FP16), FlagEmbedding API, cache location | `docs/research/extract-vector-store-embedding-pipeline.md` | 2026-03-29 |
+| Qdrant quickstart guide | <https://qdrant.tech/documentation/quickstart/> | Apache-2.0 | Local mode vs Docker guidance, recommended Python local-only approach | `docs/research/extract-vector-store-embedding-pipeline.md` | 2026-03-29 |
+
+## CancelSignal, Consolidation & Evaluator Extraction Research (Task #135)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python typing.Callable docs | <https://docs.python.org/3/library/typing.html#typing.Callable> | PSF | Async callable type alias pattern for LLM injection | `docs/research/extract-cancel-sandbox-consolidation-evaluator.md` | 2026-03-29 |
+| .NET CancellationToken docs | <https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads> | CC-BY-4.0 | Cooperative cancellation prior art: token-per-operation, linked parent/child composition | `docs/research/extract-cancel-sandbox-consolidation-evaluator.md` | 2026-03-29 |
+
 ## ACP Client Library Decomposition Validation (Task #19)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | ACP Python SDK `interfaces.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/interfaces.py> | Apache-2.0 | Full `Client` protocol interface: 10 required async methods, `@param_model` decorators, session_update union types | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
 | ACP Python SDK `core.py` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/core.py> | Apache-2.0 | `connect_to_agent()` implementation, 50MB stdio buffer, `ClientSideConnection` wiring confirms NDJSON is SDK-handled | `docs/research/acp-client-library-decomposition.md` | 2026-03-28 |
+
+## Build Dispatch Planner Research (Task #20)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP Python SDK quickstart | <https://agentclientprotocol.github.io/python-sdk/quickstart/> | Apache-2.0 | `spawn_agent_process` pattern, programmatic session/prompt dispatch | `docs/research/build-dispatch-planner.md` | 2026-03-29 |
+| ACP architecture docs | <https://agentclientprotocol.com/get-started/architecture> | Unknown | Agent-client architecture, stdio JSON-RPC setup, MCP server forwarding | `docs/research/build-dispatch-planner.md` | 2026-03-29 |
+
+## KB Curation Process Research (Task #177)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| LlamaIndex IngestionPipeline (Document Management) | <https://developers.llamaindex.ai/python/framework/module_guides/loading/ingestion_pipeline/> | MIT | doc_id → document_hash dedup, docstore skip-if-unchanged, upsert-on-change pattern | `docs/research/kb-curation-process.md` | 2026-03-29 |
 
 ## Instructions README Update Research (Task #109)
 
@@ -2046,6 +2277,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `.agent.md` frontmatter spec, tool/agents fields, handoffs, hooks | `docs/research/agent-port-v2.md` | 2026-03-28 |
 | VS Code Chat Tools Reference | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | CC-BY-4.0 | Complete built-in tool list including tool sets, `todos` naming | `docs/research/agent-port-v2.md` | 2026-03-28 |
+
+## Setup & Sharing Documentation Research (Task #169)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Copilot customization overview | <https://code.visualstudio.com/docs/copilot/copilot-customization> | CC-BY-4.0 | Parent repository discovery, Chat Customizations editor, troubleshooting via Diagnostics/Debug Logs | `docs/research/setup-and-sharing-docs.md` | 2026-03-29 |
+| VS Code custom agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agentFilesLocations, org-level agent sharing, agent name collision behavior | `docs/research/setup-and-sharing-docs.md` | 2026-03-29 |
+| VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server config structure, MCP:List Servers command, server naming conventions | `docs/research/setup-and-sharing-docs.md` | 2026-03-29 |
+| Claude Code README | <https://github.com/anthropics/claude-code> | Proprietary | Ultra-minimal README + separate detailed setup docs pattern | `docs/research/setup-and-sharing-docs.md` | 2026-03-29 |
 | VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | `agents:` field semantics, restriction patterns, nested subagent config | `docs/research/agent-port-v2.md` | 2026-03-28 |
 | mcp-knowledge unit tests | `packages/mcp-knowledge/tests/test_search_knowledge.py` | N/A (internal) | Sister MCP package test pattern: direct function call with mocked AppContext | `docs/research/mcp-kanban-unit-test-strategy.md` | 2026-03-28 |
 | MCP Python SDK README (v1) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | `@mcp.tool()` context injection, lifespan pattern, typed `Context[ServerSession, AppContext]` | `docs/research/mcp-kanban-unit-test-strategy.md` | 2026-03-28 |
@@ -2054,6 +2294,13 @@ External repos and resources studied during OwlBear development.
 | OwlBear MCP SDK deep-dive | `docs/research/mcp-python-sdk.md` | N/A | 3 MCP primitives, transport trade-offs, lifecycle, recommended 3-server architecture | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | OwlBear scaffold research | `docs/research/scaffold-mcp-kanban.md` | N/A | Package layout, lifespan pattern, binary path resolution, VS Code registration, minimal tool surface | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | OwlBear integration test research | `docs/research/mcp-kanban-integration-tests.md` | N/A | In-memory MCP testing, board isolation via tmp_path, binary availability strategy, test scenarios | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+
+## Knowledge Package Integration + Hybrid Search (Task #34)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MS GraphRAG v3 | <https://github.com/microsoft/graphrag> | MIT | Multi-package monorepo, retrieval as separate concern, graph-augmented search | `docs/research/knowledge-package-integration-hybrid-search.md` | 2026-03-29 |
+| LightRAG (HKUDS, EMNLP 2025) | <https://github.com/HKUDS/LightRAG> | MIT | "mix" mode: KG + vector search with token budgets (`max_entity_tokens`, `max_relation_tokens`), reranker integration | `docs/research/knowledge-package-integration-hybrid-search.md` | 2026-03-29 |
 
 ## Knowledge Engine Extraction Research — Module Audit (Task #15, update)
 
@@ -2743,3 +2990,46 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | awesome-copilot memory-bank.instructions.md | <https://github.com/github/awesome-copilot/blob/main/instructions/memory-bank.instructions.md> | MIT | Community pattern using .instructions.md for memory management; different scope (full project memory bank) but validates the file-based approach | Task #137 research validation | 2026-03-29 |
+
+## Pre-commit Agent Tool Guard (Tasks #132, #134)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| pre-commit docs — local hooks | <https://pre-commit.com/#repository-local-hooks> | MIT | `repo: local` hook config, `language: system` (now `unsupported`), `pass_filenames`, `files` filter | `docs/research/pre-commit-agent-tool-guard.md`, `.pre-commit-config.yaml` | 2026-03-29 |
+
+## Planner Data Models & Board Reader Research (Task #144)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | `model_validate_json()`, `TypeAdapter`, frozen models, `Field(alias=...)` | `docs/research/planner-data-models-board-reader.md` | 2026-03-29 |
+| Python 3.12 asyncio-subprocess docs | <https://docs.python.org/3.12/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` with PIPE, `communicate()` pattern | `docs/research/planner-data-models-board-reader.md` | 2026-03-29 |
+
+## .github/ v1 Cleanup Research (Task #29)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code prompt file docs | <https://code.visualstudio.com/docs/copilot/customization/prompt-files> | CC-BY-4.0 | `.github/prompts/` as canonical workspace prompt location; relative path resolution for file references | `docs/research/github-v1-cleanup.md` | 2026-03-29 |
+
+## Intake + Ingest Pipeline Modules Research (Task #158)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| LlamaIndex IngestionPipeline | <https://developers.llamaindex.ai/python/framework/module_guides/loading/ingestion_pipeline/> | MIT | Docstore delta detection, async pipeline, composable transformations, vector store integration | `docs/research/intake-ingest-pipeline-modules.md` | 2026-03-29 |
+| nano-graphrag _op.py | <https://github.com/gusye1234/nano-graphrag/blob/main/nano_graphrag/_op.py> | MIT | asyncio.gather for parallel chunk extraction, injectable LLM callables, content hashing | `docs/research/intake-ingest-pipeline-modules.md` | 2026-03-29 |
+
+## ErrorJournal-AcpClient Wiring Research (Task #148)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Tenacity `after` callback pattern | <https://tenacity.readthedocs.io/en/latest/api.html> | Apache-2.0 | after/before callback hooks for error logging in retry wrappers | `docs/research/errorjournal-acpclient-wiring.md` | 2026-03-29 |
+| Python logging.Logger.exception | <https://docs.python.org/3/library/logging.html> | PSF | Standard logging exception handler pattern as alternative to structured journal | `docs/research/errorjournal-acpclient-wiring.md` | 2026-03-29 |
+| PydanticAI exceptions hierarchy | <https://github.com/pydantic/pydantic-ai/blob/main/pydantic_ai_slim/pydantic_ai/exceptions.py> | MIT | Classified exception hierarchy with typed error categories | `docs/research/errorjournal-acpclient-wiring.md` | 2026-03-29 |
+
+## Auditor Confidence Deduction Rubric (Task #197)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Popham 1997 — What's Wrong and What's Right with Rubrics | <https://eric.ed.gov/?id=EJ552014> | N/A | Analytic rubric structure: separate dimension evaluation, deduction-from-max pattern | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
+| Wikipedia — Inter-rater reliability (Cohen 1960, Fleiss 1971) | <https://en.wikipedia.org/wiki/Inter-rater_reliability> | CC-BY-SA-3.0 | Rater drift without explicit guidelines, scoring consistency requires rubrics | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
+| Du et al. 2023 — Multi-agent Debate | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Anchoring in sequential pipelines: agents inherit upstream assumptions | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
+| Wang et al. 2024 — Rethinking Bounds of LLM Reasoning | <https://arxiv.org/abs/2402.18272> | N/A | Better prompts outperform more agents; structured scoring > more review stages | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
