@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
@@ -84,7 +85,7 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
 async def ingest_document(
     ctx: Context,
     text: str,
@@ -105,7 +106,7 @@ async def ingest_document(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 async def list_entities(
     ctx: Context,
     entity_type: str | None = None,
@@ -136,7 +137,7 @@ async def list_entities(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 async def get_stats(ctx: Context) -> str:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
