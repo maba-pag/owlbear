@@ -46,9 +46,14 @@ _AUDIT_DIR = _PROJECT_ROOT / "data" / "audit"
 
 
 def _skip_if_no_copilot() -> None:
-    """Skip the calling test if Copilot CLI is not on PATH."""
-    if shutil.which("copilot") is None:
-        pytest.skip("copilot CLI not found on PATH — install and add to PATH to run e2e tests")
+    """Skip the calling test if the ``gh`` CLI is not on PATH.
+
+    ``owlbear dispatch`` requires ``gh`` (the GitHub CLI that hosts the
+    ``gh copilot`` ACP extension).  Checking for ``copilot`` is insufficient
+    because a different binary with that name may exist on PATH.
+    """
+    if shutil.which("gh") is None:
+        pytest.skip("gh CLI not found on PATH — install GitHub CLI to run e2e tests")
 
 
 def _run_kanban(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
