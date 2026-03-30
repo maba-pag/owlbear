@@ -154,42 +154,57 @@ class TestFromAC_ErrorJournalInit:  # noqa: N801
 
 
 class TestFromAC_ErrorJournalLog:  # noqa: N801
-    """log() appends a single JSONL line; load() retrieves it as ErrorEntry."""
+    """log() appends a single JSONL line; load() retrieves it as ErrorEntry.
 
-    def _make_entry(self, idx: int = 0) -> ErrorEntry:
-        return ErrorEntry(
-            timestamp=f"2026-03-29T10:0{idx}:00Z",
-            category="transient",
-            method="call_agent",
-            message=f"error {idx}",
-            session_id=f"sess-{idx:03d}",
-        )
+    Updated (retry #184): uses keyword-only interface per AC4.
+    Positional entry= param is not in AC4; resolved builder BLOCK.
+    """
 
     def test_log_appends_single_jsonl_line(self, tmp_path: Path) -> None:
         log_file = tmp_path / "errors.jsonl"
         journal = ErrorJournal(path=log_file, max_entries=10)
-        journal.log(self._make_entry(0))
+        journal.log(
+            category="transient",
+            method="call_agent",
+            message="error 0",
+            session_id="sess-000",
+        )
         lines = log_file.read_text(encoding="utf-8").strip().splitlines()
         assert len(lines) == 1
 
     def test_load_retrieves_entry_after_log(self, tmp_path: Path) -> None:
         log_file = tmp_path / "errors.jsonl"
         journal = ErrorJournal(path=log_file, max_entries=10)
-        entry = self._make_entry(0)
-        journal.log(entry)
+        journal.log(
+            category="transient",
+            method="call_agent",
+            message="error 0",
+            session_id="sess-000",
+        )
         loaded = journal.load()
         assert len(loaded) == 1
-        assert loaded[0] == entry
+        assert loaded[0].category == "transient"
+        assert loaded[0].method == "call_agent"
+        assert loaded[0].message == "error 0"
+        assert loaded[0].session_id == "sess-000"
 
     def test_multiple_log_calls_accumulate_entries(self, tmp_path: Path) -> None:
         log_file = tmp_path / "errors.jsonl"
         journal = ErrorJournal(path=log_file, max_entries=100)
-        entries = [self._make_entry(i) for i in range(5)]
-        for e in entries:
-            journal.log(e)
+        for i in range(5):
+            journal.log(
+                category="transient",
+                method="call_agent",
+                message=f"error {i}",
+                session_id=f"sess-{i:03d}",
+            )
         loaded = journal.load()
         assert len(loaded) == 5
-        assert loaded == entries
+        for i, entry in enumerate(loaded):
+            assert entry.category == "transient"
+            assert entry.method == "call_agent"
+            assert entry.message == f"error {i}"
+            assert entry.session_id == f"sess-{i:03d}"
 
 
 # ---------------------------------------------------------------------------
@@ -218,23 +233,22 @@ class TestFromAC_ErrorJournalLoad:  # noqa: N801
 
 
 class TestFromAC_ErrorJournalRotation:  # noqa: N801
-    """Rotation: at max_entries+1 writes, file is trimmed to max_entries; newest are kept."""
+    """Rotation: at max_entries+1 writes, file is trimmed to max_entries; newest are kept.
 
-    def _make_entry(self, idx: int) -> ErrorEntry:
-        return ErrorEntry(
-            timestamp=f"2026-03-29T{idx:02d}:00:00Z",
-            category="permanent",
-            method="send_prompt",
-            message=f"rotation test entry {idx}",
-            session_id=f"sess-rot-{idx:03d}",
-        )
+    Updated (retry #184): uses keyword-only interface per AC4.
+    """
 
     def test_rotation_trims_to_max_entries(self, tmp_path: Path) -> None:
         max_entries = 5
         log_file = tmp_path / "errors.jsonl"
         journal = ErrorJournal(path=log_file, max_entries=max_entries)
         for i in range(max_entries + 1):
-            journal.log(self._make_entry(i))
+            journal.log(
+                category="permanent",
+                method="send_prompt",
+                message=f"rotation test entry {i}",
+                session_id=f"sess-rot-{i:03d}",
+            )
         loaded = journal.load()
         assert len(loaded) == max_entries
 
@@ -243,15 +257,20 @@ class TestFromAC_ErrorJournalRotation:  # noqa: N801
         log_file = tmp_path / "errors.jsonl"
         journal = ErrorJournal(path=log_file, max_entries=max_entries)
         # Write max+1 = 4 entries (0, 1, 2, 3)
-        entries = [self._make_entry(i) for i in range(max_entries + 1)]
-        for e in entries:
-            journal.log(e)
+        for i in range(max_entries + 1):
+            journal.log(
+                category="permanent",
+                method="send_prompt",
+                message=f"rotation test entry {i}",
+                session_id=f"sess-rot-{i:03d}",
+            )
         loaded = journal.load()
         # Oldest entry (index 0) must be evicted; entries 1, 2, 3 must be present
-        assert self._make_entry(0) not in loaded
-        assert self._make_entry(max_entries) in loaded
+        messages = [e.message for e in loaded]
+        assert "rotation test entry 0" not in messages
+        assert f"rotation test entry {max_entries}" in messages
         # Entries are in chronological order (oldest first among the kept ones)
-        assert loaded == entries[1:]
+        assert messages == [f"rotation test entry {i}" for i in range(1, max_entries + 1)]
 
 
 # ---------------------------------------------------------------------------
