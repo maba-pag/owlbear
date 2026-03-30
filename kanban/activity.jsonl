@@ -4725,3 +4725,23 @@
 {"timestamp":"2026-03-30T05:13:20.4478209+02:00","action":"release","task_id":166,"detail":"auditor"}
 {"timestamp":"2026-03-30T05:13:38.7407237+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
 {"timestamp":"2026-03-30T05:13:44.1606016+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:14:06.7804109+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:14:20.8077291+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T05:14:46.4484821+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:14:46.451086+02:00","action":"claim","task_id":190,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:14:48.6415531+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T05:14:48.6430736+02:00","action":"claim","task_id":51,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:14:52.8088212+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T05:14:52.8119721+02:00","action":"claim","task_id":19,"detail":"builder"}
+{"timestamp":"2026-03-30T05:14:54.196731+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:14:54.1993412+02:00","action":"claim","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:14:57.8586646+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:14:57.86253+02:00","action":"release","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:15:29.7408432+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T05:15:29.7444848+02:00","action":"claim","task_id":197,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:20:22.132438+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T05:20:28.0754884+02:00","action":"move","task_id":197,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T05:20:28.4325693+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T05:20:28.4352012+02:00","action":"release","task_id":197,"detail":"auditor"}
+{"timestamp":"2026-03-30T05:20:52.7679615+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T05:20:56.0018773+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
