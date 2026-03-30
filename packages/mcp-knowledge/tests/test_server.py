@@ -174,6 +174,50 @@ class TestFromAC_ServerLifespan:
         assert isinstance(args[0], str)
 
 
+class TestFromAC_AppContextSourceStore:
+    """Contract tests for AppContext.source_store field (AC: AppContext dataclass, #16)."""
+
+    @pytest.mark.asyncio
+    async def test_app_lifespan_yields_app_context_with_source_store(self) -> None:
+        """app_lifespan yields an AppContext whose source_store is not None."""
+        mock_conn = MagicMock()
+        mock_source_store = MagicMock()
+
+        with (
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn),
+            patch("owlbear_mcp_knowledge.server.GraphStore"),
+            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
+            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
+            patch(
+                "owlbear_mcp_knowledge.server.KnowledgeSourceStore",
+                return_value=mock_source_store,
+            ),
+        ):
+            fake_server = MagicMock()
+            async with app_lifespan(fake_server) as ctx:
+                assert ctx.source_store is mock_source_store
+
+    @pytest.mark.asyncio
+    async def test_app_lifespan_constructs_source_store_with_conn(self) -> None:
+        """app_lifespan passes the db connection to KnowledgeSourceStore."""
+        mock_conn = MagicMock()
+
+        with (
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn),
+            patch("owlbear_mcp_knowledge.server.GraphStore"),
+            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
+            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
+            patch("owlbear_mcp_knowledge.server.KnowledgeSourceStore") as mock_kss_cls,
+        ):
+            fake_server = MagicMock()
+            async with app_lifespan(fake_server):
+                pass
+
+        mock_kss_cls.assert_called_once_with(mock_conn)
+
+
 class TestFromAC_ServerWiring:
     """Contract tests for FastMCP server registration and module structure."""
 
