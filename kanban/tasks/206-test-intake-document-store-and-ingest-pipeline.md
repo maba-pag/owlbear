@@ -1,10 +1,12 @@
 ---
 id: 206
 title: 'Test: intake, document_store, and ingest pipeline modules'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-30T08:14:52.468527+02:00
-updated: 2026-03-30T10:00:10.8117233+02:00
+updated: 2026-03-30T14:14:59.9671529+02:00
+started: 2026-03-30T14:14:54.3298887+02:00
+completed: 2026-03-30T14:14:54.3298887+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -189,3 +191,118 @@ Return to todo. Test-writer must add:
 1. delete_document_data test: insert Document with entities+edges (document_id set), call delete_document_data, verify entities and edges removed
 2. ingest_text error path test: simulate exception in chunker or store, verify IngestResult(status=failed)
 ---
+
+[[2026-03-30]] Mon 13:21
+## Review Evidence (Cycle 3)
+
+### Test Results
+- pytest tests/test_knowledge_intake_docstore_ingest.py: **59 passed, 0 failed** (was 53)
+
+### Lint Results
+- ruff check intake.py, document_store.py, ingest.py, test file: **All checks passed!**
+
+### Coverage
+- intake.py: 100%
+- document_store.py: **100%** (was 95%, missed L162 fixed)
+- ingest.py: **100%** (was 95%, missed L109-111 fixed)
+
+### TestFromAC Modifications
+All 22 original TestFromAC_ classes preserved, no modifications detected.
+Two new review-directed TestFromAC_ classes added as instructed by prior FAIL.
+
+### Prior LAX Findings Resolution
+
+LAX-1 (entity/edge cascade delete path):
+FIXED. New class TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges added with 2 tests:
+- test_delete_document_data_removes_entities_with_document_id: inserts entities with document_id set, verifies cascade deletes them. Precondition (2 entity rows) verified before delete. Strong assertion (rows_after == []).
+- test_delete_document_data_removes_edges_for_document_entities: inserts entities + edge, verifies edge exists pre-delete, confirms all edges removed post-delete. Would fail if edge deletion loop (L162-164) were removed.
+
+LAX-2 (ingest_text error handler):
+FIXED. New class TestFromAC_IngestTextErrorHandling added with 2 tests:
+- test_ingest_text_internal_exception_returns_failed_status: mocks insert_document to raise RuntimeError, asserts result.status == failed. Directly exercises L109-111.
+- test_ingest_text_chunker_exception_returns_failed_status: mocks chunker to raise, verifies same path.
+
+### TestBuilderDiscovered
+2 new guard-clause tests added for empty-list noop paths (store_embeddings, store_entity_embeddings). Strong mock-not-called assertions.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| IntakeResult frozen Pydantic model | TestFromAC_IntakeResult passes | PASS |
+| read_file success, file metadata | TestFromAC_ReadFile passes | PASS |
+| read_file sandbox rejection | TestFromAC_ReadFile passes | PASS |
+| read_file missing FileNotFoundError | TestFromAC_ReadFile passes | PASS |
+| read_url success, url metadata | TestFromAC_ReadUrl passes | PASS |
+| read_url HTTPStatusError on non-2xx | TestFromAC_ReadUrl passes | PASS |
+| read_text sync wrapper, source_type=text | TestFromAC_ReadText passes | PASS |
+| DocumentStore constructor | TestFromAC_DocumentStoreConstructor passes | PASS |
+| insert_document inserts row in documents | TestFromAC_DocumentStoreInsert passes | PASS |
+| store_chunks inserts rows, returns chunk_ids | TestFromAC_DocumentStoreChunks passes | PASS |
+| store_embeddings calls VectorStoreProtocol.store_embedding | TestFromAC_DocumentStoreEmbeddings passes | PASS |
+| store_extractions: calls insert_entity/insert_edge returns counts | TestFromAC_DocumentStoreExtractions passes | PASS |
+| store_entity_embeddings: entity type embedding | TestFromAC_DocumentStoreEntityEmbeddings passes | PASS |
+| delete_document_data: cascade deletes chunks/edges/entities | TestFromAC_DocumentStoreDelete + TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges passes | PASS |
+| Status roundtrip: set_status and find_status_by_source | TestFromAC_DocumentStoreStatus passes | PASS |
+| check_content_changed: (True,None)/(False,id)/(True,id) | TestFromAC_CheckContentChanged passes | PASS |
+| IngestPipeline constructor w/ optional CancelSignal | TestFromAC_IngestPipelineConstructor passes | PASS |
+| ingest_text preserved signature | TestFromAC_IngestTextUpgrade passes | PASS |
+| ingest takes IntakeResult, returns IngestResult | TestFromAC_IngestMethod passes | PASS |
+| Delta detection: unchanged returns skipped | TestFromAC_DeltaDetection passes | PASS |
+| Parallel: embed+extract both called | TestFromAC_ParallelOperations passes | PASS |
+| CancelSignal: returns cancelled when signal.is_set() | TestFromAC_CancelSignalIngest passes | PASS |
+| Error handling: internal exception returns failed | TestFromAC_IngestErrorHandling passes | PASS |
+| IngestResult status values: ok/failed/skipped/cancelled | TestFromAC_IngestResultStatusValues passes | PASS |
+| E2E: text+mock extractor, verify graph+vector populated | TestFromAC_E2EIngest passes | PASS |
+
+### Security Review
+- SQL: all queries parameterized, no f-string injection risk
+- Path traversal: sandbox_path() used in intake.py read_file
+- No hardcoded secrets, no eval/exec, no pickle
+- SSRF in read_url: user-directed by design for a local intake pipeline; acceptable
+- No new dependencies
+
+### Informational (non-blocking)
+store_extractions inserts entities without setting document_id (defaults None). This means pipeline-ingested entities are not reachable by delete_document_data WHERE document_id = ?. The cascade delete mechanism is correct and tested; the entity document_id assignment is a separate pipeline design concern. Recommend follow-up task.
+
+### Verdict: PASS - Confidence 0.92
+
+[[2026-03-30]] Mon 13:22
+## Review Evidence (Cycle 3)
+
+### Test Results
+- pytest tests/test_knowledge_intake_docstore_ingest.py: **59 passed, 0 failed** (was 53)
+
+### Lint Results
+- ruff check intake.py, document_store.py, ingest.py, test file: **All checks passed!**
+
+### Coverage
+- intake.py: 100%
+- document_store.py: **100%** (was 95%, missed L162 fixed)
+- ingest.py: **100%** (was 95%, missed L109-111 fixed)
+
+### Prior LAX Findings Resolution
+
+LAX-1 (entity/edge cascade delete): FIXED. TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges added with 2 strong tests that insert entities/edges with document_id set, verify cascade deletion exercises L162-164.
+
+LAX-2 (ingest_text error handler): FIXED. TestFromAC_IngestTextErrorHandling added with 2 tests mocking exceptions in ingest_text, assert status=failed, exercises L109-111.
+
+### TestFromAC Modifications
+All 22 original TestFromAC_ classes preserved. Two new review-directed classes added per prior FAIL instructions.
+
+### TestBuilderDiscovered
+2 guard-clause tests (empty list noop for store_embeddings, store_entity_embeddings). Strong mock-not-called assertions.
+
+### AC Compliance: 25 of 25 lines PASS
+(All 25 AC lines verified via corresponding TestFromAC_ tests, all 59 tests pass)
+
+### Security Review
+- SQL: all queries parameterized
+- Path traversal: sandbox_path() used in read_file
+- No hardcoded secrets, eval, exec, pickle
+- No new dependencies
+
+### Informational (non-blocking)
+store_extractions inserts entities without setting document_id (defaults None). Pipeline-ingested entities unreachable by delete_document_data WHERE document_id=?. Cascade mechanism correct and tested; entity document_id assignment is separate concern. Recommend follow-up task.
+
+### Verdict: PASS - Confidence 0.92
