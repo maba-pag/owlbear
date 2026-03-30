@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from acp.exceptions import RequestError
 
 if TYPE_CHECKING:
     from acp.client.connection import ClientSideConnection
-    from acp.schema import InitializeResponse, NewSessionResponse, PromptResponse
+    from acp.schema import ContentBlock, InitializeResponse, NewSessionResponse, PromptResponse
 
 
 class ErrorCategory(StrEnum):
@@ -83,32 +83,40 @@ class AcpClient:
         self._conn = conn
         self._cancel_signal = cancel_signal
 
-    async def initialize(self) -> InitializeResponse:
-        """Call conn.initialize() with a 30 s timeout."""
+    async def initialize(self, **kwargs: Any) -> InitializeResponse:  # noqa: ANN401
+        """Call conn.initialize() with a 30 s timeout, forwarding all kwargs to the SDK."""
         try:
-            return await asyncio.wait_for(self._conn.initialize(), timeout=30)
+            return await asyncio.wait_for(self._conn.initialize(**kwargs), timeout=30)
         except RequestError as exc:
             raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
-    async def new_session(self) -> NewSessionResponse:
-        """Call conn.new_session() with a 15 s timeout."""
+    async def new_session(self, **kwargs: Any) -> NewSessionResponse:  # noqa: ANN401
+        """Call conn.new_session() with a 15 s timeout, forwarding all kwargs to the SDK."""
         try:
-            return await asyncio.wait_for(self._conn.new_session(), timeout=15)
+            return await asyncio.wait_for(self._conn.new_session(**kwargs), timeout=15)
         except RequestError as exc:
             raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
-    async def prompt(self, session_id: str) -> PromptResponse:
+    async def prompt(
+        self,
+        session_id: str,
+        prompt: list[ContentBlock] | None = None,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> PromptResponse:
         """Call conn.prompt() with a 300 s timeout, handling CancelSignal and TimeoutError."""
         if self._cancel_signal is not None and self._cancel_signal.is_set():
             await self._conn.cancel(session_id=session_id)
             raise asyncio.CancelledError
+        call_kwargs: dict[str, Any] = {"session_id": session_id, **kwargs}
+        if prompt is not None:
+            call_kwargs["prompt"] = prompt
         try:
             return await asyncio.wait_for(
-                self._conn.prompt(session_id=session_id),
+                self._conn.prompt(**call_kwargs),
                 timeout=300,
             )
         except TimeoutError:
