@@ -474,6 +474,57 @@ class TestFromAC_DispatchWave:  # noqa: N801
         assert 1 in result.failures
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_non_rate_limit_crash_no_wave_level_retry_single_call(self) -> None:
+        """Non-rate-limit exception: dispatch_entry called exactly once — no wave-level retry."""
+        client = _make_client()
+        client.new_session = AsyncMock(side_effect=Exception("internal server error"))
+        state = LoopState(sequential_remaining=0)
+        result = await dispatch_wave(self._make_wave("builder"), client, state)
+        assert 1 in result.failures
+        assert client.new_session.call_count == 1  # no retry within the wave
+        assert result.rate_limited is False
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_sequential_mode_dispatch_entry_returns_false_recorded_as_failure(
+        self,
+    ) -> None:
+        """Sequential mode: dispatch_entry returning False (AcpClientError) records task_id in failures."""
+        client = _make_client()
+        client.new_session = AsyncMock(side_effect=AcpClientError("connection refused", category=MagicMock()))
+        state = LoopState(sequential_remaining=2)
+        result = await dispatch_wave(self._make_wave("builder"), client, state)
+        assert 1 in result.failures
+        assert result.rate_limited is False
+        assert state.sequential_remaining == 1  # decremented by one dispatch
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_sequential_mode_uncaught_exception_recorded_as_failure(self) -> None:
+        """Sequential mode: uncaught exception in dispatch_entry is caught by _dispatch_sequential and recorded as failure."""
+        client = _make_client()
+        client.new_session = AsyncMock(side_effect=RuntimeError("upstream crash"))
+        state = LoopState(sequential_remaining=2)
+        result = await dispatch_wave(self._make_wave("builder"), client, state)
+        assert 1 in result.failures
+        assert result.rate_limited is False
+        assert state.sequential_remaining == 1  # decremented by one dispatch
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_sequential_mode_rate_limit_exception_sets_rate_limited_flag(
+        self,
+    ) -> None:
+        """Sequential mode: rate-limit exception sets rate_limited=True on CycleResult."""
+        client = _make_client()
+        client.new_session = AsyncMock(
+            side_effect=Exception("rate-limited by provider")
+        )
+        state = LoopState(sequential_remaining=2)
+        result = await dispatch_wave(self._make_wave("builder"), client, state)
+        assert result.rate_limited is True
+        # _apply_wave_result resets sequential_remaining to 3; _dispatch_sequential
+        # then decrements it once (for the single entry dispatched) → 2
+        assert state.sequential_remaining == 2
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_mixed_results_successes_and_failures_recorded(self) -> None:
         """Mixed wave: succeeded entries in CycleResult.successes, failed in .failures."""
         client = _make_client()
