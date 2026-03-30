@@ -9,6 +9,9 @@ dependencies = [
 	"typer>=0.24",
 ]
 
+[project.scripts]
+owlbear = "owlbear.cli:app"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

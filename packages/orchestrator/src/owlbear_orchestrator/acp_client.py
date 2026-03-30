@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, Self
 
 from acp.exceptions import RequestError
 
@@ -82,6 +82,18 @@ class AcpClient:
     ) -> None:
         self._conn = conn
         self._cancel_signal = cancel_signal
+
+    async def __aenter__(self) -> Self:
+        """Enter the async context manager; returns self."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Exit the async context manager; performs no cleanup."""
 
     async def initialize(self, **kwargs: Any) -> InitializeResponse:  # noqa: ANN401
         """Call conn.initialize() with a 30 s timeout, forwarding all kwargs to the SDK."""

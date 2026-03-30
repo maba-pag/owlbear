@@ -11,20 +11,37 @@ All tests fail on current HEAD because ``owlbear/cli.py`` does not exist yet.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
+from click.testing import Result as _ClickResult
 
 from owlbear.cli import app  # ImportError until cli.py is implemented
 from owlbear.planner.models import DispatchEntry, DispatchPlan, Task
 from owlbear_orchestrator.acp_client import AcpClientError, ErrorCategory
 
-_NOW = datetime(2026, 3, 30, tzinfo=datetime.UTC)
+_NOW = datetime(2026, 3, 30, tzinfo=UTC)
 _CLI = "owlbear.cli"
 
-# mix_stderr=False keeps stdout and stderr separate so we can assert routing.
-runner = CliRunner(mix_stderr=False)
+
+# Click 8.2+ changed result.output to mix stdout+stderr. Restore pre-8.2 semantics
+# so tests can assert stdout and stderr separately (test-writer intent).
+class _Result(_ClickResult):
+    @property
+    def output(self) -> str:  # type: ignore[override]
+        """Return stdout only (pre-8.2 semantics; tests assert stderr separately)."""
+        return self.stdout
+
+
+class _SeparatedCliRunner(CliRunner):
+    def invoke(self, *args, **kwargs):  # type: ignore[override]
+        result = super().invoke(*args, **kwargs)
+        result.__class__ = _Result
+        return result
+
+
+runner = _SeparatedCliRunner()
 
 
 # ---------------------------------------------------------------------------
