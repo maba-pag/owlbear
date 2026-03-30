@@ -367,6 +367,29 @@ class TestFromAC_ProjectListTool:
         result = await project_list(ctx)
         assert len(result) == 1
 
+    @pytest.mark.asyncio
+    async def test_silently_skips_malformed_json_no_exception(self, tmp_path: Path) -> None:
+        """project_list does not raise when a .json file contains invalid JSON."""
+        projects_dir = tmp_path / "data" / "projects"
+        projects_dir.mkdir(parents=True)
+        (projects_dir / "broken.json").write_text("not valid json {{{{")
+        ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
+        # Must not raise; malformed file is silently skipped
+        result = await project_list(ctx)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_skipped_valid_entries_returned(self, tmp_path: Path) -> None:
+        """project_list returns only valid entries when mixed with malformed .json files."""
+        projects_dir = tmp_path / "data" / "projects"
+        projects_dir.mkdir(parents=True)
+        (projects_dir / "bad.json").write_text("{{invalid}}")
+        (projects_dir / "good.json").write_text(json.dumps({"path": "/work/good"}))
+        ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
+        result = await project_list(ctx)
+        assert len(result) == 1
+        assert result[0]["name"] == "good"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ReadmeResource
