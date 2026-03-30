@@ -2,6 +2,16 @@
 
 External repos and resources studied during OwlBear development.
 
+## Mock ACP Agent for E2E Testing (Task #155)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| ACP SDK `interfaces.py` — Agent Protocol | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/interfaces.py> | MIT | Agent Protocol interface (15 required methods), method signatures | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+| ACP SDK `examples/agent.py` — ExampleAgent | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/agent.py> | MIT | Reference Agent implementation pattern (~125 LOC), `run_agent()` entry point | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+| ACP SDK `stdio.py` — `spawn_agent_process()` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/stdio.py> | MIT | Subprocess spawn pattern, `ClientSideConnection` wiring, env/cwd forwarding | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+| ACP SDK `test_rpc.py` — spawn roundtrip | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/test_rpc.py> | MIT | In-memory agent/client test harness, `test_spawn_agent_process_roundtrip` pattern | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+| ACP SDK `conftest.py` — TestAgent/TestClient | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/conftest.py> | MIT | TestAgent stub pattern, TestClient with permission handling | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+
 ## Canonical Tool Registry Validation (Task #198)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -40,6 +50,14 @@ External repos and resources studied during OwlBear development.
 | LightRAG insert API | <https://github.com/HKUDS/LightRAG> | MIT | `rag.ainsert()` incremental ingestion, workspace isolation pattern | `docs/research/general-kb-initial-data-load.md` | 2026-03-29 |
 | Mem0 memory layer | <https://github.com/mem0ai/mem0> | Apache-2.0 | `memory.add()` incremental pattern, multi-level memory scoping | `docs/research/general-kb-initial-data-load.md` | 2026-03-29 |
 
+## E2E Dispatch Integration Test (Task #156)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Typer testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | CliRunner invocation model, synchronous test pattern, result assertion | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
+| Click testing docs | <https://click.palletsprojects.com/en/stable/testing/> | BSD-3 | CliRunner API, file system isolation, subcommand invocation | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
+| ACP SDK test_rpc.py | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/test_rpc.py> | MIT | spawn_agent_process roundtrip pattern, TestClient fixture, mock agent testing | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
+
 ## Wire Audit Log into Dispatch Loop (Task #164)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -64,6 +82,13 @@ External repos and resources studied during OwlBear development.
 | VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Subagent context isolation, tool inheritance, collapsed execution model | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
 | VS Code Agent Tools docs | <https://code.visualstudio.com/docs/copilot/agents/agent-tools> | CC-BY-4.0 | Tool enabling, tool type taxonomy | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `tools:` frontmatter spec, unavailable tool behavior | `docs/research/manage-todo-list-subagent-removal.md` | 2026-03-30 |
+
+## Extract retrieval.py (Task #159)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MS GraphRAG Local Search | <https://microsoft.github.io/graphrag/query/local_search> | MIT | Entity-based reasoning, neighbor fan-out, context-window budget | `docs/research/extract-retrieval-graphaugmentedretriever.md` | 2026-03-30 |
+| LightRAG (HKUDS, EMNLP 2025) | <https://github.com/HKUDS/LightRAG> | MIT | KG + vector "mix" mode, token budget system | `docs/research/extract-retrieval-graphaugmentedretriever.md` | 2026-03-30 |
 
 ## E2E Dispatch Test Research (Task #23)
 
@@ -3033,3 +3058,24 @@ External repos and resources studied during OwlBear development.
 | Wikipedia — Inter-rater reliability (Cohen 1960, Fleiss 1971) | <https://en.wikipedia.org/wiki/Inter-rater_reliability> | CC-BY-SA-3.0 | Rater drift without explicit guidelines, scoring consistency requires rubrics | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
 | Du et al. 2023 — Multi-agent Debate | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Anchoring in sequential pipelines: agents inherit upstream assumptions | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
 | Wang et al. 2024 — Rethinking Bounds of LLM Reasoning | <https://arxiv.org/abs/2402.18272> | N/A | Better prompts outperform more agents; structured scoring > more review stages | `docs/research/auditor-confidence-deduction-rubric.md` | 2026-03-30 |
+
+## Integration Test: Ingest-to-Search Cycle (Task #162)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MS GraphRAG test layout | <https://github.com/microsoft/graphrag/tree/main/tests> | MIT | unit/integration/smoke test separation pattern for RAG pipelines | `docs/research/integration-test-ingest-to-search-cycle.md` | 2026-03-30 |
+| LightRAG test layout | <https://github.com/HKUDS/LightRAG/tree/main/tests> | MIT | conftest markers for offline/integration tests, Qdrant integration tests | `docs/research/integration-test-ingest-to-search-cycle.md` | 2026-03-30 |
+
+## Stop Commit Guard Hooks Phase 1 (Task #209)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | Command-execution hook model, Stop hook contract (stop_hook_active, decision: block), exit codes, JSON I/O | `docs/research/stop-commit-guard-hooks-phase1.md` | 2026-03-30 |
+| VS Code Custom Agents docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent-scoped hooks frontmatter format, chat.useCustomAgentHooks setting requirement | `docs/research/stop-commit-guard-hooks-phase1.md` | 2026-03-30 |
+
+## Update #86 Research Doc — Command-Execution Hook Model (Task #212)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | 8 hook event types (PascalCase), type: command format, exit code 2 blocking, PreToolUse permissionDecision, Stop decision: block, JSON I/O contract | `docs/research/agent-scoped-hooks-pipeline-enforcement.md` (revision) | 2026-03-30 |
+| VS Code Custom Agents docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent-scoped hooks frontmatter example with type: command | `docs/research/agent-scoped-hooks-pipeline-enforcement.md` (revision) | 2026-03-30 |
