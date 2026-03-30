@@ -1053,3 +1053,131 @@ class TestFromAC_E2EIngest:
         )
         await pipeline.ingest(intake)
         assert vector_store.store_embedding.called
+
+
+# ---------------------------------------------------------------------------
+# Retry-cycle additions (reviewer LAX findings)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges:
+    """delete_document_data must cascade-delete entities and edges for the document.
+
+    Reviewer finding LAX-1: prior tests never inserted entities with document_id set,
+    so the entity/edge deletion loop (document_store.py line 162) was never executed.
+    This test inserts entities with explicit document_id and verifies the cascade.
+    """
+
+    def test_delete_document_data_removes_entities_with_document_id(self) -> None:
+        """delete_document_data removes entities whose document_id matches."""
+        from owlbear_knowledge.document_store import DocumentStore
+        from owlbear_knowledge.graph_store import GraphStore
+        from owlbear_knowledge.models import Document, Entity, EntityType
+
+        conn = _make_db()
+        graph = GraphStore(conn)
+        store = DocumentStore(conn, graph, MagicMock(), MagicMock())
+
+        doc = Document(id="del-ent-001", title="T", content="c", metadata={}, scope="global")
+        store.insert_document(doc)
+
+        # Insert entities with document_id explicitly set
+        entity_a = Entity(name="A", entity_type=EntityType.CONCEPT, document_id="del-ent-001")
+        entity_b = Entity(name="B", entity_type=EntityType.CONCEPT, document_id="del-ent-001")
+        graph.insert_entity(entity_a)
+        graph.insert_entity(entity_b)
+
+        # Precondition: entities exist
+        rows_before = conn.execute(
+            "SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)
+        ).fetchall()
+        assert len(rows_before) == 2
+
+        store.delete_document_data("del-ent-001")
+
+        rows_after = conn.execute(
+            "SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)
+        ).fetchall()
+        assert rows_after == []
+
+    def test_delete_document_data_removes_edges_for_document_entities(self) -> None:
+        """delete_document_data removes edges connected to the document's entities."""
+        from owlbear_knowledge.document_store import DocumentStore
+        from owlbear_knowledge.graph_store import GraphStore
+        from owlbear_knowledge.models import Document, Edge, Entity, EntityType, RelationType
+
+        conn = _make_db()
+        graph = GraphStore(conn)
+        store = DocumentStore(conn, graph, MagicMock(), MagicMock())
+
+        doc = Document(id="del-ent-002", title="T", content="c", metadata={}, scope="global")
+        store.insert_document(doc)
+
+        entity_a = Entity(name="A2", entity_type=EntityType.CONCEPT, document_id="del-ent-002")
+        entity_b = Entity(name="B2", entity_type=EntityType.CONCEPT, document_id="del-ent-002")
+        graph.insert_entity(entity_a)
+        graph.insert_entity(entity_b)
+
+        edge = Edge(
+            source_id=entity_a.id, target_id=entity_b.id, relation=RelationType.RELATED_TO
+        )
+        graph.insert_edge(edge)
+
+        # Precondition: edge exists
+        edge_row_before = conn.execute(
+            "SELECT id FROM edges WHERE source_id = ?", (entity_a.id,)
+        ).fetchone()
+        assert edge_row_before is not None
+
+        store.delete_document_data("del-ent-002")
+
+        edge_row_after = conn.execute(
+            "SELECT id FROM edges WHERE source_id = ? OR target_id = ?",
+            (entity_a.id, entity_b.id),
+        ).fetchall()
+        assert edge_row_after == []
+
+
+class TestFromAC_IngestTextErrorHandling:
+    """ingest_text returns status='failed' when an unexpected internal exception occurs.
+
+    Reviewer finding LAX-2: TestFromAC_IngestErrorHandling only tests ingest(),
+    leaving the ingest_text() except block (ingest.py lines 109-111) unexercised.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ingest_text_internal_exception_returns_failed_status(self) -> None:
+        """ingest_text returns IngestResult(status='failed') on unexpected runtime error."""
+        from owlbear_knowledge.chunker import TextChunker
+        from owlbear_knowledge.extractor import EntityExtractor
+        from owlbear_knowledge.ingest import IngestPipeline
+
+        doc_store = MagicMock()
+        doc_store.insert_document.side_effect = RuntimeError("store failure in ingest_text")
+
+        pipeline = IngestPipeline(
+            document_store=doc_store,
+            entity_extractor=EntityExtractor("stub"),
+            text_chunker=TextChunker(),
+        )
+        result = await pipeline.ingest_text("some text that triggers failure")
+        assert result.status == "failed"
+
+    @pytest.mark.asyncio
+    async def test_ingest_text_chunker_exception_returns_failed_status(self) -> None:
+        """ingest_text returns status='failed' when the chunker itself raises."""
+        from owlbear_knowledge.chunker import TextChunker
+        from owlbear_knowledge.extractor import EntityExtractor
+        from owlbear_knowledge.ingest import IngestPipeline
+
+        doc_store = MagicMock()
+        broken_chunker = MagicMock(spec=TextChunker)
+        broken_chunker.chunk.side_effect = RuntimeError("chunker exploded")
+
+        pipeline = IngestPipeline(
+            document_store=doc_store,
+            entity_extractor=EntityExtractor("stub"),
+            text_chunker=broken_chunker,
+        )
+        result = await pipeline.ingest_text("text that makes chunker fail")
+        assert result.status == "failed"
