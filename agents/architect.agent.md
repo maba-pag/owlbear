@@ -131,6 +131,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 - You are reviewing a task not in `backlog` status
 - You are making an architectural decision without checking existing code patterns
 - You are expanding scope beyond what the research doc recommends (YAGNI)
+- You are approving a feature addition without checking if the environment already provides it
 - A task has "and" in its title joining unrelated concerns and you haven't split it
 - You are approving a multi-domain task without splitting
 - You are refining AC for a placeholder task (`TEMP-*` title or empty body) — block to `ideation` instead (see agent-common)

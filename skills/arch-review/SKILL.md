@@ -70,14 +70,21 @@ and general architectural principles:
    defined in the `architecture-standards` skill? No upward imports.
 5. **TDD compliance** — preceding test task exists?
 6. **KISS/YAGNI** — minimal scope? no hypothetical requirements?
-7. **Pattern consistency** — follows existing codebase patterns (protocols, error taxonomy,
+7. **Premise challenge** — Should this task exist? Does the capability already exist in:
+   (a) IDE features (built-in MCP, IntelliSense, Git integration, terminal),
+   (b) runtime (Python stdlib, installed packages, OS utilities),
+   (c) existing tooling (scripts/, MCP servers, kanban-md features), or
+   (d) extensions (Copilot built-in server, VS Code extensions)?
+   If the capability exists, block to ideation with evidence. Applies to ALL tasks
+   including ones labeled trivial.
+8. **Pattern consistency** — follows existing codebase patterns (protocols, error taxonomy,
    toolset wrapping, config via pydantic-settings)?
-8. **Security surface** — does the task introduce new system boundaries (user input,
+9. **Security surface** — does the task introduce new system boundaries (user input,
    external APIs, file I/O)? If so, AC must include input validation requirements.
-9. **Single domain** — does this task target exactly one domain (see `architecture-standards`
-   skill → **Domain taxonomy**)? Multi-domain → split. Edge case: an ancillary `config.py`
-   field addition for a feature is NOT a domain violation — domain = primary concern.
-10. **Failure Mode Map** — if the task introduces or modifies codepaths with potential
+10. **Single domain** — does this task target exactly one domain (see `architecture-standards`
+    skill → **Domain taxonomy**)? Multi-domain → split. Edge case: an ancillary `config.py`
+    field addition for a feature is NOT a domain violation — domain = primary concern.
+11. **Failure Mode Map** — if the task introduces or modifies codepaths with potential
     failure modes, fill in the template below. Skip for docs/config-only tasks.
 
     | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
@@ -115,4 +122,5 @@ Before submitting:
 - [ ] Did NOT create/edit .py, .toml, or test files
 - [ ] Dependency graph has no cycles
 - [ ] Single-domain verified — task targets exactly one domain from the canonical list
+- [ ] Premise challenge applied — verified capability is not already provided by environment (IDE/runtime/tooling/extensions)
 - [ ] Failure mode map assessed (for tasks with new/modified codepaths)
