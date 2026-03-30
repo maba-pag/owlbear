@@ -34,14 +34,14 @@ class TestBuilderDiscovered:
         )
 
     def test_document_covers_pretooluse(self) -> None:
-        """AC1: document must mention preToolUse hook type."""
+        """AC1 + #212-AC3: document must use PascalCase PreToolUse (not camelCase)."""
         text = DOC_PATH.read_text(encoding="utf-8")
-        assert "preToolUse" in text, "Document must cover the preToolUse hook type"
+        assert "PreToolUse" in text, "Document must cover the PreToolUse hook type (PascalCase per updated API)"
 
     def test_document_covers_posttooluse(self) -> None:
-        """AC1: document must mention postToolUse hook type."""
+        """AC1 + #212-AC3: document must use PascalCase PostToolUse (not camelCase)."""
         text = DOC_PATH.read_text(encoding="utf-8")
-        assert "postToolUse" in text, "Document must cover the postToolUse hook type"
+        assert "PostToolUse" in text, "Document must cover the PostToolUse hook type (PascalCase per updated API)"
 
     def test_document_covers_stop_hook(self) -> None:
         """AC1: document must mention the stop hook type."""
