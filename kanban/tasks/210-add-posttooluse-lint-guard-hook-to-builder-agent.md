@@ -18,14 +18,18 @@ class: standard
 ## Context
 
 See docs/research/agent-scoped-hooks-pipeline-enforcement.md §4 (Candidate 1) and §6 for full guidance.
+See docs/research/hook-ac-command-execution-model.md for the AC correction rationale (#213).
 
-Phase 2 of VS Code agent-scoped hooks adoption: add a `postToolUse` lint guard to `builder.agent.md` that fires after file edits with a reminder to run ruff. Monitor for context window inflation after deployment.
+Phase 2 of VS Code agent-scoped hooks adoption: add a `PostToolUse` lint guard to `builder.agent.md` that fires after file edits and runs ruff automatically. Monitor for context window inflation after deployment.
 
 Depends on: #209 (Phase 1 must be deployed and settings opt-in confirmed)
 
 ## Acceptance Criteria
 
-- [ ] Add `postToolUse` hook to `agents/builder.agent.md` frontmatter, gated on `tool == 'edit/editFiles' || tool == 'edit/createFile'`, injecting a prompt to run `uv run ruff check` on modified files.
-- [ ] `chat.useCustomAgentHooks` setting must already be enabled (prerequisite from #209).
-- [ ] The hook YAML must not introduce duplicate keys or conflict with any existing `stop` hook from Phase 1.
-- [ ] Verify agent file parses with valid YAML frontmatter.
+- [ ] Add `PostToolUse` hook to `agents/builder.agent.md` frontmatter: `type: command`, `command:` key pointing to `scripts/hooks/lint-changed.ps1`
+- [ ] Script reads `tool_name` from stdin JSON; runs ruff only for file-edit tools (`create_file`, `replace_string_in_file`, `multi_replace_string_in_file`)
+- [ ] On lint errors: returns `systemMessage` with ruff output (or blocks via exit code 2)
+- [ ] On non-edit tools or clean lint: returns empty JSON `{}`
+- [ ] `chat.useCustomAgentHooks` setting must already be enabled (prerequisite from #209)
+- [ ] Hook YAML must not introduce duplicate keys or conflict with existing Stop hook from Phase 1
+- [ ] Verify agent file parses with valid YAML frontmatter
