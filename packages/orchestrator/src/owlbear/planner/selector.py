@@ -42,6 +42,16 @@ DISPATCH_CAP: int = 20
 _MAX_PRIORITY_RANK = max(PRIORITY_RANK.values())
 _MAX_STATUS_RANK = max(STATUS_RANK.values())
 
+_TARGET_STATUS: dict[str, str] = {
+    "ideation": "backlog",
+    "backlog": "todo",
+    "todo": "in-progress",
+    "in-progress": "review",
+    "review": "docs",
+    "docs": "done",
+    "done": "archived",
+}
+
 
 def select_tasks(tasks: list[Task]) -> DispatchPlan:
     """Select dispatchable tasks and return a dispatch plan.
@@ -68,8 +78,9 @@ def select_tasks(tasks: list[Task]) -> DispatchPlan:
             agent = "kanban-planner"
         else:
             agent = STATUS_AGENT_MAP.get(task.status, "architect")
+        target = _TARGET_STATUS.get(task.status, task.status)
         entries.append(
-            DispatchEntry(task_id=task.id, agent=agent, target_status=task.status)
+            DispatchEntry(task_id=task.id, agent=agent, target_status=target)
         )
 
     return DispatchPlan(entries=entries)
