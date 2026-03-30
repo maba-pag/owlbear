@@ -6,7 +6,11 @@ import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-import httpx
+try:
+    import httpx as _httpx
+except ImportError:  # pragma: no cover
+    _httpx = None  # type: ignore[assignment]
+
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_knowledge._paths import sandbox_path
@@ -61,9 +65,13 @@ async def read_url(url: str) -> IntakeResult:
         IntakeResult with the response body and URL metadata.
 
     Raises:
+        ImportError: If httpx is not installed.
         httpx.HTTPStatusError: On non-2xx HTTP responses.
     """
-    async with httpx.AsyncClient() as client:
+    if _httpx is None:
+        _msg = "httpx is required for read_url. Install via: pip install owlbear-knowledge[intake]"
+        raise ImportError(_msg)
+    async with _httpx.AsyncClient() as client:
         response = await client.get(url)
         response.raise_for_status()
     return IntakeResult(

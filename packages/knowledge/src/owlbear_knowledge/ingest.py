@@ -146,7 +146,7 @@ class IngestPipeline:
                 )
 
             changed, existing_id = self._docs.check_content_changed(  # type: ignore[union-attr]
-                intake.source, intake.content
+                intake.source, intake.content, scope
             )
             if not changed:
                 return IngestResult(

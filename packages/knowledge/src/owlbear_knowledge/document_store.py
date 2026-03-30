@@ -204,10 +204,10 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         self,
         results: list[ExtractionResult],
         *,
-        scope: str = "global",  # noqa: ARG002 - reserved for entity provenance stamping
-        document_id: str = "",  # noqa: ARG002 - reserved for entity provenance stamping
-        chunk_ids: list[str] | None = None,  # noqa: ARG002 - reserved for entity provenance stamping
-        pipeline_name: str = "ingest",  # noqa: ARG002 - reserved for entity provenance stamping
+        scope: str = "global",
+        document_id: str = "",
+        chunk_ids: list[str] | None = None,  # noqa: ARG002 - reserved for future chunk-level provenance
+        pipeline_name: str = "ingest",
     ) -> tuple[int, int]:
         """Persist entities and edges from *results* and return counts.
 
@@ -225,7 +225,12 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         edge_count = 0
         for result in results:
             for entity in result.entities:  # type: ignore[union-attr]
-                self._graph.insert_entity(entity)
+                stamped = entity.model_copy(update={
+                    "scope": scope,
+                    "document_id": document_id,
+                    "metadata": {**entity.metadata, "pipeline_name": pipeline_name},
+                })
+                self._graph.insert_entity(stamped)
                 entity_count += 1
             for edge in result.edges:  # type: ignore[union-attr]
                 self._graph.insert_edge(edge)
