@@ -479,3 +479,268 @@ class TestFromAC_CopilotInstructionsCleanup:
             "Found 'manage_todo_list' in .github/copilot-instructions.md — "
             "the process-habit line must be removed"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_KnownToolsConstants  (#198)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_KnownToolsConstants:
+    """#198 AC1-3: KNOWN_TOOLSETS and KNOWN_STANDALONE_TOOLS constants exist and are correct."""
+
+    # --- KNOWN_TOOLSETS ---
+
+    def test_known_toolsets_is_importable_and_frozenset(self) -> None:
+        """AC1: KNOWN_TOOLSETS can be imported from validate_agents and is a frozenset."""
+        from validate_agents import KNOWN_TOOLSETS
+
+        assert isinstance(KNOWN_TOOLSETS, frozenset), (
+            f"KNOWN_TOOLSETS must be a frozenset, got {type(KNOWN_TOOLSETS)}"
+        )
+
+    def test_known_toolsets_contains_all_8_prefixes(self) -> None:
+        """AC1: KNOWN_TOOLSETS contains all 8 VS Code built-in toolset prefixes."""
+        from validate_agents import KNOWN_TOOLSETS
+
+        expected = frozenset(
+            {"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"}
+        )
+        missing = expected - KNOWN_TOOLSETS
+        assert not missing, f"KNOWN_TOOLSETS is missing prefixes: {missing}"
+
+    def test_known_toolsets_does_not_contain_arbitrary_strings(self) -> None:
+        """AC1 boundary: KNOWN_TOOLSETS does not contain known-invalid names."""
+        from validate_agents import KNOWN_TOOLSETS
+
+        assert "fly_to_moon" not in KNOWN_TOOLSETS
+        assert "foo" not in KNOWN_TOOLSETS
+
+    # --- KNOWN_STANDALONE_TOOLS ---
+
+    def test_known_standalone_tools_is_importable_and_frozenset(self) -> None:
+        """AC2: KNOWN_STANDALONE_TOOLS can be imported and is a frozenset."""
+        from validate_agents import KNOWN_STANDALONE_TOOLS
+
+        assert isinstance(KNOWN_STANDALONE_TOOLS, frozenset), (
+            f"KNOWN_STANDALONE_TOOLS must be a frozenset, got {type(KNOWN_STANDALONE_TOOLS)}"
+        )
+
+    def test_known_standalone_tools_contains_new_workspace(self) -> None:
+        """AC2: 'newWorkspace' is in KNOWN_STANDALONE_TOOLS."""
+        from validate_agents import KNOWN_STANDALONE_TOOLS
+
+        assert "newWorkspace" in KNOWN_STANDALONE_TOOLS, (
+            "'newWorkspace' missing from KNOWN_STANDALONE_TOOLS"
+        )
+
+    def test_known_standalone_tools_contains_selection(self) -> None:
+        """AC2: 'selection' is in KNOWN_STANDALONE_TOOLS."""
+        from validate_agents import KNOWN_STANDALONE_TOOLS
+
+        assert "selection" in KNOWN_STANDALONE_TOOLS, (
+            "'selection' missing from KNOWN_STANDALONE_TOOLS"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CheckUnknownToolsHelper  (#198)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CheckUnknownToolsHelper:
+    """#198 AC4: _check_unknown_tools() helper is importable and callable."""
+
+    def test_check_unknown_tools_is_importable_and_callable(self) -> None:
+        """AC4: _check_unknown_tools can be imported from validate_agents and is a callable."""
+        from validate_agents import _check_unknown_tools
+
+        assert callable(_check_unknown_tools), "_check_unknown_tools must be callable"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_UnknownToolErrors  (#198)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_UnknownToolErrors:
+    """#198 AC5: unrecognized tool names produce validation errors."""
+
+    def test_hallucinated_tool_name_produces_error(self, tmp_path: Path) -> None:
+        """AC5: tool 'fly_to_moon' (not in any registry category) produces an error."""
+        agent_file = tmp_path / "hallucinated.agent.md"
+        _write_agent(agent_file, _agent_content("name: hallucinated\ntools: [fly_to_moon]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected error for unknown tool 'fly_to_moon'"
+
+    def test_unknown_prefix_tool_produces_error(self, tmp_path: Path) -> None:
+        """AC5: tool 'foo/bar' (prefix 'foo' not in KNOWN_TOOLSETS) produces error."""
+        agent_file = tmp_path / "bad-prefix.agent.md"
+        _write_agent(agent_file, _agent_content("name: bad-prefix\ntools: [foo/bar]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected error for tool 'foo/bar' (unknown prefix 'foo')"
+
+    def test_typo_toolset_prefix_produces_error(self, tmp_path: Path) -> None:
+        """AC5: misspelled prefix 'Seach/findFile' (not 'search') produces error."""
+        agent_file = tmp_path / "typo.agent.md"
+        _write_agent(agent_file, _agent_content("name: typo\ntools: [Seach/findFile]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected error for typo tool name 'Seach/findFile'"
+
+    def test_mcp_path_without_wildcard_and_unknown_prefix_produces_error(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5: 'someMCP/specificTool' (unknown prefix, no '/*') produces error."""
+        agent_file = tmp_path / "no-wildcard.agent.md"
+        _write_agent(
+            agent_file, _agent_content("name: no-wildcard\ntools: [someMCP/specificTool]")
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected error for 'someMCP/specificTool' (not a valid pattern)"
+
+    def test_multiple_unknown_tools_each_produce_error(self, tmp_path: Path) -> None:
+        """AC5 boundary: two unknown tools each produce their own error (two errors minimum)."""
+        agent_file = tmp_path / "two-bad.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: two-bad\ntools: [ghost_tool, phantom_tool]"),
+        )
+        errors = validate_agent(agent_file)
+        assert len(errors) >= 2, (
+            f"Expected at least 2 errors for two unknown tools; got {len(errors)}: {errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_UnknownToolErrorMessage  (#198)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_UnknownToolErrorMessage:
+    """#198 AC6: error message for unknown tool matches the required format."""
+
+    def test_error_message_includes_filename(self, tmp_path: Path) -> None:
+        """AC6: error message includes the agent file path/name."""
+        agent_file = tmp_path / "bad-msg.agent.md"
+        _write_agent(agent_file, _agent_content("name: bad-msg\ntools: [ghost_tool]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected at least one error"
+        combined = "\n".join(errors)
+        assert "bad-msg.agent.md" in combined, (
+            f"Error message should include filename; got: {errors}"
+        )
+
+    def test_error_message_contains_unknown_tool_phrase(self, tmp_path: Path) -> None:
+        """AC6: error message contains the phrase 'unknown tool'."""
+        agent_file = tmp_path / "bad-phrase.agent.md"
+        _write_agent(agent_file, _agent_content("name: bad-phrase\ntools: [ghost_tool]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected at least one error"
+        combined = "\n".join(errors)
+        assert "unknown tool" in combined, (
+            f"Error message should contain 'unknown tool'; got: {errors}"
+        )
+
+    def test_error_message_includes_specific_tool_name(self, tmp_path: Path) -> None:
+        """AC6: error message includes the specific unknown tool name."""
+        agent_file = tmp_path / "bad-toolname.agent.md"
+        _write_agent(agent_file, _agent_content("name: bad-toolname\ntools: [phantom_tool]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected at least one error"
+        combined = "\n".join(errors)
+        assert "phantom_tool" in combined, (
+            f"Error should include tool name 'phantom_tool'; got: {errors}"
+        )
+
+    def test_error_message_says_not_a_recognized_pattern(self, tmp_path: Path) -> None:
+        """AC6: error message contains 'not a recognized VS Code built-in or MCP server pattern'."""
+        agent_file = tmp_path / "bad-recog.agent.md"
+        _write_agent(agent_file, _agent_content("name: bad-recog\ntools: [ghost_tool]"))
+        errors = validate_agent(agent_file)
+        assert errors, "Expected at least one error"
+        combined = "\n".join(errors)
+        assert "not a recognized" in combined, (
+            f"Error should contain 'not a recognized'; got: {errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_NoBannedToolDoubleError  (#198)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_NoBannedToolDoubleError:
+    """#198 AC7: banned tools are NOT also reported as unknown — no double errors.
+
+    Each test uses _require_registry() to ensure the unknown-tool check exists before
+    asserting no double-errors.  Tests fail in RED (AssertionError on missing helper)
+    and guard the correctness constraint for the builder.
+    """
+
+    @staticmethod
+    def _require_registry() -> None:
+        """Fail clearly if _check_unknown_tools is not yet implemented (#198 builder step)."""
+        import validate_agents as va
+
+        if not hasattr(va, "_check_unknown_tools"):
+            msg = "_check_unknown_tools not yet implemented — #198 builder step required"
+            raise AssertionError(msg)
+
+    def test_todos_banned_not_also_reported_as_unknown(self, tmp_path: Path) -> None:
+        """AC7: 'todos' (banned #193) should not also produce an 'unknown tool' error."""
+        self._require_registry()
+        agent_file = tmp_path / "todos-no-double.agent.md"
+        _write_agent(agent_file, _agent_content("name: todos-no-double\ntools: [todos]"))
+        errors = validate_agent(agent_file)
+        unknown_errors = [e for e in errors if "unknown tool" in e]
+        assert not unknown_errors, (
+            f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
+        )
+
+    def test_manage_todo_list_not_also_reported_as_unknown(self, tmp_path: Path) -> None:
+        """AC7: 'manage_todo_list' (banned #193) should not produce an 'unknown tool' error."""
+        self._require_registry()
+        agent_file = tmp_path / "mtl-no-double.agent.md"
+        _write_agent(
+            agent_file, _agent_content("name: mtl-no-double\ntools: [manage_todo_list]")
+        )
+        errors = validate_agent(agent_file)
+        unknown_errors = [e for e in errors if "unknown tool" in e]
+        assert not unknown_errors, (
+            f"'manage_todo_list' (banned) should not produce unknown-tool error; got: {unknown_errors}"
+        )
+
+    def test_resolve_uri_not_also_reported_as_unknown(self, tmp_path: Path) -> None:
+        """AC7: 'resolveMemoryFileUri' (banned original) should not produce an 'unknown tool' error."""
+        self._require_registry()
+        agent_file = tmp_path / "uri-no-double.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: uri-no-double\ntools: [resolveMemoryFileUri]"),
+        )
+        errors = validate_agent(agent_file)
+        unknown_errors = [e for e in errors if "unknown tool" in e]
+        assert not unknown_errors, (
+            f"'resolveMemoryFileUri' (banned) should not produce unknown-tool error; got: {unknown_errors}"
+        )
+
+    def test_mixed_banned_and_unknown_only_unknown_gets_unknown_error(
+        self, tmp_path: Path
+    ) -> None:
+        """AC7 edge: file with banned + unknown tool — only the unknown gets an unknown-tool error."""
+        self._require_registry()
+        agent_file = tmp_path / "mixed-bad.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: mixed-bad\ntools: [todos, ghost_tool]"),
+        )
+        errors = validate_agent(agent_file)
+        unknown_errors = [e for e in errors if "unknown tool" in e]
+        ghost_flagged = any("ghost_tool" in e for e in unknown_errors)
+        todos_flagged = any("todos" in e for e in unknown_errors)
+        assert ghost_flagged, (
+            f"Expected 'ghost_tool' to produce an unknown-tool error; got: {errors}"
+        )
+        assert not todos_flagged, (
+            f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
+        )
