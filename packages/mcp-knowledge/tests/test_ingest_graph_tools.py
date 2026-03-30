@@ -675,3 +675,34 @@ class TestFromAC_ToolReadOnlyHints:
         assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=True for get_stats, got: {annotations.readOnlyHint!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge cases not covered by TestFromAC_* classes.
+
+    Tightens the LAX assertion in TestFromAC_ListEntities::
+    test_entity_type_filter_passed_when_provided, which only checked
+    to_thread call count without verifying the entity_type kwarg forwarding.
+    """
+
+    @pytest.mark.asyncio
+    async def test_entity_type_kwarg_forwarded_as_enum_to_to_thread(self) -> None:
+        """When entity_type='concept', EntityType enum value is forwarded as kwarg to to_thread."""
+        from owlbear_knowledge.models import EntityType
+
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = []
+            await list_entities(_make_mcp_ctx(), entity_type="concept")
+
+        call_kwargs = mock_t.call_args.kwargs
+        assert "entity_type" in call_kwargs, (
+            "entity_type kwarg must be forwarded to asyncio.to_thread when entity_type is given"
+        )
+        assert call_kwargs["entity_type"] == EntityType("concept"), (
+            f"Expected EntityType('concept'), got: {call_kwargs['entity_type']!r}"
+        )
