@@ -2,6 +2,25 @@
 
 External repos and resources studied during OwlBear development.
 
+## Analysis Module Implementation Readiness (Task #179)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| AutoGen telemetry + structured logging | <https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/framework/telemetry.html> | MIT | Typed event spans (`invoke_agent`), per-agent attribution via OpenTelemetry | `docs/research/analysis-module-implementation-readiness.md` | 2026-03-30 |
+| LangSmith evaluation concepts | <https://docs.langchain.com/langsmith/evaluation> | N/A | Code evaluators vs LLM-as-judge; validates pure-stats approach for threshold-based detection | `docs/research/analysis-module-implementation-readiness.md` | 2026-03-30 |
+
+## Stop Commit Guard Defect Remediation (Task #209)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | Hook command properties (`command` vs `windows`), Stop hook I/O format, `hookSpecificOutput` wrapper, `stop_hook_active` loop prevention | `docs/research/stop-commit-guard-defect-remediation.md` | 2026-03-30 |
+
+## Hook AC Command-Execution Model Correction (Task #213)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | PreToolUse `permissionDecision` output, PostToolUse `systemMessage` and `decision` output, tool_name in stdin JSON, correct VS Code tool names (`create_file`, `replace_string_in_file`) | `docs/research/hook-ac-command-execution-model.md` | 2026-03-30 |
+
 ## Mock ACP Agent for E2E Testing (Task #155)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -10,6 +29,14 @@ External repos and resources studied during OwlBear development.
 | ACP SDK `examples/agent.py` — ExampleAgent | <https://github.com/agentclientprotocol/python-sdk/blob/main/examples/agent.py> | MIT | Reference Agent implementation pattern (~125 LOC), `run_agent()` entry point | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
 | ACP SDK `stdio.py` — `spawn_agent_process()` | <https://github.com/agentclientprotocol/python-sdk/blob/main/src/acp/stdio.py> | MIT | Subprocess spawn pattern, `ClientSideConnection` wiring, env/cwd forwarding | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
 | ACP SDK `test_rpc.py` — spawn roundtrip | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/test_rpc.py> | MIT | In-memory agent/client test harness, `test_spawn_agent_process_roundtrip` pattern | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
+
+## Extend Decision-Request Process for User Action Requests (Task #221)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | MIT | HandoffTermination pattern for async user handoff, UserProxyAgent for typed pause points | `docs/research/extend-decision-request-for-action-requests.md` | 2026-03-30 |
+| CrewAI Task docs | <https://docs.crewai.com/concepts/tasks> | Apache-2.0 | `human_input` task attribute for human review gate, callback mechanism for notifications | `docs/research/extend-decision-request-for-action-requests.md` | 2026-03-30 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | CC-BY-4.0 | Required-reviewer approval gate, structured file-based state, auto-timeout patterns | `docs/research/extend-decision-request-for-action-requests.md` | 2026-03-30 |
 | ACP SDK `conftest.py` — TestAgent/TestClient | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/conftest.py> | MIT | TestAgent stub pattern, TestClient with permission handling | `docs/research/mock-acp-agent-e2e.md` | 2026-03-30 |
 
 ## Canonical Tool Registry Validation (Task #198)
@@ -35,12 +62,26 @@ External repos and resources studied during OwlBear development.
 | Du et al. 2023 — Multi-agent Debate | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Multi-agent debate improves factuality only when agents reason independently; sequential pipelines inherit upstream errors | `docs/research/pipeline-quality-audit.md` | 2026-03-29 |
 | VS Code MCP Server Guide | <https://code.visualstudio.com/docs/copilot/chat/mcp-servers> | CC-BY-4.0 | MCP server configuration, Copilot extension built-in server provision, duplicate server behavior | `docs/research/pipeline-quality-audit.md` | 2026-03-29 |
 
+## Gate 4 TW:MISSING Tag Exemptions (Task #215)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub Actions `paths-ignore` | <https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore> | CC-BY-4.0 | Established CI pattern for exempting non-code changes from test gates | `docs/research/gate4-tw-missing-tag-exemptions.md` | 2026-03-30 |
+| GitLab CI `rules:changes` | <https://docs.gitlab.com/ci/yaml/#ruleschanges> | MIT | Tag/path-based gate exemption pattern in CI pipelines | `docs/research/gate4-tw-missing-tag-exemptions.md` | 2026-03-30 |
+
 ## Arch-Review Premise Challenge (Task #195)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | Klein 2007 — Performing a Project Premortem | <https://hbr.org/2007/09/performing-a-project-premortem> | N/A | Pre-mortem technique: assume failure and work backward to identify causes; breaks groupthink and anchoring bias | `docs/research/arch-review-premise-challenge.md` | 2026-03-29 |
 | Chesterton 1929 — The Drift from Domesticity | <https://en.wikipedia.org/wiki/G._K._Chesterton#Chesterton's_fence> | N/A | Chesterton's fence: understand why something exists (or doesn't) before changing it; inverse applied to feature additions | `docs/research/arch-review-premise-challenge.md` | 2026-03-29 |
+
+## Gate 3 Atomicity Architect Bypass (Task #214)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| `skills/dispatch-planning/SKILL.md` (internal) | N/A | N/A | Gate 3 definition, Board Scan Recipe 1 marker pattern | `docs/research/gate-3-atomicity-architect-bypass.md` | 2026-03-30 |
+| `skills/arch-review/SKILL.md` (internal) | N/A | N/A | Step 3.1 single-responsibility check, `## Architecture Review` output section | `docs/research/gate-3-atomicity-architect-bypass.md` | 2026-03-30 |
 
 ## General KB Initial Data Load Research (Task #24)
 
@@ -57,6 +98,15 @@ External repos and resources studied during OwlBear development.
 | Typer testing docs | <https://typer.tiangolo.com/tutorial/testing/> | MIT | CliRunner invocation model, synchronous test pattern, result assertion | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
 | Click testing docs | <https://click.palletsprojects.com/en/stable/testing/> | BSD-3 | CliRunner API, file system isolation, subcommand invocation | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
 | ACP SDK test_rpc.py | <https://github.com/agentclientprotocol/python-sdk/blob/main/tests/test_rpc.py> | MIT | spawn_agent_process roundtrip pattern, TestClient fixture, mock agent testing | `docs/research/e2e-dispatch-integration-test.md` | 2026-03-30 |
+
+## Gate-Blocked Task Remediation (Task #216)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| GitHub actions/stale action | <https://github.com/marketplace/actions/close-stale-issues> | MIT | Timer-based stale detection pattern: label after N days, close after M more; escalation before action | `docs/research/gate-blocked-task-remediation.md` | 2026-03-30 |
+| GitLab CI blocked pipeline | <https://docs.gitlab.com/ci/jobs/job_control/> | MIT | Pipeline "blocked" status visibility for manual/blocking jobs; retry patterns | `docs/research/gate-blocked-task-remediation.md` | 2026-03-30 |
+| Jenkins restart-from-stage | <https://www.jenkins.io/doc/book/pipeline/running-pipelines/> | CC-BY-SA-4.0 | Manual re-entry from any completed stage; user-initiated remediation, not automated | `docs/research/gate-blocked-task-remediation.md` | 2026-03-30 |
+| Azure DevOps impediment tracking | <https://learn.microsoft.com/en-us/azure/devops/boards/backlogs/manage-issues-impediments> | CC-BY-4.0 | Blocker visibility via queries, aging-based escalation ("blockers active >7 days") | `docs/research/gate-blocked-task-remediation.md` | 2026-03-30 |
 
 ## Wire Audit Log into Dispatch Loop (Task #164)
 
@@ -3028,6 +3078,8 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | `model_validate_json()`, `TypeAdapter`, frozen models, `Field(alias=...)` | `docs/research/planner-data-models-board-reader.md` | 2026-03-29 |
 | Python 3.12 asyncio-subprocess docs | <https://docs.python.org/3.12/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` with PIPE, `communicate()` pattern | `docs/research/planner-data-models-board-reader.md` | 2026-03-29 |
+| Pydantic v2 Models docs | <https://docs.pydantic.dev/latest/concepts/models/> | MIT | Frozen models with `ConfigDict(frozen=True, populate_by_name=True)`, `TypeAdapter(list[Task])`, `Field(alias=...)` for keyword conflict | `packages/orchestrator/src/owlbear/planner/models.py` | 2026-03-30 |
+| Python 3.12 asyncio-subprocess docs | <https://docs.python.org/3.12/library/asyncio-subprocess.html> | PSF-2.0 | `create_subprocess_exec` with PIPE, `communicate()` — board reader subprocess pattern | `packages/orchestrator/src/owlbear/planner/board.py` | 2026-03-30 |
 
 ## .github/ v1 Cleanup Research (Task #29)
 
