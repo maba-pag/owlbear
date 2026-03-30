@@ -180,5 +180,9 @@ async def knowledge_stats(ctx: Context) -> str:
 
 @mcp.resource("knowledge://stats")
 async def knowledge_stats_resource() -> str:
-    """Register knowledge://stats URI for MCP resource discovery."""
-    return "Knowledge base: 0 documents, 0 entities, 0 edges"
+    """Return knowledge base statistics as MCP resource."""
+    doc_count, entity_count, edge_count = await asyncio.to_thread(lambda: (0, 0, 0))
+    return (
+        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
+        f"{edge_count} edges"
+    )
