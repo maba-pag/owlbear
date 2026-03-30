@@ -252,3 +252,98 @@ class TestFromAC_ErrorJournalRotation:  # noqa: N801
         assert self._make_entry(max_entries) in loaded
         # Entries are in chronological order (oldest first among the kept ones)
         assert loaded == entries[1:]
+
+
+# ---------------------------------------------------------------------------
+# #184 AC: keyword-only __init__ with default max_entries=5000
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorJournalInitV2:  # noqa: N801
+    """#184 AC: __init__(path, *, max_entries=5000) — keyword-only with default."""
+
+    def test_default_max_entries_no_kwarg_required(self, tmp_path: Path) -> None:
+        """ErrorJournal must work with just path; max_entries defaults to 5000."""
+        log_file = tmp_path / "errors.jsonl"
+        journal = ErrorJournal(path=log_file)
+        assert journal is not None
+
+    def test_max_entries_is_keyword_only(self, tmp_path: Path) -> None:
+        """max_entries must be keyword-only: positional second arg must raise TypeError."""
+        log_file = tmp_path / "errors.jsonl"
+        with pytest.raises(TypeError):
+            ErrorJournal(log_file, 100)  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# #184 AC: keyword-only log(*, category, method, message, session_id) + auto-timestamp
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorJournalLogV2:  # noqa: N801
+    """#184 AC: log(*, category, method, message, session_id) — keyword-only, auto-timestamp."""
+
+    def test_log_accepts_keyword_args_no_entry_object(self, tmp_path: Path) -> None:
+        """log() must accept keyword-only args; caller does not pass an ErrorEntry."""
+        log_file = tmp_path / "errors.jsonl"
+        journal = ErrorJournal(path=log_file)
+        journal.log(
+            category="transient",
+            method="call_agent",
+            message="timeout",
+            session_id="sess-001",
+        )
+        assert log_file.exists()
+
+    def test_log_auto_generates_iso8601_timestamp(self, tmp_path: Path) -> None:
+        """log() must auto-generate a non-empty ISO-8601 timestamp; caller provides none."""
+        from datetime import datetime
+
+        log_file = tmp_path / "errors.jsonl"
+        journal = ErrorJournal(path=log_file)
+        journal.log(
+            category="transient",
+            method="call_agent",
+            message="timeout",
+            session_id="sess-001",
+        )
+        loaded = journal.load()
+        assert len(loaded) == 1
+        ts = loaded[0].timestamp
+        assert ts  # non-empty
+        # Must be parseable as ISO-8601 (Python 3.11+ handles Z natively)
+        datetime.fromisoformat(ts)
+
+    def test_log_stores_all_four_caller_fields(self, tmp_path: Path) -> None:
+        """All four keyword args (category, method, message, session_id) must be stored."""
+        log_file = tmp_path / "errors.jsonl"
+        journal = ErrorJournal(path=log_file)
+        journal.log(
+            category="permanent",
+            method="send_prompt",
+            message="invalid input",
+            session_id="sess-xyz",
+        )
+        loaded = journal.load()
+        assert len(loaded) == 1
+        entry = loaded[0]
+        assert entry.category == "permanent"
+        assert entry.method == "send_prompt"
+        assert entry.message == "invalid input"
+        assert entry.session_id == "sess-xyz"
+
+    def test_log_rotation_with_keyword_interface(self, tmp_path: Path) -> None:
+        """Rotation still trims correctly when log() is called via keyword-only interface."""
+        log_file = tmp_path / "errors.jsonl"
+        max_e = 3
+        journal = ErrorJournal(path=log_file, max_entries=max_e)
+        for i in range(max_e + 1):
+            journal.log(
+                category="transient",
+                method="call_agent",
+                message=f"err {i}",
+                session_id=f"sess-{i:03d}",
+            )
+        loaded = journal.load()
+        assert len(loaded) == max_e
+        assert loaded[-1].message == f"err {max_e}"  # most recent entry kept
