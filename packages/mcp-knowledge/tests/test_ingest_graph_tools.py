@@ -627,3 +627,51 @@ class TestFromAC_ToolDescriptions:
         assert first_word in _VERB_FIRST_WORDS, (
             f"'get_stats' description should start with a verb, got: {desc!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ToolReadOnlyHints  (retry: AC1, AC3, AC6 — readOnlyHint gaps)
+# ---------------------------------------------------------------------------
+
+
+def _get_tool_annotations(tool_name: str) -> object | None:
+    """Return the ToolAnnotations object for a named tool, or None if not found."""
+    if hasattr(mcp, "_tool_manager"):
+        for t in mcp._tool_manager.list_tools():  # noqa: SLF001
+            if getattr(t, "name", None) == tool_name:
+                return getattr(t, "annotations", None)
+    return None
+
+
+class TestFromAC_ToolReadOnlyHints:
+    """Contract tests for @mcp.tool() readOnlyHint annotations (AC1, AC3, AC6 retry)."""
+
+    def test_ingest_document_has_read_only_hint_false(self) -> None:
+        """ingest_document must be registered with readOnlyHint=False (it writes to the KB)."""
+        annotations = _get_tool_annotations("ingest_document")
+        assert annotations is not None, (
+            "ingest_document has no ToolAnnotations; readOnlyHint=False must be set"
+        )
+        assert annotations.readOnlyHint is False, (  # type: ignore[union-attr]
+            f"Expected readOnlyHint=False for ingest_document, got: {annotations.readOnlyHint!r}"
+        )
+
+    def test_list_entities_has_read_only_hint_true(self) -> None:
+        """list_entities must be registered with readOnlyHint=True (it only reads the KB)."""
+        annotations = _get_tool_annotations("list_entities")
+        assert annotations is not None, (
+            "list_entities has no ToolAnnotations; readOnlyHint=True must be set"
+        )
+        assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
+            f"Expected readOnlyHint=True for list_entities, got: {annotations.readOnlyHint!r}"
+        )
+
+    def test_get_stats_has_read_only_hint_true(self) -> None:
+        """get_stats must be registered with readOnlyHint=True (it only reads counts)."""
+        annotations = _get_tool_annotations("get_stats")
+        assert annotations is not None, (
+            "get_stats has no ToolAnnotations; readOnlyHint=True must be set"
+        )
+        assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
+            f"Expected readOnlyHint=True for get_stats, got: {annotations.readOnlyHint!r}"
+        )
