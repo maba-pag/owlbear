@@ -67,6 +67,7 @@
   "chat.tools.urls.autoApprove": {
     "*": true
   },
+  "chat.useCustomAgentHooks": true,
   "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
   "editor.defaultFormatter": "charliermarsh.ruff",

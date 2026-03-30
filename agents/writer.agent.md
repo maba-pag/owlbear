@@ -8,6 +8,10 @@ model: Claude Sonnet 4.6 (copilot)
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*']
 agents: []
+hooks:
+  Stop:
+    - type: command
+      windows: powershell -NoProfile -File scripts/hooks/stop-commit-guard.ps1
 ---
 
 <persona>
