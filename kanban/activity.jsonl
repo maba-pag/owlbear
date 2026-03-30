@@ -4745,3 +4745,229 @@
 {"timestamp":"2026-03-30T05:20:28.4352012+02:00","action":"release","task_id":197,"detail":"auditor"}
 {"timestamp":"2026-03-30T05:20:52.7679615+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
 {"timestamp":"2026-03-30T05:20:56.0018773+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:20:56.9201742+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T05:20:56.9243202+02:00","action":"release","task_id":19,"detail":"builder"}
+{"timestamp":"2026-03-30T05:21:03.3660399+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T05:21:43.664705+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:21:44.0301587+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:21:44.0333098+02:00","action":"release","task_id":190,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:24:37.9403858+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T05:24:54.2624056+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T05:25:00.1766706+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T05:25:00.1788766+02:00","action":"release","task_id":51,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:25:18.5865459+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T05:25:18.5897302+02:00","action":"claim","task_id":86,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:25:25.9020712+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T05:25:25.9047331+02:00","action":"claim","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:25:28.783939+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:25:28.7866255+02:00","action":"claim","task_id":193,"detail":"builder"}
+{"timestamp":"2026-03-30T05:25:29.9667039+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T05:25:29.969501+02:00","action":"claim","task_id":79,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:25:36.9564003+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T05:25:38.0091984+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:25:41.4495767+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T05:25:42.9326589+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:25:42.9363287+02:00","action":"claim","task_id":190,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:25:45.9482106+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T05:25:45.9513578+02:00","action":"release","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:25:46.7962386+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T05:25:46.7990607+02:00","action":"release","task_id":86,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:25:52.3508963+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
+{"timestamp":"2026-03-30T05:25:52.3535152+02:00","action":"claim","task_id":143,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:26:29.1896803+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
+{"timestamp":"2026-03-30T05:26:29.1928991+02:00","action":"release","task_id":143,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:27:03.6510022+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:27:03.6541831+02:00","action":"block","task_id":193,"detail":"TestFromAC conflict: TestFromAC_BanTodosToolCheck (new) says tools:[todos] must error; TestFromAC_ValidateAgentsTodoCheck (old, passing) says tools:[todos] must return no errors. Cannot satisfy both without modifying a TestFromAC class. Test-writer must update the old class or architect must resolve."}
+{"timestamp":"2026-03-30T05:27:03.6567833+02:00","action":"release","task_id":193,"detail":"builder"}
+{"timestamp":"2026-03-30T05:27:11.8854089+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:27:19.932397+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:27:25.9698343+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T05:27:52.5605766+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:27:56.266485+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T05:27:56.2697817+02:00","action":"release","task_id":190,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:28:02.2812697+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T05:28:02.2844481+02:00","action":"release","task_id":79,"detail":"reviewer"}
+{"timestamp":"2026-03-30T05:28:16.7856361+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
+{"timestamp":"2026-03-30T05:28:16.7882938+02:00","action":"claim","task_id":142,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:28:30.6645476+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T05:28:30.6672202+02:00","action":"claim","task_id":55,"detail":"builder"}
+{"timestamp":"2026-03-30T05:28:53.0045017+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:28:53.0082665+02:00","action":"claim","task_id":198,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:29:02.3802504+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T05:29:02.38315+02:00","action":"claim","task_id":184,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:30:49.4028464+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T05:30:49.4054057+02:00","action":"release","task_id":55,"detail":"builder"}
+{"timestamp":"2026-03-30T05:31:16.6088317+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
+{"timestamp":"2026-03-30T05:31:17.8653869+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T05:31:20.6007855+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
+{"timestamp":"2026-03-30T05:31:20.6033806+02:00","action":"release","task_id":142,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:31:21.4777076+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T05:31:24.8351459+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T05:31:29.0324631+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T05:31:29.0351898+02:00","action":"release","task_id":184,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:35:09.3521686+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T05:35:09.3769568+02:00","action":"claim","task_id":139,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:37:03.6359277+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:37:06.8607264+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T05:37:06.8643953+02:00","action":"release","task_id":198,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:37:38.6313581+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:37:38.6350162+02:00","action":"claim","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T05:37:42.98751+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:37:42.9922624+02:00","action":"release","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T05:37:46.8426755+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T05:37:46.8454836+02:00","action":"release","task_id":139,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:37:50.2041813+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:37:50.2067998+02:00","action":"claim","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T05:37:54.0069766+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T05:37:54.0096458+02:00","action":"release","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T05:38:25.288742+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T05:38:25.2913585+02:00","action":"claim","task_id":89,"detail":"builder"}
+{"timestamp":"2026-03-30T05:38:33.2082049+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T05:38:33.2107902+02:00","action":"claim","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:38:39.6169077+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T05:38:43.0437577+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T05:38:43.0465359+02:00","action":"release","task_id":90,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:38:43.9589515+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T05:38:43.9622792+02:00","action":"claim","task_id":139,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:38:48.087151+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T05:38:48.0898782+02:00","action":"release","task_id":139,"detail":"test-writer"}
+{"timestamp":"2026-03-30T05:44:43.7470265+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T05:44:53.3268101+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T05:44:53.3294235+02:00","action":"release","task_id":89,"detail":"builder"}
+{"timestamp":"2026-03-30T06:02:57.88873+02:00","action":"edit","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T06:02:57.8918335+02:00","action":"claim","task_id":200,"detail":"researcher"}
+{"timestamp":"2026-03-30T06:02:58.0924988+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:02:58.0962582+02:00","action":"claim","task_id":79,"detail":"writer"}
+{"timestamp":"2026-03-30T06:03:02.3619671+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T06:03:02.3651092+02:00","action":"claim","task_id":51,"detail":"writer"}
+{"timestamp":"2026-03-30T06:03:27.490705+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:03:27.4933364+02:00","action":"claim","task_id":190,"detail":"builder"}
+{"timestamp":"2026-03-30T06:04:12.0924289+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:04:12.0934757+02:00","action":"release","task_id":79,"detail":"writer"}
+{"timestamp":"2026-03-30T06:04:30.3126248+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:05:02.3666988+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:05:02.3698335+02:00","action":"release","task_id":190,"detail":"builder"}
+{"timestamp":"2026-03-30T06:05:10.1971841+02:00","action":"edit","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T06:05:10.1998126+02:00","action":"release","task_id":200,"detail":"researcher"}
+{"timestamp":"2026-03-30T06:07:34.4303434+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T06:07:34.4330463+02:00","action":"release","task_id":51,"detail":"writer"}
+{"timestamp":"2026-03-30T06:08:02.5211605+02:00","action":"edit","task_id":201,"detail":"Add tests for canonical tool registry validation"}
+{"timestamp":"2026-03-30T06:08:02.5243033+02:00","action":"claim","task_id":201,"detail":"researcher"}
+{"timestamp":"2026-03-30T06:08:05.4635285+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:08:05.4645648+02:00","action":"claim","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:08:12.1506457+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:08:12.1538714+02:00","action":"claim","task_id":55,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:08:25.3356759+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T06:08:25.3388444+02:00","action":"claim","task_id":198,"detail":"builder"}
+{"timestamp":"2026-03-30T06:12:04.0082929+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:12:04.0118831+02:00","action":"release","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:13:37.5252005+02:00","action":"edit","task_id":201,"detail":"Add tests for canonical tool registry validation"}
+{"timestamp":"2026-03-30T06:13:48.5594879+02:00","action":"edit","task_id":201,"detail":"Add tests for canonical tool registry validation"}
+{"timestamp":"2026-03-30T06:13:54.4501457+02:00","action":"edit","task_id":201,"detail":"Add tests for canonical tool registry validation"}
+{"timestamp":"2026-03-30T06:13:54.4527138+02:00","action":"release","task_id":201,"detail":"researcher"}
+{"timestamp":"2026-03-30T06:14:30.3469778+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:14:30.3506356+02:00","action":"release","task_id":55,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:17:48.2063679+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T06:17:52.3367659+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T06:17:52.3410472+02:00","action":"release","task_id":198,"detail":"builder"}
+{"timestamp":"2026-03-30T06:17:57.1411183+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T06:17:57.1437472+02:00","action":"block","task_id":198,"detail":"Test-writer must resolve contradictions: (1) test_tools_todos_passes vs test_todos_with_other_tools_still_errors, (2) test_todo_prefix_substring_does_not_trigger vs _check_unknown_tools requirement. See Builder Notes for details."}
+{"timestamp":"2026-03-30T06:18:28.7812701+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:18:28.7838703+02:00","action":"claim","task_id":184,"detail":"builder"}
+{"timestamp":"2026-03-30T06:18:29.0212776+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:18:29.0244132+02:00","action":"claim","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:20:00.8813955+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:20:00.8845357+02:00","action":"claim","task_id":167,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:20:47.9976801+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:20:52.3391184+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:20:52.3425885+02:00","action":"release","task_id":167,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:21:15.8649099+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:21:20.7326316+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:21:20.7354038+02:00","action":"release","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:21:34.8983176+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:21:54.5201868+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:21:54.5249856+02:00","action":"release","task_id":184,"detail":"builder"}
+{"timestamp":"2026-03-30T06:25:22.9309071+02:00","action":"edit","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T06:25:22.9340649+02:00","action":"claim","task_id":200,"detail":"architect"}
+{"timestamp":"2026-03-30T06:25:23.4533586+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:25:23.4559602+02:00","action":"claim","task_id":19,"detail":"writer"}
+{"timestamp":"2026-03-30T06:25:24.2854008+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:25:24.2880011+02:00","action":"claim","task_id":89,"detail":"writer"}
+{"timestamp":"2026-03-30T06:25:25.8314295+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T06:25:25.834038+02:00","action":"claim","task_id":51,"detail":"auditor"}
+{"timestamp":"2026-03-30T06:27:09.5095284+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:27:30.6704608+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T06:27:30.6760223+02:00","action":"release","task_id":89,"detail":"writer"}
+{"timestamp":"2026-03-30T06:28:03.9289948+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:28:06.9255869+02:00","action":"edit","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T06:28:06.9289577+02:00","action":"release","task_id":200,"detail":"architect"}
+{"timestamp":"2026-03-30T06:28:18.2047808+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:28:19.7104015+02:00","action":"delete","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T06:28:31.3569068+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:28:31.3595298+02:00","action":"release","task_id":19,"detail":"writer"}
+{"timestamp":"2026-03-30T06:33:11.834998+02:00","action":"move","task_id":51,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T06:33:16.492254+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T06:33:16.5009425+02:00","action":"release","task_id":51,"detail":"auditor"}
+{"timestamp":"2026-03-30T06:33:38.94359+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
+{"timestamp":"2026-03-30T06:34:04.4455123+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:34:04.4475573+02:00","action":"claim","task_id":79,"detail":"auditor"}
+{"timestamp":"2026-03-30T06:37:08.6868454+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:37:13.5353927+02:00","action":"move","task_id":79,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T06:37:13.8686988+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:37:13.8713929+02:00","action":"release","task_id":79,"detail":"auditor"}
+{"timestamp":"2026-03-30T06:37:31.7411248+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T06:37:53.8456523+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T06:37:53.8488037+02:00","action":"claim","task_id":139,"detail":"builder"}
+{"timestamp":"2026-03-30T06:37:55.0328987+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:37:55.0360628+02:00","action":"claim","task_id":190,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:38:21.4909938+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:38:21.4940934+02:00","action":"claim","task_id":184,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:38:51.1938771+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:38:51.1943978+02:00","action":"claim","task_id":55,"detail":"test-writer"}
+{"timestamp":"2026-03-30T06:40:35.7959524+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:40:43.4440311+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:40:45.2767459+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:40:48.3783737+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T06:40:48.3810641+02:00","action":"release","task_id":55,"detail":"test-writer"}
+{"timestamp":"2026-03-30T06:40:50.1653379+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:40:50.1679187+02:00","action":"release","task_id":190,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:42:14.7029013+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:42:21.3621165+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:42:25.6610474+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T06:42:32.3696983+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T06:42:32.373269+02:00","action":"release","task_id":139,"detail":"builder"}
+{"timestamp":"2026-03-30T06:42:40.3919947+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:42:48.8017384+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:42:59.9195099+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
+{"timestamp":"2026-03-30T06:42:59.920061+02:00","action":"release","task_id":184,"detail":"reviewer"}
+{"timestamp":"2026-03-30T06:43:48.4621795+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T06:43:48.4653027+02:00","action":"claim","task_id":90,"detail":"builder"}
+{"timestamp":"2026-03-30T06:43:50.5609511+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:43:50.5641187+02:00","action":"claim","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T06:44:06.4591636+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:44:17.4605724+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:44:24.3974237+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T06:44:24.4005034+02:00","action":"release","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T06:44:26.3029168+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T06:44:29.8898818+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T06:44:29.8929804+02:00","action":"release","task_id":90,"detail":"builder"}
+{"timestamp":"2026-03-30T06:47:03.3838773+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
+{"timestamp":"2026-03-30T06:47:03.3875443+02:00","action":"claim","task_id":21,"detail":"architect"}
+{"timestamp":"2026-03-30T06:47:03.9803533+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:47:03.9829634+02:00","action":"claim","task_id":190,"detail":"writer"}
+{"timestamp":"2026-03-30T06:47:08.9507943+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:47:08.9534063+02:00","action":"claim","task_id":19,"detail":"auditor"}
+{"timestamp":"2026-03-30T06:49:07.3031604+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:49:29.9052404+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:49:30.3121736+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:49:30.315481+02:00","action":"release","task_id":190,"detail":"writer"}
+{"timestamp":"2026-03-30T06:49:35.251423+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
+{"timestamp":"2026-03-30T06:49:37.538099+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
+{"timestamp":"2026-03-30T06:49:41.4839499+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
+{"timestamp":"2026-03-30T06:49:41.4870463+02:00","action":"block","task_id":21,"detail":"Stale parent task: all AC already implemented via #163 (archived) and #185 (archived). Recommend direct archival."}
+{"timestamp":"2026-03-30T06:49:41.4905277+02:00","action":"release","task_id":21,"detail":"architect"}
+{"timestamp":"2026-03-30T06:52:24.5855068+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:52:44.4174388+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:52:49.2346356+02:00","action":"move","task_id":19,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T06:52:54.2681235+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T06:52:54.2707479+02:00","action":"release","task_id":19,"detail":"auditor"}
