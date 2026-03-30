@@ -18,18 +18,19 @@ See kanban-md skill for claiming protocol and pitfalls. Key researcher commands:
 
 ## Research checklist
 
-Before a task can leave `ideation`, complete this checklist. Items 1–5 are **mandatory**;
-items 6–7 are **recommended**.
+Before a task can leave `ideation`, complete this checklist. Items 1–6 are **mandatory**;
+items 7–8 are **recommended**.
 
 1. **Theoretical validity** — Is this a sound concept? Does the abstraction make sense? Is it the right approach?
-2. **Prior art** — Find 2+ GitHub repos, articles, or docs showing how others solved this problem.
-3. **Technical feasibility** — Will it work in our stack (Python 3.12, PydanticAI, etc.)? Any blockers or dependencies?
-4. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
-5. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
-6. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?
-7. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/research/{slug}.md` for complex research.
+2. **Environment audit** — Is this capability already provided by the IDE, runtime, installed extensions, or existing tooling? Check VS Code built-in features, extension-provided servers, and installed packages before recommending additions.
+3. **Prior art** — Find 2+ GitHub repos, articles, or docs showing how others solved this problem.
+4. **Technical feasibility** — Will it work in our stack (Python 3.12, PydanticAI, etc.)? Any blockers or dependencies?
+5. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
+6. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
+7. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?
+8. **Findings documented** _(recommended)_ — Brief notes in task body, or linked `docs/research/{slug}.md` for complex research.
 
-For trivial tasks (rename, typo, config tweak): items 1–3 get a one-liner
+For trivial tasks (rename, typo, config tweak): items 1–4 get a one-liner
 `N/A — trivial change, rationale: X` and the task moves through quickly. **The gate
 still exists** — it just doesn't create busywork.
 
@@ -122,4 +123,5 @@ Before submitting:
 - [ ] External sources logged in sources/overview.md
 - [ ] Cloned repos deleted
 - [ ] Task advanced to `backlog` and claim released
+- [ ] Verified no environment duplication
 - [ ] Recommendations align with KISS/YAGNI
