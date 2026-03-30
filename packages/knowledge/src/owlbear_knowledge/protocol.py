@@ -3,13 +3,19 @@
 Defines :class:`VectorStoreProtocol` — the minimum interface that any
 vector backend must satisfy — along with :class:`SparseVector`,
 :class:`HybridEmbedding`, and the :data:`Embedding` convenience alias.
+
+Also defines :class:`StructuredExtractor` — the injection interface for
+LLM-backed entity/relationship extraction.
 """
 
 from __future__ import annotations
 
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from owlbear_knowledge.extractor import ExtractionResult
 
 
 class SparseVector(BaseModel):
@@ -75,3 +81,14 @@ class VectorStoreProtocol(Protocol):
     ) -> list[tuple[str, float]]: ...
 
     def delete_embedding(self, entity_or_doc_id: str) -> bool: ...
+
+
+@runtime_checkable
+class StructuredExtractor(Protocol):
+    """Protocol for structured entity/relationship extraction via LLM.
+
+    Any object with an ``extract(prompt: str) -> ExtractionResult`` method
+    satisfies this protocol.  Checked at runtime via :func:`isinstance`.
+    """
+
+    def extract(self, prompt: str) -> ExtractionResult: ...

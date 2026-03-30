@@ -17,10 +17,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from owlbear_knowledge.extractor import ExtractionResult
-from owlbear_knowledge.graph_builder import GraphBuildResult, IntraDocGraphBuilder
+from owlbear_knowledge.graph_builder import GraphBuildResult, InterDocGraphBuilder, IntraDocGraphBuilder
 from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
 from owlbear_knowledge.protocol import StructuredExtractor  # noqa: F401 — RED: not in protocol.py yet
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -212,3 +211,46 @@ class TestFromAC_IntraDocGraphBuilder:
         await builder.build(entities, scope="global", document_id="unique_doc_id_99")
         prompt = mock_ext.extract.call_args[0][0]
         assert "unique_doc_id_99" in prompt
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — backward-compat no-op paths
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests for no-op (extractor=None) compatibility."""
+
+    @pytest.mark.asyncio
+    async def test_no_extractor_two_entities_returns_empty(self) -> None:
+        """IntraDocGraphBuilder with no extractor returns empty GraphBuildResult for 2 entities."""
+        builder = IntraDocGraphBuilder()
+        entities = [_make_entity("a"), _make_entity("b")]
+        result = await builder.build(entities, scope="global", document_id="doc1")
+        assert result == GraphBuildResult()
+
+    @pytest.mark.asyncio
+    async def test_no_extractor_many_entities_returns_empty(self) -> None:
+        """IntraDocGraphBuilder with no extractor returns empty GraphBuildResult for 90 entities."""
+        builder = IntraDocGraphBuilder()
+        entities = [_make_entity(f"e{i}") for i in range(90)]
+        result = await builder.build(entities, scope="global", document_id="doc1")
+        assert result == GraphBuildResult()
+
+    @pytest.mark.asyncio
+    async def test_legacy_inter_doc_empty_entities_returns_empty(self) -> None:
+        """Legacy InterDocGraphBuilder.build([]) returns empty GraphBuildResult (no-op)."""
+        builder = InterDocGraphBuilder(model="stub")
+        result = await builder.build([], vector_store=MagicMock(), scope="global")
+        assert result == GraphBuildResult()
+
+    @pytest.mark.asyncio
+    async def test_legacy_inter_doc_calls_search_similar(self) -> None:
+        """Legacy InterDocGraphBuilder calls vector_store.search_similar for pre-filtering."""
+        mock_vs = MagicMock()
+        mock_vs.search_similar.return_value = []
+        builder = InterDocGraphBuilder(model="stub")
+        entities = [_make_entity("a"), _make_entity("b")]
+        result = await builder.build(entities, vector_store=mock_vs, scope="global")
+        mock_vs.search_similar.assert_called_once()
+        assert result == GraphBuildResult()

@@ -1,18 +1,21 @@
-"""Entity extraction pipeline — no-op implementation.
+"""Entity extraction pipeline — DI-based implementation.
 
-PydanticAI has been removed per AC. This module provides the
-ExtractionResult schema and a stub EntityExtractor that returns empty
-results without making LLM calls. Real extraction is wired up at the
-application layer.
+:class:`EntityExtractor` delegates to an injected :class:`StructuredExtractor`
+for LLM-backed entity and relationship extraction.  Pass ``extractor=`` to wire
+in a real backend; omit it for a no-op stub (backward-compatible).
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_knowledge.models import Edge, Entity  # noqa: TC001 — needed by Pydantic at runtime
+
+if TYPE_CHECKING:
+    from owlbear_knowledge.protocol import StructuredExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -27,21 +30,49 @@ class ExtractionResult(BaseModel):
 
 
 class EntityExtractor:
-    """Schema-only entity extractor with no LLM dependency.
+    """Entity extractor with optional injected :class:`StructuredExtractor`.
 
-    Returns empty ExtractionResult for all inputs. Wire up a real
-    LLM backend at the application layer if extraction is needed.
+    When ``extractor`` is provided, non-empty input is forwarded to it (with
+    an optional metadata prefix).  When omitted, the extractor behaves as a
+    no-op stub (backward-compatible with ``EntityExtractor(model=...)``) .
 
     Args:
-        model: Ignored — kept for API compatibility.
+        model: Ignored — kept for backward compatibility.
+        extractor: Injected :class:`StructuredExtractor` for LLM extraction.
     """
 
-    def __init__(self, model: str | object, **_kwargs: object) -> None:
+    def __init__(
+        self,
+        model: str | object | None = None,
+        *,
+        extractor: StructuredExtractor | None = None,
+        **_kwargs: object,
+    ) -> None:
         self._model = model
+        self._extractor = extractor
 
-    async def extract(self, text: str) -> ExtractionResult:
-        """Return an empty ExtractionResult (no LLM dependency)."""
+    async def extract(
+        self,
+        text: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> ExtractionResult:
+        """Extract entities and edges from *text*.
+
+        Args:
+            text: Source text to extract from.
+            metadata: Optional key/value pairs prepended to the prompt.
+
+        Returns:
+            :class:`ExtractionResult` from the injected extractor, or an
+            empty result when input is blank or no extractor is wired.
+        """
         if not text or not text.strip():
             return ExtractionResult()
-        logger.debug("EntityExtractor.extract called — returning empty result (no-op)")
-        return ExtractionResult()
+        if self._extractor is None:
+            logger.debug("EntityExtractor.extract called — returning empty result (no-op)")
+            return ExtractionResult()
+        prompt = text
+        if metadata:
+            prefix = "\n".join(f"{k}: {v}" for k, v in metadata.items())
+            prompt = f"{prefix}\n{text}"
+        return self._extractor.extract(prompt)
