@@ -21,6 +21,24 @@ _TODOS_RE = re.compile(r"\btodos\b")
 _RESOLVE_URI = "resolveMemoryFileUri"
 _MANAGE_TODO_LIST = "manage_todo_list"
 
+# Canonical VS Code built-in toolset prefixes.
+# Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
+# Update this set when VS Code adds new toolsets.
+KNOWN_TOOLSETS: frozenset[str] = frozenset(
+    {"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"}
+)
+
+# Standalone tool names not under any toolset prefix.
+# Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
+# Update this set when VS Code adds new standalone tools.
+KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"})
+
+# Tool names that already produce specific ban errors — skip in unknown-tool check
+# to avoid double-reporting the same tool with two different error messages.
+_BANNED_TOOL_NAMES: frozenset[str] = frozenset(
+    {"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"}
+)
+
 
 def _frontmatter_lines(content: str) -> list[str]:
     """Return lines inside the leading --- ... --- block, or empty list."""
@@ -47,6 +65,49 @@ def _tools_text(fm_lines: list[str]) -> str:
             else:
                 break
     return " ".join(result)
+
+
+def _is_valid_tool(name: str) -> bool:
+    """Return True if name matches any recognized VS Code built-in or MCP server pattern."""
+    # (a) exact match in KNOWN_TOOLSETS — toolset shorthand like 'search'
+    if name in KNOWN_TOOLSETS:
+        return True
+    # (b) prefix before first '/' is in KNOWN_TOOLSETS — e.g. 'execute/runInTerminal'
+    if "/" in name:
+        prefix = name.split("/", 1)[0]
+        if prefix in KNOWN_TOOLSETS:
+            return True
+    # (c) exact match in KNOWN_STANDALONE_TOOLS
+    if name in KNOWN_STANDALONE_TOOLS:
+        return True
+    # (d) MCP server wildcard pattern — e.g. 'owlbear-kanban/*'
+    return bool(name.endswith("/*"))
+
+
+def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Return error messages for tool names not in the canonical registry.
+
+    Skips names already covered by specific ban checks to avoid double errors.
+    """
+    tools = _tools_text(fm_lines)
+    if not tools:
+        return []
+    bracket_match = re.search(r"\[([^\]]*)\]", tools)
+    if not bracket_match:
+        return []
+    errors: list[str] = []
+    for raw in bracket_match.group(1).split(","):
+        name = raw.strip().strip("'\"")
+        if not name:
+            continue
+        if name in _BANNED_TOOL_NAMES:
+            continue
+        if not _is_valid_tool(name):
+            errors.append(
+                f"{agent_file}: tools: unknown tool '{name}'"
+                f" — not a recognized VS Code built-in or MCP server pattern"
+            )
+    return errors
 
 
 def validate_agent(agent_file: Path) -> list[str]:
@@ -79,6 +140,9 @@ def validate_agent(agent_file: Path) -> list[str]:
         errors.append(
             f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents"
         )
+
+    # Unknown-tool check — runs after ban checks so banned tools are not double-reported
+    errors.extend(_check_unknown_tools(_frontmatter_lines(content), agent_file))
 
     return errors
 
