@@ -4171,3 +4171,474 @@
 {"timestamp":"2026-03-30T02:48:50.2466562+02:00","action":"claim","task_id":57,"detail":"reviewer"}
 {"timestamp":"2026-03-30T02:49:57.096627+02:00","action":"move","task_id":163,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-30T02:50:24.7406824+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T02:50:37.9555912+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T02:50:37.9613449+02:00","action":"release","task_id":163,"detail":"auditor"}
+{"timestamp":"2026-03-30T02:51:00.6293842+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T02:51:00.6323119+02:00","action":"claim","task_id":192,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:51:31.1740515+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T02:52:09.2788672+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T02:52:09.2814922+02:00","action":"release","task_id":61,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:52:09.7521794+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
+{"timestamp":"2026-03-30T02:53:48.3925813+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T02:53:48.398629+02:00","action":"release","task_id":85,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:54:47.3976729+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
+{"timestamp":"2026-03-30T02:54:47.4010289+02:00","action":"release","task_id":196,"detail":"test-writer"}
+{"timestamp":"2026-03-30T02:54:51.1795473+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T02:55:01.2483888+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T02:55:01.6659516+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T02:55:01.669131+02:00","action":"release","task_id":192,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:55:11.1989037+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T02:55:15.1482461+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T02:55:51.303819+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T02:55:54.9384462+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T02:56:17.8080546+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T02:56:17.8106332+02:00","action":"claim","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:56:24.6146523+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T02:56:24.6189036+02:00","action":"claim","task_id":55,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:56:31.3157647+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T02:56:31.3191753+02:00","action":"claim","task_id":19,"detail":"builder"}
+{"timestamp":"2026-03-30T02:58:22.774471+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T02:58:22.7765467+02:00","action":"claim","task_id":166,"detail":"test-writer"}
+{"timestamp":"2026-03-30T02:58:58.1534804+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T02:59:07.3172016+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T02:59:12.9155106+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T02:59:12.9183881+02:00","action":"release","task_id":57,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:59:37.9146242+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T02:59:37.9183919+02:00","action":"release","task_id":78,"detail":"reviewer"}
+{"timestamp":"2026-03-30T02:59:53.7948833+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T02:59:57.8305491+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T02:59:57.8334852+02:00","action":"release","task_id":19,"detail":"builder"}
+{"timestamp":"2026-03-30T03:00:10.317689+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:00:17.618694+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T03:00:23.1133669+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T03:00:23.1170559+02:00","action":"release","task_id":166,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:00:31.2626166+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:00:36.2412448+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:00:36.2445831+02:00","action":"release","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:03:35.4031915+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T03:03:39.9072075+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T03:03:39.910348+02:00","action":"release","task_id":55,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:04:34.4931246+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:04:34.4963005+02:00","action":"claim","task_id":90,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:04:40.707141+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:04:40.709738+02:00","action":"claim","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:04:46.3266904+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:04:46.3293156+02:00","action":"release","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:04:55.6623926+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:04:55.6644893+02:00","action":"claim","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:04:56.0211414+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:04:56.0232648+02:00","action":"release","task_id":11,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:05:15.664943+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T03:05:15.6686449+02:00","action":"claim","task_id":86,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:05:35.9528714+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:05:39.4600694+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:06:01.6296838+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:06:02.5021483+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T03:06:02.5058446+02:00","action":"claim","task_id":134,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:06:04.6937432+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:06:04.6967556+02:00","action":"claim","task_id":112,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:06:11.9060094+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
+{"timestamp":"2026-03-30T03:06:11.9096504+02:00","action":"claim","task_id":143,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:06:40.6265593+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:06:53.182701+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:06:58.5571027+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:06:58.5617602+02:00","action":"release","task_id":90,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:07:44.8593014+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T03:07:49.0208188+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
+{"timestamp":"2026-03-30T03:07:49.0239392+02:00","action":"release","task_id":86,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:08:26.0227805+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:08:36.1306626+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:08:39.7580572+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
+{"timestamp":"2026-03-30T03:09:32.7880351+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:09:37.1283176+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:09:37.1309609+02:00","action":"release","task_id":112,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:11:19.369414+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
+{"timestamp":"2026-03-30T03:11:19.3725348+02:00","action":"release","task_id":143,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:11:30.6166439+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:11:30.6202924+02:00","action":"claim","task_id":192,"detail":"writer"}
+{"timestamp":"2026-03-30T03:11:35.4476053+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
+{"timestamp":"2026-03-30T03:11:35.4507269+02:00","action":"claim","task_id":193,"detail":"architect"}
+{"timestamp":"2026-03-30T03:11:35.8038701+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:11:35.8075457+02:00","action":"claim","task_id":199,"detail":"researcher"}
+{"timestamp":"2026-03-30T03:11:37.0264454+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
+{"timestamp":"2026-03-30T03:11:37.029067+02:00","action":"claim","task_id":182,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:12:55.5136876+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:13:04.7050853+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:13:05.0167244+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:13:05.0188094+02:00","action":"release","task_id":199,"detail":"researcher"}
+{"timestamp":"2026-03-30T03:13:05.9603895+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:13:10.1490738+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:13:10.1516787+02:00","action":"release","task_id":192,"detail":"writer"}
+{"timestamp":"2026-03-30T03:13:19.229661+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T03:13:25.4074643+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T03:13:25.4112108+02:00","action":"release","task_id":134,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:13:53.779073+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:13:56.7331751+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:13:56.7368728+02:00","action":"claim","task_id":173,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:13:58.0993515+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:13:58.1019598+02:00","action":"claim","task_id":138,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:13:59.3315403+02:00","action":"delete","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:14:02.8199295+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:14:02.8231298+02:00","action":"claim","task_id":183,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:14:15.4649129+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:14:20.1933822+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:14:20.1965387+02:00","action":"release","task_id":193,"detail":"architect"}
+{"timestamp":"2026-03-30T03:14:27.1613716+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
+{"timestamp":"2026-03-30T03:14:34.1909461+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:14:34.1946698+02:00","action":"claim","task_id":193,"detail":"architect"}
+{"timestamp":"2026-03-30T03:14:38.0726452+02:00","action":"move","task_id":182,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:14:43.8312243+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
+{"timestamp":"2026-03-30T03:14:43.8343966+02:00","action":"release","task_id":182,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:14:52.7035265+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:14:52.7046004+02:00","action":"release","task_id":183,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:15:02.3704526+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T03:15:02.3730107+02:00","action":"claim","task_id":95,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:15:25.6168332+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
+{"timestamp":"2026-03-30T03:15:41.1547996+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T03:15:41.1590328+02:00","action":"release","task_id":193,"detail":"architect"}
+{"timestamp":"2026-03-30T03:15:57.8368988+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T03:15:57.8400865+02:00","action":"release","task_id":95,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:16:09.0991145+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T03:16:09.102289+02:00","action":"claim","task_id":194,"detail":"builder"}
+{"timestamp":"2026-03-30T03:16:09.3068369+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:16:15.2579328+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T03:16:15.2594823+02:00","action":"claim","task_id":189,"detail":"writer"}
+{"timestamp":"2026-03-30T03:16:16.4273879+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:16:16.4305312+02:00","action":"release","task_id":173,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:16:23.275011+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T03:16:23.2781968+02:00","action":"claim","task_id":85,"detail":"writer"}
+{"timestamp":"2026-03-30T03:16:27.7868957+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T03:16:56.974996+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:17:00.681495+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:17:21.5451434+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T03:17:21.5466798+02:00","action":"release","task_id":189,"detail":"writer"}
+{"timestamp":"2026-03-30T03:17:26.8897648+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T03:17:26.8929184+02:00","action":"release","task_id":85,"detail":"writer"}
+{"timestamp":"2026-03-30T03:17:36.2262219+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T03:17:36.2283191+02:00","action":"release","task_id":194,"detail":"builder"}
+{"timestamp":"2026-03-30T03:17:47.6539002+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:17:47.6565485+02:00","action":"release","task_id":138,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:18:09.7964988+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T03:18:09.7997658+02:00","action":"claim","task_id":177,"detail":"builder"}
+{"timestamp":"2026-03-30T03:18:16.8362504+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:18:16.8398952+02:00","action":"claim","task_id":61,"detail":"writer"}
+{"timestamp":"2026-03-30T03:18:17.5672201+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:18:17.5703356+02:00","action":"claim","task_id":185,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:18:21.1438682+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T03:18:21.1465314+02:00","action":"claim","task_id":57,"detail":"writer"}
+{"timestamp":"2026-03-30T03:18:22.7326592+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T03:18:22.7352509+02:00","action":"claim","task_id":198,"detail":"researcher"}
+{"timestamp":"2026-03-30T03:18:25.2094134+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:18:25.2145537+02:00","action":"claim","task_id":109,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:18:26.6719427+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:18:26.6745394+02:00","action":"claim","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:18:47.2436789+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:18:47.2462538+02:00","action":"claim","task_id":111,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:18:55.939273+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T03:18:55.9419002+02:00","action":"release","task_id":177,"detail":"builder"}
+{"timestamp":"2026-03-30T03:19:05.7724328+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T03:19:12.5966986+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T03:19:33.6769114+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T03:19:49.9213965+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:19:49.9224482+02:00","action":"release","task_id":61,"detail":"writer"}
+{"timestamp":"2026-03-30T03:20:01.636588+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T03:20:01.6376176+02:00","action":"release","task_id":57,"detail":"writer"}
+{"timestamp":"2026-03-30T03:20:17.5883544+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:21:07.3638078+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:21:11.5618992+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:21:21.8657328+02:00","action":"create","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
+{"timestamp":"2026-03-30T03:21:27.764572+02:00","action":"create","task_id":201,"detail":"Add tests for canonical tool registry validation"}
+{"timestamp":"2026-03-30T03:21:30.6289338+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:21:33.5557036+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:21:33.5572646+02:00","action":"release","task_id":89,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:21:37.1886883+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:21:37.1912733+02:00","action":"release","task_id":109,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:21:43.2294757+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:21:43.2315666+02:00","action":"release","task_id":111,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:21:52.5115242+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
+{"timestamp":"2026-03-30T03:21:52.5141157+02:00","action":"release","task_id":198,"detail":"researcher"}
+{"timestamp":"2026-03-30T03:24:06.0717776+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:24:14.7332766+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:24:19.3896068+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:24:19.3906404+02:00","action":"release","task_id":185,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:24:48.5930617+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:24:48.5956797+02:00","action":"claim","task_id":195,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:24:50.1390537+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:24:50.1390537+02:00","action":"claim","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:24:55.9586157+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T03:24:55.9613137+02:00","action":"claim","task_id":55,"detail":"test-writer-retry"}
+{"timestamp":"2026-03-30T03:25:05.6591266+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:25:05.6627857+02:00","action":"claim","task_id":11,"detail":"builder"}
+{"timestamp":"2026-03-30T03:25:27.3904998+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:25:35.3055808+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:25:39.2574652+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T03:25:39.2600935+02:00","action":"release","task_id":11,"detail":"builder"}
+{"timestamp":"2026-03-30T03:25:53.0361689+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:25:53.0392987+02:00","action":"claim","task_id":183,"detail":"writer"}
+{"timestamp":"2026-03-30T03:25:55.4054826+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:25:55.408071+02:00","action":"claim","task_id":187,"detail":"writer"}
+{"timestamp":"2026-03-30T03:25:59.3048924+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T03:25:59.3080532+02:00","action":"claim","task_id":78,"detail":"writer"}
+{"timestamp":"2026-03-30T03:26:08.5783049+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:26:08.580876+02:00","action":"claim","task_id":61,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:26:30.0070629+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:26:30.0096748+02:00","action":"release","task_id":195,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:26:47.4867259+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T03:26:47.4899247+02:00","action":"release","task_id":78,"detail":"writer"}
+{"timestamp":"2026-03-30T03:26:58.2354628+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:27:07.8892627+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:27:07.8914061+02:00","action":"release","task_id":183,"detail":"writer"}
+{"timestamp":"2026-03-30T03:27:45.2727174+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:27:55.1223759+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:28:02.3969043+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:28:02.4003714+02:00","action":"release","task_id":187,"detail":"writer"}
+{"timestamp":"2026-03-30T03:28:09.8903655+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:28:09.8929726+02:00","action":"claim","task_id":187,"detail":"writer"}
+{"timestamp":"2026-03-30T03:28:12.294701+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T03:28:13.994681+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:28:13.9972393+02:00","action":"release","task_id":187,"detail":"writer"}
+{"timestamp":"2026-03-30T03:28:17.3294135+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T03:28:19.8452685+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
+{"timestamp":"2026-03-30T03:28:19.8484266+02:00","action":"release","task_id":55,"detail":"test-writer-retry"}
+{"timestamp":"2026-03-30T03:31:29.3595233+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:32:22.3790821+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:32:39.1487766+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:32:39.1519634+02:00","action":"release","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:32:43.5288725+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:32:43.5309355+02:00","action":"claim","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:32:48.4975891+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T03:32:48.5001873+02:00","action":"release","task_id":19,"detail":"reviewer"}
+{"timestamp":"2026-03-30T03:33:27.8982665+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T03:33:27.9004117+02:00","action":"claim","task_id":166,"detail":"builder"}
+{"timestamp":"2026-03-30T03:33:37.3290112+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T03:33:37.3326615+02:00","action":"claim","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:33:44.1132789+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T03:33:44.1159357+02:00","action":"claim","task_id":197,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:33:50.4948131+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T03:33:53.8706175+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T03:33:53.8732489+02:00","action":"release","task_id":167,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:34:48.0137231+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:34:48.0197205+02:00","action":"claim","task_id":89,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:36:31.8954036+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T03:36:31.89907+02:00","action":"release","task_id":166,"detail":"builder"}
+{"timestamp":"2026-03-30T03:36:53.3158567+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:36:56.6911326+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
+{"timestamp":"2026-03-30T03:36:56.6952759+02:00","action":"release","task_id":89,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:38:13.0868457+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:38:25.294594+02:00","action":"move","task_id":61,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:38:25.6196609+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:38:25.6223443+02:00","action":"release","task_id":61,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:38:27.3245381+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T03:38:31.2987154+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T03:38:31.3018198+02:00","action":"release","task_id":197,"detail":"test-writer"}
+{"timestamp":"2026-03-30T03:38:50.4923992+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T03:38:50.4950094+02:00","action":"claim","task_id":134,"detail":"writer"}
+{"timestamp":"2026-03-30T03:38:56.8778831+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:38:56.8809986+02:00","action":"claim","task_id":112,"detail":"writer"}
+{"timestamp":"2026-03-30T03:39:00.1678096+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:39:00.1688407+02:00","action":"claim","task_id":138,"detail":"writer"}
+{"timestamp":"2026-03-30T03:39:04.0080686+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T03:39:04.0181028+02:00","action":"claim","task_id":57,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:39:55.7007995+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:39:56.2118592+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:39:56.2144974+02:00","action":"claim","task_id":195,"detail":"writer"}
+{"timestamp":"2026-03-30T03:40:00.434031+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:40:00.4372392+02:00","action":"claim","task_id":192,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:40:05.6043483+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:40:05.607493+02:00","action":"claim","task_id":185,"detail":"writer"}
+{"timestamp":"2026-03-30T03:40:10.3886177+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:40:14.7616538+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T03:40:14.7643487+02:00","action":"release","task_id":112,"detail":"writer"}
+{"timestamp":"2026-03-30T03:40:59.3240705+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T03:40:59.327211+02:00","action":"release","task_id":134,"detail":"writer"}
+{"timestamp":"2026-03-30T03:41:05.4696839+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:41:05.9735512+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:41:13.6969097+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:41:21.2414506+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
+{"timestamp":"2026-03-30T03:41:21.2450248+02:00","action":"release","task_id":138,"detail":"writer"}
+{"timestamp":"2026-03-30T03:41:23.3415971+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:41:27.7677546+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T03:41:27.7699232+02:00","action":"release","task_id":195,"detail":"writer"}
+{"timestamp":"2026-03-30T03:43:32.3199325+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:43:38.630114+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T03:43:38.6333699+02:00","action":"release","task_id":185,"detail":"writer"}
+{"timestamp":"2026-03-30T03:46:38.6076758+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T03:46:43.8246519+02:00","action":"move","task_id":57,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:46:44.1440197+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
+{"timestamp":"2026-03-30T03:46:44.1463818+02:00","action":"release","task_id":57,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:47:03.2702571+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:47:08.4892207+02:00","action":"move","task_id":192,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:47:08.815488+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:47:08.8186386+02:00","action":"release","task_id":192,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:47:15.8594036+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
+{"timestamp":"2026-03-30T03:47:16.1239123+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T03:47:16.1276283+02:00","action":"claim","task_id":95,"detail":"writer"}
+{"timestamp":"2026-03-30T03:47:16.19919+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:47:16.2252135+02:00","action":"claim","task_id":111,"detail":"writer"}
+{"timestamp":"2026-03-30T03:47:17.7947598+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:47:17.7984334+02:00","action":"claim","task_id":173,"detail":"writer"}
+{"timestamp":"2026-03-30T03:47:18.3408104+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:47:18.3434804+02:00","action":"claim","task_id":188,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:47:47.2175483+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:47:47.2211725+02:00","action":"claim","task_id":183,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:48:02.3636382+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:48:14.1737203+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:48:20.8683086+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T03:48:20.8714607+02:00","action":"release","task_id":95,"detail":"writer"}
+{"timestamp":"2026-03-30T03:48:41.1954664+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:48:50.6726489+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
+{"timestamp":"2026-03-30T03:48:50.6758157+02:00","action":"release","task_id":111,"detail":"writer"}
+{"timestamp":"2026-03-30T03:48:53.5213798+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:48:57.7865416+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T03:48:57.7907378+02:00","action":"release","task_id":173,"detail":"writer"}
+{"timestamp":"2026-03-30T03:53:15.1491578+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:53:21.829139+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:53:30.4916843+02:00","action":"move","task_id":183,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:53:35.6809995+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
+{"timestamp":"2026-03-30T03:53:35.6846604+02:00","action":"release","task_id":183,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:54:14.5672923+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T03:54:14.5699187+02:00","action":"claim","task_id":85,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:55:06.3119842+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:55:13.6614245+02:00","action":"move","task_id":188,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T03:55:14.0442964+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:55:14.0485489+02:00","action":"release","task_id":188,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:56:33.2401302+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
+{"timestamp":"2026-03-30T03:56:33.2427001+02:00","action":"claim","task_id":188,"detail":"auditor"}
+{"timestamp":"2026-03-30T03:56:56.0418327+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:56:56.0444523+02:00","action":"claim","task_id":109,"detail":"writer"}
+{"timestamp":"2026-03-30T03:57:30.9293422+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:57:34.2886905+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T03:57:34.2913011+02:00","action":"release","task_id":109,"detail":"writer"}
+{"timestamp":"2026-03-30T04:00:25.5658806+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T04:00:29.9941029+02:00","action":"move","task_id":85,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:00:30.3354321+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T04:00:30.3375332+02:00","action":"release","task_id":85,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:00:55.1385022+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
+{"timestamp":"2026-03-30T04:01:27.2504984+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T04:01:27.2550327+02:00","action":"claim","task_id":189,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:04:56.854255+02:00","action":"move","task_id":189,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:04:57.2851052+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T04:04:57.2890272+02:00","action":"release","task_id":189,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:07:00.9590368+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T04:07:07.7723715+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
+{"timestamp":"2026-03-30T04:07:36.3663732+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:07:36.3674021+02:00","action":"claim","task_id":78,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:12:14.8590187+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:12:21.4172696+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:12:35.0265968+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:12:39.2927875+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:12:44.1837402+02:00","action":"move","task_id":78,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:12:49.1084936+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:12:49.1117035+02:00","action":"release","task_id":78,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:13:15.6361939+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
+{"timestamp":"2026-03-30T04:13:39.550952+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T04:13:39.5521243+02:00","action":"claim","task_id":187,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:15:55.8214174+02:00","action":"move","task_id":187,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:16:01.2791611+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T04:16:01.2823743+02:00","action":"release","task_id":187,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:16:16.2702374+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
+{"timestamp":"2026-03-30T04:16:58.113567+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:16:58.1161964+02:00","action":"claim","task_id":194,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:17:17.4830286+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T04:17:17.4867025+02:00","action":"claim","task_id":197,"detail":"builder"}
+{"timestamp":"2026-03-30T04:18:49.8875481+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:19:03.2776168+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:19:03.6554091+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T04:19:03.6590601+02:00","action":"claim","task_id":19,"detail":"test-writer"}
+{"timestamp":"2026-03-30T04:19:06.695515+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T04:19:06.6981492+02:00","action":"claim","task_id":193,"detail":"test-writer"}
+{"timestamp":"2026-03-30T04:19:07.8890135+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T04:19:14.3072826+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:19:18.1394405+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:19:18.1421029+02:00","action":"release","task_id":194,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:21:40.2765552+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T04:21:40.2802086+02:00","action":"claim","task_id":185,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:22:01.0961281+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T04:22:22.2966033+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
+{"timestamp":"2026-03-30T04:22:22.299204+02:00","action":"release","task_id":19,"detail":"test-writer"}
+{"timestamp":"2026-03-30T04:22:53.8047492+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
+{"timestamp":"2026-03-30T04:22:53.8079387+02:00","action":"release","task_id":197,"detail":"builder"}
+{"timestamp":"2026-03-30T04:23:06.7871692+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T04:23:10.8430439+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
+{"timestamp":"2026-03-30T04:23:10.8462742+02:00","action":"release","task_id":193,"detail":"test-writer"}
+{"timestamp":"2026-03-30T04:23:34.6663482+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T04:23:34.6700611+02:00","action":"claim","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T04:23:38.3369249+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T04:23:38.3397051+02:00","action":"claim","task_id":166,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:23:39.6934701+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T04:23:39.696664+02:00","action":"release","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T04:23:40.6506781+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:23:40.6548751+02:00","action":"claim","task_id":11,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:23:46.7264055+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T04:23:46.729561+02:00","action":"claim","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T04:23:48.9920476+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T04:23:48.9957202+02:00","action":"claim","task_id":177,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:23:50.6372972+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-30T04:23:50.6405105+02:00","action":"release","task_id":167,"detail":"builder"}
+{"timestamp":"2026-03-30T04:24:59.7714509+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T04:24:59.7745137+02:00","action":"release","task_id":177,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:25:35.9713568+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T04:25:40.3707201+02:00","action":"move","task_id":185,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:25:45.0320168+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T04:25:45.035565+02:00","action":"release","task_id":185,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:26:28.479001+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
+{"timestamp":"2026-03-30T04:26:37.0925282+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:26:37.0951352+02:00","action":"release","task_id":11,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:26:57.3047987+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T04:26:57.3074611+02:00","action":"claim","task_id":195,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:27:09.6556358+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:27:47.9090243+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T04:27:47.9120662+02:00","action":"release","task_id":166,"detail":"reviewer"}
+{"timestamp":"2026-03-30T04:28:42.750199+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T04:28:48.2707856+02:00","action":"move","task_id":195,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:28:53.2529999+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
+{"timestamp":"2026-03-30T04:28:53.2551985+02:00","action":"release","task_id":195,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:29:18.5682448+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T04:29:18.571894+02:00","action":"claim","task_id":95,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:30:40.448092+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T04:30:40.4512143+02:00","action":"claim","task_id":166,"detail":"writer"}
+{"timestamp":"2026-03-30T04:30:40.5159889+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:30:40.536629+02:00","action":"claim","task_id":194,"detail":"writer"}
+{"timestamp":"2026-03-30T04:30:41.5949796+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T04:30:41.5976372+02:00","action":"claim","task_id":173,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:30:46.6987765+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:30:46.7034484+02:00","action":"claim","task_id":11,"detail":"writer"}
+{"timestamp":"2026-03-30T04:31:49.6632585+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T04:31:54.5403892+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T04:32:06.0155904+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T04:32:11.5355632+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:32:22.0303794+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:32:22.2405642+02:00","action":"move","task_id":173,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:32:22.618455+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
+{"timestamp":"2026-03-30T04:32:22.6210668+02:00","action":"release","task_id":173,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:32:30.1031972+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
+{"timestamp":"2026-03-30T04:32:30.1057836+02:00","action":"release","task_id":194,"detail":"writer"}
+{"timestamp":"2026-03-30T04:32:36.8913711+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:32:44.5604327+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
+{"timestamp":"2026-03-30T04:32:44.5626188+02:00","action":"release","task_id":11,"detail":"writer"}
+{"timestamp":"2026-03-30T04:33:35.2314527+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
+{"timestamp":"2026-03-30T04:33:35.2339885+02:00","action":"release","task_id":166,"detail":"writer"}
+{"timestamp":"2026-03-30T04:33:59.9707841+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T04:33:59.9749413+02:00","action":"claim","task_id":177,"detail":"writer"}
+{"timestamp":"2026-03-30T04:34:02.9484944+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T04:34:02.9523556+02:00","action":"claim","task_id":134,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:37:33.4869561+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T04:37:43.2745488+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T04:37:50.3453255+02:00","action":"move","task_id":95,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:37:55.0095232+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
+{"timestamp":"2026-03-30T04:37:55.0129644+02:00","action":"release","task_id":95,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:37:57.8504303+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
+{"timestamp":"2026-03-30T04:37:57.8537772+02:00","action":"release","task_id":177,"detail":"writer"}
+{"timestamp":"2026-03-30T04:38:19.8436757+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T04:38:23.9503822+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T04:38:28.9358117+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T04:38:28.9379155+02:00","action":"claim","task_id":109,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:38:30.0423055+02:00","action":"move","task_id":134,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:38:35.011644+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T04:38:35.0142893+02:00","action":"release","task_id":134,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:39:34.6659+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
+{"timestamp":"2026-03-30T04:40:02.6539582+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
+{"timestamp":"2026-03-30T04:40:02.6570176+02:00","action":"claim","task_id":112,"detail":"auditor"}
+{"timestamp":"2026-03-30T04:40:53.8640046+02:00","action":"move","task_id":109,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-30T04:40:54.2026766+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
+{"timestamp":"2026-03-30T04:40:54.205851+02:00","action":"release","task_id":109,"detail":"auditor"}
