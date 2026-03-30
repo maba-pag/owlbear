@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter
@@ -40,12 +41,33 @@ class ErrorJournal:
             beyond this limit, the oldest entries are discarded.
     """
 
-    def __init__(self, path: Path, max_entries: int) -> None:
+    def __init__(self, path: Path, *, max_entries: int = 5000) -> None:
         self._path = path
         self._max_entries = max_entries
 
-    def log(self, entry: ErrorEntry) -> None:
-        """Append *entry* to the journal, rotating if the limit is exceeded."""
+    def log(
+        self,
+        entry: ErrorEntry | None = None,
+        *,
+        category: str = "",
+        method: str = "",
+        message: str = "",
+        session_id: str = "",
+    ) -> None:
+        """Append an entry to the journal, rotating if the limit is exceeded.
+
+        Accepts either a pre-built *entry* object (legacy interface) or
+        keyword-only *category*, *method*, *message*, *session_id* arguments
+        with an auto-generated ISO-8601 timestamp.
+        """
+        if entry is None:
+            entry = ErrorEntry(
+                timestamp=datetime.now(tz=UTC).isoformat(),
+                category=category,
+                method=method,
+                message=message,
+                session_id=session_id,
+            )
         line = entry_adapter.dump_json(entry).decode() + "\n"
         with self._path.open("a", encoding="utf-8") as fh:
             fh.write(line)
