@@ -1181,3 +1181,42 @@ class TestFromAC_IngestTextErrorHandling:
         )
         result = await pipeline.ingest_text("text that makes chunker fail")
         assert result.status == "failed"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: guard-clause coverage
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases discovered during GREEN phase — guard-clause paths not triggered by TestFromAC_."""
+
+    def test_store_embeddings_empty_list_is_noop(self) -> None:
+        """store_embeddings with empty chunk_ids does nothing and does not call embedder."""
+        from owlbear_knowledge.document_store import DocumentStore
+        from owlbear_knowledge.graph_store import GraphStore
+
+        conn = _make_db()
+        embedder = MagicMock()
+        vector_store = MagicMock()
+        store = DocumentStore(conn, GraphStore(conn), vector_store, embedder)
+
+        store.store_embeddings([], [])
+
+        embedder.embed.assert_not_called()
+        vector_store.store_embedding.assert_not_called()
+
+    def test_store_entity_embeddings_empty_list_is_noop(self) -> None:
+        """store_entity_embeddings with empty entities does nothing and does not call embedder."""
+        from owlbear_knowledge.document_store import DocumentStore
+        from owlbear_knowledge.graph_store import GraphStore
+
+        conn = _make_db()
+        embedder = MagicMock()
+        vector_store = MagicMock()
+        store = DocumentStore(conn, GraphStore(conn), vector_store, embedder)
+
+        store.store_entity_embeddings([])
+
+        embedder.embed.assert_not_called()
+        vector_store.store_embedding.assert_not_called()
