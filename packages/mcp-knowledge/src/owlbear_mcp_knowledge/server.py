@@ -22,6 +22,7 @@ from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db as _schema_init_db
+from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -44,6 +45,7 @@ class AppContext:
     query_service: KnowledgeQueryService | None
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
+    source_store: KnowledgeSourceStore | None
 
 
 @asynccontextmanager
@@ -61,10 +63,12 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         extractor = EntityExtractor(model)
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
+        source_store = KnowledgeSourceStore(conn)
         yield AppContext(
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
+            source_store=source_store,
         )
     finally:
         conn.close()
@@ -80,10 +84,23 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
     qs = app_ctx.query_service
     if qs is None:
         return "Knowledge service not available."
-    result = await asyncio.to_thread(qs.query_for_context, query, top_k=limit)
-    if result is None:
-        return "No relevant knowledge found for your query."
-    return result
+    results = await qs.query(query, top_k=limit)
+    if not results:
+        return "No relevant knowledge found."
+    lines = [f"- {r.title} ({r.score:.2f}): {r.snippet[:200]}" for r in results]
+    return "\n".join(lines)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+async def list_sources(ctx: Context, scope: str | None = None) -> str:
+    """List all registered knowledge sources."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store
+    sources = await asyncio.to_thread(store.list_all, scope=scope)
+    if not sources:
+        return "No sources found."
+    lines = [f"- {s.name} ({s.source_type}): scope={s.scope}" for s in sources]
+    return "\n".join(lines)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
@@ -148,3 +165,20 @@ async def get_stats(ctx: Context) -> str:
         f"Knowledge base: {doc_count} documents, {entity_count} entities, "
         f"{edge_count} edges"
     )
+
+
+async def knowledge_stats(ctx: Context) -> str:
+    """Return knowledge base statistics (callable directly with ctx for testing)."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    gs = app_ctx.graph_store
+    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
+    return (
+        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
+        f"{edge_count} edges"
+    )
+
+
+@mcp.resource("knowledge://stats")
+async def knowledge_stats_resource() -> str:
+    """Register knowledge://stats URI for MCP resource discovery."""
+    return "Knowledge base: 0 documents, 0 entities, 0 edges"
