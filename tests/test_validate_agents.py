@@ -309,3 +309,173 @@ class TestFromAC_ValidateAgentsReadme:
         assert "auto-staging" in content_lower or "auto-stage" in content_lower, (
             "README.md does not mention the VS Code auto-staging trap"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BanTodosToolCheck  (#193)
+# ---------------------------------------------------------------------------
+class TestFromAC_BanTodosToolCheck:
+    """AC #193: validate_agents flags 'todos' on the tools: frontmatter line.
+
+    The todos/manage_todo_list tool does not function in subagent context and
+    must be banned from all agent definitions.  The check is scoped to the
+    tools: block only — mentions in argument-hint or body must not be flagged.
+    """
+
+    def test_todos_in_tools_line_produces_error(self, tmp_path: Path) -> None:
+        """#193-AC1: tools: [todos] returns at least one validation error."""
+        agent_file = tmp_path / "todos-in-tools.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: todos-agent\ntools: [todos]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected an error for 'todos' in tools: line"
+
+    def test_todos_error_mentions_disabled_for_subagents(self, tmp_path: Path) -> None:
+        """#193-AC1: error message for 'todos' in tools: states the tool is disabled for subagents."""
+        agent_file = tmp_path / "todos-in-tools.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: todos-agent\ntools: [todos]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected a non-empty error list"
+        combined = " ".join(errors).lower()
+        assert "disabled" in combined, (
+            f"Expected error message to mention 'disabled'; got: {errors}"
+        )
+
+    def test_todos_with_other_tools_still_errors(self, tmp_path: Path) -> None:
+        """#193-AC1: tools: [todos, read/readFile] still produces an error."""
+        agent_file = tmp_path / "todos-mixed.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: todos-mixed\ntools: [todos, read/readFile]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected an error even when todos is mixed with other tools"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BanManageTodoListCheck  (#193)
+# ---------------------------------------------------------------------------
+class TestFromAC_BanManageTodoListCheck:
+    """AC #193: validate_agents flags 'manage_todo_list' anywhere in the file.
+
+    Full-file scope — frontmatter, body, anywhere.  Same pattern as the
+    existing resolveMemoryFileUri check.
+    """
+
+    def test_manage_todo_list_in_tools_line_produces_error(self, tmp_path: Path) -> None:
+        """#193-AC2: manage_todo_list in tools: list returns at least one error."""
+        agent_file = tmp_path / "mtl-tools.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: mtl-agent\ntools: [manage_todo_list]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected an error for 'manage_todo_list' in tools:"
+
+    def test_manage_todo_list_in_body_produces_error(self, tmp_path: Path) -> None:
+        """#193-AC2 (AC-mandated scenario): manage_todo_list in markdown body returns error."""
+        agent_file = tmp_path / "mtl-body.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content(
+                "name: mtl-body\ntools: [read/readFile]",
+                body="Use manage_todo_list to track progress.\n",
+            ),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected an error for 'manage_todo_list' in file body"
+
+    def test_manage_todo_list_in_frontmatter_produces_error(self, tmp_path: Path) -> None:
+        """#193-AC2: manage_todo_list in frontmatter description field returns error."""
+        agent_file = tmp_path / "mtl-fm.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content(
+                "name: mtl-fm\n"
+                "description: 'Calls manage_todo_list internally'\n"
+                "tools: [read/readFile]",
+            ),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected an error for 'manage_todo_list' in frontmatter"
+
+    def test_manage_todo_list_error_mentions_disabled(self, tmp_path: Path) -> None:
+        """#193-AC2: error message for manage_todo_list states the tool is disabled."""
+        agent_file = tmp_path / "mtl-msg.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content(
+                "name: mtl-msg\ntools: [read/readFile]",
+                body="manage_todo_list is used here.\n",
+            ),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected a non-empty error list"
+        combined = " ".join(errors).lower()
+        assert "disabled" in combined, (
+            f"Expected error message to mention 'disabled'; got: {errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_DeprecatedTodoMessage  (#193)
+# ---------------------------------------------------------------------------
+class TestFromAC_DeprecatedTodoMessage:
+    """AC #193: bare 'todo' check message updated to reflect disabled status.
+
+    The existing bare-todo error message says 'should be todos' — this must be
+    updated to state that the tool itself is disabled for subagents.
+    """
+
+    def test_bare_todo_error_message_not_says_should_be_todos(self, tmp_path: Path) -> None:
+        """#193-AC3: bare 'todo' error message no longer says 'should be todos'."""
+        agent_file = tmp_path / "bare-todo.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: bare-todo\ntools: [todo]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected at least one error for bare 'todo' in tools:"
+        combined = " ".join(errors).lower()
+        assert "should be" not in combined, (
+            f"Error message still says 'should be' (old phrasing); got: {errors}"
+        )
+
+    def test_bare_todo_error_message_says_disabled_for_subagents(
+        self, tmp_path: Path
+    ) -> None:
+        """#193-AC3: bare 'todo' error message states the tool is disabled for subagents."""
+        agent_file = tmp_path / "bare-todo-msg.agent.md"
+        _write_agent(
+            agent_file,
+            _agent_content("name: bare-todo-msg\ntools: [todo]"),
+        )
+        errors = validate_agent(agent_file)
+        assert errors, "Expected a non-empty error list"
+        combined = " ".join(errors).lower()
+        assert "disabled" in combined, (
+            f"Expected error message to mention 'disabled'; got: {errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CopilotInstructionsCleanup  (#193)
+# ---------------------------------------------------------------------------
+_COPILOT_INSTRUCTIONS = _REPO_ROOT / ".github" / "copilot-instructions.md"
+
+
+class TestFromAC_CopilotInstructionsCleanup:
+    """AC #193: manage_todo_list process-habit line removed from copilot-instructions."""
+
+    def test_manage_todo_list_not_in_copilot_instructions(self) -> None:
+        """#193-AC4: .github/copilot-instructions.md does not reference manage_todo_list."""
+        content = _COPILOT_INSTRUCTIONS.read_text(encoding="utf-8")
+        assert "manage_todo_list" not in content, (
+            "Found 'manage_todo_list' in .github/copilot-instructions.md — "
+            "the process-habit line must be removed"
+        )

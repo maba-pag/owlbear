@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from acp.client.connection import ClientSideConnection
 from acp.exceptions import RequestError
+from acp.schema import TextContentBlock
 from owlbear_orchestrator.acp_client import AcpClient, AcpClientError, ErrorCategory
 
 _MODULE = "owlbear_orchestrator.acp_client"
@@ -305,35 +306,33 @@ class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
 class TestFromAC_SDKParameterForwarding:  # noqa: N801
     """AcpClient must accept and forward required SDK parameters to the underlying conn methods.
 
-    Reviewer Finding 2: existing mocks have no spec, so missing required args pass silently.
-    These tests assert that the ACTUAL arguments forwarded to conn.* match what was supplied.
+    Tests call through to actual mock connection methods — asyncio.wait_for is NOT patched,
+    so the AsyncMock conn methods receive real awaits with the forwarded arguments.
     """
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_initialize_forwards_protocol_version(self) -> None:
-        """initialize(protocol_version=n) must forward protocol_version to conn.initialize().
+        """initialize(protocol_version=1) must forward protocol_version to conn.initialize().
 
         SDK signature: initialize(self, protocol_version: int, ...) — required positional.
         Current acp_client.py calls conn.initialize() with no args — TypeError at runtime.
         """
         conn = _make_conn()
         client = AcpClient(conn)
-        with patch(f"{_MODULE}.asyncio.wait_for", new=AsyncMock(return_value=MagicMock())):
-            await client.initialize(protocol_version=1)
+        await client.initialize(protocol_version=1)
         conn.initialize.assert_called_once_with(protocol_version=1)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_new_session_forwards_cwd(self) -> None:
-        """new_session(cwd='/path') must forward cwd to conn.new_session().
+        """new_session(cwd='/tmp') must forward cwd to conn.new_session().
 
         SDK signature: new_session(self, cwd: str, ...) — required positional.
         Current acp_client.py calls conn.new_session() with no args — TypeError at runtime.
         """
         conn = _make_conn()
         client = AcpClient(conn)
-        with patch(f"{_MODULE}.asyncio.wait_for", new=AsyncMock(return_value=MagicMock())):
-            await client.new_session(cwd="/test/workspace")
-        conn.new_session.assert_called_with(cwd="/test/workspace")
+        await client.new_session(cwd="/work/cwd")
+        conn.new_session.assert_called_once_with(cwd="/work/cwd")
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_prompt_forwards_prompt_content(self) -> None:
@@ -350,3 +349,42 @@ class TestFromAC_SDKParameterForwarding:  # noqa: N801
         call_kwargs = conn.prompt.call_args[1]
         assert call_kwargs.get("prompt") == fake_content
         assert call_kwargs.get("session_id") == _SESSION_ID
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests: additional SDK parameter coverage
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered_SDKForwarding:  # noqa: N801
+    """Additional SDK parameter forwarding tests discovered by the builder during GREEN phase."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_prompt_forwards_content_blocks(self) -> None:
+        """prompt(prompt=[TextContentBlock(...)], session_id='s1') forwards both args to conn.prompt()."""
+        conn = _make_conn()
+        client = AcpClient(conn)
+        content = [TextContentBlock(text="hello", type="text")]
+        await client.prompt(prompt=content, session_id="s1")
+        call_kwargs = conn.prompt.call_args.kwargs
+        assert call_kwargs.get("prompt") == content
+        assert call_kwargs.get("session_id") == "s1"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_forwards_mcp_servers(self) -> None:
+        """new_session(cwd='/tmp', mcp_servers=[...]) must forward mcp_servers to conn.new_session()."""
+        conn = _make_conn()
+        client = AcpClient(conn)
+        mcp_servers = [{"name": "test-server", "command": "npx test"}]
+        await client.new_session(cwd="/work/cwd", mcp_servers=mcp_servers)
+        conn.new_session.assert_called_once_with(cwd="/work/cwd", mcp_servers=mcp_servers)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_prompt_forwards_optional_message_id(self) -> None:
+        """prompt(..., message_id='m1') must forward message_id to conn.prompt()."""
+        conn = _make_conn()
+        client = AcpClient(conn)
+        content = [TextContentBlock(text="hi", type="text")]
+        await client.prompt(prompt=content, session_id="s1", message_id="m1")
+        call_kwargs = conn.prompt.call_args.kwargs
+        assert call_kwargs.get("message_id") == "m1"
