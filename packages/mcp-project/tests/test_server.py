@@ -439,6 +439,16 @@ class TestFromAC_ReadmeResource:
         result = await project_readme(ctx)
         assert "Ünïcödé" in result
 
+    @pytest.mark.asyncio
+    async def test_project_readme_registered_as_mcp_resource_uri(self) -> None:
+        """project://readme must be registered as an MCP resource URI (not just a tool)."""
+        resources = await mcp.list_resources()
+        uris = [str(r.uri) for r in resources]
+        assert "project://readme" in uris, (
+            "project://readme not found in mcp.list_resources() — "
+            "must be registered with @mcp.resource('project://readme')"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_StructureResource
@@ -555,3 +565,13 @@ class TestFromAC_StructureResource:
         ctx = _make_mcp_ctx(_make_app_context(project_root=tmp_path))
         result = await project_structure(ctx)
         assert "toodeep.txt" not in result
+
+    @pytest.mark.asyncio
+    async def test_project_structure_registered_as_mcp_resource_uri(self) -> None:
+        """project://structure must be registered as an MCP resource URI (not just a tool)."""
+        resources = await mcp.list_resources()
+        uris = [str(r.uri) for r in resources]
+        assert "project://structure" in uris, (
+            "project://structure not found in mcp.list_resources() — "
+            "must be registered with @mcp.resource('project://structure')"
+        )
