@@ -76,17 +76,21 @@ async def read_url(url: str) -> IntakeResult:
     )
 
 
-def read_text(text: str) -> IntakeResult:
+def read_text(text: str, source: str = "inline") -> IntakeResult:
     """Synchronous intake for plain text strings.
 
     Args:
         text: Raw text content to wrap.
+        source: Source identifier. Defaults to 'inline'.
 
     Returns:
-        IntakeResult with source_type='text'.
+        IntakeResult with source_type='text' and fetched_at timestamp.
     """
     return IntakeResult(
         content=text,
-        source="text://inline",
-        metadata={"source_type": "text"},
+        source=source,
+        metadata={
+            "source_type": "text",
+            "fetched_at": datetime.now(tz=UTC).isoformat(),
+        },
     )

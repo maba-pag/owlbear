@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from owlbear_knowledge.chunker import Chunk
     from owlbear_knowledge.extractor import ExtractionResult
     from owlbear_knowledge.graph_store import GraphStore
+    from owlbear_knowledge.intake import IntakeResult
     from owlbear_knowledge.models import Document, Entity
+    from owlbear_knowledge.protocol import HybridEmbedding
     from owlbear_knowledge.status_store import DocumentStatus
 
 
@@ -44,18 +46,51 @@ class DocumentStore:
 
     # ── Documents ─────────────────────────────────────────────────────────
 
-    def insert_document(self, doc: Document) -> None:
-        """Persist *doc* to the documents table via GraphStore."""
-        self._graph.insert_document(doc)
+    def insert_document(
+        self,
+        document_id_or_doc: str | Document,
+        intake: IntakeResult | None = None,
+        *,
+        scope: str = "global",
+    ) -> None:
+        """Persist a document to the documents table.
+
+        Supports two calling conventions:
+
+        - New API: ``insert_document(document_id, intake, *, scope)``
+        - Legacy API: ``insert_document(doc)``  — accepts a Document object.
+        """
+        if isinstance(document_id_or_doc, str):
+            now = datetime.now(tz=UTC).isoformat()
+            self._conn.execute(
+                "INSERT OR REPLACE INTO documents"
+                " (id, title, content, metadata, created_at, scope)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    document_id_or_doc,
+                    intake.source if intake else "",
+                    intake.content if intake else "",
+                    json.dumps(dict(intake.metadata)) if intake else "{}",
+                    now,
+                    scope,
+                ),
+            )
+            self._conn.commit()
+        else:
+            # Legacy API: insert_document(doc: Document)
+            self._graph.insert_document(document_id_or_doc)
 
     # ── Chunks ────────────────────────────────────────────────────────────
 
-    def store_chunks(self, document_id: str, chunks: list[Chunk]) -> list[str]:
+    def store_chunks(
+        self, document_id: str, chunks: list[Chunk], *, scope: str = "global"
+    ) -> list[str]:
         """Insert chunk rows for *document_id* and return their IDs.
 
         Args:
             document_id: Parent document ID.
             chunks: List of :class:`~owlbear_knowledge.chunker.Chunk` objects.
+            scope: Scope tag for the chunk rows.  Defaults to ``'global'``.
 
         Returns:
             List of generated chunk IDs (same length as *chunks*).
@@ -71,8 +106,9 @@ class DocumentStore:
         for chunk in chunks:
             chunk_id = uuid4().hex
             self._conn.execute(
-                "INSERT INTO chunks (id, document_id, chunk_index, content, metadata, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO chunks"
+                " (id, document_id, chunk_index, content, metadata, created_at, scope)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     chunk_id,
                     document_id,
@@ -80,6 +116,7 @@ class DocumentStore:
                     chunk.text,
                     json.dumps(chunk.metadata),
                     now,
+                    scope,
                 ),
             )
             chunk_ids.append(chunk_id)
@@ -88,34 +125,73 @@ class DocumentStore:
 
     # ── Embeddings ────────────────────────────────────────────────────────
 
-    def store_embeddings(self, chunk_ids: list[str], chunk_texts: list[str]) -> None:
-        """Embed *chunk_texts* and store one embedding per chunk ID.
+    def store_embeddings(
+        self,
+        document_id_or_chunk_ids: str | list[str],
+        chunks_or_texts: list[Chunk] | list[str],
+        embeddings: list[HybridEmbedding] | None = None,
+        *,
+scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+    ) -> None:
+        """Store embeddings for document chunks.
 
-        Args:
-            chunk_ids: IDs matching *chunk_texts* positionally.
-            chunk_texts: Raw text for each chunk.
+        Supports two calling conventions:
+
+        - New API: ``store_embeddings(document_id, chunks, embeddings, *, scope)``
+          — stores pre-computed :class:`~owlbear_knowledge.protocol.HybridEmbedding` objects.
+        - Legacy API: ``store_embeddings(chunk_ids, chunk_texts)``
+          — embeds *chunk_texts* internally and stores one embedding per chunk ID.
         """
-        if not chunk_ids:
-            return
-        embeddings: list[list[float]] = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
-        for cid, emb in zip(chunk_ids, embeddings, strict=False):
-            self._vector.store_embedding(  # type: ignore[union-attr]
-                entity_or_doc_id=cid,
-                embedding=emb,
-                embedding_type="document",
-            )
+        if isinstance(document_id_or_chunk_ids, str):
+            # New API
+            if not embeddings:
+                return
+            for chunk, embedding in zip(chunks_or_texts, embeddings, strict=False):
+                self._vector.store_embedding(  # type: ignore[union-attr]
+                    entity_or_doc_id=f"{document_id_or_chunk_ids}_{chunk.index}",  # type: ignore[union-attr]
+                    embedding=embedding,
+                    embedding_type="document",
+                )
+        else:
+            # Legacy API: (chunk_ids, chunk_texts)
+            chunk_ids = document_id_or_chunk_ids
+            chunk_texts = chunks_or_texts
+            if not chunk_ids:
+                return
+            computed: list[list[float]] = self._embedder.embed(chunk_texts)  # type: ignore[union-attr]
+            for cid, emb in zip(chunk_ids, computed, strict=False):
+                self._vector.store_embedding(  # type: ignore[union-attr]
+                    entity_or_doc_id=cid,
+                    embedding=emb,
+                    embedding_type="document",
+                )
 
-    def store_entity_embeddings(self, entities: list[Entity]) -> None:
+    def store_entity_embeddings(
+        self,
+        entities_or_results: list[Entity] | list[ExtractionResult] | None = None,
+        *,
+        results: list[ExtractionResult] | None = None,
+        scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+    ) -> None:
         """Embed entity descriptions and store with embedding_type='entity'.
 
-        Args:
-            entities: Entities to embed.  Uses *description* if set, else *name*.
+        Supports two calling conventions:
+
+        - New API: ``store_entity_embeddings(results=[...], scope=...)``
+          — extracts entities from :class:`~owlbear_knowledge.extractor.ExtractionResult` list.
+        - Legacy API: ``store_entity_embeddings(entities)``
+          — accepts a list of :class:`~owlbear_knowledge.models.Entity` objects.
         """
+        if results is not None:
+            # New API: extract entities from ExtractionResult list
+            entities: list[Entity] = [e for r in results for e in (r.entities or [])]  # type: ignore[union-attr,misc]
+        else:
+            entities = entities_or_results or []  # type: ignore[assignment]
         if not entities:
             return
         texts = [e.description or e.name for e in entities]  # type: ignore[union-attr]
-        embeddings: list[list[float]] = self._embedder.embed(texts)  # type: ignore[union-attr]
-        for entity, emb in zip(entities, embeddings, strict=False):
+        computed: list[list[float]] = self._embedder.embed(texts)  # type: ignore[union-attr]
+        for entity, emb in zip(entities, computed, strict=False):
             self._vector.store_embedding(  # type: ignore[union-attr]
                 entity_or_doc_id=entity.id,  # type: ignore[union-attr]
                 embedding=emb,
@@ -124,11 +200,23 @@ class DocumentStore:
 
     # ── Entity extractions ────────────────────────────────────────────────
 
-    def store_extractions(self, results: list[ExtractionResult]) -> tuple[int, int]:
+    def store_extractions(
+        self,
+        results: list[ExtractionResult],
+        *,
+        scope: str = "global",  # noqa: ARG002 - reserved for entity provenance stamping
+        document_id: str = "",  # noqa: ARG002 - reserved for entity provenance stamping
+        chunk_ids: list[str] | None = None,  # noqa: ARG002 - reserved for entity provenance stamping
+        pipeline_name: str = "ingest",  # noqa: ARG002 - reserved for entity provenance stamping
+    ) -> tuple[int, int]:
         """Persist entities and edges from *results* and return counts.
 
         Args:
             results: List of :class:`~owlbear_knowledge.extractor.ExtractionResult`.
+            scope: Scope tag for provenance metadata.
+            document_id: Source document ID for provenance stamping.
+            chunk_ids: Source chunk IDs for provenance stamping.
+            pipeline_name: Pipeline name for provenance metadata.  Defaults to ``'ingest'``.
 
         Returns:
             Tuple of ``(entity_count, edge_count)``.

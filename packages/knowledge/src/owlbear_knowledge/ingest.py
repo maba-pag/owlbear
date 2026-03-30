@@ -124,17 +124,16 @@ class IngestPipeline:
             status="ok",
         )
 
-    async def ingest(self, intake: IntakeResult) -> IngestResult:
+    async def ingest(self, intake: IntakeResult, *, scope: str = "global") -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
 
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
+            scope: Scope tag applied to all stored objects.  Defaults to ``'global'``.
 
         Returns:
             IngestResult with status: ok | skipped | cancelled | failed.
         """
-        from owlbear_knowledge.models import Document  # noqa: PLC0415
-
         doc_id = uuid4().hex
         try:
             if self._cancel_signal is not None and self._cancel_signal.is_set():  # type: ignore[union-attr]
@@ -162,16 +161,9 @@ class IngestPipeline:
             chunks = await asyncio.to_thread(self._chunker.chunk, intake.content, metadata=_meta)
             chunk_count = len(chunks)
 
-            doc = Document(
-                id=doc_id,
-                title=str(_meta.get("title") or doc_id),
-                content=intake.content,
-                metadata=_meta,
-                scope=str(_meta.get("scope", "global")),
-            )
-            self._docs.insert_document(doc)  # type: ignore[union-attr]
+            self._docs.insert_document(doc_id, intake, scope=scope)  # type: ignore[union-attr]
 
-            chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks)  # type: ignore[union-attr]
+            chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
 
             embed_coro = asyncio.to_thread(
@@ -181,7 +173,13 @@ class IngestPipeline:
 
             all_results = await asyncio.gather(embed_coro, *extract_coros, return_exceptions=True)
             extraction_results = [r for r in all_results[1:] if not isinstance(r, BaseException)]
-            entity_count, edge_count = self._docs.store_extractions(extraction_results)  # type: ignore[union-attr]
+            entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
+                extraction_results,
+                scope=scope,
+                document_id=doc_id,
+                chunk_ids=chunk_ids,
+            )
+            self._docs.update_content_hash(doc_id, intake.content)  # type: ignore[union-attr]
 
         except Exception:
             logger.exception("ingest failed for doc_id=%s", doc_id)
