@@ -138,3 +138,16 @@ Config examples per source type:
 4. **Delta checking:** The pipeline deduplicates by content hash. Re-ingesting the same content is a no-op.
 
 For recurring sources, prefer `add_source` + `refresh_source` over repeated `ingest_document` calls.
+
+## Curation Workflow
+
+Full lifecycle for adding, updating, and removing knowledge sources. See [docs/research/kb-curation-process.md](../../docs/research/kb-curation-process.md) for the complete guide with worked examples and manifest format.
+
+Six-step process:
+
+1. **Register** — `add_source` to track where content comes from
+2. **Check delta** — `StatusStore.check_content_changed()` skips unchanged documents (SHA-256 hash)
+3. **Ingest** — `ingest_document` or `refresh_source` to chunk, extract, and store
+4. **Track status** — pipeline records ingestion state and content hash
+5. **Verify** — `query_knowledge` to spot-check search relevance
+6. **Remove stale** — delete source + cascade to clean up decommissioned content
