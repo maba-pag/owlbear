@@ -1,10 +1,12 @@
 ---
 id: 151
 title: 'Test: Vector store and embedding pipeline'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-29T19:13:47.4828015+02:00
-updated: 2026-03-29T20:35:25.0071639+02:00
+updated: 2026-03-30T17:07:49.3231571+02:00
+started: 2026-03-30T17:07:45.9103111+02:00
+completed: 2026-03-30T17:07:45.9103111+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -72,3 +74,52 @@ All 16 AC lines are precise, testable, and map 1:1 to actual method signatures i
 
 ### Changes Made
 - Approved task, moved to todo
+
+[[2026-03-30]] Mon 14:21
+## Test-Writer Notes
+- This task IS a test-writing task (tagged test). No separate TW pass needed — the task itself is TW output.
+- Architect approved atomicity: "Both modules live in same package, single test task appropriate."
+- Retroactively added by manual triage (2026-03-30) to unblock Gate 4.
+
+[[2026-03-30]] Mon 14:37
+## Builder Notes
+- Test-writing task: deliverable is the test files themselves (source code already exists from #15).
+- Files: packages/knowledge/tests/test_qdrant_vector_store.py, packages/knowledge/tests/test_embedding_provider.py
+- Tests: 23 passed (15 qdrant + 8 embedding provider tests)
+- Coverage: full AC coverage, all 16 AC lines exercised
+- Lint: ruff clean
+- Committed: 1dd9d42
+- No source code changes needed (implementation was from #15)
+
+[[2026-03-30]] Mon 15:12
+## Review Evidence
+
+### Test Results
+- pytest 23 passed (14 qdrant + 9 embedding), 0 failed
+- knowledge package full suite: 33 passed, 0 failed
+
+### Lint Results
+- ruff: All checks passed
+
+### Pass 1 -- CRITICAL
+
+#### AC Coverage (test-writing task -- test files are the deliverable)
+
+All 16 AC lines COVERED:
+- test_qdrant_vector_store.py: file exists, store_embedding dense+hybrid, get_embedding retrieve+None, search_similar top-k sorted+type-filter+scopes-filter, delete_embedding True+False, _ensure_collection lazy+idempotent, in-memory Qdrant verified, ImportError match='qdrant-client'
+- test_embedding_provider.py: file exists, embed() list[list[float]]+empty=[], embed_hybrid() HybridEmbedding dense+sparse+colbert, lazy loading None+loaded, unload() _model None+timer None, ImportError match='FlagEmbedding', FlagEmbedding fully mocked, all imports from owlbear_knowledge
+
+#### Security Review
+No issues: no secrets, no subprocess, no path traversal, no deserialization, no new production deps
+
+#### Test Quality
+- Assertion specificity: ADEQUATE (strict is True/False for delete; match= for ImportError; exact ID match in search; dimension+type checks for retrieval)
+- Negative paths: STRONG (missing ID, ImportError both modules, empty input embed/embed_hybrid)
+- Mutation reasoning: ADEQUATE (sorted scores, type/scope filters, upsert-overwrites, lazy-init, timer-cancelled all change-sensitive)
+- Test independence: STRONG (fresh fixture per test, no shared mutable state)
+- Test names: STRONG
+
+#### Data Safety
+No issues -- mocks and in-memory storage only
+
+### Verdict: PASS -- confidence .93
