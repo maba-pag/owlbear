@@ -65,7 +65,6 @@
   },
   "chat.tools.terminal.autoReplyToPrompts": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
-  "chat.tools.terminal.preventShellHistory": false,
   "chat.tools.urls.autoApprove": {
     "*": true
   },
@@ -74,6 +73,8 @@
   "editor.defaultFormatter": "charliermarsh.ruff",
   "editor.formatOnPaste": false,
   "editor.formatOnSave": false,
+  "editor.links": false,
+  "editor.maxTokenizationLineLength": 2500,
   "extensions.experimental.affinity": {
     "charliermarsh.ruff": 3,
     "ms-python.vscode-pylance": 2
