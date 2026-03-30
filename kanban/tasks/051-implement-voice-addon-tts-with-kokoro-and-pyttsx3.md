@@ -1,10 +1,12 @@
 ---
 id: 51
 title: Implement voice addon TTS with Kokoro and pyttsx3 fallback
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-26T18:57:30.5848405+01:00
-updated: 2026-03-26T21:19:12.0301052+01:00
+updated: 2026-03-30T06:33:16.492254+02:00
+started: 2026-03-30T06:33:11.8339457+02:00
+completed: 2026-03-30T06:33:11.8339457+02:00
 tags:
     - phase-3
     - scope:voice
@@ -89,3 +91,51 @@ Created #78: Test voice addon TTS backends and factory (RED phase)
 Added: #52 (owlbear-voice workspace package scaffold)
 Added: #78 (test task, TDD RED phase)
 Verified: #49 (stdio protocol) is a sibling, not a dependency for this task
+
+[[2026-03-29]] Sun 15:38
+## Architecture Review (Pass 2)
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| TTSBackend protocol speak()+close() | Precise, file path specified, methods typed | No change |
+| KokoroTTSBackend lazy KPipeline + sounddevice | Specific API calls, sample rate, chunk iteration | No change |
+| Pyttsx3TTSBackend lazy init + say/runAndWait | Mirrors v1 pattern, file path specified | No change |
+| Import-time _kokoro_available flag | Detection mechanism clear, no per-call overhead | No change |
+| create_tts_backend factory in __init__.py | Params typed, return logic clear, logging required | No change |
+| Speed mapping 1.0 normal | Concrete formula for both backends | No change |
+| Voice mapping string passthrough/substring | Clear per-backend behavior | No change |
+| Kokoro init failure fallback | Error types listed, factory never-raise contract | No change |
+| Unit tests with mocked deps | Specific mocks and scenarios enumerated | No change |
+
+### Architecture Notes
+- All 9 AC lines from prior REFINE pass are precise and mechanically verifiable.
+- Protocol pattern: typing.Protocol matches owlbear_knowledge/protocol.py and embeddings.py patterns.
+- close() method not in v1 but appropriate for v2 resource cleanup (Kokoro torch memory).
+- Module path owlbear_voice/tts/ is a leaf subpackage with no upward deps. Verified packages/voice/src/owlbear_voice/ currently has only stubs.
+- Import-time fallback validated against v1 pattern (v1/src/owlbear/voice/tts.py uses identical try/import/except).
+- Single domain: scope:voice (TTS subsystem only). No cross-domain concerns.
+- No new security surface: audio playback is local, no user input parsing (stdin belongs to #49).
+- Factory never-raise contract is appropriate for a non-critical addon subsystem.
+
+### Dependencies
+- Verified: #52 (owlbear-voice workspace package) archived
+- Verified: #78 (TDD RED test task) exists at backlog, depends on #52 (satisfied)
+- TDD sequencing: #51 depends_on #78 ensures RED before GREEN
+
+### Changes Made
+- Approved task, moved to todo
+
+[[2026-03-29]] Sun 20:26
+## Builder Notes
+- Files changed: packages/voice/src/owlbear_voice/tts/__init__.py, kokoro_backend.py, protocol.py, pyttsx3_backend.py
+- Tests: 40 passed (all TestFromAC_* green), 0 failures
+- Coverage: tts/__init__.py 100%, kokoro_backend.py 93%, protocol.py 100%, pyttsx3_backend.py 97%
+- Lint: ruff check -- all checks passed
+- Evidence: uv run pytest tests/test_voice_tts.py -- 40 passed in 53.95s
+- Fixes applied: Rewrote kokoro_backend.py to use module-level try/except import of KPipeline (ruff PLC0415 compliance); used object type instead of Any (ruff ANN401 compliance)
+
+[[2026-03-30]] Mon 05:24
+## Review Evidence
+See docs/scratch/51-reviewer.md for full evidence.
