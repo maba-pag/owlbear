@@ -90,6 +90,7 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
   if ($_.status -in @('todo','in-progress','review','docs','done') -and
       $_.body -notmatch '(?m)^\s*(-\s|\d+\.\s)') {$w+='AC:MISSING'}
   if ($_.body -match 'Needs decomposition:') {$w+='DECOMP'}
+  if ($_.body -match '## Architecture Review') {$w+='ARCH:REVIEWED'}
   $t=if($_.tags){"($($_.tags -join ','))"}else{''}
   $x=if($w){" [!$($w -join ',')]"}else{''}
   "#$($_.id) $($_.status)/$($_.priority) $($_.title) $t$x"
@@ -117,10 +118,11 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
   **= Gate 5.** Not flagged for ideation/backlog — those tasks don't need AC yet
   (the researcher/architect adds it).
 - Tags inline for scope/category context.
+- `ARCH:REVIEWED` flag: task body contains `## Architecture Review` section. **= Gate 3 exemption.** Tasks with this marker have already had atomicity evaluated by the architect.
 
 **What remains for LLM reasoning (no terminal commands needed):**
 
-- Gate 3 (atomicity): scan titles for "and" joining unrelated concerns.
+- Gate 3 (atomicity): scan titles for "and" joining unrelated concerns — skip for tasks marked `[!ARCH:REVIEWED]` (architect already evaluated atomicity).
 - DECOMP routing: tasks flagged `[!DECOMP]` dispatch to `kanban-planner` regardless of status.
 - 20-task dispatch cap: take top entries from the already-sorted list.
 - Stale-task handling: cross-reference orchestrator failure context with output.
@@ -216,6 +218,8 @@ archived). No manual dependency checking needed.
 Title describes a single responsibility. Red flag: the word "and" joining unrelated
 concerns (e.g., "Implement parser and update config"). Related concerns joined by "and"
 are fine (e.g., "Read board and build DAG" — both are planning sub-steps).
+**Exemption:** Tasks marked `[!ARCH:REVIEWED]` in the Board Scan output are exempt from
+this heuristic — the architect already evaluated atomicity during backlog review.
 
 **Gate 4 — TDD gate (safety net):**
 Check the Board Scan output for `[!TW:MISSING]` marker. This appears on `in-progress`
@@ -237,6 +241,36 @@ The `--unclaimed` flag excludes tasks with active claims. It respects `claim_tim
 from `kanban/config.yml` — claims older than the timeout are treated as expired and DO
 appear in the scan. Never manually inspect `claimed_by`/`claimed_at` fields.
 
+### Gate failure remediation
+
+For each task excluded by **Gate 3** (atomicity) or **Gate 4** (TDD), record a
+`gate_warnings` entry. Gate 5 is excluded from this collection — its failures are
+content gaps (missing AC), not process violations, and populating warnings for every
+incomplete task would produce false-positive noise.
+
+**Format:**
+
+```json
+{"id": 102, "gate": "Gate 3", "reason": "Title contains 'and' joining unrelated concerns: implement parser and update config"}
+```
+
+**Fields:**
+
+- `id` — task ID (int)
+- `gate` — one of `"Gate 3"` or `"Gate 4"` (string)
+- `reason` — short description of why the gate failed (string, ≤ 120 chars)
+
+`gate_warnings` is always emitted — use an empty array when no Gate 3/4 exclusions
+occurred. This keeps the planner stateless: the orchestrator receives a deterministic
+signal every cycle without needing to diff board state.
+
+**Rejected alternative — auto-move back:**
+Auto-moving failed tasks to an earlier status was considered but rejected. It creates
+feedback loops (tasks could oscillate between statuses), violates the planner's
+read-only constraint (the planner never mutates board state), and adds remediation
+complexity outside the planner's responsibility. Gate failures are surfaced as warnings
+only; human or orchestrator decides how to act on them.
+
 ### Filter and prioritize
 
 From the gate-passing tasks, build the dispatch list:
@@ -256,14 +290,20 @@ into concurrent dispatches — the planner does not need to know about batching 
 
 Produce JSON as the final response. No prose preamble, no narrative, no markdown tables.
 
-Format:
+Format (with gate failures):
 
 ```json
-{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}]}
+{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"gate_warnings":[{"id":102,"gate":"Gate 3","reason":"Title has unrelated concerns joined by 'and'"}]}
 ```
 
-<good example why="Single-line JSON object with `dispatch` field. Agent names from mapping.">
-{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}]}
+Format (no gate failures):
+
+```json
+{"dispatch":[{"id":101,"agent":"architect"}],"gate_warnings":[]}
+```
+
+<good example why="Single-line JSON object with `dispatch` and `gate_warnings` fields. Agent names from mapping.">
+{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"gate_warnings":[]}
 </good example>
 <bad example why="Includes prose and markdown, not a single-line JSON object.">
 ```json
@@ -278,13 +318,16 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
   - `retry_hint` (optional string, ≤120 chars) — present only on first-stale tasks
     retried with guided context. Summarizes the prior failure extracted from the task
     body's last agent note section. Omit for normal dispatches.
+- `gate_warnings` — Always-present array of `{id, gate, reason}` objects for tasks
+  excluded by Gate 3 or Gate 4. Empty array when no failures. Each object: `id` (int),
+  `gate` (one of `"Gate 3"` or `"Gate 4"`), `reason` (string, ≤ 120 chars).
 
 **Rules:**
 
 - Output MUST be a single JSON object on one line (no pretty-printing)
-- The only field is `dispatch`
-- Empty array is fine: `{"dispatch":[]}`
-- Gate names do not appear in the output (gate failures = task not in dispatch, not mentioned at all)
+- Fields: `dispatch` and `gate_warnings` (both required)
+- Empty dispatch array is fine: `{"dispatch":[],"gate_warnings":[]}`
+- Gate names do not appear in `dispatch` entries; gate failures surface only via `gate_warnings`
 - If more than 20 tasks pass gates, include only the top 20 by priority
 
 ---
@@ -304,7 +347,8 @@ Before outputting:
 - [ ] Agent names match the dispatch mapping
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
 - [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks excluded
-- [ ] Output is a single-line JSON object with `dispatch` field only
+- [ ] Output is a single-line JSON object with `dispatch` and `gate_warnings` fields
+- [ ] `gate_warnings` populated for every Gate 3/4 exclusion; empty array if none
 - [ ] No prose preamble or narrative in the output
 - [ ] No `kanban-md move` commands were run
 - [ ] No subagents were dispatched
