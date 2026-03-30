@@ -112,7 +112,7 @@ Target >= 90% on touched modules.
 - `--cov=packages/mcp-kanban/src/` — reports 0% (src-layout; use bare `--cov` instead)
 - `coverage run --source=...` — incompatible with pytest-cov config
 
-Only bare `--cov` works. It picks up `[tool.coverage.run] source_pkgs` from `pyproject.toml`, which lists all 6 installed package names: `owlbear`, `owlbear_orchestrator`, `owlbear_knowledge`, `owlbear_mcp_kanban`, `owlbear_mcp_knowledge`, `owlbear_mcp_project`. Coverage is measured across all of them automatically.
+Only bare `--cov` works. It picks up `[tool.coverage.run] source_pkgs` from `pyproject.toml`, which lists all 7 installed package names: `owlbear`, `owlbear_orchestrator`, `owlbear_knowledge`, `owlbear_mcp_kanban`, `owlbear_mcp_knowledge`, `owlbear_mcp_project`, `owlbear_voice`. Coverage is measured across all of them automatically.
 
 ## Known hang: WMI + logfire pydantic plugin on Windows
 
