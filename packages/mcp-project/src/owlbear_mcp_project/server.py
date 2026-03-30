@@ -117,6 +117,15 @@ async def project_readme(ctx: Context) -> str:
     return readme.read_text(encoding="utf-8")
 
 
+@mcp.resource("project://readme")
+async def project_readme_resource() -> str:
+    """MCP resource: project://readme — returns README.md content or fallback."""
+    readme = Path.cwd() / "README.md"
+    if not readme.exists():
+        return "No README.md found in project root."
+    return readme.read_text(encoding="utf-8")
+
+
 def _build_tree(root: Path, max_depth: int = 3) -> str:
     """Return an indented directory tree string, excluding common noise directories."""
     lines: list[str] = []
@@ -146,3 +155,9 @@ async def project_structure(ctx: Context) -> str:
     """Return an indented directory tree (max depth 3) of the project root."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     return _build_tree(app_ctx.project_root)
+
+
+@mcp.resource("project://structure")
+async def project_structure_resource() -> str:
+    """MCP resource: project://structure — indented tree of project root."""
+    return _build_tree(Path.cwd())
