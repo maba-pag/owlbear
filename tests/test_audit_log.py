@@ -589,3 +589,39 @@ class TestFromAC_GitIgnore:  # noqa: N801
         assert gitignore.exists(), ".gitignore not found at project root"
         content = gitignore.read_text(encoding="utf-8")
         assert "data/audit" in content, "data/audit/ missing from .gitignore"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases discovered during GREEN phase — covers log.py lines 48 and 55."""
+
+    def test_query_nonexistent_dir_returns_empty_list(self, tmp_path: Path) -> None:
+        """query() returns [] when audit_dir was never created (line 48 coverage)."""
+        audit_dir = tmp_path / "never_created"
+        log = AuditLog(audit_dir)
+        assert log.query() == []
+
+    def test_query_skips_empty_lines_in_jsonl(self, tmp_path: Path) -> None:
+        """query() ignores blank lines inside a JSONL file (line 55 coverage)."""
+        audit_dir = tmp_path / "audit"
+        audit_dir.mkdir()
+        session_file = audit_dir / "sess-blank.jsonl"
+        event = DispatchEvent(
+            timestamp="2026-03-29T10:00:00Z",
+            task_id=1,
+            agent="builder",
+            prompt_summary="test",
+            session_id="sess-blank",
+        )
+        session_file.write_text(
+            "\n" + event.model_dump_json() + "\n\n",
+            encoding="utf-8",
+        )
+        log = AuditLog(audit_dir)
+        events = log.query()
+        assert len(events) == 1
+        assert isinstance(events[0], DispatchEvent)
