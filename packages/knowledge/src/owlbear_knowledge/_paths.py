@@ -29,7 +29,7 @@ def sandbox_path(root: Path, path: Path | str) -> Path:
     resolved = (root / path).resolve()
     root_resolved = root.resolve()
 
-    if not str(resolved).startswith(str(root_resolved)):
+    if not resolved.is_relative_to(root_resolved):
         msg = f"Path {path!r} resolves outside root {root!r}: {resolved}"
         raise PermissionError(msg)
 
