@@ -10,7 +10,7 @@ All tests FAIL in RED phase — ImportError expected until builder implements #1
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 # ---------------------------------------------------------------------------
 # Import targets — will raise ImportError until builder implements #145 (RED)
@@ -34,7 +34,7 @@ from owlbear.planner.selector import (  # type: ignore[import]
 # Factory helper
 # ---------------------------------------------------------------------------
 
-_EPOCH = datetime(2026, 1, 1, tzinfo=datetime.UTC).isoformat()
+_EPOCH = datetime(2026, 1, 1, tzinfo=UTC).isoformat()
 
 
 def _make_task(  # noqa: PLR0913
