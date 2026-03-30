@@ -28,7 +28,7 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _SCRIPT = _PROJECT_ROOT / "scripts" / "validate_skills.py"
-_SKILLS_DIR = _PROJECT_ROOT / ".github" / "skills"
+_SKILLS_DIR = _PROJECT_ROOT / "skills"
 
 
 class TestFromAC_ScriptAutoDiscovery:
