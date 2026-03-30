@@ -5,9 +5,53 @@ description: Query, ingest, and manage the knowledge base (graph + vector store)
 
 # knowledge-ops
 
-> **VS Code agent note:** This skill documents OwlBear PydanticAI runtime tools
-> (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset) not available in
-> VS Code Copilot agent mode. Use VS Code search tools for codebase queries instead.
+> **VS Code agent note:** This skill documents both the **owlbear-knowledge MCP server tools**
+> (available in VS Code Copilot agent mode via `.vscode/mcp.json`) and the OwlBear PydanticAI
+> runtime tools (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset).
+
+## MCP Server Tools (owlbear-knowledge)
+
+The `owlbear-knowledge` MCP server exposes the knowledge base via stdio transport.
+Register it in `.vscode/mcp.json` to use in Copilot agent mode.
+
+### MCP Tool Reference
+
+**search_knowledge** — Search the knowledge base for relevant context.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `query` | str | required | Natural-language search query |
+| `limit` | int | 5 | Max results to return |
+
+Returns: bullet list `- {title} ({score:.2f}): {snippet[:200]}` or `"No relevant knowledge found."`
+
+**ingest_document** — Ingest a text document into the knowledge base.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `text` | str | required | Text content to ingest |
+| `metadata` | dict | None | Optional metadata dict |
+
+**list_entities** — List entities in the knowledge graph.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `entity_type` | str | None | Filter by entity type |
+| `offset` | int | 0 | Pagination offset |
+| `limit` | int | 50 | Max results |
+
+**list_sources** — List all registered knowledge sources.
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `scope` | str | None | Filter by scope; omit for all |
+
+Returns: bullet list `- {name} ({source_type}): scope={scope}` or `"No sources found."`
+
+**get_stats** — Get knowledge base summary statistics. No parameters.
+Returns: `"Knowledge base: {N} documents, {N} entities, {N} edges"`
+
+**Resource:** `knowledge://stats` — same format as `get_stats`, readable as MCP resource.
 
 > **Agent status:** Utility skill — not dispatched by the orchestrator pipeline.
 > Available to any agent or VS Code chat participant that needs knowledge-base
