@@ -47,27 +47,23 @@ class ErrorJournal:
 
     def log(
         self,
-        entry: ErrorEntry | None = None,
         *,
-        category: str = "",
-        method: str = "",
-        message: str = "",
-        session_id: str = "",
+        category: str,
+        method: str,
+        message: str,
+        session_id: str,
     ) -> None:
         """Append an entry to the journal, rotating if the limit is exceeded.
 
-        Accepts either a pre-built *entry* object (legacy interface) or
-        keyword-only *category*, *method*, *message*, *session_id* arguments
-        with an auto-generated ISO-8601 timestamp.
+        All arguments are keyword-only.  The ISO-8601 timestamp is auto-generated.
         """
-        if entry is None:
-            entry = ErrorEntry(
-                timestamp=datetime.now(tz=UTC).isoformat(),
-                category=category,
-                method=method,
-                message=message,
-                session_id=session_id,
-            )
+        entry = ErrorEntry(
+            timestamp=datetime.now(tz=UTC).isoformat(),
+            category=category,
+            method=method,
+            message=message,
+            session_id=session_id,
+        )
         line = entry_adapter.dump_json(entry).decode() + "\n"
         with self._path.open("a", encoding="utf-8") as fh:
             fh.write(line)
