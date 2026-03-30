@@ -327,6 +327,69 @@ class TestFromAC_Tools:
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "--release" not in args_used
 
+    # ------------------------------------------------------------------ list_tasks search/sort/unclaimed (retry: LAX coverage from cycle 1+2)
+    @pytest.mark.asyncio
+    async def test_list_tasks_passes_search_flag(self) -> None:
+        """list_tasks passes --search and value to _run_kanban when search is non-empty."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, search="keyword")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--search" in args_used
+        assert "keyword" in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_omits_search_flag_when_empty(self) -> None:
+        """list_tasks does NOT pass --search when search is empty string (default)."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, search="")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--search" not in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_passes_sort_flag(self) -> None:
+        """list_tasks passes --sort and value to _run_kanban when sort is non-empty."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, sort="priority")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--sort" in args_used
+        assert "priority" in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_omits_sort_flag_when_empty(self) -> None:
+        """list_tasks does NOT pass --sort when sort is empty string (default)."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, sort="")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--sort" not in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_passes_unclaimed_flag_when_true(self) -> None:
+        """list_tasks passes --unclaimed to _run_kanban when unclaimed=True."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, unclaimed=True)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--unclaimed" in args_used
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_omits_unclaimed_flag_when_false(self) -> None:
+        """list_tasks does NOT pass --unclaimed when unclaimed=False (default)."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run() as mock_run:
+            await list_tasks(mcp_ctx, unclaimed=False)
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--unclaimed" not in args_used
+
     # ------------------------------------------------------------------ list_tasks block_filter branches (retry: LAX coverage)
     @pytest.mark.asyncio
     async def test_list_tasks_not_blocked_filter(self) -> None:
