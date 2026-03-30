@@ -4,7 +4,7 @@ title: Implement analysis module with pattern detectors
 status: archived
 priority: needed
 created: 2026-03-29T19:51:21.7412918+02:00
-updated: 2026-03-31T00:22:27.1367826+02:00
+updated: 2026-03-31T00:28:45.1486838+02:00
 started: 2026-03-31T00:22:20.5752253+02:00
 completed: 2026-03-31T00:22:20.5752253+02:00
 tags:
@@ -118,3 +118,39 @@ Files Updated: None. Scratch Files Cleaned: None (no docs/scratch/179-* files fo
 ## Audit
 See docs/scratch/179-audit.tmp for full evidence.
 Confidence: .98 - Action: archive
+
+[[2026-03-31]] Tue 00:23
+## Commits
+3ac05eb chore: archive task #179 (kanban board file)
+
+[[2026-03-31]] Tue 00:28
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AnalysisProposal frozen Pydantic model, 6 fields | models.py: ConfigDict(frozen=True), 6 fields (target_agent, category, pattern, rationale, evidence, suggested_action) | PASS |
+| analyze(audit_dir, window, now) returns list[AnalysisProposal] | analyze.py L26-30: correct signature, reads *.jsonl, uses audit_adapter | PASS |
+| High error rate detector (>=40%, >=3) | detectors.py L23-54: pattern=high_error_rate, category=reliability, correct thresholds | PASS |
+| Slow agent detector (>2x avg, >=3) | detectors.py L57-89: pattern=slow_agent, category=performance, correct thresholds | PASS |
+| Repeated failure detector (>=2) | detectors.py L92-116: pattern=repeated_failure, category=reliability | PASS |
+| Stale dispatch (no completion >1h) | detectors.py L119-150: pattern=stale_dispatch, category=stability. Matches (task_id, agent) -- session_id omitted because CompletionEvent lacks that field | PASS |
+| format_json Pydantic serialization | formatters.py L14-16: model_dump() + json.dumps | PASS |
+| format_markdown tables | formatters.py L19-30: markdown table with Pattern/Category/Agent/Rationale | PASS |
+| No side effects | All functions are pure, no file writes, no mutation | PASS |
+| Threshold constants in detectors.py | ERROR_RATE_THRESHOLD=0.4, MIN_DISPATCHES=3, SLOW_FACTOR=2, STALE_THRESHOLD=1h | PASS |
+| Empty audit_dir returns [] | analyze() returns [] when no .jsonl files found; each detector returns [] on empty input | PASS |
+
+### Test Results
+- pytest (task-scoped): 56 passed in 0.32s (test_analysis_package.py)
+- pytest (full suite): 1849 passed, 198 failed, 1 error. Failures are pre-existing from other tasks. 22 in test_analysis.py are from task #222 wrong-interface tests (expected per test-writer notes).
+- ruff: clean on analysis/ and test_analysis_package.py
+
+### Architect Quality
+- AC specificity: 4/5 -- precise thresholds, types, pattern IDs. Minor gap: session_id matching specified but CompletionEvent has no session_id field.
+- Edge case coverage: good. Empty input, threshold boundaries all specified.
+- Design direction: namespace placement, frozen Pydantic models, pure functions all led to clean implementation.
+
+### Deduction breakdown
+- Missing reviewer evidence section: -.02
+### Confidence: .98
+### Action: archive
