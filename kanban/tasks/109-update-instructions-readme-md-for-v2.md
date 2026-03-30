@@ -4,7 +4,7 @@ title: Update instructions/README.md for v2
 status: archived
 priority: nice-to-have
 created: 2026-03-28T21:46:19.0352268+01:00
-updated: 2026-03-30T04:40:54.2021352+02:00
+updated: 2026-03-30T04:41:38.0865203+02:00
 started: 2026-03-30T04:40:53.8634767+02:00
 completed: 2026-03-30T04:40:53.8634767+02:00
 tags:
@@ -79,3 +79,9 @@ Security: No code changed. Confidence: .96
 
 ### Scratch Files Cleaned
 - None
+
+[[2026-03-30]] Mon 04:41
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6cde020 | chore | kanban task+activity | #109 |

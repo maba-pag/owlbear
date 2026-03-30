@@ -1,10 +1,10 @@
 ---
 id: 55
 title: Add ingest and graph tools to mcp-knowledge server
-status: todo
+status: review
 priority: important
 created: 2026-03-26T19:12:49.2923419+01:00
-updated: 2026-03-26T21:26:09.2106254+01:00
+updated: 2026-03-30T10:16:17.1336047+02:00
 tags:
     - phase-2
     - scope:mcp
@@ -87,3 +87,109 @@ Module layering: mcp-knowledge (MCP layer) depends on owlbear-knowledge (memory 
 - Added: #77 (Test: Add ingest and graph tools) TDD RED phase runs first
 - Transitive: #77 depends on #54 depends on #40 (scaffold)
 - Verified: v1 IngestPipeline, GraphStore, EntityExtractor interfaces stable
+
+[[2026-03-29]] Sun 15:17
+## Test-Writer Notes
+- Test files:
+  - packages/mcp-knowledge/tests/test_ingest_graph_tools.py (MCP tool contract tests)
+  - packages/knowledge/tests/test_graph_store_counts.py (GraphStore.get_counts unit tests)
+- Classes:
+  - TestFromAC_IngestDocument (AC1-AC2, 9 tests)
+  - TestFromAC_ListEntities (AC3-AC5, 11 tests)
+  - TestFromAC_GetStats (AC6, 5 tests)
+  - TestFromAC_AppContextExtension (AC8, 4 tests)
+  - TestFromAC_ToolDescriptions (AC9, 3 tests)
+  - TestFromAC_GraphStoreGetCounts (AC7, 9 tests)
+- Tests per category: happy 15, edge 7, error 7, boundary 4
+- Total: 41 tests, all FAIL
+  - test_ingest_graph_tools.py: 32 tests, collection ERROR (ImportError - server.py not yet created)
+  - test_graph_store_counts.py: 9 tests, AttributeError (get_counts not yet on GraphStore)
+- ruff: clean (both files)
+- AC coverage:
+  - AC1 ingest_document format and delegation: 7 tests in TestFromAC_IngestDocument
+  - AC2 ingest_document error handling: 3 tests in TestFromAC_IngestDocument
+  - AC3 list_entities filtering/pagination/to_thread: 9 tests in TestFromAC_ListEntities
+  - AC4 list_entities EntityType validation: 2 tests in TestFromAC_ListEntities
+  - AC5 list_entities empty result: 2 tests in TestFromAC_ListEntities
+  - AC6 get_stats format and to_thread: 5 tests in TestFromAC_GetStats
+  - AC7 GraphStore.get_counts tuple return: 9 tests in TestFromAC_GraphStoreGetCounts
+  - AC8 AppContext ingest_pipeline extension: 4 tests in TestFromAC_AppContextExtension
+  - AC9 verb-first tool descriptions: 3 tests in TestFromAC_ToolDescriptions
+  - AC10 (all prior tests pass GREEN): builder gate - no RED tests written
+
+[[2026-03-29]] Sun 15:18
+## Test-Writer Notes
+- Test files:
+  - packages/mcp-knowledge/tests/test_ingest_graph_tools.py (MCP tool contract tests)
+  - packages/knowledge/tests/test_graph_store_counts.py (GraphStore.get_counts unit tests)
+- Classes:
+  - TestFromAC_IngestDocument (AC1-AC2, 9 tests)
+  - TestFromAC_ListEntities (AC3-AC5, 11 tests)
+  - TestFromAC_GetStats (AC6, 5 tests)
+  - TestFromAC_AppContextExtension (AC8, 4 tests)
+  - TestFromAC_ToolDescriptions (AC9, 3 tests)
+  - TestFromAC_GraphStoreGetCounts (AC7, 9 tests)
+- Tests per category: happy 15, edge 7, error 7, boundary 4
+- Total: 41 tests, all FAIL
+  - test_ingest_graph_tools.py: 32 tests, collection ERROR (ImportError - server.py not yet created)
+  - test_graph_store_counts.py: 9 tests, AttributeError (get_counts not yet on GraphStore)
+- ruff: clean (both files)
+- AC coverage:
+  - AC1 ingest_document format and delegation: 7 tests in TestFromAC_IngestDocument
+  - AC2 ingest_document error handling: 3 tests in TestFromAC_IngestDocument
+  - AC3 list_entities filtering/pagination/to_thread: 9 tests in TestFromAC_ListEntities
+  - AC4 list_entities EntityType validation: 2 tests in TestFromAC_ListEntities
+  - AC5 list_entities empty result: 2 tests in TestFromAC_ListEntities
+  - AC6 get_stats format and to_thread: 5 tests in TestFromAC_GetStats
+  - AC7 GraphStore.get_counts tuple return: 9 tests in TestFromAC_GraphStoreGetCounts
+  - AC8 AppContext ingest_pipeline extension: 4 tests in TestFromAC_AppContextExtension
+  - AC9 verb-first tool descriptions: 3 tests in TestFromAC_ToolDescriptions
+  - AC10 (all prior tests pass GREEN): builder gate - no RED tests written
+
+[[2026-03-29]] Sun 19:44
+## Builder Notes
+- Files changed: packages/knowledge/src/owlbear_knowledge/graph_store.py (get_counts added), packages/knowledge/src/owlbear_knowledge/ingest.py (new: IngestResult, DocumentStore, IngestPipeline), packages/mcp-knowledge/src/owlbear_mcp_knowledge/server.py (new), packages/mcp-knowledge/src/owlbear_mcp_knowledge/__main__.py (new)
+- Tests: 44 TestFromAC tests passed; ruff clean
+- Coverage: mocks-only test strategy limits coverage on ingest.py (53%) and server.py (88%)
+
+[[2026-03-30]] Mon 03:03
+## Review Evidence
+See docs/scratch/55-reviewer.md for full evidence.
+
+FAIL: readOnlyHint omitted from ingest_document (AC1), list_entities (AC3), get_stats (AC6). No tests cover readOnlyHint for any tool. MCP 1.26.0 ToolAnnotations.readOnlyHint is available. Confidence: .82
+
+[[2026-03-30]] Mon 03:28
+## Test-Writer Notes (retry)
+- Retry reason: reviewer FAIL - readOnlyHint missing for AC1, AC3, AC6
+- Added: 3 failing tests in TestFromAC_ToolReadOnlyHints
+- Preserved: 35 existing tests (all PASS)
+- ruff: clean, commit: 122c6dc
+
+[[2026-03-30]] Mon 06:40
+## Test-Writer Notes (retry #2)\n- Situation: task stuck in todo after retry cycle; builder commit d2daab6 already fixed readOnlyHint\n- All 47 tests pass (TestFromAC_ToolReadOnlyHints 3/3 PASS + 44 prior tests PASS)\n- No new tests needed: implementation complete, advancing to in-progress for builder verification\n- ruff: clean
+
+[[2026-03-30]] Mon 07:15
+## Builder Notes (verification pass)
+- Verification pass: all prior implementation committed in d2daab6 (readOnlyHint fix) and e307df5 (initial feat)
+- Files changed: server.py, graph_store.py, ingest.py
+- Tests: 47 passed (all TestFromAC classes)
+- Coverage: server.py 88%, ingest.py 44% (mocks-only strategy per test-writer notes)
+- Lint: ruff clean
+- readOnlyHint: ingest_document=False, list_entities=True, get_stats=True
+
+[[2026-03-30]] Mon 07:40
+## Review Evidence
+See docs/scratch/55-reviewer.md for full evidence.
+
+FAIL: TestFromAC_ListEntities::test_entity_type_filter_passed_when_provided is LAX -- asserts to_thread called once but not that entity_type kwarg is forwarded. No compensating TestBuilderDiscovered test. Confidence: .87
+
+[[2026-03-30]] Mon 10:15
+## Builder Notes (verification pass #2)
+- Retry reason: reviewer FAIL - test_entity_type_filter_passed_when_provided was LAX (only checked to_thread call count, not kwarg forwarding)
+- Fix: added TestBuilderDiscovered::test_entity_type_kwarg_forwarded_as_enum_to_to_thread
+- Verifies asyncio.to_thread is called with entity_type=EntityType("concept") kwarg when entity_type string is provided
+- No source code changes needed - implementation was already correct
+- Files changed: packages/mcp-knowledge/tests/test_ingest_graph_tools.py only
+- Tests: 39 passed (38 existing + 1 new TestBuilderDiscovered)
+- Lint: ruff clean on changed file
+- Commit: 75bfa8a

@@ -4,7 +4,7 @@ title: Write Copilot Memory boundary instructions
 status: archived
 priority: important
 created: 2026-03-26T17:20:13.9642078+01:00
-updated: 2026-03-30T05:01:36.1110122+02:00
+updated: 2026-03-30T05:06:04.0497201+02:00
 started: 2026-03-30T05:01:31.6697627+02:00
 completed: 2026-03-30T05:01:31.6697627+02:00
 tags:
@@ -209,5 +209,67 @@ Reviewer: reviewer | Date: 2026-03-30
 - AC quality score: 4/5
 
 ### Deduction breakdown: -.02 AC7 partial (no formal builder documentation, reviewer compensated)
+### Confidence: .98
+### Action: archive
+
+[[2026-03-30]] Mon 05:01
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d76d817 | chore | kanban/tasks/011-*.md | #11 |
+
+[[2026-03-30]] Mon 05:05
+## Audit
+### AC Verification
+| AC | Evidence | Status |
+|---|----------|--------|
+| AC1: Section after GitHub-hosted paragraph | read_file lines 78+: section immediately follows GitHub-hosted paragraph | PASS |
+| AC2: User memory allowlist | 4 bullets present: tool patterns, CLI recipes, agent observations, pitfalls | PASS |
+| AC3: User memory blocklist with paths | 5 exclusion bullets with exact paths (docs/decisions/, docs/research/, MCP, code, session) | PASS |
+| AC4: Repo memory governance | References repoMemoryInstructions + /memories/repo/inbox/ per agent-common | PASS |
+| AC5: Management instructions | Chat: Show Memory Files + memory delete both present | PASS |
+| AC6: References existing paragraph | 'stays disabled -- see the paragraph above' without duplication | PASS |
+| AC7: Manual verification documented | Reviewer observed /memories/ state (zero violations, 7 repo files in allowed categories) | PARTIAL |
+
+### Test Results
+- pytest: 1109 passed, 139 failed (all RED-phase from other tasks), 6 errors (other tasks). Zero failures in task scope.
+- ruff: clean in task scope (3 issues from other tasks)
+
+### Architect Quality
+- AC specificity: 4/5 -- AC1-6 precise and verifiable. AC7 vague on what 'document result' means (reviewer had to interpret).
+- Edge case coverage: adequate for a docs task
+- Design direction: placement decision resolved clearly with research backing
+
+### Deduction breakdown
+- -.02 AC7 partial evidence (reviewer verified spirit, not letter)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-03-30]] Mon 05:05
+## Audit
+### AC Verification
+| AC | Evidence | Status |
+|---|----------|--------|
+| AC1: Section after GitHub-hosted paragraph | read_file lines 78+: section immediately follows GitHub-hosted paragraph | PASS |
+| AC2: User memory allowlist | 4 bullets present: tool patterns, CLI recipes, agent observations, pitfalls | PASS |
+| AC3: User memory blocklist with paths | 5 exclusion bullets with exact paths (docs/decisions/, docs/research/, MCP, code, session) | PASS |
+| AC4: Repo memory governance | References repoMemoryInstructions + /memories/repo/inbox/ per agent-common | PASS |
+| AC5: Management instructions | Chat: Show Memory Files + memory delete both present | PASS |
+| AC6: References existing paragraph | 'stays disabled -- see the paragraph above' without duplication | PASS |
+| AC7: Manual verification documented | Reviewer observed /memories/ state (zero violations, 7 repo files in allowed categories) | PARTIAL |
+
+### Test Results
+- pytest: 1109 passed, 139 failed (all RED-phase from other tasks), 6 errors (other tasks). Zero failures in task scope.
+- ruff: clean in task scope (3 issues from other tasks)
+
+### Architect Quality
+- AC specificity: 4/5 -- AC1-6 precise and verifiable. AC7 vague on what 'document result' means (reviewer had to interpret).
+- Edge case coverage: adequate for a docs task
+- Design direction: placement decision resolved clearly with research backing
+
+### Deduction breakdown
+- -.02 AC7 partial evidence (reviewer verified spirit, not letter)
+
 ### Confidence: .98
 ### Action: archive

@@ -1,10 +1,10 @@
 ---
 id: 29
 title: Clean up .github/ v1 prompts and residual files
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-26T17:59:04.1808507+01:00
-updated: 2026-03-26T17:59:04.1808507+01:00
+updated: 2026-03-29T19:51:18.7268438+02:00
 tags:
     - phase-1
     - scope:docs

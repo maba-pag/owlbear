@@ -4,7 +4,7 @@ title: Add environment audit step to research-workflow skill
 status: archived
 priority: needed
 created: 2026-03-29T23:08:12.686527+02:00
-updated: 2026-03-30T05:00:38.536687+02:00
+updated: 2026-03-30T05:00:59.5551014+02:00
 started: 2026-03-30T05:00:33.842204+02:00
 completed: 2026-03-30T05:00:33.842204+02:00
 tags:
@@ -155,3 +155,9 @@ AC was highly specific: exact wording, exact numbering, exact renumbering instru
 
 ### Confidence: 0.98
 ### Action: archive
+
+[[2026-03-30]] Mon 05:00
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 142b17e | chore | kanban/tasks/194-*.md | #194 |

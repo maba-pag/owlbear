@@ -4,7 +4,7 @@ title: Configure MCP server registry
 status: archived
 priority: important
 created: 2026-03-26T17:21:51.105499+01:00
-updated: 2026-03-30T01:27:43.1144009+02:00
+updated: 2026-03-30T01:28:09.8360761+02:00
 started: 2026-03-30T01:27:42.7470672+02:00
 completed: 2026-03-30T01:27:42.7470672+02:00
 tags:
@@ -131,3 +131,9 @@ Original AC was solid for initial scoping. Architect did thorough refinement ack
 
 ### Confidence: .95
 ### Action: archive
+
+[[2026-03-30]] Mon 01:28
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b75fe06 | chore | kanban/tasks/018-*.md | #18 |

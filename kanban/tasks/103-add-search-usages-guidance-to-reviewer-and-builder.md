@@ -4,7 +4,7 @@ title: Add search/usages guidance to reviewer and builder skill workflows
 status: archived
 priority: nice-to-have
 created: 2026-03-28T13:34:53.1996415+01:00
-updated: 2026-03-29T14:32:19.2211341+02:00
+updated: 2026-03-29T14:32:37.8888515+02:00
 started: 2026-03-29T14:32:18.9145567+02:00
 completed: 2026-03-29T14:32:18.9145567+02:00
 tags:
@@ -148,3 +148,9 @@ AC was specific, complete (exact files, step numbers, tool name, limitation). Cl
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-29]] Sun 14:32
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| a9d9388 | chore | kanban/tasks/103-*.md | #103 |

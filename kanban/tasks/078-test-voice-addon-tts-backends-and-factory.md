@@ -4,7 +4,7 @@ title: 'Test: voice addon TTS backends and factory'
 status: archived
 priority: nice-to-have
 created: 2026-03-26T21:17:56.9640853+01:00
-updated: 2026-03-30T04:12:49.1074789+02:00
+updated: 2026-03-30T04:13:15.6361939+02:00
 started: 2026-03-30T04:12:44.1826493+02:00
 completed: 2026-03-30T04:12:44.1826493+02:00
 tags:
@@ -176,3 +176,7 @@ All 11 AC items verified: TTSBackend protocol (PASS), Kokoro lazy init/chunks/24
 ### Commits: ba09d4c (test-writer), 0490909 (builder). Uncommitted diffs are line-ending normalization only.
 ### Confidence: .96
 ### Action: archive
+
+[[2026-03-30]] Mon 04:13
+## Commits
+1831389 chore: archive task #78 (#78, auditor) - kanban/tasks/078-*.md

@@ -24,4 +24,4 @@ claim_timeout: 1h
 tui:
     title_lines: 2
     hide_empty_columns: true
-next_id: 101
+next_id: 213

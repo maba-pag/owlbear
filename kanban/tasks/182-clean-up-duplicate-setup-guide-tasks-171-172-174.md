@@ -4,7 +4,7 @@ title: 'Clean up duplicate setup-guide tasks (#171 #172 #174 #175)'
 status: archived
 priority: needed
 created: 2026-03-29T20:13:44.4010742+02:00
-updated: 2026-03-30T03:14:43.8295809+02:00
+updated: 2026-03-30T03:15:25.6153135+02:00
 started: 2026-03-29T20:29:33.0848762+02:00
 completed: 2026-03-30T03:14:38.0715928+02:00
 tags:
@@ -92,3 +92,7 @@ Tests: N/A (non-code task). Lint: N/A.
 AC Quality: 4/5.
 Confidence: .97
 Action: archive
+
+[[2026-03-30]] Mon 03:15
+## Commits
+be8e4a7 chore: archive duplicate setup-guide tasks (5 kanban files) #182

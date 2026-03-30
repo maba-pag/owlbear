@@ -4,13 +4,15 @@ title: Implement voice addon STT with Moonshine
 status: todo
 priority: nice-to-have
 created: 2026-03-26T18:57:23.8838546+01:00
-updated: 2026-03-27T02:53:11.957042+01:00
+updated: 2026-03-29T20:17:31.5019238+02:00
 tags:
     - phase-3
     - scope:voice
 depends_on:
     - 52
     - 61
+blocked: true
+block_reason: 'TestFromAC_ThreadSafeStdout tests use monkeypatch.setattr(sys.stdout, ''buffer'', ...) which raises AttributeError: readonly attribute on Python 3.12. Test-writer must fix by using patch.object(stt_module, ''sys'', mock_sys) pattern instead.'
 class: standard
 ---
 

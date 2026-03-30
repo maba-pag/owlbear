@@ -4,13 +4,15 @@ title: Fix stale .github/agents/ paths in v1-era test files
 status: archived
 priority: nice-to-have
 created: 2026-03-29T20:46:55.1055537+02:00
-updated: 2026-03-30T03:55:14.0432047+02:00
+updated: 2026-03-30T03:56:33.2392337+02:00
 started: 2026-03-30T03:55:13.6594047+02:00
 completed: 2026-03-30T03:55:13.6594047+02:00
 tags:
     - phase-1
     - scope:docs
     - type:test
+claimed_by: auditor
+claimed_at: 2026-03-30T03:56:33.2392337+02:00
 class: standard
 ---
 
@@ -160,3 +162,7 @@ AC3 inaccurate (said update AGENTS_DIR but variable already correct). Researcher
 ### Confidence: .96
 All 6 AC items verified, no regressions, clean lint.
 ### Action: archive
+
+[[2026-03-30]] Mon 03:56
+## Commits
+- 0ff0aee: chore: archive task #188 (kanban board file)

@@ -4,7 +4,7 @@ title: Fix broken skill paths in frontend prompts
 status: archived
 priority: important
 created: 2026-03-29T19:49:17.606228+02:00
-updated: 2026-03-30T00:46:45.886543+02:00
+updated: 2026-03-30T00:47:07.9550195+02:00
 started: 2026-03-29T20:16:38.0756442+02:00
 completed: 2026-03-30T00:46:31.186467+02:00
 tags:
@@ -99,3 +99,9 @@ AC was specific with exact file names, line numbers, and ref counts. Led to clea
 
 ### Upstream Commit
 - 6f9f047 docs: fix broken skill paths in frontend prompts (#165, builder)
+
+[[2026-03-30]] Mon 00:47
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c458889 | chore | kanban/tasks/165-*.md | #165 |

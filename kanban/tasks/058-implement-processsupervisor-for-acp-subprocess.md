@@ -4,7 +4,7 @@ title: Implement ProcessSupervisor for ACP subprocess lifecycle
 status: archived
 priority: needed
 created: 2026-03-26T19:27:17.0329284+01:00
-updated: 2026-03-29T14:52:29.0602624+02:00
+updated: 2026-03-29T14:52:45.245595+02:00
 started: 2026-03-29T14:52:24.4874843+02:00
 completed: 2026-03-29T14:52:24.4874843+02:00
 tags:
@@ -184,3 +184,9 @@ AC was specific, complete, and led to a clean implementation. Every line verifia
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-29]] Sun 14:52
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b2aa177 | chore | kanban/tasks/058-*.md | #58 |

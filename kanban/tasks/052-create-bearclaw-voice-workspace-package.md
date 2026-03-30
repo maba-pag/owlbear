@@ -4,7 +4,7 @@ title: Create owlbear-voice workspace package
 status: archived
 priority: nice-to-have
 created: 2026-03-26T18:57:37.151058+01:00
-updated: 2026-03-29T15:27:03.4339472+02:00
+updated: 2026-03-29T15:27:19.2000983+02:00
 started: 2026-03-29T15:26:58.6159762+02:00
 completed: 2026-03-29T15:26:58.6159762+02:00
 tags:
@@ -134,3 +134,7 @@ AC rewritten from 4 vague lines to 13 testable items + 3 constraints. Corrected 
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-29]] Sun 15:27
+## Commits
+ce460ae chore: archive task #52 voice workspace package (#52, auditor)

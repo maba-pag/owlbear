@@ -4,7 +4,7 @@ title: Build ACP client library
 status: archived
 priority: needed
 created: 2026-03-26T17:22:08.8522322+01:00
-updated: 2026-03-30T06:52:54.2670679+02:00
+updated: 2026-03-30T06:53:27.3001008+02:00
 started: 2026-03-30T06:52:49.2335818+02:00
 completed: 2026-03-30T06:52:49.2335818+02:00
 tags:
@@ -246,3 +246,8 @@ test note
 
 [[2026-03-30]] Mon 06:52
 See docs/scratch/19-auditor.md for full evidence.
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d08e84e | chore | kanban/tasks/019, kanban/activity.jsonl | #19 |

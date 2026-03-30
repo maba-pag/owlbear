@@ -4,7 +4,7 @@ title: ACP protocol deep-dive
 status: archived
 priority: needed
 created: 2026-03-26T17:18:05.2307425+01:00
-updated: 2026-03-29T15:49:28.7825231+02:00
+updated: 2026-03-29T15:49:45.6075049+02:00
 started: 2026-03-29T15:49:28.4753841+02:00
 completed: 2026-03-29T15:49:28.4753841+02:00
 tags:
@@ -114,3 +114,9 @@ Builder/reviewer/writer sections absent from task body (research task with no co
 
 ### Confidence: .96
 ### Action: archive
+
+[[2026-03-29]] Sun 15:49
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 9b49aa9 | chore | kanban/tasks/001-acp-protocol-deep-dive.md | #1 |

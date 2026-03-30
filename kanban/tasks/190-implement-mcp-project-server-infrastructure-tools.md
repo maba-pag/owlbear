@@ -4,7 +4,7 @@ title: Implement mcp-project server infrastructure + tools (server.py part 1)
 status: archived
 priority: needed
 created: 2026-03-29T22:43:56.3602548+02:00
-updated: 2026-03-30T07:12:25.494617+02:00
+updated: 2026-03-30T07:12:41.8333864+02:00
 started: 2026-03-29T22:44:26.8745996+02:00
 completed: 2026-03-30T07:12:21.4065194+02:00
 tags:
@@ -161,3 +161,9 @@ AC was specific and testable. Minor gap: malformed JSON error path discovered by
 ### Deduction breakdown: none (all AC lines have evidence, lint clean in scope, AC quality 4, reviewer evidence present, no task-scope failures)
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-03-30]] Mon 07:12
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 1244cbd | chore | kanban/tasks/190-*.md | #190 |

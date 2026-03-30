@@ -4,7 +4,7 @@ title: Document KB curation process
 status: archived
 priority: important
 created: 2026-03-29T19:50:54.093837+02:00
-updated: 2026-03-30T05:06:16.1596599+02:00
+updated: 2026-03-30T05:06:44.2389569+02:00
 started: 2026-03-30T05:06:09.6935581+02:00
 completed: 2026-03-30T05:06:09.6935581+02:00
 tags:
@@ -183,3 +183,9 @@ All 5 AC items verified against docs/research/kb-curation-process.md:
 ### AC Quality Score: 4/5 -- specific, verifiable AC items; each mapped directly to a doc section
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 05:06
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| efed904 | docs | kb-curation-process.md, 177-*.md | #177 |

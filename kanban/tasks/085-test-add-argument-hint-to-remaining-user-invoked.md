@@ -4,7 +4,7 @@ title: 'Test: Add argument-hint to remaining user-invoked skills'
 status: archived
 priority: nice-to-have
 created: 2026-03-27T08:48:16.9125448+01:00
-updated: 2026-03-30T04:00:30.3344458+02:00
+updated: 2026-03-30T04:00:55.1385022+02:00
 started: 2026-03-30T04:00:29.9930343+02:00
 completed: 2026-03-30T04:00:29.9930343+02:00
 tags:
@@ -61,3 +61,7 @@ Test task for #79. Pattern: tests/test_argument_hint_skills.py already has class
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-30]] Mon 04:00
+## Commits
+- 18d0456: chore: archive task #85 (kanban board file)

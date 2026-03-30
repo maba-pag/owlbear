@@ -4,7 +4,7 @@ title: 'Test: audit log module (DispatchEvent + CompletionEvent)'
 status: archived
 priority: needed
 created: 2026-03-29T20:29:44.1186399+02:00
-updated: 2026-03-30T04:25:45.030573+02:00
+updated: 2026-03-30T04:26:28.4780007+02:00
 started: 2026-03-29T20:30:01.8009314+02:00
 completed: 2026-03-30T04:25:40.3692046+02:00
 tags:
@@ -200,3 +200,9 @@ AC was specific and verifiable. Builder discovered 2 minor edge cases (nonexiste
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 04:26
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2d33434 | chore | kanban/tasks/185-*.md | #185 |

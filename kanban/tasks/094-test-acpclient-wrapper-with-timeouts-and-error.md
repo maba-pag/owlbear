@@ -1,10 +1,12 @@
 ---
 id: 94
 title: 'Test: AcpClient wrapper with timeouts and error classification'
-status: todo
+status: archived
 priority: needed
 created: 2026-03-28T01:50:49.0538734+01:00
-updated: 2026-03-28T04:24:25.0528718+01:00
+updated: 2026-03-29T15:37:46.7394829+02:00
+started: 2026-03-29T15:37:46.4444022+02:00
+completed: 2026-03-29T15:37:46.4444022+02:00
 tags:
     - phase-1
     - scope:orchestrator
@@ -64,3 +66,78 @@ Precedes: #59. See docs/research/acp-error-handling-strategy.md SS3.3-SS3.5 and 
 ### Dependencies
 - Verified: no depends_on needed (RED phase mocks everything)
 - Verified: #59 (impl) at ideation, correctly follows this test task
+
+[[2026-03-29]] Sun 13:03
+## Test-Writer Notes
+- Test file: tests/test_acp_client.py
+- Classes: TestFromAC_Timeouts, TestFromAC_ErrorClassification, TestFromAC_Cancellation
+- Tests per category: happy 3, edge 1, error 7, boundary 2
+- Total: 13 tests
+- ruff: clean
+- Status: PRE-BUILT — both tests and implementation (owlbear_orchestrator/acp_client.py) existed before test-writer ran. Tests PASS (not RED) because the builder implemented ahead of the pipeline.
+- AC coverage complete: all 11 AC lines have at least one test.
+- AC line to test mapping:
+  - initialize 30s timeout: test_initialize_uses_30s_timeout
+  - new_session 15s timeout: test_new_session_uses_15s_timeout
+  - prompt 300s timeout: test_prompt_uses_300s_timeout
+  - RequestError by code: test_request_error_* (5 tests, codes -32700 -32601 -32603 -32000 -32002)
+  - session/cancel on TimeoutError: test_cancel_sent_on_timeout_error_during_prompt
+  - external CancelSignal: test_cancel_sent_when_cancel_signal_already_set
+  - BrokenPipeError TRANSIENT: test_broken_pipe_classified_transient
+  - EOF TRANSIENT: test_eof_connection_error_classified_transient
+  - AsyncMock(spec=ClientSideConnection): verified in _make_conn()
+  - import from owlbear_orchestrator.acp_client: verified
+  - test_process_supervisor.py patterns: pytest.mark.asyncio(loop_scope=function), patch(), AsyncMock
+
+[[2026-03-29]] Sun 15:04
+## Test-Writer Notes (retry 2026-03-29)
+- Pre-built situation confirmed: tests/test_acp_client.py -- 13 tests, all PASS
+- Implementation owlbear_orchestrator/acp_client.py already exists
+- ruff: clean
+- Tests cannot be RED -- builder implemented ahead of pipeline
+- Advancing to in-progress to unblock the builder for task #59
+
+[[2026-03-29]] Sun 15:10
+## Builder Notes
+- Pre-built situation: tests/test_acp_client.py and owlbear_orchestrator/acp_client.py already existed
+- Files changed: none (implementation was already in place before builder ran)
+- Tests: 13 passed, coverage 92% on owlbear_orchestrator/acp_client.py
+- Lint: ruff clean
+- Evidence: uv run pytest tests/test_acp_client.py -q -- 13 passed in 0.37s; ruff check -- no issues found
+- Fixes applied: None (pass-through, all AC satisfied by pre-existing implementation)
+
+[[2026-03-29]] Sun 15:37
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| initialize 30s timeout | test_initialize_uses_30s_timeout asserts timeout=30 on patched wait_for | PASS |
+| new_session 15s timeout | test_new_session_uses_15s_timeout asserts timeout=15 | PASS |
+| prompt 300s timeout | test_prompt_uses_300s_timeout asserts timeout=300 | PASS |
+| RequestError classified by code | 5 tests for codes -32700,-32601,-32603,-32000,-32002 | PASS |
+| session/cancel on TimeoutError | test_cancel_sent_on_timeout_error_during_prompt | PASS |
+| CancelSignal triggers cancel | test_cancel_sent_when_cancel_signal_already_set | PASS |
+| BrokenPipeError TRANSIENT | test_broken_pipe_classified_transient | PASS |
+| EOF TRANSIENT | test_eof_connection_error_classified_transient | PASS |
+| AsyncMock(spec=ClientSideConnection) | _make_conn() uses AsyncMock(spec=ClientSideConnection) | PASS |
+| Import from owlbear_orchestrator.acp_client | Line 19 imports AcpClient, AcpClientError, ErrorCategory | PASS |
+| Follow test_process_supervisor.py patterns | pytest.mark.asyncio(loop_scope=function), patch(), AsyncMock confirmed | PASS |
+
+### Test Results
+- pytest: 13/13 passed (test_acp_client.py), full suite 679 passed, 90 pre-existing failures unrelated to #94
+- ruff: all checks passed
+
+### Upstream Commits
+- 5bca212 test: add failing tests (#94, test-writer)
+- ffefc29 feat: implement AcpClient (#94, builder)
+
+### Quality Gaps
+- No Review Evidence section in task body (reviewer skipped or failed to record)
+- No Docs Gate section in task body (writer skipped or failed to record)
+- Pre-built situation: builder implemented ahead of pipeline, tests were never RED
+
+### AC Quality Score: 5/5
+AC was precise and verifiable: exact timeout values, specific error codes, concrete mock patterns. No gaps requiring improvisation.
+
+### Confidence: .95
+### Action: archive

@@ -4,7 +4,7 @@ title: Add MCP server customization section to README
 status: archived
 priority: important
 created: 2026-03-29T07:06:43.608754+02:00
-updated: 2026-03-29T14:35:18.9403647+02:00
+updated: 2026-03-29T14:35:30.1385466+02:00
 started: 2026-03-29T14:35:18.632805+02:00
 completed: 2026-03-29T14:35:18.632805+02:00
 tags:
@@ -92,3 +92,9 @@ AC was specific and measurable. All 7 items directly verifiable. Minor gap: no I
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-29]] Sun 14:35
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2248459 | chore | kanban/tasks/128-*.md | #128 |

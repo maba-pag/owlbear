@@ -4,7 +4,7 @@ title: 'Test: VoiceChannel adapter'
 status: archived
 priority: nice-to-have
 created: 2026-03-29T16:01:31.5585818+02:00
-updated: 2026-03-30T09:01:07.7148459+02:00
+updated: 2026-03-30T09:01:48.6340526+02:00
 started: 2026-03-29T16:01:45.8076799+02:00
 completed: 2026-03-30T09:01:02.5261335+02:00
 tags:
@@ -160,3 +160,9 @@ No Review Evidence section in task body. Writer (docs gate) was present. Deducti
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 09:01
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| f710b60 | chore | kanban/tasks/142-*.md | #142 |

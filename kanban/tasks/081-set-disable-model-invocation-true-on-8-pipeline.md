@@ -1,16 +1,16 @@
 ---
 id: 81
 title: 'Set disable-model-invocation: true on 8 pipeline agents'
-status: backlog
+status: ideation
 priority: nice-to-have
 created: 2026-03-27T04:51:29.8169691+01:00
-updated: 2026-03-27T23:37:03.2714725+01:00
+updated: 2026-03-29T16:08:42.9354529+02:00
 tags:
     - phase-1
     - scope:agents
     - type:build
 blocked: true
-block_reason: 'Implementation reverted: disable-model-invocation: true breaks subagent invocation. The flag means agents can *only* be triggered by users, preventing pipeline use. The agents-array-override is Experimental and does not work reliably in practice. Research doc needs correction.'
+block_reason: 'Duplicate: all 3 AC lines already satisfied by #38 pipeline (commits 692e3cb, 3294d29). Flag live in all 8 agents, tests committed. Recommend archival.'
 class: standard
 ---
 
@@ -82,3 +82,69 @@ Config-only change, 8 files, 1 YAML line each. Research validated against curren
 ## Revert Note (2026-03-27)
 
 Implementation was reverted immediately after merge. The flag disable-model-invocation: true prevents agents from being used as subagents - exactly the opposite of what pipeline agents need. The VS Code docs describe this flag as for agents that should only be triggered explicitly by users. The claimed agents-array-override mechanism is tagged Experimental and does not work reliably in practice. All 8 agent files have had the flag removed. tests/test_disable_model_invocation.py deleted. Research doc (docs/research/disable-model-invocation-pipeline-agents.md) needs correction before this task can be reconsidered.
+
+[[2026-03-29]] Sun 16:08
+## Architecture Review
+**Verdict:** Block (duplicate - work completed by #38)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Add disable-model-invocation: true to 8 pipeline agents | Already present in codebase (commit 3294d29 via #38) | No work needed |
+| Do NOT add to orchestrator, kanban-planner, curator | Already satisfied - flag absent from those 3 agents | No work needed |
+| Orchestrator agents list continues to override the flag | Override working - architect agent running now as proof | No work needed |
+
+### Architecture Notes
+Task #81 was built, reverted (cebe572), then the identical work was re-implemented under task #38 (commits 692e3cb + 3294d29). Agents were subsequently ported from .github/agents/ to agents/ (ec84b55, 59677bb), carrying the flag. Current codebase satisfies all 3 AC lines. The block reason on this task is stale - the revert was itself superseded by #38's re-implementation.
+
+This task is a duplicate. Recommend archival.
+
+### Evidence
+- Flag present: grep confirms disable-model-invocation: true in all 8 agents/ files
+- Tests exist: tests/test_disable_model_invocation.py (committed, 692e3cb)
+- System working: architect agent (one of the 8) running successfully via subagent invocation
+- copilot-instructions.md line 101 documents the flag as active convention
+
+[[2026-03-29]] Sun 16:08
+## Architecture Review
+**Verdict:** Block (duplicate - work completed by #38)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Add disable-model-invocation: true to 8 pipeline agents | Already present in codebase (commit 3294d29 via #38) | No work needed |
+| Do NOT add to orchestrator, kanban-planner, curator | Already satisfied - flag absent from those 3 agents | No work needed |
+| Orchestrator agents list continues to override the flag | Override working - architect agent running now as proof | No work needed |
+
+### Architecture Notes
+Task #81 was built, reverted (cebe572), then the identical work was re-implemented under task #38 (commits 692e3cb + 3294d29). Agents were subsequently ported from .github/agents/ to agents/ (ec84b55, 59677bb), carrying the flag. Current codebase satisfies all 3 AC lines. The block reason on this task is stale - the revert was itself superseded by #38's re-implementation.
+
+This task is a duplicate. Recommend archival.
+
+### Evidence
+- Flag present: grep confirms disable-model-invocation: true in all 8 agents/ files
+- Tests exist: tests/test_disable_model_invocation.py (committed, 692e3cb)
+- System working: architect agent (one of the 8) running successfully via subagent invocation
+- copilot-instructions.md line 101 documents the flag as active convention
+
+[[2026-03-29]] Sun 16:08
+## Architecture Review
+**Verdict:** Block (duplicate - work completed by #38)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Add disable-model-invocation: true to 8 pipeline agents | Already present in codebase (commit 3294d29 via #38) | No work needed |
+| Do NOT add to orchestrator, kanban-planner, curator | Already satisfied - flag absent from those 3 agents | No work needed |
+| Orchestrator agents list continues to override the flag | Override working - architect agent running now as proof | No work needed |
+
+### Architecture Notes
+Task #81 was built, reverted (cebe572), then the identical work was re-implemented under task #38 (commits 692e3cb + 3294d29). Agents were subsequently ported from .github/agents/ to agents/ (ec84b55, 59677bb), carrying the flag. Current codebase satisfies all 3 AC lines. The block reason on this task is stale - the revert was itself superseded by #38's re-implementation.
+
+This task is a duplicate. Recommend archival.
+
+### Evidence
+- Flag present: grep confirms disable-model-invocation: true in all 8 agents/ files
+- Tests exist: tests/test_disable_model_invocation.py (committed, 692e3cb)
+- System working: architect agent (one of the 8) running successfully via subagent invocation
+- copilot-instructions.md line 101 documents the flag as active convention

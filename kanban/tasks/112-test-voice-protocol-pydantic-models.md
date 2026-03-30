@@ -4,7 +4,7 @@ title: 'Test: Voice protocol Pydantic models'
 status: archived
 priority: nice-to-have
 created: 2026-03-28T22:26:21.6972367+01:00
-updated: 2026-03-30T04:45:06.4724703+02:00
+updated: 2026-03-30T04:45:34.3648846+02:00
 started: 2026-03-30T04:45:00.965129+02:00
 completed: 2026-03-30T04:45:00.965129+02:00
 tags:
@@ -172,3 +172,6 @@ No security surface. Pure Pydantic data models, no I/O, no user input, no creden
 See docs/scratch/112-auditor.md for full evidence.
 Confidence: 1.0
 Action: archive
+
+## Commits
+d4aa671 chore: archive task #112 (kanban/tasks/112-*.md)

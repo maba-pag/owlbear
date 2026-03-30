@@ -1,10 +1,12 @@
 ---
 id: 117
 title: Delete .github/skills/ and remove dual-path settings
-status: done
+status: archived
 priority: needed
 created: 2026-03-29T01:40:59.1881601+01:00
-updated: 2026-03-29T16:23:01.1764748+02:00
+updated: 2026-03-29T23:08:04.4705364+02:00
+started: 2026-03-29T23:08:04.14529+02:00
+completed: 2026-03-29T23:08:04.14529+02:00
 tags:
     - phase-1
     - scope:skills
@@ -12,8 +14,6 @@ tags:
 depends_on:
     - 116
     - 131
-claimed_by: auditor
-claimed_at: 2026-03-29T16:23:01.1754696+02:00
 class: standard
 ---
 
@@ -204,3 +204,73 @@ No 6 - docs/decisions/README.md: Pass -- builder updated (AC8); no .github/skill
 
 Files Updated: None
 Scratch Files Cleaned: None (no docs/scratch/117-* files existed)
+
+[[2026-03-29]] Sun 23:07
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: delete .github/skills/ | Test-Path False; test passes | PASS |
+| AC2: settings.json no dual-path | grep 0 matches; test passes | PASS |
+| AC3: setup.py no dual-path | grep 0 matches; test passes | PASS |
+| AC4: test_monorepo_skeleton updated | grep 0 matches; test passes | PASS |
+| AC5: test_setup_script updated | grep 0 matches; test passes | PASS |
+| AC6: test_copy_skills_to_root deleted | Test-Path False; test passes | PASS |
+| AC7: test_skill_sync_131 deleted | Test-Path False; test passes | PASS |
+| AC8: docs/decisions/README.md updated | grep 0 matches; test passes | PASS |
+| AC9: 22 skills from skills/ only | test_all_current_skills_pass PASS | PASS |
+| AC10: all tests pass | 8/8 AC tests; 870 suite pass, 61 pre-existing | PASS |
+
+### Test Results
+- pytest (AC tests): 8 passed, 0 failed
+- pytest (full suite): 870 passed, 61 failed (all pre-existing), 3 collection errors (pre-existing)
+- ruff: clean on all task files
+
+### AC Quality Score: 4/5
+AC was specific with line numbers. Researcher additions incorporated. Minor gap: did not anticipate VS Code Copilot auto-regeneration of .github/skills/ after deletion.
+
+### Confidence: .97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b5377c6 | chore | 44 files (deletions + settings) | #117 |
+| 4560f54 | fix | .gitignore | #117 |
+| 5275e53 | docs | research doc + test whitespace | #117 |
+| eb20987 | chore | kanban task file | #117 |
+
+[[2026-03-29]] Sun 23:07
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: delete .github/skills/ | Test-Path False; test passes | PASS |
+| AC2: settings.json no dual-path | grep 0 matches; test passes | PASS |
+| AC3: setup.py no dual-path | grep 0 matches; test passes | PASS |
+| AC4: test_monorepo_skeleton updated | grep 0 matches; test passes | PASS |
+| AC5: test_setup_script updated | grep 0 matches; test passes | PASS |
+| AC6: test_copy_skills_to_root deleted | Test-Path False; test passes | PASS |
+| AC7: test_skill_sync_131 deleted | Test-Path False; test passes | PASS |
+| AC8: docs/decisions/README.md updated | grep 0 matches; test passes | PASS |
+| AC9: 22 skills from skills/ only | test_all_current_skills_pass PASS | PASS |
+| AC10: all tests pass | 8/8 AC tests; 870 suite pass, 61 pre-existing | PASS |
+
+### Test Results
+- pytest (AC tests): 8 passed, 0 failed
+- pytest (full suite): 870 passed, 61 failed (all pre-existing), 3 collection errors (pre-existing)
+- ruff: clean on all task files
+
+### AC Quality Score: 4/5
+AC was specific with line numbers. Researcher additions incorporated. Minor gap: did not anticipate VS Code Copilot auto-regeneration of .github/skills/ after deletion.
+
+### Confidence: .97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b5377c6 | chore | 44 files (deletions + settings) | #117 |
+| 4560f54 | fix | .gitignore | #117 |
+| 5275e53 | docs | research doc + test whitespace | #117 |
+| eb20987 | chore | kanban task file | #117 |

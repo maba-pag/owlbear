@@ -4,7 +4,7 @@ title: Add mcp.json customization hint to setup.py output
 status: archived
 priority: important
 created: 2026-03-29T07:06:54.7365186+02:00
-updated: 2026-03-29T14:39:55.8748484+02:00
+updated: 2026-03-29T14:40:06.5712964+02:00
 started: 2026-03-29T07:34:09.3893315+02:00
 completed: 2026-03-29T14:39:50.9377761+02:00
 tags:
@@ -175,3 +175,9 @@ Existing mcp.json assertion passes |} 45/45 passed in test_setup_script.py |} PA
 ### AC Quality: 5/5
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-29]] Sun 14:40
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2e6be81 | chore | kanban/tasks/129-*.md | #129 |

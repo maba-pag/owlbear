@@ -4,7 +4,7 @@ title: Clean up stale .github/instructions/ references
 status: archived
 priority: nice-to-have
 created: 2026-03-28T22:24:22.9333309+01:00
-updated: 2026-03-30T04:49:40.3693984+02:00
+updated: 2026-03-30T04:50:20.1272217+02:00
 started: 2026-03-30T04:47:07.5506987+02:00
 completed: 2026-03-30T04:47:07.5506987+02:00
 tags:
@@ -117,3 +117,8 @@ This is a docs-only cleanup task (type:docs, scope:docs). The only change is a p
 ### Deduction breakdown: none
 ### Confidence: 1.0
 ### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8f9d3c3 | chore | kanban/tasks/111-*.md | #111 |

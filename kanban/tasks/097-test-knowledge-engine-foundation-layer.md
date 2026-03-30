@@ -1,16 +1,18 @@
 ---
 id: 97
 title: 'Test: Knowledge engine foundation layer'
-status: backlog
+status: ideation
 priority: needed
 created: 2026-03-28T03:43:11.3576373+01:00
-updated: 2026-03-28T03:43:18.0811771+01:00
+updated: 2026-03-29T12:44:18.8519866+02:00
 tags:
     - phase-1
     - scope:knowledge
     - test
 depends_on:
     - 7
+blocked: true
+block_reason: 'Duplicate of archived #107. All AC completed and audited. Delete this task.'
 class: standard
 ---
 
@@ -30,3 +32,20 @@ Write failing tests (TDD RED) for the knowledge engine foundation layer extracte
 - [ ] Tests for protocol types: SparseVector, HybridEmbedding instantiation, Embedding alias
 - [ ] All tests import from owlbear_knowledge package (not v1 paths)
 - [ ] All tests fail (RED) before builder implements #15
+
+[[2026-03-29]] Sun 12:44
+## Architecture Review
+**Verdict:** BLOCK (duplicate)
+
+### AC Assessment
+All 11 AC lines in #97 are identical to (or a subset of) the 31 AC lines in #107, which was merged from #97 and archived at .97 confidence.
+
+### Architecture Notes
+Task #107 body explicitly states: "Merged from #97 (duplicate test task)." The test file tests/test_knowledge_foundation.py (69 tests) was written and verified through the #107 pipeline. All GraphStore, KnowledgeSourceStore, model validation, and protocol type tests are passing. No remaining work exists for #97.
+
+### Changes Made
+- Blocked to ideation as stale duplicate
+- Released claim
+
+### Dependencies
+- #107 (archived) completed all work from #97

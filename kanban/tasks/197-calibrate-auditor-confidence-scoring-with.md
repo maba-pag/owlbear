@@ -4,7 +4,7 @@ title: Calibrate auditor confidence scoring with deduction rubric
 status: archived
 priority: important
 created: 2026-03-29T23:08:40.6714421+02:00
-updated: 2026-03-30T05:20:28.4314931+02:00
+updated: 2026-03-30T05:21:03.3652945+02:00
 started: 2026-03-30T05:20:28.0739267+02:00
 completed: 2026-03-30T05:20:28.0739267+02:00
 tags:
@@ -112,3 +112,9 @@ AC lines were specific, measurable, and led to clean implementation.
 ### Deduction breakdown: none (all AC verified, lint clean, no in-scope failures, reviewer/writer evidence present, AC quality 5)
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 05:21
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 39da7ea | chore | kanban/tasks/197-*, kanban/activity.jsonl | #197 |

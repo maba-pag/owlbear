@@ -1,10 +1,10 @@
 ---
 id: 24
 title: General KB initial data load
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-26T17:23:17.8229702+01:00
-updated: 2026-03-26T17:23:17.8229702+01:00
+updated: 2026-03-29T19:51:35.0011314+02:00
 tags:
     - phase-2
     - scope:knowledge

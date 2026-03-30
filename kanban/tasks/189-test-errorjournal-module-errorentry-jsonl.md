@@ -4,7 +4,7 @@ title: 'Test: ErrorJournal module (ErrorEntry + JSONL persistence)'
 status: archived
 priority: nice-to-have
 created: 2026-03-29T20:53:53.1784331+02:00
-updated: 2026-03-30T04:04:57.2840262+02:00
+updated: 2026-03-30T04:07:07.7718587+02:00
 started: 2026-03-30T04:04:56.8532491+02:00
 completed: 2026-03-30T04:04:56.8532491+02:00
 tags:
@@ -120,3 +120,34 @@ See docs/research/v2-errorjournal-module.md S3.6 for test case details.
 
 ### Verdict: PASS
 Confidence: 0.97
+
+[[2026-03-30]] Mon 04:07
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| ErrorEntry frozen, 5 str fields, rejects mutation | ConfigDict(frozen=True) at L22; 5 str fields; test_frozen_rejects_mutation passes | PASS |
+| TypeAdapter round-trip | entry_adapter at L33; test_round_trip_serialize_deserialize passes | PASS |
+| __init__ no eager file | Constructor stores path only; test_does_not_create_file_eagerly passes | PASS |
+| log appends, load retrieves | log() appends JSONL line; test_log_appends_single_jsonl_line + test_load_retrieves_entry_after_log pass | PASS |
+| load [] no file | test_load_returns_empty_when_file_does_not_exist passes | PASS |
+| load [] empty file | test_load_returns_empty_when_file_is_empty passes | PASS |
+| rotation trims at max+1 | _rotate() keeps lines[-max_entries:]; test_rotation_trims_to_max_entries passes | PASS |
+| rotation keeps recent | test_rotation_preserves_most_recent_entries passes | PASS |
+| multiple log accumulate | test_multiple_log_calls_accumulate_entries passes (5 entries) | PASS |
+| test file at tests/test_error_journal.py | File exists, 20 tests collected | PASS |
+
+### Test Results
+- pytest (task): 20 passed, 0 failed
+- pytest (full suite): 873 passed, 141 failed (all pre-existing RED-phase from other tasks: #196, rename, voice, planner)
+- ruff: clean
+
+### Upstream Commits
+- e326d23 test: add failing tests for ErrorJournal module (#189, test-writer)
+- ad48b11 feat: implement ErrorJournal module (#189, builder)
+
+### AC Quality: 4/5
+AC was specific and measurable with clear test expectations. Minor gap: AC10 is a process assertion not a functional criterion.
+
+### Confidence: .97
+### Action: archive

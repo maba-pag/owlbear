@@ -4,7 +4,7 @@ title: 'Test: Add ingest and graph tools to mcp-knowledge'
 status: archived
 priority: important
 created: 2026-03-26T21:02:00.1833273+01:00
-updated: 2026-03-30T01:01:07.0037257+02:00
+updated: 2026-03-30T01:01:29.7967921+02:00
 started: 2026-03-30T01:01:02.3131489+02:00
 completed: 2026-03-30T01:01:02.3131489+02:00
 tags:
@@ -148,3 +148,9 @@ depends_on #54 is blocked in ideation (v1/v2 API mismatch). However, the actual 
 
 ### Confidence: .97
 ### Action: archive
+
+[[2026-03-30]] Mon 01:01
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 20c78f1 | chore | kanban/tasks/077-*.md | #77 |

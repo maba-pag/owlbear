@@ -4,7 +4,7 @@ title: 'Test: mcp-kanban full tool set'
 status: archived
 priority: important
 created: 2026-03-27T22:47:10.8520099+01:00
-updated: 2026-03-30T06:58:50.0326987+02:00
+updated: 2026-03-30T06:59:35.4828286+02:00
 started: 2026-03-30T06:58:49.694304+02:00
 completed: 2026-03-30T06:58:49.694304+02:00
 tags:
@@ -198,3 +198,9 @@ No deductions. All AC verified, lint clean, reviewer evidence thorough, no scope
 
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-03-30]] Mon 06:59
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 85d9fab | chore | kanban/tasks/089, kanban/activity.jsonl | #89 |

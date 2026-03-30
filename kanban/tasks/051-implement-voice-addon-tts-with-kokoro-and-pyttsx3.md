@@ -4,7 +4,7 @@ title: Implement voice addon TTS with Kokoro and pyttsx3 fallback
 status: archived
 priority: nice-to-have
 created: 2026-03-26T18:57:30.5848405+01:00
-updated: 2026-03-30T06:33:16.492254+02:00
+updated: 2026-03-30T06:33:38.9424441+02:00
 started: 2026-03-30T06:33:11.8339457+02:00
 completed: 2026-03-30T06:33:11.8339457+02:00
 tags:
@@ -139,3 +139,9 @@ Verified: #49 (stdio protocol) is a sibling, not a dependency for this task
 [[2026-03-30]] Mon 05:24
 ## Review Evidence
 See docs/scratch/51-reviewer.md for full evidence.
+
+[[2026-03-30]] Mon 06:33
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 5ca9937 | chore | kanban/tasks/051-*.md | #51 |

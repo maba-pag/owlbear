@@ -1,10 +1,10 @@
 ---
 id: 54
 title: Implement real search_knowledge tool in mcp-knowledge
-status: backlog
+status: ideation
 priority: needed
 created: 2026-03-26T19:12:42.1178047+01:00
-updated: 2026-03-26T20:23:29.130043+01:00
+updated: 2026-03-29T12:45:26.9842278+02:00
 tags:
     - phase-2
     - scope:mcp
@@ -12,6 +12,8 @@ tags:
 depends_on:
     - 40
     - 72
+blocked: true
+block_reason: 'v1/v2 API mismatch: AC built on query_for_context (v1) but v2 has async query() returning StructuredSearchResult. Re-research needed against v2 API.'
 class: standard
 ---
 

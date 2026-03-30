@@ -4,15 +4,13 @@ title: Document multi-project setup experience and sharing guide
 status: archived
 priority: important
 created: 2026-03-29T19:49:38.9701114+02:00
-updated: 2026-03-30T00:55:44.3883598+02:00
+updated: 2026-03-30T00:56:09.5042174+02:00
 started: 2026-03-30T00:55:20.0891145+02:00
 completed: 2026-03-30T00:55:20.0891145+02:00
 tags:
     - phase-2
     - scope:build
     - type:docs
-claimed_by: auditor
-claimed_at: 2026-03-30T00:55:44.3883598+02:00
 class: standard
 ---
 
@@ -102,3 +100,9 @@ Missing Review Evidence and Docs Gate sections in task body. Reviewer and writer
 
 ### Confidence: .96
 ### Action: archive
+
+[[2026-03-30]] Mon 00:56
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 323ca9f | chore | kanban/tasks/169-*.md | #169 |

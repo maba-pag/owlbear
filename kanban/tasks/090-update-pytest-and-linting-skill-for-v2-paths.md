@@ -4,7 +4,7 @@ title: Update pytest-and-linting skill for v2 paths
 status: archived
 priority: nice-to-have
 created: 2026-03-28T01:40:27.8103029+01:00
-updated: 2026-03-30T07:22:24.1971197+02:00
+updated: 2026-03-30T07:23:06.6504214+02:00
 started: 2026-03-30T07:22:23.8827604+02:00
 completed: 2026-03-30T07:22:23.8827604+02:00
 tags:
@@ -178,3 +178,9 @@ AC was specific with clear verify/add split. Minor gap: did not call out stale p
 ### Deduction breakdown: None. All 7 AC lines verified with evidence.
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 07:23
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c68cf5b | chore | kanban/tasks/090-*.md | #90 |

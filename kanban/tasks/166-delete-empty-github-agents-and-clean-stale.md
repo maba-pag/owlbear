@@ -4,7 +4,7 @@ title: Delete empty .github/agents/ and clean stale settings
 status: archived
 priority: important
 created: 2026-03-29T19:49:25.9709896+02:00
-updated: 2026-03-30T05:13:44.1600844+02:00
+updated: 2026-03-30T05:14:20.8069181+02:00
 started: 2026-03-30T05:13:15.7964327+02:00
 completed: 2026-03-30T05:13:15.7964327+02:00
 tags:
@@ -105,3 +105,12 @@ Architect correctly identified test contradiction in original AC and created dep
 - Missing reviewer evidence section in task body: -.02
 ### Confidence: .98
 ### Action: archive
+
+## Commits
+5b43277 chore: archive task #166 (#166, auditor) -- kanban board files
+
+[[2026-03-30]] Mon 05:14
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 5b43277 | chore | kanban/tasks/166-*.md, activity.jsonl | #166 |

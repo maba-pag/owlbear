@@ -4,7 +4,7 @@ title: Add skills-ref validation to CI
 status: todo
 priority: nice-to-have
 created: 2026-03-26T18:55:53.1789806+01:00
-updated: 2026-03-27T05:25:18.6174791+01:00
+updated: 2026-03-29T19:11:52.8326824+02:00
 tags:
     - phase-1
     - scope:skills
@@ -12,6 +12,8 @@ tags:
     - type:build
 depends_on:
     - 84
+blocked: true
+block_reason: test_validate_skills.py::TestFromAC_ExitCode::test_exit_code_one_no_arguments expects exit 1 with no args (task 84 behavior), but test_ci_integration.py::TestFromAC_ScriptAutoDiscovery expects exit 0 with no args (task 44 new behavior). Both are TestFromAC_ — builder cannot modify either. Test-writer must resolve the contradiction.
 class: standard
 ---
 
@@ -69,3 +71,18 @@ Key findings: skills-ref v0.1.1 (PyPI: agentskills CLI) validates spec complianc
 - Added: #84 (test task, TDD red phase)
 - Removed: #83 (deleted duplicate)
 - No other deps required; skills-ref is a new dev dependency (no existing package conflict)
+
+[[2026-03-29]] Sun 12:39
+## Test-Writer Notes
+- Test file: tests/test_ci_integration.py
+- Classes: TestFromAC_ScriptAutoDiscovery
+- Tests per category: 4 auto-discovery contract tests
+- Total: 4 tests, all FAIL via AssertionError (exit code 1 / usage message in stderr)
+- ruff: clean
+- AC coverage:
+  - AC1 (skills-ref in pyproject.toml): already satisfied by #84 builder; no failing tests possible
+  - AC2(a) (auto-discover .github/skills/*): test_no_args_exits_zero_when_all_skills_valid, test_no_args_produces_no_stderr_output, test_no_args_does_not_print_usage_message
+  - AC2(b-e) (filter logic, stderr, exit codes): covered by test_validate_skills.py (#84)
+  - AC3 (pre-commit hook config): already satisfied; hook exists with correct entry
+  - AC4 (all 21 skills pass via pre-commit): test_no_args_exit_code_matches_explicit_skill_dirs
+- Root cause: main() exits 1 with usage error when called with no args. Builder must add auto-discovery of .github/skills/* when argv is empty.

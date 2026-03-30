@@ -4,7 +4,7 @@ title: Extract knowledge engine from v1
 status: archived
 priority: needed
 created: 2026-03-26T17:21:09.6126432+01:00
-updated: 2026-03-29T16:04:46.1284678+02:00
+updated: 2026-03-29T16:05:02.3038832+02:00
 started: 2026-03-29T16:04:25.8044465+02:00
 completed: 2026-03-29T16:04:25.8044465+02:00
 tags:
@@ -106,3 +106,9 @@ AC was specific and complete. Minor gap: AC said get_by_id but impl uses get (fu
 
 ### Confidence: .95
 ### Action: archived
+
+[[2026-03-29]] Sun 16:05
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 02ce42e | chore | kanban/tasks/015-*.md | #15 |

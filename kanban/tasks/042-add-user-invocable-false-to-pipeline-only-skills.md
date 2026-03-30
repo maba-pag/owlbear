@@ -1,16 +1,16 @@
 ---
 id: 42
 title: 'Add user-invocable: false to pipeline-only skills'
-status: todo
+status: archived
 priority: important
 created: 2026-03-26T18:55:38.450539+01:00
-updated: 2026-03-27T22:46:44.290162+01:00
+updated: 2026-03-30T00:29:28.5565332+02:00
+started: 2026-03-30T00:29:06.0548815+02:00
+completed: 2026-03-30T00:29:06.0548815+02:00
 tags:
     - phase-1
     - scope:skills
     - type:build
-blocked: true
-block_reason: 'Waiting on user decision: docs/decisions/pending/42-ac3-slash-command-menu-verification.md — AC 3 requires VS Code UI verification that cannot be automated with pytest'
 class: standard
 ---
 
@@ -260,3 +260,54 @@ Key points:
 - VS Code UI cannot be tested with pytest. TestFromAC_SlashCommandMenu is the maximum automated proxy.
 - Decision request created: docs/decisions/pending/42-ac3-slash-command-menu-verification.md
 - Blocked pending user decision on AC 3 acceptance criteria.
+
+[[2026-03-29]] Sun 13:09
+## Test-Writer Notes (retry)\n- Retry reason: reviewer FAIL was about AC 3 test quality (proxy vs literal UI test), not missing tests.\n- Decision request 42-ac3 resolved as approved=true (option A: frontmatter-inference accepted).\n- Existing 25 tests preserved: all PASS (builder already implemented).\n- No new tests needed.
+
+[[2026-03-29]] Sun 18:53
+## Builder Notes (retry cycle)\n- Implementation already committed (prior cycles).\n- Skills changed: 11 pipeline-only SKILL.md files under skills/ already have user-invocable: false.\n- Tests: 25 passed in tests/test_skill_frontmatter.py (no failures).\n- Lint: ruff all checks passed.\n- Coverage: N/A — no Python source modules changed.\n- Evidence: decision 42-ac3 resolved approved=true; TestFromAC_SlashCommandMenu proxy test accepted.\n- No new commits needed — deliverables were committed in prior cycles.
+
+[[2026-03-29]] Sun 23:56
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | Yes | Pass | Line 44 documents user-invocable: false convention with research doc link |
+| 2 | Docstrings | No | N/A | YAML-only frontmatter change; no Python modules modified |
+| 3 | docs/sources/overview.md | No | N/A | No external patterns adopted |
+| 4 | README.md | No | N/A | No CLI commands changed |
+| 5 | Research doc linked | Yes | Pass | docs/research/user-invocable-skills.md exists and linked from task body |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found
+
+[[2026-03-29]] Sun 23:56
+## Docs Gate - PASS. No docs impact except copilot-instructions.md (already had user-invocable convention at line 44). Research doc exists at docs/research/user-invocable-skills.md. No Python changes, no CLI changes, no external patterns. No scratch files.
+
+[[2026-03-30]] Mon 00:29
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC 1: Add user-invocable: false to 11 pipeline-only skills | grep found 12 entries (11 AC + mcp-kanban from task 14). Spot-checked arch-review, tdd-workflow frontmatter. | PASS |
+| AC 2: Remaining 10 skills keep default (true) | kanban-md SKILL.md confirmed no user-invocable: false. 22 total - 12 false = 10 visible. | PASS |
+| AC 3: Test slash-command menu | Decision 42-ac3 resolved approved=true. TestFromAC_SlashCommandMenu asserts visible set = 10 user-invocable skills. | PASS |
+
+### Test Results
+- pytest (task-specific): 25 passed in tests/test_skill_frontmatter.py
+- pytest (full suite): 870 passed, 64 failed, 2 errors. No failures related to task 42.
+- ruff: all checks passed
+
+### AC Quality: 4/5
+AC 1 and AC 2 were clear and verifiable. AC 3 was slightly ambiguous (manual UI vs automated), requiring a decision request to resolve. Good overall.
+
+### Confidence: .96
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 666b4ca | docs | docs/decisions/resolved/42-ac3-slash-command-menu-verification.md | #42 |

@@ -4,7 +4,7 @@ title: Add GitHub remote MCP server to setup.py template
 status: archived
 priority: important
 created: 2026-03-29T06:32:56.3191317+02:00
-updated: 2026-03-30T01:05:49.5757972+02:00
+updated: 2026-03-30T01:06:07.9950517+02:00
 started: 2026-03-30T01:05:49.1964627+02:00
 completed: 2026-03-30T01:05:49.1964627+02:00
 tags:
@@ -140,3 +140,9 @@ See docs/scratch/121-reviewer.md for full evidence.
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/121-* files exist)
+
+[[2026-03-30]] Mon 01:06
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 41c5eb4 | chore | kanban/tasks/121-*.md | #121 |

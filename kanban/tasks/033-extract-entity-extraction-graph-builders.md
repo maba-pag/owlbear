@@ -1,34 +1,84 @@
 ---
 id: 33
 title: Extract entity extraction + graph builders
-status: ideation
+status: todo
 priority: needed
 created: 2026-03-26T18:33:48.3894411+01:00
-updated: 2026-03-26T18:33:48.3894411+01:00
+updated: 2026-03-30T08:14:01.5854175+02:00
 tags:
     - phase-1
     - scope:knowledge
     - type:build
 depends_on:
     - 32
+    - 203
 class: standard
 ---
 
 ## Objective
 
-Extract the entity extraction pipeline and graph building from v1 into packages/knowledge/.
+Replace no-op stubs in packages/knowledge/ with protocol-backed entity extraction and graph building. Uses a pluggable StructuredExtractor protocol so the MCP server or orchestrator can inject the LLM provider.
 
 ## Acceptance Criteria
 
-- [ ] Extract extractor.py (EntityExtractor — LLM-based entity extraction)
-- [ ] Extract graph_builder.py (IntraDocGraphBuilder)
-- [ ] Extract inter_doc_graph_builder.py (InterDocGraphBuilder)
-- [ ] Extract ingest.py (document ingest pipeline)
-- [ ] Extract intake.py (intake coordination)
-- [ ] Replace PydanticAI Agent calls with a pluggable LLM interface (protocol/ABC)
-- [ ] Unit tests: entity extraction with mock LLM, graph building from entities
-- [ ] Ingest pipeline end-to-end test: text in, entities + graph edges out
+- [ ] protocol.py â€” add StructuredExtractor protocol: @runtime_checkable, single method sync def extract(self, prompt: str) -> ExtractionResult, following the existing EmbeddingProvider / VectorStoreProtocol pattern
+- [ ] extractor.py â€” replace no-op stub: EntityExtractor(extractor: StructuredExtractor) constructor; extract(text: str, metadata: dict | None = None) -> ExtractionResult optionally prefixes metadata key-value pairs to the prompt before delegating to the injected extractor; empty/whitespace input returns empty ExtractionResult without calling the extractor
+- [ ] graph_builder.py â€” replace no-op stub: IntraDocGraphBuilder(extractor: StructuredExtractor) constructor; uild(entities, scope, document_id) -> GraphBuildResult; <2 entities returns empty result; >80 entities batches by entity_type (one extractor call per type); all inferred edges stamped with weight=0.5 and metadata={source: intra_doc_inference}
+- [ ] inter_doc_graph_builder.py â€” separate file (move InterDocGraphBuilder out of graph_builder.py): InterDocGraphBuilder(extractor: StructuredExtractor, vector_store: VectorStoreProtocol, graph_store: GraphStore, top_k: int = 10, cosine_threshold: float = 0.70) constructor; vector pre-filtering via get_embedding + search_similar per entity; cross-doc filter (skip same document_id); dedup existing inter-doc edges via list_edges; batches candidate pairs in groups of 40; all inferred edges stamped with weight=0.4 and metadata={source: inter_doc_inference}
+- [ ] Prompt constants (EXTRACTION_PROMPT, GRAPH_BUILDER_PROMPT, INTER_DOC_PROMPT) preserved as module-level string constants matching v1 content
+- [ ] Zero PydanticAI imports in any knowledge package module (verified by grep -r pydantic_ai packages/knowledge/)
+- [ ] ExtractionResult and GraphBuildResult models preserved: frozen Pydantic BaseModel, same field schema as current v2 stubs
+- [ ] All tests from preceding test task #203 pass; ruff clean
 
 ## Context
 
-Depends on #32 (vector store). Subtask 3/4 of knowledge engine extraction. The entity extractor uses an LLM — v1 uses PydanticAI Agent. v2 needs a pluggable interface so the MCP server or orchestrator can inject the LLM provider.
+Depends on #32 (vector store, shared protocol.py). Depends on #203 (TDD RED â€” failing tests). Subtask 3/4 of knowledge engine extraction. Downstream: #158 (intake/ingest pipeline) depends on this task's StructuredExtractor protocol.
+
+Research doc: docs/research/extract-entity-extraction-graph-builders.md
+
+### Design decisions
+- **StructuredExtractor** (narrow protocol, Option C from research) at .85 confidence â€” matches existing EmbeddingProvider pattern, all 3 modules return ExtractionResult, system prompt is caller-owned
+- **intake/ingest split** into #158 per research S4 â€” ingest depends on DocumentStore extensions and #135 (CancelSignal, sandbox_path)
+
+[[2026-03-30]] Mon 08:12
+
+## Architecture Review
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| StructuredExtractor protocol in protocol.py | Follows EmbeddingProvider/VectorStoreProtocol pattern. Added @runtime_checkable spec. | Tightened |
+| extractor.py EntityExtractor with injected StructuredExtractor | Clarified constructor signature, metadata-prefix behavior, empty-input guard. | Tightened |
+| graph_builder.py IntraDocGraphBuilder | Clarified constructor, batch threshold (80), edge stamp (weight=0.5, source=intra_doc_inference). Matches v1 _BATCH_THRESHOLD. | Tightened |
+| inter_doc_graph_builder.py separate file | Clarified full constructor (extractor + vector_store + graph_store + top_k + cosine_threshold). Matches v1 DI pattern. | Tightened |
+| Prompt constants preserved | Added as explicit AC line. V1 has EXTRACTION_PROMPT, GRAPH_BUILDER_PROMPT, INTER_DOC_PROMPT. | Added |
+| Zero PydanticAI imports | Clear, verifiable by grep. | Kept |
+| ExtractionResult/GraphBuildResult preserved | Frozen Pydantic, same schema as v2 stubs. Verifiable. | Kept |
+| Unit tests (original AC) | REMOVED from impl task. Moved to preceding test task #203 for TDD compliance. | Moved |
+| All tests pass; ruff clean | Builder gate condition. | Kept |
+
+### Architecture Notes
+Module layering is clean. All modules stay within owlbear_knowledge/ with no upward imports. StructuredExtractor follows the established Protocol pattern (EmbeddingProvider, VectorStoreProtocol) with @runtime_checkable. DI via constructor matches existing codebase convention. InterDocGraphBuilder needs GraphStore (for get_entity/list_edges dedup) and VectorStoreProtocol (for embedding pre-filter) per v1 pattern. System prompts are caller-owned per research recommendation (Option C, .85 confidence). intake/ingest scope correctly split into #158 per research S4.
+
+### Failure Mode Map
+| Codepath | Failure Mode | Exception | Handling | User Impact |
+|----------|-------------|-----------|----------|-------------|
+| EntityExtractor.extract() | LLM call fails | From StructuredExtractor | Catch, return empty ExtractionResult | Silent degradation |
+| IntraDocGraphBuilder.build() | Batch LLM call fails | From StructuredExtractor | Catch per-batch, continue | Partial graph edges |
+| InterDocGraphBuilder._find_candidate_pairs() | Vector lookup fails | From VectorStoreProtocol | Catch, skip entity | Fewer cross-doc candidates |
+| InterDocGraphBuilder.build() | Batch LLM call fails | From StructuredExtractor | Catch per-batch, continue | Partial cross-doc edges |
+
+### Changes Made
+- Rewrote AC: 8 precise lines (was 7 with mixed test/impl concerns)
+- Added constructor signatures with DI types for all 3 classes
+- Added InterDocGraphBuilder full constructor params (vector_store, graph_store, top_k, cosine_threshold)
+- Added prompt constants as explicit AC line
+- Removed unit test AC (moved to #203)
+- Added depends_on #203 (TDD RED pair)
+- Created #203 (Test: Entity extraction and graph builders) at backlog
+
+### Dependencies
+- Verified: #32 (vector store, todo) provides shared protocol.py types
+- Added: #203 (preceding test task, backlog)
+- Downstream: #158 depends on #33 (StructuredExtractor protocol)

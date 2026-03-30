@@ -4,7 +4,7 @@ title: Add argument-hint to remaining user-invoked skills
 status: archived
 priority: nice-to-have
 created: 2026-03-27T02:56:52.2499907+01:00
-updated: 2026-03-30T06:37:13.8676351+02:00
+updated: 2026-03-30T06:37:31.7400847+02:00
 started: 2026-03-30T06:37:13.5343471+02:00
 completed: 2026-03-30T06:37:13.5343471+02:00
 tags:
@@ -166,3 +166,9 @@ Deliverables committed in 5d60deb (feat: add argument-hint, #85 builder). Task #
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 06:37
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| bd4caf1 | chore | kanban/tasks/079-*.md | #79 |

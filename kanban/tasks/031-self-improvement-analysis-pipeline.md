@@ -1,10 +1,10 @@
 ---
 id: 31
 title: Self-improvement analysis pipeline
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-26T18:05:35.1098126+01:00
-updated: 2026-03-26T18:05:35.1098126+01:00
+updated: 2026-03-29T19:52:06.9021837+02:00
 tags:
     - phase-2
     - scope:orchestrator
