@@ -91,6 +91,16 @@ needs calibration.
 
 ## Step 3 — Score and decide
 
+**Deduction rubric:** Start at 1.0, deduct per criterion:
+
+| Criterion | Deduction |
+|-----------|-----------|
+| Per AC line with no specific evidence | -.02 |
+| Lint issues (ruff violations) | -.05 |
+| AC quality score at 3 or below | -.03 |
+| Missing reviewer evidence section | -.02 |
+| Full-suite test failures in task scope | -.05 |
+
 Thresholds from agent-common → **Confidence thresholds** (single source of truth):
 
 | Score | Meaning | Action |

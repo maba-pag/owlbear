@@ -56,7 +56,7 @@ Follow the `task-verification` skill for the step-by-step exit gate process.
 
 ### Channel B — Task body (write before returning)
 
-Append an `## Audit` section to the task body:
+Append an Audit section to the task body:
 
 ```powershell
 kanban\kanban-md.exe edit {ID} -a "## Audit
@@ -69,6 +69,7 @@ kanban\kanban-md.exe edit {ID} -a "## Audit
 - pytest: {summary}
 - ruff: {summary}
 
+### Deduction breakdown: {list each criterion applied, e.g. '-.02 AC line 3 no evidence'}
 ### Confidence: {.XX}
 ### Action: {archive/reject}" -t
 ```
@@ -132,6 +133,7 @@ kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |
 - Uncommitted work that doesn’t map to any done task
 - Merge conflicts that prevent committing
 - Tasks in `done` with no implementation evidence at all
+- Your confidence score is between .95 and .97 without explicit deduction calculation
 - The task has AC quality score ≤ 2 (create a follow-up task for architect calibration)
 
 **Common failure rationalizations:**
