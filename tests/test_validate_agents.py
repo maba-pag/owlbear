@@ -63,15 +63,6 @@ class TestFromAC_ValidateAgentsTodoCheck:
 
     # --- Happy paths ---
 
-    def test_tools_todos_passes(self, tmp_path: Path) -> None:
-        """AC1: tools: containing 'todos' (not bare 'todo') returns no errors."""
-        agent_file = tmp_path / "clean.agent.md"
-        _write_agent(
-            agent_file,
-            _agent_content("name: clean\ntools: [todos, read/readFile]"),
-        )
-        assert validate_agent(agent_file) == []
-
     def test_no_tools_field_passes(self, tmp_path: Path) -> None:
         """AC1: agent file with no tools: field at all returns no errors."""
         agent_file = tmp_path / "no-tools.agent.md"
@@ -79,13 +70,6 @@ class TestFromAC_ValidateAgentsTodoCheck:
             agent_file,
             _agent_content("name: no-tools\ndescription: Agent without tools."),
         )
-        assert validate_agent(agent_file) == []
-
-    def test_multiline_tools_todos_passes(self, tmp_path: Path) -> None:
-        """AC1: multiline tools: block containing only 'todos' returns no errors."""
-        content = "---\nname: multiline\ntools:\n  [todos, vscode/memory]\n---\n\n# Body\n"
-        agent_file = tmp_path / "multiline.agent.md"
-        _write_agent(agent_file, content)
         assert validate_agent(agent_file) == []
 
     # --- Error paths ---
@@ -131,7 +115,7 @@ class TestFromAC_ValidateAgentsTodoCheck:
         agent_file = tmp_path / "substr.agent.md"
         _write_agent(
             agent_file,
-            _agent_content("name: substr\ntools: [todos, todo_extra]"),
+            _agent_content("name: substr\ntools: [read/readFile, todo_extra]"),
         )
         assert validate_agent(agent_file) == []
 
@@ -148,7 +132,7 @@ class TestFromAC_ValidateAgentsTodoCheck:
             _agent_content(
                 "name: planner-like\n"
                 "argument-hint: 'Orchestrate: {status:todos}'\n"
-                "tools: [todos, read/readFile]",
+                "tools: [read/readFile]",
             ),
         )
         assert validate_agent(agent_file) == []
@@ -167,7 +151,7 @@ class TestFromAC_ValidateAgentsResolveCheck:
         agent_file = tmp_path / "clean.agent.md"
         _write_agent(
             agent_file,
-            _agent_content("name: clean\ntools: [todos]"),
+            _agent_content("name: clean\ntools: [read/readFile]"),
         )
         assert validate_agent(agent_file) == []
 
