@@ -307,3 +307,55 @@ class TestFromAC_RichMethods:  # noqa: N801
         assert isinstance(sent_msg, SpeakMsg)
         assert sent_msg.text == "[image]"
 
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: VoiceProcessManager abstract base behaviour
+# ---------------------------------------------------------------------------
+
+
+class _ConcreteManager(VoiceProcessManager):
+    """Minimal concrete subclass for testing the base class shared methods."""
+
+    async def send(self, msg: object) -> None:
+        raise NotImplementedError
+
+    async def receive(self):  # type: ignore[override]
+        raise NotImplementedError
+
+    async def shutdown(self) -> None:
+        pass  # no-op — lets __aexit__ complete without raising
+
+
+class TestBuilderDiscovered:
+    """VoiceProcessManager base class behaviour not covered by TestFromAC_* classes."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aenter_returns_self(self) -> None:
+        mgr = _ConcreteManager()
+        result = await mgr.__aenter__()
+        assert result is mgr
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aexit_calls_shutdown(self) -> None:
+        mgr = _ConcreteManager()
+        # Should complete without raising (shutdown is a no-op on _ConcreteManager)
+        await mgr.__aexit__(None, None, None)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_send_raises_not_implemented(self) -> None:
+        mgr = VoiceProcessManager()
+        with pytest.raises(NotImplementedError):
+            await mgr.send("x")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_receive_raises_not_implemented(self) -> None:
+        mgr = VoiceProcessManager()
+        with pytest.raises(NotImplementedError):
+            await mgr.receive()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_shutdown_raises_not_implemented(self) -> None:
+        mgr = VoiceProcessManager()
+        with pytest.raises(NotImplementedError):
+            await mgr.shutdown()
+
