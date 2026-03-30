@@ -1,11 +1,12 @@
 ---
 id: 153
 title: 'Test: planner data models and board reader'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-29T19:26:49.0532083+02:00
-updated: 2026-03-29T19:57:53.64276+02:00
+updated: 2026-03-30T17:02:04.237038+02:00
 started: 2026-03-29T19:26:53.8364954+02:00
+completed: 2026-03-30T17:02:03.7644787+02:00
 tags:
     - phase-2
     - ' scope:orchestrator'
@@ -44,3 +45,15 @@ class: standard
 - Mock asyncio.create_subprocess_exec for board reader tests
 - Use canned kanban-md JSON from research doc S3.1 schema
 - Follow packages/mcp-kanban/tests/test_server.py subprocess mocking pattern
+
+[[2026-03-30]] Mon 14:21
+## Test-Writer Notes
+- This task IS a test-writing task (tagged test). No separate TW pass needed — the task itself is TW output.
+- Architect approved atomicity: "single test task appropriate for same-domain models and reader."
+- Retroactively added by manual triage (2026-03-30) to unblock Gate 4.
+
+[[2026-03-30]] Mon 15:11
+## Review Evidence
+pytest: 27 passed, 0 failed | ruff: All checks passed! | Coverage: board.py 100%, models.py 100%
+AC Compliance: All 14 AC lines PASS
+Verdict: PASS confidence 0.97
