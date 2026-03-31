@@ -4,7 +4,7 @@ title: Subagent nesting architecture — validate designs and create implementat
 status: archived
 priority: needed
 created: 2026-03-30T18:23:38.6783812+02:00
-updated: 2026-03-31T06:02:32.833249+02:00
+updated: 2026-03-31T06:10:37.1623991+02:00
 started: 2026-03-31T06:02:32.3188552+02:00
 completed: 2026-03-31T06:02:32.3188552+02:00
 tags:
@@ -124,3 +124,41 @@ kanban edit 228 --status todo --release
 
 [[2026-03-31]] Tue 04:05
 ## Builder Notes (2nd pass)\n- Review failure: AC 2 lacked empirical evidence for parallel runSubagent calls.\n- Fix: Ran two simultaneous runSubagent calls from this builder session (L2 depth).\n- Both calls resolved successfully (count=74 tasks, count=73 tests), start=16:52:41 for both.\n- No rate-limit errors observed for N=2 parallel calls.\n- Updated docs/research/subagent-nesting-architecture.md Section 3a with recorded session data.\n- No code changes (research task).\n- Lint: N/A (no source files changed).
+
+[[2026-03-31]] Tue 06:03
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b3bafc5 | docs | research doc + 4 decision files + kanban task | #228 |
+
+[[2026-03-31]] Tue 06:10
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Validate 4 categories against pain points | S3b validation table (Valid/Conf/Beneficiaries/Evidence) | PASS |
+| Empirically test parallel runSubagent calls | S3a: 2 simultaneous calls at 16:52:41, count=74/73, no rate limits | PASS |
+| Quality-Runner interface (input/output/error/mode) | S3c: 5 input fields, 4 output sections, 2-retry contract, assign .80 | PASS |
+| Category B: fan-out beneficiaries + throughput | S3d: ranking table, reviewer 40-50% to builder 10-15% | PASS |
+| Category F: retry threshold | S3e: threshold=2 (.75 conf) | PASS |
+| Decision request per category | 4 files in docs/decisions/resolved/228-*.md, all approved:true | PASS |
+| Follow-up tasks at ideation | #263 backlog, #264 todo, #265 backlog, #266 ideation (created, progressed) | PASS |
+| Research doc draft to final | Header Status: Complete | PASS |
+
+### Research Task Checks
+- Doc exists: docs/research/subagent-nesting-architecture.md (Complete)
+- Follow-up tasks: #263, #264, #265, #266 all reference research doc
+- Decision requests: 4 in docs/decisions/resolved/228-*.md
+
+### Test Results
+- pytest: 1891 passed, 162 failed (all pre-existing, none in task scope)
+- ruff: N/A (no source code changed)
+
+### AC Quality Score: 4/5
+AC was specific and verifiable. One interpretation gap (AC 2 'empirically test' vs cite docs) caused a review cycle, but the AC wording was correct.
+
+### Deduction breakdown
+- -.02: Missing 2nd reviewer evidence section after builder fix (task progressed review-to-done without recorded 2nd Review Evidence)
+
+### Confidence: .98
+### Action: archive
