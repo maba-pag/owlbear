@@ -1,10 +1,12 @@
 ---
 id: 462
 title: Update agent-common defer-to-user boundary with tier classification
-status: done
+status: archived
 priority: needed
 created: 2026-03-31T03:40:17.7617381+02:00
-updated: 2026-03-31T07:12:28.6941641+02:00
+updated: 2026-03-31T08:03:43.1481912+02:00
+started: 2026-03-31T08:03:42.7488869+02:00
+completed: 2026-03-31T08:03:42.7488869+02:00
 tags:
     - process
     - scope:agents
