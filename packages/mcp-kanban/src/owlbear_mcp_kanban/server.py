@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ __all__ = [
     "move_task",
     "pick_task",
     "show_task",
+    "start_work",
 ]
 
 _DEFAULT_KANBAN_DIR = Path("kanban")
@@ -274,3 +276,38 @@ async def board_context(ctx: Context) -> str:
     if rc != 0:
         return f"error: {stderr.strip()}"
     return stdout
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+async def start_work(ctx: Context, task_id: str, claim: str = "") -> str:
+    """Claim a task and return its full details as JSON with injected claim_name.
+
+    Compound operation: replaces separate claim + show_task calls with a single call.
+    If no claim is provided, auto-generates one via kanban-md agent-name.
+    The task remains at its current status — no status change is made.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+
+    # Step 1: resolve claim name
+    if claim:
+        claim_name = claim
+    else:
+        stdout, stderr, rc = await _run_kanban(app_ctx, "agent-name")
+        if rc != 0:
+            return f"error: {stderr.strip() or stdout.strip()}"
+        claim_name = stdout.strip()
+
+    # Step 2: claim the task (no --status: stays at current status)
+    stdout, stderr, rc = await _run_kanban(app_ctx, "edit", task_id, "--claim", claim_name)
+    if rc != 0:
+        return f"error: {stderr.strip() or stdout.strip()}"
+
+    # Step 3: fetch task details
+    stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
+    if rc != 0:
+        return f"error: {stderr.strip() or stdout.strip()}"
+
+    # Step 4: inject claim_name and return merged JSON
+    data: dict = json.loads(stdout)
+    data["claim_name"] = claim_name
+    return json.dumps(data)
