@@ -11,6 +11,7 @@ All tests FAIL in RED phase — ImportError expected until builder implements #5
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
     app_lifespan,
     create_task,
     edit_task,
+    end_work,
     list_tasks,
     move_task,
     pick_task,
@@ -59,6 +61,27 @@ def _mock_proc(stdout: str = "ok", stderr: str = "", returncode: int = 0) -> Asy
     proc.communicate.return_value = (stdout.encode(), stderr.encode())
     proc.returncode = returncode
     return proc
+
+
+_DEFAULT_STATUSES: list[str] = [
+    "ideation", "backlog", "todo", "in-progress", "review", "docs", "done"
+]
+
+
+def _make_app_context_with_statuses(
+    statuses: list[str] | None = None,
+    kanban_bin: Path = Path("/fake/kanban-md"),
+    kanban_dir: Path = Path("/fake/kanban"),
+) -> AppContext:
+    """Return an AppContext with statuses for end_work tests.
+
+    RED phase: fails until builder adds statuses field to AppContext.
+    """
+    return AppContext(
+        kanban_bin=kanban_bin,
+        kanban_dir=kanban_dir,
+        statuses=statuses if statuses is not None else list(_DEFAULT_STATUSES),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -466,3 +489,403 @@ class TestFromAC_Tools:
         assert isinstance(result, str)
         assert result.startswith("error:")
         assert _FAKE_STDERR.strip() in result
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AppContextStatuses
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AppContextStatuses:
+    """Contract tests for AppContext.statuses extension and lifespan config population (#497 AC)."""
+
+    # AC: Extend AppContext with statuses: list[str] field
+    def test_app_context_has_statuses_field(self) -> None:
+        """AppContext accepts a statuses kwarg and exposes it as a list[str] field."""
+        ctx = _make_app_context_with_statuses(["todo", "in-progress", "done"])
+        assert hasattr(ctx, "statuses")
+        assert isinstance(ctx.statuses, list)
+        assert all(isinstance(s, str) for s in ctx.statuses)
+
+    # AC: populated from config subprocess (JSON mode) during app_lifespan
+    @pytest.mark.asyncio
+    async def test_lifespan_populates_statuses_from_config_json(self) -> None:
+        """app_lifespan runs config --json and stores returned statuses in AppContext.statuses."""
+        expected_statuses = ["todo", "in-progress", "review", "done"]
+        config_output = json.dumps({"statuses": expected_statuses})
+        mock_server = MagicMock()
+
+        async def _fake_exec(*args: Any, **_kwargs: Any) -> Any:
+            if "config" in args:
+                return _mock_proc(stdout=config_output)
+            return _mock_proc()
+
+        with (
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        ):
+            async with app_lifespan(mock_server) as ctx:
+                assert hasattr(ctx, "statuses")
+                assert ctx.statuses == expected_statuses
+
+    # AC: cached once at startup
+    @pytest.mark.asyncio
+    async def test_lifespan_calls_config_exactly_once(self) -> None:
+        """app_lifespan calls the config subprocess exactly once (cached; not repeated per tool call)."""
+        config_output = json.dumps({"statuses": ["todo", "in-progress", "done"]})
+        mock_server = MagicMock()
+        config_call_count = 0
+
+        async def _fake_exec(*args: Any, **_kwargs: Any) -> Any:
+            nonlocal config_call_count
+            if "config" in args:
+                config_call_count += 1
+            return _mock_proc(stdout=config_output)
+
+        with (
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=True),
+            patch("asyncio.create_subprocess_exec", side_effect=_fake_exec),
+        ):
+            async with app_lifespan(mock_server) as _ctx:
+                pass
+
+        assert config_call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWork
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWork:
+    """Contract tests for end_work compound tool derived from #497 AC."""
+
+    # ------------------------------------------------------------------ helpers
+
+    def _make_mcp_ctx_with_statuses(
+        self, statuses: list[str] | None = None
+    ) -> MagicMock:
+        return _make_mcp_ctx(_make_app_context_with_statuses(statuses))
+
+    def _show_json(
+        self,
+        status: str = "in-progress",
+        claimed_by: str = "test-agent",
+        task_id: int = 42,
+    ) -> str:
+        return json.dumps({"id": task_id, "status": status, "claimed_by": claimed_by})
+
+    def _patch_run_seq(self, *responses: tuple[str, str, int]) -> Any:
+        """Patch _run_kanban with sequential (stdout, stderr, rc) responses."""
+        if len(responses) == 1:
+            return patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=responses[0]),
+            )
+        return patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(side_effect=list(responses)),
+        )
+
+    def _patch_run_always(self, stdout: str = '{"id": 42}', rc: int = 0) -> Any:
+        """Patch _run_kanban to always return the same (stdout, '', rc) for any call count."""
+        return patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(stdout, "", rc)),
+        )
+
+    def _edit_calls(self, mock_run: AsyncMock) -> list[Any]:
+        return [c for c in mock_run.call_args_list if "edit" in c[0]]
+
+    def _all_cmds(self, mock_run: AsyncMock) -> list[str]:
+        return [c[0][1] for c in mock_run.call_args_list if len(c[0]) > 1]
+
+    # ------------------------------------------------------------------ outcome=success (happy)
+
+    # AC: verify edit called with -a NOTE -t --status NEXT_STATUS --release --json
+    @pytest.mark.asyncio
+    async def test_success_edit_includes_next_status(self) -> None:
+        """outcome=success: edit call includes --status set to statuses[current_index + 1]."""
+        statuses = ["todo", "in-progress", "review", "docs", "done"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress", claimed_by="builder"), "", 0)
+        edit_resp = ('{"id": 42, "status": "review"}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            await end_work(mcp_ctx, task_id="42", note="done!", outcome="success")
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls, "edit was not called for success outcome"
+        edit_args = list(edit_calls[-1][0])
+        assert "--status" in edit_args
+        assert edit_args[edit_args.index("--status") + 1] == "review"
+        assert "--release" in edit_args
+        assert "--json" in edit_args
+
+    @pytest.mark.asyncio
+    async def test_success_edit_includes_note_and_timestamp(self) -> None:
+        """outcome=success: edit call includes -a NOTE and --timestamp (-t) flags."""
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress"), "", 0)
+        edit_resp = ('{"id": 42}', "", 0)
+        note_text = "implementation complete"
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            await end_work(mcp_ctx, task_id="42", note=note_text, outcome="success")
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "-a" in edit_args
+        assert any(note_text in arg for arg in edit_args)
+        assert "--timestamp" in edit_args
+
+    # AC: return JSON string from final CLI call
+    @pytest.mark.asyncio
+    async def test_success_returns_json_from_final_cli_call(self) -> None:
+        """end_work returns the stdout of the final _run_kanban call (edit response)."""
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress"), "", 0)
+        final_json = '{"id": 42, "status": "review", "title": "my task"}'
+        edit_resp = (final_json, "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp):
+            result = await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
+
+        assert result == final_json
+
+    # ------------------------------------------------------------------ outcome=success at done (edge)
+
+    # AC: verify edit + archive sequence (two _run_kanban calls)
+    @pytest.mark.asyncio
+    async def test_success_at_done_calls_edit_then_archive(self) -> None:
+        """outcome=success when task is at done status: _run_kanban is called with archive."""
+        statuses = ["todo", "in-progress", "done"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="done", claimed_by="builder"), "", 0)
+        edit_resp = ('{"id": 42, "status": "done"}', "", 0)
+        archive_resp = ('{"id": 42, "status": "archived"}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp, archive_resp) as mock_run:
+            await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
+
+        cmds = self._all_cmds(mock_run)
+        assert "archive" in cmds, "archive was not called for done→success path"
+
+    # AC: if archive fails after edit succeeds, return the error
+    @pytest.mark.asyncio
+    async def test_success_at_done_returns_error_if_archive_fails(self) -> None:
+        """outcome=success at done: if archive subprocess fails, end_work returns error string."""
+        statuses = ["todo", "done"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="done"), "", 0)
+        edit_resp = ('{"id": 42}', "", 0)
+        archive_fail = ("", "archive failed: permission denied", 1)
+
+        with self._patch_run_seq(show_resp, edit_resp, archive_fail):
+            result = await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
+
+        assert isinstance(result, str)
+        assert "error" in result.lower()
+
+    # ------------------------------------------------------------------ next-status derivation (boundary)
+
+    # AC: statuses[current_index + 1]
+    @pytest.mark.asyncio
+    async def test_next_status_derivation_uses_statuses_index(self) -> None:
+        """Next status is statuses[index + 1]; index comes from current task status position."""
+        # Use non-default ordering to verify derivation is not hardcoded
+        custom_statuses = ["alpha", "beta", "gamma", "delta"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(custom_statuses)
+        show_resp = (self._show_json(status="beta"), "", 0)
+        edit_resp = ('{"id": 42}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--status" in edit_args
+        assert edit_args[edit_args.index("--status") + 1] == "gamma"
+
+    # ------------------------------------------------------------------ outcome=fail (happy)
+
+    # AC: verify edit called with -a NOTE -t --release --json (no status change)
+    @pytest.mark.asyncio
+    async def test_fail_edit_has_no_status_flag(self) -> None:
+        """outcome=fail: edit call does NOT include --status (task stays at current status)."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with self._patch_run_always() as mock_run:
+            await end_work(
+                mcp_ctx, task_id="42", note="couldn't finish", outcome="fail", claim="my-agent"
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = edit_calls[-1][0]
+        assert "--status" not in edit_args
+        assert "--release" in edit_args
+        assert "-a" in edit_args
+
+    @pytest.mark.asyncio
+    async def test_fail_edit_includes_timestamp_and_release(self) -> None:
+        """outcome=fail: edit includes --timestamp and --release flags."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with self._patch_run_always() as mock_run:
+            await end_work(
+                mcp_ctx, task_id="42", note="context overflow", outcome="fail", claim="agent"
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = edit_calls[-1][0]
+        assert "--timestamp" in edit_args
+        assert "--release" in edit_args
+
+    # ------------------------------------------------------------------ outcome=block (happy)
+
+    # AC: verify edit called with -a NOTE -t --block REASON --release --json
+    @pytest.mark.asyncio
+    async def test_block_edit_includes_block_reason_and_release(self) -> None:
+        """outcome=block: edit call includes --block {block_reason} and --release."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+        reason = "waiting on user decision #DR-42"
+
+        with self._patch_run_always() as mock_run:
+            await end_work(
+                mcp_ctx,
+                task_id="42",
+                note="blocked",
+                outcome="block",
+                block_reason=reason,
+                claim="agent",
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--block" in edit_args
+        assert edit_args[edit_args.index("--block") + 1] == reason
+        assert "--release" in edit_args
+
+    # ------------------------------------------------------------------ outcome=block validation (error)
+
+    # AC: verify error returned (validation) when block_reason is empty
+    @pytest.mark.asyncio
+    async def test_block_without_reason_returns_error_before_any_cli_calls(self) -> None:
+        """outcome=block with empty block_reason: returns error string, zero CLI calls."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=('{"id": 42}', "", 0)),
+        ) as mock_run:
+            result = await end_work(
+                mcp_ctx, task_id="42", note="blocked", outcome="block", block_reason=""
+            )
+
+        assert isinstance(result, str)
+        assert "error" in result.lower()
+        mock_run.assert_not_called()
+
+    # ------------------------------------------------------------------ outcome=reject (happy + boundary)
+
+    # AC: verify edit called with -a NOTE -t --status move_to --release --json
+    @pytest.mark.asyncio
+    async def test_reject_edit_uses_move_to_status(self) -> None:
+        """outcome=reject: edit call includes --status {move_to}."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with self._patch_run_always() as mock_run:
+            await end_work(
+                mcp_ctx,
+                task_id="42",
+                note="fundamental issue",
+                outcome="reject",
+                move_to="backlog",
+                claim="agent",
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--status" in edit_args
+        assert edit_args[edit_args.index("--status") + 1] == "backlog"
+        assert "--release" in edit_args
+
+    # AC: default move_to is ideation
+    @pytest.mark.asyncio
+    async def test_reject_default_move_to_is_ideation(self) -> None:
+        """outcome=reject without explicit move_to: --status ideation is used."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with self._patch_run_always() as mock_run:
+            await end_work(
+                mcp_ctx, task_id="42", note="rejected", outcome="reject", claim="agent"
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--status" in edit_args
+        assert edit_args[edit_args.index("--status") + 1] == "ideation"
+
+    # ------------------------------------------------------------------ claim parameter (happy)
+
+    # AC: when provided, pass to edit's --claim flag
+    @pytest.mark.asyncio
+    async def test_claim_provided_passed_to_edit(self) -> None:
+        """When claim param is provided, it appears as --claim {claim} in the edit call."""
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        # claimed_by in show is different from provided claim — correct value must win
+        show_resp = (self._show_json(status="in-progress", claimed_by="old-agent"), "", 0)
+        edit_resp = ('{"id": 42}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            await end_work(
+                mcp_ctx, task_id="42", note="done", outcome="success", claim="provided-agent"
+            )
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--claim" in edit_args
+        assert edit_args[edit_args.index("--claim") + 1] == "provided-agent"
+
+    # AC: when absent, read claimed_by from show JSON output
+    @pytest.mark.asyncio
+    async def test_claim_absent_reads_claimed_by_from_show_json(self) -> None:
+        """When claim param is omitted, the claimed_by value from show JSON is used for --claim."""
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress", claimed_by="the-builder-agent"), "", 0)
+        edit_resp = ('{"id": 42}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            # No claim param — must derive from show
+            await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls
+        edit_args = list(edit_calls[-1][0])
+        assert "--claim" in edit_args
+        assert edit_args[edit_args.index("--claim") + 1] == "the-builder-agent"
+
+    # ------------------------------------------------------------------ error propagation (error)
+
+    @pytest.mark.asyncio
+    async def test_show_error_is_propagated(self) -> None:
+        """If the initial show call fails, end_work returns an error string immediately."""
+        mcp_ctx = self._make_mcp_ctx_with_statuses()
+
+        with self._patch_run_seq(("", "task not found", 1)):
+            result = await end_work(mcp_ctx, task_id="999", note="done", outcome="success")
+
+        assert isinstance(result, str)
+        assert "error" in result.lower()
