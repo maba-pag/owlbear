@@ -7,9 +7,8 @@ AC coverage:
   - move_task:     destructiveHint=False, idempotentHint=True
   - edit_task:     destructiveHint=False
   - pick_task:     destructiveHint=False
-  - board_context: readOnlyHint=True,  idempotentHint=True
   - ToolAnnotations imported from mcp.types in server module
-  - All 7 tools have annotations (not None)
+  - All 6 tools have annotations (not None)
 
 All tests FAIL in RED phase — ToolAnnotations not yet applied to @mcp.tool() decorators.
 """
@@ -53,7 +52,7 @@ class TestFromAC_ToolAnnotations:
             "server module must import ToolAnnotations so it can be used in @mcp.tool() decorators"
         )
 
-    # -- All 7 tools have annotations (not None) ------------------------------
+    # -- All 6 tools have annotations (not None) ------------------------------
 
     @pytest.mark.parametrize(
         "tool_name",
@@ -64,7 +63,6 @@ class TestFromAC_ToolAnnotations:
             "move_task",
             "edit_task",
             "pick_task",
-            "board_context",
         ],
     )
     def test_all_tools_have_annotations(self, tool_name: str) -> None:
@@ -159,20 +157,4 @@ class TestFromAC_ToolAnnotations:
             f"Expected destructiveHint=False for pick_task, got: {ann.destructiveHint!r}"
         )
 
-    # -- board_context --------------------------------------------------------
 
-    def test_board_context_read_only_hint_true(self) -> None:
-        """board_context is read-only: readOnlyHint must be True."""
-        ann = _get_tool_annotations("board_context")
-        assert ann is not None, "board_context has no ToolAnnotations"
-        assert ann.readOnlyHint is True, (  # type: ignore[union-attr]
-            f"Expected readOnlyHint=True for board_context, got: {ann.readOnlyHint!r}"
-        )
-
-    def test_board_context_idempotent_hint_true(self) -> None:
-        """board_context is idempotent: idempotentHint must be True."""
-        ann = _get_tool_annotations("board_context")
-        assert ann is not None, "board_context has no ToolAnnotations"
-        assert ann.idempotentHint is True, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=True for board_context, got: {ann.idempotentHint!r}"
-        )

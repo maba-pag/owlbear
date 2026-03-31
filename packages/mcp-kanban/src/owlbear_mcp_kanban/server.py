@@ -21,7 +21,6 @@ __all__ = [
     "_apply_tool_exclusions",
     "_run_kanban",
     "app_lifespan",
-    "board_context",
     "create_task",
     "edit_task",
     "list_tasks",
@@ -233,7 +232,7 @@ async def create_task(  # noqa: PLR0913
 async def move_task(ctx: Context, task_id: str, status: str) -> str:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status)
+    stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status, "--json")
     if rc != 0:
         return f"error: {stderr.strip()}"
     return stdout
@@ -314,17 +313,8 @@ async def pick_task(
         args += ["--move", move]
     if tags:
         args += ["--tags", tags]
+    args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
-    if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def board_context(ctx: Context) -> str:
-    """Get a compact board context snapshot showing task distribution."""
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-    stdout, stderr, rc = await _run_kanban(app_ctx, "context")
     if rc != 0:
         return f"error: {stderr.strip()}"
     return stdout
