@@ -305,6 +305,93 @@ class TestFromAC_ListTasksLeanJson:
 
 
 # ---------------------------------------------------------------------------
+# TestFromAC_ListTasksLeanJsonPresence — lean fields are RETAINED (not over-stripped)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksLeanJsonPresence:
+    """Tests that lean JSON output RETAINS expected fields (guards against over-stripping).
+
+    The reviewer cited a mutation: `lean = [{} for task in tasks]` passes all existing
+    tests because only absence of stripped fields was checked.  These tests assert
+    PRESENCE of the fields that must survive stripping, making that mutation fail.
+    """
+
+    # Core lean fields must all survive stripping
+    @pytest.mark.asyncio
+    async def test_lean_json_retains_all_expected_lean_fields(self) -> None:
+        """list_tasks lean output must contain id, title, status, priority, tags, etc."""
+        mcp_ctx = _make_mcp_ctx()
+        with _patch_run(stdout=_SAMPLE_FULL_JSON):
+            result = await list_tasks(mcp_ctx)
+
+        tasks = json.loads(result)
+        assert isinstance(tasks, list)
+        assert len(tasks) > 0
+        task = tasks[0]
+        # _LEAN_FIELDS must ALL be present — mutation [{} for …] would break this
+        for field in _LEAN_FIELDS:
+            assert field in task, (
+                f"Expected lean field '{field}' is absent — stripping removed too much"
+            )
+
+    # Individual boundary: id is retained
+    @pytest.mark.asyncio
+    async def test_lean_json_retains_id(self) -> None:
+        """list_tasks lean output must retain the 'id' field."""
+        mcp_ctx = _make_mcp_ctx()
+        with _patch_run(stdout=_SAMPLE_FULL_JSON):
+            result = await list_tasks(mcp_ctx)
+
+        task = json.loads(result)[0]
+        assert "id" in task, "'id' must be present in lean output"
+        assert task["id"] == _SAMPLE_FULL_TASK["id"]
+
+    # Individual boundary: title is retained
+    @pytest.mark.asyncio
+    async def test_lean_json_retains_title(self) -> None:
+        """list_tasks lean output must retain the 'title' field."""
+        mcp_ctx = _make_mcp_ctx()
+        with _patch_run(stdout=_SAMPLE_FULL_JSON):
+            result = await list_tasks(mcp_ctx)
+
+        task = json.loads(result)[0]
+        assert "title" in task, "'title' must be present in lean output"
+        assert task["title"] == _SAMPLE_FULL_TASK["title"]
+
+    # Boundary: exactly the 4 noisy fields are stripped, nothing else
+    @pytest.mark.asyncio
+    async def test_lean_json_strips_exactly_four_fields(self) -> None:
+        """list_tasks must strip exactly body/file/created/updated — no more, no less."""
+        mcp_ctx = _make_mcp_ctx()
+        with _patch_run(stdout=_SAMPLE_FULL_JSON):
+            result = await list_tasks(mcp_ctx)
+
+        task = json.loads(result)[0]
+        original_key_count = len(_SAMPLE_FULL_TASK)
+        expected_key_count = original_key_count - len(_STRIPPED_FIELDS)
+        assert len(task) == expected_key_count, (
+            f"Expected exactly {expected_key_count} fields in lean output "
+            f"(original {original_key_count} minus 4 stripped), got {len(task)}"
+        )
+
+    # Edge: multi-task list — all tasks retain lean fields
+    @pytest.mark.asyncio
+    async def test_lean_json_multi_task_all_retain_id_and_title(self) -> None:
+        """list_tasks with multiple tasks must retain id and title in every task."""
+        mcp_ctx = _make_mcp_ctx()
+        with _patch_run(stdout=_SAMPLE_MULTI_JSON):
+            result = await list_tasks(mcp_ctx)
+
+        tasks = json.loads(result)
+        assert len(tasks) == 2
+        for i, task in enumerate(tasks):
+            assert "id" in task, f"Task[{i}] missing 'id' in lean output"
+            assert "title" in task, f"Task[{i}] missing 'title' in lean output"
+            assert "status" in task, f"Task[{i}] missing 'status' in lean output"
+
+
+# ---------------------------------------------------------------------------
 # TestFromAC_ListTasksStructuredContent — outputSchema + structuredContent contract
 # ---------------------------------------------------------------------------
 
