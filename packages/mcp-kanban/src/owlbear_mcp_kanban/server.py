@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -97,7 +98,7 @@ async def _run_kanban(ctx: AppContext, *args: str) -> tuple[str, str, int]:
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_tasks(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -134,7 +135,7 @@ async def list_tasks(  # noqa: PLR0913
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_task(ctx: Context, task_id: str) -> str:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -144,7 +145,7 @@ async def show_task(ctx: Context, task_id: str) -> str:
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_task(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -174,7 +175,7 @@ async def create_task(  # noqa: PLR0913
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
 async def move_task(ctx: Context, task_id: str, status: str) -> str:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -184,7 +185,7 @@ async def move_task(ctx: Context, task_id: str, status: str) -> str:
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def edit_task(  # noqa: PLR0913
     ctx: Context,
     *,
@@ -228,7 +229,7 @@ async def edit_task(  # noqa: PLR0913
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def pick_task(
     ctx: Context,
     status: str = "",
@@ -253,7 +254,7 @@ async def pick_task(
     return stdout
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def board_context(ctx: Context) -> str:
     """Get a compact board context snapshot showing task distribution."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
