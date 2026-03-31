@@ -22,7 +22,9 @@ from owlbear_mcp_project.server import (  # type: ignore[import]
     project_info,
     project_list,
     project_readme,
+    project_readme_resource,
     project_structure,
+    project_structure_resource,
 )
 
 
@@ -80,6 +82,21 @@ class TestFromAC_ServerStructure:
 
         # The __main__ module must import `mcp` from server (same object)
         assert hasattr(main_mod, "mcp") or True  # existence verified by importability
+
+    def test_main_mcp_is_same_server_instance(self) -> None:
+        """__main__.mcp is the exact same FastMCP object as owlbear_mcp_project.server.mcp.
+
+        The trivially-true assertion in the prior test cannot catch a regression where
+        __main__.py stops importing mcp or imports a different instance.  This test
+        verifies identity, not just attribute existence.
+        """
+        import owlbear_mcp_project.__main__ as main_mod  # noqa: PLC0415
+
+        assert hasattr(main_mod, "mcp"), "__main__ does not expose a 'mcp' name"
+        assert main_mod.mcp is mcp, (
+            "__main__.mcp is not the server.mcp FastMCP instance — "
+            "ensure __main__.py does 'from owlbear_mcp_project.server import mcp'"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +466,38 @@ class TestFromAC_ReadmeResource:
             "must be registered with @mcp.resource('project://readme')"
         )
 
+    @pytest.mark.asyncio
+    async def test_readme_resource_fn_returns_content_when_file_present(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """project_readme_resource() body: returns README.md content read from CWD.
+
+        Tests the resource FUNCTION directly (not the project_readme tool).
+        The resource body at lines 123-126 of server.py was previously uncovered.
+        """
+        (tmp_path / "README.md").write_text("# Direct Resource Test\nHello resource.", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        result = await project_readme_resource()
+        assert "Direct Resource Test" in result
+        assert "Hello resource." in result
+
+    @pytest.mark.asyncio
+    async def test_readme_resource_fn_returns_exact_fallback_when_absent(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """project_readme_resource() body: returns exact fallback string when no README.md.
+
+        Tests the resource FUNCTION directly (not the project_readme tool) to ensure
+        the fallback branch in the resource body is exercised.
+        """
+        monkeypatch.chdir(tmp_path)
+        result = await project_readme_resource()
+        assert result == "No README.md found in project root."
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_StructureResource
@@ -575,3 +624,42 @@ class TestFromAC_StructureResource:
             "project://structure not found in mcp.list_resources() — "
             "must be registered with @mcp.resource('project://structure')"
         )
+
+    @pytest.mark.asyncio
+    async def test_structure_resource_fn_returns_string_directly(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """project_structure_resource() body: returns a string (resource fn directly called).
+
+        Tests the resource FUNCTION directly (not the project_structure tool).
+        The resource body at line 163 of server.py was previously uncovered.
+        """
+        monkeypatch.chdir(tmp_path)
+        result = await project_structure_resource()
+        assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_structure_resource_fn_shows_non_dir_files_inside_depth3_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC: project://structure uses build_tree helper (not a private reimplementation).
+
+        build_tree._append_leaf_files() shows non-directory files inside depth-3 dirs.
+        server.py._build_tree() does NOT — _walk(dir, 4) returns immediately at depth 4,
+        hiding files like level1/level2/level3/leaf.txt (DRY violation).
+
+        This test FAILS if project_structure_resource() uses _build_tree instead of
+        tree.build_tree (the AC-mandated helper).
+        """
+        l3 = tmp_path / "level1" / "level2" / "level3"
+        l3.mkdir(parents=True)
+        (l3 / "leaf_file.txt").write_text("content")
+        monkeypatch.chdir(tmp_path)
+        result = await project_structure_resource()
+        # build_tree._append_leaf_files includes leaf_file.txt (non-dir inside depth-3 dir)
+        # _build_tree silently drops it (depth guard fires at depth 4)
+        assert "leaf_file.txt" in result
