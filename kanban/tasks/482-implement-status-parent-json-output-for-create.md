@@ -1,16 +1,16 @@
 ---
 id: 482
 title: Implement status, parent, JSON output for create_task MCP tool
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-31T06:20:17.3046417+02:00
-updated: 2026-03-31T06:20:17.3046417+02:00
+updated: 2026-03-31T08:08:37.0670805+02:00
+started: 2026-03-31T08:08:37.0670805+02:00
+completed: 2026-03-31T08:08:37.0670805+02:00
 tags:
     - scope:mcp
     - type:build
     - phase-2
-depends_on:
-    - 475
 class: standard
 ---
 
