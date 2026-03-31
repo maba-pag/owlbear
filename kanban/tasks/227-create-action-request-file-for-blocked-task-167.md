@@ -1,16 +1,20 @@
 ---
 id: 227
 title: Create action request file for blocked task 167
-status: todo
+status: archived
 priority: needed
 created: 2026-03-30T16:57:45.5260962+02:00
-updated: 2026-03-31T03:39:38.7934413+02:00
+updated: 2026-03-31T06:45:29.1209591+02:00
+started: 2026-03-31T06:45:29.1209591+02:00
+completed: 2026-03-31T06:45:29.1209591+02:00
 tags:
     - phase-1
     - scope:agents
     - type:docs
 depends_on:
     - 224
+claimed_by: auditor
+claimed_at: 2026-03-31T06:45:25.1095257+02:00
 class: standard
 ---
 
@@ -72,3 +76,65 @@ Depends on #224 (action request format must be defined first)
 ### Dependencies
 - Verified: #224 (action request format in skill) archived
 - Verified: #167 (blocked task) in-progress with builder notes providing the 5 AC items to map
+
+[[2026-03-31]] Tue 04:39
+## Test-Writer Notes
+- Non-implementation task (tagged type:docs) - no tests applicable.
+- Passing through to builder.
+
+[[2026-03-31]] Tue 04:48
+## Builder Notes
+- Files changed: docs/decisions/pending/167-manual-vs-code-validation.md (created)
+- Non-implementation task (type:docs) -- no code changes, no tests applicable.
+- AC1 DONE: File created with action request format (request_type: action, completed: false, urgency: blocking).
+- AC2 DONE: All 5 manual GUI steps as checklist (AC2 agent picker, AC3 skills menu, AC4 Diagnostics, AC6 References, AC8 no shadowing) plus AC9 cleanup.
+- AC3 DONE: Context section links to task 167 builder notes by reference.
+- AC4 DONE: Get-ChildItem docs/decisions/pending/*.md returns file (3073 bytes). Planner detection confirmed.
+- Lint: N/A (docs file only)
+
+[[2026-03-31]] Tue 06:17
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | No behavior or API change; task creates an action request file using format from #224 |
+| 2 | Docstrings | No | N/A | No Python modules created or modified |
+| 3 | docs/sources/overview.md | No | N/A | Applies existing project format; no external patterns adopted |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | No | N/A | No separate research doc; parent research #221 pre-existing |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/227-* files found)
+
+[[2026-03-31]] Tue 06:45
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Create docs/decisions/pending/167-manual-vs-code-validation.md using action request format | File exists (66 lines), frontmatter has request_type: action, completed: false, urgency: blocking, task_id: 167 | PASS |
+| Include all 5 manual GUI verification steps as checklist (AC2, AC3, AC4, AC6, AC8) | Six checkbox items present: AC2 (agent picker), AC3 (skills menu), AC4 (Diagnostics), AC6 (References), AC8 (no shadowing), plus AC9 (cleanup) | PASS |
+| Link to existing builder notes in task #167 for context | Context section states: See the full builder session notes in task #167 body for detailed context | PASS |
+| Verify planner can detect the file during Recipe 0 scan | Builder confirmed Get-ChildItem returns file (3073 bytes). File at correct path. | PASS |
+
+### Test Results
+- pytest: 1926 passed, 157 failed (pre-existing, unrelated to this docs-only task), 1 collection error (test_analysis_cli.py missing module)
+- ruff: N/A (no source code changed)
+
+### Architect Quality
+- AC specificity: All 4 lines specific and verifiable
+- Edge cases: N/A (single file creation)
+- Design direction: Architect correctly identified no TDD needed for type:docs
+- AC quality score: 4 (adequate; AC4 slightly redundant with AC1 as architect noted, but harmless)
+
+### Upstream Gaps
+- Missing ## Review Evidence section from reviewer (-.02)
+- Deliverable file not committed by builder (will commit in step 5)
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section
+
+### Confidence: .98
+### Action: archive
