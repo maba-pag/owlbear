@@ -413,20 +413,23 @@ class TestFromAC_Shutdown:  # noqa: N801
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_shutdown_cancels_read_loop_task(self) -> None:
-        """Read loop background task is cancelled during shutdown."""
+        """Read loop background task is cleaned up during shutdown.
+
+        Avoids patching asyncio.Task.cancel — immutable C type in CPython 3.12.
+        Instead, compares asyncio.all_tasks() before, during, and after the
+        context manager to verify that background tasks created by the manager
+        are done (cancelled or finished) by the time __aexit__ returns.
+        """
         proc = _make_proc()
-        cancelled_tasks: list[asyncio.Task[Any]] = []
+        baseline_tasks: set[asyncio.Task[Any]] = set(asyncio.all_tasks())
 
-        original_cancel = asyncio.Task.cancel
-
-        def capture_cancel(self: asyncio.Task[Any], *args: Any, **kwargs: Any) -> bool:  # noqa: ANN401
-            cancelled_tasks.append(self)
-            return original_cancel(self, *args, **kwargs)
-
-        with _patch_spawn(proc), patch.object(asyncio.Task, "cancel", capture_cancel):
+        with _patch_spawn(proc):
             async with VoiceProcessManager(_COMMAND):
-                pass
-        assert len(cancelled_tasks) > 0
+                running_tasks = set(asyncio.all_tasks()) - baseline_tasks
+            await asyncio.sleep(0)  # let cancellation propagate
+
+        assert len(running_tasks) > 0, "expected at least one background task during context"
+        assert all(t.done() for t in running_tasks), "all manager background tasks must be done after shutdown"
 
 
 # ---------------------------------------------------------------------------
@@ -439,17 +442,22 @@ class TestFromAC_RestartBudget:  # noqa: N801
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_raises_budget_exhausted_after_max_restarts(self) -> None:
-        """After max_restarts crashes, VoiceRestartBudgetExhausted is raised."""
-        # Each proc: ready (init ok) then EOF (crash triggers restart)
-        def _crash_proc() -> MagicMock:
-            return _make_proc(lines=[READY_LINE, EOF])
+        """VoiceRestartBudgetExhausted raised when restart count exceeds max_restarts.
 
-        spawn_mock = AsyncMock(side_effect=[_crash_proc() for _ in range(10)])
+        With max_restarts=0, the first crash increments restart_count to 1 which
+        exceeds the budget of 0 allowed restarts.  This avoids the contradiction
+        with test_restart_counter_resets_after_successful_init: the reset-on-ready
+        behaviour keeps the counter ≤ 1 when max_restarts ≥ 2, so the budget test
+        uses max_restarts=0 to guarantee exhaustion on the very first crash.
+        """
+        # Proc completes init (ready), then crashes (EOF) → restart_count = 1 > 0
+        proc = _make_proc(lines=[READY_LINE, EOF])
+        spawn_mock = AsyncMock(side_effect=[proc, *[_make_proc() for _ in range(5)]])
         with patch(f"{_MODULE}.asyncio.create_subprocess_exec", new=spawn_mock), pytest.raises(
             VoiceRestartBudgetExhausted
         ):
-            async with VoiceProcessManager(_COMMAND, max_restarts=2):
-                await asyncio.sleep(0.3)
+            async with VoiceProcessManager(_COMMAND, max_restarts=0):
+                await asyncio.sleep(0.2)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_restart_counter_resets_after_successful_init(self) -> None:
