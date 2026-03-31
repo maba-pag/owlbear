@@ -1,10 +1,10 @@
 ---
 id: 17
 title: Build mcp-project server
-status: in-progress
+status: review
 priority: important
 created: 2026-03-26T17:21:36.1413972+01:00
-updated: 2026-03-29T19:21:46.2844237+02:00
+updated: 2026-03-31T07:15:23.3961127+02:00
 tags:
     - phase-1
     - scope:mcp
@@ -14,8 +14,6 @@ depends_on:
     - 7
     - 68
     - 99
-claimed_by: builder
-claimed_at: 2026-03-29T19:21:46.2828834+02:00
 class: standard
 ---
 
@@ -147,3 +145,22 @@ Key verifications:
 - Total: 49 tests, all FAIL (ModuleNotFoundError for owlbear_mcp_project.server + .tree) ✓
 - ruff: clean
 - Every AC line covered by at least one test
+
+[[2026-03-31]] Tue 07:15
+## Builder Notes
+- Implementation: server.py + tree.py + __main__.py already committed in #190/#191 prior to this dispatch
+- Files: packages/mcp-project/src/owlbear_mcp_project/server.py, tree.py, __main__.py, models.py
+- Tests: 91 passed (49 TestFromAC + 42 TestBuilderDiscovered), 0 failed
+- Coverage: 92% overall (server.py 93%, tree.py 91%, models.py 100%, __init__.py 100%)
+- Lint: ruff clean
+- Nothing to commit: deliverables already committed in feat: implement mcp-project server infrastructure tools (#190, builder) and feat: implement tree.py helper and resource handlers (#191, builder)
+
+-t
+
+[[2026-03-31]] Tue 07:15
+## Builder Notes
+- Files: server.py, tree.py, __main__.py, models.py (packages/mcp-project/)
+- Tests: 91 passed (0 failed), coverage 92% overall (server.py 93%, tree.py 91%)
+- Lint: ruff clean
+- Deliverables already committed: #190 (server infra + tools), #191 (tree.py + resources)
+- No new commits needed

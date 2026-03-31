@@ -1,15 +1,17 @@
 ---
 id: 385
 title: Mandatory user-decision gate for research-driven features and architectural changes
-status: backlog
+status: docs
 priority: critical
 created: 2026-03-30T20:56:31.6511501+02:00
-updated: 2026-03-31T03:44:49.3450932+02:00
+updated: 2026-03-31T07:39:39.3160461+02:00
 tags:
     - research
     - ' scope:agents'
     - ' process'
     - ' quality'
+claimed_by: writer
+claimed_at: 2026-03-31T07:39:39.3160461+02:00
 class: standard
 ---
 
@@ -52,3 +54,46 @@ Follow-up tasks created:
 - #462: Update agent-common defer-to-user boundary with tier classification
 
 Sources logged in docs/sources/overview.md.
+
+[[2026-03-31]] Tue 04:45
+## Architecture Review
+**Verdict:** Approve
+**DR Verification:** docs/decisions/resolved/385-research-outcome-classification.md approved: true
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Audit decision-request workflow | Complete: research doc S3 identifies 5 gaps (G1-G5) | Verified |
+| Determine mandatory vs autonomous outcomes | Complete: deterministic T3 triggers (6 factual conditions) | Verified |
+| Design classification system | Complete: T1/T2/T3 with deterministic triggers in S4 | Verified |
+| Propose researcher agent changes | Complete: S6 C2+C3 | Verified |
+| Propose architect agent changes | Complete: S6 C4 | Verified |
+| Address 5-day auto-timeout | Complete: Option A selected (T2 keeps 5d, T3 blocks indefinitely) | Verified |
+| Create decision request | Complete: docs/decisions/resolved/385-research-outcome-classification.md, user-approved | Verified |
+| Create follow-up tasks at ideation | Complete: #459, #460, #461, #462 (all now at todo after arch review) | Verified |
+
+### Architecture Notes
+Pure research/design task. All 8 AC items are deliverables (audit, design, propose, create), not implementation. Research doc is thorough: 9 sources, 5 identified gaps, deterministic classification triggers (not judgment-based). Decision request was approved (Option A: 3-tier). Four atomic follow-up tasks properly cover all 5 required changes (C2+C3 combined in #460 since they target the same agent workflow). No code produced, no TDD needed. Single concern: user-decision gate process.
+
+Verified gaps exist in current files: decision-requests skill has no impact_tier field, researcher agent has no tier classification, uniform 5-day auto-resolve applies to all urgencies.
+
+### Changes Made
+- Verified all 8 AC items against research doc and kanban board
+- Verified decision request approved at docs/decisions/resolved/
+- Verified follow-up tasks #459-#462 exist and are properly scoped
+- Approved to todo
+
+### Dependencies
+- Verified: Follow-ups #459-#462 all at todo (already architect-reviewed)
+- Verified: #464 (dispatch-planning tier-aware auto-resolve) created by #459 research
+
+[[2026-03-31]] Tue 06:04
+## Test-Writer Notes
+- Non-implementation task (tagged research, quality) — no tests applicable.
+- Architecture Review confirmed: "No code produced, no TDD needed."
+- Passing through to builder.
+
+[[2026-03-31]] Tue 06:16
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.

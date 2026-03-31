@@ -4,7 +4,7 @@ title: Create Code-Reader subagent (agent.md)
 status: archived
 priority: needed
 created: 2026-03-30T20:29:35.2589109+02:00
-updated: 2026-03-31T05:51:37.9649448+02:00
+updated: 2026-03-31T05:52:00.4746382+02:00
 started: 2026-03-31T05:51:37.424203+02:00
 completed: 2026-03-31T05:51:37.424203+02:00
 tags:
@@ -180,3 +180,9 @@ Decision 228-parallel-fan-out is pending (approved: false) but the agent file is
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/307-* files existed)
+
+[[2026-03-31]] Tue 05:52
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8dac007 | chore | kanban/tasks/307-*.md | #307 |

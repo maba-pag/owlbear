@@ -1,10 +1,10 @@
 ---
 id: 33
 title: Extract entity extraction + graph builders
-status: review
+status: done
 priority: needed
 created: 2026-03-26T18:33:48.3894411+01:00
-updated: 2026-03-31T03:56:34.210585+02:00
+updated: 2026-03-31T07:39:47.0649423+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -12,6 +12,8 @@ tags:
 depends_on:
     - 32
     - 203
+claimed_by: auditor
+claimed_at: 2026-03-31T07:39:47.0623063+02:00
 class: standard
 ---
 
@@ -99,3 +101,27 @@ Module layering is clean. All modules stay within owlbear_knowledge/ with no upw
 - Tests: 52 passed (47 TestFromAC + 5 TestBuilderDiscovered), 0 failures
 - Lint: ruff clean
 - Evidence: `uv run pytest tests/test_extractor.py tests/test_graph_builder.py tests/test_inter_doc_graph_builder.py tests/test_structured_extractor_protocol.py -q` → 52 passed in 0.63s
+
+[[2026-03-31]] Tue 04:37
+## Review Evidence
+See docs/scratch/33-reviewer.md for full evidence.
+
+[[2026-03-31]] Tue 05:13
+## Test-Writer Notes (retry)
+- Retry: reviewer FAIL — 2 MISSING AC rows
+- Added: 7 new failing tests (TestFromAC_PromptConstants x3, TestFromAC_InterDocGraphBuilderConstructorParams x4)
+- Preserved: 52 existing tests PASS
+- ruff clean, committed 86756f5
+
+[[2026-03-31]] Tue 06:08
+## Builder Notes (retry)
+- Files changed: extractor.py, graph_builder.py, inter_doc_graph_builder.py
+- Tests: 59 passed (7 previously failing now pass), 0 failures
+- Lint: ruff clean (extracted _collect_candidates helper to fix C901 complexity)
+- Coverage: extractor.py 92%, graph_builder.py 100%, inter_doc_graph_builder.py 98%, protocol.py 100%
+- Fixes: EXTRACTION_PROMPT, GRAPH_BUILDER_PROMPT, INTER_DOC_PROMPT added; InterDocGraphBuilder.__init__ accepts top_k=10 and cosine_threshold=0.70; filtering applied in _collect_candidates
+- Commit: 488963a
+
+[[2026-03-31]] Tue 06:49
+## Review Evidence (retry 2)
+See docs/scratch/33-reviewer.md for full evidence.

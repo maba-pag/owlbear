@@ -4,7 +4,7 @@ title: Build mcp-knowledge server
 status: archived
 priority: needed
 created: 2026-03-26T17:21:28.0951097+01:00
-updated: 2026-03-31T05:53:27.2358507+02:00
+updated: 2026-03-31T05:53:48.0470657+02:00
 started: 2026-03-31T05:43:56.6345458+02:00
 completed: 2026-03-31T05:43:56.6345458+02:00
 tags:
@@ -309,3 +309,9 @@ Score: 4/5 -- AC was thorough with 20+ verifiable items covering server structur
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 05:53
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ca77df2 | chore | kanban/tasks/016-*.md | #16 |

@@ -1,12 +1,11 @@
 ---
 id: 1
 title: ACP protocol deep-dive
-status: archived
+status: backlog
 priority: needed
 created: 2026-03-26T17:18:05.2307425+01:00
-updated: 2026-03-29T15:49:45.6075049+02:00
+updated: 2026-03-31T07:02:14.667445+02:00
 started: 2026-03-29T15:49:28.4753841+02:00
-completed: 2026-03-29T15:49:28.4753841+02:00
 tags:
     - research
     - phase-1
@@ -120,3 +119,8 @@ Builder/reviewer/writer sections absent from task body (research task with no co
 | Commit | Type | Files | Tasks |
 |--------|------|-------|-------|
 | 9b49aa9 | chore | kanban/tasks/001-acp-protocol-deep-dive.md | #1 |
+
+[[2026-03-31]] Tue 07:02
+[[2026-03-31]] Tue 12:00
+## Researcher Re-check
+Task was found at ideation despite having completed the full pipeline (archive at .96 on 2026-03-29). All AC satisfied, all deliverables intact. Re-advancing to backlog.

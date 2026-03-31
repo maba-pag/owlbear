@@ -4,7 +4,7 @@ title: Subagent nesting architecture — validate designs and create implementat
 status: archived
 priority: needed
 created: 2026-03-30T18:23:38.6783812+02:00
-updated: 2026-03-31T06:10:37.1623991+02:00
+updated: 2026-03-31T06:10:56.4794251+02:00
 started: 2026-03-31T06:02:32.3188552+02:00
 completed: 2026-03-31T06:02:32.3188552+02:00
 tags:
@@ -162,3 +162,9 @@ AC was specific and verifiable. One interpretation gap (AC 2 'empirically test' 
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 06:10
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 9ea1e40 | chore | kanban/tasks/228-*.md | #228 |

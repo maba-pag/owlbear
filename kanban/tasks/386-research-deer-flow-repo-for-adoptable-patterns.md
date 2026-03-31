@@ -4,7 +4,7 @@ title: Research deer-flow repo for adoptable patterns across harness, memory, su
 status: archived
 priority: needed
 created: 2026-03-30T20:57:13.6184382+02:00
-updated: 2026-03-31T06:53:27.4385426+02:00
+updated: 2026-03-31T06:53:52.3464395+02:00
 started: 2026-03-31T06:53:23.2382282+02:00
 completed: 2026-03-31T06:53:23.2382282+02:00
 tags:
@@ -227,3 +227,9 @@ Follow-up tasks have verifiable AC and appropriate priorities. No TDD requiremen
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 06:53
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2e3e84c | chore | kanban/tasks/386-*.md | #386 |

@@ -7631,3 +7631,644 @@
 {"timestamp":"2026-03-31T04:12:35.1276764+02:00","action":"claim","task_id":454,"detail":"architect"}
 {"timestamp":"2026-03-31T04:12:42.7591141+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
 {"timestamp":"2026-03-31T04:12:42.7634299+02:00","action":"claim","task_id":460,"detail":"architect"}
+{"timestamp":"2026-03-31T04:16:22.5354081+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T04:16:22.5400896+02:00","action":"release","task_id":225,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:16:52.5252203+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T04:18:18.7436157+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T04:18:19.5579459+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T04:19:05.1745451+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T04:19:49.8242725+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T04:19:49.8301171+02:00","action":"release","task_id":459,"detail":"architect"}
+{"timestamp":"2026-03-31T04:20:05.1611929+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:20:05.1671739+02:00","action":"claim","task_id":307,"detail":"builder"}
+{"timestamp":"2026-03-31T04:20:29.0820731+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T04:20:29.0873635+02:00","action":"release","task_id":454,"detail":"architect"}
+{"timestamp":"2026-03-31T04:21:23.4342156+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:21:23.438625+02:00","action":"release","task_id":307,"detail":"builder"}
+{"timestamp":"2026-03-31T04:22:17.8848059+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:23:14.1247843+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:23:30.9902195+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T04:24:23.9895153+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T04:24:23.9953325+02:00","action":"release","task_id":460,"detail":"architect"}
+{"timestamp":"2026-03-31T04:27:08.1380891+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T04:27:08.1455164+02:00","action":"claim","task_id":462,"detail":"architect"}
+{"timestamp":"2026-03-31T04:27:21.2948238+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T04:27:21.2995848+02:00","action":"claim","task_id":461,"detail":"architect"}
+{"timestamp":"2026-03-31T04:28:33.8545135+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
+{"timestamp":"2026-03-31T04:28:33.8592955+02:00","action":"claim","task_id":308,"detail":"auditor"}
+{"timestamp":"2026-03-31T04:29:35.670763+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T04:29:35.6764418+02:00","action":"claim","task_id":228,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:29:51.220831+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T04:29:56.9923878+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T04:29:56.9972367+02:00","action":"release","task_id":462,"detail":"architect"}
+{"timestamp":"2026-03-31T04:30:13.559177+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T04:30:13.5638594+02:00","action":"release","task_id":228,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:31:48.6653113+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T04:31:48.6705869+02:00","action":"release","task_id":461,"detail":"architect"}
+{"timestamp":"2026-03-31T04:32:24.4647843+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T04:32:24.471335+02:00","action":"claim","task_id":33,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:32:24.5198286+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T04:32:24.5245674+02:00","action":"claim","task_id":435,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:32:38.0173243+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T04:32:38.0235695+02:00","action":"claim","task_id":386,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:32:58.8315859+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:32:58.8368681+02:00","action":"claim","task_id":16,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:34:37.5818538+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
+{"timestamp":"2026-03-31T04:34:45.5152741+02:00","action":"move","task_id":308,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T04:34:46.0473984+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
+{"timestamp":"2026-03-31T04:34:46.0515725+02:00","action":"release","task_id":308,"detail":"auditor"}
+{"timestamp":"2026-03-31T04:35:24.3892149+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T04:35:24.3928888+02:00","action":"release","task_id":435,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:35:30.40524+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T04:35:30.4093886+02:00","action":"release","task_id":386,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:35:49.9951049+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T04:35:50.0003354+02:00","action":"claim","task_id":386,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:36:39.6826697+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:36:44.2485916+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:36:44.253701+02:00","action":"release","task_id":16,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:37:42.035997+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T04:37:51.1734174+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T04:37:56.4348481+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T04:37:56.4395218+02:00","action":"release","task_id":33,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:38:46.5344596+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
+{"timestamp":"2026-03-31T04:38:46.5397667+02:00","action":"claim","task_id":226,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:38:47.1075189+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:38:47.1118061+02:00","action":"claim","task_id":227,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:38:50.0338058+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:38:50.0393421+02:00","action":"claim","task_id":220,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:38:58.9005283+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
+{"timestamp":"2026-03-31T04:38:58.9070876+02:00","action":"release","task_id":226,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:39:12.7973319+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:39:21.1311338+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
+{"timestamp":"2026-03-31T04:39:21.1368848+02:00","action":"claim","task_id":226,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:39:23.519125+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:39:23.5238894+02:00","action":"claim","task_id":99,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:39:26.0153783+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
+{"timestamp":"2026-03-31T04:39:26.02063+02:00","action":"release","task_id":226,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:39:27.6707374+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:39:34.7164986+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:39:42.9591393+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:39:43.2180577+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:39:44.1185332+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:39:47.1012452+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:39:47.1060402+02:00","action":"release","task_id":227,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:39:54.9592015+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:39:54.9633382+02:00","action":"release","task_id":220,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:41:16.0691875+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:41:26.5704341+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:41:26.5792531+02:00","action":"release","task_id":99,"detail":"test-writer"}
+{"timestamp":"2026-03-31T04:43:39.073551+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T04:43:39.0788706+02:00","action":"claim","task_id":225,"detail":"writer"}
+{"timestamp":"2026-03-31T04:43:43.0706121+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:43:43.0757279+02:00","action":"claim","task_id":99,"detail":"builder"}
+{"timestamp":"2026-03-31T04:43:46.6193459+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T04:43:46.62521+02:00","action":"claim","task_id":228,"detail":"writer"}
+{"timestamp":"2026-03-31T04:43:58.7950573+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T04:43:58.7998006+02:00","action":"claim","task_id":385,"detail":"architect"}
+{"timestamp":"2026-03-31T04:44:26.5791292+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:44:29.8932826+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T04:44:29.897928+02:00","action":"release","task_id":99,"detail":"builder"}
+{"timestamp":"2026-03-31T04:45:25.8711926+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T04:45:25.8759576+02:00","action":"release","task_id":225,"detail":"writer"}
+{"timestamp":"2026-03-31T04:45:38.7575796+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T04:45:38.7629353+02:00","action":"release","task_id":228,"detail":"writer"}
+{"timestamp":"2026-03-31T04:45:42.3491137+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T04:45:46.9091435+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T04:45:46.9146756+02:00","action":"release","task_id":385,"detail":"architect"}
+{"timestamp":"2026-03-31T04:46:41.0336168+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T04:46:41.0787097+02:00","action":"claim","task_id":435,"detail":"writer"}
+{"timestamp":"2026-03-31T04:46:43.2693842+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:46:43.2750706+02:00","action":"claim","task_id":227,"detail":"builder"}
+{"timestamp":"2026-03-31T04:47:08.3030628+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:47:08.3083063+02:00","action":"claim","task_id":16,"detail":"writer"}
+{"timestamp":"2026-03-31T04:48:23.7839622+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:48:31.9092441+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:48:36.226134+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T04:48:36.230338+02:00","action":"release","task_id":227,"detail":"builder"}
+{"timestamp":"2026-03-31T04:48:38.9906473+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T04:48:38.9968961+02:00","action":"release","task_id":435,"detail":"writer"}
+{"timestamp":"2026-03-31T04:52:42.5791018+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:52:50.2496882+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T04:52:50.2544053+02:00","action":"release","task_id":16,"detail":"writer"}
+{"timestamp":"2026-03-31T04:53:48.2484057+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:53:48.2531283+02:00","action":"claim","task_id":220,"detail":"builder"}
+{"timestamp":"2026-03-31T04:53:59.5148448+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:53:59.5223619+02:00","action":"claim","task_id":180,"detail":"architect"}
+{"timestamp":"2026-03-31T04:53:59.6615213+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:53:59.6675699+02:00","action":"claim","task_id":464,"detail":"architect"}
+{"timestamp":"2026-03-31T04:54:42.7729156+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:54:42.7772326+02:00","action":"claim","task_id":307,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:55:15.0046077+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:55:18.5203188+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T04:55:18.5253739+02:00","action":"release","task_id":220,"detail":"builder"}
+{"timestamp":"2026-03-31T04:55:30.9257571+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:55:48.0282192+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:03.3527492+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:19.7172376+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:25.4917635+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:25.4954522+02:00","action":"release","task_id":464,"detail":"architect"}
+{"timestamp":"2026-03-31T04:56:30.8807752+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:30.8865924+02:00","action":"claim","task_id":464,"detail":"architect"}
+{"timestamp":"2026-03-31T04:56:31.3312058+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
+{"timestamp":"2026-03-31T04:56:31.3364476+02:00","action":"release","task_id":464,"detail":"architect"}
+{"timestamp":"2026-03-31T04:56:48.2346971+02:00","action":"create","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:57:02.2910553+02:00","action":"move","task_id":466,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-03-31T04:57:06.3118811+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T04:57:06.3159772+02:00","action":"release","task_id":307,"detail":"reviewer"}
+{"timestamp":"2026-03-31T04:58:09.5691708+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:58:19.8616512+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:59:37.5052418+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:59:48.0990728+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:59:53.3339939+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T04:59:53.3395473+02:00","action":"release","task_id":180,"detail":"architect"}
+{"timestamp":"2026-03-31T05:00:38.4902521+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
+{"timestamp":"2026-03-31T05:00:38.4947081+02:00","action":"claim","task_id":431,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:00:40.5324267+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T05:00:40.5366619+02:00","action":"claim","task_id":459,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:00:42.9689118+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T05:00:42.9735808+02:00","action":"claim","task_id":462,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:00:49.8612014+02:00","action":"edit","task_id":465,"detail":"Challenger subagent — adversarial in-process review for architect decisions"}
+{"timestamp":"2026-03-31T05:00:49.8659332+02:00","action":"claim","task_id":465,"detail":"researcher"}
+{"timestamp":"2026-03-31T05:01:04.511319+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T05:01:05.7059668+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T05:01:15.8704292+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T05:01:15.8757305+02:00","action":"release","task_id":459,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:01:17.0531555+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T05:01:17.0589295+02:00","action":"release","task_id":462,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:04:45.7323481+02:00","action":"create","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:04:52.5039779+02:00","action":"create","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
+{"timestamp":"2026-03-31T05:04:58.6775648+02:00","action":"create","task_id":469,"detail":"Expand Challenger to researcher agent (Phase 2)"}
+{"timestamp":"2026-03-31T05:06:10.5608479+02:00","action":"edit","task_id":465,"detail":"Challenger subagent — adversarial in-process review for architect decisions"}
+{"timestamp":"2026-03-31T05:06:10.5661783+02:00","action":"release","task_id":465,"detail":"researcher"}
+{"timestamp":"2026-03-31T05:08:19.1020357+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
+{"timestamp":"2026-03-31T05:08:19.1069822+02:00","action":"release","task_id":431,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:08:49.4904708+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T05:08:49.4930813+02:00","action":"claim","task_id":460,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:08:53.254691+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T05:08:53.9604737+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T05:08:53.9647324+02:00","action":"claim","task_id":461,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:09:03.7101683+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T05:09:07.436413+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T05:09:07.441178+02:00","action":"release","task_id":461,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:09:07.8835999+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T05:09:07.8878092+02:00","action":"claim","task_id":454,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:09:14.985643+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T05:09:17.9882359+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T05:09:19.9449208+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T05:09:19.9495967+02:00","action":"release","task_id":460,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:09:33.8600331+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T05:09:49.9228245+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T05:09:49.9265099+02:00","action":"release","task_id":454,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:10:38.2634232+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T05:10:38.2674691+02:00","action":"claim","task_id":33,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:13:38.8794093+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T05:13:47.9374918+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T05:13:47.941071+02:00","action":"release","task_id":33,"detail":"test-writer"}
+{"timestamp":"2026-03-31T05:16:23.8335545+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:16:23.8388001+02:00","action":"claim","task_id":467,"detail":"researcher"}
+{"timestamp":"2026-03-31T05:16:25.7515046+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T05:16:25.7562787+02:00","action":"claim","task_id":435,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:16:55.0812961+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:16:55.0869723+02:00","action":"claim","task_id":307,"detail":"writer"}
+{"timestamp":"2026-03-31T05:18:25.5377546+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:18:30.7216556+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:19:14.8757505+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:19:25.3132078+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T05:19:25.3173633+02:00","action":"release","task_id":467,"detail":"researcher"}
+{"timestamp":"2026-03-31T05:19:33.2612321+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:19:42.6265369+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:19:42.6302227+02:00","action":"release","task_id":307,"detail":"writer"}
+{"timestamp":"2026-03-31T05:21:07.0541274+02:00","action":"create","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T05:21:15.4502465+02:00","action":"create","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T05:21:21.4372245+02:00","action":"create","task_id":472,"detail":"Add archived flag to list_tasks MCP tool"}
+{"timestamp":"2026-03-31T05:21:29.1312911+02:00","action":"create","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T05:28:55.7554456+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:28:55.7612289+02:00","action":"claim","task_id":225,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:32:19.2827937+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T05:32:35.286205+02:00","action":"move","task_id":435,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T05:32:35.8197339+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T05:32:35.8241861+02:00","action":"release","task_id":435,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:33:02.3375241+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
+{"timestamp":"2026-03-31T05:33:43.4236246+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:35:32.5192497+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:35:37.9761758+02:00","action":"move","task_id":225,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T05:35:38.4600548+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:35:38.4647934+02:00","action":"release","task_id":225,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:35:55.8178952+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:36:43.520954+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:36:43.5267867+02:00","action":"claim","task_id":16,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:38:30.8867847+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:38:41.0789582+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:39:09.2239192+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
+{"timestamp":"2026-03-31T05:39:54.4927043+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:43:56.6361358+02:00","action":"move","task_id":16,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T05:43:57.2333616+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:43:57.2386571+02:00","action":"release","task_id":16,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:44:20.0563142+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:44:55.6733967+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:44:55.67993+02:00","action":"claim","task_id":307,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:51:37.4252778+02:00","action":"move","task_id":307,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T05:51:37.9704706+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:51:37.9756965+02:00","action":"release","task_id":307,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:52:00.4756755+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
+{"timestamp":"2026-03-31T05:53:07.481605+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:53:27.2369004+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:53:48.0487471+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
+{"timestamp":"2026-03-31T05:54:08.4274143+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T05:54:08.4307201+02:00","action":"claim","task_id":228,"detail":"auditor"}
+{"timestamp":"2026-03-31T05:54:25.935634+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:02:32.3209007+02:00","action":"move","task_id":228,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T06:02:32.8348176+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:02:32.8405714+02:00","action":"release","task_id":228,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:03:06.6224124+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:03:36.2341996+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:03:36.2416382+02:00","action":"claim","task_id":227,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:03:44.8008559+02:00","action":"create","task_id":474,"detail":"TEMP-test-json"}
+{"timestamp":"2026-03-31T06:03:46.0652205+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:03:46.0689327+02:00","action":"claim","task_id":99,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:03:48.7671879+02:00","action":"move","task_id":474,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-31T06:03:52.3717912+02:00","action":"edit","task_id":474,"detail":"TEMP-test-json"}
+{"timestamp":"2026-03-31T06:03:57.2280188+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:03:57.2322076+02:00","action":"claim","task_id":385,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:03:57.7033714+02:00","action":"delete","task_id":474,"detail":"TEMP-test-json"}
+{"timestamp":"2026-03-31T06:04:03.6633184+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:04:07.6246244+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:04:07.6309609+02:00","action":"release","task_id":385,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:05:56.5725316+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:05:56.5779488+02:00","action":"claim","task_id":33,"detail":"builder"}
+{"timestamp":"2026-03-31T06:05:57.6644393+02:00","action":"edit","task_id":472,"detail":"Add archived flag to list_tasks MCP tool"}
+{"timestamp":"2026-03-31T06:06:04.3845297+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:06:12.5814717+02:00","action":"create","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:06:19.0770598+02:00","action":"create","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:06:24.6010115+02:00","action":"create","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:06:27.6823455+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:06:34.7777825+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:06:41.3870529+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:06:41.395222+02:00","action":"release","task_id":99,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:06:46.4506937+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:06:47.9672331+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:06:47.9736241+02:00","action":"claim","task_id":99,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:06:54.6789364+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:06:54.6832207+02:00","action":"release","task_id":227,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:07:01.488307+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:07:01.493502+02:00","action":"release","task_id":99,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:08:24.4805878+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:08:33.6353875+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:08:39.471984+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:08:39.4791813+02:00","action":"release","task_id":33,"detail":"builder"}
+{"timestamp":"2026-03-31T06:09:04.5624305+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T06:09:04.5678319+02:00","action":"claim","task_id":433,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:09:05.193313+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:09:05.1980951+02:00","action":"claim","task_id":220,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:09:13.6610634+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T06:09:13.6652564+02:00","action":"claim","task_id":462,"detail":"builder"}
+{"timestamp":"2026-03-31T06:09:14.9091589+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T06:09:19.3690657+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T06:09:19.3736817+02:00","action":"release","task_id":433,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:09:46.9496653+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T06:09:46.9564337+02:00","action":"claim","task_id":466,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:10:30.1603742+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:10:32.4924168+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:10:32.5035742+02:00","action":"release","task_id":220,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:10:35.4370648+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T06:10:37.1634377+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:10:39.3801574+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T06:10:39.3848888+02:00","action":"release","task_id":462,"detail":"builder"}
+{"timestamp":"2026-03-31T06:10:56.480481+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-03-31T06:11:18.3243482+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:11:18.3284978+02:00","action":"claim","task_id":471,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:11:23.9369125+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:11:23.9416092+02:00","action":"claim","task_id":472,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:12:15.3700644+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:12:15.3751768+02:00","action":"claim","task_id":470,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:13:41.405129+02:00","action":"create","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
+{"timestamp":"2026-03-31T06:13:51.2567714+02:00","action":"create","task_id":479,"detail":"GREEN: implement modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
+{"timestamp":"2026-03-31T06:14:13.4628912+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:14:14.3784554+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:14:17.826926+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:14:17.8327065+02:00","action":"release","task_id":470,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:14:22.8405519+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:14:23.8500431+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:14:23.8564031+02:00","action":"release","task_id":472,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:14:27.1932357+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T06:14:34.7897782+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T06:14:34.7939835+02:00","action":"release","task_id":466,"detail":"test-writer"}
+{"timestamp":"2026-03-31T06:15:37.3445174+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:15:44.6474238+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:15:48.2537466+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:15:48.2590215+02:00","action":"release","task_id":471,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:16:44.0446255+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:16:44.0483229+02:00","action":"claim","task_id":385,"detail":"builder"}
+{"timestamp":"2026-03-31T06:16:47.9913188+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:16:47.9965961+02:00","action":"claim","task_id":227,"detail":"writer"}
+{"timestamp":"2026-03-31T06:16:50.9364528+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:16:50.9419286+02:00","action":"claim","task_id":99,"detail":"writer"}
+{"timestamp":"2026-03-31T06:16:51.7173298+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:16:51.8003285+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:16:51.8255755+02:00","action":"claim","task_id":386,"detail":"writer"}
+{"timestamp":"2026-03-31T06:16:56.1225607+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T06:16:56.1272508+02:00","action":"release","task_id":385,"detail":"builder"}
+{"timestamp":"2026-03-31T06:17:27.2218149+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:17:30.8357116+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:17:30.8415309+02:00","action":"release","task_id":227,"detail":"writer"}
+{"timestamp":"2026-03-31T06:17:41.2089295+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:17:41.21361+02:00","action":"release","task_id":386,"detail":"writer"}
+{"timestamp":"2026-03-31T06:18:22.7994995+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:18:22.8047353+02:00","action":"claim","task_id":473,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:18:24.7887876+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:18:24.7938967+02:00","action":"claim","task_id":477,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:18:25.5952593+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:18:25.5995001+02:00","action":"claim","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:18:58.3802775+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:19:15.5720909+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:19:16.7565867+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:19:16.760252+02:00","action":"claim","task_id":476,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:19:19.8148045+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:19:19.8194666+02:00","action":"release","task_id":99,"detail":"writer"}
+{"timestamp":"2026-03-31T06:19:26.1090608+02:00","action":"create","task_id":480,"detail":"TEST-RESEARCHER-475-DELETE-ME"}
+{"timestamp":"2026-03-31T06:19:32.621758+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:19:47.1699713+02:00","action":"create","task_id":481,"detail":"test-json-move"}
+{"timestamp":"2026-03-31T06:19:47.9178754+02:00","action":"move","task_id":1,"detail":"archived -\u003e ideation"}
+{"timestamp":"2026-03-31T06:19:54.0990131+02:00","action":"delete","task_id":481,"detail":"test-json-move"}
+{"timestamp":"2026-03-31T06:20:01.6762094+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T06:20:01.6814365+02:00","action":"claim","task_id":467,"detail":"architect"}
+{"timestamp":"2026-03-31T06:20:09.0759703+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:20:09.08032+02:00","action":"claim","task_id":220,"detail":"writer"}
+{"timestamp":"2026-03-31T06:20:11.0324778+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T06:20:11.0377344+02:00","action":"claim","task_id":454,"detail":"builder"}
+{"timestamp":"2026-03-31T06:20:17.3077277+02:00","action":"create","task_id":482,"detail":"Implement status, parent, JSON output for create_task MCP tool"}
+{"timestamp":"2026-03-31T06:20:39.2877251+02:00","action":"create","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-03-31T06:20:55.3285997+02:00","action":"create","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-03-31T06:20:57.9379333+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:02.7244837+02:00","action":"create","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T06:21:07.495619+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:08.9574244+02:00","action":"create","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-03-31T06:21:09.1719586+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:09.1775673+02:00","action":"release","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:21:12.1790838+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:15.9860827+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:22.2971667+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:23.7248084+02:00","action":"create","task_id":487,"detail":"Switch move/pick to JSON, remove board_context - build"}
+{"timestamp":"2026-03-31T06:21:27.0508676+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:21:29.5174436+02:00","action":"create","task_id":488,"detail":"Implement move pick JSON remove board_context"}
+{"timestamp":"2026-03-31T06:21:33.2480301+02:00","action":"create","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T06:21:36.469918+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:21:37.1009351+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:21:37.1059538+02:00","action":"release","task_id":220,"detail":"writer"}
+{"timestamp":"2026-03-31T06:21:39.7416121+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T06:21:47.7858977+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:47.7906545+02:00","action":"claim","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:21:51.2169091+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T06:21:55.7293049+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:21:55.7337735+02:00","action":"release","task_id":476,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:21:55.9520575+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T06:21:59.8872139+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:22:01.7159432+02:00","action":"create","task_id":490,"detail":"Update mcp-kanban SKILL.md after board_context removal"}
+{"timestamp":"2026-03-31T06:22:05.498632+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:22:18.0846019+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:22:18.0926655+02:00","action":"release","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:22:21.8934663+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:22:24.6070305+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:22:24.6070305+02:00","action":"create","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
+{"timestamp":"2026-03-31T06:22:24.6128163+02:00","action":"release","task_id":477,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:22:42.8096458+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T06:22:51.2913366+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:22:54.572602+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T06:22:58.319621+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:22:58.3249088+02:00","action":"release","task_id":473,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:22:58.8406698+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T06:22:58.8465567+02:00","action":"release","task_id":454,"detail":"builder"}
+{"timestamp":"2026-03-31T06:23:13.3573632+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T06:23:15.8141611+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T06:23:15.8191132+02:00","action":"release","task_id":467,"detail":"architect"}
+{"timestamp":"2026-03-31T06:23:46.9858308+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:23:47.5966624+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:23:47.601898+02:00","action":"claim","task_id":470,"detail":"architect"}
+{"timestamp":"2026-03-31T06:23:55.4752599+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T06:23:55.4796415+02:00","action":"claim","task_id":462,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:24:34.6252469+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
+{"timestamp":"2026-03-31T06:24:34.6299498+02:00","action":"claim","task_id":431,"detail":"builder"}
+{"timestamp":"2026-03-31T06:25:11.548782+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T06:25:11.552984+02:00","action":"release","task_id":462,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:25:12.3121885+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:25:12.3176959+02:00","action":"claim","task_id":220,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:25:51.5411622+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T06:25:51.547418+02:00","action":"release","task_id":470,"detail":"architect"}
+{"timestamp":"2026-03-31T06:28:17.0226817+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:28:19.7519594+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:28:19.7572745+02:00","action":"release","task_id":472,"detail":"architect"}
+{"timestamp":"2026-03-31T06:30:04.27465+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:30:07.9436097+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:30:23.3092884+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T06:30:26.3014241+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:30:28.4019699+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:30:29.0918345+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:30:31.0909366+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:30:35.1666231+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:30:35.289684+02:00","action":"move","task_id":220,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T06:30:35.8496806+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:30:35.8558141+02:00","action":"release","task_id":220,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:30:52.1901924+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
+{"timestamp":"2026-03-31T06:31:16.3940046+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:31:16.4003892+02:00","action":"claim","task_id":99,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:36:58.3020201+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
+{"timestamp":"2026-03-31T06:36:58.8634778+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
+{"timestamp":"2026-03-31T06:36:58.8687439+02:00","action":"release","task_id":431,"detail":"builder"}
+{"timestamp":"2026-03-31T06:36:59.2441623+02:00","action":"move","task_id":150,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-03-31T06:37:12.6198494+02:00","action":"create","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
+{"timestamp":"2026-03-31T06:37:25.2454226+02:00","action":"create","task_id":493,"detail":"Add TOOLS_EXCLUDE config to knowledge and project MCP servers"}
+{"timestamp":"2026-03-31T06:37:47.8079909+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T06:37:47.812747+02:00","action":"claim","task_id":459,"detail":"builder"}
+{"timestamp":"2026-03-31T06:37:51.4082869+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:37:51.4135557+02:00","action":"claim","task_id":33,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:39:01.5410606+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:39:01.551979+02:00","action":"claim","task_id":477,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:39:03.5427759+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T06:39:39.4631741+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T06:39:42.77105+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T06:39:42.7768442+02:00","action":"release","task_id":459,"detail":"builder"}
+{"timestamp":"2026-03-31T06:39:59.3390041+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:40:02.873331+02:00","action":"move","task_id":99,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T06:40:03.489999+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:40:03.4942321+02:00","action":"release","task_id":99,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:40:22.6362887+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
+{"timestamp":"2026-03-31T06:40:40.5834845+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:40:40.587064+02:00","action":"claim","task_id":227,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:41:47.5855295+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:41:47.590936+02:00","action":"claim","task_id":476,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:42:41.5383193+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:42:41.5436872+02:00","action":"release","task_id":476,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:45:25.112135+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:45:29.1239994+02:00","action":"move","task_id":227,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T06:46:02.2505613+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:46:02.9405334+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
+{"timestamp":"2026-03-31T06:46:02.9458788+02:00","action":"release","task_id":227,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:46:21.5496127+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:46:21.55431+02:00","action":"claim","task_id":386,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:46:59.3706431+02:00","action":"create","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T06:47:09.5937914+02:00","action":"create","task_id":495,"detail":"Define KanbanTask model + add outputSchema to show/move/pick"}
+{"timestamp":"2026-03-31T06:47:37.9214759+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-03-31T06:47:37.9267179+02:00","action":"release","task_id":477,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:49:50.4972728+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:50:05.5767342+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:50:10.0895029+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T06:50:10.0953947+02:00","action":"release","task_id":33,"detail":"reviewer"}
+{"timestamp":"2026-03-31T06:51:09.9998478+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T06:51:10.0067773+02:00","action":"claim","task_id":461,"detail":"builder"}
+{"timestamp":"2026-03-31T06:52:05.6224078+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:52:05.6288721+02:00","action":"claim","task_id":473,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:52:28.5307939+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T06:52:28.5380459+02:00","action":"release","task_id":461,"detail":"builder"}
+{"timestamp":"2026-03-31T06:52:31.0788296+02:00","action":"create","task_id":496,"detail":"Standardize error handling, return types, and exports across MCP servers"}
+{"timestamp":"2026-03-31T06:53:04.1210847+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:53:04.1273786+02:00","action":"claim","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:53:11.8412574+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:53:18.0745195+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:53:23.2396617+02:00","action":"move","task_id":386,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T06:53:27.4406832+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:53:27.4456649+02:00","action":"release","task_id":386,"detail":"auditor"}
+{"timestamp":"2026-03-31T06:53:52.3475012+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
+{"timestamp":"2026-03-31T06:54:33.8566669+02:00","action":"edit","task_id":488,"detail":"Implement move pick JSON remove board_context"}
+{"timestamp":"2026-03-31T06:54:33.8609173+02:00","action":"claim","task_id":488,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:54:41.1800817+02:00","action":"move","task_id":488,"detail":"ideation -\u003e review"}
+{"timestamp":"2026-03-31T06:54:41.184773+02:00","action":"handoff","task_id":488,"detail":"Implement move pick JSON remove board_context"}
+{"timestamp":"2026-03-31T06:54:41.1894545+02:00","action":"block","task_id":488,"detail":"Empty body: no AC, no context, no description. Cannot research without scoped requirements."}
+{"timestamp":"2026-03-31T06:54:41.193051+02:00","action":"release","task_id":488,"detail":"Implement move pick JSON remove board_context"}
+{"timestamp":"2026-03-31T06:54:48.1161196+02:00","action":"move","task_id":488,"detail":"review -\u003e ideation"}
+{"timestamp":"2026-03-31T06:55:23.759601+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:55:31.2568489+02:00","action":"edit","task_id":473,"detail":"Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure"}
+{"timestamp":"2026-03-31T06:55:31.2632321+02:00","action":"release","task_id":473,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:56:06.1474563+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
+{"timestamp":"2026-03-31T06:56:06.1527105+02:00","action":"release","task_id":475,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:56:07.9339398+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T06:56:07.9416872+02:00","action":"claim","task_id":485,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:56:55.9878923+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T06:57:03.994303+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T06:57:04.4426128+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T06:57:04.4472911+02:00","action":"release","task_id":485,"detail":"researcher"}
+{"timestamp":"2026-03-31T06:57:14.52859+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T06:57:14.539127+02:00","action":"claim","task_id":460,"detail":"builder"}
+{"timestamp":"2026-03-31T06:59:07.7614161+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T06:59:16.2944691+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T06:59:16.743687+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T06:59:16.7488524+02:00","action":"release","task_id":460,"detail":"builder"}
+{"timestamp":"2026-03-31T07:01:13.9016463+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:01:13.905876+02:00","action":"claim","task_id":494,"detail":"researcher"}
+{"timestamp":"2026-03-31T07:01:57.282916+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-31T07:01:57.2881806+02:00","action":"claim","task_id":1,"detail":"researcher"}
+{"timestamp":"2026-03-31T07:02:06.8853918+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-31T07:02:14.2477059+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-31T07:02:14.6689995+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
+{"timestamp":"2026-03-31T07:02:14.6726369+02:00","action":"release","task_id":1,"detail":"researcher"}
+{"timestamp":"2026-03-31T07:04:01.8079737+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:04:01.8122495+02:00","action":"release","task_id":494,"detail":"researcher"}
+{"timestamp":"2026-03-31T07:05:20.4490715+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T07:05:20.4532847+02:00","action":"claim","task_id":466,"detail":"builder"}
+{"timestamp":"2026-03-31T07:05:28.1919976+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T07:05:28.1966579+02:00","action":"claim","task_id":33,"detail":"writer"}
+{"timestamp":"2026-03-31T07:06:48.8954792+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T07:06:48.8993005+02:00","action":"release","task_id":33,"detail":"writer"}
+{"timestamp":"2026-03-31T07:10:39.2126051+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T07:10:42.6101407+02:00","action":"edit","task_id":466,"detail":"Test: CLI entrypoint for analysis pipeline"}
+{"timestamp":"2026-03-31T07:10:42.614376+02:00","action":"release","task_id":466,"detail":"builder"}
+{"timestamp":"2026-03-31T07:11:11.8078363+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T07:11:11.8120408+02:00","action":"claim","task_id":385,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:11:11.8996692+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T07:11:11.9174871+02:00","action":"claim","task_id":462,"detail":"writer"}
+{"timestamp":"2026-03-31T07:11:11.9769296+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:11:11.9817689+02:00","action":"claim","task_id":494,"detail":"architect"}
+{"timestamp":"2026-03-31T07:12:28.6952358+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
+{"timestamp":"2026-03-31T07:12:28.6999157+02:00","action":"release","task_id":462,"detail":"writer"}
+{"timestamp":"2026-03-31T07:13:17.3593683+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:13:24.7352093+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T07:13:24.7407011+02:00","action":"release","task_id":385,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:13:31.8124021+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:13:35.5036943+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T07:13:35.5078868+02:00","action":"release","task_id":494,"detail":"architect"}
+{"timestamp":"2026-03-31T07:15:05.235441+02:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-31T07:15:09.6161718+02:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-31T07:15:19.0559633+02:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-31T07:15:23.3976197+02:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
+{"timestamp":"2026-03-31T07:15:44.4054327+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T07:15:44.4091026+02:00","action":"claim","task_id":485,"detail":"architect"}
+{"timestamp":"2026-03-31T07:15:44.5912529+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T07:15:44.5961243+02:00","action":"claim","task_id":461,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:15:45.3628674+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:15:45.3694601+02:00","action":"claim","task_id":471,"detail":"architect"}
+{"timestamp":"2026-03-31T07:16:03.808121+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T07:16:03.8133054+02:00","action":"claim","task_id":433,"detail":"builder"}
+{"timestamp":"2026-03-31T07:16:40.1640767+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T07:16:53.0959158+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T07:16:58.8370025+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T07:16:58.8406705+02:00","action":"release","task_id":485,"detail":"architect"}
+{"timestamp":"2026-03-31T07:17:09.063219+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T07:17:09.0684617+02:00","action":"release","task_id":461,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:17:26.822338+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T07:17:30.3260928+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
+{"timestamp":"2026-03-31T07:17:30.3325446+02:00","action":"release","task_id":433,"detail":"builder"}
+{"timestamp":"2026-03-31T07:18:55.960472+02:00","action":"create","task_id":497,"detail":"Test: end_work compound tool (TDD RED)"}
+{"timestamp":"2026-03-31T07:19:14.8845491+02:00","action":"edit","task_id":497,"detail":"Test: end_work compound tool (TDD RED)"}
+{"timestamp":"2026-03-31T07:20:17.9307812+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:21:23.3145303+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:21:38.9803265+02:00","action":"edit","task_id":471,"detail":"Add end_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:21:38.9849812+02:00","action":"release","task_id":471,"detail":"architect"}
+{"timestamp":"2026-03-31T07:22:13.3603527+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T07:22:13.36508+02:00","action":"claim","task_id":454,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:22:13.5594643+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:22:13.5644057+02:00","action":"claim","task_id":460,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:22:17.4992213+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T07:22:17.5036633+02:00","action":"claim","task_id":459,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:22:52.2139581+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
+{"timestamp":"2026-03-31T07:22:52.2181238+02:00","action":"claim","task_id":141,"detail":"builder"}
+{"timestamp":"2026-03-31T07:23:53.0766007+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T07:24:07.71103+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T07:24:32.5101761+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
+{"timestamp":"2026-03-31T07:24:32.5146725+02:00","action":"release","task_id":459,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:25:19.7651901+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:25:33.8902536+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T07:25:49.8715192+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T07:26:01.2710036+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
+{"timestamp":"2026-03-31T07:26:01.2754288+02:00","action":"release","task_id":454,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:26:12.020611+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:26:30.0469138+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:26:40.1177723+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:26:40.122462+02:00","action":"release","task_id":460,"detail":"reviewer"}
+{"timestamp":"2026-03-31T07:27:36.0606491+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
+{"timestamp":"2026-03-31T07:27:40.753677+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
+{"timestamp":"2026-03-31T07:27:40.7578876+02:00","action":"release","task_id":141,"detail":"builder"}
+{"timestamp":"2026-03-31T07:28:39.9955149+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T07:28:40.0062556+02:00","action":"claim","task_id":472,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:28:47.672239+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T07:28:47.6785009+02:00","action":"claim","task_id":467,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:28:47.814267+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
+{"timestamp":"2026-03-31T07:28:47.8199303+02:00","action":"claim","task_id":50,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:29:20.0414763+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:29:20.0458832+02:00","action":"claim","task_id":470,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:30:05.6223154+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
+{"timestamp":"2026-03-31T07:30:14.9779496+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
+{"timestamp":"2026-03-31T07:30:14.9821563+02:00","action":"release","task_id":50,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:31:10.6251315+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
+{"timestamp":"2026-03-31T07:31:10.6320749+02:00","action":"release","task_id":470,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:31:59.372713+02:00","action":"move","task_id":226,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-03-31T07:35:17.381902+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
+{"timestamp":"2026-03-31T07:35:17.3866022+02:00","action":"release","task_id":467,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:36:48.5437893+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T07:36:54.5480841+02:00","action":"edit","task_id":472,"detail":"Modernize list_tasks: lean JSON, archived, limit, blocked tri-state"}
+{"timestamp":"2026-03-31T07:36:54.5528456+02:00","action":"release","task_id":472,"detail":"test-writer"}
+{"timestamp":"2026-03-31T07:37:48.0235753+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-31T07:37:48.027755+02:00","action":"unblock","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-03-31T07:39:38.654115+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:39:38.658303+02:00","action":"claim","task_id":460,"detail":"writer"}
+{"timestamp":"2026-03-31T07:39:39.3176015+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
+{"timestamp":"2026-03-31T07:39:39.323342+02:00","action":"claim","task_id":385,"detail":"writer"}
+{"timestamp":"2026-03-31T07:39:43.48983+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T07:39:43.4957181+02:00","action":"claim","task_id":461,"detail":"writer"}
+{"timestamp":"2026-03-31T07:39:47.066007+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
+{"timestamp":"2026-03-31T07:39:47.070772+02:00","action":"claim","task_id":33,"detail":"auditor"}
+{"timestamp":"2026-03-31T07:40:08.3136939+02:00","action":"move","task_id":487,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-03-31T07:40:08.3242097+02:00","action":"move","task_id":488,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-03-31T07:40:24.8616066+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:40:29.64203+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
+{"timestamp":"2026-03-31T07:40:29.6475436+02:00","action":"release","task_id":460,"detail":"writer"}
+{"timestamp":"2026-03-31T07:40:31.3576213+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
+{"timestamp":"2026-03-31T07:40:31.3645417+02:00","action":"release","task_id":461,"detail":"writer"}

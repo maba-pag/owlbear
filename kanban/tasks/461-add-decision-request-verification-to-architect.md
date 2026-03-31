@@ -1,10 +1,10 @@
 ---
 id: 461
 title: Add decision-request verification to architect backlog gate
-status: backlog
+status: done
 priority: needed
 created: 2026-03-31T03:40:10.0274088+02:00
-updated: 2026-03-31T03:56:43.8393504+02:00
+updated: 2026-03-31T07:40:31.3556351+02:00
 tags:
     - process
     - scope:agents
@@ -12,4 +12,47 @@ tags:
 class: standard
 ---
 
-Architect must verify that research-driven tasks (tagged 'research' or referencing a research doc) have an approved decision request before advancing past backlog. If no approved DR exists for a T3 outcome, reject to ideation. See docs/research/mandatory-user-decision-gate.md. AC: - [ ] Architect checks for approved DR when task references research doc - [ ] T3-origin tasks without approved DR are rejected to ideation - [ ] Architect red flag added: approving research-driven feature without DR - [ ] Architecture Review section notes DR verification result
+Scope: `skills/arch-review/SKILL.md` and `agents/architect.agent.md` only. No code, no tests.
+
+AC:
+- [ ] arch-review Step 3 (Evaluate architecture) has a new numbered sub-step 12: "Decision-request verification" — if the task under review references `docs/research/*.md` in its body or is tagged `research`, check `docs/decisions/` for an approved DR (frontmatter `approved: true`) whose `task_id` matches the research doc's owning task; skip for tasks with no research reference
+- [ ] arch-review Step 4 (Decide and act) Block row in the table notes: tasks originating from T3 research without an approved DR are blocked to ideation with reason "T3 research outcome requires approved decision request"
+- [ ] architect.agent.md `<boundaries>` red flags list has a new entry: "You are approving a task that references a research doc (`docs/research/`) or is tagged `research` without verifying an approved decision request exists for that research"
+- [ ] architect.agent.md `<output_format>` Channel B template includes a "DR Verification" line after the Verdict line showing: DR file path and approval status (e.g., `docs/decisions/pending/385-slug.md approved: true`), or "N/A — not research-driven"
+
+See docs/research/mandatory-user-decision-gate.md (Section 6, C4) for context.
+
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+
+- AC1 (arch-review Step 3 sub-step 12): Refined — specified exact step number, trigger conditions (research tag or docs/research/ reference), and verification mechanism (check docs/decisions/ for approved DR matching owning task_id)
+- AC2 (Step 4 Block row): Clear — rejection path and reason text specified
+- AC3 (boundaries red flag): Clear — exact section and wording specified
+- AC4 (output template DR line): Refined — specified placement (after Verdict line), content format, and N/A fallback
+
+### Architecture Notes
+Process-only task: modifies arch-review skill and architect agent instruction files. No application code. Both files serve the same agent workflow (single domain: process/agents). Follows existing patterns: numbered sub-steps in Step 3, bullet entries in red flags list, template lines in Channel B output. No TDD needed (instruction files only, matching #460 precedent). Soft dependency on #459 (impact_tier concept) but self-contained — tier classification is defined in the research doc.
+
+### Changes Made
+- Refined AC with exact file locations, section targets, and verification mechanism
+
+### Dependencies
+- Verified: #459 (soft dep, impact_tier concept) at todo
+- Verified: #460 (sibling, researcher tier classification) at todo
+
+[[2026-03-31]] Tue 05:09
+## Test-Writer Notes
+- Non-implementation task (tagged quality) -- no tests applicable.
+- Passing through to builder.
+
+[[2026-03-31]] Tue 06:52
+## Builder Notes
+- Files changed: `skills/arch-review/SKILL.md`, `agents/architect.agent.md`
+- Tests: N/A (non-implementation task — instruction files only)
+- Lint: N/A (markdown only)
+- AC1: arch-review Step 3 sub-step 12 "Decision-request verification" added after sub-step 11
+- AC2: T3 research block path note added to Step 4 after Placeholder block path note
+- AC3: Red flag added to architect.agent.md boundaries: "approving research-tagged task without verified approved DR"
+- AC4: DR Verification line added to Channel B template immediately after Verdict line

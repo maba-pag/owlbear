@@ -1,10 +1,10 @@
 ---
 id: 433
 title: Add structured tool-error handling guidance to agent instructions
-status: todo
+status: review
 priority: important
 created: 2026-03-30T21:37:50.6549223+02:00
-updated: 2026-03-30T22:42:03.0761026+02:00
+updated: 2026-03-31T07:17:30.3245239+02:00
 tags:
     - research
     - scope:agents
@@ -100,3 +100,20 @@ No test task needed -- markdown instruction file edit, not application code. Rev
 ### Dependencies
 - Added: depends_on #435 (loop detection consolidation must land first to avoid merge conflicts)
 - Verified: #432 (loop detection) is archived -- no conflict
+
+[[2026-03-31]] Tue 06:09
+## Test-Writer Notes
+- Non-implementation task (tagged research) -- markdown instruction file edit, not application code.
+- Architect noted: No test task needed. Reviewer verifies content directly.
+- Passing through to builder.
+
+[[2026-03-31]] Tue 07:17
+## Builder Notes
+- Files changed: instructions/agent-common.instructions.md (28 lines inserted)
+- Section placed after "Skill authority", before "Self-defense against orchestrator degradation" (lines 155-181)
+- 3-step protocol: Capture/Diagnose/Adapt
+- Recovery table: 4 tool types (terminal, file ops, search, MCP) with common failures + recovery actions
+- Structured error context for handoff: 4 fields (tool name+inputs, error msg, alternatives, root cause)
+- Retry limits: cross-referenced "Loop detection and retry discipline" -- no duplication
+- Skill authority bullet preserved unchanged
+- Commit: 1e4dfc1

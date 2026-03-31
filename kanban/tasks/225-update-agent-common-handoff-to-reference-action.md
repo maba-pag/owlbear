@@ -4,7 +4,7 @@ title: Update agent-common handoff to reference action requests
 status: archived
 priority: needed
 created: 2026-03-30T16:57:22.0388952+02:00
-updated: 2026-03-31T05:38:41.0773694+02:00
+updated: 2026-03-31T05:39:09.2226939+02:00
 started: 2026-03-31T05:35:37.9736422+02:00
 completed: 2026-03-31T05:35:37.9736422+02:00
 tags:
@@ -144,3 +144,9 @@ No Builder Notes, Review Evidence, or Docs Gate sections in task body. Builder c
 - -.02 missing reviewer evidence section
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 05:39
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7ecef76 | chore | kanban/tasks/225-*.md | #225 |

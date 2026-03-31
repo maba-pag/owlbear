@@ -4,7 +4,7 @@ title: Consolidate loop detection rules in agent-common.instructions.md
 status: archived
 priority: needed
 created: 2026-03-30T21:45:53.9677998+02:00
-updated: 2026-03-31T05:32:35.8177176+02:00
+updated: 2026-03-31T05:33:02.3352765+02:00
 started: 2026-03-31T05:32:35.2851635+02:00
 completed: 2026-03-31T05:32:35.2851635+02:00
 tags:
@@ -110,3 +110,9 @@ No test task needed â€” this is a markdown instruction file edit, not appli
 - -.02 missing reviewer evidence section in task body
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 05:33
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c3885ac | chore | kanban/tasks/435-*.md | #435 |

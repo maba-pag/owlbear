@@ -1,10 +1,10 @@
 ---
 id: 50
 title: Implement voice addon STT with Moonshine
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-03-26T18:57:23.8838546+01:00
-updated: 2026-03-30T23:17:56.7186006+02:00
+updated: 2026-03-31T07:30:14.975871+02:00
 tags:
     - phase-3
     - scope:voice
@@ -76,3 +76,9 @@ Implicit blocker chain: #50 requires #52 (package scaffold) requires #7 (monorep
 - ruff: clean
 - Note: stt.py was pre-implemented prior to RED phase. Test file existed from prior incomplete pass with 2 broken tests in TestFromAC_ThreadSafeStdout (monkeypatching sys.stdout.buffer which is readonly under pytest). Fixed to use patch.object on owlbear_voice.stt.sys binding, matching captured_stdout fixture approach.
 - AC coverage: all 11 AC lines covered (AC1-SttRunner lifecycle, AC2-lazy init, AC3-constructor kwargs, AC4-TranscriptJsonListener MRO, AC5-NDJSON types, AC6-thread safety, AC7-stderr logging, AC8-status ready, AC9-stop delegation, AC10-close idempotency, AC11-ImportError guard)
+
+[[2026-03-31]] Tue 07:30
+## Test-Writer Notes (resume 2026-03-31)
+- Prior session (2026-03-30) completed all RED-phase work but did not advance the task.
+- test_voice_stt.py is committed at 7800236; ruff clean; 36 tests PASS against pre-existing implementation.
+- Advancing to in-progress now.

@@ -1,10 +1,10 @@
 ---
 id: 141
 title: 'Test: Voice process manager'
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-03-29T15:39:36.7418317+02:00
-updated: 2026-03-31T04:07:12.0913631+02:00
+updated: 2026-03-31T07:27:40.7520898+02:00
 tags:
     - phase-3
     - ' scope:voice'
@@ -132,3 +132,12 @@ TDD companion for #62. See docs/research/voice-process-manager.md.
 1. test_shutdown_cancels_read_loop_task: Uses patch.object(asyncio.Task, 'cancel', ...) which fails on CPython 3.12 with TypeError: cannot set 'cancel' attribute of immutable type '_asyncio.Task'. Task is a C extension type since CPython 3.12 and its methods cannot be monkey-patched. Test needs rewrite using a different verification approach.
 
 2. test_raises_budget_exhausted_after_max_restarts: Contradicts test_restart_counter_resets_after_successful_init. Counter reset on successful handshake (required by reset test) prevents budget exhaustion (required by budget test). With reset: counter oscillates 0-to-1 each crash/restart cycle and never reaches max_restarts. Without reset: budget exhausts but reset test fails. Mathematical proof: no single counter scheme satisfies both tests simultaneously. Test-writer needs to reconcile the AC for these two behaviors.
+
+[[2026-03-31]] Tue 07:27
+## Builder Notes (2026-03-31, second pass)
+- Files changed: None - implementation already committed by prior builder run
+- Tests: 37 passed (previously 35/37; 2 blocked tests fixed by test-writer rewrite)
+- Coverage: 96% on owlbear/voice/process.py (148 stmts, 6 uncovered: guards/dead branches)
+- Lint: ruff clean on both process.py and test file
+- Evidence: 37 passed in 0.76s, all TestFromAC classes green
+- Fixes applied: None - tests pass against existing committed implementation

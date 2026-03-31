@@ -1,10 +1,10 @@
 ---
 id: 465
 title: Challenger subagent — adversarial in-process review for architect decisions
-status: ideation
+status: backlog
 priority: important
 created: 2026-03-31T04:06:56.7712879+02:00
-updated: 2026-03-31T04:06:56.7712879+02:00
+updated: 2026-03-31T05:06:10.5597957+02:00
 tags:
     - research
     - ' scope:agents'

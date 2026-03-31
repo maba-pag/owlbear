@@ -1,22 +1,56 @@
 ---
 id: 464
 title: Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3
-status: backlog
+status: todo
 priority: needed
 created: 2026-03-31T03:54:57.0490464+02:00
-updated: 2026-03-31T04:12:34.5984522+02:00
+updated: 2026-03-31T04:56:31.330169+02:00
 tags:
     - process
     - scope:agents
     - quality
+depends_on:
+    - 459
 class: standard
 ---
 
-Recipe 0 in dispatch-planning skill auto-resolves pending decisions after 5 days. With impact_tier (from #459), T3 decisions must NOT auto-resolve. Update Recipe 0 logic: check impact_tier field, skip 5-day timer when impact_tier=3, report T3 pending count separately in JSON output. See docs/research/impact-tier-decision-requests.md. AC: - [ ] Recipe 0 checks impact_tier field in decision request frontmatter - [ ] impact_tier=3 decisions skip 5-day auto-resolve timer - [ ] Missing impact_tier defaults to 2 (current behavior preserved) - [ ] JSON output pending field distinguishes T2 vs T3 pending counts - [ ] Updated Recipe 0 prose documents tier-aware auto-resolution
+Recipe 0 in dispatch-planning skill auto-resolves pending decisions after 5 days. With impact_tier (from #459), T3 decisions must NOT auto-resolve. Update Recipe 0 logic: check impact_tier field, skip 5-day timer when impact_tier=3, report T3 pending count separately in JSON output. See docs/research/recipe0-tier-aware-auto-resolve.md.
 
-[[2026-03-31]] Tue 04:12
-## Research
-Validated (2026-03-31). See docs/research/recipe0-tier-aware-auto-resolve.md.
-AC is complete. Change confined to skills/dispatch-planning/SKILL.md (3 sections: Recipe 0 prose, Step 1 paragraph, Step 3 JSON format).
-Key: add impact_tier check before 5-day auto-resolve; missing field defaults to T2; pending JSON uses flat keys (decisions_t2, decisions_t3, actions).
-No additional follow-up tasks needed.
+Scope: skills/dispatch-planning/SKILL.md only (3 sections: Recipe 0 prose, Step 1 paragraph, Step 3 JSON format). No code, no tests.
+Depends on: #459 (impact_tier field in decision-requests skill).
+
+AC:
+- [ ] Recipe 0 prose (lines ~58-71): add conditional before 5-day auto-resolve that reads impact_tier from decision request YAML frontmatter
+- [ ] impact_tier=3 decisions skip 5-day auto-resolve timer (remain pending indefinitely until user resolves)
+- [ ] Missing impact_tier field defaults to tier 2 (backwards compat: existing files keep current 5-day auto-resolve behavior)
+- [ ] impact_tier=1 in a pending file (should not exist) is treated as tier 2
+- [ ] Action requests (request_type: action) are unaffected by impact_tier and keep their existing 5-day auto-resolve
+- [ ] Step 1 paragraph (~line 159): note that Recipe 0 now distinguishes T2 (auto-resolvable) from T3 (permanently pending)
+- [ ] Step 3 JSON format (~line 290+): add pending field with flat keys: decisions_t2 (int), decisions_t3 (int), actions (int)
+- [ ] No new files created; no code changes
+
+[[2026-03-31]] Tue 04:56
+## Architecture Review
+**Verdict:** Approve
+
+### AC Assessment
+
+AC Line: Recipe 0 checks impact_tier -- Assessment: Precise after refinement -- Action: Specified exact lines and frontmatter field
+AC Line: T3 skips 5-day auto-resolve -- Assessment: Clear pass/fail -- Action: None
+AC Line: Missing impact_tier defaults to T2 -- Assessment: Backwards compat verified -- Action: None
+AC Line: T1 in pending treated as T2 -- Assessment: Edge case covered -- Action: Added during refinement
+AC Line: Action requests unaffected -- Assessment: Scope boundary clarified -- Action: Added during refinement
+AC Line: Step 1 paragraph update -- Assessment: Specific section cited -- Action: Refined from vague 'updated prose'
+AC Line: Step 3 JSON flat keys -- Assessment: Exact key names specified -- Action: Refined from vague 'distinguishes T2 vs T3'
+AC Line: No new files -- Assessment: Scope guard -- Action: None
+
+### Architecture Notes
+Single-file change (skills/dispatch-planning/SKILL.md). Recipe 0 already reads decision request frontmatter; adding impact_tier check is a minimal conditional extension. Flat JSON keys (decisions_t2, decisions_t3, actions) follow KISS and match existing JSON output style in Step 3. No module layering concerns (skill prose only). No security surface. Dependency on #459 added (was missing).
+
+### Changes Made
+- Added depends_on: 459 via --add-dep
+- Refined 5 AC lines to be section-specific and include exact key names
+- Added 3 new AC lines: T1 edge case, action request exclusion, no-new-files guard
+
+### Dependencies
+- Added: #459 (impact_tier field in decision-requests skill) -- currently at todo

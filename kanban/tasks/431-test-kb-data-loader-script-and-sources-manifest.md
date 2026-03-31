@@ -1,10 +1,10 @@
 ---
 id: 431
 title: 'Test: KB data loader script and sources manifest'
-status: todo
+status: review
 priority: needed
 created: 2026-03-30T21:31:51.1166724+02:00
-updated: 2026-03-30T21:32:05.2789979+02:00
+updated: 2026-03-31T06:36:58.8624168+02:00
 started: 2026-03-30T21:32:05.2789979+02:00
 tags:
     - phase-2

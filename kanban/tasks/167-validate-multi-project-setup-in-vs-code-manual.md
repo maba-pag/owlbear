@@ -4,7 +4,7 @@ title: Validate multi-project setup in VS Code (manual)
 status: in-progress
 priority: important
 created: 2026-03-29T19:49:30.9245641+02:00
-updated: 2026-03-30T19:04:44.6671219+02:00
+updated: 2026-03-31T07:37:48.0225492+02:00
 tags:
     - phase-2
     - scope:build
@@ -12,8 +12,6 @@ tags:
     - rigor:lean
 depends_on:
     - 18
-blocked: true
-block_reason: 'Waiting on user: 5 AC items require VS Code GUI interaction (AC2 agent picker, AC3 skills, AC4 Diagnostics, AC6 References, AC8 no shadowing). test-project/ ready at C:\Users\p362329\Coding\Projects\test-project. Human must open in VS Code, verify, document, clean up, then advance to review.'
 class: standard
 ---
 

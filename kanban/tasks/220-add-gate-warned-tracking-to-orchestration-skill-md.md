@@ -4,7 +4,7 @@ title: Add gate_warned tracking to orchestration SKILL.md
 status: archived
 priority: needed
 created: 2026-03-30T15:17:02.0028127+02:00
-updated: 2026-03-31T06:30:35.848621+02:00
+updated: 2026-03-31T06:30:52.1873414+02:00
 started: 2026-03-31T06:30:35.2880943+02:00
 completed: 2026-03-31T06:30:35.2880943+02:00
 tags:
@@ -209,3 +209,7 @@ AC specific and verifiable. Builder scope creep caught by reviewer.
 ### Deduction: none (base 1.0, 6/6 AC pass, no lint/test issues, reviewer evidence present)
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 06:30
+## Commits
+073fa35 chore: archive task #220 (#220, auditor) - 1 file

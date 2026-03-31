@@ -4,7 +4,7 @@ title: 'Test: mcp-project server tools and resources'
 status: archived
 priority: needed
 created: 2026-03-28T04:04:45.3489882+01:00
-updated: 2026-03-31T06:40:03.4860812+02:00
+updated: 2026-03-31T06:40:22.6352468+02:00
 started: 2026-03-31T06:40:02.8717612+02:00
 completed: 2026-03-31T06:40:02.8717612+02:00
 tags:
@@ -186,3 +186,9 @@ Umbrella AC was clear. Original scope over-sized (crashed builder twice), archit
 ### Deduction breakdown: none
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-03-31]] Tue 06:40
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6733b12 | chore | kanban/tasks/099-*.md | #99 |
