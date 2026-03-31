@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
+
+from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -182,13 +186,17 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {"type": "array"}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: str) -> str:
+async def show_task(ctx: Context, task_id: str) -> KanbanTask:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        raise ToolError(stderr.strip())
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Validation error: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -229,13 +237,17 @@ async def create_task(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def move_task(ctx: Context, task_id: str, status: str) -> str:
+async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status, "--json")
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        raise ToolError(stderr.strip())
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Validation error: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -301,7 +313,7 @@ async def pick_task(
     claim: str = "",
     move: str = "",
     tags: str = "",
-) -> str:
+) -> KanbanTask:
     """Pick the next available unclaimed task matching the given filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["pick"]
@@ -316,8 +328,12 @@ async def pick_task(
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        raise ToolError(stderr.strip())
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Validation error: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -353,3 +369,13 @@ async def start_work(ctx: Context, task_id: str, claim: str = "") -> str:
     data: dict = json.loads(stdout)
     data["claim_name"] = claim_name
     return json.dumps(data)
+
+
+# Set outputSchema for show_task, move_task, pick_task to KanbanTask with alias keys
+# (field name `class_` maps to alias `class`; must use by_alias=True to match MCP spec).
+# This overrides FastMCP's auto-generated schema (which uses Python field names) before
+# tool.output_schema cached_property is first accessed.
+_kanbantask_schema = KanbanTask.model_json_schema(by_alias=True)
+for _tool_name in ("show_task", "move_task", "pick_task"):
+    _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
+    _tool_obj.fn_metadata.output_schema = _kanbantask_schema

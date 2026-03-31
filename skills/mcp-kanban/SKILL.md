@@ -38,7 +38,10 @@ The `claim_name` in the response is used by agents to release their claim at `en
 
 ## Error handling
 
-All tools return `error: {message}` when `kanban-md` exits with a non-zero code. Check for the `error:` prefix to detect failures.
+Error handling differs by tool:
+
+- **`show_task`, `move_task`, `pick_task`** — raise `ToolError` when `kanban-md` exits with a non-zero code. The MCP client receives `isError: true` in the call result. These tools also raise `ToolError` when the JSON output cannot be validated into a `KanbanTask` (wraps `ValidationError` with details).
+- **`list_tasks`, `create_task`, `edit_task`, `start_work`** — return `error: {message}` string on failure. Check for the `error:` prefix to detect failures.
 
 ## Binary discovery
 
