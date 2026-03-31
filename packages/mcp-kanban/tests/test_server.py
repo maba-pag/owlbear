@@ -169,7 +169,7 @@ class TestFromAC_Tools:
     # ------------------------------------------------------------------ list_tasks
     @pytest.mark.asyncio
     async def test_list_tasks_success_passes_args(self) -> None:
-        """list_tasks passes --compact + all filter args to _run_kanban when rc=0."""
+        """list_tasks passes --json + all filter args to _run_kanban when rc=0."""
         mcp_ctx = _make_mcp_ctx()
         with self._patch_run() as mock_run:
             result = await list_tasks(
@@ -177,7 +177,7 @@ class TestFromAC_Tools:
                 status="todo",
                 tag="phase-3",
                 priority="important",
-                block_filter="blocked",
+                blocked=True,
                 search="keyword",
                 sort="priority",
                 unclaimed=True,
@@ -186,7 +186,7 @@ class TestFromAC_Tools:
         assert result == _FAKE_STDOUT
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "list" in args_used
-        assert "--compact" in args_used
+        assert "--json" in args_used
         assert "--status" in args_used
         assert "todo" in args_used
         assert "--tag" in args_used
@@ -393,10 +393,10 @@ class TestFromAC_Tools:
     # ------------------------------------------------------------------ list_tasks block_filter branches (retry: LAX coverage)
     @pytest.mark.asyncio
     async def test_list_tasks_not_blocked_filter(self) -> None:
-        """list_tasks passes --not-blocked to _run_kanban when block_filter='not-blocked'."""
+        """list_tasks passes --not-blocked to _run_kanban when blocked=False."""
         mcp_ctx = _make_mcp_ctx()
         with self._patch_run() as mock_run:
-            result = await list_tasks(mcp_ctx, block_filter="not-blocked")
+            result = await list_tasks(mcp_ctx, blocked=False)
 
         assert result == _FAKE_STDOUT
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -405,10 +405,10 @@ class TestFromAC_Tools:
 
     @pytest.mark.asyncio
     async def test_list_tasks_blocked_filter_does_not_pass_not_blocked(self) -> None:
-        """list_tasks passes --blocked (not --not-blocked) when block_filter='blocked'."""
+        """list_tasks passes --blocked (not --not-blocked) when blocked=True."""
         mcp_ctx = _make_mcp_ctx()
         with self._patch_run() as mock_run:
-            await list_tasks(mcp_ctx, block_filter="blocked")
+            await list_tasks(mcp_ctx, blocked=True)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "--blocked" in args_used

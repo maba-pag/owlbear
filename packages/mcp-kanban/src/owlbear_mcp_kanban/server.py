@@ -124,40 +124,62 @@ async def _run_kanban(ctx: AppContext, *args: str) -> tuple[str, str, int]:
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_tasks(  # noqa: PLR0913
+async def list_tasks(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
     status: str = "",
     tag: str = "",
     priority: str = "",
-    block_filter: str = "",
     search: str = "",
     sort: str = "",
     unclaimed: bool = False,
+    archived: bool = False,
+    limit: int = 0,
+    reverse: bool = False,
+    blocked: bool | None = None,
 ) -> str:
-    """List kanban tasks with optional filters. Returns compact text representation."""
+    """List kanban tasks with optional filters. Returns lean JSON array."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    args: list[str] = ["list", "--compact"]
+    args: list[str] = ["list", "--json"]
     if status:
         args += ["--status", status]
     if tag:
         args += ["--tag", tag]
     if priority:
         args += ["--priority", priority]
-    if block_filter == "blocked":
-        args.append("--blocked")
-    elif block_filter == "not-blocked":
-        args.append("--not-blocked")
     if search:
         args += ["--search", search]
     if sort:
         args += ["--sort", sort]
     if unclaimed:
         args.append("--unclaimed")
+    if archived:
+        args.append("--archived")
+    if limit > 0:
+        args += ["--limit", str(limit)]
+    if reverse:
+        args.append("--reverse")
+    if blocked is True:
+        args.append("--blocked")
+    elif blocked is False:
+        args.append("--not-blocked")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
         return f"error: {stderr.strip()}"
-    return stdout
+    _strip = {"body", "file", "created", "updated"}
+    try:
+        tasks = json.loads(stdout)
+        lean = [{k: v for k, v in task.items() if k not in _strip} for task in tasks]
+        return json.dumps(lean)
+    except (json.JSONDecodeError, AttributeError):
+        return stdout
+
+
+# Set outputSchema for list_tasks (lean task array)
+_list_tasks_tool_obj = next(
+    t for t in mcp._tool_manager._tools.values() if t.name == "list_tasks"  # noqa: SLF001
+)
+_list_tasks_tool_obj.fn_metadata.output_schema = {"type": "array"}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
