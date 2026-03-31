@@ -19,9 +19,9 @@ The server is registered in `.vscode/mcp.json` as `owlbear-kanban`.
 | `list_tasks` | List tasks with optional filters | `status`, `tag`, `priority`, `search`, `sort`, `unclaimed`, `archived`, `limit`, `reverse`, `blocked` |
 | `show_task` | Show a single task by ID | `task_id` (required) |
 | `create_task` | Create a new task | `title` (required), `body`, `claim`, `depends_on`, `parent` (int, 0=none), `priority`, `status`, `tags` |
-| `move_task` | Move task to a new status | `task_id`, `status` (both required) |
+| `move_task` | Move task to a new status; returns JSON task object | `task_id`, `status` (both required) |
 | `edit_task` | Edit task fields | `task_id` (required), `body`, `block`, `unblock`, `tags`, `priority`, `append_body`, `claim`, `release`, `status`, `timestamp`, `add_dep`, `remove_dep`, `parent`, `title` |
-| `pick_task` | Pick the next unclaimed task | `status`, `claim`, `move`, `tags` |
+| `pick_task` | Pick the next unclaimed task; returns JSON task object | `status`, `claim`, `move`, `tags` |
 | `start_work` | Compound: claim a task and return full JSON details | `task_id` (required), `claim` (optional — auto-generated if omitted) |
 
 ## start_work details
@@ -71,5 +71,5 @@ KANBAN_TOOLS_EXCLUDE=create_task,move_task,edit_task,pick_task
 Valid names: `list_tasks`, `show_task`, `create_task`, `move_task`, `edit_task`,
 `pick_task`, `start_work`.
 
-Unknown names are silently ignored. If the variable is not set or is empty, all 6 tools
+Unknown names are silently ignored. If the variable is not set or is empty, all 7 tools
 are registered (backwards-compatible default).
