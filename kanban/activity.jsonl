@@ -8718,3 +8718,16 @@
 {"timestamp":"2026-03-31T13:43:02.4329119+02:00","action":"move","task_id":494,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-31T13:43:02.8987828+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
 {"timestamp":"2026-03-31T13:43:02.9036525+02:00","action":"release","task_id":494,"detail":"auditor"}
+{"timestamp":"2026-03-31T13:43:23.0664801+02:00","action":"edit","task_id":494,"detail":"Add ToolAnnotations to all mcp-kanban tools"}
+{"timestamp":"2026-03-31T13:43:51.291168+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T13:43:51.297316+02:00","action":"claim","task_id":485,"detail":"auditor"}
+{"timestamp":"2026-03-31T13:45:57.3904199+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T13:45:57.3950934+02:00","action":"claim","task_id":489,"detail":"researcher"}
+{"timestamp":"2026-03-31T13:46:38.4352821+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T13:46:49.4555212+02:00","action":"move","task_id":489,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-03-31T13:46:55.6804672+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
+{"timestamp":"2026-03-31T13:46:55.6846799+02:00","action":"release","task_id":489,"detail":"researcher"}
+{"timestamp":"2026-03-31T13:49:52.4986187+02:00","action":"move","task_id":485,"detail":"done -\u003e archived"}
+{"timestamp":"2026-03-31T13:49:58.3065522+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}
+{"timestamp":"2026-03-31T13:49:58.3117516+02:00","action":"release","task_id":485,"detail":"auditor"}
+{"timestamp":"2026-03-31T13:50:10.8709483+02:00","action":"edit","task_id":485,"detail":"Switch move/pick to JSON output, remove board_context — tests"}

@@ -1,10 +1,12 @@
 ---
 id: 485
 title: Switch move/pick to JSON output, remove board_context — tests
-status: todo
+status: archived
 priority: needed
 created: 2026-03-31T06:21:02.7216362+02:00
-updated: 2026-03-31T07:16:58.8359399+02:00
+updated: 2026-03-31T13:50:10.8699189+02:00
+started: 2026-03-31T13:49:52.4962688+02:00
+completed: 2026-03-31T13:49:52.4962688+02:00
 tags:
     - scope:mcp
     - type:test
@@ -57,3 +59,40 @@ Single-file change in test_server.py. Follows established show_task --json asser
 ### Dependencies
 - Verified: #489 (GREEN impl) depends_on [485] -- correct TDD ordering
 - Verified: #477 (parent) is the owning task
+
+[[2026-03-31]] Tue 11:40
+## Builder Notes
+- Files changed: packages/mcp-kanban/tests/test_server.py (committed by test-writer, no further changes needed)
+- Tests: 27 passed, 2 failed (expected RED: test_move_task_success_passes_args, test_pick_task_success_passes_args)
+- Evidence: RED state confirmed -- --json assertions for move_task and pick_task fail; board_context removal clean (27 pass)
+- Fixes applied: None -- test-writer deliverable already committed and in correct state per AC
+
+[[2026-03-31]] Tue 13:50
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Add --json to move_task test | L251: assert --json in args_used | PASS |
+| Add --json to pick_task test | L439: assert --json in args_used | PASS |
+| Remove board_context import+test | Import L28-36 clean, no board_context test | PASS |
+| Remove board_context from error parametrize | 6 entries only (no board_context) | PASS |
+| move/pick --json tests fail (RED) | 2 failed exactly as expected | PASS |
+| All other mcp-kanban tests pass | 27 passed, 0 unexpected failures | PASS |
+
+### Test Results
+- pytest (scoped): 27 passed, 2 failed (expected RED)
+- pytest (full suite): 1998 passed, 294 failed (all pre-existing RED from other tasks)
+- ruff: All checks passed
+
+### Architect Quality
+AC quality score: 5 -- specific test names, line numbers, file ref, clear RED expectation
+
+### Deduction breakdown: none -- all AC verified with evidence, lint clean, commit exists
+### Confidence: 1.0
+### Action: archive
+
+## Commits
+Deliverable committed upstream by test-writer:
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6f9fb9c | test | packages/mcp-kanban/tests/test_server.py | #485 |
