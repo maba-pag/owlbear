@@ -186,7 +186,7 @@ async def move_task(ctx: Context, task_id: str, status: str) -> str:
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def edit_task(  # noqa: PLR0913
+async def edit_task(  # noqa: PLR0913, C901
     ctx: Context,
     *,
     task_id: str,
@@ -200,6 +200,10 @@ async def edit_task(  # noqa: PLR0913
     release: bool = False,
     status: str = "",
     timestamp: bool = False,
+    add_dep: int = 0,
+    remove_dep: int = 0,
+    parent: int = 0,
+    title: str = "",
 ) -> str:
     """Edit task fields including status, priority, body, claim, and block state."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -211,6 +215,7 @@ async def edit_task(  # noqa: PLR0913
         ("--priority", priority),
         ("--claim", claim),
         ("--status", status),
+        ("--title", title),
     ]
     for flag, value in str_flags:
         if value:
@@ -223,6 +228,13 @@ async def edit_task(  # noqa: PLR0913
         args.append("--release")
     if timestamp:
         args.append("--timestamp")
+    if add_dep > 0:
+        args += ["--add-dep", str(add_dep)]
+    if remove_dep > 0:
+        args += ["--remove-dep", str(remove_dep)]
+    if parent > 0:
+        args += ["--parent", str(parent)]
+    args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
         return f"error: {stderr.strip()}"
