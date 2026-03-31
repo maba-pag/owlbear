@@ -4,7 +4,7 @@ title: Update agent-common handoff to reference action requests
 status: archived
 priority: needed
 created: 2026-03-30T16:57:22.0388952+02:00
-updated: 2026-03-31T05:35:38.4590551+02:00
+updated: 2026-03-31T05:38:41.0773694+02:00
 started: 2026-03-31T05:35:37.9736422+02:00
 completed: 2026-03-31T05:35:37.9736422+02:00
 tags:
@@ -107,5 +107,40 @@ No Builder Notes, Review Evidence, or Docs Gate sections in task body. Builder c
 - All 5 AC lines verified with evidence: no deductions
 - Missing reviewer evidence section: -.02
 
+### Confidence: .98
+### Action: archive
+
+[[2026-03-31]] Tue 05:35
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 64db19e | chore | kanban/tasks/225-*.md | #225 |
+
+[[2026-03-31]] Tue 05:38
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Handoff section: reference action requests | L40-41: action request paragraph with skill reference | PASS |
+| Defer-to-user boundary: distinguish types | L58-81: two subsections (Decision requests / Action requests) | PASS |
+| Per-role triggers for action requests | L77-81: table with Builder (2 rows) + Any agent (2 rows) | PASS |
+| Blocking convention: include action requests | L94: bullet 'Action requests - blocked pending user action completion' | PASS |
+
+### Test Results
+- pytest: 1891 passed, 162 failed (all pre-existing, none in task scope - docs only change)
+- ruff: not applicable (no Python files changed)
+
+### Architect Quality
+- AC specificity: 5 verifiable lines, all mechanically checkable
+- Edge case coverage: no gaps, additive docs only
+- Design direction: correctly identified no TDD needed
+- AC quality score: 5/5
+
+### Commit Verification
+- b486720: docs: update agent-common to reference action requests (#225, builder) - 1 file, +21 -1
+- No uncommitted deliverables
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section
 ### Confidence: .98
 ### Action: archive
