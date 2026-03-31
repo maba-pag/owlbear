@@ -1,10 +1,12 @@
 ---
 id: 145
 title: Implement planner gate checker and task selector
-status: review
+status: archived
 priority: needed
 created: 2026-03-29T16:23:38.8707663+02:00
-updated: 2026-03-30T22:57:36.2431824+02:00
+updated: 2026-03-31T23:57:01.4584833+02:00
+started: 2026-03-31T23:56:51.5650996+02:00
+completed: 2026-03-31T23:56:51.5650996+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -143,3 +145,53 @@ See docs/research/build-dispatch-planner.md S3.5 for parent design.
 - Coverage: gates.py 100%, selector.py 100%, models.py 100%, __init__.py 100%
 - Lint: ruff clean
 - No code changes needed
+
+[[2026-03-31]] Tue 12:14
+## Review Evidence
+
+### Test Results
+- pytest: 73 passed, 0 failed (tests/test_planner_gates_selector.py)
+
+### Lint Results
+- ruff: All checks passed!
+
+### Coverage
+- gates.py: 100%   selector.py: 100%   __init__.py: 100%   models.py: 100%
+
+### Builder Process Quality
+- Builder Notes sections: 1 (CLEAN - no retries, impl committed in 4ae80df)
+
+### AC Compliance
+All 17 AC items verified. Implementation matches AC exactly.
+gates.py: check_atomicity/check_tdd/check_clarity/check_gates all pure and correct.
+selector.py: PRIORITY_RANK(5 keys), STATUS_RANK(7 keys), STATUS_AGENT_MAP(7 entries), DISPATCH_CAP=20, select_tasks with gate filter/dual-key sort/cap/DECOMP override/unknown fallback.
+__init__.py: all 7 required exports present.
+
+### Test-Writer Coverage: All AC lines covered by TestFromAC tests (COVERED x14 items).
+
+### TestFromAC Integrity: All 3 TestFromAC classes PRESERVED (builder made no code changes).
+
+### Test Quality: STRONG (assertion specificity, error-path coverage, test independence, naming).
+Note: 2 LAX conditional DECOMP tests use guarded 'if result.entries:' but compensating strong test test_decomp_override_routes_agent_to_kanban_planner covers core behavior.
+
+### Security: Clean - no injection, no hardcoded secrets, no deserialization risks, no new deps.
+
+### Verdict: PASS - confidence 0.95
+
+[[2026-03-31]] Tue 12:58
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Internal planner module; no behavior/API/convention change visible to agents |
+| 2 | Docstrings complete | Yes | Pass | gates.py: 4 public functions all have accurate docstrings; selector.py: module docstring + select_tasks() complete; __init__.py: module docstring present |
+| 3 | docs/sources/overview.md | Yes | Pass | Section already present (line 481) with 2 entries for re module and Pydantic v2 |
+| 4 | README.md CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc linked | Yes | Pass | docs/research/planner-gate-checker-selector.md exists; linked in task body; follow-up test task #207 created |
+| 6 | Scratch files | — | Pass | No docs/scratch/145-* files found |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None
