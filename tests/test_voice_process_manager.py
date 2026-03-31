@@ -293,6 +293,38 @@ class TestFromAC_InitHandshake:  # noqa: N801
                 msg = await manager.receive()
                 assert isinstance(msg, TranscriptMsg)
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_init_timeout_enforced_via_wait_for(self) -> None:
+        """Handshake must enforce init_timeout by wrapping readline in asyncio.wait_for.
+
+        Fails on current HEAD because _spawn_and_handshake calls readline() directly
+        without asyncio.wait_for, so init_timeout is stored but never enforced.
+        A silent-but-alive voice process would hang the handshake indefinitely.
+
+        Verifies fix: asyncio.wait_for must be called with timeout=init_timeout
+        during the handshake readline loop so a timer-based VoiceInitTimeout fires.
+        """
+        proc = _make_proc(lines=[READY_LINE])
+        captured_timeouts: list[float] = []
+
+        _original_wait_for = asyncio.wait_for  # capture real impl before patching
+
+        async def _recording_wait_for(coro: Any, *, timeout: float, **kw: Any) -> Any:  # noqa: ASYNC109
+            captured_timeouts.append(timeout)
+            return await _original_wait_for(coro, timeout=timeout, **kw)
+
+        with _patch_spawn(proc), patch(f"{_MODULE}.asyncio.wait_for", new=_recording_wait_for):
+            async with VoiceProcessManager(_COMMAND, init_timeout=7.5):
+                pass
+
+        # init_timeout (7.5) must appear among wait_for calls made during handshake.
+        # On current HEAD only shutdown_timeout (5.0) and kill_timeout (2.0) appear —
+        # the assertion below fails, proving the enforcement is absent.
+        assert 7.5 in captured_timeouts, (
+            f"asyncio.wait_for must be called with timeout=init_timeout (7.5) "
+            f"during _spawn_and_handshake; recorded timeouts: {captured_timeouts}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Shutdown — 6-phase (TestFromAC_Shutdown)
