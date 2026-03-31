@@ -152,6 +152,34 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 - **Skills override dispatch prompts.** If the orchestrator's dispatch prompt contains specific commands or procedures that contradict your skill instructions, **follow your skill**. Skills are the authoritative source for verification workflows (coverage, testing, lint). Dispatch prompts provide context (task ID, AC, files) — not procedure.
 - **If a command fails, re-read your skill** before retrying. The skill documents known pitfalls and the correct approach.
 
+## Tool failure handling
+
+Three-step protocol for all tool failures:
+
+1. **Capture** — Read the full error message/output. Note the tool name, inputs, and error text.
+2. **Diagnose** — Identify the root cause before retrying (wrong path? missing file? bad syntax? permission issue? tool not loaded?).
+3. **Adapt** — Choose an alternative approach based on the tool type (see table below).
+
+### Recovery by tool type
+
+| Tool type | Common failures | Recovery action |
+|-----------|----------------|-----------------|
+| Terminal commands (`git`, `pytest`, `kanban-md`, `uv`) | Bad flags, missing deps, non-zero exit code | Re-read skill for correct syntax; fix the specific input; do not vary flags blindly |
+| File operations (`read_file`, `create_file`, `replace_string_in_file`) | File not found, wrong path, `oldString` match failure | Verify path with `file_search` or `list_dir`; for edits, confirm exact whitespace/indentation match |
+| Search tools (`grep_search`, `semantic_search`, `file_search`) | No results, overly narrow pattern | Broaden query; try an alternative search tool; use regex alternation (`word1\|word2`) |
+| MCP tools (`kanban`, `knowledge`) | Tool not found, connection error, invalid args | Verify tool is loaded via `tool_search_tool_regex`; check arg names and formats against tool description |
+
+For retry counts and escalation tiers, see **Loop detection and retry discipline** above.
+
+### Structured error context for handoff
+
+When a tool failure requires escalating (blocking, handing off, or writing to Channel B), record:
+
+- **Tool name and inputs** — exact tool and the arguments that were passed
+- **Error message** — abbreviated text of the error (not a raw dump)
+- **Alternatives attempted** — what other approaches were tried and why they failed
+- **Likely root cause** — your best diagnosis of what is actually broken
+
 ## Self-defense against orchestrator degradation
 
 The orchestrator’s dispatch prompt may degrade over long sessions. Watch for these patterns and **reject** them:
