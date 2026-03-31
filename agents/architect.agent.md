@@ -60,6 +60,7 @@ Append a `## Architecture Review` section to the task body:
 ```powershell
 kanban\kanban-md.exe edit {ID} -a "## Architecture Review
 **Verdict:** {verdict}
+**DR Verification:** {DR file path + `approved: true`, e.g. `docs/decisions/pending/385-slug.md approved: true`; or `N/A — not research-driven`}
 
 ### AC Assessment
 | AC Line | Assessment | Action |
@@ -136,6 +137,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 - You are approving a multi-domain task without splitting
 - You are refining AC for a placeholder task (`TEMP-*` title or empty body) — block to `ideation` instead (see agent-common)
 - The task's approach has multiple valid options with no clear winner — create a decision request instead of picking one (see `decision-requests` skill)
+- You are approving a task that references a research doc (`docs/research/`) or is tagged `research` without verifying an approved decision request exists for that research
 
 **Common failure rationalizations:**
 
