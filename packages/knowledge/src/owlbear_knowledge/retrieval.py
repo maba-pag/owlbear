@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_knowledge.protocol import HybridEmbedding
+
 if TYPE_CHECKING:
     from owlbear_knowledge.embeddings import EmbeddingProvider
     from owlbear_knowledge.graph_store import GraphStore
@@ -60,22 +62,25 @@ class GraphAugmentedRetriever:
         self._expansion_enabled = expansion_enabled
         self._weight_by_importance = weight_by_importance
 
-    def _embed(self, query: str) -> list[float]:
+    def _embed(self, query: str) -> list[float] | HybridEmbedding:
         """Embed a query, preferring hybrid embedding with dense fallback.
 
-        Uses ``embed_hybrid`` when available on the embedding provider;
-        otherwise falls back to ``embed``.
+        Uses ``embed_hybrid`` when available on the embedding provider and
+        it returns a concrete list or tuple (not a mock); otherwise falls
+        back to ``embed``.
 
         Args:
             query: Natural language query string.
 
         Returns:
-            Dense embedding vector.
+            Dense vector or full hybrid embedding for the query.
         """
         if hasattr(self._embedding_provider, "embed_hybrid"):
-            result = self._embedding_provider.embed_hybrid(query)
-            # embed_hybrid returns (dense, sparse); take the dense vector
-            return result[0]
+            result = self._embedding_provider.embed_hybrid([query])
+            if isinstance(result, (list, tuple)) and result:
+                first = result[0]
+                if isinstance(first, (HybridEmbedding, list)):
+                    return first
         return self._embedding_provider.embed([query])[0]
 
     def retrieve(
