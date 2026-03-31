@@ -19,6 +19,28 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+EXTRACTION_PROMPT = """\
+Extract entities and relationships from the given text.
+
+Identify:
+- **Entities**: functions, classes, patterns, decisions, concepts, files
+- **Relationships**: defines, imports, depends_on, related_to, implements, documents
+
+Return your findings as JSON matching the ExtractionResult schema.
+
+Each entity needs:
+  - name: a short identifier
+  - entity_type: one of file, function, class_, decision, pattern, concept
+  - description: a brief description of what it is or does
+  - importance: a 0.0 to 1.0 score indicating how important the entity is
+    (0.0 = trivial, 1.0 = critical)
+
+Each edge needs:
+  - source_id: the id of the source entity
+  - target_id: the id of the target entity
+  - relation: one of defines, imports, depends_on, related_to, implements, documents
+"""
+
 
 class ExtractionResult(BaseModel):
     """Result of entity extraction — entities and relationships found in text."""

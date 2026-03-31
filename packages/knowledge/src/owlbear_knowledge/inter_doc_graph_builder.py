@@ -25,6 +25,30 @@ _INTER_BATCH_SIZE = 40
 _INTER_WEIGHT = 0.4
 _INTER_SOURCE = "inter_doc_inference"
 _MIN_ENTITIES = 2
+_DEFAULT_TOP_K = 10
+_DEFAULT_COSINE_THRESHOLD = 0.70
+
+INTER_DOC_PROMPT = """\
+You are a knowledge-graph relationship-inference engine.
+
+Given pairs of entities extracted from DIFFERENT documents, infer implicit
+cross-document relationships between them. Only use these relation types:
+{relation_types}.
+
+Each inferred edge needs:
+  - source_id: the id of the source entity
+  - target_id: the id of the target entity
+  - relation: one of {relation_types}
+
+Only propose relationships that are strongly implied by the entity names,
+descriptions, and types. These entities come from separate documents, so
+focus on conceptual, dependency, or implementation relationships that
+bridge document boundaries. Do NOT hallucinate edges that lack evidence.
+When in doubt, omit.
+
+Return your findings as JSON matching the ExtractionResult schema. Leave the
+entities list empty — only return edges.
+"""
 
 
 def _stamp_inter_edge(edge: Edge) -> Edge:
@@ -63,10 +87,38 @@ class InterDocGraphBuilder:
         extractor: StructuredExtractor,
         vector_store: VectorStoreProtocol,
         graph_store: GraphStore,
+        top_k: int = _DEFAULT_TOP_K,
+        cosine_threshold: float = _DEFAULT_COSINE_THRESHOLD,
     ) -> None:
         self._extractor = extractor
         self._vector_store = vector_store
         self._graph_store = graph_store
+        self._top_k = top_k
+        self._cosine_threshold = cosine_threshold
+
+    def _collect_candidates(
+        self,
+        entities: list[Entity],
+        entity_by_id: dict[str, Entity],
+        existing_pairs: set[tuple[str, str]],
+    ) -> list[tuple[Entity, Entity]]:
+        """Return cross-document candidate pairs after vector filtering and dedup."""
+        candidate_pairs: list[tuple[Entity, Entity]] = []
+        for entity in entities:
+            embedding = self._vector_store.get_embedding(entity.id)
+            similar = self._vector_store.search_similar(embedding, top_k=self._top_k)
+            for sim_id, score in similar:
+                if score < self._cosine_threshold:
+                    continue
+                if sim_id not in entity_by_id:
+                    continue
+                other = entity_by_id[sim_id]
+                if entity.document_id == other.document_id:
+                    continue
+                if (entity.id, other.id) in existing_pairs:
+                    continue
+                candidate_pairs.append((entity, other))
+        return candidate_pairs
 
     async def build(
         self,
@@ -89,23 +141,7 @@ class InterDocGraphBuilder:
             existing_pairs.add((e.target_id, e.source_id))
 
         entity_by_id: dict[str, Entity] = {e.id: e for e in entities}
-
-        # Vector pre-filtering: collect candidate cross-document pairs.
-        candidate_pairs: list[tuple[Entity, Entity]] = []
-        for entity in entities:
-            embedding = self._vector_store.get_embedding(entity.id)
-            similar = self._vector_store.search_similar(embedding)
-            for sim_id, _score in similar:
-                if sim_id not in entity_by_id:
-                    continue
-                other = entity_by_id[sim_id]
-                # Cross-doc filter: skip pairs from the same document.
-                if entity.document_id == other.document_id:
-                    continue
-                # Dedup: skip pairs that already have a graph edge.
-                if (entity.id, other.id) in existing_pairs:
-                    continue
-                candidate_pairs.append((entity, other))
+        candidate_pairs = self._collect_candidates(entities, entity_by_id, existing_pairs)
 
         if not candidate_pairs:
             return GraphBuildResult()

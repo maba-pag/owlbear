@@ -29,6 +29,25 @@ _INTRA_WEIGHT = 0.5
 _INTRA_SOURCE = "intra_doc_inference"
 _MIN_ENTITIES = 2
 
+GRAPH_BUILDER_PROMPT = """\
+You are a knowledge-graph relationship-inference engine.
+
+Given a list of entities extracted from a single document, infer implicit
+relationships between them that are not already captured as edges. Only use
+these relation types: {relation_types}.
+
+Each inferred edge needs:
+  - source_id: the id of the source entity
+  - target_id: the id of the target entity
+  - relation: one of {relation_types}
+
+Only propose relationships that are strongly implied by the entity names and
+descriptions. Do NOT hallucinate edges that lack evidence. When in doubt, omit.
+
+Return your findings as JSON matching the ExtractionResult schema. Leave the
+entities list empty — only return edges.
+"""
+
 
 def _stamp_intra_edge(edge: Edge) -> Edge:
     """Return a copy of *edge* stamped with intra-doc weight and source."""
