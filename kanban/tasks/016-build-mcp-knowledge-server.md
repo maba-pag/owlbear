@@ -1,10 +1,12 @@
 ---
 id: 16
 title: Build mcp-knowledge server
-status: review
+status: archived
 priority: needed
 created: 2026-03-26T17:21:28.0951097+01:00
-updated: 2026-03-31T03:48:31.881932+02:00
+updated: 2026-03-31T05:43:57.2323171+02:00
+started: 2026-03-31T05:43:56.6345458+02:00
+completed: 2026-03-31T05:43:56.6345458+02:00
 tags:
     - phase-1
     - scope:mcp
@@ -238,3 +240,27 @@ See docs/scratch/16-reviewer-cycle3.md for full evidence.
 
 [[2026-03-31]] Tue 03:48
 ## Builder Notes (cycle 4)\n- Files changed: packages/mcp-knowledge/src/owlbear_mcp_knowledge/server.py\n- Tests: 84 passed, coverage 97% on server.py\n- Lint: ruff clean\n- Fix: module-level _app_context set by app_lifespan; _knowledge_stats_bridge reads _app_context.graph_store.get_counts not hardcoded lambda\n- Commit: f93655b
+
+[[2026-03-31]] Tue 04:36
+## Review Evidence (cycle 4)
+See docs/scratch/16-reviewer-cycle4.md for full evidence.
+
+[[2026-03-31]] Tue 04:52
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | Yes | Pass | mcp-knowledge already listed in MCP servers table; no convention changes |
+| 2 | Docstrings | Yes | Pass | All public classes/functions in server.py have accurate docstrings (verified by read) |
+| 3 | sources/overview.md | Yes | Updated | Task 16 entry Where Used corrected from research doc to server.py (commit 382fe41) |
+| 4 | README.md | No | N/A | MCP server uses stdio protocol, no CLI commands added |
+| 5 | Research doc | Yes | Pass | docs/research/build-mcp-knowledge-server.md exists and linked from task body |
+| 6 | SKILL.md | Yes | Pass | skills/knowledge-ops/SKILL.md updated with full MCP tool reference (5 tools + resource) |
+
+### Files Updated
+- docs/sources/overview.md (sources entry corrected; commit 382fe41)
+
+### Scratch Files Cleaned
+- docs/scratch/16-reviewer.md
+- docs/scratch/16-reviewer-cycle3.md
+- docs/scratch/16-reviewer-cycle4.md
