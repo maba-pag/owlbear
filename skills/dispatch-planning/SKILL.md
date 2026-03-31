@@ -58,18 +58,39 @@ The planner uses exactly these commands. No improvisation — no `rg` on frontma
 data comes from `kanban-md.exe` commands that respect server-side filtering (claim
 timeout, dependency resolution, block flags).
 
-### Recipe 0 — Decision requests
+### Recipe 0 — Decision and action requests
 
-Run before the Board Scan. Check for resolved decision requests:
+Run before the Board Scan. Check for resolved decision requests and action requests:
 
 ```powershell
 Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Select-Object -ExpandProperty FullName
 ```
 
-For each file found, read frontmatter. If `approved: true`, unblock the task
+For each file found, read frontmatter. **Type detection:** if the `completed:` field is
+present, treat as an action request; otherwise treat as a decision request
+(backwards-compatible — files without `request_type` default to decision).
+
+For **decision requests**: if `approved: true`, unblock the task
 (`kanban\kanban-md.exe edit {id} --unblock`) and move the file to
-`docs/decisions/resolved/`. If `approved: false` and older than 5 days, auto-resolve
-with the agent's recommendation.
+`docs/decisions/resolved/`. Before applying the 5-day auto-resolve, read the
+`impact_tier` field from the file frontmatter. If `impact_tier: 3`, skip the 5-day
+timer — the decision stays pending indefinitely until the user manually sets
+`approved: true`. Missing `impact_tier` defaults to T2; `impact_tier: 1` in a pending
+file should not exist in practice (T1 outcomes are autonomous) but if encountered is
+treated as T2. If `impact_tier` is 2 (or absent) and `approved: false` and older than
+5 days, auto-resolve: set `approved: auto`, unblock, and move to
+`docs/decisions/resolved/`.
+
+For **action requests**: if `completed: true`, unblock the task and move the file to
+`docs/decisions/resolved/`. If `completed: false` and older than 5 days,
+auto-resolve: set `completed: auto`, unblock, and move. Note: `completed: auto`
+signals the user action was not manually confirmed. `impact_tier` does not apply to
+action requests — they always use the 5-day auto-resolve.
+
+Track unresolved counts by tier for the `pending` field in the JSON output:
+`{"decisions_t2": N, "decisions_t3": N, "actions": N}`. `decisions_t2` = pending T2
+or untiered decision requests; `decisions_t3` = pending T3 decision requests;
+`actions` = pending action request files.
 
 ### Recipe 1 — Board Scan
 
@@ -160,9 +181,13 @@ foreach ($id in {stale_ids}) { "===TASK $id==="; kanban\kanban-md.exe show $id; 
 The orchestrator passes a scope filter and optional failure context from the previous
 cycle.
 
-### Check pending decision requests
+### Check pending decision and action requests
 
-Run **Recipe 0** (Decision requests). Process any resolved requests before scanning.
+Run **Recipe 0** (Decision and action requests). Process any resolved requests before
+scanning. Recipe 0 distinguishes T2 (auto-resolvable after 5 days when `impact_tier` is
+2 or absent) from T3 (permanently pending — `impact_tier: 3` decisions skip the 5-day
+timer and require explicit user approval). Count unresolved files by tier for the
+`pending` field in the JSON output.
 
 ### Board Scan
 
@@ -299,17 +324,17 @@ Produce JSON as the final response. No prose preamble, no narrative, no markdown
 Format (with gate failures):
 
 ```json
-{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"gate_warnings":[{"id":102,"gate":"Gate 3","reason":"Title has unrelated concerns joined by 'and'"}]}
+{"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder","retry_hint":"Review FAIL: missing coverage on parser module"}],"gate_warnings":[{"id":102,"gate":"Gate 3","reason":"Title has unrelated concerns joined by 'and'"}],"pending":{"decisions_t2":0,"decisions_t3":0,"actions":0}}
 ```
 
 Format (no gate failures):
 
 ```json
-{"dispatch":[{"id":101,"agent":"architect"}],"gate_warnings":[]}
+{"dispatch":[{"id":101,"agent":"architect"}],"gate_warnings":[],"pending":{"decisions_t2":0,"decisions_t3":0,"actions":0}}
 ```
 
 <good example why="Single-line JSON object with `dispatch` and `gate_warnings` fields. Agent names from mapping.">
-{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"gate_warnings":[]}
+{"dispatch":[{"id":849,"agent":"architect"},{"id":850,"agent":"researcher"},{"id":854,"agent":"architect"},{"id":851,"agent":"architect"},{"id":843,"agent":"auditor"},{"id":536,"agent":"writer"},{"id":541,"agent":"reviewer"},{"id":549,"agent":"builder"},{"id":544,"agent":"test-writer"},{"id":774,"agent":"architect"},{"id":772,"agent":"architect"},{"id":853,"agent":"architect"}],"gate_warnings":[],"pending":{"decisions_t2":0,"decisions_t3":0,"actions":0}}
 </good example>
 <bad example why="Includes prose and markdown, not a single-line JSON object.">
 ```json
@@ -327,11 +352,16 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
 - `gate_warnings` — Always-present array of `{id, gate, reason}` objects for tasks
   excluded by Gate 3 or Gate 4. Empty array when no failures. Each object: `id` (int),
   `gate` (one of `"Gate 3"` or `"Gate 4"`), `reason` (string, ≤ 120 chars).
+- `pending` — Always-present object with counts of unresolved requests from Recipe 0.
+  Format: `{"decisions_t2": N, "decisions_t3": N, "actions": N}`. `decisions_t2` = pending
+  T2 or untiered decision requests (auto-resolvable after 5 days); `decisions_t3` = pending
+  T3 decision requests (never auto-resolve — require explicit user approval); `actions` =
+  unresolved action request files. All zero when no pending requests.
 
 **Rules:**
 
 - Output MUST be a single JSON object on one line (no pretty-printing)
-- Fields: `dispatch` and `gate_warnings` (both required)
+- Fields: `dispatch`, `gate_warnings`, and `pending` (all required)
 - Empty dispatch array is fine: `{"dispatch":[],"gate_warnings":[]}`
 - Gate names do not appear in `dispatch` entries; gate failures surface only via `gate_warnings`
 - If more than 20 tasks pass gates, include only the top 20 by priority
@@ -353,7 +383,8 @@ Before outputting:
 - [ ] Agent names match the dispatch mapping
 - [ ] Failure context from orchestrator was checked for stale tasks and stale_retried IDs
 - [ ] First-stale tasks have `retry_hint` extracted from task body; second-stale tasks excluded
-- [ ] Output is a single-line JSON object with `dispatch` and `gate_warnings` fields
+- [ ] Recipe 0 checked both `approved: true` (decisions) and `completed: true` (actions); pending counts computed by type
+- [ ] Output is a single-line JSON object with `dispatch`, `gate_warnings`, and `pending` fields
 - [ ] `gate_warnings` populated for every Gate 3/4 exclusion; empty array if none
 - [ ] No prose preamble or narrative in the output
 - [ ] No `kanban-md move` commands were run
