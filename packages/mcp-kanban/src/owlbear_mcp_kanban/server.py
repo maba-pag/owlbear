@@ -259,7 +259,7 @@ async def edit_task(  # noqa: PLR0913, C901
     parent: int = 0,
     title: str = "",
 ) -> str:
-    """Edit task fields including status, priority, body, claim, and block state."""
+    """Edit task fields: status, priority, body, claim, block state, deps, parent, and title."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["edit", task_id]
     str_flags: list[tuple[str, str]] = [
