@@ -310,3 +310,82 @@ class TestFromAC_InterDocGraphBuilder:
         result = await builder.build([e1, e2], scope="global")
         for edge in result.edges:
             assert edge.weight == 0.4
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_InterDocGraphBuilderConstructorParams
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_InterDocGraphBuilderConstructorParams:
+    """AC: InterDocGraphBuilder(top_k: int = 10, cosine_threshold: float = 0.70) (task #33 retry)."""
+
+    # --- cosine_threshold: default 0.70 excludes low-similarity candidates ---
+
+    @pytest.mark.asyncio
+    async def test_default_cosine_threshold_excludes_low_similarity_candidate(self) -> None:
+        """Score=0.60 is below default threshold 0.70 — extractor must not be called."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store(similar=[(e2.id, 0.60)])
+        mock_ext = _make_mock_extractor()
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        await builder.build([e1, e2], scope="global")
+        mock_ext.extract.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_custom_cosine_threshold_excludes_borderline_candidate(self) -> None:
+        """Score=0.75 passes default 0.70 but must be excluded when cosine_threshold=0.80."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store(similar=[(e2.id, 0.75)])
+        mock_ext = _make_mock_extractor()
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+            cosine_threshold=0.80,
+        )
+        await builder.build([e1, e2], scope="global")
+        mock_ext.extract.assert_not_called()
+
+    # --- top_k: passed to search_similar ---
+
+    @pytest.mark.asyncio
+    async def test_search_similar_receives_configured_top_k(self) -> None:
+        """search_similar is called with top_k matching the constructor argument."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store()
+        builder = InterDocGraphBuilder(
+            extractor=_make_mock_extractor(),
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+            top_k=7,
+        )
+        await builder.build([e1, e2], scope="global")
+        for call in mock_vs.search_similar.call_args_list:
+            args, kwargs = call
+            top_k_used = kwargs.get("top_k") if "top_k" in kwargs else (args[1] if len(args) > 1 else None)
+            assert top_k_used == 7, f"Expected top_k=7, got {top_k_used}"
+
+    @pytest.mark.asyncio
+    async def test_default_top_k_is_10(self) -> None:
+        """search_similar is called with top_k=10 when top_k is not specified in constructor."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store()
+        builder = InterDocGraphBuilder(
+            extractor=_make_mock_extractor(),
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        await builder.build([e1, e2], scope="global")
+        for call in mock_vs.search_similar.call_args_list:
+            args, kwargs = call
+            top_k_used = kwargs.get("top_k") if "top_k" in kwargs else (args[1] if len(args) > 1 else None)
+            assert top_k_used == 10, f"Expected default top_k=10, got {top_k_used}"

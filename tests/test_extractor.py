@@ -159,3 +159,36 @@ class TestFromAC_EntityExtractor:
         extractor = EntityExtractor(extractor=mock_ext)
         result = await extractor.extract("some text", metadata={})
         assert isinstance(result, ExtractionResult)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PromptConstants
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PromptConstants:
+    """AC: Prompt constants preserved as module-level string constants (task #33 retry)."""
+
+    def test_extraction_prompt_exists_as_module_level_string(self) -> None:
+        """EXTRACTION_PROMPT is a non-empty module-level string in owlbear_knowledge.extractor."""
+        import owlbear_knowledge.extractor as extractor_mod
+
+        assert hasattr(extractor_mod, "EXTRACTION_PROMPT"), "EXTRACTION_PROMPT missing from extractor module"
+        assert isinstance(extractor_mod.EXTRACTION_PROMPT, str)
+        assert len(extractor_mod.EXTRACTION_PROMPT) > 0
+
+    def test_graph_builder_prompt_exists_as_module_level_string(self) -> None:
+        """GRAPH_BUILDER_PROMPT is a non-empty module-level string in owlbear_knowledge.graph_builder."""
+        import owlbear_knowledge.graph_builder as graph_builder_mod
+
+        assert hasattr(graph_builder_mod, "GRAPH_BUILDER_PROMPT"), "GRAPH_BUILDER_PROMPT missing from graph_builder module"
+        assert isinstance(graph_builder_mod.GRAPH_BUILDER_PROMPT, str)
+        assert len(graph_builder_mod.GRAPH_BUILDER_PROMPT) > 0
+
+    def test_inter_doc_prompt_exists_as_module_level_string(self) -> None:
+        """INTER_DOC_PROMPT is a non-empty module-level string in owlbear_knowledge.inter_doc_graph_builder."""
+        import owlbear_knowledge.inter_doc_graph_builder as inter_doc_mod
+
+        assert hasattr(inter_doc_mod, "INTER_DOC_PROMPT"), "INTER_DOC_PROMPT missing from inter_doc_graph_builder module"
+        assert isinstance(inter_doc_mod.INTER_DOC_PROMPT, str)
+        assert len(inter_doc_mod.INTER_DOC_PROMPT) > 0
