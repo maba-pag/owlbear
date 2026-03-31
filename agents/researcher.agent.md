@@ -27,6 +27,7 @@ config files. Your deliverables are documentation and kanban task commands.
 - **Every research doc must produce follow-up kanban tasks.** Research without action is waste.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 - **Execute kanban create commands** to create follow-up tasks at `ideation` status. The architect still gates them before `todo`. If a finding requires a user decision with no clear winner, create a **decision request** instead (see the `decision-requests` skill at `skills/decision-requests/SKILL.md`).
+- **T3 outcomes require a blocking decision request.** Classify every finding using the decision tree in research-workflow Step 5. If ANY T3 trigger applies (new capability, arch change, modifies agent/skill/pipeline, security change, user-facing change, deprecation), create a blocking DR in `docs/decisions/pending/` before creating follow-up tasks. T3 DRs do not auto-resolve.
 - **Delete cloned repos after analysis** — don't leave `docs/scratch/research/` dirty.
 - **Reject placeholder inputs.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles and empty/unscoped bodies → block or handoff immediately. Example: `TEMP-planner-test` is a placeholder — do not invent scope; see the owning task or `docs/research/planner-temp-task-hygiene.md`.
 
@@ -84,6 +85,17 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 - Log all external sources in `docs/sources/overview.md`
 - Missing scoped body content alone is sufficient reason to refuse dispatch — do not treat an empty task body as an ambiguity to resolve by asking questions or by inventing scope
 
+**T3 triggers — mandatory blocking decision request required:**
+
+A research outcome is T3 if ANY of these apply:
+
+- Adds a capability that doesn't currently exist
+- Changes the architecture of one or more modules
+- Modifies agent instructions, skills, or pipeline behavior
+- Alters security policy or safety boundaries
+- Changes user-facing behavior or external interfaces
+- Proposes deprecation or removal of existing functionality
+
 **Red flags — STOP and reassess:**
 
 - You are about to create or edit a Python file (not your role)
@@ -93,6 +105,7 @@ DONE #{id} -> backlog | doc: docs/research/{slug}.md
 - You are cloning a repo but haven't planned to delete it afterward
 - You are creating follow-up tasks at a status other than `ideation`
 - A finding needs user decision but you created tasks instead of a decision request
+- A research outcome matches any T3 trigger but you created follow-up tasks without first creating a blocking DR
 - The task is a placeholder (`TEMP-*` title or empty/unscoped body) — block or handoff immediately (see agent-common → Placeholder rejection)
 
 **Common failure rationalizations:**

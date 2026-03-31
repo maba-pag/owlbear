@@ -91,7 +91,34 @@ Create `docs/research/{slug}.md`:
 
 Max 200 lines. Every claim needs a source reference.
 
-## Step 5 — Create follow-up tasks
+## Step 5 — Classify outcome and create follow-up tasks
+
+### Tier classification (do this first)
+
+Classify every research finding before acting on it:
+
+| Tier | Category | Decision required? | Examples |
+|------|----------|--------------------|----------|
+| **T1: Autonomous** | Bug fix, refactor, config, perf | None — proceed directly | Root cause analysis, linter config, dep bump |
+| **T2: Advisory** | Approach with trade-offs, no T3 triggers | Advisory DR (5-day auto-resolve) | Library selection, pattern choice |
+| **T3: Mandatory** | New feature, arch change, security/process/breaking change | Blocking DR (no auto-resolve) | New agent capability, pipeline change, module restructure |
+
+**T3 triggers (deterministic — ANY one makes it T3):**
+
+- Adds a capability that doesn't currently exist
+- Changes the architecture of one or more modules
+- Modifies agent instructions, skills, or pipeline behavior
+- Alters security policy or safety boundaries
+- Changes user-facing behavior or external interfaces
+- Proposes deprecation or removal of existing functionality
+
+**Decision tree:**
+
+1. Check T3 triggers → any match? → **T3**: create blocking DR in `docs/decisions/pending/` (no auto-resolve), block task, stop
+2. No T3 triggers + multiple valid approaches with trade-offs? → **T2**: create advisory DR (5-day auto-resolve)
+3. No T3 triggers + no meaningful trade-offs? → **T1**: proceed directly
+
+### Create follow-up tasks
 
 Generate `kanban-md create` commands for every actionable finding.
 **Execute them** to create tasks at `ideation` status — the architect still gates them before `todo`.
