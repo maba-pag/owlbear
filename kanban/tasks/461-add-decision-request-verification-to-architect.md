@@ -1,10 +1,12 @@
 ---
 id: 461
 title: Add decision-request verification to architect backlog gate
-status: done
+status: archived
 priority: needed
 created: 2026-03-31T03:40:10.0274088+02:00
-updated: 2026-03-31T07:40:31.3556351+02:00
+updated: 2026-03-31T09:02:15.7569801+02:00
+started: 2026-03-31T09:02:12.7497947+02:00
+completed: 2026-03-31T09:02:12.7497947+02:00
 tags:
     - process
     - scope:agents
@@ -56,3 +58,30 @@ Process-only task: modifies arch-review skill and architect agent instruction fi
 - AC2: T3 research block path note added to Step 4 after Placeholder block path note
 - AC3: Red flag added to architect.agent.md boundaries: "approving research-tagged task without verified approved DR"
 - AC4: DR Verification line added to Channel B template immediately after Verdict line
+
+[[2026-03-31]] Tue 09:02
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: arch-review Step 3 sub-step 12 | Verified at SKILL.md L94-99: sub-step 12 "Decision-request verification" with correct trigger, matching mechanism, and skip clause | PASS |
+| AC2: Step 4 T3 research block path | Verified at SKILL.md L112: blockquote with exact reason text | PASS |
+| AC3: architect boundaries red flag | Verified at architect.agent.md L140: new red flag entry matching specified wording | PASS |
+| AC4: Channel B DR Verification line | Verified at architect.agent.md L63: DR Verification line after Verdict line with example and N/A fallback | PASS |
+
+### Test Results
+- pytest: 1925 passed, 269 failed (pre-existing, none in task scope; process-only task, no code)
+- ruff: N/A (markdown only)
+
+### Notes
+- Builder added a "Non-implementation tagging" blockquote in Step 4 between Refine and Split rows (not in AC, benign scope creep). Breaks table rendering (table split into two segments).
+- Deliverables were uncommitted by builder (quality gap noted).
+- No Review Evidence section from reviewer (missing).
+
+### AC Quality Score: 4
+AC was specific: exact file paths, section targets, content format, and placement. Minor gap: AC did not specify whether the Step 4 note should be a blockquote or table row.
+
+### Deduction breakdown
+- Missing reviewer evidence section: -.02
+### Confidence: .98
+### Action: archive
