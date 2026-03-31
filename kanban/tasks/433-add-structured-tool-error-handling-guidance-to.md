@@ -1,10 +1,12 @@
 ---
 id: 433
 title: Add structured tool-error handling guidance to agent instructions
-status: review
+status: archived
 priority: important
 created: 2026-03-30T21:37:50.6549223+02:00
-updated: 2026-03-31T07:17:30.3245239+02:00
+updated: 2026-03-31T15:54:36.8387894+02:00
+started: 2026-03-31T15:54:31.9218182+02:00
+completed: 2026-03-31T15:54:31.9218182+02:00
 tags:
     - research
     - scope:agents
@@ -117,3 +119,37 @@ No test task needed -- markdown instruction file edit, not application code. Rev
 - Retry limits: cross-referenced "Loop detection and retry discipline" -- no duplication
 - Skill authority bullet preserved unchanged
 - Commit: 1e4dfc1
+
+[[2026-03-31]] Tue 15:10
+## Docs Gate - all 6 checklist items evaluated, no docs files needed updating, content verified
+
+[[2026-03-31]] Tue 15:54
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| New 'Tool failure handling' section | Found at L155 of agent-common.instructions.md | PASS |
+| Placed after 'Skill authority', before 'Self-defense' | Skill authority L150, Tool failure L155, Self-defense L189 | PASS |
+| 3-step error protocol (Capture/Diagnose/Adapt) | Lines 159-161, all three steps present with definitions | PASS |
+| Recovery by tool type table (4 categories) | Lines 165-170: terminal, file ops, search, MCP -- each with failures + recovery | PASS |
+| Structured error context for handoff | Lines 174-179: 4 fields (tool+inputs, error msg, alternatives, root cause) | PASS |
+| Cross-references Loop detection, no retry duplication | L172 references section, no retry numbers duplicated | PASS |
+| Skill authority bullet preserved unchanged | Lines 151-152 unchanged from pre-task state | PASS |
+
+### Test Results
+- pytest: 1918 passed, 141 failed (all pre-existing, none in task scope -- markdown-only change)
+- ruff: 2 violations in unrelated file (test_necessity_check_196.py) -- not in scope
+
+### AC Quality: 5/5
+AC was specific, mechanically verifiable, and led to clean implementation with no builder improvisation needed.
+
+### Research verification
+- Research doc exists: docs/research/tool-error-handling-guidance.md
+- This task IS the follow-up implementation from that research
+- Task body links to research doc
+
+### Deduction breakdown
+- -.02 Missing reviewer evidence section in task body
+
+### Confidence: .98
+### Action: archive
