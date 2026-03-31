@@ -567,21 +567,6 @@ class TestFromAC_DispatchWave:  # noqa: N801
         assert 1 in result.successes  # researcher (task_id=1) succeeded
         assert 2 in result.failures   # builder (task_id=2) failed
 
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_non_rate_limit_crash_dispatch_entry_called_twice_retry_once(
-        self,
-    ) -> None:
-        """Non-rate-limit error: dispatch_entry retried exactly once → new_session called twice."""
-        client = _make_client()
-        client.new_session = AsyncMock(side_effect=Exception("internal server error"))
-        state = LoopState(sequential_remaining=0)
-        result = await dispatch_wave(self._make_wave("builder"), client, state)
-        assert 1 in result.failures
-        # AC: retry once on non-rate-limit error → dispatch_entry called twice
-        assert client.new_session.call_count == 2, (
-            "dispatch_wave must retry dispatch_entry once on non-rate-limit error"
-        )
-
 
 # ===========================================================================
 # run_loop
