@@ -35,6 +35,8 @@ _SOURCE_SCHEMA = sy.Map(
         "name": sy.Str(),
         "type": sy.Enum(["file_glob", "url_list", "crawl"]),
         "config": sy.MapPattern(sy.Str(), sy.Str()),
+        sy.Optional("scope"): sy.Str(),
+        sy.Optional("enabled"): sy.Bool(),
     }
 )
 
@@ -56,6 +58,8 @@ class ManifestEntry:
     name: str
     type: str
     config: dict[str, str]
+    scope: str = "global"
+    enabled: bool = True
 
 
 @dataclass
@@ -125,6 +129,8 @@ def parse_manifest(yaml_text: str) -> list[ManifestEntry]:
             name=entry["name"],
             type=entry["type"],
             config=dict(entry["config"]),
+            scope=entry.get("scope", "global"),
+            enabled=entry.get("enabled", True),
         )
         for entry in raw_sources
     ]
@@ -154,6 +160,10 @@ async def load_manifest_file(
     now = datetime.now(tz=UTC).isoformat()
 
     for entry in entries:
+        if not entry.enabled:
+            logger.debug("Skipping disabled source %r", entry.name)
+            continue
+
         source = KnowledgeSource(
             name=entry.name,
             source_type=SourceType(entry.type),
@@ -182,7 +192,7 @@ async def load_manifest_file(
                 intake_result = await intake_mod.read_file(
                     file_path, workspace_root=workspace_root
                 )
-                result = await pipeline.ingest(intake_result)
+                result = await pipeline.ingest(intake_result, scope=entry.scope)
                 if result.status == "skipped":
                     summary.skipped += 1
                 elif result.status == "failed":

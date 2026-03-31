@@ -1,0 +1,21 @@
+sources:
+  - name: "Research docs"
+    type: file_glob
+    config:
+      glob: "docs/research/*.md"
+    scope: global
+    enabled: true
+
+  - name: "Skills"
+    type: file_glob
+    config:
+      glob: "skills/*/SKILL.md"
+    scope: global
+    enabled: true
+
+  - name: "Instructions"
+    type: file_glob
+    config:
+      glob: "instructions/*.md"
+    scope: global
+    enabled: true
