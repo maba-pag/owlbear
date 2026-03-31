@@ -539,6 +539,66 @@ class TestFromAC_IngestFlow:
         assert summary.skipped == 1
         assert summary.failed == 1
 
+    @pytest.mark.asyncio
+    async def test_ingest_exception_does_not_abort_remaining_files(
+        self, tmp_path: Path
+    ) -> None:
+        """If ingest() raises an exception on one file, remaining files are still processed
+        and summary.failed is incremented (covers exception handler at loader.py:193-196)."""
+        (tmp_path / "a.md").write_text("first")
+        (tmp_path / "b.md").write_text("second")
+        (tmp_path / "c.md").write_text("third")
+
+        manifest_file = _write_manifest(
+            tmp_path,
+            "sources:\n  - name: 'D'\n    type: file_glob\n    config:\n      glob: '*.md'\n",
+        )
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(
+            side_effect=[RuntimeError("unexpected failure"), _make_ok_result(), _make_ok_result()]
+        )
+        mock_source_store = MagicMock()
+
+        summary = await load_manifest_file(
+            manifest_path=manifest_file,
+            workspace_root=tmp_path,
+            source_store=mock_source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert mock_pipeline.ingest.call_count == 3
+        assert summary.failed == 1
+        assert summary.ingested == 2
+
+    @pytest.mark.asyncio
+    async def test_all_source_ok_false_when_all_files_in_source_fail(
+        self, tmp_path: Path
+    ) -> None:
+        """When every file in a source fails, all_source_ok is set to False via the
+        source_failed == source_total condition (loader.py:199) — tested without CLI mock."""
+        (tmp_path / "a.md").write_text("fail1")
+        (tmp_path / "b.md").write_text("fail2")
+
+        manifest_file = _write_manifest(
+            tmp_path,
+            "sources:\n  - name: 'D'\n    type: file_glob\n    config:\n      glob: '*.md'\n",
+        )
+        mock_pipeline = MagicMock()
+        mock_pipeline.ingest = AsyncMock(
+            side_effect=[_make_failed_result(), _make_failed_result()]
+        )
+        mock_source_store = MagicMock()
+
+        summary = await load_manifest_file(
+            manifest_path=manifest_file,
+            workspace_root=tmp_path,
+            source_store=mock_source_store,
+            pipeline=mock_pipeline,
+        )
+
+        assert summary.all_source_ok is False
+        assert summary.failed == 2
+
 
 # ---------------------------------------------------------------------------
 # AC9, AC10 — CLI entry point and exit codes
