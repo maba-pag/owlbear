@@ -339,3 +339,164 @@ class TestFromAC_ReadmeMd:
         assert has_qdrant or has_embedding, (
             "README must mention optional dependencies (qdrant and/or embedding provider)"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC: retrieval.py GraphAugmentedRetriever — constructor parameters and
+#     retrieve() / _embed() interface (retry: items missing from prior cycle)
+#
+# Missing from prior test-writer cycle (reviewer evidence #34-reviewer.md):
+#   - expansion_depth: int = 1
+#   - max_neighbors_per_entity: int = 10
+#   - max_expansion_tokens default = 2000 (not 500)
+#   - retrieve(query, top_k: int = 5, scopes)
+#   - _embed() prefers embed_hybrid with dense fallback
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GraphAugmentedRetrieverInterface:
+    """Contract tests for GraphAugmentedRetriever __init__ params and retrieve() / _embed()."""
+
+    # -- expansion_depth: int = 1 -------------------------------------------
+
+    def test_init_accepts_expansion_depth_kwarg(self) -> None:
+        """AC: __init__ accepts expansion_depth as a keyword argument."""
+        r = GraphAugmentedRetriever(
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            embedding_provider=MagicMock(),
+            expansion_depth=2,
+        )
+        assert r is not None
+
+    def test_init_expansion_depth_default_is_one(self) -> None:
+        """AC: expansion_depth defaults to 1."""
+        import inspect
+
+        sig = inspect.signature(GraphAugmentedRetriever.__init__)
+        param = sig.parameters.get("expansion_depth")
+        assert param is not None, "__init__ must have an expansion_depth parameter"
+        assert param.default == 1, f"expansion_depth default must be 1, got {param.default!r}"
+
+    # -- max_neighbors_per_entity: int = 10 -----------------------------------
+
+    def test_init_accepts_max_neighbors_per_entity_kwarg(self) -> None:
+        """AC: __init__ accepts max_neighbors_per_entity as a keyword argument."""
+        r = GraphAugmentedRetriever(
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            embedding_provider=MagicMock(),
+            max_neighbors_per_entity=5,
+        )
+        assert r is not None
+
+    def test_init_max_neighbors_per_entity_default_is_ten(self) -> None:
+        """AC: max_neighbors_per_entity defaults to 10."""
+        import inspect
+
+        sig = inspect.signature(GraphAugmentedRetriever.__init__)
+        param = sig.parameters.get("max_neighbors_per_entity")
+        assert param is not None, "__init__ must have a max_neighbors_per_entity parameter"
+        assert param.default == 10, (
+            f"max_neighbors_per_entity default must be 10, got {param.default!r}"
+        )
+
+    # -- max_expansion_tokens default = 2000 ----------------------------------
+
+    def test_init_max_expansion_tokens_default_is_2000(self) -> None:
+        """AC: max_expansion_tokens defaults to 2000 (AC specifies 2000, not 500)."""
+        import inspect
+
+        sig = inspect.signature(GraphAugmentedRetriever.__init__)
+        param = sig.parameters.get("max_expansion_tokens")
+        assert param is not None, "__init__ must have a max_expansion_tokens parameter"
+        assert param.default == 2000, (
+            f"max_expansion_tokens default must be 2000, got {param.default!r}"
+        )
+
+    # -- retrieve(query, top_k: int = 5, scopes) --------------------------------
+
+    def test_retrieve_accepts_top_k_kwarg(self) -> None:
+        """AC: retrieve() accepts top_k as a keyword argument."""
+        vector_store = MagicMock()
+        vector_store.search_similar.return_value = []
+        ep = MagicMock()
+        ep.embed.return_value = [[0.1, 0.2]]
+        r = GraphAugmentedRetriever(
+            vector_store=vector_store,
+            graph_store=MagicMock(),
+            embedding_provider=ep,
+        )
+        result = r.retrieve("query text", top_k=3)
+        assert isinstance(result, RetrievalResult)
+
+    def test_retrieve_top_k_default_is_five(self) -> None:
+        """AC: retrieve() top_k defaults to 5."""
+        import inspect
+
+        sig = inspect.signature(GraphAugmentedRetriever.retrieve)
+        param = sig.parameters.get("top_k")
+        assert param is not None, "retrieve() must have a top_k parameter"
+        assert param.default == 5, f"top_k default must be 5, got {param.default!r}"
+
+    def test_retrieve_top_k_limits_result_chunks(self) -> None:
+        """AC: top_k limits the number of chunks included in RetrievalResult."""
+        vector_store = MagicMock()
+        many_results = [(f"chunk-{i}", 0.9 - i * 0.01) for i in range(20)]
+        vector_store.search_similar.return_value = many_results
+        ep = MagicMock()
+        ep.embed.return_value = [[0.1]]
+        graph_store = MagicMock()
+        graph_store.list_entities.return_value = []
+
+        r = GraphAugmentedRetriever(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=ep,
+        )
+
+        result = r.retrieve("q", top_k=5)
+
+        assert len(result.chunks) <= 5
+
+    # -- _embed() prefers embed_hybrid with dense fallback --------------------
+
+    def test_embed_method_exists(self) -> None:
+        """AC: GraphAugmentedRetriever has a callable _embed() method."""
+        r = GraphAugmentedRetriever(
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            embedding_provider=MagicMock(),
+        )
+        assert callable(getattr(r, "_embed", None)), (
+            "GraphAugmentedRetriever must have a callable _embed() method"
+        )
+
+    def test_embed_prefers_embed_hybrid_when_available(self) -> None:
+        """AC: _embed() calls embed_hybrid when the embedding provider supports it."""
+        ep = MagicMock()
+        ep.embed_hybrid.return_value = ([0.1, 0.2], {"indices": [0], "values": [0.5]})
+        r = GraphAugmentedRetriever(
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            embedding_provider=ep,
+        )
+
+        r._embed("some query")
+
+        ep.embed_hybrid.assert_called()
+        ep.embed.assert_not_called()
+
+    def test_embed_falls_back_to_dense_when_no_embed_hybrid(self) -> None:
+        """AC: _embed() falls back to embed() when embed_hybrid is not available."""
+        ep = MagicMock(spec=["embed"])  # no embed_hybrid attribute
+        ep.embed.return_value = [[0.1, 0.2, 0.3]]
+        r = GraphAugmentedRetriever(
+            vector_store=MagicMock(),
+            graph_store=MagicMock(),
+            embedding_provider=ep,
+        )
+
+        r._embed("some query")
+
+        ep.embed.assert_called()
