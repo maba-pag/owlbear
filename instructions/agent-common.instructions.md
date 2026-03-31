@@ -201,7 +201,7 @@ Content: agent name, task ID, date, then bullet points. Example:
 
 These apply to ALL agents:
 
-- You are retrying the same command with different flag variations (max 2 retries)
+- You are retrying the same command with different flag variations (max 2 retries — see Loop detection and retry discipline below)
 - You are about to work on a second task in the same invocation
 - You are trusting another agent's self-report without your own evidence
 - You are about to produce output without running tests/lint yourself (when applicable)
@@ -246,10 +246,34 @@ Read kanban task details once with `kanban-md show` at the start of your workflo
 These rules apply to all terminal usage:
 
 - **First-call discipline.** Get the invocation right the first time. Load the relevant skill first if unsure of the exact syntax.
-- **No brute-force retries.** If a command fails, read the error and diagnose before retrying. Maximum 2 attempts at the same logical operation before reassessing.
+- **No brute-force retries.** If a command fails, read the error and diagnose before retrying. See Loop detection and retry discipline below for tier-based escalation limits.
 - **No Write-Host fencing.** The terminal tool reports exit codes automatically. Don't wrap commands in `Write-Host` markers.
 - **Chain with `;`** — never `&&` (PowerShell 5.1).
 - **Command decomposition.** Break complex multi-step operations into separate terminal calls rather than long chained pipelines. Each call is independently reviewable and reduces approval friction. Use `;`-chaining for closely related commands within one logical operation (e.g., `cd dir ; run cmd`), but separate distinct logical steps into their own calls.
+
+## Loop detection and retry discipline
+
+These rules apply to ALL agents and ALL operations — tool calls, terminal commands, searches, file reads.
+
+### 3-tier escalation model
+
+| Tier | Trigger | Required action |
+|------|---------|------------------|
+| 1 — Detect | Same tool call or command attempted twice | Read the error. Diagnose root cause. Change your approach before retrying. |
+| 2 — Adapt | Same logical operation failed with 2 different approaches | Reassess whether the operation is necessary. Consider skipping or deferring. |
+| 3 — Stop | 3+ failed attempts at the same goal | Stop. Write what you tried in the task body. Move to handoff/blocked. |
+
+**Tier 3 is mandatory:** When you reach tier 3, you MUST update the task body with what you tried and why it failed, then use `kanban\kanban-md.exe handoff` or `--block` to park the task.
+
+### Category-specific retry limits
+
+| Category | Max attempts | Examples |
+|----------|-------------|----------|
+| Exact same command | 1 retry | Same pytest flags, same grep query |
+| Same logical operation, varied approach | 2 retries | Different flags, different search terms |
+| Same goal, different operations | 3 total | Try grep, then semantic search, then read file |
+
+After each failure, you must vary your approach — running the same command with identical arguments a second time counts as one attempt, no matter how many times you repeat it.
 
 ## Defense-in-depth verification model
 
