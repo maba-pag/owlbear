@@ -1,10 +1,12 @@
 ---
 id: 228
 title: Subagent nesting architecture — validate designs and create implementation plan
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T18:23:38.6783812+02:00
-updated: 2026-03-31T04:05:42.2067368+02:00
+updated: 2026-03-31T06:02:32.833249+02:00
+started: 2026-03-31T06:02:32.3188552+02:00
+completed: 2026-03-31T06:02:32.3188552+02:00
 tags:
     - research
     - ' scope:agents'
