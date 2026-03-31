@@ -175,11 +175,13 @@ async def create_task(  # noqa: PLR0913
     ctx: Context,
     *,
     title: str,
-    priority: str = "",
-    tags: str = "",
     body: str = "",
-    depends_on: str = "",
     claim: str = "",
+    depends_on: str = "",
+    parent: int = 0,
+    priority: str = "",
+    status: str = "",
+    tags: str = "",
 ) -> str:
     """Create a new kanban task with the given title and optional metadata."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -194,6 +196,11 @@ async def create_task(  # noqa: PLR0913
         args += ["--depends-on", depends_on]
     if claim:
         args += ["--claim", claim]
+    if status:
+        args += ["--status", status]
+    if parent > 0:
+        args += ["--parent", str(parent)]
+    args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
         return f"error: {stderr.strip()}"

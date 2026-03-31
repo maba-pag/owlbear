@@ -18,7 +18,7 @@ The server is registered in `.vscode/mcp.json` as `owlbear-kanban`.
 |------|-------------|----------------|
 | `list_tasks` | List tasks with optional filters | `status`, `tag`, `priority`, `block_filter`, `search`, `sort`, `unclaimed` |
 | `show_task` | Show a single task by ID | `task_id` (required) |
-| `create_task` | Create a new task | `title` (required), `priority`, `tags`, `body`, `depends_on`, `claim` |
+| `create_task` | Create a new task | `title` (required), `body`, `claim`, `depends_on`, `parent` (int, 0=none), `priority`, `status`, `tags` |
 | `move_task` | Move task to a new status | `task_id`, `status` (both required) |
 | `edit_task` | Edit task fields | `task_id` (required), `body`, `block`, `unblock`, `tags`, `priority`, `append_body`, `claim`, `release`, `status`, `timestamp`, `add_dep`, `remove_dep`, `parent`, `title` |
 | `pick_task` | Pick the next unclaimed task | `status`, `claim`, `move`, `tags` |
