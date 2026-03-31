@@ -45,38 +45,63 @@ class GraphAugmentedRetriever:
         graph_store: GraphStore,
         embedding_provider: EmbeddingProvider,
         *,
+        expansion_depth: int = 1,
+        max_expansion_tokens: int = 2000,
+        max_neighbors_per_entity: int = 10,
         expansion_enabled: bool = True,
-        max_expansion_tokens: int = 500,
         weight_by_importance: bool = False,
     ) -> None:
         self._vector_store = vector_store
         self._graph_store = graph_store
         self._embedding_provider = embedding_provider
-        self._expansion_enabled = expansion_enabled
+        self._expansion_depth = expansion_depth
         self._max_expansion_tokens = max_expansion_tokens
+        self._max_neighbors_per_entity = max_neighbors_per_entity
+        self._expansion_enabled = expansion_enabled
         self._weight_by_importance = weight_by_importance
+
+    def _embed(self, query: str) -> list[float]:
+        """Embed a query, preferring hybrid embedding with dense fallback.
+
+        Uses ``embed_hybrid`` when available on the embedding provider;
+        otherwise falls back to ``embed``.
+
+        Args:
+            query: Natural language query string.
+
+        Returns:
+            Dense embedding vector.
+        """
+        if hasattr(self._embedding_provider, "embed_hybrid"):
+            result = self._embedding_provider.embed_hybrid(query)
+            # embed_hybrid returns (dense, sparse); take the dense vector
+            return result[0]
+        return self._embedding_provider.embed([query])[0]
 
     def retrieve(
         self,
         query: str,
+        top_k: int = 5,
         scopes: list[str] | None = None,
     ) -> RetrievalResult:
         """Run hybrid search and return a :class:`RetrievalResult`.
 
         Args:
             query: Natural language query string.
+            top_k: Maximum number of chunks to include in the result.
             scopes: Optional scope filter for graph operations.
 
         Returns:
             :class:`RetrievalResult` with vector chunks and graph expansion.
         """
-        embedding = self._embedding_provider.embed([query])[0]
-        chunks: list[tuple[str, float]] = self._vector_store.search_similar(embedding)
+        embedding = self._embed(query)
+        raw_chunks: list[tuple[str, float]] = self._vector_store.search_similar(embedding)
+        chunks = raw_chunks[:top_k]
 
         if not chunks:
             return RetrievalResult(chunks=[], expansion_text="", entities_found=0)
 
-        seeds = self._resolve_seeds(chunks, scopes=scopes)
+        seeds = self._resolve_seeds(raw_chunks, scopes=scopes)
 
         expansion_text = self._expand(seeds, scopes=scopes) if self._expansion_enabled else ""
 
