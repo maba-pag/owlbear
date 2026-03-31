@@ -2,6 +2,20 @@
 
 External repos and resources studied during OwlBear development.
 
+## Recipe 0 Tier-Aware Auto-Resolution (Task #464)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Per-environment wait-timers: production has required-reviewers with no auto-bypass, staging has wait-timers — validates tier-differentiated auto-resolve | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
+| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | UserProxyAgent blocks indefinitely until user responds — validates indefinite T3 blocking in single-user system | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
+
+## Impact-Tier Decision Requests (Task #459)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | UserProxyAgent blocks indefinitely; HandoffTermination typed pause pattern — validates T3 indefinite blocking | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
+| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Per-environment wait-timers with auto-approve; required-reviewer gates — validates tiered timeout model | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
+
 ## Extend Decision-Request for Action Requests (Task #221)
 
 | Source | URL | What | Where Used | Date |
@@ -433,7 +447,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| MCP Python SDK README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator API, lifespan pattern, resource decorators, Context injection | `docs/research/build-mcp-knowledge-server.md` | 2026-03-29 |
+| MCP Python SDK README | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator API, lifespan pattern, resource decorators, Context injection | `packages/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` | 2026-03-29 |
 | MCP Reference Memory Server | <https://github.com/modelcontextprotocol/servers/tree/main/src/memory> | MIT | Knowledge-graph-based MCP server prior art, tool/resource patterns | `docs/research/build-mcp-knowledge-server.md` | 2026-03-29 |
 
 ## Instruction File Porting Research (Task #10)
@@ -2460,6 +2474,23 @@ External repos and resources studied during OwlBear development.
 | VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | `agents:` array, nesting depth (max 5), override of `disable-model-invocation`, coordinator/worker pattern | `docs/research/quality-runner-wiring.md` | 2026-03-30 |
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `agents` field spec, tool inheritance, assign mode, `user-invocable` and `disable-model-invocation` flags | `docs/research/quality-runner-wiring.md` | 2026-03-30 |
 
+## Mandatory User-Decision Gate (Task #385)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Anthropic "Building Effective Agents" | <https://www.anthropic.com/engineering/building-effective-agents> | Pause for human feedback at checkpoints, programmatic checks on intermediate steps | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination for structured control transfer, typed pause points | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
+| CrewAI Tasks docs | <https://docs.crewai.com/concepts/tasks> | `human_input` mandatory flag, `guardrail` functions for output validation | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
+| GitHub Actions Environment Protection Rules | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gates per environment, auto-timeout patterns | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
+
+## Architect DR Verification Gate (Task #461)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| CrewAI Task Guardrails | <https://docs.crewai.com/concepts/tasks> | Sequential guardrail validation pattern — prerequisite check before task proceeds | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+| AutoGen Human-in-the-Loop | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination early termination when prerequisite unmet | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+| GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gate blocks before any work runs | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+
 ## Agent Port to v2 Research (Task #8)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -3277,3 +3308,10 @@ External repos and resources studied during OwlBear development.
 | AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | MIT | UserProxyAgent blocking approval, HandoffTermination typed control transfer | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
 | CrewAI Tasks docs | <https://docs.crewai.com/concepts/tasks> | N/A | `human_input` mandatory review flag, `guardrail` validation functions on task outputs | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
 | GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | N/A | Required-reviewer gate per environment, structured file-based approval state | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
+
+## CLI Entrypoint for Analysis Pipeline (Task #180)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| Python docs — `__main__` module | <https://docs.python.org/3/library/__main__.html> | PSF | Idiomatic `__main__.py` pattern: minimal file importing `main()`, `sys.exit(main())` convention | `docs/research/cli-entrypoint-analysis-pipeline.md` | 2026-03-31 |
+| Typer docs — Building a Package | <https://typer.tiangolo.com/tutorial/package/> | MIT | `__main__.py` pattern for Typer apps, `app()` invocation, `[project.scripts]` wiring | `docs/research/cli-entrypoint-analysis-pipeline.md` | 2026-03-31 |
