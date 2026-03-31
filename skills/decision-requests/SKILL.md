@@ -223,9 +223,34 @@ The user never moves files — the planner does this automatically.
 
 The planner treats `completed: true` the same as `approved: true` — it unblocks the task and moves the file to `resolved/`.
 
+## Pre-flight: check for existing decisions before creating new ones
+
+Before creating any new decision or action request, **always check for prior resolutions**:
+
+1. Search `docs/decisions/resolved/{task-id}-*` for files matching the current task ID.
+2. If a resolved decision exists:
+   - **Read it.** Extract the `decision:` (user's chosen option) and `notes:` (user feedback).
+   - **Apply the user's choice** to your work — do not recreate the same request.
+   - If the user's notes invalidate part of the AC or change requirements, treat them as **AC amendments**: update the task body to reflect the user's constraints before proceeding.
+3. Also check `docs/decisions/pending/{task-id}-*` — if a request is already pending for this task, do not create a duplicate.
+
+> **Why this matters:** Without this check, agents re-dispatched on the same task will
+> create duplicate decision requests, forcing the user to answer the same question
+> repeatedly while their previous feedback is ignored.
+
+## User notes are AC amendments
+
+When a user resolves a decision request, their `notes:` field is not just commentary — it carries **binding constraints** for the implementation. Examples:
+
+- "blocking is a no-go if no action is assigned" → the agent must not use BLOCK without an actionable follow-up
+- "please actually read my input and make changes" → prior feedback was ignored, re-read resolved files
+- "option A but only for Python files" → scope constraint that narrows the chosen approach
+
+Agents encountering a `## Decision Resolved` section in the task body (written by the planner) or reading a resolved decision file directly must treat user notes as hard requirements, not suggestions.
+
 ## Integration with existing processes
 
 - **Researchers:** After completing research, if findings require a user decision (feature-gate, architectural direction), create a decision request instead of follow-up tasks. See `research-workflow` skill Step 5.
 - **Architects:** If an architecture review reveals a decision that needs user input, create a decision request and block the task.
-- **Planner:** Checks `docs/decisions/pending/` at Step 1 of each planning cycle.
-- **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process.
+- **Planner:** Checks `docs/decisions/pending/` at Step 1 of each planning cycle. Writes decision summaries to task bodies on resolution (see `dispatch-planning` skill Recipe 0).
+- **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process. All agents must run the pre-flight check in `agent-common.instructions.md` → **Resolved decision pre-flight** before starting work on any task.

@@ -70,9 +70,23 @@ For each file found, read frontmatter. **Type detection:** if the `completed:` f
 present, treat as an action request; otherwise treat as a decision request
 (backwards-compatible — files without `request_type` default to decision).
 
-For **decision requests**: if `approved: true`, unblock the task
-(`kanban\kanban-md.exe edit {id} --unblock`) and move the file to
-`docs/decisions/resolved/`. Before applying the 5-day auto-resolve, read the
+For **decision requests**: if `approved: true`:
+
+1. **Write decision summary to task body.** Read the `decision:` and `notes:` fields
+   from the file. Append a `## Decision Resolved` section to the task body:
+
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Decision Resolved\nChosen: {decision}\nUser notes: {notes}\nSource: docs/decisions/resolved/{filename}" -t
+   ```
+
+   For **action requests** with `completed: true`, also extract the `## User findings`
+   section (if present) and include it in the summary. This ensures the user's
+   observations reach downstream agents via the task body.
+
+2. **Unblock the task:** `kanban\kanban-md.exe edit {id} --unblock`
+3. **Move the file** to `docs/decisions/resolved/`.
+
+Before applying the 5-day auto-resolve, read the
 `impact_tier` field from the file frontmatter. If `impact_tier: 3`, skip the 5-day
 timer — the decision stays pending indefinitely until the user manually sets
 `approved: true`. Missing `impact_tier` defaults to T2; `impact_tier: 1` in a pending

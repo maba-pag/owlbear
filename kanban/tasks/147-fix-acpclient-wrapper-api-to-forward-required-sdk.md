@@ -1,18 +1,18 @@
 ---
 id: 147
 title: Fix AcpClient wrapper API to forward required SDK parameters
-status: todo
+status: archived
 priority: needed
 created: 2026-03-29T18:52:57.581756+02:00
-updated: 2026-03-31T03:41:04.8514155+02:00
+updated: 2026-04-01T01:12:45.478598+02:00
+started: 2026-04-01T01:12:44.9196268+02:00
+completed: 2026-04-01T01:12:44.9196268+02:00
 tags:
     - phase-1
     - scope:orchestrator
     - type:build
 depends_on:
     - 181
-blocked: true
-block_reason: 'TestFromAC_ExplicitSignatureEnforcement conflicts with existing TestFromAC tests: making protocol_version or cwd required breaks 5+ prior error-classification tests that call those methods with no args. See Builder Notes 2026-03-31 for full analysis and required fix.'
 class: standard
 ---
 
@@ -140,3 +140,118 @@ Depends on: #59, #181.
 AC FAIL: initialize(**kwargs) lacks explicit protocol_version: int param -- Architecture Review explicitly required no **kwargs pass-through. new_session(**kwargs) lacks explicit cwd: str and mcp_servers params. TestFromAC tests LAX: do not enforce required params; no compensating TestBuilderDiscovered tests.
 
 Full details: docs/scratch/147-reviewer.md (written inline due to PS escaping)
+
+[[2026-03-31]] Tue 12:46
+Test-Writer Notes retry 2026-03-31: 7 ExplicitSignatureEnforcement tests FAIL (RED), 27 existing PASS. Block resolved - 11 existing tests updated to pass protocol_version=1 / cwd='/work'. ruff clean. See tests/test_acp_client.py TestFromAC_ExplicitSignatureEnforcement.
+
+[[2026-03-31]] Tue 13:23
+## Builder Notes (2026-03-31, final pass)
+- Files changed: packages/orchestrator/src/owlbear_orchestrator/acp_client.py
+- Change: initialize(**kwargs) -> initialize(protocol_version: int); new_session(**kwargs) -> new_session(cwd: str, mcp_servers: list or None = None)
+- Tests: 34 passed, 0 failures (TestFromAC_ExplicitSignatureEnforcement all GREEN)
+- Coverage: 98% on acp_client.py (59 stmts, 1 miss - unused __aexit__ path)
+- Lint: ruff clean
+- Evidence: 7 ExplicitSignatureEnforcement tests flipped RED to GREEN; all 27 prior tests still pass
+- Fixes applied: removed **kwargs from initialize and new_session; explicit typed params; mcp_servers conditionally forwarded
+
+[[2026-03-31]] Tue 21:49
+## Test-Writer Notes (retry-2, 2026-03-31)
+- Retry reason: task returned to todo — no new Review Evidence found; prior retry already addressed reviewer finding (LAX tests)
+- TestFromAC_ExplicitSignatureEnforcement (7 tests) from prior retry still present
+- All 34 tests PASS on current HEAD (builder final pass already fixed impl)
+- No new tests needed — existing AC coverage is complete
+- Passing through to builder.
+
+[[2026-03-31]] Tue 22:51
+## Builder Notes (2026-03-31, fifth pass / final verification)
+- Files changed: none -- all changes already committed in 4298af3
+- commit: feat: explicit signatures on initialize() and new_session() in AcpClient (#147, builder)
+- Tests: 34 passed, 0 failures (all TestFromAC_ExplicitSignatureEnforcement + prior suites green)
+- Coverage: 98% on acp_client.py (59 stmts, 1 miss - line 88 unused __aexit__ path)
+- Lint: ruff clean
+- Evidence: uv run pytest tests/test_acp_client.py -q returned 34 passed; coverage via subprocess confirmed 98%
+- Fixes applied: None -- implementation complete from prior pass
+
+[[2026-03-31]] Tue 22:51
+## Builder Notes (2026-03-31, fifth pass)
+- Files changed: none -- all changes already committed in 4298af3
+- Tests: 34 passed, 0 failures
+- Coverage: 98% on acp_client.py (59 stmts, 1 miss line 88)
+- Lint: ruff clean
+- Evidence: 34 passed via uv run pytest tests/test_acp_client.py
+- Fixes applied: None -- implementation complete from prior pass
+
+[[2026-04-01]] Wed 01:12
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| initialize(protocol_version: int) forwards | acp_client.py L103-109: explicit param, forwarded | PASS |
+| new_session(cwd, mcp_servers) forwards | acp_client.py L112-121: explicit params, conditional forwarding | PASS |
+| prompt(prompt, session_id) forwards | acp_client.py L120-147: explicit params, forwarded | PASS |
+| All existing tests pass | 34 passed (exceeds original 21) | PASS |
+| ruff clean | All checks passed | PASS |
+| Module remains leaf (TYPE_CHECKING only) | Lines 11-14: SDK types under TYPE_CHECKING | PASS |
+
+### Test Results
+- pytest: 34 passed in test_acp_client.py; full suite 2000 passed, 199 failed (all unrelated: voice, audit_log)
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was specific with types, YAGNI noted, led to clean implementation. Minor gap: prompt() retains kwargs (accepted by reviewer).
+
+### Deduction breakdown
+- -.02 final reviewer PASS section missing (only initial FAIL documented)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-01]] Wed 01:12
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| initialize(protocol_version: int) forwards | acp_client.py L103-109: explicit param, forwarded | PASS |
+| new_session(cwd, mcp_servers) forwards | acp_client.py L112-121: explicit params, conditional forwarding | PASS |
+| prompt(prompt, session_id) forwards | acp_client.py L120-147: explicit params, forwarded | PASS |
+| All existing tests pass | 34 passed (exceeds original 21) | PASS |
+| ruff clean | All checks passed | PASS |
+| Module remains leaf (TYPE_CHECKING only) | Lines 11-14: SDK types under TYPE_CHECKING | PASS |
+
+### Test Results
+- pytest: 34 passed in test_acp_client.py; full suite 2000 passed, 199 failed (all unrelated: voice, audit_log)
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was specific with types, YAGNI noted, led to clean implementation. Minor gap: prompt() retains kwargs (accepted by reviewer).
+
+### Deduction breakdown
+- -.02 final reviewer PASS section missing (only initial FAIL documented)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-01]] Wed 01:12
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| initialize(protocol_version: int) forwards | acp_client.py L103-109: explicit param, forwarded | PASS |
+| new_session(cwd, mcp_servers) forwards | acp_client.py L112-121: explicit params, conditional forwarding | PASS |
+| prompt(prompt, session_id) forwards | acp_client.py L120-147: explicit params, forwarded | PASS |
+| All existing tests pass | 34 passed (exceeds original 21) | PASS |
+| ruff clean | All checks passed | PASS |
+| Module remains leaf (TYPE_CHECKING only) | Lines 11-14: SDK types under TYPE_CHECKING | PASS |
+
+### Test Results
+- pytest: 34 passed in test_acp_client.py; full suite 2000 passed, 199 failed (all unrelated: voice, audit_log)
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was specific with types, YAGNI noted, led to clean implementation. Minor gap: prompt() retains kwargs (accepted by reviewer).
+
+### Deduction breakdown
+- -.02 final reviewer PASS section missing (only initial FAIL documented)
+
+### Confidence: .98
+### Action: archive
