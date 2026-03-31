@@ -142,6 +142,17 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 
 > **VS Code auto-staging trap:** VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities (execute/runTask, execute/testFailure, etc.). Any task that writes `.agent.md` frontmatter is at risk of having those edits silently reverted before commit. Always run `git diff --cached agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>` before the final commit.
 
+## Resolved decision pre-flight
+
+Before starting work on any task, check whether the task was previously blocked by a decision or action request. This ensures user feedback reaches the agent that needs it.
+
+1. **Check the task body** (from `kanban-md show`) for a `## Decision Resolved` section. If present, read the chosen option and user notes — these are binding constraints on your work.
+2. **If no summary in the body** (legacy tasks resolved before this rule existed), check `docs/decisions/resolved/{task-id}-*` for files matching the task ID. If found, read the `decision:` and `notes:` fields.
+3. **Treat user notes as hard requirements.** If the user's notes contradict part of the AC or narrow the approach, adjust your implementation accordingly. If the notes make the current AC infeasible, update the task body with the conflict and block for clarification.
+4. **If you are about to create a new decision request**, first run the duplicate check from the `decision-requests` skill → **Pre-flight: check for existing decisions**.
+
+This pre-flight applies to ALL agents — builder, researcher, architect, test-writer, reviewer, writer, auditor.
+
 ## Evidence over claims
 
 - **Never trust self-reports.** Verify deliverables yourself — run tests, read files, check the board. "The builder said it's done" is not evidence.
