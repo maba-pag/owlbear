@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AppContext",
+    "_apply_tool_exclusions",
     "_run_kanban",
     "app_lifespan",
     "board_context",
@@ -58,6 +59,27 @@ class AppContext:
     kanban_dir: Path
 
 
+def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+    """Read KANBAN_TOOLS_EXCLUDE and remove each listed tool from the server.
+
+    Returns the set of tool names successfully removed.
+    """
+    excluded: set[str] = set()
+    env_val = os.environ.get("KANBAN_TOOLS_EXCLUDE", "")
+    if not env_val:
+        return excluded
+    for raw in env_val.split(","):
+        tool_name = raw.strip()
+        if not tool_name:
+            continue
+        try:
+            server.remove_tool(tool_name)
+            excluded.add(tool_name)
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return excluded
+
+
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Discover kanban-md binary and yield AppContext for the MCP session.
@@ -73,6 +95,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             "Set KANBAN_BIN or place binary at kanban/kanban-md.exe."
         )
         raise FileNotFoundError(msg)
+    _apply_tool_exclusions(_server)
     yield AppContext(kanban_bin=kanban_bin, kanban_dir=_DEFAULT_KANBAN_DIR)
 
 

@@ -35,3 +35,29 @@ The server resolves `kanban-md.exe` at startup using:
 2. `kanban/kanban-md.exe` (convention fallback — clone-then-run default)
 
 If the binary is not found, the server fails to start with a `FileNotFoundError`.
+
+## Configuration
+
+The server reads the following environment variables at startup:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KANBAN_BIN` | `kanban/kanban-md.exe` | Path to the `kanban-md` binary |
+| `KANBAN_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated list of tool names to remove from the server |
+
+### KANBAN_TOOLS_EXCLUDE
+
+Set this variable to hide specific tools from the MCP server. This is useful when a client
+should only have access to a subset of board operations (e.g., read-only access).
+
+**Syntax:** comma-separated tool names, whitespace around names is stripped.
+
+```
+KANBAN_TOOLS_EXCLUDE=create_task,move_task,edit_task,pick_task
+```
+
+Valid names: `list_tasks`, `show_task`, `create_task`, `move_task`, `edit_task`,
+`pick_task`, `board_context`.
+
+Unknown names are silently ignored. If the variable is not set or is empty, all 7 tools
+are registered (backwards-compatible default).
