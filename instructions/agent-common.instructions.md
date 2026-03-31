@@ -37,6 +37,8 @@ kanban\kanban-md.exe handoff <ID> --claim <agent> --block "Waiting on user: <wha
 - Next step:" --timestamp --release
 ```
 
+For user-must-do-X scenarios (manual testing, GUI verification, credential setup), create an action request file instead of writing raw block text. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the action request format.
+
 ### Defer-to-user boundary
 
 Agents should take tasks all the way through the pipeline. Defer to the user only when:
@@ -46,7 +48,11 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
-**For async deferral (agents running unsupervised),** use the **decision request** process. Create a structured decision request file in `docs/decisions/pending/` and block the task. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when decisions are resolved.
+**For async deferral (agents running unsupervised),** use one of two structured request types. Both live in `docs/decisions/pending/` and use the same skill. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when requests are resolved.
+
+#### Decision requests — when you need the user to choose
+
+Use when there are multiple valid options and no clear winner. The user picks an option, sets `approved: true`, and the task unblocks automatically.
 
 **Per-role triggers — when to create a decision request:**
 
@@ -62,6 +68,19 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 
 If in doubt, create the decision request — the cost of an unnecessary request is far lower than the cost of guessing wrong on a product decision.
 
+#### Action requests — when you need the user to do something
+
+Use when you need the user to perform a physical action before the task can continue. The user completes the action, sets `completed: true`, and the task unblocks automatically.
+
+**Per-role triggers — when to create an action request:**
+
+| Agent     | Trigger                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------ |
+| Builder   | Manual testing or GUI verification required to confirm implementation is correct           |
+| Builder   | Credential or API key setup needed before integration tests can run                        |
+| Any agent | External service configuration or account access required to proceed                       |
+| Any agent | Push, release, or deployment action that only the user can perform                         |
+
 ### Blocking convention
 
 Routine gate rejections use simple status movement and claim release — **no `--block`**. The task re-enters the pipeline automatically on the planner's next cycle. Rejection details live in the Channel B task body (Review Evidence, Docs Gate, Audit sections).
@@ -72,6 +91,7 @@ Use `--block` **only** for situations requiring human intervention before redisp
 - Architect gates (task → ideation) — AC needs rework
 - Handoff — waiting on user decision or external action
 - Decision requests — blocked pending async user decision
+- Action requests — blocked pending user action completion
 - Stale tasks — blocked for triage
 
 ## Commit discipline
