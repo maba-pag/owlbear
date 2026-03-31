@@ -1,10 +1,12 @@
 ---
 id: 459
 title: Update decision-requests skill with impact_tier field and T3 indefinite blocking
-status: docs
+status: archived
 priority: needed
 created: 2026-03-31T03:39:53.0605+02:00
-updated: 2026-03-31T07:24:32.5092202+02:00
+updated: 2026-03-31T11:14:59.7385689+02:00
+started: 2026-03-31T11:14:59.1183331+02:00
+completed: 2026-03-31T11:14:59.1183331+02:00
 tags:
     - process
     - scope:agents
@@ -68,3 +70,21 @@ Gap found: dispatch-planning Recipe 0 needs tier-aware auto-resolve (created #46
 | T1 note: autonomous, value exists for completeness, should not appear in practice | "T1 note: impact_tier: 1 outcomes are autonomous...The value 1 exists for completeness but should not appear in practice in decision request files." | PASS |
 
 ### Verdict: PASS (.98)
+
+[[2026-03-31]] Tue 07:57
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Task scope is SKILL.md only; copilot-instructions.md just points to the skill, no tier details to add |
+| 2 | Docstrings | No | N/A | No Python modules changed (scope: SKILL.md only, no code) |
+| 3 | docs/sources/overview.md | Yes | PASS | Already updated with AutoGen Human-in-the-Loop and GitHub Actions environment sources (lines 90-91) |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | PASS | docs/research/impact-tier-decision-requests.md exists and linked from task body |
+| 6 | Scratch files | N/A | PASS | No docs/scratch/459-* files found |
+
+### Files Updated
+- None (all sources/research docs updated by builder/researcher upstream)
+
+### Scratch Files Cleaned
+- None
