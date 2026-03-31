@@ -153,9 +153,12 @@
     "sortJSONValues": false,
     "sortJSONValuesReverse": false
   },
+  "task.problemMatchers.neverPrompt": true,
   "telemetry.editStats.enabled": false,
   "telemetry.feedback.enabled": false,
   "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.enableFileLinks": "off",
+  "terminal.integrated.wordSeparators": "",
   "workbench.settings.alwaysShowAdvancedSettings": true,
   "workbench.startupEditor": "none"
 }
