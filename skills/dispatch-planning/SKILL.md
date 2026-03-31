@@ -362,7 +362,7 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
 
 - Output MUST be a single JSON object on one line (no pretty-printing)
 - Fields: `dispatch`, `gate_warnings`, and `pending` (all required)
-- Empty dispatch array is fine: `{"dispatch":[],"gate_warnings":[]}`
+- Empty dispatch array is fine: `{"dispatch":[],"gate_warnings":[],"pending":{"decisions_t2":0,"decisions_t3":0,"actions":0}}`
 - Gate names do not appear in `dispatch` entries; gate failures surface only via `gate_warnings`
 - If more than 20 tasks pass gates, include only the top 20 by priority
 
