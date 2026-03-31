@@ -1,10 +1,12 @@
 ---
 id: 435
 title: Consolidate loop detection rules in agent-common.instructions.md
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T21:45:53.9677998+02:00
-updated: 2026-03-31T03:47:44.1465175+02:00
+updated: 2026-03-31T05:32:35.8177176+02:00
+started: 2026-03-31T05:32:35.2851635+02:00
+completed: 2026-03-31T05:32:35.2851635+02:00
 tags:
     - scope:agents
     - phase-2
@@ -78,3 +80,33 @@ No test task needed â€” this is a markdown instruction file edit, not appli
 - Terminal discipline cross-reference: line 249 (No brute-force retries -- see Loop detection...)
 - Tier 3 mandatory handoff/block requirement included
 - Commit: caf462a
+
+[[2026-03-31]] Tue 05:32
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| New 'Loop detection and retry discipline' section | Section at L274 of agent-common.instructions.md | PASS |
+| 3-tier escalation table (detect/adapt/stop) | Table at L280-284 with Detect/Adapt/Stop, concrete actions | PASS |
+| Category-specific retry limits table (1/2/3) | Table at L288-292 with exact values matching AC | PASS |
+| Red flag 'max 2 retries' cross-references new section | L224: 'see Loop detection and retry discipline below' | PASS |
+| Terminal discipline cross-references new section | L269: 'See Loop detection and retry discipline below' | PASS |
+| Mandatory handoff/block after tier 3 | 'Tier 3 is mandatory' paragraph at L286 | PASS |
+
+### Test Results
+- pytest: 1891 passed, 162 failed (all pre-existing, none in task scope)
+- ruff: clean in task scope (pre-existing issues only)
+
+### Architect Quality
+- AC specificity: all 6 lines mechanically verifiable
+- Edge case coverage: no gaps, builder needed no improvisation
+- Design direction: arch correctly identified no tests needed for markdown-only change
+- AC quality score: 5/5
+
+### Commit Verification
+- caf462a: docs: consolidate loop detection rules (#435, builder) - 1 file, +26 -2
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section in task body
+### Confidence: .98
+### Action: archive
