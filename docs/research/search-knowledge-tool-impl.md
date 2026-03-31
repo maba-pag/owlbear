@@ -1,7 +1,7 @@
 # Implement Real search_knowledge Tool
 
 > **Owning task:** #54 — Implement real search_knowledge tool in mcp-knowledge
-> **Date:** 2026-03-26 **Status:** Complete
+> **Date:** 2026-03-26 **Updated:** 2026-03-30 **Status:** Superseded
 
 ## 1. Context and Question
 
@@ -102,3 +102,19 @@ No need to load real BGE-M3 in tests — mock `EmbeddingProvider.embed()`. The Q
 ```
 kanban\kanban-md.exe create "Add search_structured method to KnowledgeQueryService" --priority important --status ideation --tags "phase-2,scope:knowledge" --body "## Objective\nAdd a public method returning raw structured results (entity names, types, relevance scores) for MCP and other consumers that need richer output than query_for_context().\n\n## Acceptance Criteria\n- [ ] New search_structured(query, top_k) returns list of typed result objects with doc_id, title, score, entity_type\n- [ ] Does not break existing query_for_context() contract\n- [ ] Unit tests with mock vector store\n\n## Context\nDriven by #54 research finding: query_for_context() returns pre-formatted text without scores or entity types. See docs/research/search-knowledge-tool-impl.md."
 ```
+
+## 6. Supersession Notice (2026-03-30)
+
+The work described in this document was completed through three successor tasks:
+
+| Task | What it delivered | Status |
+|------|------------------|--------|
+| #72 | `tools.py` — original `asyncio.to_thread(query_for_context)` implementation + 12 tests | Archived |
+| #70 | `KnowledgeQueryService.query()` async method + `StructuredSearchResult` model | Archived |
+| #152 | `server.py` v2 — `search_knowledge` rewritten to `await qs.query()` with structured output | Archived |
+
+**Current state:** `server.py` uses `await qs.query()` returning `list[StructuredSearchResult]`, formatted as bullet lines (`- {title} ({score:.2f}): {snippet[:200]}`). This supersedes the original recommendation to use `query_for_context()` via `asyncio.to_thread()`.
+
+**Dead code:** `tools.py` and `test_search_knowledge.py` implement the old approach and are not registered on the FastMCP server. Follow-up cleanup task created.
+
+**Async purity note:** `KnowledgeQueryService.query()` is `async def` but calls sync internals (`embed()`, `search_similar()`, `get_document()`). Acceptable for single-user stdio MCP; noted for future consideration if concurrent requests become relevant.

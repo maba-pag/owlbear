@@ -41,6 +41,35 @@ External repos and resources studied during OwlBear development.
 | VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | Multi-perspective review pattern ("Thorough Reviewer"), coordinator/worker orchestration | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
 | VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
 
+## Dispatch-Cycle Trace ID (Task #434)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| W3C Trace Context | https://www.w3.org/TR/trace-context/ | trace-id (16-byte UUID) propagation standard, parent-id per span, trace-flags | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+| OpenTelemetry Traces | https://opentelemetry.io/docs/concepts/signals/traces/ | trace_id + span_id context propagation, parent-child correlation model | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+| LangSmith Observability | https://docs.langchain.com/langsmith/observability-concepts | Trace = collection of runs bound by trace_id, threads linked by session_id | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+
+## Reviewer execute/* Tool Removal (Task #317)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | Subagent tool independence from parent agent | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
+| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | Least privilege via assign mode, tool set security | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
+
+## Reviewer Loop Pattern Detection (Task #436)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| deer-flow LoopDetectionMiddleware | https://github.com/bytedance/deer-flow | Apache-2.0 | Hash-based tool call dedup, warn@3/stop@5 thresholds, sliding window tracking | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
+| AutoGen termination conditions | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/termination.html | MIT | Composable termination (MaxMessage, FunctionCall, Text), stateful+resettable pattern | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
+
+## Planner Recipe 0 Action Request Extension (Task #226)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Wait-timer auto-approve after timeout; structured file-based gate with auto-resolution precedent | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
+| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | HandoffTermination typed pause-point pattern; confirms structured resume signals | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
+
 ## Analysis Module Implementation Readiness (Task #179)
 
 | Source | URL | License | What we studied | Where Used | Date |
