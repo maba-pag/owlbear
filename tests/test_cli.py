@@ -386,3 +386,111 @@ class TestFromAC_ErrorHandling:  # noqa: N801
         assert "Copilot CLI not found" not in result.output  # stdout clean
         assert "Copilot CLI not found" in result.stderr
 
+
+# ---------------------------------------------------------------------------
+# ACP dispatch contract (retry-cycle additions — reviewer FAIL)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ACPDispatchContract:  # noqa: N801
+    """AC: 'Dispatches to selected agent via AcpClient (async, wrapped with asyncio.run())'.
+
+    The prior cycle's _do_dispatch stub opens an AcpClient context with ``pass`` and
+    calls no methods. These tests prove the contract: AcpClient must invoke
+    new_session() for the command to dispatch. All three FAIL against the stub.
+    """
+
+    def test_dispatch_command_calls_new_session_on_acp_client(self) -> None:
+        """dispatch invokes client.new_session() -- a no-op stub fails this assertion.
+
+        AC: 'Dispatches to selected agent via AcpClient'
+        """
+        entry = _entry(task_id=77, agent="builder")
+        plan = DispatchPlan(entries=[entry])
+        mock_client = AsyncMock()
+        mock_instance = MagicMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_instance.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(f"{_CLI}.shutil.which", return_value="/usr/local/bin/gh"),
+            patch(f"{_CLI}.read_board", new=AsyncMock(return_value=[_task(task_id=77)])),
+            patch(f"{_CLI}.select_tasks", return_value=plan),
+            patch(f"{_CLI}.AcpClient", return_value=mock_instance),
+        ):
+            runner.invoke(app, ["dispatch", "77"])
+
+        mock_client.new_session.assert_called_once()
+
+    def test_run_command_calls_new_session_on_acp_client(self) -> None:
+        """run invokes client.new_session() -- a no-op stub fails this assertion.
+
+        AC: 'Dispatches to selected agent via AcpClient'
+        """
+        task = _task(task_id=88, status="todo")
+        plan = DispatchPlan(entries=[_entry(task_id=88, agent="reviewer")])
+        mock_client = AsyncMock()
+        mock_instance = MagicMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_instance.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(f"{_CLI}.shutil.which", return_value="/usr/local/bin/gh"),
+            patch(f"{_CLI}.read_board", new=AsyncMock(return_value=[task])),
+            patch(f"{_CLI}.select_tasks", return_value=plan),
+            patch(f"{_CLI}.AcpClient", return_value=mock_instance),
+        ):
+            runner.invoke(app, ["run"])
+
+        mock_client.new_session.assert_called_once()
+
+    def test_run_new_session_acp_error_exits_1_stderr(self) -> None:
+        """AcpClientError from new_session in run: message on stderr, exit 1.
+
+        Tests lines 99-101: run._run_once() catches AcpClientError and routes to stderr.
+        Against stub: new_session is never called, no exception raised, run exits 0 -- FAILS.
+        Against correct impl: new_session raises, _run_once catches it, exits 1 -- PASSES.
+        """
+        task = _task(task_id=99, status="todo")
+        plan = DispatchPlan(entries=[_entry(task_id=99, agent="builder")])
+        mock_client = AsyncMock()
+        mock_client.new_session.side_effect = AcpClientError(
+            "session start failed", category=ErrorCategory.TRANSIENT
+        )
+        mock_instance = MagicMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_instance.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch(f"{_CLI}.shutil.which", return_value="/usr/local/bin/gh"),
+            patch(f"{_CLI}.read_board", new=AsyncMock(return_value=[task])),
+            patch(f"{_CLI}.select_tasks", return_value=plan),
+            patch(f"{_CLI}.AcpClient", return_value=mock_instance),
+        ):
+            result = runner.invoke(app, ["run"])
+
+        assert result.exit_code == 1
+        assert result.stderr  # error message routed to stderr
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases discovered during GREEN phase implementation."""
+
+    def test_dispatch_no_plan_entries_exits_1_stderr(self) -> None:
+        """dispatch: task exists but select_tasks returns no entries → 'not found' stderr, exit 1.
+
+        Covers the no-plan path in dispatch (cli.py lines 67-68).
+        """
+        with (
+            patch(f"{_CLI}.shutil.which", return_value="/usr/local/bin/gh"),
+            patch(f"{_CLI}.read_board", new=AsyncMock(return_value=[_task(task_id=55)])),
+            patch(f"{_CLI}.select_tasks", return_value=DispatchPlan(entries=[])),
+        ):
+            result = runner.invoke(app, ["dispatch", "55"])
+
+        assert result.exit_code == 1
+        assert "55" in result.stderr
+        assert "not found" in result.stderr.lower()
+

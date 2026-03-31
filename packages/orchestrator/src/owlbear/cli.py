@@ -39,8 +39,10 @@ def _check_copilot() -> None:
 async def _do_dispatch(entry: DispatchEntry) -> None:
     """Dispatch one entry via ACP. Raises AcpClientError on connection failure."""
     _session_name = f"owlbear-{entry.agent}-{entry.task_id}"
-    async with AcpClient(None) as _client:  # type: ignore[arg-type]
-        pass
+    async with AcpClient(None) as client:  # type: ignore[arg-type]
+        coro = client.new_session(cwd=str(Path.cwd()))
+        if asyncio.iscoroutine(coro):
+            await coro
 
 
 @app.command()
