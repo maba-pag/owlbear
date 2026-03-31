@@ -1,10 +1,12 @@
 ---
 id: 386
 title: Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T20:57:13.6184382+02:00
-updated: 2026-03-31T03:59:24.8312204+02:00
+updated: 2026-03-31T06:53:27.4385426+02:00
+started: 2026-03-31T06:53:23.2382282+02:00
+completed: 2026-03-31T06:53:23.2382282+02:00
 tags:
     - research
     - ' scope:agents'
@@ -161,3 +163,67 @@ Follow-up tasks have verifiable AC and appropriate priorities. No TDD requiremen
 ## Builder Notes
 - Non-implementation task — no code changes needed.
 - Passing through to review.
+
+[[2026-03-31]] Tue 06:53
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Clone deer-flow repo for analysis | Task body + architect confirm, Test-Path returns False | PASS |
+| Subtask A (#388) Memory + Subagent | Covered in parent: 7 areas analyzed in research doc | PASS |
+| Subtask B (#389) Broader survey | Same: all areas in single pass | PASS |
+| Parent complete when subtasks done | Research doc complete (155 lines, 7 analysis areas) | PASS |
+| Clean up cloned repo | Test-Path docs/scratch/research/deer-flow returns False | PASS |
+
+### Research Task Checks
+- Doc exists: docs/research/deer-flow-adoptable-patterns.md (155 lines, committed 5e96e18)
+- Follow-ups created: #432 (archived), #433 (in-progress), #434 (backlog)
+- Follow-ups reference doc: all bodies contain See docs/research/deer-flow-adoptable-patterns.md
+
+### Test Results
+- pytest: 1669 passed, 157 failed (pre-existing, unrelated to research task), 1 error (test_analysis_cli.py missing module)
+- ruff: N/A (no source code changed)
+
+### Architect Quality
+- AC specificity: Clear and verifiable
+- Edge cases: Subtask IDs #388/#389 were overwritten; researcher adapted cleanly
+- Design direction: Appropriate for research task
+- AC quality score: 4
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section
+
+### Confidence: .98
+### Action: archive
+
+[[2026-03-31]] Tue 06:53
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Clone deer-flow repo for analysis | Task body + architect confirm, Test-Path returns False | PASS |
+| Subtask A (#388) Memory + Subagent | Covered in parent: 7 areas analyzed in research doc | PASS |
+| Subtask B (#389) Broader survey | Same: all areas in single pass | PASS |
+| Parent complete when subtasks done | Research doc complete (155 lines, 7 analysis areas) | PASS |
+| Clean up cloned repo | Test-Path docs/scratch/research/deer-flow returns False | PASS |
+
+### Research Task Checks
+- Doc exists: docs/research/deer-flow-adoptable-patterns.md (155 lines, committed 5e96e18)
+- Follow-ups created: #432 (archived), #433 (in-progress), #434 (backlog)
+- Follow-ups reference doc: all bodies contain See docs/research/deer-flow-adoptable-patterns.md
+
+### Test Results
+- pytest: 1669 passed, 157 failed (pre-existing, unrelated to research task), 1 error (test_analysis_cli.py missing module)
+- ruff: N/A (no source code changed)
+
+### Architect Quality
+- AC specificity: Clear and verifiable
+- Edge cases: Subtask IDs #388/#389 were overwritten; researcher adapted cleanly
+- Design direction: Appropriate for research task
+- AC quality score: 4
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section
+
+### Confidence: .98
+### Action: archive
