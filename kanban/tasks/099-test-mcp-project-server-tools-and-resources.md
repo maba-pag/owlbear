@@ -1,10 +1,12 @@
 ---
 id: 99
 title: 'Test: mcp-project server tools and resources'
-status: todo
+status: archived
 priority: needed
 created: 2026-03-28T04:04:45.3489882+01:00
-updated: 2026-03-31T03:55:23.3422732+02:00
+updated: 2026-03-31T06:40:03.4860812+02:00
+started: 2026-03-31T06:40:02.8717612+02:00
+completed: 2026-03-31T06:40:02.8717612+02:00
 tags:
     - phase-1
     - scope:mcp
@@ -101,3 +103,86 @@ Depends on #68 (model, archived). Pattern: #89 TestFromAC_ convention.
 - Full suite: uv run pytest packages/mcp-project/tests/ -q => 91 passed, 0 failed
 - No code changes by this builder -- both subtasks already implemented and archived
 - Advancing to review as umbrella pass-through
+
+[[2026-03-31]] Tue 04:41
+## Test-Writer Notes (re-run pass-through, 2026-03-31)
+- Non-implementation task (tagged test) — umbrella with no own AC.
+- Tests from prior pipeline run remain valid: commit 23f2d7b, 91 tests (test_server.py + test_tree.py).
+- Both subtasks #190 and #191 archived. Passing through to builder.
+
+[[2026-03-31]] Tue 04:44
+## Builder Notes (pass-through, 2026-03-31)
+- Non-implementation task — umbrella with no own AC.
+- Both subtasks #190 and #191 archived.
+- Verified: uv run pytest packages/mcp-project/tests/ -q => 91 passed, 0 failed.
+- No code changes. Advancing to review.
+
+[[2026-03-31]] Tue 06:06
+## Review Evidence
+Umbrella task -- both subtasks archived. No own AC.
+
+### Subtask Status
+- #190 (server infrastructure + tools): **archived** (auditor confidence 1.00)
+- #191 (resources + tree helper): **archived**
+
+### Test Results
+- uv run pytest packages/mcp-project/tests/ -q: **91 passed, 0 failed**
+
+### Lint Results
+- ruff check packages/mcp-project/: **All checks passed!**
+
+### AC Compliance
+| Criterion | Evidence | Status |
+|-----------|----------|--------|
+| #190 archived | kanban status: archived | PASS |
+| #191 archived | kanban status: archived | PASS |
+| Full test suite green | 91 passed, 0 failed | PASS |
+| Lint clean | ruff all checks passed | PASS |
+
+### Verdict: PASS
+Confidence: .97
+
+[[2026-03-31]] Tue 06:18
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Umbrella task; mcp-project already in tech stack table; both subtasks verified this independently |
+| 2 | Docstrings | Yes | Pass | Read server.py and tree.py: module docstrings, AppContext, app_lifespan, project_info, project_list, project_readme, project_readme_resource, _build_tree, project_structure all have accurate docstrings; tree.py: build_tree, _iter_children, _append_leaf_files all documented |
+| 3 | docs/sources/overview.md | No | N/A | FastMCP patterns already attributed from tasks #17 and #41 (confirmed by both subtask docs gates) |
+| 4 | README.md | No | N/A | No CLI commands added |
+| 5 | Research doc | No | N/A | No research phase; test umbrella task |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/99-* files present)
+
+[[2026-03-31]] Tue 06:39
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| #190 archived | kanban status: archived (confidence 1.00) | PASS |
+| #191 archived | kanban status: archived | PASS |
+| 91 tests pass | uv run pytest packages/mcp-project/tests/: 91 passed | PASS |
+| Lint clean | ruff check packages/mcp-project/: All checks passed | PASS |
+
+### Test Results
+- pytest (task scope): 91 passed, 0 failed
+- pytest (full suite): 1926 passed, 157 failed (all pre-existing RED-phase, unrelated to #99)
+- ruff: All checks passed
+
+### Upstream Commits
+- 23f2d7b test: add failing tests for mcp-project (#99, test-writer)
+- 399879b feat: implement server infrastructure (#190, builder)
+- a2ee0de test: add malformed JSON contract tests (#190, test-writer)
+- 1a0e948 feat: implement tree.py and resource handlers (#191, builder)
+
+### AC Quality Score: 4/5
+Umbrella AC was clear. Original scope over-sized (crashed builder twice), architect adapted by splitting into two subtasks. Good recovery.
+
+### Deduction breakdown: none
+### Confidence: 1.00
+### Action: archive
