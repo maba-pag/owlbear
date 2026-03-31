@@ -425,6 +425,16 @@ class GraphStore:
         self._conn.commit()
         return cursor.rowcount > 0
 
+    # ── Chunk lookup ────────────────────────────────────────────────────────
+
+    def get_document_id_for_chunk(self, chunk_id: str) -> str | None:
+        """Return the document_id that owns *chunk_id*, or ``None`` if not found."""
+        row = self._conn.execute(
+            "SELECT document_id FROM chunks WHERE id = ?",
+            (chunk_id,),
+        ).fetchone()
+        return row[0] if row else None
+
     # ── Count operations ───────────────────────────────────────────────────
 
     def get_counts(self) -> tuple[int, int, int]:

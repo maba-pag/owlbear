@@ -97,7 +97,9 @@ class KnowledgeQueryService:
             ][:top_k]
 
             structured: list[StructuredSearchResult] = []
-            for doc_id, score in filtered:
+            for raw_id, score in filtered:
+                # raw_id from the vector store is a chunk_id; resolve to document_id.
+                doc_id = self._graph.get_document_id_for_chunk(raw_id) or raw_id
                 doc = self._graph.get_document(doc_id)
                 if doc is None:
                     continue

@@ -206,7 +206,7 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         *,
         scope: str = "global",
         document_id: str = "",
-        chunk_ids: list[str] | None = None,  # noqa: ARG002 - reserved for future chunk-level provenance
+        chunk_ids: list[str] | None = None,
         pipeline_name: str = "ingest",
     ) -> tuple[int, int]:
         """Persist entities and edges from *results* and return counts.
@@ -223,11 +223,13 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         """
         entity_count = 0
         edge_count = 0
-        for result in results:
+        for i, result in enumerate(results):
+            assigned_chunk_id = chunk_ids[i] if chunk_ids and i < len(chunk_ids) else None
             for entity in result.entities:  # type: ignore[union-attr]
                 stamped = entity.model_copy(update={
                     "scope": scope,
                     "document_id": document_id,
+                    "chunk_id": assigned_chunk_id,
                     "metadata": {**entity.metadata, "pipeline_name": pipeline_name},
                 })
                 self._graph.insert_entity(stamped)
