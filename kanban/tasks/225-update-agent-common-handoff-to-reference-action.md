@@ -1,18 +1,18 @@
 ---
 id: 225
 title: Update agent-common handoff to reference action requests
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T16:57:22.0388952+02:00
-updated: 2026-03-31T04:12:33.7273227+02:00
+updated: 2026-03-31T05:35:38.4590551+02:00
+started: 2026-03-31T05:35:37.9736422+02:00
+completed: 2026-03-31T05:35:37.9736422+02:00
 tags:
     - phase-1
     - scope:agents
     - type:docs
 depends_on:
     - 224
-claimed_by: reviewer
-claimed_at: 2026-03-31T04:12:33.7262877+02:00
 class: standard
 ---
 
@@ -81,3 +81,31 @@ See docs/research/extend-decision-request-for-action-requests.md
 ## Test-Writer Notes
 - Non-implementation task (tagged type:docs) - no tests applicable.
 - Passing through to builder.
+
+[[2026-03-31]] Tue 05:35
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Handoff section: reference action requests | Line 40: action request paragraph added after handoff block | PASS |
+| Defer-to-user: distinguish decision vs action | Diff splits single paragraph into two subsections with headers | PASS |
+| Per-role triggers for action requests | New table: Builder (manual test, creds), Any agent (external, push) | PASS |
+| Blocking convention: action request blocking | New bullet added to blocking list | PASS |
+| No behavioral/code changes | Commit touches only instructions/agent-common.instructions.md | PASS |
+
+### Test Results
+- pytest: 1891 passed, 162 failed (all pre-existing from other tasks: acp_client, agent_port_v2, voice, analysis, etc.), 0 related to #225
+- ruff: clean (no Python files in scope)
+
+### AC Quality Score: 4/5
+AC was adequate with good specificity. Architect refined from 4 to 5 verifiable lines with section targets. Minor: original AC could have been more explicit about structural changes (subsection headers).
+
+### Missing Pipeline Evidence
+No Builder Notes, Review Evidence, or Docs Gate sections in task body. Builder committed correctly (b486720) but left no Channel B notes. Reviewer and writer appear to have been skipped or left no evidence. Deducting for missing reviewer evidence.
+
+### Deduction breakdown
+- All 5 AC lines verified with evidence: no deductions
+- Missing reviewer evidence section: -.02
+
+### Confidence: .98
+### Action: archive
