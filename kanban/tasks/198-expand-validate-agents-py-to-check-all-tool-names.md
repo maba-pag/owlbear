@@ -1,17 +1,17 @@
 ---
 id: 198
 title: Expand validate_agents.py to check all tool names against canonical registry
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-29T23:08:48.2138586+02:00
-updated: 2026-03-30T06:17:57.1400882+02:00
+updated: 2026-03-31T03:30:46.9682363+02:00
+started: 2026-03-31T03:30:11.3180275+02:00
+completed: 2026-03-31T03:30:11.3180275+02:00
 tags:
     - phase-1
     - tooling
     - agent
     - config
-blocked: true
-block_reason: 'Test-writer must resolve contradictions: (1) test_tools_todos_passes vs test_todos_with_other_tools_still_errors, (2) test_todo_prefix_substring_does_not_trigger vs _check_unknown_tools requirement. See Builder Notes for details.'
 class: standard
 ---
 
@@ -105,3 +105,101 @@ Resolution required (test-writer):
 1. Update test_tools_todos_passes and test_multiline_tools_todos_passes: todos now banned by #193.
 2. Update test_todo_prefix_substring_does_not_trigger: todo_extra is unknown tool; assert the unknown error IS present, or scope test to only verify bare-todo check does not fire.
 3. Implement and complete #193 before re-dispatching #198.
+
+[[2026-03-30]] Mon 18:10
+## Test-Writer Notes (retry)
+- Retry reason: builder BLOCK on test_todo_prefix_substring_does_not_trigger
+- Fix: scoped assertion to bare-todo ban only (todo_extra is unknown-tool territory)
+- 20 #198 tests: all FAIL
+- 27 prior tests: all PASS
+- ruff: clean
+
+[[2026-03-30]] Mon 23:21
+## Review Evidence
+
+### Test Results
+- pytest tests/test_validate_agents.py: **47 passed, 0 failed** (0.88s)
+
+### Lint Results
+- ruff check scripts/ tests/: 2 PT018 errors in tests\test_necessity_check_196.py (pre-existing, not touched by #198 - suppression rule 9)
+- scripts/validate_agents.py and tests/test_validate_agents.py: ruff clean
+
+### Coverage
+- validate_agents.py overall: 76% (67/88 stmts)
+- Missed: lines 47,51,64 (pre-existing _frontmatter_lines/_tools_text); 74,82,97,102 (new code defensive branches); 152-169,173 (main() pre-existing subprocess-only)
+- Suppression rule 9 applies: main() and helper branches not touched by #198
+- New code (~50 lines): 4 uncovered defensive branches; functionality exercised end-to-end by integration test
+
+### Source Control
+- Builder commit b40ecb5: only scripts/validate_agents.py
+- Test file last modified by test-writer retry commit 3203734 (NOT builder)
+
+### TestFromAC Comparison
+- All 20 new TestFromAC methods: builder did NOT touch test file - PRESERVED
+- test_todo_prefix_substring_does_not_trigger: scoped by test-writer retry (assert bare_todo_errors only); bare-todo boundary check preserved - SCOPED/LEGITIMATE
+
+### AC Compliance
+
+| AC | Evidence | Status |
+|----|---------|--------|
+| KNOWN_TOOLSETS frozenset 8 prefixes | Lines 23-25 validate_agents.py; test_known_toolsets_contains_all_8_prefixes PASSES | PASS |
+| KNOWN_STANDALONE_TOOLS frozenset | Line 30; test_known_standalone_tools_contains_new_workspace + _selection PASS | PASS |
+| Source comments on constants | Lines 20-22 + 27-29: source + update note confirmed by read_file | PASS (no behavioral test) |
+| _check_unknown_tools() callable from validate_agent() | Lines 85-108; called in validate_agent(); test_check_unknown_tools_is_importable_and_callable PASSES | PASS |
+| Validation rules (a)-(d) | _is_valid_tool() lines 69-83; all 4 error-path tests PASS | PASS |
+| Error message format | Line 104-107: exact format; all 4 TestFromAC_UnknownToolErrorMessage PASS | PASS |
+| No double-reporting of banned tools | _BANNED_TOOL_NAMES lines 34-36; skip lines 93-94; all 4 NoBannedToolDoubleError PASS | PASS |
+| Exits 0 on current agents | test_script_exits_zero_on_current_agents PASSES | PASS |
+
+### Security Review
+- No injection, no eval/exec, no credentials, no path traversal, no new deps - CLEAN
+
+### Verdict: PASS - confidence 0.91
+
+-t
+
+[[2026-03-31]] Tue 00:07
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | validate_agents.py only in dir-structure table; no documented validation behavior to update |
+| 2 | Docstrings complete | Yes | PASS | _is_valid_tool(), _check_unknown_tools() have docstrings; existing functions unchanged — validate_agents.py lines 1-175 |
+| 3 | docs/sources/overview.md | Yes | PASS | Section '## Canonical Tool Registry Validation (Task #198)' at line 141 with 3 source rows |
+| 4 | README.md | No | N/A | No CLI commands added or changed |
+| 5 | Research doc linked | Yes | PASS | docs/research/canonical-tool-registry-validation.md exists; stale-tool-names.md linked in task body |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/198-* files found)
+
+[[2026-03-31]] Tue 03:30
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| KNOWN_TOOLSETS frozenset 8 prefixes | L23-25 validate_agents.py: 8 named prefixes | PASS |
+| KNOWN_STANDALONE_TOOLS frozenset | L31: newWorkspace, selection | PASS |
+| Source comments on constants | L20-22, L27-29: cite cheat sheet + stale-tool-names.md | PASS |
+| _check_unknown_tools() helper | L85-108, called from validate_agent() at L144 | PASS |
+| Validation rules (a)-(d) | _is_valid_tool() L69-81: toolset, prefix/slash, standalone, wildcard | PASS |
+| Error message format | L103-107 exact format per AC | PASS |
+| No double-reporting banned tools | _BANNED_TOOL_NAMES L34-36, skip L93-94 | PASS |
+| Exits 0 on current agents | 47/47 tests pass including integration test | PASS |
+
+### Test Results
+- pytest tests/test_validate_agents.py: 47 passed, 0 failed (0.83s)
+- Full suite: 1850 passed, 197 failed (all pre-existing, none in task scope)
+- ruff: clean (scripts/validate_agents.py + tests/test_validate_agents.py)
+
+### AC Quality: 4/5
+Specific, testable AC with 8 verifiable lines. Minor gap: soft dependency on #193 not enforced as depends_on, causing builder BLOCK and test-writer retry cycle.
+
+### Deduction breakdown: none (all AC evidenced, lint clean, AC quality 4, reviewer evidence present, no task failures)
+### Confidence: 1.00
+### Action: archived
+
+### Quality gap noted
+Test-writer retry did not commit scoped assertion fix to test_todo_prefix_substring_does_not_trigger. Uncommitted change is legitimate and tests pass. Committed as leftovers by auditor.
