@@ -1,10 +1,12 @@
 ---
 id: 308
 title: Add strictyaml to knowledge package dependencies
-status: done
+status: archived
 priority: needed
 created: 2026-03-30T20:30:35.1438782+02:00
-updated: 2026-03-31T04:10:42.1892355+02:00
+updated: 2026-03-31T04:34:46.0452664+02:00
+started: 2026-03-31T04:34:45.5142376+02:00
+completed: 2026-03-31T04:34:45.5142376+02:00
 tags:
     - phase-2
     - scope:knowledge
@@ -152,3 +154,34 @@ No docs impact. Config-only task (pyproject.toml + uv.lock).
 
 ### Scratch Files Cleaned
 - None
+
+[[2026-03-31]] Tue 04:34
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| strictyaml>=1.7 in [project.dependencies] | packages/knowledge/pyproject.toml L8: strictyaml>=1.7 | PASS |
+| uv lock updated | Committed at 67c6193; 4 lock tests pass | PASS |
+| Import strictyaml in package context | 2 metadata tests pass (importlib.metadata) | PASS |
+
+### Test Results
+- pytest (task-scoped): 8 passed, 0 failed (0.41s)
+- pytest (full suite): 1892 passed, 154 failed (pre-existing), 1 error. No new failures from #308.
+- ruff: All checks passed
+
+### Cross-Task Note
+test_knowledge_foundation::test_pydantic_is_sole_runtime_dependency now fails (expects pydantic as sole dep). Stale assertion from #15, not a #308 defect. Needs independent update.
+
+### Architect Quality
+- AC specificity: clear and verifiable
+- Edge cases: N/A (config-only)
+- Design direction: architect refined AC3 correctly (loader not yet created)
+- AC quality score: 4/5
+
+### Upstream Commits
+- c430890: test: add failing tests for strictyaml knowledge dep (#308, test-writer)
+- 67c6193: feat: add strictyaml>=1.7 to owlbear-knowledge dependencies (#308, builder)
+
+### Deduction breakdown: no deductions apply from rubric
+### Confidence: .98
+### Action: archive
