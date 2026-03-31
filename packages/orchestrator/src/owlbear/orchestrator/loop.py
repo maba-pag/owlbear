@@ -123,9 +123,7 @@ async def dispatch_entry(
     before_files = _git_diff_names()
 
     try:
-        session_resp = await client.new_session(
-            session_name=f"owlbear-{entry.agent}-{entry.task_id}"
-        )
+        session_resp = await client.new_session(cwd=None, mcp_servers=[])
     except (AcpClientError, TimeoutError):
         return False
 
