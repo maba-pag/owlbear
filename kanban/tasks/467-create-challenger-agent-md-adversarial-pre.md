@@ -1,13 +1,16 @@
 ---
 id: 467
 title: Create challenger.agent.md (adversarial pre-decision review subagent)
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-31T05:04:45.7284032+02:00
-updated: 2026-03-31T07:35:17.3803548+02:00
+updated: 2026-03-31T15:39:37.655324+02:00
+started: 2026-03-31T15:39:09.5059793+02:00
+completed: 2026-03-31T15:39:09.5059793+02:00
 tags:
     - scope:agents
     - phase-2
+    - agent
 class: standard
 ---
 
@@ -72,3 +75,101 @@ TDD not applicable: .agent.md is declarative configuration, not application code
 - Verified: no depends_on needed (standalone agent file)
 - Verified: #468 (arch-review integration) correctly depends on #467
 - Verified: #469 (researcher expansion) correctly depends on #468
+
+[[2026-03-31]] Tue 11:41
+## Test-Writer Notes
+- Test file: tests/test_challenger_agent_467.py
+- Classes: TestFromAC_ChallengerFrontmatter, TestFromAC_ChallengerPersona, TestFromAC_ChallengerInputContract, TestFromAC_ChallengerOutputContract
+- Tests per category: happy 35, edge 16, error 9, boundary 3
+- Total: 63 tests, all FAIL ✓ (FileNotFoundError — agents/challenger.agent.md does not exist yet)
+- ruff: clean
+- AC coverage: all 13 AC lines covered (2–8 tests each)
+- Note: test file was pre-existing (committed); verified RED state before advancing
+
+[[2026-03-31]] Tue 14:02
+## Builder Notes
+- Files changed: agents/challenger.agent.md
+- Tests: 63 passed, all TestFromAC_* green
+- Lint: ruff clean
+- Evidence: 63 passed in 0.17s; RED confirmed (FileNotFoundError) before implementation
+- Fixes applied: removed backtick wrappers from input contract table field names
+
+[[2026-03-31]] Tue 14:37
+## Review Evidence
+See docs/scratch/467-reviewer.md for full evidence.
+
+[[2026-03-31]] Tue 15:39
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: file exists | agents/challenger.agent.md on disk, read confirmed | PASS |
+| AC2: name: challenger | Frontmatter verified | PASS |
+| AC3: description one-line adversarial | Verified: mentions adversarial + challenge | PASS |
+| AC4: argument-hint 6 fields | All 6 placeholders present | PASS |
+| AC5: user-invocable: false | Verified | PASS |
+| AC6: disable-model-invocation: true | Verified | PASS |
+| AC7: model single Opus 4.6 | Single string, not array | PASS |
+| AC8: tools canonical read-only | 5 tools, no execute/edit/MCP | PASS |
+| AC9: agents: [] | Verified | PASS |
+| AC10: persona section | Adversarial role, NOT-validate, NOT-edit, NOT-kanban | PASS |
+| AC11: input contract 6 fields | All fields with types/required | PASS |
+| AC12: output contract 6 sections | All sections with enums | PASS |
+| AC13: structured text only | Stated, no state mutations | PASS |
+
+### Test Results
+- pytest (task): 63 passed, 0 failed (0.21s)
+- pytest (full suite): 462 passed, 86 failed (none in task scope)
+- ruff: 2 violations in unrelated file (test_necessity_check_196.py)
+
+### Upstream Commits
+- 322c95c test: add failing tests for challenger.agent.md (#467, test-writer)
+- 9219277 feat: implement challenger.agent.md (#467, builder)
+- a6f3f85 docs: update agents/README.md for challenger subagent (#467, writer)
+
+### AC Quality Score: 5/5
+AC was specific, enumerated all fields/tools/types. Architect refined from research doc. Clean implementation with no improvisation needed.
+
+### Deduction breakdown
+- -.02 reviewer evidence file missing (docs/scratch/467-reviewer.md referenced but absent)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-03-31]] Tue 15:39
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: file exists | agents/challenger.agent.md on disk, read confirmed | PASS |
+| AC2: name: challenger | Frontmatter verified | PASS |
+| AC3: description one-line adversarial | Verified: mentions adversarial + challenge | PASS |
+| AC4: argument-hint 6 fields | All 6 placeholders present | PASS |
+| AC5: user-invocable: false | Verified | PASS |
+| AC6: disable-model-invocation: true | Verified | PASS |
+| AC7: model single Opus 4.6 | Single string, not array | PASS |
+| AC8: tools canonical read-only | 5 tools, no execute/edit/MCP | PASS |
+| AC9: agents: [] | Verified | PASS |
+| AC10: persona section | Adversarial role, NOT-validate, NOT-edit, NOT-kanban | PASS |
+| AC11: input contract 6 fields | All fields with types/required | PASS |
+| AC12: output contract 6 sections | All sections with enums | PASS |
+| AC13: structured text only | Stated, no state mutations | PASS |
+
+### Test Results
+- pytest (task): 63 passed, 0 failed (0.21s)
+- pytest (full suite): 462 passed, 86 failed (none in task scope)
+- ruff: 2 violations in unrelated file (test_necessity_check_196.py)
+
+### Upstream Commits
+- 322c95c test: add failing tests for challenger.agent.md (#467, test-writer)
+- 9219277 feat: implement challenger.agent.md (#467, builder)
+- a6f3f85 docs: update agents/README.md for challenger subagent (#467, writer)
+
+### AC Quality Score: 5/5
+AC was specific, enumerated all fields/tools/types. Architect refined from research doc. Clean implementation with no improvisation needed.
+
+### Deduction breakdown
+- -.02 reviewer evidence file missing (docs/scratch/467-reviewer.md referenced but absent)
+
+### Confidence: .98
+### Action: archive
