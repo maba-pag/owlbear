@@ -1,10 +1,12 @@
 ---
 id: 33
 title: Extract entity extraction + graph builders
-status: done
+status: archived
 priority: needed
 created: 2026-03-26T18:33:48.3894411+01:00
-updated: 2026-03-31T07:39:47.0649423+02:00
+updated: 2026-03-31T07:52:43.3299225+02:00
+started: 2026-03-31T07:52:23.7514659+02:00
+completed: 2026-03-31T07:52:23.7514659+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,7 +15,7 @@ depends_on:
     - 32
     - 203
 claimed_by: auditor
-claimed_at: 2026-03-31T07:39:47.0623063+02:00
+claimed_at: 2026-03-31T07:52:43.3289048+02:00
 class: standard
 ---
 
@@ -125,3 +127,32 @@ See docs/scratch/33-reviewer.md for full evidence.
 [[2026-03-31]] Tue 06:49
 ## Review Evidence (retry 2)
 See docs/scratch/33-reviewer.md for full evidence.
+
+[[2026-03-31]] Tue 07:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| StructuredExtractor @runtime_checkable, sync extract | protocol.py L82-99; 8 protocol tests pass | PASS |
+| EntityExtractor DI constructor + empty guard + metadata prefix | extractor.py L53-100; 14 tests pass | PASS |
+| IntraDocGraphBuilder DI, <2 empty, >80 batch by type, w=0.5/intra_doc_inference | graph_builder.py L72-120; 18 tests pass | PASS |
+| InterDocGraphBuilder separate file, full DI (top_k=10, cosine=0.70) | inter_doc_graph_builder.py L80-92; 19 tests pass | PASS |
+| Vector prefilter, cross-doc filter, dedup list_edges, batch 40, w=0.4 | inter_doc_graph_builder.py L97-135 | PASS |
+| Prompt constants (EXTRACTION, GRAPH_BUILDER, INTER_DOC) | extractor.py L24, graph_builder.py L28, inter_doc L30 | PASS |
+| Zero PydanticAI imports | Select-String confirms no matches | PASS |
+| ExtractionResult/GraphBuildResult frozen Pydantic | ConfigDict(frozen=True) in both | PASS |
+| All tests pass; ruff clean | 59/59 passed; ruff all checks passed | PASS |
+
+### Test Results
+- pytest (task scope): 59 passed, 0 failed (0.73s)
+- pytest (full suite): 1939 passed, 242 failed (all failures are pre-existing TDD RED from other tasks)
+- ruff: All checks passed
+
+### Architect Quality
+- AC specificity: 5/5 - precise constructor signatures, thresholds, edge stamps, batching limits, prompt names
+- Edge cases covered in AC (empty input, <2 entities, >80 batch threshold)
+- Design notes led to clean implementation matching existing protocol patterns
+
+### Deduction breakdown: none - all AC lines verified with evidence, lint clean, reviewer evidence thorough
+### Confidence: 1.0
+### Action: archived
