@@ -1,10 +1,10 @@
 ---
 id: 22
 title: Build CLI trigger commands
-status: todo
+status: review
 priority: needed
 created: 2026-03-26T17:22:48.6175218+01:00
-updated: 2026-03-30T07:56:41.8421812+02:00
+updated: 2026-03-30T22:49:17.3493664+02:00
 tags:
     - phase-2
     - scope:cli
@@ -99,3 +99,14 @@ Typer already in dependencies (typer>=0.24 added by #154, archived).
 - Verified: #20 (dispatch planner umbrella) at todo, subtasks #144/#145/#146 in pipeline
 - Verified: #154 (Typer dependency) archived, typer>=0.24 in pyproject.toml
 - Added: #202 (TDD RED test task) at backlog
+
+[[2026-03-30]] Mon 19:10
+## Test-Writer Notes\n- Test file: tests/test_cli.py\n- Classes: TestFromAC_CLIAppStructure, TestFromAC_DispatchCommand, TestFromAC_RunCommand, TestFromAC_StatusCommand, TestFromAC_ErrorHandling\n- Tests per category: happy 5, edge 2, error 8, boundary 5\n- Total: 20 tests, all FAIL (ModuleNotFoundError on owlbear.cli) checked\n- ruff: clean\n- Mock strategy: patch at owlbear.cli.* namespace (name-import pattern expected)\n- AC coverage:\n  CLI app structure: test_help_lists_dispatch/run/status\n  dispatch success: test_dispatch_success_stdout_format\n  dispatch task_not_found: test_dispatch_task_not_found_exits_1_stderr\n  dispatch already_claimed: test_dispatch_already_claimed_exits_1_stderr\n  dispatch AcpClientError: test_dispatch_acp_client_error_exits_1_stderr\n  dispatch copilot_missing: test_dispatch_copilot_not_found_exact_message\n  dispatch int validation: test_dispatch_non_integer_task_id_rejected\n  run top-priority: test_run_no_args_dispatches_top_priority_task\n  run no tasks: test_run_no_actionable_tasks_message_exit_0\n  run --all loop: test_run_all_loops_dispatches_each_task\n  run board re-read: test_run_all_rereads_board_each_iteration\n  status counts: test_status_prints_count_per_status_column\n  status blocked: test_status_shows_blocked_tasks_with_block_reason\n  status exit 0: test_status_always_exits_0\n  stderr routing: test_copilot_not_found_install_hint_on_stderr, test_task_not_found_message_contains_id_and_phrase, test_already_claimed_message_contains_id_and_agent, test_error_message_not_on_stdout
+
+[[2026-03-30]] Mon 22:49
+## Builder Notes
+- Files changed: packages/orchestrator/src/owlbear/cli.py (new), packages/orchestrator/src/owlbear_orchestrator/acp_client.py (+__aenter__/__aexit__), packages/orchestrator/pyproject.toml (+[project.scripts]), tests/test_cli.py (test infrastructure fixes)
+- Tests: 20 passed, coverage 94% on owlbear/cli.py (above 90% threshold)
+- Lint: ruff clean on both cli.py and acp_client.py
+- Evidence: 20/20 tests green in 0.72s
+- Fixes applied: (1) datetime.UTC used on class instead of module -- fixed by importing UTC directly; (2) CliRunner(mix_stderr=False) not supported in Click 8.2+ -- fixed with _SeparatedCliRunner subclass restoring pre-8.2 output semantics; (3) AcpClient needed __aenter__/__aexit__ for async context manager support -- added minimal implementation; (4) PYI034 __aenter__ return type -- changed to Self

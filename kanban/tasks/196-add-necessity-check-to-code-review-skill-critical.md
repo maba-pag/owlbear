@@ -4,7 +4,7 @@ title: Add necessity check to code-review skill critical checks
 status: archived
 priority: needed
 created: 2026-03-29T23:08:30.248244+02:00
-updated: 2026-03-30T16:52:35.4490727+02:00
+updated: 2026-03-30T16:52:55.8111055+02:00
 started: 2026-03-30T15:25:48.1247518+02:00
 completed: 2026-03-30T16:52:35.0364391+02:00
 tags:
@@ -169,3 +169,8 @@ Confidence: .90
 - Start 1.0, -.02 test case-sensitivity bug
 ### Confidence: .98
 ### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 237a6c4 | chore | kanban/tasks/196-*.md | #196 |

@@ -1,10 +1,10 @@
 ---
 id: 204
 title: 'Test: Wire audit log into dispatch loop'
-status: todo
+status: review
 priority: needed
 created: 2026-03-30T08:11:23.2576692+02:00
-updated: 2026-03-30T08:11:23.2576692+02:00
+updated: 2026-03-30T23:10:50.6593741+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -35,3 +35,29 @@ TDD RED tests for #164 (wire audit log into dispatch loop).
 - Use tmp_path for JSONL file assertions
 - Follow existing test pattern in tests/test_audit_log.py
 - Depends on #146 (dispatch loop interface must exist to write meaningful tests)
+
+[[2026-03-30]] Mon 18:46
+## Test-Writer Notes
+- Test file: tests/test_dispatch_audit_wiring.py
+- Classes: TestFromAC_DispatchAuditWiring
+- Tests per category: happy 10, edge 2, error 2, boundary 2
+- Total: 16 tests, all FAIL (ImportError: no module owlbear.orchestrator)
+- ruff: clean
+- AC coverage:
+  - AC1 (AuditLog injection): test_run_loop_accepts_audit_log_parameter
+  - AC2 (log_dispatch before prompt, DispatchEvent fields): test_log_dispatch_called_before_prompt, test_dispatch_event_task_id_and_agent, test_dispatch_event_session_id_matches_new_session, test_dispatch_event_timestamp_is_iso8601, test_dispatch_event_prompt_summary_max_100_chars
+  - AC3 (log_completion after prompt, CompletionEvent fields): test_log_completion_called_after_prompt, test_completion_event_task_id_agent_and_outcome, test_completion_event_duration_ms_is_int, test_completion_event_files_changed_is_list
+  - AC4 (duration_ms monotonic): test_duration_ms_uses_monotonic_clock
+  - AC5 (files_changed via git diff): test_files_changed_populated_via_git_diff, test_files_changed_empty_when_no_diff
+  - AC6 (log_dispatch I/O error): test_log_dispatch_io_error_does_not_propagate
+  - AC7 (log_completion I/O error): test_log_completion_io_error_does_not_propagate
+  - AC8 (integration round-trip): test_integration_round_trip_both_events_in_jsonl
+
+[[2026-03-30]] Mon 23:10
+## Builder Notes
+- Files changed: packages/orchestrator/src/owlbear/orchestrator/loop.py, __init__.py
+- Tests: 16 passed (test_dispatch_audit_wiring.py), 67 passed total with test_orchestrator_loop.py
+- Coverage: 97% on loop.py
+- Lint: ruff clean
+- Evidence: uv run pytest tests/test_dispatch_audit_wiring.py tests/test_orchestrator_loop.py -q — 67 passed in 16s
+- Fixes applied: None — clean GREEN pass

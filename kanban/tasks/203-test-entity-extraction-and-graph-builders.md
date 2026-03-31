@@ -4,7 +4,7 @@ title: 'Test: Entity extraction and graph builders'
 status: archived
 priority: needed
 created: 2026-03-30T08:11:19.8857429+02:00
-updated: 2026-03-31T00:35:00.8191323+02:00
+updated: 2026-03-31T00:35:22.8181679+02:00
 started: 2026-03-30T08:11:24.6685937+02:00
 completed: 2026-03-31T00:34:26.5811658+02:00
 tags:
@@ -159,3 +159,9 @@ Score: 4/5 - AC was specific with measurable scenarios per file. Minor gap: buil
 
 ### Confidence: 0.98
 ### Action: archive
+
+[[2026-03-31]] Tue 00:35
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 11ead25 | chore | kanban/tasks/203-*.md | #203 |

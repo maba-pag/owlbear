@@ -4,7 +4,7 @@ title: 'Test: Voice process manager'
 status: in-progress
 priority: nice-to-have
 created: 2026-03-29T15:39:36.7418317+02:00
-updated: 2026-03-30T07:16:50.7155408+02:00
+updated: 2026-03-31T04:07:12.0913631+02:00
 tags:
     - phase-3
     - ' scope:voice'
@@ -12,8 +12,6 @@ tags:
     - ' test'
 depends_on:
     - 61
-blocked: true
-block_reason: STALE — retried with hint, still unchanged (length limit crash on body update)
 class: standard
 ---
 
@@ -119,3 +117,18 @@ TDD companion for #62. See docs/research/voice-process-manager.md.
   is_alive true/false/pre-entry: 3 tests
   receive: test_receive_returns_voice_out_message
 - Note: file was committed by prior agent run; task advanced now
+
+[[2026-03-30]] Mon 18:00
+## Builder Notes
+
+**Result:** 35/37 tests pass. Ruff clean. 2 tests blocked due to test-level issues.
+
+**Implementation:** Full VoiceProcessManager with exceptions (VoiceProcessError, VoiceInitTimeout, VoiceRestartBudgetExhausted), async context manager, send/receive NDJSON, 6-phase shutdown, init handshake, restart budget with counter reset, is_alive property. Extracted _shutdown_phases_2_to_6 to satisfy ruff C901. Added read loop task cancellation on restart to prevent duplicate tasks.
+
+**Passing (35):** Exceptions(3), Spawn(5), ReadLoop(4), Send(3), InitHandshake(3), Shutdown(10/11), RestartBudget(1/2), ContextManager(2), IsAlive(3), Receive(1).
+
+**Blocked tests (2):**
+
+1. test_shutdown_cancels_read_loop_task: Uses patch.object(asyncio.Task, 'cancel', ...) which fails on CPython 3.12 with TypeError: cannot set 'cancel' attribute of immutable type '_asyncio.Task'. Task is a C extension type since CPython 3.12 and its methods cannot be monkey-patched. Test needs rewrite using a different verification approach.
+
+2. test_raises_budget_exhausted_after_max_restarts: Contradicts test_restart_counter_resets_after_successful_init. Counter reset on successful handshake (required by reset test) prevents budget exhaustion (required by budget test). With reset: counter oscillates 0-to-1 each crash/restart cycle and never reaches max_restarts. Without reset: budget exhausts but reset test fails. Mathematical proof: no single counter scheme satisfies both tests simultaneously. Test-writer needs to reconcile the AC for these two behaviors.

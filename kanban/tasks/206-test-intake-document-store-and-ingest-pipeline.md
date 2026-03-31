@@ -4,7 +4,7 @@ title: 'Test: intake, document_store, and ingest pipeline modules'
 status: archived
 priority: needed
 created: 2026-03-30T08:14:52.468527+02:00
-updated: 2026-03-30T14:14:59.9671529+02:00
+updated: 2026-03-30T14:15:18.197761+02:00
 started: 2026-03-30T14:14:54.3298887+02:00
 completed: 2026-03-30T14:14:54.3298887+02:00
 tags:
@@ -306,3 +306,9 @@ All 22 original TestFromAC_ classes preserved. Two new review-directed classes a
 store_extractions inserts entities without setting document_id (defaults None). Pipeline-ingested entities unreachable by delete_document_data WHERE document_id=?. Cascade mechanism correct and tested; entity document_id assignment is separate concern. Recommend follow-up task.
 
 ### Verdict: PASS - Confidence 0.92
+
+[[2026-03-30]] Mon 14:15
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8a44bfa | chore | kanban/tasks/206-*.md | #206 |

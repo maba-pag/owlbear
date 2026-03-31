@@ -1,0 +1,80 @@
+---
+id: 435
+title: Consolidate loop detection rules in agent-common.instructions.md
+status: review
+priority: needed
+created: 2026-03-30T21:45:53.9677998+02:00
+updated: 2026-03-31T03:47:44.1465175+02:00
+tags:
+    - scope:agents
+    - phase-2
+class: standard
+---
+
+## Context
+Consolidate scattered retry guidance (red flags line 204, terminal discipline line 249) into a single 'Loop detection and retry discipline' section. Add 3-tier escalation model and category-specific retry limits per docs/research/loop-detection-instruction-patterns.md.
+
+See docs/research/loop-detection-instruction-patterns.md for full analysis.
+
+## Acceptance Criteria
+- [ ] New section 'Loop detection and retry discipline' in agent-common.instructions.md
+- [ ] 3-tier escalation table (detect/adapt/stop) with concrete action per tier
+- [ ] Category-specific retry limits table (exact same command: 1 retry, same logical op: 2, same goal: 3 total)
+- [ ] Existing red flag 'max 2 retries' cross-references the new section
+- [ ] Terminal discipline 'No brute-force retries' cross-references the new section
+- [ ] Mandatory handoff/block after tier 3 with task body update requirement
+
+[[2026-03-30]] Mon 22:18
+## Architecture Review
+**Verdict:** APPROVED (merged from #432)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| New 'Loop detection and retry discipline' section | Clear, verifiable â€” section exists or doesn't | Keep |
+| 3-tier escalation table (detect/adapt/stop) | Concrete tiers with actions â€” testable | Keep |
+| Category-specific retry limits table | Specific numbers (1/2/3) â€” mechanically verifiable | Keep |
+| Red flag 'max 2 retries' cross-references new section | Verifiable â€” check line ~204 for xref | Keep |
+| Terminal discipline cross-references new section | Verifiable â€” check line ~249 for xref | Keep |
+| Mandatory handoff/block after tier 3 | Clear stop condition â€” verifiable | Keep |
+
+### Architecture Notes
+This is an instruction-file-only change (agent-common.instructions.md). No code, no tests needed.
+
+Existing retry guidance locations verified:
+- Line 204: red flags section, 'max 2 retries'
+- Line 249: terminal discipline, 'No brute-force retries'
+
+Both must cross-reference the new consolidated section, not be deleted (preserves in-context scanning).
+
+Single domain: agents/instructions. No module layering concerns. No security surface changes.
+
+### Merge Details
+- #432 (Implement loop-detection pattern) merged into this task
+- #432's implementation AC was a strict subset of #435's AC with vaguer language
+- #432's research context preserved in docs/research/loop-detection-instruction-patterns.md (already referenced by #435)
+- #432 deleted as redundant
+
+### TDD Note
+No test task needed â€” this is a markdown instruction file edit, not application code. Reviewer verifies content directly.
+
+### Dependencies
+- None required (standalone instruction edit)
+- #436 (reviewer checklist) is independent â€” can proceed in parallel
+
+[[2026-03-30]] Mon 23:46
+## Test-Writer Notes
+- Non-implementation task (scope:agents, instruction-file edit only) - no tests applicable.
+- Architect confirmed: no test task needed, this is a markdown instruction file edit, not application code.
+- Passing through to builder.
+
+[[2026-03-31]] Tue 03:47
+## Builder Notes
+- Files changed: instructions/agent-common.instructions.md
+- New section added: '## Loop detection and retry discipline' (line 254)
+- 3-tier escalation table: Detect/Adapt/Stop with required actions
+- Category-specific retry limits table (1/2/3 retries)
+- Red flag cross-reference: line 204 (max 2 retries -- see Loop detection...)
+- Terminal discipline cross-reference: line 249 (No brute-force retries -- see Loop detection...)
+- Tier 3 mandatory handoff/block requirement included
+- Commit: caf462a

@@ -4,7 +4,7 @@ title: Ban manage_todo_list/todos tool from agents and validator
 status: archived
 priority: needed
 created: 2026-03-29T22:56:35.3736143+02:00
-updated: 2026-03-30T19:30:51.3006323+02:00
+updated: 2026-03-30T19:32:36.7449808+02:00
 started: 2026-03-30T19:30:33.1029097+02:00
 completed: 2026-03-30T19:30:33.1029097+02:00
 tags:
@@ -193,3 +193,13 @@ validate_skills.py has no tool name validation and is out of scope. #198 (broade
 
 ### Scratch Files Cleaned
 - Deleted docs/scratch/193-reviewer.md
+
+[[2026-03-30]] Mon 19:32
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| e179e1d | chore | kanban/tasks/193-*.md | #193 |
+
+[[2026-03-30]] Mon 19:32
+## Commits
+Commit e179e1d: chore: archive task #193 (kanban/tasks/193-*.md)

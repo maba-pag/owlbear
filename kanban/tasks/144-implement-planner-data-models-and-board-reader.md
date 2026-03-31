@@ -4,7 +4,7 @@ title: Implement planner data models and board reader
 status: archived
 priority: needed
 created: 2026-03-29T16:23:29.2258287+02:00
-updated: 2026-03-30T19:21:48.6409578+02:00
+updated: 2026-03-30T19:22:38.641827+02:00
 started: 2026-03-30T19:21:42.2457521+02:00
 completed: 2026-03-30T19:21:42.2457521+02:00
 tags:
@@ -199,3 +199,9 @@ See docs/research/build-dispatch-planner.md S3.3, S3.5 for parent design.
 ### Deduction breakdown: (none)
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 19:22
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 40577f4 | chore | kanban/tasks/144-*.md | #144 |

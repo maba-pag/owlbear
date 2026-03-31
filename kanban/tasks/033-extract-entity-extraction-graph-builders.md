@@ -1,10 +1,10 @@
 ---
 id: 33
 title: Extract entity extraction + graph builders
-status: todo
+status: review
 priority: needed
 created: 2026-03-26T18:33:48.3894411+01:00
-updated: 2026-03-30T08:14:01.5854175+02:00
+updated: 2026-03-31T03:56:34.210585+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -82,3 +82,20 @@ Module layering is clean. All modules stay within owlbear_knowledge/ with no upw
 - Verified: #32 (vector store, todo) provides shared protocol.py types
 - Added: #203 (preceding test task, backlog)
 - Downstream: #158 depends on #33 (StructuredExtractor protocol)
+
+[[2026-03-30]] Mon 23:25
+## Test-Writer Notes
+- Pre-existing test task #203 completed the TDD RED phase for this task
+- Test files: tests/test_extractor.py, tests/test_graph_builder.py, tests/test_inter_doc_graph_builder.py, tests/test_structured_extractor_protocol.py
+- Classes: TestFromAC_EntityExtractor, TestFromAC_IntraDocGraphBuilder, TestFromAC_InterDocGraphBuilder, TestFromAC_StructuredExtractorProtocol
+- Total: 52 tests (47 TestFromAC + 5 TestBuilderDiscovered) all PASS (implementation already done in #203 pipeline)
+- ruff: clean
+- Advancing to in-progress: implementation + tests complete via #203; builder pass-through.
+
+[[2026-03-31]] Tue 03:56
+## Builder Notes
+- Pass-through: implementation completed in #203 pipeline
+- Files: packages/knowledge/src/ (extractor.py, graph_builder.py, inter_doc_graph_builder.py, protocol.py)
+- Tests: 52 passed (47 TestFromAC + 5 TestBuilderDiscovered), 0 failures
+- Lint: ruff clean
+- Evidence: `uv run pytest tests/test_extractor.py tests/test_graph_builder.py tests/test_inter_doc_graph_builder.py tests/test_structured_extractor_protocol.py -q` → 52 passed in 0.63s

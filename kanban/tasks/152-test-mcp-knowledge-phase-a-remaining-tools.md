@@ -4,7 +4,7 @@ title: 'Test: mcp-knowledge Phase A remaining tools'
 status: archived
 priority: needed
 created: 2026-03-29T19:20:21.3798812+02:00
-updated: 2026-03-30T15:38:41.3367293+02:00
+updated: 2026-03-30T15:39:18.2862509+02:00
 started: 2026-03-30T15:38:33.9276219+02:00
 completed: 2026-03-30T15:38:33.9276219+02:00
 tags:
@@ -97,3 +97,9 @@ See docs/scratch/152-reviewer.md for full evidence.
 - Lint: ruff clean
 - Evidence: all TestFromAC_* classes GREEN (8 search_v2, 5 list_sources, 3 stats_resource)
 - Notes: test_stats_resource_handler_queries_graph_store passes because server.py commit 25275d6 already wired asyncio.to_thread in knowledge_stats_resource; test-writer marked it FAIL against prior stub, but it passed against current HEAD
+
+[[2026-03-30]] Mon 15:39
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8a8e86e | chore | kanban/tasks/152-*.md | #152 |

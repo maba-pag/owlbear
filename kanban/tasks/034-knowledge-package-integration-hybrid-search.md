@@ -1,10 +1,10 @@
 ---
 id: 34
 title: Knowledge package integration + hybrid search
-status: todo
+status: in-progress
 priority: needed
 created: 2026-03-26T18:33:53.2231299+01:00
-updated: 2026-03-30T08:15:34.0924594+02:00
+updated: 2026-03-30T23:31:09.0203553+02:00
 tags:
     - phase-1
     - scope:knowledge

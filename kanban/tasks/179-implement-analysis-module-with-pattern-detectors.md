@@ -4,7 +4,7 @@ title: Implement analysis module with pattern detectors
 status: archived
 priority: needed
 created: 2026-03-29T19:51:21.7412918+02:00
-updated: 2026-03-31T00:28:45.1486838+02:00
+updated: 2026-03-31T00:29:22.4762248+02:00
 started: 2026-03-31T00:22:20.5752253+02:00
 completed: 2026-03-31T00:22:20.5752253+02:00
 tags:
@@ -154,3 +154,10 @@ Confidence: .98 - Action: archive
 - Missing reviewer evidence section: -.02
 ### Confidence: .98
 ### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 0aabdfe | test | tests/test_analysis_package.py | #179 |
+| df4c9c3 | feat | analysis/ package (5 files) | #179 |
+| e7eeb2d | chore | kanban board archive | #179 |

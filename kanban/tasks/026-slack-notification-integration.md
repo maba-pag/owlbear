@@ -1,10 +1,10 @@
 ---
 id: 26
 title: Slack notification integration
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-03-26T17:23:41.5689417+01:00
-updated: 2026-03-26T17:23:41.5689417+01:00
+updated: 2026-03-30T20:42:56.140287+02:00
 tags:
     - phase-3
     - scope:notifications

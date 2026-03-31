@@ -1,10 +1,10 @@
 ---
 id: 146
 title: Implement orchestrator dispatch loop
-status: backlog
+status: todo
 priority: needed
 created: 2026-03-29T16:23:47.2530291+02:00
-updated: 2026-03-30T08:26:08.2130459+02:00
+updated: 2026-03-30T22:58:00.2187751+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -22,12 +22,13 @@ See docs/research/build-dispatch-planner.md S3.2 for parent design.
 
 ### waves.py — packages/orchestrator/src/owlbear/orchestrator/waves.py
 
-- [ ] `AgentCategory` StrEnum: `RESTRICTED`, `LIGHT_FLEX`, `HEAVY_FLEX`
+- [ ] `AgentCategory` StrEnum: `AUDITOR`, `BUILDER`, `LIGHT_FLEX`, `HEAVY_FLEX` (4 values — auditor and builder are separate categories because the wave algorithm treats them differently in Phases 2 and 3)
 - [ ] Module-level `AGENT_CATEGORY: dict[str, AgentCategory]` mapping:
-  - restricted: `auditor`, `builder`
+  - `auditor` → `AUDITOR`
+  - `builder` → `BUILDER`
   - light_flex: `researcher`, `writer`, `architect`, `kanban-planner`, `curator`
   - heavy_flex: `reviewer`, `test-writer`
-- [ ] `Wave` — frozen Pydantic BaseModel: `entries: list[DispatchEntry]`
+- [ ] `Wave` — `@dataclasses.dataclass` (mutable, not frozen): `entries: list[DispatchEntry] = field(default_factory=list)`. Mutable because Phase 5 (curator injection) appends to entries in-place.
 - [ ] `def assemble_waves(entries: list[DispatchEntry], *, wave_size: int = 4, cycle: int) -> list[Wave]`
   - Four-bucket algorithm per orchestration skill Steps 1-7:
     1. Bucket sort entries by AGENT_CATEGORY
@@ -43,7 +44,7 @@ See docs/research/build-dispatch-planner.md S3.2 for parent design.
 ### loop.py — packages/orchestrator/src/owlbear/orchestrator/loop.py
 
 - [ ] Module-level `AGENT_PROMPT_PREFIX: dict[str, str]`:
-  - architect: "Architect Review", builder: "Build", reviewer: "Review", test-writer: "Write tests", researcher: "Research", writer: "Docs", auditor: "Audit", kanban-planner: "Plan", curator: "Curate: Periodic curation"
+  - architect: "Architect Review", builder: "Build", reviewer: "Review", test-writer: "Write tests", researcher: "Research", writer: "Docs Gate", auditor: "Audit", kanban-planner: "Plan", curator: "Curate: Periodic curation"
 - [ ] `def format_prompt(entry: DispatchEntry) -> str`
   - Returns `"{prefix}: #{task_id}"` using AGENT_PROMPT_PREFIX
   - If `entry.retry_hint` is truthy, appends `"\nRetry context: {entry.retry_hint}"`
@@ -73,7 +74,9 @@ See docs/research/build-dispatch-planner.md S3.2 for parent design.
   - Testable loop core (client injected for mocking)
   - Loop: read_board() (#144) then select_tasks() (#145) then assemble_waves() then dispatch_wave() per wave then re-plan
   - Stops when DispatchPlan.entries is empty
-  - Passes crash_failures + stale_retried IDs to select_tasks on subsequent cycles
+  - Pre-filters crash_failures from task list before calling select_tasks(): `select_tasks([t for t in tasks if t.id not in state.crash_failures])` — avoids interface changes to #145's selector
+  - stale_retried tracked in LoopState for logging only (not passed to select_tasks)
+  - Forwards `scope` parameter to read_board()
   - Increments LoopState.cycle each iteration
   - Uses Python `logging` module: log each dispatch (task_id, agent, wave#) and each cycle summary (successes, failures count)
 - [ ] `async def orchestrate(kanban_bin: Path, kanban_dir: Path, copilot_cmd: list[str], *, scope: str | None = None) -> None`
@@ -110,3 +113,38 @@ See docs/research/build-dispatch-planner.md S3.2 for parent design.
 ## Architecture Review
 See docs/scratch/146-architect.md for full review.
 Verdict: REFINE. AC rewritten with precise function signatures. Test task #208 created at todo. depends_on updated to include #208.
+
+[[2026-03-30]] Mon 22:51
+## Architecture Review (cycle 2)
+**Verdict:** APPROVED
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AgentCategory: RESTRICTED (3 values) | Wrong: Phases 2-3 treat auditor/builder separately | Fixed: 4 values (AUDITOR, BUILDER, LIGHT_FLEX, HEAVY_FLEX) |
+| AGENT_CATEGORY restricted grouping | Misleading: auditor+builder not interchangeable | Fixed: separate entries |
+| Wave frozen Pydantic BaseModel | Wrong: Phase 5 mutates entries (curator append) | Fixed: mutable @dataclasses.dataclass |
+| writer prefix "Docs" | Should match docs-gate skill naming | Fixed: "Docs Gate" |
+| crash_failures/stale_retried to select_tasks | Interface mismatch with #145's selector | Fixed: pre-filter crash_failures from task list |
+| scope param forwarding | Not explicitly noted | Added: "Forwards scope to read_board()" |
+| All other AC lines | Precise and testable | Kept |
+
+### Architecture Notes
+- Layering OK: waves.py imports planner.models; loop.py imports waves, planner.board, planner.selector, owlbear_orchestrator.acp_client
+- Single domain: scope:orchestrator
+- Existing impl from #208 TDD covers waves.py + loop.py (100% coverage). Builder finalizes: orchestrate(), __init__.py exports, scope forwarding, logging.
+- Wave as mutable dataclass is correct KISS for Phase 5 in-place mutation.
+- Pre-filtering crash_failures avoids cross-task interface pollution on #145.
+
+### Changes Made
+- Fixed AgentCategory: 4 enum values
+- Fixed AGENT_CATEGORY mapping: auditor/builder separate
+- Fixed Wave: mutable dataclass not frozen Pydantic
+- Fixed writer prefix: "Docs Gate"
+- Fixed run_loop: pre-filter crash_failures, scope forwarding
+- Approved to todo
+
+### Dependencies
+- #19 (ACP client) archived
+- #145 (planner gate checker) in-progress, correctly blocks builder phase
+- #208 (TDD RED tests) at review, 51 tests, 100% coverage

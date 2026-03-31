@@ -1,10 +1,10 @@
 ---
 id: 143
 title: 'Test: Extract CancelSignal and sandbox_path'
-status: in-progress
-priority: nice-to-have
+status: docs
+priority: someday
 created: 2026-03-29T16:12:59.6641148+02:00
-updated: 2026-03-30T08:52:34.8832421+02:00
+updated: 2026-03-30T23:24:00.0847695+02:00
 tags:
     - phase-1
     - ' scope:knowledge'

@@ -1,18 +1,18 @@
 ---
 id: 21
 title: Build audit log
-status: ideation
+status: archived
 priority: important
 created: 2026-03-26T17:22:35.5978869+01:00
-updated: 2026-03-30T06:49:41.4829093+02:00
+updated: 2026-03-30T15:35:59.1521227+02:00
+started: 2026-03-30T15:18:46.5256209+02:00
+completed: 2026-03-30T15:18:46.5256209+02:00
 tags:
     - phase-2
     - scope:orchestrator
     - type:build
 depends_on:
     - 19
-blocked: true
-block_reason: 'Stale parent task: all AC already implemented via #163 (archived) and #185 (archived). Recommend direct archival.'
 class: standard
 ---
 
@@ -56,3 +56,5 @@ Task #21 is a stale parent that was never closed after decomposition. Recommend 
 
 ### Changes Made
 - Blocked to ideation as stale (work done via #163, #185)
+
+## Audit (manual archival 2026-03-30) Stale parent: all AC done via #163 (archived) and #185 (archived). Both audited. Confidence 1.0.

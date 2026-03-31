@@ -4,7 +4,7 @@ title: Implement mcp-project resources + tree helper (server.py part 2)
 status: archived
 priority: needed
 created: 2026-03-29T22:44:09.0266926+02:00
-updated: 2026-03-30T21:08:24.1100948+02:00
+updated: 2026-03-30T21:08:55.7970747+02:00
 started: 2026-03-29T22:44:30.3182174+02:00
 completed: 2026-03-30T21:08:23.651872+02:00
 tags:
@@ -86,3 +86,9 @@ All tests in the listed test classes pass. ruff clean.
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/191-* files present)
+
+[[2026-03-30]] Mon 21:08
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 694cf9f | chore | kanban/tasks/191-*.md | #191 |

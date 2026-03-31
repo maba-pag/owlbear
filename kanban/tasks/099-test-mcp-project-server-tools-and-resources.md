@@ -1,10 +1,10 @@
 ---
 id: 99
 title: 'Test: mcp-project server tools and resources'
-status: in-progress
+status: todo
 priority: needed
 created: 2026-03-28T04:04:45.3489882+01:00
-updated: 2026-03-29T22:45:20.5796602+02:00
+updated: 2026-03-31T03:55:23.3422732+02:00
 tags:
     - phase-1
     - scope:mcp
@@ -82,3 +82,22 @@ Depends on #68 (model, archived). Pattern: #89 TestFromAC_ convention.
 - Note: tests verified as pre-existing from #17 pipeline; line-ending normalization commit only
 
 ## Split into subtasks (2026-03-29)\nUmbrella task — no own AC. Blocked until #190 and #191 are both archived.\n- #190: server infrastructure + tools (in-progress)\n- #191: resources + tree helper (in-progress, depends on #190)
+
+[[2026-03-30]] Mon 18:39
+## Builder Notes
+- Umbrella task — no own implementation. Pass-through.
+- Subtask #190: archived (server infrastructure + tools, 41 tests pass)
+- Subtask #191: at review (resources + tree helper, 13 tests added GREEN)
+- Full scope (53 tests): packages/mcp-project/tests/test_server.py + test_tree.py
+- Test result: 53 passed, 0 failed
+- Lint: ruff clean (packages/mcp-project/src/ + tests/)
+- Files: tree.py (new), server.py (resource handlers added in part 2)
+- No code changes by this builder — both subtasks already implemented
+
+[[2026-03-30]] Mon 23:41
+## Builder Notes (umbrella pass-through, 2026-03-30)
+- Subtask #190: archived (server infrastructure + tools)
+- Subtask #191: archived (resources + tree helper)
+- Full suite: uv run pytest packages/mcp-project/tests/ -q => 91 passed, 0 failed
+- No code changes by this builder -- both subtasks already implemented and archived
+- Advancing to review as umbrella pass-through

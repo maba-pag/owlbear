@@ -1,16 +1,16 @@
 ---
 id: 170
 title: Update stale agent path in agent-audit prompt
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-29T19:49:39.6297224+02:00
-updated: 2026-03-29T20:47:59.7768479+02:00
+updated: 2026-03-30T15:36:02.0826964+02:00
+started: 2026-03-30T15:18:49.5324013+02:00
+completed: 2026-03-30T15:18:49.5324013+02:00
 tags:
     - phase-1
     - scope:docs
     - type:docs
-blocked: true
-block_reason: 'Duplicate of #173 (already at backlog)'
 class: standard
 ---
 
@@ -43,3 +43,5 @@ Stale .github/agents/ refs not covered by existing tasks:
 Follow-up tasks created:
 - #187: Fix stale refs in skill/instruction files
 - #188: Fix stale paths in v1-era test files
+
+## Audit (manual archival 2026-03-30) Duplicate of #173 (archived at 1.0 confidence). Path fixed in commit 62da80f. Confidence 1.0.

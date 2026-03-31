@@ -4,7 +4,7 @@ title: 'Update #86 research doc to reflect command-execution hook model'
 status: archived
 priority: nice-to-have
 created: 2026-03-30T08:58:34.3969542+02:00
-updated: 2026-03-31T03:37:56.8889054+02:00
+updated: 2026-03-31T03:38:22.0701412+02:00
 started: 2026-03-31T03:37:34.2121463+02:00
 completed: 2026-03-31T03:37:34.2121463+02:00
 tags:
@@ -204,3 +204,9 @@ AC was specific and verifiable. Minor gap: AC did not mention updating existing 
 ### Deduction breakdown: none
 ### Confidence: 1.0
 ### Action: archived
+
+[[2026-03-31]] Tue 03:38
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b9c1428 | chore | kanban/tasks/212-*.md | #212 |

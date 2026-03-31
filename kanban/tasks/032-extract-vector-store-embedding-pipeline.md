@@ -4,7 +4,7 @@ title: Extract vector store + embedding pipeline
 status: archived
 priority: needed
 created: 2026-03-26T18:33:43.753881+01:00
-updated: 2026-03-30T20:25:26.2509919+02:00
+updated: 2026-03-30T20:26:32.0968688+02:00
 started: 2026-03-30T20:25:18.6502883+02:00
 completed: 2026-03-30T20:25:18.6502883+02:00
 tags:
@@ -151,3 +151,9 @@ Precise, complete, verifiable. No builder improvisation needed.
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 20:26
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| eaf0182 | chore | kanban/tasks/032-*.md | #32 |

@@ -1,10 +1,12 @@
 ---
 id: 205
 title: 'Test: Knowledge package hybrid search + retrieval'
-status: docs
+status: archived
 priority: needed
 created: 2026-03-30T08:13:51.224589+02:00
-updated: 2026-03-30T10:00:30.8537195+02:00
+updated: 2026-03-30T14:22:08.2483419+02:00
+started: 2026-03-30T14:21:42.4981297+02:00
+completed: 2026-03-30T14:21:42.4981297+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -75,3 +77,63 @@ Test pair for #34 (Knowledge package hybrid search). Port reference: `v1/src/owl
 [[2026-03-30]] Mon 10:00
 ## Review Evidence
 See docs/scratch/205-reviewer.md for full evidence.
+
+[[2026-03-30]] Mon 14:22
+## Audit
+
+### AC Verification (spot-check, 3rd-line)
+- RetrievalResult frozen Pydantic model with chunks/expansion_text/entities_found: PASS (retrieval.py L20-33)
+- retrieve() returns RetrievalResult with hybrid search: PASS (retrieval.py L64-91)
+- query_for_context() catches exceptions, returns None: PASS (retrieval.py L198)
+- All tests use mocks, no real Qdrant/model: PASS (both test files)
+- 35 tests pass, ruff clean
+
+### Test Results
+- pytest (task-scoped): 35 passed in 0.26s
+- pytest (full suite): 1092 passed, 168 failed (pre-existing, none in task scope)
+- ruff: All checks passed
+
+### Reviewer Evidence
+- docs/scratch/205-reviewer.md referenced in task body but file does not exist (quality gap)
+- Reviewer PASS verdict present in task body
+
+### AC Quality Score: 4/5
+AC was specific and verifiable. Minor gaps filled by builder (10 extra tests beyond test-writer's 25).
+
+### Deduction breakdown
+- Start: 1.00
+- Missing reviewer evidence file: -.02
+- Final: .98
+
+### Confidence: .98
+### Action: archived
+
+[[2026-03-30]] Mon 14:22
+## Audit
+
+### AC Verification (spot-check, 3rd-line)
+- RetrievalResult frozen Pydantic model with chunks/expansion_text/entities_found: PASS (retrieval.py L20-33)
+- retrieve() returns RetrievalResult with hybrid search: PASS (retrieval.py L64-91)
+- query_for_context() catches exceptions, returns None: PASS (retrieval.py L198)
+- All tests use mocks, no real Qdrant/model: PASS (both test files)
+- 35 tests pass, ruff clean
+
+### Test Results
+- pytest (task-scoped): 35 passed in 0.26s
+- pytest (full suite): 1092 passed, 168 failed (pre-existing, none in task scope)
+- ruff: All checks passed
+
+### Reviewer Evidence
+- docs/scratch/205-reviewer.md referenced in task body but file does not exist (quality gap)
+- Reviewer PASS verdict present in task body
+
+### AC Quality Score: 4/5
+AC was specific and verifiable. Minor gaps filled by builder (10 extra tests beyond test-writer's 25).
+
+### Deduction breakdown
+- Start: 1.00
+- Missing reviewer evidence file: -.02
+- Final: .98
+
+### Confidence: .98
+### Action: archived

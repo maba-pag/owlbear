@@ -4,7 +4,7 @@ title: 'Test: Vector store and embedding pipeline'
 status: archived
 priority: needed
 created: 2026-03-29T19:13:47.4828015+02:00
-updated: 2026-03-30T17:07:49.3231571+02:00
+updated: 2026-03-30T17:08:09.8875281+02:00
 started: 2026-03-30T17:07:45.9103111+02:00
 completed: 2026-03-30T17:07:45.9103111+02:00
 tags:
@@ -123,3 +123,9 @@ No issues: no secrets, no subprocess, no path traversal, no deserialization, no 
 No issues -- mocks and in-memory storage only
 
 ### Verdict: PASS -- confidence .93
+
+[[2026-03-30]] Mon 17:08
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c38c03b | chore | kanban/tasks/151-*.md | #151 |

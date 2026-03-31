@@ -1,0 +1,30 @@
+---
+id: 217
+title: Implement Gate 3 architect-bypass in dispatch-planning SKILL.md
+status: archived
+priority: needed
+created: 2026-03-30T14:51:52.7303277+02:00
+updated: 2026-03-30T15:33:10.1181477+02:00
+started: 2026-03-30T15:33:10.1181477+02:00
+completed: 2026-03-30T15:33:10.1181477+02:00
+tags:
+    - scope:agents
+    - quality
+    - type:config
+class: standard
+---
+
+## Objective
+Modify dispatch-planning SKILL.md to exempt architect-reviewed tasks from Gate 3 atomicity heuristic.
+
+## Acceptance Criteria
+- [ ] Board Scan Recipe 1 PS adds ARCH:REVIEWED marker when body contains ## Architecture Review
+- [ ] Gate 3 text updated: tasks with ARCH:REVIEWED marker skip the and heuristic
+- [ ] What the PowerShell layer adds section documents the new marker
+- [ ] What remains for LLM reasoning section updated for Gate 3 exemption
+- [ ] No other gates affected
+- [ ] The and heuristic remains active for tasks WITHOUT ## Architecture Review
+
+## Context
+See docs/research/gate-3-atomicity-architect-bypass.md for full analysis.
+Owning research: #214

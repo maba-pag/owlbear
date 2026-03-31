@@ -4,7 +4,7 @@ title: Create v2 ErrorJournal module with append-only JSONL persistence
 status: archived
 priority: nice-to-have
 created: 2026-03-29T20:23:15.50196+02:00
-updated: 2026-03-31T03:20:26.4176424+02:00
+updated: 2026-03-31T03:20:50.4501607+02:00
 started: 2026-03-31T03:20:26.0233865+02:00
 completed: 2026-03-31T03:20:26.0233865+02:00
 tags:
@@ -184,3 +184,9 @@ AC suggestion: test-writer update TestFromAC_ErrorJournalLog + Rotation to use k
 - -.02: Reviewer evidence file (docs/scratch/184-reviewer.md) referenced 3x in body but never created
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-31]] Tue 03:20
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d0a1dc4 | chore | kanban/tasks/184-*.md | #184 |

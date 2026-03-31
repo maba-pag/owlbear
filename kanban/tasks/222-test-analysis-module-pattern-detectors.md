@@ -4,7 +4,7 @@ title: 'Test: analysis module pattern detectors'
 status: archived
 priority: needed
 created: 2026-03-30T16:42:42.1510101+02:00
-updated: 2026-03-30T20:57:38.7037405+02:00
+updated: 2026-03-30T20:58:10.3243073+02:00
 started: 2026-03-30T16:42:46.8556346+02:00
 completed: 2026-03-30T20:57:33.7469941+02:00
 tags:
@@ -240,3 +240,9 @@ No MISSING AC lines. One LAX note: slow_agent has no test for EXACTLY 2x ratio (
 ### Deduction breakdown: none (all AC evidenced, lint clean, reviewer thorough, tests pass)
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 20:58
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ec2ae63 | chore | kanban/tasks/222-*.md | #222 |

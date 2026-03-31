@@ -4,7 +4,7 @@ title: Build dispatch planner
 status: todo
 priority: needed
 created: 2026-03-26T17:22:22.8937692+01:00
-updated: 2026-03-30T07:50:35.2753094+02:00
+updated: 2026-03-30T23:04:45.0547735+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -99,3 +99,71 @@ Concern separation validated: planner produces DispatchPlan (data), orchestrator
 When #144 reaches architect review, note:
 1. Add explicit pydantic>=2.10.0 to orchestrator pyproject.toml (currently transitive only)
 2. Handle `class` field name conflict via Field(alias=class) with populate_by_name=True
+
+[[2026-03-30]] Mon 18:48
+## Test-Writer Notes
+- Umbrella/tracker task — TDD Exemption declared in body.
+- All AC items map 1:1 to subtask deliverables (#144, #145, #146) which each have their own TDD cycles.
+- No test file applicable. Passing through to builder.
+
+[[2026-03-30]] Mon 22:14
+## Builder Notes
+- Files changed: packages/orchestrator/src/owlbear/planner/gates.py (new), planner/selector.py (full impl), planner/__init__.py (gates+selector exports), tests/test_planner_gates_selector.py (fixed datetime.UTC import)
+- Tests: 73 passed, coverage 100% on gates.py and selector.py
+- Lint: ruff clean
+- Evidence: 73 passed in 0.20s, ruff all checks passed
+- AC pending: orchestrator loop in loop.py (depends on #146, still in backlog)
+
+[[2026-03-30]] Mon 23:03
+## Review Evidence
+See docs/scratch/20-reviewer.tmp for full evidence.
+
+[[2026-03-30]] Mon 23:04
+## Review Evidence (inline)
+
+### Test Results
+- pytest test_planner_gates_selector.py: 73 passed, 0 failed
+- pytest test_orchestrator_loop.py: 51 passed, 0 failed
+
+### Lint Results
+- ruff planner scope: All checks passed!
+
+### Subtask Status
+- #144: archived
+- #145: review (incomplete)
+- #146: todo (loop not built by builder yet)
+
+### AC Compliance
+
+| AC Line | Status |
+|---------|--------|
+| Planner subpackage + __init__.py | PASS |
+| planner.models (#144) | PASS |
+| planner.board read_board (#144) | PASS |
+| planner.gates exports (#145, 4 functions) | PASS (AC says 6 but #145 arch review revised to 4 - stale umbrella AC) |
+| planner.selector dual-key sort 20-cap | PASS |
+| STATUS_AGENT_MAP all 7 entries | PASS |
+| loop.py consumes DispatchPlan (#146) | FAIL - #146 in todo; orchestrate() absent; run_loop has critical bug |
+| All subtask tests pass including loop | FAIL - loop tests mask runtime bug via mocks |
+| Integration read_board/check_gates/select_tasks | PARTIAL - gates+selector work; loop broken |
+
+### PRIMARY FAIL: run_loop() incompatible select_tasks() call
+
+loop.py run_loop() calls:
+  select_tasks(tasks, crash_failures=state.crash_failures, stale_retried=state.stale_retried)
+
+selector.py select_tasks() signature is:
+  def select_tasks(tasks: list[Task]) -> DispatchPlan  (no kwargs)
+
+Runtime result: TypeError. Tests pass only because TestFromAC_RunLoop fully mocks select_tasks.
+#146 AC explicitly requires pre-filtering: select_tasks([t for t in tasks if t.id not in state.crash_failures])
+stale_retried must be logging-only, not passed as kwarg.
+
+### Secondary FAIL: Missing deliverables for #146
+1. orchestrate() function absent from loop.py
+2. run_loop() missing scope: str | None = None parameter (no scope forwarding to read_board)
+3. orchestrator/__init__.py empty - missing orchestrate, run_loop, assemble_waves, format_prompt, Wave, LoopState, CycleResult exports
+
+### Verdict: FAIL confidence .40 - back to todo until #146 is complete and bugs fixed
+
+-t

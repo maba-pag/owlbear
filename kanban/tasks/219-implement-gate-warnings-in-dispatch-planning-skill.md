@@ -4,7 +4,7 @@ title: Implement gate_warnings in dispatch-planning SKILL.md
 status: archived
 priority: needed
 created: 2026-03-30T15:16:54.6204067+02:00
-updated: 2026-03-30T21:16:40.4606+02:00
+updated: 2026-03-30T21:17:04.1086541+02:00
 started: 2026-03-30T21:16:12.9740559+02:00
 completed: 2026-03-30T21:16:12.9740559+02:00
 tags:
@@ -134,3 +134,9 @@ Specific, complete AC with exact types, locations, format specs. Architect refin
 ### Deduction breakdown: none (all 10 AC items verified, no lint issues, AC quality 5, reviewer evidence present, no in-scope test failures)
 ### Confidence: 1.00
 ### Action: archived
+
+[[2026-03-30]] Mon 21:17
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 556f1b3 | chore | kanban/tasks/219-*.md | #219 |

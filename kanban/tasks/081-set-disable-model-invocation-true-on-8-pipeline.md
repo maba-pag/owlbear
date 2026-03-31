@@ -1,16 +1,16 @@
 ---
 id: 81
 title: 'Set disable-model-invocation: true on 8 pipeline agents'
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-27T04:51:29.8169691+01:00
-updated: 2026-03-29T16:08:42.9354529+02:00
+updated: 2026-03-30T15:36:00.4215703+02:00
+started: 2026-03-30T15:18:47.5101141+02:00
+completed: 2026-03-30T15:18:47.5101141+02:00
 tags:
     - phase-1
     - scope:agents
     - type:build
-blocked: true
-block_reason: 'Duplicate: all 3 AC lines already satisfied by #38 pipeline (commits 692e3cb, 3294d29). Flag live in all 8 agents, tests committed. Recommend archival.'
 class: standard
 ---
 
@@ -148,3 +148,5 @@ This task is a duplicate. Recommend archival.
 - Tests exist: tests/test_disable_model_invocation.py (committed, 692e3cb)
 - System working: architect agent (one of the 8) running successfully via subagent invocation
 - copilot-instructions.md line 101 documents the flag as active convention
+
+## Audit (manual archival 2026-03-30) Duplicate of #38 (archived). Flag present in all 8 agents, 47 tests passing. Confidence 1.0.

@@ -4,7 +4,7 @@ title: Expand validate_agents.py to check all tool names against canonical regis
 status: archived
 priority: nice-to-have
 created: 2026-03-29T23:08:48.2138586+02:00
-updated: 2026-03-31T03:30:46.9682363+02:00
+updated: 2026-03-31T03:31:19.8161154+02:00
 started: 2026-03-31T03:30:11.3180275+02:00
 completed: 2026-03-31T03:30:11.3180275+02:00
 tags:
@@ -203,3 +203,10 @@ Specific, testable AC with 8 verifiable lines. Minor gap: soft dependency on #19
 
 ### Quality gap noted
 Test-writer retry did not commit scoped assertion fix to test_todo_prefix_substring_does_not_trigger. Uncommitted change is legitimate and tests pass. Committed as leftovers by auditor.
+
+[[2026-03-31]] Tue 03:31
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 35828d1 | test | tests/test_validate_agents.py | #198 |
+| f798485 | chore | kanban/tasks/198-*.md | #198 |

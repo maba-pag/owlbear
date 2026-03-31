@@ -4,7 +4,7 @@ title: 'Test: AcpClient wrapper forwards required SDK parameters'
 status: archived
 priority: needed
 created: 2026-03-29T20:03:34.5436669+02:00
-updated: 2026-03-30T16:58:48.9139412+02:00
+updated: 2026-03-30T16:59:07.7049845+02:00
 started: 2026-03-30T16:58:48.4594263+02:00
 completed: 2026-03-30T16:58:48.4594263+02:00
 tags:
@@ -133,3 +133,8 @@ No untested branches for the SDK forwarding paths.
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/181-* files found)
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| dead0a4 | chore | kanban/tasks/181-*.md | #181 |

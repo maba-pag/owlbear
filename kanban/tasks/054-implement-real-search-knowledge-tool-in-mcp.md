@@ -4,7 +4,7 @@ title: Implement real search_knowledge tool in mcp-knowledge
 status: archived
 priority: needed
 created: 2026-03-26T19:12:42.1178047+01:00
-updated: 2026-03-30T22:56:24.7196789+02:00
+updated: 2026-03-30T22:56:49.2354676+02:00
 started: 2026-03-30T22:56:17.0864873+02:00
 completed: 2026-03-30T22:56:17.0864873+02:00
 tags:
@@ -310,3 +310,7 @@ Original AC had wrong API ref. Architect caught and rewrote in cycle 1. Cycle 2 
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 22:56
+## Commits
+e6ade99 chore: archive task #54 (kanban/tasks/054-*.md)

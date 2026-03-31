@@ -1,15 +1,15 @@
 ---
 id: 49
 title: Implement voice addon stdio protocol
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-26T18:57:17.0081341+01:00
-updated: 2026-03-26T21:48:50.046281+01:00
+updated: 2026-03-30T15:35:59.9682199+02:00
+started: 2026-03-30T15:31:30.839261+02:00
+completed: 2026-03-30T15:31:30.839261+02:00
 tags:
     - phase-3
     - scope:voice
-blocked: true
-block_reason: 'Superseded by decomposition into #61, #62, #63. Original scope bundles 3 responsibilities. See Architecture Review in task body.'
 class: standard
 ---
 
@@ -70,3 +70,5 @@ Implicit dependency: No packages/ directory exists yet. Task #7 (monorepo skelet
 - #63 (VoiceChannel adapter): ideation
 - #52 (package scaffold): backlog, depends_on #7
 - #7 (monorepo skeleton): ideation
+
+## Audit (manual archival 2026-03-30) Superseded by decomposition into #61, #62, #63. Architect confirmed. Confidence 1.0.

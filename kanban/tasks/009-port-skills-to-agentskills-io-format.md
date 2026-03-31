@@ -1,18 +1,18 @@
 ---
 id: 9
 title: Port skills to agentskills.io format
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-26T17:19:53.9934892+01:00
-updated: 2026-03-29T14:27:02.6203361+02:00
+updated: 2026-03-30T15:35:58.7489671+02:00
+started: 2026-03-30T15:18:45.9928034+02:00
+completed: 2026-03-30T15:18:45.9928034+02:00
 tags:
     - phase-1
     - scope:skills
     - type:build
 depends_on:
     - 3
-blocked: true
-block_reason: 'Superseded: all AC items completed by organic work and tasks #3, #42, #44, #79, #117. No remaining actionable work. Recommend closing as superseded.'
 class: standard
 ---
 
@@ -91,3 +91,5 @@ No remaining actionable work exists for a builder. Recommend closing as supersed
 ### Dependencies
 - Depends-on #3: archived (satisfied)
 - No downstream tasks depend on #9
+
+## Audit (manual archival 2026-03-30) Superseded: all 22 skills ported organically. Superseding tasks #3, #42, #79, #117 all archived. Confidence 1.0.

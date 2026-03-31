@@ -4,7 +4,7 @@ title: Validate multi-project setup in VS Code (manual)
 status: in-progress
 priority: important
 created: 2026-03-29T19:49:30.9245641+02:00
-updated: 2026-03-30T08:43:53.5525497+02:00
+updated: 2026-03-30T19:04:44.6671219+02:00
 tags:
     - phase-2
     - scope:build
@@ -156,3 +156,13 @@ Human executor must: (1) create test-project/ sibling directory, (2) execute all
 - AC9 DEFERRED: test-project/ left in place so human can open it in VS Code to verify AC2, AC3, AC4, AC6, AC8. Human executor must clean up after verification.
 - STATUS: 3 of 9 AC items verified programmatically. 5 items require VS Code UI interaction that AI agents cannot perform.
 - HANDOFF: Human executor must: (1) open test-project/ in VS Code, (2) verify AC2 agent picker, (3) verify AC3 skills, (4) verify AC4 Diagnostics, (5) verify AC6 References, (6) verify AC8 no shadowing, (7) document findings here, (8) clean up test-project/, (9) move task to review.
+
+[[2026-03-30]] Mon 19:04
+## Builder Notes (session 3)
+- Files changed: none (manual validation task)
+- AC1 PASS: test-project/ verified still in place at C:\Users\p362329\Coding\Projects\test-project with all expected files (.vscode/settings.json maps agents/skills/instructions to ../owlbear, .vscode/mcp.json has 4 servers, .github/copilot-instructions.md, kanban/, owlbear-project.json)
+- AC5 PASS: owlbear-kanban MCP list_tasks confirmed operational in this session (returned 14 in-progress tasks)
+- AC7 PASS: test-project/.github/agents/test-agent.agent.md exists with correct YAML frontmatter (name: Test Agent, description set)
+- settings.json correctness: chat.agentFilesLocations, chat.agentSkillsLocations, chat.instructionsFilesLocations all pointing to ../owlbear
+- mcp.json correctness: all 4 servers (github, owlbearKanban, owlbearKnowledge, owlbearProject) configured
+- REMAINING (requires VS Code UI - human must complete): AC2 (agent picker), AC3 (skills menu), AC4 (Diagnostics view), AC6 (References section), AC8 (no agent shadowing), AC9 (cleanup after verification)

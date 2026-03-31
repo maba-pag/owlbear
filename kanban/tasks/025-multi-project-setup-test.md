@@ -1,10 +1,12 @@
 ---
 id: 25
 title: Multi-project setup test
-status: ideation
+status: archived
 priority: important
 created: 2026-03-26T17:23:32.2827073+01:00
-updated: 2026-03-30T01:22:46.6895368+02:00
+updated: 2026-03-30T15:35:59.5696133+02:00
+started: 2026-03-30T15:18:47.0201355+02:00
+completed: 2026-03-30T15:18:47.0201355+02:00
 tags:
     - phase-2
     - scope:build
@@ -12,8 +14,6 @@ tags:
 depends_on:
     - 12
     - 18
-blocked: true
-block_reason: 'Fully superseded: AC covered by #12 (tests), #167 (manual validation), #169 (docs). Auditor should archive.'
 class: standard
 ---
 
@@ -79,3 +79,5 @@ No remaining work exists for this task. All successor tasks are created and trac
 - Verified: #167 (manual validation) ideation
 - Verified: #169 (documentation) archived
 - Verified: #175 archived as duplicate of #169
+
+## Audit (manual archival 2026-03-30) Superseded: decomposed into #12 (archived), #167 (in-progress), #169 (archived). No own work remains. Confidence .97.

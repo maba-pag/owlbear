@@ -1,15 +1,15 @@
 ---
 id: 149
 title: Add GraphStore.get_counts() method
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-29T19:04:04.6269412+02:00
-updated: 2026-03-29T20:02:30.1269831+02:00
+updated: 2026-03-30T15:36:01.6512542+02:00
+started: 2026-03-30T15:18:49.0518667+02:00
+completed: 2026-03-30T15:18:49.0518667+02:00
 tags:
     - phase-1
     - scope:knowledge
-blocked: true
-block_reason: 'Already implemented: get_counts() exists in graph_store.py with 9 passing tests. Task is redundant, recommend archiving.'
 class: standard
 ---
 
@@ -34,3 +34,5 @@ GraphStore.get_counts() already exists in packages/knowledge/src/owlbear_knowled
 - `uv run pytest packages/knowledge/tests/test_graph_store_counts.py -q`: 9 passed in 0.41s
 - Method signature: `def get_counts(self) -> tuple[int, int, int]`
 - Implementation: 3x SQL COUNT queries, returns (doc_count, entity_count, edge_count)
+
+## Audit (manual archival 2026-03-30) Already implemented: get_counts() at graph_store.py L420-434, 9 tests passing. Confidence 1.0.

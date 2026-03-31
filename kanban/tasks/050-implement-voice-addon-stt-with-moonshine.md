@@ -4,15 +4,13 @@ title: Implement voice addon STT with Moonshine
 status: todo
 priority: nice-to-have
 created: 2026-03-26T18:57:23.8838546+01:00
-updated: 2026-03-29T20:17:31.5019238+02:00
+updated: 2026-03-30T23:17:56.7186006+02:00
 tags:
     - phase-3
     - scope:voice
 depends_on:
     - 52
     - 61
-blocked: true
-block_reason: 'TestFromAC_ThreadSafeStdout tests use monkeypatch.setattr(sys.stdout, ''buffer'', ...) which raises AttributeError: readonly attribute on Python 3.12. Test-writer must fix by using patch.object(stt_module, ''sys'', mock_sys) pattern instead.'
 class: standard
 ---
 
@@ -68,3 +66,13 @@ Implicit blocker chain: #50 requires #52 (package scaffold) requires #7 (monorep
 - Added: #52 (owlbear-voice package scaffold)
 - Added: #61 (voice protocol Pydantic models)
 - Verified implicit chain: #52 requires #7 (monorepo skeleton, ideation)
+
+[[2026-03-30]] Mon 18:12
+## Test-Writer Notes
+- Test file: tests/test_voice_stt.py
+- Classes: TestFromAC_SttRunnerClass, TestFromAC_LazyMicTranscriberCreation, TestFromAC_SttRunnerConstructorParams, TestFromAC_TranscriptJsonListenerStructure, TestFromAC_NdjsonOutput, TestFromAC_ThreadSafeStdout, TestFromAC_OnErrorLogsToStderr, TestFromAC_StatusReadyMessage, TestFromAC_StopDelegatesToMicTranscriber, TestFromAC_CloseIdempotency, TestFromAC_ImportErrorWhenMissingMoonshine
+- Tests per category: happy 14, edge 8, error 7, boundary 7
+- Total: 36 tests, 36 PASS (pre-existing implementation)
+- ruff: clean
+- Note: stt.py was pre-implemented prior to RED phase. Test file existed from prior incomplete pass with 2 broken tests in TestFromAC_ThreadSafeStdout (monkeypatching sys.stdout.buffer which is readonly under pytest). Fixed to use patch.object on owlbear_voice.stt.sys binding, matching captured_stdout fixture approach.
+- AC coverage: all 11 AC lines covered (AC1-SttRunner lifecycle, AC2-lazy init, AC3-constructor kwargs, AC4-TranscriptJsonListener MRO, AC5-NDJSON types, AC6-thread safety, AC7-stderr logging, AC8-status ready, AC9-stop delegation, AC10-close idempotency, AC11-ImportError guard)

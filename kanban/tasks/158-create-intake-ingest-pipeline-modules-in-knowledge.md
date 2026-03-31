@@ -4,7 +4,7 @@ title: Create intake + ingest pipeline modules in knowledge package
 status: archived
 priority: needed
 created: 2026-03-29T19:35:58.8584239+02:00
-updated: 2026-03-30T23:39:15.2743747+02:00
+updated: 2026-03-30T23:39:56.0860205+02:00
 started: 2026-03-30T23:39:07.8257019+02:00
 completed: 2026-03-30T23:39:07.8257019+02:00
 tags:
@@ -176,3 +176,9 @@ No deductions. All AC lines verified with evidence, ruff clean, no task-scope fa
 
 ### Confidence: 1.0
 ### Action: archive
+
+[[2026-03-30]] Mon 23:39
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3fb643c | chore | kanban/tasks/158-*.md | #158 |

@@ -1,10 +1,10 @@
 ---
 id: 145
 title: Implement planner gate checker and task selector
-status: todo
+status: review
 priority: needed
 created: 2026-03-29T16:23:38.8707663+02:00
-updated: 2026-03-30T08:23:55.8856413+02:00
+updated: 2026-03-30T22:57:36.2431824+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -104,3 +104,42 @@ See docs/research/build-dispatch-planner.md S3.5 for parent design.
 - Verified: #144 (planner data models + board reader) in review, code exists
 - Added: #207 (TDD RED tests) at todo, #145 depends on it
 - Verified: #20 (umbrella) depends on #145, unaffected
+
+[[2026-03-30]] Mon 18:46
+## Test-Writer Notes
+- Test file: tests/test_planner_gates_selector.py
+- Classes: TestFromAC_GateChecker, TestFromAC_TaskSelector, TestFromAC_PlannerInit
+- Tests per category: happy 28, edge 14, error 22, boundary 9
+- Total: 73 tests, all FAIL (ImportError: No module named 'owlbear.planner.gates') v
+- ruff: clean
+- AC coverage:
+  check_atomicity: word-boundary regex heuristic (happy + error + edge for embedded 'and')
+  check_tdd: in-progress without Test-Writer Notes returns False; all other statuses True
+  check_clarity: todo/in-progress/review/docs/done require bullet or numbered AC; ideation/backlog exempt
+  check_gates: composite AND of all three predicates
+  PRIORITY_RANK: 5 keys, critical=0 lowest rank, someday=4 highest rank
+  STATUS_RANK: 7 keys, done=0 closest to pipeline end, ideation=6 farthest
+  STATUS_AGENT_MAP: all 7 status-to-agent mappings verified
+  DISPATCH_CAP: constant equals 20
+  select_tasks: gate filtering, dual-key sort, dispatch cap, DECOMP routing override, unknown fallback
+  __init__.py: all 7 symbols importable from owlbear.planner
+
+-t
+
+[[2026-03-30]] Mon 18:47
+## Test-Writer Notes
+- Test file: tests/test_planner_gates_selector.py
+- Classes: TestFromAC_GateChecker, TestFromAC_TaskSelector, TestFromAC_PlannerInit
+- Tests per category: happy 28, edge 14, error 22, boundary 9
+- Total: 73 tests, all FAIL (ImportError: owlbear.planner.gates not found)
+- ruff: clean
+- AC coverage: check_atomicity word-boundary regex; check_tdd in-progress gate; check_clarity bullet/numbered-list gate; check_gates composite; PRIORITY_RANK 5 keys; STATUS_RANK 7 keys; STATUS_AGENT_MAP 7 entries; DISPATCH_CAP=20; select_tasks filtering/sort/cap/DECOMP/fallback; __init__.py 7 exports
+
+[[2026-03-30]] Mon 22:57
+## Builder Notes
+- Files: packages/orchestrator/src/owlbear/planner/gates.py, selector.py, __init__.py
+- Implementation already committed in 4ae80df (feat: implement planner gates and task selector, #20, builder)
+- Tests: 73 passed (TestFromAC_GateChecker, TestFromAC_TaskSelector, TestFromAC_PlannerInit)
+- Coverage: gates.py 100%, selector.py 100%, models.py 100%, __init__.py 100%
+- Lint: ruff clean
+- No code changes needed

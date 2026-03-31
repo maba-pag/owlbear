@@ -4,7 +4,7 @@ title: Build mock ACP agent for E2E testing
 status: archived
 priority: needed
 created: 2026-03-29T19:33:50.5555158+02:00
-updated: 2026-03-30T15:29:05.3080615+02:00
+updated: 2026-03-30T15:29:40.6471037+02:00
 started: 2026-03-30T15:29:04.9118616+02:00
 completed: 2026-03-30T15:29:04.9118616+02:00
 tags:
@@ -174,3 +174,9 @@ See docs/research/e2e-dispatch-test.md S3.4 for the mock agent pattern from ACP 
 - -.02 missing Review Evidence section in task body
 ### Confidence: .98
 ### Action: archive
+
+[[2026-03-30]] Mon 15:29
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 48d5043 | chore | kanban/tasks/155-*.md | #155 |
