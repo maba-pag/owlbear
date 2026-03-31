@@ -1,17 +1,17 @@
 ---
 id: 385
 title: Mandatory user-decision gate for research-driven features and architectural changes
-status: docs
+status: archived
 priority: critical
 created: 2026-03-30T20:56:31.6511501+02:00
-updated: 2026-03-31T07:39:39.3160461+02:00
+updated: 2026-03-31T08:38:16.775382+02:00
+started: 2026-03-31T08:38:13.0954315+02:00
+completed: 2026-03-31T08:38:13.0954315+02:00
 tags:
     - research
     - ' scope:agents'
     - ' process'
     - ' quality'
-claimed_by: writer
-claimed_at: 2026-03-31T07:39:39.3160461+02:00
 class: standard
 ---
 
@@ -97,3 +97,70 @@ Verified gaps exist in current files: decision-requests skill has no impact_tier
 ## Builder Notes
 - Non-implementation task — no code changes needed.
 - Passing through to review.
+
+[[2026-03-31]] Tue 07:53
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Pure design task; implementation in follow-ups #459-#462 |
+| 2 | Python docstrings | No | N/A | No Python modules changed |
+| 3 | docs/sources/overview.md | Yes | Updated | Duplicate simpler section (line 2551) removed; complete entry at line 3387 retained; not committed in isolation due to other tasks uncommitted changes in same file |
+| 4 | README.md CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/mandatory-user-decision-gate.md exists and linked |
+
+### Files Updated
+- docs/sources/overview.md (duplicate section removed)
+
+### Scratch Files Cleaned
+- None
+
+[[2026-03-31]] Tue 07:54
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Pure design task; T1/T2/T3 implementation in follow-ups #459-#462 |
+| 2 | Python docstrings | No | N/A | No Python modules changed |
+| 3 | docs/sources/overview.md | Yes | Updated | Duplicate simpler entry (line 2551) removed; complete entry at line 3387 retained |
+| 4 | README.md CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/mandatory-user-decision-gate.md exists and linked |
+
+### Files Updated
+- docs/sources/overview.md (duplicate section removed; not committed in isolation due to other uncommitted changes in same file from other tasks)
+
+### Scratch Files Cleaned
+- None (no 385-* scratch files found)
+
+[[2026-03-31]] Tue 08:38
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Audit decision-request workflow gaps | Research doc S3: 5 gaps (G1-G5) identified | PASS |
+| Determine mandatory vs autonomous outcomes | Research doc S4: deterministic T3 triggers (6 factual conditions) | PASS |
+| Design classification system | Research doc S4: T1/T2/T3 tiers with deterministic triggers | PASS |
+| Propose researcher agent changes | Research doc S6 C2+C3 | PASS |
+| Propose architect agent changes | Research doc S6 C4 | PASS |
+| Address 5-day auto-timeout | Research doc S5 Option A selected (T2 keeps 5d, T3 blocks indefinitely) | PASS |
+| Create decision request | docs/decisions/resolved/385-research-outcome-classification.md approved: true | PASS |
+| Create follow-up tasks at ideation | #459, #460, #461, #462 all created and progressed through pipeline | PASS |
+
+### Research Task Checklist
+- Research doc exists: docs/research/mandatory-user-decision-gate.md (committed 5e96e18)
+- Decision request approved: docs/decisions/resolved/385-research-outcome-classification.md
+- Follow-up tasks reference research doc: all 4 verified
+- Follow-up tasks created: #459 (done), #460 (done), #461 (done), #462 (archived)
+
+### Test Results
+- pytest: 1927 passed, 267 failed, 1 error (all failures from other tasks, none in #385 scope)
+- ruff: N/A (no Python code produced)
+
+### AC Quality Score: 5/5
+8 specific, verifiable AC items. No improvisation needed by downstream agents.
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section (no Review Evidence in task body)
+
+### Confidence: .98
+### Action: archive
