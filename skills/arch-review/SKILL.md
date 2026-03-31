@@ -97,6 +97,46 @@ and general architectural principles:
     frontmatter `approved: true`. If none exists, note the gap and apply the T3 research
     block path in Step 4. Skip this check for tasks with no research reference.
 
+## Step 3.5 — Challenge proposed verdict
+
+Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using the Challenger subagent.
+
+**Trigger conditions:**
+
+| Proposed verdict | Challenge? |
+|-----------------|------------|
+| APPROVE | **Mandatory** |
+| REFINE | Optional (architect's judgment) |
+| SPLIT | Skip |
+| BLOCK | Skip |
+
+**Prompt construction:** Use `runSubagent` with `agentName: "challenger"`, passing these 6 fields in the prompt text:
+
+| Field | Value |
+|-------|-------|
+| `task_id` | The dispatched task ID |
+| `proposed_verdict` | Your Step 3 conclusion (APPROVE or REFINE) |
+| `reasoning` | Your Step 3 evaluation summary |
+| `ac_lines` | The refined AC being approved |
+| `codebase_evidence` | Files examined and patterns found (Step 2 findings) |
+| `research_doc` | Task body reference to `docs/research/*.md` if present; omit if none |
+
+**Integration protocol:**
+
+| Challenger output | Architect action |
+|-------------------|------------------|
+| `proceed` + confidence ≥ .80 | Continue with original verdict. Note challenge results in body. |
+| `reconsider` OR confidence < .80 | Re-evaluate. May revise AC, change verdict, or justify override with rebuttal. |
+| `block` | Strong signal to move task to ideation. Must provide rebuttal if overriding. |
+
+**Architect retains final authority.** The Challenger advises only — never decides.
+
+**Sequential fallback:** If `runSubagent` errors (timeout, tool error, malformed response):
+
+1. Proceed without challenge
+2. Note in Challenge Results: `Challenge: FALLBACK — {error reason}`
+3. No verdict change required — the architect's own analysis stands
+
 ## Step 4 — Decide and act
 
 | Verdict     | When                              | Action                                                                  |

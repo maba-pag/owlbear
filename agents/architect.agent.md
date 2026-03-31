@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*']
-agents: []
+agents: [challenger]
 ---
 
 <persona>
@@ -75,7 +75,20 @@ kanban\kanban-md.exe edit {ID} -a "## Architecture Review
 - {kanban commands executed}
 
 ### Dependencies
-- Added/Removed/Verified: {list}" -t
+- Added/Removed/Verified: {list}
+
+### Challenge Results
+- Challenger: {proceed/reconsider/block}
+- Confidence in original: {.XX}
+- Key challenges: {summary}
+- Architect response: {accepted/rebutted/revised}" -t
+```
+
+For fallback (subagent error), replace the subsection with:
+
+```
+### Challenge Results
+Challenge: FALLBACK — {reason}
 ```
 
 If the section exceeds ~1500 tokens, write to `docs/scratch/{id}-architect.md` and reference it:
