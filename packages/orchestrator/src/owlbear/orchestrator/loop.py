@@ -15,12 +15,24 @@ from owlbear.orchestrator.waves import Wave, assemble_waves
 from owlbear.planner.board import read_board
 from owlbear.planner.selector import select_tasks
 from owlbear_orchestrator.acp_client import AcpClient, AcpClientError
+from owlbear_orchestrator.process_supervisor import ProcessSupervisor
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear.audit import AuditLog
     from owlbear.planner.models import DispatchEntry
+
+try:
+    from acp import PROTOCOL_VERSION, Client, connect_to_agent
+except ImportError:  # pragma: no cover
+    PROTOCOL_VERSION = "2025-02-14"  # type: ignore[assignment]
+    Client = object  # type: ignore[assignment,misc]
+    connect_to_agent = None  # type: ignore[assignment]
+
+
+class _OrchestratorClient(Client):  # type: ignore[misc]
+    """Minimal concrete ACP Client used by the orchestrator dispatch loop."""
 
 # Prompt prefix per agent type.  Used by format_prompt() to build dispatch prompts.
 AGENT_PROMPT_PREFIX: dict[str, str] = {
@@ -259,12 +271,13 @@ async def dispatch_wave(
     return CycleResult(successes=successes, failures=failures, rate_limited=rate_limited)
 
 
-async def run_loop(
+async def run_loop(  # noqa: PLR0913
     kanban_bin: Path,
     kanban_dir: Path,
     client: AcpClient,
     *,
     wave_size: int = 4,
+    scope: str | None = None,
     audit_log: AuditLog | None = None,
 ) -> None:
     """Run the orchestrator dispatch loop until the board is empty.
@@ -274,13 +287,14 @@ async def run_loop(
         kanban_dir: Path to the kanban directory.
         client: ACP client for dispatching agents.
         wave_size: Maximum entries per dispatch wave.
+        scope: Optional tag filter forwarded to read_board().
         audit_log: Optional audit logger injected into each dispatch.
     """
     state = LoopState()
 
     while True:
         state.cycle += 1
-        tasks = await read_board(kanban_bin=kanban_bin, kanban_dir=kanban_dir)
+        tasks = await read_board(kanban_bin=kanban_bin, kanban_dir=kanban_dir, scope=scope)
         plan = select_tasks(
             tasks,
             crash_failures=state.crash_failures,
@@ -302,3 +316,60 @@ async def run_loop(
             cycle_failures |= set(result.failures)
 
         state.crash_failures = cycle_failures
+
+
+async def orchestrate(  # noqa: PLR0913
+    kanban_bin: Path,
+    kanban_dir: Path,
+    *,
+    copilot_cmd: list[str] | None = None,
+    client: AcpClient | None = None,
+    scope: str | None = None,
+    wave_size: int = 4,
+    audit_log: AuditLog | None = None,
+) -> None:
+    """Top-level entry point: wire infrastructure and run the dispatch loop.
+
+    When ``client`` is provided, uses it directly and skips subprocess setup.
+    When ``copilot_cmd`` is provided, constructs a ProcessSupervisor, spawns
+    the ACP subprocess, initialises the connection, then delegates to run_loop().
+
+    Args:
+        kanban_bin: Path to the kanban-md binary.
+        kanban_dir: Path to the kanban directory.
+        copilot_cmd: Command to spawn the Copilot ACP subprocess.
+        client: Pre-built AcpClient (bypasses subprocess setup when provided).
+        scope: Optional tag filter forwarded to read_board().
+        wave_size: Maximum entries per dispatch wave.
+        audit_log: Optional audit logger injected into dispatch.
+    """
+    if client is not None:
+        await run_loop(
+            kanban_bin=kanban_bin,
+            kanban_dir=kanban_dir,
+            client=client,
+            wave_size=wave_size,
+            scope=scope,
+            audit_log=audit_log,
+        )
+        return
+
+    if copilot_cmd is None:  # pragma: no cover
+        msg = "Either client or copilot_cmd must be provided"
+        raise ValueError(msg)
+
+    async with ProcessSupervisor(copilot_cmd) as supervisor:
+        stdin, stdout = await supervisor.ensure_running()
+        client_impl = _OrchestratorClient()
+        conn = connect_to_agent(client_impl, stdin, stdout)
+        await conn.initialize(protocol_version=PROTOCOL_VERSION)
+        acp_client = AcpClient(conn)
+        await run_loop(
+            kanban_bin=kanban_bin,
+            kanban_dir=kanban_dir,
+            client=acp_client,
+            wave_size=wave_size,
+            scope=scope,
+            audit_log=audit_log,
+        )
+        supervisor.mark_healthy()

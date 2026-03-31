@@ -53,7 +53,12 @@ _TARGET_STATUS: dict[str, str] = {
 }
 
 
-def select_tasks(tasks: list[Task]) -> DispatchPlan:
+def select_tasks(
+    tasks: list[Task],
+    *,
+    crash_failures: set[int] | None = None,
+    stale_retried: set[int] | None = None,  # noqa: ARG001
+) -> DispatchPlan:
     """Select dispatchable tasks and return a dispatch plan.
 
     Filters tasks through check_gates(), applies DECOMP routing override,
@@ -62,8 +67,14 @@ def select_tasks(tasks: list[Task]) -> DispatchPlan:
 
     Unknown priority or status keys receive a fallback rank that sorts them
     to the end of the list while still including them in the plan.
+
+    Args:
+        tasks: Full task list from the board reader.
+        crash_failures: Task IDs that crashed in the previous cycle (pre-filtered out).
+        stale_retried: Task IDs already retried for staleness (informational, unused).
     """
-    passing = [t for t in tasks if check_gates(t)]
+    exclude = crash_failures or set()
+    passing = [t for t in tasks if check_gates(t) and t.id not in exclude]
 
     def _sort_key(task: Task) -> tuple[int, int]:
         prank = PRIORITY_RANK.get(task.priority, _MAX_PRIORITY_RANK + 1)
