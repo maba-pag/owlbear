@@ -2,12 +2,92 @@
 
 External repos and resources studied during OwlBear development.
 
+## deer-flow Memory + Subagent Deep Dive (Task #428)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| deer-flow repo (v2, Apache-2.0) | github.com/bytedance/deer-flow | Memory system (updater, queue, storage, prompt, middleware) and subagent system (executor, registry, config, task_tool, SubagentLimitMiddleware) — full source analysis | docs/research/deer-flow-memory-subagent-deep-dive.md | 2026-03-31 |
+
+## KANBAN_TOOLS_EXCLUDE Config (Task #473)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP v1.26.0 server.py | Installed: `.venv/Lib/site-packages/mcp/server/fastmcp/server.py` | `remove_tool(name) -> None` public API, raises ToolError on unknown | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+| FastMCP tool_manager.py | Installed: `.venv/Lib/site-packages/mcp/server/fastmcp/tools/tool_manager.py` | `remove_tool` implementation and ToolError exception | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+| OwlBear mcp-kanban server | `packages/mcp-kanban/src/owlbear_mcp_kanban/server.py` | KANBAN_BIN env read pattern (in lifespan), tool registration via decorators | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+
+## Switch move/pick to JSON, Remove board_context (Task #477)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| kanban-md v0.33.0 CLI help | Local binary (`kanban-md move --help`, `pick --help`) | Confirmed `--json` global flag support for move and pick commands | docs/research/move-pick-json-remove-board-context.md | 2026-03-31 |
+| kanban-md JSON schemas | `skills/kanban-md/references/json-schemas.md` | Task object schema returned by `--json` flag | docs/research/move-pick-json-remove-board-context.md | 2026-03-31 |
+| MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | outputSchema, structuredContent, ToolAnnotations spec definitions | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 types + func_metadata | Installed package `.venv/Lib/site-packages/mcp/` | ToolAnnotations class, Tool.outputSchema field, FastMCP structured_output auto-detection | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
+| mcp-knowledge server ToolAnnotations usage | `packages/mcp-knowledge/src/.../server.py` | Existing annotation pattern (readOnlyHint=True/False) as implementation precedent | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
+
+## create_task Status/Parent/JSON (Task #475)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| kanban-md v0.33.0 `create --help` | Local binary | `--status`, `--parent`, `--json` flag availability and types | docs/research/create-task-status-parent-json.md | 2026-03-31 |
+| Modernize list_tasks research (#472) | docs/research/modernize-list-tasks.md | JSON output design precedent, lean JSON approach | docs/research/create-task-status-parent-json.md | 2026-03-31 |
+| FastMCP `func_metadata.py` | Installed: `.venv/.../mcp/server/fastmcp/utilities/func_metadata.py` | outputSchema auto-detection from return type annotations | docs/research/create-task-status-parent-json.md | 2026-03-31 |
+| MCP Python SDK `mcp.types` | Installed: `.venv/.../mcp/types.py` L1310-1380 | Tool.outputSchema, CallToolResult.structuredContent definitions | docs/research/create-task-status-parent-json.md | 2026-03-31 |
+| outputSchema research (#477) | docs/research/mcp-kanban-outputschema-annotations.md | KanbanTask model design, ToolError error handling pattern | docs/research/create-task-status-parent-json.md | 2026-03-31 |
+
+## edit_task dep/parent/title/JSON (Task #476)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| kanban-md CLI v0.33.0 help | (local binary) | `edit --help` flag verification for --add-dep, --remove-dep, --parent, --title, --json | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
+| Existing expand-mcp-kanban research (#56) | docs/research/expand-mcp-kanban-tools.md | Prior gap analysis identifying missing edit params | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 README | https://github.com/modelcontextprotocol/python-sdk | Structured output patterns: TypedDict, Pydantic, dict return types; outputSchema auto-detection | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
+| MCP Python SDK mcp.types module | (installed package: mcp.types L1310-1380) | Tool.outputSchema and CallToolResult.structuredContent field definitions | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
+
+## end_work Compound Tool (Task #471)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP Tools docs | https://gofastmcp.com/servers/tools | Literal type support, ToolError, async patterns, structured output | docs/research/end-work-compound-tool.md | 2026-03-31 |
+| MCP Spec — Tools | https://modelcontextprotocol.io/specification/2025-03-26/server/tools | Tool design patterns, error reporting model | docs/research/end-work-compound-tool.md | 2026-03-31 |
+
+## ToolAnnotations for mcp-kanban (Task #494)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | ToolAnnotations spec: readOnlyHint, destructiveHint, idempotentHint defaults | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 mcp.types | Installed: `.venv/Lib/site-packages/mcp/types.py` L1247-1300 | ToolAnnotations class definition and field defaults | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
+| mcp-knowledge server ToolAnnotations | `packages/mcp-knowledge/src/.../server.py` | Existing annotation pattern as implementation reference | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
+| mcp-knowledge annotation tests | `packages/mcp-knowledge/tests/test_ingest_graph_tools.py` L630-680 | `_get_tool_annotations()` test helper pattern | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
+
+## Modernize list_tasks (Task #472)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP tool registration docs | https://gofastmcp.com/servers/fastmcp#tools | Tool parameter typing conventions for Optional[bool] tri-state | docs/research/modernize-list-tasks.md | 2026-03-31 |
+| Python typing.Optional docs | https://docs.python.org/3/library/typing.html#typing.Optional | Optional[bool] tri-state pattern reference | docs/research/modernize-list-tasks.md | 2026-03-31 |
+
+## start_work Compound Tool (Task #470)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Python SDK (FastMCP) | https://github.com/modelcontextprotocol/python-sdk | `@mcp.tool()` decorator patterns, return types, compound tool feasibility | docs/research/start-work-compound-tool.md | 2026-03-31 |
+| FastMCP Tools docs | https://gofastmcp.com/servers/tools | Tool arguments, structured output, error handling patterns | docs/research/start-work-compound-tool.md | 2026-03-31 |
+
 ## Recipe 0 Tier-Aware Auto-Resolution (Task #464)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Per-environment wait-timers: production has required-reviewers with no auto-bypass, staging has wait-timers — validates tier-differentiated auto-resolve | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
 | AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | UserProxyAgent blocks indefinitely until user responds — validates indefinite T3 blocking in single-user system | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
+
+## KANBAN_TOOLS_EXCLUDE Config (Task #473)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP v1.x server.py | https://github.com/modelcontextprotocol/python-sdk/blob/v1.x/src/mcp/server/fastmcp/server.py | `remove_tool(name)` public API for post-registration tool removal | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+| MCP Python SDK README | https://github.com/modelcontextprotocol/python-sdk | `@mcp.tool()` registration pattern, lifespan conventions | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
 
 ## Impact-Tier Decision Requests (Task #459)
 
@@ -466,16 +546,6 @@ External repos and resources studied during OwlBear development.
 | VS Code agent skills docs | <https://code.visualstudio.com/docs/copilot/customization/agent-skills> | CC-BY-4.0 | agentSkillsLocations setting, skill discovery mechanisms | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
 | VS Code MCP configuration reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | stdio server config, MCP: List Servers command, troubleshooting steps | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
 | VS Code troubleshooting docs | <https://code.visualstudio.com/docs/copilot/troubleshooting> | CC-BY-4.0 | Agent Debug Log panel, Chat Debug View, MCP server troubleshooting | `docs/research/multi-project-setup-docs.md` | 2026-03-29 |
-
-## ACP Protocol Deep-Dive (Task #1)
-
-| Source | URL | License | What we studied | Where Used | Date |
-|--------|-----|---------|-----------------|------------|------|
-| ACP specification (official) | <https://agentclientprotocol.com/> | Unknown | Protocol overview, message types, session lifecycle, error codes, capability negotiation | `docs/research/acp-protocol.md` | 2026-03-26 |
-| ACP GitHub (schema + repo) | <https://github.com/agentclientprotocol/agent-client-protocol> | Apache-2.0 | JSON schema (v0.11.3), message type definitions, transport details | `docs/research/acp-protocol.md` | 2026-03-26 |
-| ACP Python SDK | <https://github.com/agentclientprotocol/python-sdk> | Apache-2.0 | Official client library (v0.9.0), connect_to_agent API, Pydantic models, examples | `docs/research/acp-protocol.md` | 2026-03-26 |
-| mcp-copilot-acp (TypeScript bridge) | <https://github.com/bsmi021/mcp-copilot-acp> | MIT | Real-world ACP client implementation, session management, timeout patterns | `docs/research/acp-protocol.md` | 2026-03-26 |
-| rest-acp (OpenAI-compat wrapper) | <https://github.com/iot2020/rest-acp> | Unknown | Session management patterns, ACP-to-OpenAI bridging approach | `docs/research/acp-protocol.md` | 2026-03-26 |
 
 ## Vector Store + Embedding Pipeline Extraction Research (Task #32)
 
@@ -2474,19 +2544,20 @@ External repos and resources studied during OwlBear development.
 | VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | `agents:` array, nesting depth (max 5), override of `disable-model-invocation`, coordinator/worker pattern | `docs/research/quality-runner-wiring.md` | 2026-03-30 |
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `agents` field spec, tool inheritance, assign mode, `user-invocable` and `disable-model-invocation` flags | `docs/research/quality-runner-wiring.md` | 2026-03-30 |
 
-## Mandatory User-Decision Gate (Task #385)
-
-| Source | URL | What | Where Used | Date |
-|--------|-----|------|------------|------|
-| Anthropic "Building Effective Agents" | <https://www.anthropic.com/engineering/building-effective-agents> | Pause for human feedback at checkpoints, programmatic checks on intermediate steps | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
-| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination for structured control transfer, typed pause points | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
-| CrewAI Tasks docs | <https://docs.crewai.com/concepts/tasks> | `human_input` mandatory flag, `guardrail` functions for output validation | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
-| GitHub Actions Environment Protection Rules | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gates per environment, auto-timeout patterns | `docs/research/mandatory-user-decision-gate.md` | 2026-03-30 |
-
 ## Architect DR Verification Gate (Task #461)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
+
+## Challenger Subagent Design (Task #465)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | One-shot subagent model, coordinator/worker pattern, multi-perspective review, nesting depth max 5 | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Du et al. — Improving Factuality through Multiagent Debate (2023) | https://arxiv.org/abs/2305.14325 | CC-BY-4.0 | Multi-agent debate improves factuality and reasoning; single-round debate effective | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Liang et al. — MAD: Multi-Agent Debate (EMNLP 2024) | https://arxiv.org/abs/2305.19118 | arxiv nonexclusive | Degeneration-of-Thought in self-reflection; external adversarial challenge breaks DoT | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Chan et al. — ChatEval multi-agent debate (2023) | https://arxiv.org/abs/2308.07201 | arxiv nonexclusive | Multi-annotator collaboration outperforms single-agent evaluation | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
 | CrewAI Task Guardrails | <https://docs.crewai.com/concepts/tasks> | Sequential guardrail validation pattern — prerequisite check before task proceeds | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
 | AutoGen Human-in-the-Loop | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination early termination when prerequisite unmet | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
 | GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gate blocks before any work runs | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
