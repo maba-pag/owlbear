@@ -25,7 +25,6 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
     AppContext,
     _run_kanban,
     app_lifespan,
-    board_context,
     create_task,
     edit_task,
     list_tasks,
@@ -249,6 +248,7 @@ class TestFromAC_Tools:
         assert "move" in args_used
         assert "42" in args_used
         assert "in-progress" in args_used
+        assert "--json" in args_used
 
     # ------------------------------------------------------------------ edit_task
     @pytest.mark.asyncio
@@ -436,21 +436,7 @@ class TestFromAC_Tools:
         assert "--claim" in args_used
         assert "--move" in args_used
         assert "--tags" in args_used
-
-    # ------------------------------------------------------------------ board_context
-    @pytest.mark.asyncio
-    async def test_board_context_success_no_extra_args(self) -> None:
-        """board_context calls _run_kanban with the context command and no extra args."""
-        mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
-            result = await board_context(mcp_ctx)
-
-        assert result == _FAKE_STDOUT
-        args_used: tuple[Any, ...] = mock_run.call_args[0]
-        assert "context" in args_used
-        # Only the base command — no extra filter flags
-        user_args = [a for a in args_used if isinstance(a, str) and a.startswith("--")]
-        assert len(user_args) == 0
+        assert "--json" in args_used
 
     # ------------------------------------------------------------------ error path (parametrized)
     @pytest.mark.asyncio
@@ -463,9 +449,8 @@ class TestFromAC_Tools:
             (move_task, {"task_id": "1", "status": "done"}),
             (edit_task, {"task_id": "1"}),
             (pick_task, {}),
-            (board_context, {}),
         ],
-        ids=["list_tasks", "show_task", "create_task", "move_task", "edit_task", "pick_task", "board_context"],
+        ids=["list_tasks", "show_task", "create_task", "move_task", "edit_task", "pick_task"],
     )
     async def test_all_tools_return_error_string_on_non_zero_rc(
         self, tool_fn: Any, kwargs: dict[str, Any]
