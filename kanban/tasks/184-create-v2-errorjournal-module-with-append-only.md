@@ -1,18 +1,18 @@
 ---
 id: 184
 title: Create v2 ErrorJournal module with append-only JSONL persistence
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-29T20:23:15.50196+02:00
-updated: 2026-03-30T10:20:48.4316832+02:00
+updated: 2026-03-31T03:20:26.4176424+02:00
+started: 2026-03-31T03:20:26.0233865+02:00
+completed: 2026-03-31T03:20:26.0233865+02:00
 tags:
     - phase-2
     - scope:orchestrator
     - type:build
 depends_on:
     - 189
-blocked: true
-block_reason: 'TestFromAC interface contradiction: cannot satisfy both TestFromAC_ErrorJournalLog (positional log(entry) must work) and TestFromAC_ErrorJournalLogV2 (positional log(entry) must raise TypeError) simultaneously. Test-writer must reconcile.'
 class: standard
 ---
 
@@ -139,3 +139,48 @@ BLOCK: TestFromAC interface contradiction.
 - TestFromAC_ErrorJournalLogV2::test_log_positional_entry_object_raises_type_error expects journal.log(entry) positionally to raise TypeError.
 - Both are TestFromAC classes - cannot modify either. Contradiction is unsatisfiable.
 AC suggestion: test-writer update TestFromAC_ErrorJournalLog + Rotation to use keyword-only interface, OR remove the positional TypeError test and verify AC4 via function signature inspection alone.
+
+[[2026-03-30]] Mon 17:43
+## Test-Writer Notes (retry #2)
+- Retry reason: builder BLOCK — TestFromAC_ErrorJournalLog + Rotation called log(entry) positionally, contradicting test_log_positional_entry_object_raises_type_error (both TestFromAC classes, unsatisfiable)
+- Resolution: updated TestFromAC_ErrorJournalLog (3 tests) and TestFromAC_ErrorJournalRotation (2 tests) to use keyword-only log() interface per AC4
+- Removed _make_entry() helpers (no longer needed — auto-timestamp, field assertions used instead)
+- State: 26 tests PASS, 1 test FAILS (test_log_positional_entry_object_raises_type_error)
+- Builder action: remove entry: ErrorEntry or None = None positional param from log(); strictly keyword-only per AC4
+- ruff: clean
+- Commit: 0794e02
+
+[[2026-03-30]] Mon 21:51
+## Builder Notes (retry #3)
+- Files changed: packages/orchestrator/src/owlbear_orchestrator/error_journal.py
+- Change: removed entry: ErrorEntry or None = None positional param; log() is now strictly keyword-only
+- Tests: 27 passed (26 from prior + 1 new test_log_positional_entry_object_raises_type_error), coverage 100% on error_journal.py
+- Lint: ruff clean
+- Commit: 027a9a3
+
+[[2026-03-31]] Tue 03:20
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: ErrorEntry frozen model, 5 str fields | error_journal.py L14-29: BaseModel + ConfigDict(frozen=True) + all str fields | PASS |
+| AC2: Module-level TypeAdapter | error_journal.py L33: entry_adapter | PASS |
+| AC3: init(path, *, max_entries=5000), no eager file | error_journal.py L49: exact signature, no filesystem access | PASS |
+| AC4: log(*, kw-only), auto timestamp | error_journal.py L53-74: keyword-only params, auto UTC ISO-8601 | PASS |
+| AC5: load() returns list or empty | error_journal.py L79-88: handles missing/empty, parses JSONL | PASS |
+| AC6: Rotation keeps most recent | error_journal.py L93-100: _rotate() trims to max_entries | PASS |
+| AC7: No JsonlStore base | ErrorJournal has no base class | PASS |
+| AC8: Correct file path | File at packages/orchestrator/src/owlbear_orchestrator/error_journal.py | PASS |
+| AC9: All #189 tests pass | 27/27 passed (20 from #189 + 7 from #184) | PASS |
+
+### Test Results
+- pytest: 27 passed in 0.24s (task scope), 1595 passed full suite (195 failures all outside task scope)
+- ruff: clean
+
+### Architect Quality
+- AC quality score: 4/5 (refined from vague to precise, minor gap around positional/kw-only interface caused retries)
+
+### Deduction breakdown
+- -.02: Reviewer evidence file (docs/scratch/184-reviewer.md) referenced 3x in body but never created
+### Confidence: .98
+### Action: archive
