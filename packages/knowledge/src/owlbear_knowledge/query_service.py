@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from owlbear_knowledge.embeddings import EmbeddingProvider
     from owlbear_knowledge.graph_store import GraphStore
     from owlbear_knowledge.protocol import VectorStoreProtocol
+    from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class KnowledgeQueryService:
         *,
         scopes: list[str] | None = None,
         similarity_threshold: float = 0.3,
-        retriever: object | None = None,  # noqa: ARG002
+        retriever: GraphAugmentedRetriever | None = None,
         consolidation_conn: object | None = None,  # noqa: ARG002
     ) -> None:
         self._vectors = vector_store
@@ -61,6 +62,7 @@ class KnowledgeQueryService:
         self._embedder = embedding_provider
         self._scopes = scopes
         self._threshold = similarity_threshold
+        self._retriever = retriever
 
     async def query(
         self,
@@ -116,3 +118,47 @@ class KnowledgeQueryService:
             return []
         else:
             return structured
+
+    def query_for_context(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 2000,
+        top_k: int = 5,
+    ) -> str | None:
+        """Query via the injected retriever and return a formatted context string.
+
+        Returns ``None`` when no retriever is available, no results are found,
+        or any exception occurs (graceful degradation).
+
+        Args:
+            prompt: Natural language query string.
+            max_tokens: Maximum word count for the returned string.
+            top_k: Maximum number of chunks to resolve and format.
+        """
+        if self._retriever is None:
+            return None
+        try:
+            result = self._retriever.retrieve(prompt)
+            chunks = result.chunks[:top_k]
+            if not chunks:
+                return None
+
+            lines: list[str] = []
+            for chunk_id, _ in chunks:
+                doc = self._graph.get_document(chunk_id)
+                if doc is not None:
+                    lines.append(f"- {doc.title}: {doc.content}")
+
+            if not lines:
+                return None
+
+            output = "Relevant knowledge:\n\n" + "\n".join(lines)
+            words = output.split()
+            if len(words) > max_tokens:
+                output = " ".join(words[:max_tokens])
+        except Exception:  # noqa: BLE001
+            logger.warning("query_for_context failed for prompt: %s", prompt[:100], exc_info=True)
+            return None
+        else:
+            return output

@@ -9,6 +9,7 @@ from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
+from owlbear_knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 from owlbear_knowledge.status_store import DocumentStatus, StatusStore, compute_content_hash
@@ -21,11 +22,13 @@ __all__ = [
     "DocumentStatus",
     "DocumentStore",
     "EvaluationResult",
+    "GraphAugmentedRetriever",
     "GraphStore",
     "IngestPipeline",
     "IngestResult",
     "IntakeResult",
     "KnowledgeSourceStore",
+    "RetrievalResult",
     "SourceEvaluator",
     "StatusStore",
     "compute_content_hash",
