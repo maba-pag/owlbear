@@ -729,3 +729,126 @@ class TestFromAC_DispatchEntryRetryHint:  # noqa: N801
             retry_hint="Coverage missing on parser.py",
         )
         assert entry.retry_hint == "Coverage missing on parser.py"
+
+
+# ===========================================================================
+# Retry-cycle additions (#20): reviewer found run_loop calls select_tasks
+# with wrong kwargs (masked by over-mocking), missing scope param, missing
+# orchestrate() function, and missing __init__.py exports.
+# ===========================================================================
+
+
+class TestFromAC_RunLoopCallSignature:  # noqa: N801
+    """run_loop() must call select_tasks(tasks) with NO extra kwargs.
+
+    The existing TestFromAC_RunLoop tests fully mock select_tasks, which masks
+    a TypeError at runtime. These tests use the real select_tasks so the
+    signature mismatch surfaces as a test failure.
+    """
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_empty_board_exits_cleanly_with_real_select_tasks(self) -> None:
+        """Empty board: run_loop exits without TypeError when select_tasks is NOT mocked."""
+        client = _make_client()
+        with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
+            # Real select_tasks — exposes TypeError if run_loop passes extra kwargs
+            await run_loop(
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                client=client,
+            )
+        client.new_session.assert_not_called()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_run_loop_accepts_scope_keyword_argument(self) -> None:
+        """run_loop must accept scope: str | None = None keyword argument."""
+        client = _make_client()
+        with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
+            await run_loop(
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                client=client,
+                scope="phase-1",
+            )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_scope_forwarded_to_read_board(self) -> None:
+        """scope kwarg must be forwarded to read_board() on each cycle."""
+        client = _make_client()
+        read_board_mock = AsyncMock(return_value=[])
+        with patch("owlbear.orchestrator.loop.read_board", new=read_board_mock):
+            await run_loop(
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                client=client,
+                scope="phase-3",
+            )
+        assert any(
+            c.kwargs.get("scope") == "phase-3"
+            for c in read_board_mock.call_args_list
+        ), "scope must be forwarded to read_board"
+
+
+class TestFromAC_OrchestratorPackageExports:  # noqa: N801
+    """owlbear.orchestrator.__init__ must re-export the complete symbol set."""
+
+    def test_exports_assemble_waves(self) -> None:
+        """assemble_waves must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "assemble_waves"), "assemble_waves missing from owlbear.orchestrator"
+
+    def test_exports_wave(self) -> None:
+        """Wave must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "Wave"), "Wave missing from owlbear.orchestrator"
+
+    def test_exports_loop_state(self) -> None:
+        """LoopState must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "LoopState"), "LoopState missing from owlbear.orchestrator"
+
+    def test_exports_cycle_result(self) -> None:
+        """CycleResult must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "CycleResult"), "CycleResult missing from owlbear.orchestrator"
+
+    def test_exports_format_prompt(self) -> None:
+        """format_prompt must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "format_prompt"), "format_prompt missing from owlbear.orchestrator"
+
+    def test_exports_orchestrate(self) -> None:
+        """orchestrate must be importable directly from owlbear.orchestrator."""
+        import owlbear.orchestrator as pkg
+
+        assert hasattr(pkg, "orchestrate"), "orchestrate missing from owlbear.orchestrator"
+
+
+class TestFromAC_OrchestrateFunction:  # noqa: N801
+    """orchestrate() — top-level async entry point in owlbear.orchestrator."""
+
+    def test_orchestrate_is_callable(self) -> None:
+        """orchestrate must be a callable (not None, not a non-callable attribute)."""
+        import owlbear.orchestrator as pkg
+
+        fn = getattr(pkg, "orchestrate", None)
+        assert callable(fn), "orchestrate must be callable"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_runs_without_typeerror_on_empty_board(self) -> None:
+        """orchestrate(kanban_bin, kanban_dir, client) completes on an empty board."""
+        import owlbear.orchestrator as pkg
+
+        orchestrate_fn = pkg.orchestrate  # type: ignore[attr-defined]
+        client = _make_client()
+        with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
+            await orchestrate_fn(
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                client=client,
+            )
