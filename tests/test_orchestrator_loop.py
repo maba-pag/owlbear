@@ -391,6 +391,26 @@ class TestFromAC_DispatchEntry:  # noqa: N801
         assert result is False
         client.new_session.assert_called_once()
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_called_with_cwd_kwarg(self) -> None:
+        """AC: new_session(cwd=..., mcp_servers=[]) — cwd= must be a keyword arg."""
+        client = _make_client()
+        entry = _entry(42, "builder")
+        await dispatch_entry(entry, client)
+        _, kwargs = client.new_session.call_args
+        assert "cwd" in kwargs, "new_session must be called with cwd= kwarg per AC"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_called_with_empty_mcp_servers(self) -> None:
+        """AC: new_session(cwd=..., mcp_servers=[]) — mcp_servers must be empty list."""
+        client = _make_client()
+        entry = _entry(42, "builder")
+        await dispatch_entry(entry, client)
+        _, kwargs = client.new_session.call_args
+        assert kwargs.get("mcp_servers") == [], (
+            "new_session must be called with mcp_servers=[] per AC"
+        )
+
 
 # ===========================================================================
 # dispatch_wave
@@ -546,6 +566,21 @@ class TestFromAC_DispatchWave:  # noqa: N801
         result = await dispatch_wave(wave, client, state)
         assert 1 in result.successes  # researcher (task_id=1) succeeded
         assert 2 in result.failures   # builder (task_id=2) failed
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_non_rate_limit_crash_dispatch_entry_called_twice_retry_once(
+        self,
+    ) -> None:
+        """Non-rate-limit error: dispatch_entry retried exactly once → new_session called twice."""
+        client = _make_client()
+        client.new_session = AsyncMock(side_effect=Exception("internal server error"))
+        state = LoopState(sequential_remaining=0)
+        result = await dispatch_wave(self._make_wave("builder"), client, state)
+        assert 1 in result.failures
+        # AC: retry once on non-rate-limit error → dispatch_entry called twice
+        assert client.new_session.call_count == 2, (
+            "dispatch_wave must retry dispatch_entry once on non-rate-limit error"
+        )
 
 
 # ===========================================================================
