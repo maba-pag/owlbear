@@ -1,10 +1,12 @@
 ---
 id: 307
 title: Create Code-Reader subagent (agent.md)
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T20:29:35.2589109+02:00
-updated: 2026-03-31T04:12:08.2260005+02:00
+updated: 2026-03-31T05:51:37.9649448+02:00
+started: 2026-03-31T05:51:37.424203+02:00
+completed: 2026-03-31T05:51:37.424203+02:00
 tags:
     - scope:agents
     - phase-2
@@ -142,3 +144,39 @@ Decision 228-parallel-fan-out is pending (approved: false) but the agent file is
   AC10: test_body_input_contract_has_task_id/ac_lines/changed_files/test_files
   AC11: test_body_output_contract_test_writer_audit/security_review/test_integrity/test_quality/data_safety/test_gaps/necessity_check/informational
   AC12: test_body_has_readonly_persona, test_body_has_adversarial_persona
+
+[[2026-03-31]] Tue 04:21
+## Builder Notes
+- Files changed: agents/code-reader.agent.md (created)
+- Tests: 38 passed, all TestFromAC_ checks green
+- Lint: ruff clean (agents/code-reader.agent.md + tests/test_code_reader_agent_307.py)
+- Evidence: 38 passed in 0.11s; uv run ruff check All checks passed!
+- Fixes applied: None -- agent file was pre-built with correct frontmatter and body content; builder verified all 38 AC tests pass and lint is clean, then advanced to review
+
+-t
+
+[[2026-03-31]] Tue 04:23
+## Builder Notes
+- Files changed: agents/code-reader.agent.md (created)
+- Tests: 38 passed, all TestFromAC_ checks green
+- Lint: ruff clean
+- Evidence: 38 passed in 0.11s; ruff All checks passed!
+- Fixes applied: None -- agent file pre-built correctly; builder verified all 38 AC tests pass and lint clean
+
+[[2026-03-31]] Tue 05:19
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | code-reader is a leaf subagent, not a pipeline stage; no behavior/convention change |
+| 2 | Docstrings | No | N/A | Only .agent.md + test file created; no Python modules |
+| 3 | docs/sources/overview.md | No | N/A | No new external code pattern adopted |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/code-reader-subagent-design.md exists and linked in task body |
+| 6 | agents/README.md | Yes | Updated | Count updated 11-to-12; code-reader identified as leaf subagent |
+
+### Files Updated
+- agents/README.md
+
+### Scratch Files Cleaned
+- None (no docs/scratch/307-* files existed)
