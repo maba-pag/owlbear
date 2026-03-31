@@ -248,6 +248,23 @@ Answer these three questions:
 If yes to any question: FAIL with evidence citing the existing provider or the
 absence of a confirmed requirement. Document the specific overlap found.
 
+### 6.7 Builder process quality (loop detection)
+
+Read the full task body via `kanban\kanban-md.exe show {id}`. Check builder notes for loop patterns:
+
+1. **Count retry sections.** Count `## Builder Notes` headers (including suffixed retries like `Builder Notes (retry)`, `Builder Notes (retry 2)`). Record the count.
+2. **Check approach variation.** For each retry, verify the builder describes a different diagnosis, changed approach, or new strategy. Identical approaches across retries = loop pattern.
+3. **Check for tier-3 violation.** If 3+ retries at the same logical goal exist without a handoff/block statement, the builder violated the loop detection escalation rules in `agent-common.instructions.md`.
+4. **Produce a process-quality assessment:**
+
+| Assessment | Criteria | Action |
+|------------|----------|--------|
+| **CLEAN** | ≤ 1 retry, or all retries show approach variation | Note, no action |
+| **FRICTION** | 2 retries with approach variation — correct escalation behavior | Informational only, does not block PASS |
+| **LOOP** | Identical approaches across retries, or tier-3 triggered without handoff/block | Automatic FAIL |
+
+**Any LOOP assessment = automatic FAIL.** FRICTION is informational only — it does not block PASS.
+
 ## Step 7 — Pass 2: INFORMATIONAL checks
 
 Findings in Pass 2 are noted in the review but do NOT block a PASS verdict.
@@ -376,6 +393,14 @@ Pass 2 informational findings are included in the review body but do not affect 
 
 #### Implementation-Aware Test Gaps
 - {untested code paths found, or "No significant untested paths"}
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | {count} |
+| Approach variation across retries | {Yes / No / N/A} |
+| Tier-3 violation (3+ retries without handoff) | {Yes / No} |
+| Assessment | **CLEAN** / **FRICTION** / **LOOP** |
 
 ### Pass 2 — INFORMATIONAL
 - {code reading notes}
