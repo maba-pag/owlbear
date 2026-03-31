@@ -95,19 +95,24 @@ class AcpClient:
     ) -> None:
         """Exit the async context manager; performs no cleanup."""
 
-    async def initialize(self, **kwargs: Any) -> InitializeResponse:  # noqa: ANN401
-        """Call conn.initialize() with a 30 s timeout, forwarding all kwargs to the SDK."""
+    async def initialize(self, protocol_version: int) -> InitializeResponse:
+        """Call conn.initialize() with a 30 s timeout, forwarding protocol_version to the SDK."""
         try:
-            return await asyncio.wait_for(self._conn.initialize(**kwargs), timeout=30)
+            return await asyncio.wait_for(
+                self._conn.initialize(protocol_version=protocol_version), timeout=30
+            )
         except RequestError as exc:
             raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
-    async def new_session(self, **kwargs: Any) -> NewSessionResponse:  # noqa: ANN401
-        """Call conn.new_session() with a 15 s timeout, forwarding all kwargs to the SDK."""
+    async def new_session(self, cwd: str, mcp_servers: list | None = None) -> NewSessionResponse:
+        """Call conn.new_session() with a 15 s timeout, forwarding cwd and mcp_servers."""
+        call_kwargs: dict[str, Any] = {"cwd": cwd}
+        if mcp_servers is not None:
+            call_kwargs["mcp_servers"] = mcp_servers
         try:
-            return await asyncio.wait_for(self._conn.new_session(**kwargs), timeout=15)
+            return await asyncio.wait_for(self._conn.new_session(**call_kwargs), timeout=15)
         except RequestError as exc:
             raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
         except (BrokenPipeError, ConnectionError) as exc:
