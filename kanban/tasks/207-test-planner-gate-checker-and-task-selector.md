@@ -1,10 +1,12 @@
 ---
 id: 207
 title: 'Test: planner gate checker and task selector'
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T08:22:01.9959303+02:00
-updated: 2026-03-30T23:17:21.2198472+02:00
+updated: 2026-03-31T23:48:45.8768891+02:00
+started: 2026-03-31T23:48:45.3753355+02:00
+completed: 2026-03-31T23:48:45.3753355+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -92,3 +94,77 @@ checker functions and task selector.
   - select_tasks DECOMP override: test_decomp_override_maps_to_kanban_planner
   - select_tasks unknown priority fallback: test_unknown_priority_uses_fallback_rank_sorts_to_end
   - select_tasks unknown status fallback: test_unknown_status_uses_fallback_rank_sorts_to_end
+
+[[2026-03-31]] Tue 12:28
+## Review Evidence
+
+### Test Results
+- pytest: 34 passed, 0 failed (test_planner_gates.py + test_planner_selector.py)
+
+### Lint Results
+- ruff: All checks passed (gates.py, selector.py, both test files)
+
+### Coverage
+- owlbear/planner/gates.py: 100% (18 stmts)
+- owlbear/planner/selector.py: 100% (25 stmts)
+- owlbear/planner/models.py: 100%
+
+### AC Compliance
+
+All 27 AC lines covered. All pass. See detail below.
+
+check_atomicity ' and ' returns False: test_title_with_and_joining_words_returns_false â€” PASS
+check_atomicity no and returns True: test_title_without_and_returns_true â€” PASS
+check_atomicity word-boundary (handler): test_title_with_and_inside_word_returns_true â€” PASS
+check_tdd in-progress+notes True: test_in_progress_with_tdd_notes_returns_true â€” PASS
+check_tdd in-progress no-notes False: test_in_progress_without_tdd_notes_returns_false â€” PASS
+check_tdd non-in-progress True: test_todo/review/done_task_always_returns_true (3 tests) â€” PASS
+check_clarity todo bullet True: test_todo_with_bullet_ac_returns_true â€” PASS
+check_clarity todo numbered True: test_todo_with_numbered_ac_returns_true â€” PASS
+check_clarity todo no bullets False: test_todo_with_no_bullets_returns_false â€” PASS
+check_clarity ideation exempt: test_ideation_with_no_ac_returns_true â€” PASS
+check_clarity backlog exempt: test_backlog_with_no_ac_returns_true â€” PASS
+check_gates all pass True: test_task_passing_all_three_gates_returns_true â€” PASS
+check_gates any fail False: test_task_failing_atomicity/tdd/clarity_returns_false (3) â€” PASS
+PRIORITY_RANK 5 priorities: test_priority_rank_contains_all_five + correct_ordering â€” PASS
+STATUS_RANK 7 statuses: test_status_rank_contains_all_seven + correct_ordering â€” PASS
+STATUS_AGENT_MAP 7 statuses: test_status_agent_map_has_all_seven + correct_agents â€” PASS
+DISPATCH_CAP=20: test_dispatch_cap_is_twenty == 20 â€” PASS
+select_tasks empty: test_empty_input_returns_empty_dispatch_plan â€” PASS
+select_tasks single task: test_single_passing_task_produces_correct_dispatch_entry (task_id, agent, target_status) â€” PASS
+select_tasks gate-fail excluded: test_gate_failing_task_is_excluded â€” PASS
+select_tasks sorted: test_tasks_sorted_by_priority_then_pipeline_proximity â€” PASS
+select_tasks cap 20: test_twenty_five_tasks_capped_at_twenty (len <= 20) â€” PASS
+select_tasks DECOMP: test_decomp_override_maps_to_kanban_planner â€” PASS
+unknown priority fallback: test_unknown_priority_uses_fallback_rank_sorts_to_end â€” PASS
+unknown status fallback: test_unknown_status_uses_fallback_rank_sorts_to_end â€” PASS
+All tests RED initially: TW notes confirm 34 ModuleNotFoundError, now 34 pass â€” PASS
+ruff clean: confirmed above â€” PASS
+
+### TestFromAC Integrity
+All 34 TestFromAC_* methods preserved exactly. Two STRENGTHENING extras added by test-writer:
+test_in_progress_empty_body_returns_false, test_todo_with_empty_body_returns_false.
+
+### Test Quality
+Assertion specificity: STRONG (is True/False, exact == checks, DispatchEntry field checks)
+Error-path coverage: STRONG (gate failures, empty input, unknown priority/status)
+Mutation resistance: STRONG
+Test independence: STRONG (fresh _task() per test, no shared state)
+Names: STRONG (all descriptive)
+
+### Security
+No issues. Pure functions, no I/O, no external input, no new deps.
+
+### Verdict: PASS (confidence 0.95)
+
+[[2026-03-31]] Tue 12:59
+## Docs Gate
+1. copilot-instructions.md - No - N/A: internal planner module, no behavior/API/convention change visible to agents
+2. Docstrings - Yes - Pass: gates.py (module docstring + check_atomicity, check_tdd, check_clarity, check_gates) and selector.py (module docstring + select_tasks) all documented. All public symbols covered.
+3. sources/overview.md - No - N/A: Task 145 section already covers re module and Pydantic v2 attributions. Test task introduces no new external patterns.
+4. README.md - No - N/A: no CLI changes
+5. Research doc - No - N/A: type:test task, no research phase
+6. Scratch files - Clean: no docs/scratch/207-* files found
+
+Files Updated: None
+Scratch Files Cleaned: None
