@@ -14,13 +14,14 @@ All tests must FAIL until loader.py is extended to support scope/enabled fields.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from owlbear_knowledge.ingest import IngestResult
-from owlbear_knowledge.loader import load_manifest_file, parse_manifest
+from owlbear_knowledge.loader import LoadSummary, load_manifest_file, main, parse_manifest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -463,4 +464,125 @@ class TestFromAC_InitialSourcesYaml:
         globs = [e.config.get("glob", "") for e in entries]
         assert any("instructions" in g for g in globs), (
             f"No glob for instructions/*.md found in {globs}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC9 — Module invocation path: python -m owlbear_knowledge.loader
+# Reviewer finding: CLI tests were LAX (called main() directly).
+# These tests verify the module-as-script entrypoint is functional.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ModuleInvocation:
+    """The loader module must have a __main__ guard so it is invokable via python -m."""
+
+    def test_loader_module_has_main_guard(self) -> None:
+        """loader.py must contain an `if __name__ == '__main__'` guard.
+
+        Without this guard, `python -m owlbear_knowledge.loader` silently exits 0
+        with no output — AC9 is violated.
+        """
+        import inspect
+
+        import owlbear_knowledge.loader as loader_mod
+
+        source = inspect.getsource(loader_mod)
+        assert "if __name__ == '__main__'" in source, (
+            "loader.py must have an `if __name__ == '__main__': sys.exit(main())` guard "
+            "so that `python -m owlbear_knowledge.loader` invokes main()"
+        )
+
+    def test_module_invocation_without_manifest_exits_nonzero(self) -> None:
+        """Running the module via runpy without --manifest must exit non-zero.
+
+        Simulates: python -m owlbear_knowledge.loader  (no args)
+        Expected:  SystemExit with code != 0 (argparse error for missing --manifest)
+        Without the __main__ guard, no SystemExit is raised at all.
+        """
+        import runpy
+
+        with patch.object(sys, "argv", ["owlbear_knowledge.loader"]), pytest.raises(SystemExit) as exc_info:
+            runpy.run_module("owlbear_knowledge.loader", run_name="__main__")
+        assert exc_info.value.code != 0, (
+            "python -m owlbear_knowledge.loader without --manifest must exit non-zero; "
+            "got code 0 (likely missing __main__ guard)"
+        )
+
+    def test_module_invocation_with_valid_manifest_exits_zero(
+        self, tmp_path: Path
+    ) -> None:
+        """Running the module via runpy with --manifest must exit 0 on success.
+
+        Simulates: python -m owlbear_knowledge.loader --manifest <path>
+        Expected:  SystemExit(0)
+        Without the __main__ guard, no SystemExit is raised at all.
+        """
+        import runpy
+
+        manifest = tmp_path / "sources.yaml"
+        manifest.write_text("sources: []\n")
+
+        mock_load = AsyncMock(return_value=LoadSummary())
+        with (
+            patch("owlbear_knowledge.loader.load_manifest_file", mock_load),
+            patch.object(sys, "argv", ["owlbear_knowledge.loader", "--manifest", str(manifest)]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            runpy.run_module("owlbear_knowledge.loader", run_name="__main__")
+        assert exc_info.value.code == 0, (
+            "python -m owlbear_knowledge.loader --manifest <path> must exit 0 on success"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC9/AC10 — main() must instantiate real dependencies (not pass None)
+# Reviewer finding: main() passes source_store=None and pipeline=None,
+# causing AttributeError at runtime for any non-empty manifest.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MainInstantiation:
+    """main() must pass real KnowledgeSourceStore and IngestPipeline instances."""
+
+    def test_main_does_not_pass_none_source_store(self, tmp_path: Path) -> None:
+        """main() must not pass None as source_store to load_manifest_file.
+
+        Current broken behaviour: main() calls load_manifest_file(..., source_store=None)
+        which would raise AttributeError on any non-empty manifest in production.
+        """
+        manifest = tmp_path / "sources.yaml"
+        manifest.write_text("sources: []\n")
+
+        mock_load = AsyncMock(return_value=LoadSummary())
+        with patch("owlbear_knowledge.loader.load_manifest_file", mock_load):
+            main(["--manifest", str(manifest), "--root", str(tmp_path)])
+
+        mock_load.assert_called_once()
+        call_kwargs = mock_load.call_args.kwargs
+        source_store = call_kwargs.get("source_store")
+        assert source_store is not None, (
+            "main() must not pass None as source_store; "
+            "it must instantiate a real KnowledgeSourceStore before calling load_manifest_file"
+        )
+
+    def test_main_does_not_pass_none_pipeline(self, tmp_path: Path) -> None:
+        """main() must not pass None as pipeline to load_manifest_file.
+
+        Current broken behaviour: main() calls load_manifest_file(..., pipeline=None)
+        which would raise AttributeError on any non-empty manifest in production.
+        """
+        manifest = tmp_path / "sources.yaml"
+        manifest.write_text("sources: []\n")
+
+        mock_load = AsyncMock(return_value=LoadSummary())
+        with patch("owlbear_knowledge.loader.load_manifest_file", mock_load):
+            main(["--manifest", str(manifest), "--root", str(tmp_path)])
+
+        mock_load.assert_called_once()
+        call_kwargs = mock_load.call_args.kwargs
+        pipeline = call_kwargs.get("pipeline")
+        assert pipeline is not None, (
+            "main() must not pass None as pipeline; "
+            "it must instantiate a real IngestPipeline before calling load_manifest_file"
         )
