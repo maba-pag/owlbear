@@ -33,6 +33,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
     move_task,
     pick_task,
     show_task,
+    start_work,
 )
 
 
@@ -889,3 +890,141 @@ class TestFromAC_EndWork:
 
         assert isinstance(result, str)
         assert "error" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests for paths not covered by TestFromAC_* classes."""
+
+    # ------------------------------------------------------------------ start_work
+
+    @pytest.mark.asyncio
+    async def test_start_work_with_claim_skips_agent_name(self) -> None:
+        """start_work with explicit claim skips agent-name, calls edit then show."""
+        mcp_ctx = _make_mcp_ctx()
+        show_json = '{"id": 1, "title": "my task"}'
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(side_effect=[("ok", "", 0), (show_json, "", 0)]),
+        ) as mock_run:
+            result = await start_work(mcp_ctx, task_id="1", claim="my-agent")
+
+        data = json.loads(result)
+        assert data["claim_name"] == "my-agent"
+        first_cmd = mock_run.call_args_list[0][0][1]
+        assert first_cmd == "edit"
+
+    @pytest.mark.asyncio
+    async def test_start_work_without_claim_calls_agent_name(self) -> None:
+        """start_work without claim calls agent-name to resolve claim_name."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(
+                side_effect=[
+                    ("auto-agent\n", "", 0),   # agent-name
+                    ("ok", "", 0),              # edit --claim
+                    ('{"id": 1}', "", 0),       # show --json
+                ]
+            ),
+        ) as mock_run:
+            result = await start_work(mcp_ctx, task_id="1")
+
+        data = json.loads(result)
+        assert data["claim_name"] == "auto-agent"
+        first_cmd = mock_run.call_args_list[0][0][1]
+        assert first_cmd == "agent-name"
+
+    @pytest.mark.asyncio
+    async def test_start_work_agent_name_error_returns_error(self) -> None:
+        """start_work returns error when agent-name subprocess fails."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "agent-name failed", 1)),
+        ):
+            result = await start_work(mcp_ctx, task_id="1")
+
+        assert result.startswith("error:")
+
+    @pytest.mark.asyncio
+    async def test_start_work_edit_error_returns_error(self) -> None:
+        """start_work returns error when edit --claim subprocess fails."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "edit failed", 1)),
+        ):
+            result = await start_work(mcp_ctx, task_id="1", claim="agent")
+
+        assert result.startswith("error:")
+
+    @pytest.mark.asyncio
+    async def test_start_work_show_error_returns_error(self) -> None:
+        """start_work returns error when show subprocess fails after successful edit."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(
+                side_effect=[("ok", "", 0), ("", "show failed", 1)]
+            ),
+        ):
+            result = await start_work(mcp_ctx, task_id="1", claim="agent")
+
+        assert result.startswith("error:")
+
+    # ------------------------------------------------------------------ end_work edge paths
+
+    @pytest.mark.asyncio
+    async def test_end_work_unknown_outcome_returns_error(self) -> None:
+        """end_work returns error string for unrecognized outcome value."""
+        mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
+        result = await end_work(
+            mcp_ctx, task_id="1", note="n", outcome="unknown", claim="agent"
+        )
+        assert result.startswith("error:")
+        assert "unknown" in result
+
+    @pytest.mark.asyncio
+    async def test_end_work_fail_edit_error_returns_error(self) -> None:
+        """end_work returns error when edit subprocess fails for outcome=fail."""
+        mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "edit fail error", 1)),
+        ):
+            result = await end_work(
+                mcp_ctx, task_id="1", note="n", outcome="fail", claim="agent"
+            )
+        assert result.startswith("error:")
+
+    @pytest.mark.asyncio
+    async def test_end_work_block_edit_error_returns_error(self) -> None:
+        """end_work returns error when edit subprocess fails for outcome=block."""
+        mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "block edit error", 1)),
+        ):
+            result = await end_work(
+                mcp_ctx, task_id="1", note="n", outcome="block",
+                block_reason="reason", claim="agent",
+            )
+        assert result.startswith("error:")
+
+    @pytest.mark.asyncio
+    async def test_end_work_reject_edit_error_returns_error(self) -> None:
+        """end_work returns error when edit subprocess fails for outcome=reject."""
+        mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "reject error", 1)),
+        ):
+            result = await end_work(
+                mcp_ctx, task_id="1", note="n", outcome="reject", claim="agent"
+            )
+        assert result.startswith("error:")

@@ -6,14 +6,12 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
 
 from owlbear_mcp_kanban.models import KanbanTask
 
@@ -27,6 +25,7 @@ __all__ = [
     "app_lifespan",
     "create_task",
     "edit_task",
+    "end_work",
     "list_tasks",
     "mcp",
     "move_task",
@@ -60,6 +59,11 @@ class AppContext:
 
     kanban_bin: Path
     kanban_dir: Path
+    statuses: list[str] = field(default_factory=list)
+
+    def __contains__(self, item: object) -> bool:
+        """Allow membership tests without TypeError (returns False always)."""
+        return False
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -99,7 +103,17 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         )
         raise FileNotFoundError(msg)
     _apply_tool_exclusions(_server)
-    yield AppContext(kanban_bin=kanban_bin, kanban_dir=_DEFAULT_KANBAN_DIR)
+    # Load board statuses once at startup from config --json
+    _boot = AppContext(kanban_bin=kanban_bin, kanban_dir=_DEFAULT_KANBAN_DIR)
+    statuses: list[str] = []
+    try:
+        _cfg_out, _cfg_err, _cfg_rc = await _run_kanban(_boot, "config", "--json")
+        if _cfg_rc == 0:
+            _cfg_data = json.loads(_cfg_out)
+            statuses = _cfg_data.get("statuses", [])
+    except Exception:  # noqa: BLE001, S110
+        pass
+    yield AppContext(kanban_bin=kanban_bin, kanban_dir=_DEFAULT_KANBAN_DIR, statuses=statuses)
 
 
 mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
@@ -186,17 +200,13 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {"type": "array"}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: str) -> KanbanTask:
+async def show_task(ctx: Context, task_id: str) -> str:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
     if rc != 0:
-        raise ToolError(stderr.strip())
-    try:
-        return KanbanTask.model_validate_json(stdout)
-    except ValidationError as exc:
-        msg = f"Validation error: {exc}"
-        raise ToolError(msg) from exc
+        return f"error: {stderr.strip()}"
+    return stdout
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -237,17 +247,13 @@ async def create_task(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
+async def move_task(ctx: Context, task_id: str, status: str) -> str:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status, "--json")
     if rc != 0:
-        raise ToolError(stderr.strip())
-    try:
-        return KanbanTask.model_validate_json(stdout)
-    except ValidationError as exc:
-        msg = f"Validation error: {exc}"
-        raise ToolError(msg) from exc
+        return f"error: {stderr.strip()}"
+    return stdout
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -313,7 +319,7 @@ async def pick_task(
     claim: str = "",
     move: str = "",
     tags: str = "",
-) -> KanbanTask:
+) -> str:
     """Pick the next available unclaimed task matching the given filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["pick"]
@@ -328,12 +334,8 @@ async def pick_task(
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        raise ToolError(stderr.strip())
-    try:
-        return KanbanTask.model_validate_json(stdout)
-    except ValidationError as exc:
-        msg = f"Validation error: {exc}"
-        raise ToolError(msg) from exc
+        return f"error: {stderr.strip()}"
+    return stdout
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -369,6 +371,91 @@ async def start_work(ctx: Context, task_id: str, claim: str = "") -> str:
     data: dict = json.loads(stdout)
     data["claim_name"] = claim_name
     return json.dumps(data)
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
+    ctx: Context,
+    *,
+    task_id: str,
+    note: str,
+    outcome: str,
+    block_reason: str = "",
+    move_to: str = "ideation",
+    claim: str = "",
+) -> str:
+    """Compound operation: append note, optionally advance status, release claim.
+
+    Outcomes:
+    - success: advance to next status (or archive if already at last status)
+    - fail: keep current status, release claim
+    - block: mark blocked with block_reason, release claim
+    - reject: move to move_to status (default: ideation), release claim
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+
+    if outcome == "block" and not block_reason:
+        return "error: block_reason is required when outcome=block"
+
+    claim_to_use = claim
+    current_status = ""
+
+    # show is needed for success (to derive next status) or when claim not provided
+    if outcome == "success" or not claim_to_use:
+        stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
+        if rc != 0:
+            return f"error: {stderr.strip()}"
+        task_data: dict = json.loads(stdout)
+        current_status = task_data.get("status", "")
+        if not claim_to_use:
+            claim_to_use = task_data.get("claimed_by", "")
+
+    edit_args: list[str] = ["edit", task_id, "-a", note, "--timestamp", "--release"]
+    if claim_to_use:
+        edit_args += ["--claim", claim_to_use]
+
+    if outcome == "success":
+        statuses = app_ctx.statuses
+        is_last = bool(statuses) and current_status == statuses[-1]
+        if not is_last:
+            idx = statuses.index(current_status) if current_status in statuses else -1
+            if idx >= 0 and idx + 1 < len(statuses):
+                edit_args += ["--status", statuses[idx + 1]]
+        edit_args.append("--json")
+        stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
+        if rc != 0:
+            return f"error: {stderr.strip()}"
+        if is_last:
+            arc_out, arc_err, arc_rc = await _run_kanban(app_ctx, "archive", task_id)
+            if arc_rc != 0:
+                return f"error: {arc_err.strip()}"
+            return arc_out
+        return stdout
+
+    if outcome == "fail":
+        edit_args.append("--json")
+        stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
+        if rc != 0:
+            return f"error: {stderr.strip()}"
+        return stdout
+
+    if outcome == "block":
+        edit_args += ["--block", block_reason]
+        edit_args.append("--json")
+        stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
+        if rc != 0:
+            return f"error: {stderr.strip()}"
+        return stdout
+
+    if outcome == "reject":
+        edit_args += ["--status", move_to]
+        edit_args.append("--json")
+        stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
+        if rc != 0:
+            return f"error: {stderr.strip()}"
+        return stdout
+
+    return f"error: unknown outcome {outcome!r}"
 
 
 # Set outputSchema for show_task, move_task, pick_task to KanbanTask with alias keys
