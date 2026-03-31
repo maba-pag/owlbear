@@ -43,12 +43,22 @@ For user-must-do-X scenarios (manual testing, GUI verification, credential setup
 
 Agents should take tasks all the way through the pipeline. Defer to the user only when:
 
-- An important product/spec decision has multiple valid options and no clear winner
-- A research finding recommends a feature or architectural direction that the user hasn't approved
+- A **T2 (advisory)** outcome requires an advisory decision request: multiple implementation approaches exist with meaningful trade-offs and no T3 triggers apply
+- A **T3 (mandatory)** outcome always requires a blocking decision request that does not auto-resolve: new capability, architecture change, security/process change, or breaking change
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
 **For async deferral (agents running unsupervised),** use one of two structured request types. Both live in `docs/decisions/pending/` and use the same skill. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when requests are resolved.
+
+**Tier classification quick reference:**
+
+| Tier | Category | Examples | DR type |
+|------|----------|----------|---------|
+| T1 — Autonomous | Bug fix, refactor, config, perf | Root cause analysis, linter config, dep bump | None — proceed directly |
+| T2 — Advisory | Approach with trade-offs | Library selection, pattern choice | Advisory DR, 5-day auto-resolve |
+| T3 — Mandatory | New feature, arch change, security/process/breaking change | New agent capability, pipeline change, module restructure | Blocking DR, no auto-resolve |
+
+See the `decision-requests` skill for full T3 trigger list and file format.
 
 #### Decision requests — when you need the user to choose
 
@@ -58,9 +68,9 @@ Use when there are multiple valid options and no clear winner. The user picks an
 
 | Agent      | Trigger                                                                                             |
 | ---------- | --------------------------------------------------------------------------------------------------- |
-| Researcher | Finding recommends a feature or direction the user hasn't approved                                  |
-| Architect  | AC has multiple valid approaches with no clear winner; scope decision affects downstream tasks      |
-| Builder    | Implementation hits a design fork with product implications (not just a technical choice)           |
+| Researcher | T3 outcome per research classification (mandatory blocking DR, no auto-resolve); T2 outcome with no clear winner (advisory DR) |
+| Architect  | T3-origin task without an approved decision request; scope decision affecting downstream tasks (T2/T3) |
+| Builder    | T3 design fork with product implications (not just a technical choice)                              |
 | Reviewer   | Quality concern is preference-based, not objectively wrong; the correct standard is ambiguous       |
 | Writer     | Documentation structure decision has no clear right answer                                          |
 | Curator    | Conflicting findings between reviewed lessons; finding where disposition depends on user preference |
