@@ -1,6 +1,6 @@
 ---
 name: mcp-kanban
-description: "Use the owlbear-kanban MCP tools to manage the kanban board programmatically. Covers all 7 tools: list_tasks, show_task, create_task, move_task, edit_task, pick_task, board_context."
+description: "Use the owlbear-kanban MCP tools to manage the kanban board programmatically. Covers all 6 tools: list_tasks, show_task, create_task, move_task, edit_task, pick_task."
 user-invocable: false
 ---
 
@@ -22,7 +22,6 @@ The server is registered in `.vscode/mcp.json` as `owlbear-kanban`.
 | `move_task` | Move task to a new status | `task_id`, `status` (both required) |
 | `edit_task` | Edit task fields | `task_id` (required), `body`, `block`, `unblock`, `tags`, `priority`, `append_body`, `claim`, `release`, `status`, `timestamp`, `add_dep`, `remove_dep`, `parent`, `title` |
 | `pick_task` | Pick the next unclaimed task | `status`, `claim`, `move`, `tags` |
-| `board_context` | Get a board context snapshot | (no parameters) |
 
 ## Error handling
 
@@ -57,7 +56,7 @@ KANBAN_TOOLS_EXCLUDE=create_task,move_task,edit_task,pick_task
 ```
 
 Valid names: `list_tasks`, `show_task`, `create_task`, `move_task`, `edit_task`,
-`pick_task`, `board_context`.
+`pick_task`.
 
-Unknown names are silently ignored. If the variable is not set or is empty, all 7 tools
+Unknown names are silently ignored. If the variable is not set or is empty, all 6 tools
 are registered (backwards-compatible default).
