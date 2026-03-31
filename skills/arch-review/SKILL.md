@@ -110,6 +110,12 @@ and general architectural principles:
 > `type:test`, `agent`, `quality`. The `scope:*` prefix tags (e.g. `scope:agents`) are
 > categorization — they do NOT trigger test-writer pass-through. Add the bare tag if missing
 > (e.g. `--tags agent` alongside `scope:agents`).
+
+> **Always move to `todo`, never to `in-progress`.**  Even when TDD is not applicable
+> (e.g., `.agent.md` or `.instructions.md` files), the test-writer must process the task
+> to write a pass-through note. The builder depends on that note to decide its own workflow.
+> Skipping the test-writer causes tasks to be stuck at `in-progress` with Gate 4 blocking
+> further dispatch.
 | **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original, then `--release`   |
 | **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
 | **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |

@@ -67,6 +67,7 @@ agent: researcher
 created: 2026-03-13
 urgency: blocking
 decision_type: feature-gate
+impact_tier: 2
 ---
 
 # Decision: Should we adopt library X for component Y?
@@ -163,6 +164,7 @@ The planner will unblock the task automatically on its next cycle.
 | `created`       | ISO date (YYYY-MM-DD)                                                           | all        | Agent  |
 | `urgency`       | `blocking` (task is parked) or `advisory` (agent continued with recommendation) | all        | Agent  |
 | `decision_type` | `feature-gate` / `approach-selection` / `scope-decision` / `priority-call`      | decision   | Agent  |
+| `impact_tier`   | `1` (T1 autonomous, should not appear in practice) / `2` (T2 advisory, default) / `3` (T3 mandatory, no auto-resolve) | decision   | Agent  |
 
 ## Blocking behavior
 
@@ -202,7 +204,11 @@ That's it. The planner handles the rest.
 
 The user never moves files — the planner does this automatically.
 
-**Auto-resolution (5-day timeout):** If a decision stays `approved: false` for 5+ days, the planner auto-resolves with the agent's pre-filled recommendation to prevent permanent blockage. The file is updated with `approved: auto` and the task is unblocked.
+**Auto-resolution (5-day timeout):** If an `impact_tier: 2` decision (or a decision with no `impact_tier` field) stays `approved: false` for 5+ days, the planner auto-resolves with the agent's pre-filled recommendation. The file is updated with `approved: auto` and the task is unblocked. Missing `impact_tier` defaults to tier 2 for backwards compatibility — existing files retain current auto-resolve behavior.
+
+**T3 decisions do not auto-resolve.** When `impact_tier: 3`, the planner skips the 5-day timer entirely. These decisions block indefinitely until the user explicitly approves or overrides. Use `impact_tier: 3` for mandatory decisions: new capabilities, architecture changes, security/process changes, and breaking changes.
+
+**T1 note:** `impact_tier: 1` outcomes are autonomous — agents proceed without user input and do not produce decision requests. The value `1` exists for completeness but should not appear in practice in decision request files.
 
 > **Legacy files:** Files using the old `status: pending/resolved` format are treated equivalently: `status: resolved` is handled the same as `approved: true`.
 

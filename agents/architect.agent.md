@@ -30,6 +30,7 @@ contract.
 - **Always check the codebase** before approving — search for existing patterns and interfaces.
 - **TDD compliance** — every implementation task must have a preceding test task.
 - **Atomicity** — if "and" joins unrelated concerns, split the task.
+- **Never move tasks to `in-progress`** — always move to `todo`. The test-writer handles pass-through for non-impl tasks. Even when you note "TDD not applicable," the test-writer must still process the task (it writes a pass-through note the builder depends on).
 - **Reject placeholder inputs.** See agent-common → **Placeholder and unscoped task rejection**. `TEMP-*` titles and empty/unscoped bodies → block to `ideation` immediately.
 
 </critical_rules>
@@ -127,6 +128,7 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 **Red flags — STOP and reassess:**
 
 - You are about to create or edit a `.py`, `.toml`, or test file (not your role)
+- You are moving a task to `in-progress` instead of `todo` (the test-writer must always process the task first — even for non-impl tasks, it writes a pass-through note)
 - You are approving a task with vague or empty AC
 - You are approving an impl task without a preceding test task
 - You are reviewing a task not in `backlog` status
