@@ -4,7 +4,7 @@ title: Build mcp-knowledge server
 status: archived
 priority: needed
 created: 2026-03-26T17:21:28.0951097+01:00
-updated: 2026-03-31T05:43:57.2323171+02:00
+updated: 2026-03-31T05:53:27.2358507+02:00
 started: 2026-03-31T05:43:56.6345458+02:00
 completed: 2026-03-31T05:43:56.6345458+02:00
 tags:
@@ -264,3 +264,48 @@ See docs/scratch/16-reviewer-cycle4.md for full evidence.
 - docs/scratch/16-reviewer.md
 - docs/scratch/16-reviewer-cycle3.md
 - docs/scratch/16-reviewer-cycle4.md
+
+[[2026-03-31]] Tue 05:44
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 1dc7bc5 | chore | kanban/tasks/016-build-mcp-knowledge-server.md | #16 |
+
+[[2026-03-31]] Tue 05:53
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| server.py FastMCP pattern | server.py L81: FastMCP(owlbear-knowledge, lifespan=app_lifespan) | PASS |
+| AppContext fields | server.py L43-49: query_service, graph_store, ingest_pipeline, source_store | PASS |
+| app_lifespan OWLBEAR_KB_PATH + services | server.py L53-79: reads env, constructs all services, yields ctx, closes conn | PASS |
+| __main__.py | from .server import mcp; mcp.run() | PASS |
+| stdio transport | .vscode/mcp.json: stdio, uv run python -m owlbear_mcp_knowledge | PASS |
+| search_knowledge v2 query() | server.py L88: await qs.query(query, top_k=limit) | PASS |
+| list_sources asyncio.to_thread | server.py L101: await asyncio.to_thread(store.list_all, scope=scope) | PASS |
+| knowledge://stats resource | server.py L183-191: _knowledge_stats_bridge reads _app_context.graph_store.get_counts | PASS |
+| pyproject.toml owlbear-knowledge dep | pyproject.toml: owlbear-knowledge + workspace source | PASS |
+| Register in .vscode/mcp.json | Registered as owlbear-knowledge stdio server | PASS |
+| SKILL.md updated | skills/knowledge-ops/SKILL.md: 5 tools + knowledge://stats resource documented | PASS |
+| 84 package tests GREEN | pytest packages/mcp-knowledge/tests/ 84 passed | PASS |
+| ruff clean | ruff check packages/mcp-knowledge/ All checks passed! | PASS |
+
+### Test Results
+- pytest (package): 84 passed, 0 failed
+- pytest (full suite): 162 failed, 1891 passed -- 0 failures in task scope
+- ruff: All checks passed!
+
+### Architect Quality
+Score: 4/5 -- AC was thorough with 20+ verifiable items covering server structure, tools, resources, config, integration, and tests. One gap: original AC did not anticipate the stats resource FastMCP zero-arg compat issue (required 4 builder cycles to resolve). Otherwise the AC led to a clean implementation.
+
+### Upstream commits verified
+- 382fe41 docs: update sources entry (#16, writer)
+- f93655b fix: module-level _app_context in stats resource (#16, builder)
+- 5b436bb fix: add ctx param to knowledge_stats_resource (#16, builder)
+- b1f38aa feat: add pyproject dep, mcp.json, SKILL.md (#16, builder)
+
+### Deduction breakdown
+- No deductions. All AC lines verified with evidence. Lint clean. Tests green. Reviewer evidence present across 4 cycles.
+
+### Confidence: .98
+### Action: archive
