@@ -852,3 +852,171 @@ class TestFromAC_OrchestrateFunction:  # noqa: N801
                 kanban_dir=Path("kanban"),
                 client=client,
             )
+
+
+class TestFromAC_OrchestrateWiring:  # noqa: N801
+    """orchestrate() must wire ProcessSupervisor + AcpClient per AC, then delegate to run_loop.
+
+    Covers AC items not tested by TestFromAC_OrchestrateFunction:
+    - Correct signature: copilot_cmd: list[str] (not client)
+    - ProcessSupervisor(copilot_cmd) async context manager
+    - ensure_running() for streams
+    - connect_to_agent + initialize(protocol_version=...)
+    - scope forwarded to run_loop
+    - mark_healthy() after loop
+    """
+
+    def _setup_mocks(self) -> tuple[MagicMock, MagicMock, MagicMock]:
+        """Return (supervisor_mock, conn_mock, acp_client_mock)."""
+        supervisor = MagicMock()
+        supervisor.__aenter__ = AsyncMock(return_value=supervisor)
+        supervisor.__aexit__ = AsyncMock(return_value=None)
+        supervisor.ensure_running = AsyncMock(return_value=(MagicMock(), MagicMock()))
+        supervisor.mark_healthy = MagicMock()
+
+        conn = MagicMock()
+        conn.initialize = AsyncMock()
+        conn.close = AsyncMock()
+
+        acp_mock = MagicMock(spec=AcpClient)
+        return supervisor, conn, acp_mock
+
+    def test_orchestrate_signature_has_copilot_cmd(self) -> None:
+        """orchestrate() must accept copilot_cmd: list[str] per AC — not client."""
+        import inspect
+
+        import owlbear.orchestrator as pkg
+
+        fn = getattr(pkg, "orchestrate", None)
+        assert fn is not None, "orchestrate not exported from owlbear.orchestrator"
+        sig = inspect.signature(fn)
+        assert "copilot_cmd" in sig.parameters, (
+            "orchestrate must have copilot_cmd parameter per AC"
+        )
+
+    def test_orchestrate_scope_defaults_to_none(self) -> None:
+        """orchestrate() must have scope: str | None = None keyword-only parameter."""
+        import inspect
+
+        import owlbear.orchestrator as pkg
+
+        fn = getattr(pkg, "orchestrate", None)
+        assert fn is not None, "orchestrate not exported from owlbear.orchestrator"
+        sig = inspect.signature(fn)
+        assert "scope" in sig.parameters, "orchestrate must have scope parameter"
+        assert sig.parameters["scope"].default is None, "scope must default to None"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_creates_process_supervisor_from_copilot_cmd(self) -> None:
+        """orchestrate() must construct ProcessSupervisor(copilot_cmd)."""
+        import owlbear.orchestrator as pkg
+
+        supervisor, conn, acp_mock = self._setup_mocks()
+        copilot_cmd = ["gh", "copilot", "--acp", "--stdio"]
+
+        with (
+            patch("owlbear.orchestrator.loop.ProcessSupervisor", return_value=supervisor) as ps_cls,
+            patch("owlbear.orchestrator.loop.connect_to_agent", return_value=conn),
+            patch("owlbear.orchestrator.loop.AcpClient", return_value=acp_mock),
+            patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
+        ):
+            await pkg.orchestrate(  # type: ignore[attr-defined]
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                copilot_cmd=copilot_cmd,
+            )
+
+        ps_cls.assert_called_once_with(copilot_cmd)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_calls_ensure_running(self) -> None:
+        """orchestrate() must call supervisor.ensure_running() to get (stdin, stdout)."""
+        import owlbear.orchestrator as pkg
+
+        supervisor, conn, acp_mock = self._setup_mocks()
+
+        with (
+            patch("owlbear.orchestrator.loop.ProcessSupervisor", return_value=supervisor),
+            patch("owlbear.orchestrator.loop.connect_to_agent", return_value=conn),
+            patch("owlbear.orchestrator.loop.AcpClient", return_value=acp_mock),
+            patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
+        ):
+            await pkg.orchestrate(  # type: ignore[attr-defined]
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                copilot_cmd=["copilot", "--acp", "--stdio"],
+            )
+
+        supervisor.ensure_running.assert_called_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_calls_initialize_with_protocol_version(self) -> None:
+        """orchestrate() must call conn.initialize(protocol_version=PROTOCOL_VERSION) before run_loop."""
+        import owlbear.orchestrator as pkg
+
+        supervisor, conn, acp_mock = self._setup_mocks()
+
+        with (
+            patch("owlbear.orchestrator.loop.ProcessSupervisor", return_value=supervisor),
+            patch("owlbear.orchestrator.loop.connect_to_agent", return_value=conn),
+            patch("owlbear.orchestrator.loop.AcpClient", return_value=acp_mock),
+            patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
+        ):
+            await pkg.orchestrate(  # type: ignore[attr-defined]
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                copilot_cmd=["copilot", "--acp", "--stdio"],
+            )
+
+        conn.initialize.assert_called_once()
+        _, kwargs = conn.initialize.call_args
+        assert "protocol_version" in kwargs, (
+            "initialize() must be called with protocol_version kwarg"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_forwards_scope_to_run_loop(self) -> None:
+        """orchestrate(scope='phase-2') must forward scope to run_loop()."""
+        import owlbear.orchestrator as pkg
+
+        supervisor, conn, acp_mock = self._setup_mocks()
+        run_loop_mock = AsyncMock()
+
+        with (
+            patch("owlbear.orchestrator.loop.ProcessSupervisor", return_value=supervisor),
+            patch("owlbear.orchestrator.loop.connect_to_agent", return_value=conn),
+            patch("owlbear.orchestrator.loop.AcpClient", return_value=acp_mock),
+            patch("owlbear.orchestrator.loop.run_loop", new=run_loop_mock),
+        ):
+            await pkg.orchestrate(  # type: ignore[attr-defined]
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                copilot_cmd=["copilot", "--acp", "--stdio"],
+                scope="phase-2",
+            )
+
+        assert any(
+            c.kwargs.get("scope") == "phase-2"
+            for c in run_loop_mock.call_args_list
+        ), "scope must be forwarded to run_loop()"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_orchestrate_calls_mark_healthy_after_loop(self) -> None:
+        """orchestrate() must call supervisor.mark_healthy() after run_loop completes."""
+        import owlbear.orchestrator as pkg
+
+        supervisor, conn, acp_mock = self._setup_mocks()
+
+        with (
+            patch("owlbear.orchestrator.loop.ProcessSupervisor", return_value=supervisor),
+            patch("owlbear.orchestrator.loop.connect_to_agent", return_value=conn),
+            patch("owlbear.orchestrator.loop.AcpClient", return_value=acp_mock),
+            patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
+        ):
+            await pkg.orchestrate(  # type: ignore[attr-defined]
+                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_dir=Path("kanban"),
+                copilot_cmd=["copilot", "--acp", "--stdio"],
+            )
+
+        supervisor.mark_healthy.assert_called_once()
