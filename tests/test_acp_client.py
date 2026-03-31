@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -54,7 +55,7 @@ class TestFromAC_Timeouts:  # noqa: N801
         conn = _make_conn()
         client = AcpClient(conn)
         with patch(f"{_MODULE}.asyncio.wait_for", new=AsyncMock(return_value=MagicMock())) as mock_wf:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         _, kwargs = mock_wf.call_args
         assert kwargs.get("timeout") == 30  # noqa: PLR2004
 
@@ -64,7 +65,7 @@ class TestFromAC_Timeouts:  # noqa: N801
         conn = _make_conn()
         client = AcpClient(conn)
         with patch(f"{_MODULE}.asyncio.wait_for", new=AsyncMock(return_value=MagicMock())) as mock_wf:
-            await client.new_session()
+            await client.new_session(cwd="/work")
         _, kwargs = mock_wf.call_args
         assert kwargs.get("timeout") == 15  # noqa: PLR2004
 
@@ -94,7 +95,7 @@ class TestFromAC_ErrorClassification:  # noqa: N801
         conn.initialize.side_effect = RequestError(-32700, "Parse error")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         assert exc_info.value.category == ErrorCategory.PERMANENT
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -124,7 +125,7 @@ class TestFromAC_ErrorClassification:  # noqa: N801
         conn.initialize.side_effect = RequestError(-32000, "Auth required")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         assert exc_info.value.category == ErrorCategory.AUTH
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -134,7 +135,7 @@ class TestFromAC_ErrorClassification:  # noqa: N801
         conn.new_session.side_effect = RequestError(-32002, "Resource not found")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.new_session()
+            await client.new_session(cwd="/work")
         assert exc_info.value.category == ErrorCategory.TOOL_SEMANTIC
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -233,7 +234,7 @@ class TestFromAC_AllSevenErrorCodes:  # noqa: N801
         conn.initialize.side_effect = RequestError(-32602, "Invalid params")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         assert exc_info.value.category == ErrorCategory.PERMANENT
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -243,7 +244,7 @@ class TestFromAC_AllSevenErrorCodes:  # noqa: N801
         conn.new_session.side_effect = RequestError(-99999, "Unknown error")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.new_session()
+            await client.new_session(cwd="/work")
         assert exc_info.value.category == ErrorCategory.PERMANENT
 
 
@@ -262,7 +263,7 @@ class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
         conn.initialize.side_effect = BrokenPipeError("pipe broken")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         assert exc_info.value.category == ErrorCategory.TRANSIENT
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -272,7 +273,7 @@ class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
         conn.initialize.side_effect = ConnectionError("EOF")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.initialize()
+            await client.initialize(protocol_version=1)
         assert exc_info.value.category == ErrorCategory.TRANSIENT
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -282,7 +283,7 @@ class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
         conn.new_session.side_effect = BrokenPipeError("pipe broken")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.new_session()
+            await client.new_session(cwd="/work")
         assert exc_info.value.category == ErrorCategory.TRANSIENT
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -292,7 +293,7 @@ class TestFromAC_ConnectionErrorsAllMethods:  # noqa: N801
         conn.new_session.side_effect = ConnectionError("EOF")
         client = AcpClient(conn)
         with pytest.raises(AcpClientError) as exc_info:
-            await client.new_session()
+            await client.new_session(cwd="/work")
         assert exc_info.value.category == ErrorCategory.TRANSIENT
 
 
@@ -388,3 +389,107 @@ class TestBuilderDiscovered_SDKForwarding:  # noqa: N801
         await client.prompt(prompt=content, session_id="s1", message_id="m1")
         call_kwargs = conn.prompt.call_args.kwargs
         assert call_kwargs.get("message_id") == "m1"
+
+
+# ---------------------------------------------------------------------------
+# Explicit signature enforcement (retry-cycle — reviewer Finding: LAX tests)
+# Architecture Review: "no *args/**kwargs pass-through. Keeps the wrapper typed
+# and inspectable." AC requires initialize(protocol_version: int) and
+# new_session(cwd: str, mcp_servers: list | None = None) — not **kwargs.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExplicitSignatureEnforcement:  # noqa: N801
+    """AcpClient wrapper methods must declare required SDK params explicitly — no **kwargs.
+
+    Per Architecture Review: "Interface: wrapper mirrors SDK required params explicitly
+    (no *args/**kwargs pass-through). Keeps the wrapper typed and inspectable."
+    Prior TestFromAC_SDKParameterForwarding tests were LAX — they verified forwarding
+    but did not enforce that required params are explicit in the signature.
+    """
+
+    # --- initialize() ---
+
+    def test_initialize_signature_has_protocol_version(self) -> None:
+        """initialize() must declare 'protocol_version' as an explicit named parameter.
+
+        With **kwargs AcpClient.initialize absorbs any name — this test enforces the
+        AC-required explicit signature: initialize(protocol_version: int).
+        """
+        params = inspect.signature(AcpClient.initialize).parameters
+        assert "protocol_version" in params, (
+            "initialize() must declare 'protocol_version' explicitly, not absorb via **kwargs"
+        )
+
+    def test_initialize_signature_no_var_keyword(self) -> None:
+        """initialize() must not have a **kwargs absorbing parameter.
+
+        Architecture Review: no **kwargs pass-through — keep the wrapper typed.
+        """
+        params = inspect.signature(AcpClient.initialize).parameters
+        var_kw = [
+            name for name, p in params.items()
+            if p.kind == inspect.Parameter.VAR_KEYWORD
+        ]
+        assert var_kw == [], (
+            f"initialize() has **{var_kw} — Architecture Review requires explicit params, no **kwargs"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_initialize_requires_protocol_version_at_runtime(self) -> None:
+        """Calling initialize() without protocol_version must raise TypeError.
+
+        With **kwargs this silently succeeds — the test enforces that the param is
+        a required, explicitly typed argument matching the SDK function signature.
+        """
+        conn = _make_conn()
+        client = AcpClient(conn)
+        with pytest.raises(TypeError):
+            await client.initialize()
+
+    # --- new_session() ---
+
+    def test_new_session_signature_has_cwd(self) -> None:
+        """new_session() must declare 'cwd' as an explicit named parameter."""
+        params = inspect.signature(AcpClient.new_session).parameters
+        assert "cwd" in params, (
+            "new_session() must declare 'cwd' explicitly, not absorb via **kwargs"
+        )
+
+    def test_new_session_signature_cwd_is_required(self) -> None:
+        """new_session() 'cwd' must be required — no default value.
+
+        AC: new_session(cwd: str, ...) — cwd is a required positional-or-keyword arg.
+        """
+        params = inspect.signature(AcpClient.new_session).parameters
+        cwd_param = params.get("cwd")
+        assert cwd_param is not None, "new_session() must have an explicit 'cwd' parameter"
+        assert cwd_param.default is inspect.Parameter.empty, (
+            "new_session() 'cwd' must be required with no default, matching SDK signature"
+        )
+
+    def test_new_session_signature_has_mcp_servers_defaulting_to_none(self) -> None:
+        """new_session() must declare 'mcp_servers' with a default of None.
+
+        AC: new_session(cwd: str, mcp_servers: list or None = None)
+        """
+        params = inspect.signature(AcpClient.new_session).parameters
+        mcp_param = params.get("mcp_servers")
+        assert mcp_param is not None, (
+            "new_session() must declare 'mcp_servers' explicitly (not via **kwargs)"
+        )
+        assert mcp_param.default is None, (
+            "new_session() 'mcp_servers' must default to None per AC"
+        )
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_requires_cwd_at_runtime(self) -> None:
+        """Calling new_session() without cwd must raise TypeError.
+
+        With **kwargs this silently succeeds — the test enforces that cwd is a
+        required, explicitly typed argument matching the SDK function signature.
+        """
+        conn = _make_conn()
+        client = AcpClient(conn)
+        with pytest.raises(TypeError):
+            await client.new_session()
