@@ -111,13 +111,22 @@ class TestFromAC_ValidateAgentsTodoCheck:
 
         '_' is a word character in Python regex, so 'todo_extra' does not match
         \\btodo\\b. An implementation using a plain 'todo' substring would fail this.
+
+        Note: only the bare-todo ban check is scoped here. 'todo_extra' is not a
+        valid VS Code built-in or MCP pattern — a separate unknown-tool check (#198)
+        may produce errors for it. This test asserts only that NO bare-todo ban error
+        fires, not that the errors list is empty.
         """
         agent_file = tmp_path / "substr.agent.md"
         _write_agent(
             agent_file,
             _agent_content("name: substr\ntools: [read/readFile, todo_extra]"),
         )
-        assert validate_agent(agent_file) == []
+        errors = validate_agent(agent_file)
+        bare_todo_errors = [e for e in errors if "bare 'todo'" in e or "bare todo" in e.lower()]
+        assert not bare_todo_errors, (
+            f"'todo_extra' should not trigger the bare-todo ban check; got: {bare_todo_errors}"
+        )
 
     def test_argument_hint_with_todos_does_not_trigger(self, tmp_path: Path) -> None:
         """AC1: 'todos' in argument-hint does not trigger failure.
