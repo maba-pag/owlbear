@@ -51,6 +51,7 @@ class AppContext:
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
+    global _app_context  # noqa: PLW0603
     path = os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     conn = init_db(path)
     try:
@@ -64,17 +65,23 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
-        yield AppContext(
+        ctx = AppContext(
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
             source_store=source_store,
         )
+        _app_context = ctx
+        yield ctx
     finally:
+        _app_context = None
         conn.close()
 
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
+
+# Module-level context so zero-arg @mcp.resource handlers can access graph_store.
+_app_context: AppContext | None = None
 
 
 @mcp.tool()
@@ -181,7 +188,10 @@ async def knowledge_stats(ctx: Context) -> str:
 @mcp.resource("knowledge://stats")
 async def _knowledge_stats_bridge() -> str:
     """MCP-registered concrete resource for knowledge://stats (zero-arg for FastMCP compat)."""
-    doc_count, entity_count, edge_count = await asyncio.to_thread(lambda: (0, 0, 0))
+    if _app_context is None or _app_context.graph_store is None:
+        return "Knowledge base: 0 documents, 0 entities, 0 edges"
+    gs = _app_context.graph_store
+    doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
     return (
         f"Knowledge base: {doc_count} documents, {entity_count} entities, "
         f"{edge_count} edges"
