@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import re
+import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -236,13 +239,44 @@ def main(args: list[str] | None = None) -> int:
     manifest_path = Path(parsed.manifest)
     workspace_root = Path(parsed.root) if parsed.root else Path.cwd()
 
-    summary = asyncio.run(
-        load_manifest_file(
-            manifest_path=manifest_path,
-            workspace_root=workspace_root,
-            source_store=None,  # type: ignore[arg-type]
-            pipeline=None,  # type: ignore[arg-type]
+    from owlbear_knowledge.chunker import TextChunker  # noqa: PLC0415
+    from owlbear_knowledge.document_store import DocumentStore  # noqa: PLC0415
+    from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
+    from owlbear_knowledge.extractor import EntityExtractor  # noqa: PLC0415
+    from owlbear_knowledge.graph_store import GraphStore  # noqa: PLC0415
+    from owlbear_knowledge.ingest import IngestPipeline  # noqa: PLC0415
+    from owlbear_knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
+    from owlbear_knowledge.schema import init_db as _init_db  # noqa: PLC0415
+    from owlbear_knowledge.source_store import KnowledgeSourceStore  # noqa: PLC0415
+
+    db_path = os.environ.get("OWLBEAR_KB_PATH", "data/knowledge/knowledge.db")
+    db_file = Path(db_path)
+    db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_file))
+    _init_db(conn)
+    gs = GraphStore(conn)
+    vs = QdrantVectorStore()
+    emb = BgeM3EmbeddingProvider()
+    doc_store = DocumentStore(conn, gs, vs, emb)
+    extractor = EntityExtractor()
+    chunker = TextChunker()
+    pipeline = IngestPipeline(doc_store, extractor, chunker)
+    source_store = KnowledgeSourceStore(conn)
+
+    try:
+        summary = asyncio.run(
+            load_manifest_file(
+                manifest_path=manifest_path,
+                workspace_root=workspace_root,
+                source_store=source_store,
+                pipeline=pipeline,
+            )
         )
-    )
+    finally:
+        conn.close()
 
     return 0 if summary.all_source_ok else 1
+
+
+if __name__ == '__main__':  # noqa: Q000
+    sys.exit(main())
