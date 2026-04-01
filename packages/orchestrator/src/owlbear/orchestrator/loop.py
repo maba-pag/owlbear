@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import logging
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -25,11 +26,23 @@ if TYPE_CHECKING:
     from owlbear.planner.models import DispatchEntry
 
 try:
-    from acp import PROTOCOL_VERSION, Client, connect_to_agent
+    from acp import PROTOCOL_VERSION, Client, connect_to_agent, text_block
 except ImportError:  # pragma: no cover
     PROTOCOL_VERSION = "2025-02-14"  # type: ignore[assignment]
     Client = object  # type: ignore[assignment,misc]
     connect_to_agent = None  # type: ignore[assignment]
+
+    def text_block(text: str) -> object:  # type: ignore[misc]
+        """Fallback text block when acp is not installed."""
+
+        @dataclasses.dataclass
+        class _TextBlock:
+            text: str
+
+        return _TextBlock(text=text)
+
+
+_logger = logging.getLogger(__name__)
 
 
 class _OrchestratorClient(Client):  # type: ignore[misc]
@@ -160,7 +173,7 @@ async def dispatch_entry(
 
     t_start = time.monotonic()
     try:
-        await client.prompt(session_id=session_id)
+        await client.prompt(session_id=session_id, prompt=[text_block(prompt_text)])
     except (AcpClientError, TimeoutError) as exc:
         t_end = time.monotonic()
         if audit_log is not None:
@@ -355,20 +368,35 @@ async def run_loop(  # noqa: PLR0913
         if not plan.entries:
             break
 
-        # Track IDs dispatched with a retry_hint — they are "stale-retried"
+        # Track IDs dispatched with a retry_hint — they are "stale-retried".
+        # Clear entries that reappear without a retry_hint (Amendment 1).
         new_stale = {e.task_id for e in plan.entries if e.retry_hint}
-        state.stale_retried = state.stale_retried | new_stale
+        ids_without_retry_hint = {e.task_id for e in plan.entries if not e.retry_hint}
+        state.stale_retried = (state.stale_retried | new_stale) - ids_without_retry_hint
 
         waves = assemble_waves(plan.entries, wave_size=wave_size, cycle=state.cycle)
         cycle_id = uuid4().hex
 
         cycle_failures: set[int] = set()
-        for wave in waves:
+        for wave_num, wave in enumerate(waves, start=1):
+            for entry in wave.entries:
+                _logger.debug(
+                    "Dispatching task_id=%d agent=%s wave=%d",
+                    entry.task_id,
+                    entry.agent,
+                    wave_num,
+                )
             result = await dispatch_wave(
                 wave, client, state, audit_log=audit_log, cycle_id=cycle_id
             )
             cycle_failures |= set(result.failures)
 
+        _logger.debug(
+            "Cycle %d complete: successes=%d failures=%d",
+            state.cycle,
+            sum(len(w.entries) for w in waves) - len(cycle_failures),
+            len(cycle_failures),
+        )
         state.crash_failures = cycle_failures
 
 
