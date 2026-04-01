@@ -306,3 +306,23 @@ class TestFromAC_SandboxPath:
         # subdir/../file.txt resolves to tmp_path/file.txt — still inside root
         result = sandbox_path(tmp_path, "subdir/../file.txt")
         assert result == (tmp_path / "file.txt").resolve()
+
+    def test_prefix_sibling_directory_raises_permission_error(
+        self, tmp_path: Path
+    ) -> None:
+        """A path in a sibling whose name is a string prefix of root raises PermissionError.
+
+        Security regression for CWE-22: str.startswith() allows escape when a sibling
+        directory name is a string prefix of root (e.g., root='safe', sibling='safeevil').
+        Only Path.is_relative_to() correctly rejects such paths.
+        """
+        from owlbear_knowledge._paths import sandbox_path
+
+        root = tmp_path / "safe"
+        root.mkdir()
+        evil_dir = tmp_path / "safeevil"
+        evil_dir.mkdir()
+        evil_file = evil_dir / "secret.txt"
+
+        with pytest.raises(PermissionError):
+            sandbox_path(root, evil_file)
