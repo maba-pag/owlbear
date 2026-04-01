@@ -66,14 +66,14 @@ After running `kanban/setup.ps1`, a `kanban/kanban-md.exe` binary is also downlo
 After opening the project in VS Code, use the **Diagnostics view** to confirm everything loaded correctly:
 
 1. Open the Copilot Chat panel.
-2. Right-click the Chat view → select **"Diagnostics"**.
-3. Verify each of the following appears in the diagnostics output:
+2. Open the **Chat Customizations** window (from Chat settings or Command Palette).
+3. Verify each of the following appears:
 
 | What to check | How to verify |
 |---------------|---------------|
-| OwlBear agents loaded | Diagnostics shows agents from `../owlbear/agents/` |
-| OwlBear skills loaded | Diagnostics shows skills from `../owlbear/skills/` |
-| Instructions loaded | Diagnostics shows `*.instructions.md` files from `../owlbear/instructions/` |
+| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/agents/` |
+| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/skills/` |
+| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/instructions/` |
 | MCP servers running | Run `MCP: List Servers` from the Command Palette — owlbearKanban should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
@@ -103,8 +103,8 @@ To register your local agent directory, add to `.vscode/settings.json`:
 ```json
 {
   "chat.agentFilesLocations": {
-    "../owlbear/agents": "OwlBear Agents",
-    ".github/agents": "Project Agents"
+    "../owlbear/agents": true,
+    ".github/agents": true
   }
 }
 ```

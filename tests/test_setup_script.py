@@ -141,6 +141,16 @@ class TestFromAC_VscodeSettings:
             f"instructionsFilesLocations must NOT contain {{rel}}/.github/instructions — got: {paths}"
         )
 
+    def test_location_values_are_booleans(self, tmp_path: Path) -> None:
+        """VS Code expects boolean values for chat location settings, not strings."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_vscode_settings(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "settings.json").read_text())
+        for key in ("chat.agentFilesLocations", "chat.agentSkillsLocations", "chat.instructionsFilesLocations"):
+            for path, value in data[key].items():
+                assert value is True, f"{key}[{path!r}] must be True (bool), got {value!r}"
+
     def test_location_paths_use_forward_slashes(self, tmp_path: Path) -> None:
         """All VS Code location paths must use forward slashes (no backslashes)."""
         project_dir = _project_dir(tmp_path)
