@@ -533,3 +533,109 @@ class TestFromAC_ImportErrorWhenMissingMoonshine:
         # succeeded — confirming guarded import at method level only.
         assert SttRunner is not None
         assert TranscriptJsonListener is not None
+
+
+# ---------------------------------------------------------------------------
+# AC4/AC5: on_line_started emits partial NDJSON (retry — reviewer gap AC5/line 54)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_OnLineStartedEmission:
+    """on_line_started must emit partial NDJSON when a new transcript line begins (AC4/AC5).
+
+    Retry gap: prior test suite verified method existence (AC4) but never invoked
+    on_line_started to confirm it emits {"type": "partial"} NDJSON (AC5).
+    """
+
+    def test_on_line_started_emits_partial_type(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_started must emit type='partial' NDJSON message."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        listener.on_line_started(3)
+        messages = _read_ndjson(captured_stdout)
+        assert any(m.get("type") == "partial" for m in messages)
+
+    def test_on_line_started_emits_empty_text(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_started partial message must have text='' (line just started)."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        listener.on_line_started(0)
+        messages = _read_ndjson(captured_stdout)
+        partial_msgs = [m for m in messages if m.get("type") == "partial"]
+        assert any(m.get("text") == "" for m in partial_msgs)
+
+    def test_on_line_started_includes_line_idx(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_started partial message must include the correct line_idx."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        listener.on_line_started(7)
+        messages = _read_ndjson(captured_stdout)
+        partial_msgs = [m for m in messages if m.get("type") == "partial"]
+        assert any(m.get("line_idx") == 7 for m in partial_msgs)  # noqa: PLR2004
+
+
+# ---------------------------------------------------------------------------
+# AC4/AC5: on_line_text_changed bridge emits partial NDJSON (retry — reviewer gap line 78)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_OnLineTextChangedBridge:
+    """on_line_text_changed bridges Moonshine event objects to NDJSON output (AC4/AC5).
+
+    Retry gap: builder added on_line_text_changed as the production path from Moonshine
+    events to on_text_changed. It is the only code path through which real Moonshine
+    transcription events reach the NDJSON output. Zero tests exercised it.
+    """
+
+    def test_on_line_text_changed_emits_partial_ndjson(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_text_changed must emit type='partial' NDJSON using event.line attrs."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        mock_event = MagicMock()
+        mock_event.line.line_id = 2
+        mock_event.line.text = "hello from event"
+        listener.on_line_text_changed(mock_event)
+        messages = _read_ndjson(captured_stdout)
+        assert any(m.get("type") == "partial" for m in messages)
+
+    def test_on_line_text_changed_forwards_event_line_text(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_text_changed must forward event.line.text to the NDJSON message."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        mock_event = MagicMock()
+        mock_event.line.line_id = 0
+        mock_event.line.text = "transcribed words"
+        listener.on_line_text_changed(mock_event)
+        messages = _read_ndjson(captured_stdout)
+        partial_msgs = [m for m in messages if m.get("type") == "partial"]
+        assert any(m.get("text") == "transcribed words" for m in partial_msgs)
+
+    def test_on_line_text_changed_forwards_event_line_id(
+        self,
+        captured_stdout: BytesIO,
+    ) -> None:
+        """AC5: on_line_text_changed must forward event.line.line_id as line_idx in NDJSON."""
+        lock = threading.Lock()
+        listener = TranscriptJsonListener(lock)
+        mock_event = MagicMock()
+        mock_event.line.line_id = 5
+        mock_event.line.text = "words"
+        listener.on_line_text_changed(mock_event)
+        messages = _read_ndjson(captured_stdout)
+        partial_msgs = [m for m in messages if m.get("type") == "partial"]
+        assert any(m.get("line_idx") == 5 for m in partial_msgs)  # noqa: PLR2004
