@@ -1,10 +1,12 @@
 ---
 id: 20
 title: Build dispatch planner
-status: todo
+status: archived
 priority: needed
 created: 2026-03-26T17:22:22.8937692+01:00
-updated: 2026-03-30T23:04:45.0547735+02:00
+updated: 2026-04-01T22:36:43.9002892+02:00
+started: 2026-04-01T22:36:43.3770591+02:00
+completed: 2026-04-01T22:36:43.3770591+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -167,3 +169,78 @@ stale_retried must be logging-only, not passed as kwarg.
 ### Verdict: FAIL confidence .40 - back to todo until #146 is complete and bugs fixed
 
 -t
+
+[[2026-03-31]] Tue 12:38
+## Test-Writer Notes (retry)
+- Retry reason: reviewer cited weak tests (TestFromAC_RunLoop fully mocks select_tasks, masking TypeError) and missing AC deliverables
+- New test file: tests/test_orchestrator_loop.py (appended 3 new classes)
+- Classes added:
+  - TestFromAC_RunLoopCallSignature (3 tests)
+  - TestFromAC_OrchestratorPackageExports (6 tests)
+  - TestFromAC_OrchestrateFunction (2 tests)
+- Total: 11 new tests, all FAIL
+- ruff: clean
+- Preserved: existing 51 tests in prior classes (all PASS)
+- AC coverage:
+  | AC failure | Test(s) | Category |
+  | run_loop calls select_tasks with wrong kwargs | test_empty_board_exits_cleanly_with_real_select_tasks | error |
+  | run_loop missing scope param | test_run_loop_accepts_scope_keyword_argument, test_scope_forwarded_to_read_board | error |
+  | orchestrate() absent | test_orchestrate_is_callable, test_orchestrate_runs_without_typeerror_on_empty_board | error |
+  | missing exports (6 symbols) | test_exports_* x6 | error |
+
+[[2026-03-31]] Tue 13:10
+## Builder Notes (retry)\n- Files changed: packages/orchestrator/src/owlbear/orchestrator/loop.py, loop/__init__.py (exports), planner/selector.py\n- Tests: 142 passed (69 loop + 73 gates/selector), coverage 94% loop.py/100% selector.py\n- Lint: ruff clean\n- Fixes: (1) select_tasks() accepts crash_failures+stale_retried kwargs - no TypeError on real call; (2) run_loop() adds scope param forwarded to read_board; (3) orchestrate() implemented with ProcessSupervisor+connect_to_agent+AcpClient wiring, also accepts client= shortcut for test-friendly usage; (4) orchestrator/__init__.py exports Wave, assemble_waves, LoopState, CycleResult, format_prompt, orchestrate
+
+[[2026-03-31]] Tue 17:47
+## Review Evidence (retry 2)
+See docs/scratch/20-reviewer2.tmp for full evidence.
+
+[[2026-04-01]] Wed 01:32
+## Test-Writer Notes (retry 3)
+- Retry reason: reviewer cited contradictory tests in TestFromAC_DispatchWave
+- Contradiction: test_non_rate_limit_crash_no_wave_level_retry_single_call (call_count==1, PASS) vs test_non_rate_limit_crash_dispatch_entry_called_twice_retry_once (call_count==2, FAIL)
+- Resolution: removed the incorrect test (call_count==2). The contract is no retry within dispatch_wave for non-rate-limit errors — dispatch_entry propagates the exception, _apply_wave_result records it as failure once.
+- Evidence: loop.py dispatch_entry only catches AcpClientError and TimeoutError; other exceptions propagate; _apply_wave_result has no retry logic.
+- Result: 71 tests, all PASS (test_orchestrator_loop.py). Combined with test_planner_gates_selector.py: 144 passed, 0 failed.
+- ruff: clean
+
+[[2026-04-01]] Wed 05:20
+## Builder Notes (retry 3)\n- No code changes needed - existing implementation already correct\n- Test-writer removed contradictory test (call_count==2 in TestFromAC_DispatchWave)\n- Tests: 144 passed (71 loop + 73 gates/selector)\n- Coverage: loop.py 94%, gates.py 100%, selector.py 100%, models.py 100%\n- Lint: ruff clean\n- Evidence: 144 passed in 20.79s, All checks passed!
+
+[[2026-04-01]] Wed 21:34
+## Docs Gate
+Checklist: (1) copilot-instructions.md Pass - packages/orchestrator/ row accurate; (2) Docstrings Pass - all public symbols covered in models/gates/board/selector/waves/loop; (3) sources/overview.md N/A - all sources internal; (4) README.md N/A - CLI section already accurate; (5) research doc Pass - build-dispatch-planner.md exists, linked, subtasks created. Files Updated: None. Scratch cleaned: docs/scratch/20-reviewer2.tmp deleted.
+
+[[2026-04-01]] Wed 22:36
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Planner subpackage + __init__.py | list_dir confirms packages/orchestrator/src/owlbear/planner/ with 5 files | PASS |
+| planner.models exports Task, DispatchEntry, DispatchPlan | models.py L10-51, __init__.py re-exports all three | PASS |
+| planner.board exports read_board() returning list[Task] | board.py L19 async def read_board(), __init__.py imports it | PASS |
+| planner.gates exports gate predicate functions | 4 functions (check_atomicity, check_tdd, check_clarity, check_gates). AC says 6 but architect revised to 4 -- gates 1,2,6 handled by CLI flags. Reviewer accepted. | PASS |
+| planner.selector dual-key sort + 20-cap | DISPATCH_CAP=20, sort by (priority_rank, status_rank), confirmed in selector.py | PASS |
+| STATUS_AGENT_MAP matches 7 entries | 7 entries confirmed: ideation/researcher through done/auditor | PASS |
+| orchestrator/loop.py consumes DispatchPlan via AcpClient | run_loop() calls select_tasks() returning DispatchPlan, dispatches via AcpClient | PASS |
+| All subtask unit tests pass | 148 passed (73 gates+selector, 75 loop), 0 failed | PASS |
+| Integration read_board/check_gates/select_tasks | select_tasks internally calls check_gates; run_loop orchestrates the full pipeline | PASS |
+
+### Subtask Status
+- #144: archived
+- #145: archived
+- #146: archived
+
+### Test Results
+- pytest (task-scoped): 148 passed, 0 failed
+- pytest (full suite): 2216 passed, 194 failed (all unrelated: quality-runner, rename, voice, hooks, infra tasks)
+- ruff planner+orchestrator: All checks passed
+
+### AC Quality Score: 4
+AC was specific and well-structured for an umbrella task. One stale reference (6 gates vs actual 4) caused by architect revision not propagating back. Minor gap, builder and reviewer handled it correctly.
+
+### Deduction breakdown
+- No deductions. All 9 AC lines have specific evidence. Lint clean. Reviewer evidence present and thorough. No task-scope test failures. AC quality score 4 (no deduction).
+
+### Confidence: .98
+### Action: archive
