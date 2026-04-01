@@ -127,7 +127,20 @@ async def dispatch_entry(
 
     try:
         session_resp = await client.new_session(cwd=None, mcp_servers=[])
-    except (AcpClientError, TimeoutError):
+    except (AcpClientError, TimeoutError) as exc:
+        if audit_log is not None:
+            _failure_event = CompletionEvent(
+                timestamp=datetime.now(tz=UTC).isoformat(),
+                task_id=entry.task_id,
+                agent=entry.agent,
+                outcome="failure",
+                duration_ms=0,
+                files_changed=[],
+                error=str(exc),
+                cycle_id=cycle_id,
+            )
+            with contextlib.suppress(OSError):
+                audit_log.log_completion(_failure_event, uuid4().hex)
         return False
 
     session_id = session_resp.session_id
@@ -148,7 +161,21 @@ async def dispatch_entry(
     t_start = time.monotonic()
     try:
         await client.prompt(session_id=session_id)
-    except (AcpClientError, TimeoutError):
+    except (AcpClientError, TimeoutError) as exc:
+        t_end = time.monotonic()
+        if audit_log is not None:
+            _failure_event = CompletionEvent(
+                timestamp=datetime.now(tz=UTC).isoformat(),
+                task_id=entry.task_id,
+                agent=entry.agent,
+                outcome="failure",
+                duration_ms=int((t_end - t_start) * 1000),
+                files_changed=[],
+                error=str(exc),
+                cycle_id=cycle_id,
+            )
+            with contextlib.suppress(OSError):
+                audit_log.log_completion(_failure_event, session_id)
         return False
     t_end = time.monotonic()
 
