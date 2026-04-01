@@ -80,6 +80,10 @@ class AcpClient:
         conn: The ACP connection to wrap.
         cancel_signal: Optional signal object; if ``is_set()`` returns True before a
             prompt call, session/cancel is sent and the call is aborted.
+        error_logger: Optional object satisfying the ``_ErrorLogger`` protocol; if provided,
+            ``log_error`` is called with the classified ``ErrorCategory``, method name, and
+            error message whenever ``initialize``, ``new_session``, or ``prompt`` raises a
+            ``RequestError``, ``BrokenPipeError``, or ``ConnectionError``.
     """
 
     def __init__(
