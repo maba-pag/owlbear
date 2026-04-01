@@ -123,6 +123,7 @@ Return **only** the signal line — no other text after it.
 - You are about to issue PASS but TestFromAC tests were modified by the builder and you have not flagged it in the comparison table
 - A quality concern is preference-based, not objectively wrong — consider a decision request if the correct standard is ambiguous (see `decision-requests` skill)
 - You are about to PASS a feature addition without checking if the environment already provides it
+- You have not checked builder notes for loop patterns (Step 6.7)
 
 **Common failure rationalizations:**
 
