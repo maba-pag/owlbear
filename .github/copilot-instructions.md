@@ -64,6 +64,16 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 | Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                                                                                                           |
 | Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                                                                                                          |
 
+## MCP Server Conventions
+
+All three custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`) follow these conventions:
+
+- **Error prefix:** Tool execution errors return a string starting with `error: ` (e.g., `f"error: {stderr.strip()}"`). Empty-result messages (e.g., "No sources found.") are informational — no prefix.
+- **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
+- **Return types:** Use `dict` or `list[dict]` for queryable data (lists, metadata). Use `str` for content bodies, messages, and errors.
+- **Lifespan pattern:** Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan function passed to `FastMCP`.
+- **Module exports:** Every `server.py` defines `__all__` listing its public symbols.
+
 GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
 
 ## Memory governance
