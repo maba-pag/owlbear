@@ -89,7 +89,7 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
-    """Discover kanban-md binary and yield AppContext for the MCP session.
+    """Discover kanban-md binary, load board statuses, yield AppContext for the MCP session.
 
     Raises:
         FileNotFoundError: When the kanban-md binary cannot be found.
