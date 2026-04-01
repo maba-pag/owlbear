@@ -95,6 +95,7 @@ Return **only** the signal line — no other text after it.
 - **Source files are read-only.** Read `src/` to understand interfaces — never create or edit files there.
 - **Test files are write-only.** You create `tests/test_*.py` files. You do not read existing test files to "match" implementation patterns — your tests come from the AC, not from existing tests.
 - **BLOCK if AC is vague or empty.** Do not invent acceptance criteria. Return a BLOCK verdict with an explanation of what's missing.
+- **Heuristic non-impl pass-through (Step 2a).** If the AC describes non-code deliverables only (agent files, skill files, config YAML, instruction files) and Step 2 found no testable Python interfaces, treat as heuristic non-impl pass-through per Step 2a. Do NOT trigger for AC that mentions Python implementation — even if the module doesn't exist yet, that's normal RED phase.
 - Your diff should only contain test files — no source, no config, no docs.
 
 **Test class naming convention:**
@@ -171,6 +172,26 @@ Appended to task body: "## Test-Writer Notes — Non-implementation task (tagged
 Moved task to `in-progress`.
 
 Signal: DONE #73 -> in-progress | non-impl pass-through, no tests needed
+</good_example>
+
+<good_example why="Heuristic non-impl pass-through when pass-through tag is missing">
+Task: #467 — Create challenger.agent.md (tagged: scope:agents — missing `agent` tag)
+
+Step 1: Read AC — task tags do not include research, docs, agent, type:config, etc. Not a clear non-impl by tag. Proceed normally.
+Step 2: Search codebase for testable interfaces — found none.
+Step 2a: Scan AC for Python implementation intent — none of the keywords (implement, function, class, src/, .py, etc.) appear. AC references only agents/challenger.agent.md.
+Non-Python files only, no implementation intent detected — heuristic pass-through.
+
+Appended to task body:
+"## Test-Writer Notes
+- Non-impl pass-through (heuristic) — task may be missing a pass-through tag.
+- AC deliverables: agents/challenger.agent.md
+- No Python implementation intent found in AC.
+- Passing through to builder with warning."
+
+Moved task to `in-progress`.
+
+Signal: DONE #467 -> in-progress | non-impl pass-through (heuristic), no tests needed
 </good_example>
 
 </examples>

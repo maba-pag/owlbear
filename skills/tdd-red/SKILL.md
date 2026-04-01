@@ -87,6 +87,29 @@ Find interfaces, types, and existing patterns referenced in the AC:
 - Check existing `conftest.py` files for reusable fixtures
 - Source files are **read-only** — never create or edit files in `src/`
 
+## Step 2a — Non-impl fallback check
+
+Run this check **only if Step 2 found no testable interfaces**:
+
+1. **If Step 2 found testable interfaces:** proceed to Step 3 (no change).
+2. **Scan AC for Python implementation intent** — keywords: `implement`, `function`, `method`, `class`, `module`, `src/`, `packages/`, `.py`, `import`, `endpoint`, `API`.
+3. **If implementation intent found:** proceed to Step 3 (new-module RED phase, ImportError tests expected).
+4. **If NO intent AND AC references only non-Python files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.yml`, `.yaml`, `.json`, `.md`, `.prompt.md`): heuristic pass-through. Append to task body:
+
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes
+   - Non-impl pass-through (heuristic) — task may be missing a pass-through tag.
+   - AC deliverables: {list of non-Python files referenced}
+   - No Python implementation intent found in AC.
+   - Passing through to builder with warning." -t
+   ```
+
+   Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
+   Return: `DONE #{id} -> in-progress | non-impl pass-through (heuristic), no tests needed`
+   **Stop here.**
+
+5. **If ambiguous** (neither clear impl nor clear non-impl): default to pass-through with strong warning. Use the note format from step 4, appending `- Ambiguous AC — builder should verify intent.` Escalate to a decision request targeting the architect for re-tagging only when AC content is too ambiguous to determine whether the builder needs to produce code or config; escalation must designate a clear next actor.
+
 ## Step 3 — Plan test categories
 
 Map each AC line to test categories:
