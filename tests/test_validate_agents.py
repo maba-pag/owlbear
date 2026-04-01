@@ -23,6 +23,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Import target — will raise ModuleNotFoundError until script exists (RED)
 # ---------------------------------------------------------------------------
@@ -736,4 +738,77 @@ class TestFromAC_NoBannedToolDoubleError:
         )
         assert not todos_flagged, (
             f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ValidToolPatterns  (#201)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ValidToolPatterns:
+    """#201: Happy-path tests for canonical tool registry validation.
+
+    Closes the valid-input coverage gap left after #198.  All tests validate
+    the existing _is_valid_tool() contract and should PASS immediately — this
+    class verifies existing behaviour, not new implementation.
+    """
+
+    # AC1: toolset shorthand — all 8 KNOWN_TOOLSETS members
+    @pytest.mark.parametrize(
+        "toolset",
+        ["agent", "browser", "edit", "execute", "read", "search", "web", "vscode"],
+    )
+    def test_valid_toolset_shorthand_passes(self, tmp_path: Path, toolset: str) -> None:
+        """AC1: validate_agent() returns no errors for each KNOWN_TOOLSETS shorthand."""
+        agent_file = tmp_path / f"toolset-{toolset}.agent.md"
+        _write_agent(agent_file, _agent_content(f"name: toolset-{toolset}\ntools: [{toolset}]"))
+        assert validate_agent(agent_file) == []
+
+    # AC2: prefixed tools — representative sample from actual agents
+    @pytest.mark.parametrize(
+        "tool",
+        [
+            "execute/runInTerminal",
+            "read/readFile",
+            "vscode/memory",
+            "edit/createFile",
+            "search/semanticSearch",
+        ],
+    )
+    def test_valid_prefixed_tool_passes(self, tmp_path: Path, tool: str) -> None:
+        """AC2: validate_agent() returns no errors for representative prefixed tools."""
+        safe_name = tool.replace("/", "-")
+        agent_file = tmp_path / f"prefixed-{safe_name}.agent.md"
+        _write_agent(agent_file, _agent_content(f"name: prefixed-{safe_name}\ntools: [{tool}]"))
+        assert validate_agent(agent_file) == []
+
+    # AC3: standalone tools — both KNOWN_STANDALONE_TOOLS members
+    @pytest.mark.parametrize("tool", ["newWorkspace", "selection"])
+    def test_valid_standalone_tool_passes(self, tmp_path: Path, tool: str) -> None:
+        """AC3: validate_agent() returns no errors for each KNOWN_STANDALONE_TOOLS member."""
+        agent_file = tmp_path / f"standalone-{tool}.agent.md"
+        _write_agent(agent_file, _agent_content(f"name: standalone-{tool}\ntools: [{tool}]"))
+        assert validate_agent(agent_file) == []
+
+    # AC4: MCP wildcard patterns currently in use
+    @pytest.mark.parametrize("pattern", ["owlbear-kanban/*", "microsoft/markitdown/*"])
+    def test_mcp_wildcard_pattern_passes(self, tmp_path: Path, pattern: str) -> None:
+        """AC4: validate_agent() returns no errors for MCP wildcard patterns."""
+        safe_name = pattern.replace("/", "-").replace("*", "wildcard")
+        agent_file = tmp_path / f"mcp-{safe_name}.agent.md"
+        _write_agent(agent_file, _agent_content(f"name: mcp-{safe_name}\ntools: [{pattern}]"))
+        assert validate_agent(agent_file) == []
+
+    # AC5: per-file parametrized test — discovers agents/ dynamically (no hardcoded count)
+    @pytest.mark.parametrize(
+        "agent_file",
+        sorted(_AGENTS_DIR.glob("*.agent.md")),
+        ids=lambda p: p.name,
+    )
+    def test_each_agent_file_passes_validation(self, agent_file: Path) -> None:
+        """AC5: validate_agent() returns [] for every current agents/*.agent.md file."""
+        errors = validate_agent(agent_file)
+        assert errors == [], (
+            f"validate_agent({agent_file.name}) returned errors:\n" + "\n".join(errors)
         )
