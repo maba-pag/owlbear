@@ -7,6 +7,8 @@ happens at the application layer.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from pydantic import BaseModel, ConfigDict, Field
 
 EVALUATION_PROMPT = """\
@@ -39,6 +41,9 @@ class EvaluationResult(BaseModel):
     tags: list[str] = Field(default_factory=list)
     summary: str = ""
     worth_ingesting: bool = False
+
+
+EvaluateFn = Callable[[str], Awaitable[EvaluationResult]]
 
 
 class SourceEvaluator:

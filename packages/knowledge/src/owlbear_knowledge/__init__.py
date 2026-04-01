@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from owlbear_knowledge.bookmark_store import Bookmark, BookmarkStore
+from owlbear_knowledge.cancellation import CancelSignal, LinkedCancelSignal
 from owlbear_knowledge.consolidation import ConsolidationInsight, ConsolidationService
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
@@ -17,6 +18,7 @@ from owlbear_knowledge.status_store import DocumentStatus, StatusStore, compute_
 __all__ = [
     "Bookmark",
     "BookmarkStore",
+    "CancelSignal",
     "ConsolidationInsight",
     "ConsolidationService",
     "DocumentStatus",
@@ -28,6 +30,7 @@ __all__ = [
     "IngestResult",
     "IntakeResult",
     "KnowledgeSourceStore",
+    "LinkedCancelSignal",
     "RetrievalResult",
     "SourceEvaluator",
     "StatusStore",

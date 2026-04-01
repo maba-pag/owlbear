@@ -7,12 +7,15 @@ the application layer.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
 if TYPE_CHECKING:
     import sqlite3
+
+TextCompletionFn = Callable[[str], Awaitable[str]]
 
 
 class ConsolidationInsight(BaseModel):
