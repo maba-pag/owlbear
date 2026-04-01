@@ -42,6 +42,13 @@ External repos and resources studied during OwlBear development.
 | VS Code Agent Skills docs | code.visualstudio.com/docs/copilot/customization/agent-skills | Confirms spec naming constraints and directory-match requirement | docs/research/skill-validation-hardening.md | 2026-04-01 |
 | deer-flow validation.py (MIT) | github.com/bytedance/deer-flow → backend/packages/harness/deerflow/skills/validation.py | Regex pattern, angle-bracket rejection, implementation reference | docs/research/skill-validation-hardening.md | 2026-04-01 |
 
+## Memory Migration CLI Design (Task #527)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Mem0 CLI import command | docs.mem0.ai/platform/cli | Bulk import pattern (`mem0 import`), dry-run mode (`--dry-run`), JSON array input format | docs/research/memory-migration-cli-design.md | 2026-04-01 |
+| Mem0 migration guide v1.0 | github.com/mem0ai/mem0/blob/main/MIGRATION_GUIDE_v1.0.md | API migration patterns, response format normalization | docs/research/memory-migration-cli-design.md | 2026-04-01 |
+
 ## Test-Writer Non-Impl Fallback Heuristic (Task #498)
 
 | Source | URL | What | Where Used | Date |
@@ -55,6 +62,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | deer-flow repo (v2, Apache-2.0) | github.com/bytedance/deer-flow | Memory system (updater, queue, storage, prompt, middleware) and subagent system (executor, registry, config, task_tool, SubagentLimitMiddleware) — full source analysis | docs/research/deer-flow-memory-subagent-deep-dive.md | 2026-03-31 |
 
+## Upgrade query_service.py — Hybrid Search (Task #160)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Qdrant hybrid queries docs | qdrant.tech/documentation/concepts/hybrid-queries/ | Prefetch + Fusion.RRF server-side ranking pattern | docs/research/upgrade-query-service-hybrid-search.md | 2026-04-01 |
+| qdrant-client v1.9+ API (local) | Installed package | Verified `Fusion.RRF`, `FusionQuery`, `Prefetch` classes | docs/research/upgrade-query-service-hybrid-search.md | 2026-04-01 |
+
 ## KANBAN_TOOLS_EXCLUDE Config (Task #473)
 
 | Source | URL | What | Where Used | Date |
@@ -62,6 +76,29 @@ External repos and resources studied during OwlBear development.
 | FastMCP v1.26.0 server.py | Installed: `.venv/Lib/site-packages/mcp/server/fastmcp/server.py` | `remove_tool(name) -> None` public API, raises ToolError on unknown | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
 | FastMCP tool_manager.py | Installed: `.venv/Lib/site-packages/mcp/server/fastmcp/tools/tool_manager.py` | `remove_tool` implementation and ToolError exception | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
 | OwlBear mcp-kanban server | `packages/mcp-kanban/src/owlbear_mcp_kanban/server.py` | KANBAN_BIN env read pattern (in lifespan), tool registration via decorators | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+
+## E2E Smoke Test Script (Task #157)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OwlBear test_e2e_dispatch.py | tests/test_e2e_dispatch.py | UUID task isolation, subprocess dispatch, try/finally cleanup pattern | docs/research/e2e-smoke-test-script.md | 2026-04-01 |
+| Python subprocess docs | docs.python.org/3/library/subprocess.html | timeout parameter, TimeoutExpired handling for dispatch wait | docs/research/e2e-smoke-test-script.md | 2026-04-01 |
+| Python atexit docs | docs.python.org/3/library/atexit.html | Exit handler tradeoffs (decided against atexit) | docs/research/e2e-smoke-test-script.md | 2026-04-01 |
+
+## memory-mcp Server Architecture Design (Task #387)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Mem0 open-source (Apache-2.0) | github.com/mem0ai/mem0 | Multi-level memory scoping (user_id, agent_id), memory add/search API, MCP integration (OpenMemory) | docs/research/memory-mcp-server-design.md S7 | 2026-04-01 |
+| DR #428 resolved | docs/decisions/resolved/428-adopt-deer-flow-memory-patterns.md | Binding constraints: adopt patterns 1,2,4(custom),6 from deer-flow | docs/research/memory-mcp-server-design.md S2 | 2026-04-01 |
+| #499 schema definitions | docs/research/deer-flow-memory-patterns-schema-definitions.md | Concrete MemoryEntry schema, MCP tool interface proposal | docs/research/memory-mcp-server-design.md S1 | 2026-04-01 |
+
+## Curator Workflow Design for memory-mcp (Task #528)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Mem0 Memory class | github.com/mem0ai/mem0 | Memory add/get/delete/update/history operations, scoping via user_id/agent_id/run_id, LLM-driven curation (ADD/UPDATE/DELETE events) | docs/research/curator-workflow-memory-mcp.md S6 | 2026-04-01 |
+| LangMem conceptual guide | langchain-ai.github.io/langmem/concepts/conceptual_guide | Background memory manager consolidation pattern, collection vs profile memory types, hot-path vs background formation | docs/research/curator-workflow-memory-mcp.md S7 | 2026-04-01 |
 
 ## Switch move/pick to JSON, Remove board_context (Task #477)
 
@@ -71,6 +108,13 @@ External repos and resources studied during OwlBear development.
 | kanban-md JSON schemas | `skills/kanban-md/references/json-schemas.md` | Task object schema returned by `--json` flag | docs/research/move-pick-json-remove-board-context.md | 2026-03-31 |
 | MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | outputSchema, structuredContent, ToolAnnotations spec definitions | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 types + func_metadata | Installed package `.venv/Lib/site-packages/mcp/` | ToolAnnotations class, Tool.outputSchema field, FastMCP structured_output auto-detection | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
+
+## TOOLS_EXCLUDE for Knowledge and Project MCP Servers (Task #493)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| mcp-kanban _apply_tool_exclusions | packages/mcp-kanban/src/owlbear_mcp_kanban/server.py L72-90 | Reference pattern for lifespan-level tool exclusion | docs/research/tools-exclude-knowledge-project.md | 2026-04-01 |
+| #473 TOOLS_EXCLUDE research | docs/research/kanban-tools-exclude-config.md | Design rationale for env var naming and lifespan approach | docs/research/tools-exclude-knowledge-project.md | 2026-04-01 |
 | mcp-knowledge server ToolAnnotations usage | `packages/mcp-knowledge/src/.../server.py` | Existing annotation pattern (readOnlyHint=True/False) as implementation precedent | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
 
 ## create_task Status/Parent/JSON (Task #475)
@@ -3457,6 +3501,12 @@ External repos and resources studied during OwlBear development.
 | VS Code Hooks docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | 8 hook event types (PascalCase), type: command format, exit code 2 blocking, PreToolUse permissionDecision, Stop decision: block, JSON I/O contract | `docs/research/agent-scoped-hooks-pipeline-enforcement.md` (revision) | 2026-03-30 |
 | VS Code Custom Agents docs (3/25/2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent-scoped hooks frontmatter example with type: command | `docs/research/agent-scoped-hooks-pipeline-enforcement.md` (revision) | 2026-03-30 |
 
+## PostToolUse Lint Guard Feasibility (Task #210)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | PostToolUse I/O schema, hookSpecificOutput.additionalContext, exit code 2 model-facing semantics, agent-scoped hook subagent behavior | `docs/research/posttooluse-lint-guard-feasibility.md` | 2026-04-01 |
+
 ## Non-Impl Tag Cross-References (Task #218)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -3487,3 +3537,10 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | Python docs — `__main__` module | <https://docs.python.org/3/library/__main__.html> | PSF | Idiomatic `__main__.py` pattern: minimal file importing `main()`, `sys.exit(main())` convention | `docs/research/cli-entrypoint-analysis-pipeline.md` | 2026-03-31 |
 | Typer docs — Building a Package | <https://typer.tiangolo.com/tutorial/package/> | MIT | `__main__.py` pattern for Typer apps, `app()` invocation, `[project.scripts]` wiring | `docs/research/cli-entrypoint-analysis-pipeline.md` | 2026-03-31 |
+
+## PreToolUse Read-Only Guard Feasibility (Task #211)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | PreToolUse I/O schema, permissionDecision deny/allow/ask, hookSpecificOutput format, priority rules | `docs/research/pretooluse-read-only-guard-feasibility.md` | 2026-04-01 |
+| VS Code Custom Agents docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent-scoped hooks `hooks:` YAML key, subagent behavior note | `docs/research/pretooluse-read-only-guard-feasibility.md` | 2026-04-01 |
