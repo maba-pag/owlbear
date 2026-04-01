@@ -64,6 +64,20 @@ class KnowledgeQueryService:
         self._threshold = similarity_threshold
         self._retriever = retriever
 
+    def _search_chunks(self, prompt: str, top_k: int) -> list[tuple[str, float]]:
+        """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
+        if self._retriever is not None:
+            result = self._retriever.retrieve(prompt, top_k, self._scopes)
+            return result.chunks
+        embeddings = self._embedder.embed([prompt])
+        if not embeddings:
+            return []
+        query_vec = embeddings[0]
+        kwargs: dict[str, object] = {}
+        if self._scopes is not None:
+            kwargs["scopes"] = self._scopes
+        return self._vectors.search_similar(query_vec, top_k=top_k, **kwargs)
+
     async def query(
         self,
         prompt: str,
@@ -82,15 +96,9 @@ class KnowledgeQueryService:
             token_budget: Reserved for future snippet truncation.
         """
         try:
-            embeddings = self._embedder.embed([prompt])
-            if not embeddings:
+            raw = self._search_chunks(prompt, top_k)
+            if not raw:
                 return []
-
-            query_vec = embeddings[0]
-            kwargs: dict[str, object] = {}
-            if self._scopes is not None:
-                kwargs["scopes"] = self._scopes
-            raw = self._vectors.search_similar(query_vec, top_k=top_k, **kwargs)
 
             filtered = [
                 (doc_id, score) for doc_id, score in raw if score >= self._threshold
@@ -141,8 +149,7 @@ class KnowledgeQueryService:
         if self._retriever is None:
             return None
         try:
-            result = self._retriever.retrieve(prompt)
-            chunks = result.chunks[:top_k]
+            chunks = self._search_chunks(prompt, top_k)
             if not chunks:
                 return None
 

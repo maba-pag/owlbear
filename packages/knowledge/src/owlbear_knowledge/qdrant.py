@@ -157,6 +157,9 @@ class QdrantVectorStore:
             )
         query_filter = qmodels.Filter(must=must_conditions) if must_conditions else None
 
+        if isinstance(query_embedding, HybridEmbedding) and query_embedding.sparse is not None:
+            return self._hybrid_search(query_embedding, top_k, query_filter)
+
         dense_vec = (
             query_embedding.dense
             if isinstance(query_embedding, HybridEmbedding)
@@ -174,6 +177,47 @@ class QdrantVectorStore:
             (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
             for point in response.points
         ]
+
+    def _hybrid_search(
+        self,
+        query_embedding: HybridEmbedding,
+        top_k: int,
+        query_filter: object | None,
+    ) -> list[tuple[str, float]]:
+        """Run Qdrant prefetch+RRF hybrid search and return normalized (id, score) pairs."""
+        assert query_embedding.sparse is not None  # guaranteed by caller
+        dense_prefetch = qmodels.Prefetch(
+            query=query_embedding.dense,
+            using="dense",
+            limit=top_k * 10,
+        )
+        sparse_prefetch = qmodels.Prefetch(
+            query=qmodels.SparseVector(
+                indices=query_embedding.sparse.indices,
+                values=query_embedding.sparse.values,
+            ),
+            using="sparse",
+            limit=top_k * 10,
+        )
+        response = self._client.query_points(
+            collection_name=self._collection,
+            prefetch=[dense_prefetch, sparse_prefetch],
+            query=qmodels.FusionQuery(fusion=qmodels.Fusion.RRF),
+            limit=top_k,
+            query_filter=query_filter,
+            with_payload=True,
+        )
+        raw = [
+            (point.payload["entity_or_doc_id"], point.score)  # type: ignore[index]
+            for point in response.points
+        ]
+        if not raw:
+            return raw
+        scores = [s for _, s in raw]
+        min_s, max_s = min(scores), max(scores)
+        if max_s == min_s:
+            return [(pid, 1.0) for pid, _ in raw]
+        return [(pid, (s - min_s) / (max_s - min_s)) for pid, s in raw]
 
     def delete_embedding(self, entity_or_doc_id: str) -> bool:
         """Delete the embedding for *entity_or_doc_id*.

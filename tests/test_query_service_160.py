@@ -224,3 +224,32 @@ class TestFromAC_QueryForContextUsesSearchChunks:
         assert ["scope-x", "scope-y"] in all_values, (
             f"scopes=['scope-x','scope-y'] not found in retriever.retrieve call; got: {call_args}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+
+    def test_search_chunks_no_retriever_with_scopes_passes_scopes_to_vector_store(self) -> None:
+        """_search_chunks without retriever should forward scopes to search_similar."""
+        svc = _make_service(scopes=["global"])
+        svc._search_chunks("q", 5)
+        call_kwargs = svc._vectors.search_similar.call_args.kwargs
+        assert call_kwargs.get("scopes") == ["global"], (
+            f"scopes not forwarded to search_similar: {call_kwargs}"
+        )
+
+    def test_search_chunks_no_retriever_empty_embeddings_returns_empty_list(self) -> None:
+        """_search_chunks returns [] when embedder provides no vectors."""
+        svc = _make_service()
+        svc._embedder.embed.return_value = []
+        result = svc._search_chunks("q", 5)
+        assert result == []
+
+    def test_query_for_context_returns_none_when_no_retriever(self) -> None:
+        """query_for_context returns None immediately when retriever is not set."""
+        svc = _make_service(retriever=None)
+        assert svc.query_for_context("question") is None
