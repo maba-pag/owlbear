@@ -20,8 +20,8 @@ class Task(BaseModel):
     updated: datetime
     started: datetime | None = None
     completed: datetime | None = None
-    tags: list[str]
-    depends_on: list[int]
+    tags: list[str] = Field(default_factory=list)
+    depends_on: list[int] = Field(default_factory=list)
     claimed_by: str | None = None
     claimed_at: datetime | None = None
     task_class: str = Field(alias="class")

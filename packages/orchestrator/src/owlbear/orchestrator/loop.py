@@ -9,6 +9,7 @@ import logging
 import subprocess
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -20,8 +21,6 @@ from owlbear_orchestrator.acp_client import AcpClient, AcpClientError
 from owlbear_orchestrator.process_supervisor import ProcessSupervisor
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear.audit import AuditLog
     from owlbear.planner.models import DispatchEntry
 
@@ -139,7 +138,7 @@ async def dispatch_entry(
     before_files = _git_diff_names()
 
     try:
-        session_resp = await client.new_session(cwd=None, mcp_servers=[])
+        session_resp = await client.new_session(cwd=str(Path.cwd()), mcp_servers=[])
     except (AcpClientError, TimeoutError) as exc:
         if audit_log is not None:
             _failure_event = CompletionEvent(
