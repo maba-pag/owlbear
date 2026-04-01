@@ -53,7 +53,7 @@ class TestFromAC_ListSources:
 
     @pytest.mark.asyncio
     async def test_returns_formatted_bullet_list(self) -> None:
-        """list_sources returns '- {name} ({source_type}): scope={scope}' bullet lines."""
+        """list_sources returns a list of dicts with name, source_type, and scope."""
         source = _make_source(name="src-one", source_type="url_list", scope="work")
         store = MagicMock()
         store.list_all.return_value = [source]
@@ -61,8 +61,10 @@ class TestFromAC_ListSources:
 
         result = await list_sources(ctx)
 
-        assert isinstance(result, str)
-        assert "- src-one (url_list): scope=work" in result
+        assert isinstance(result, list)
+        assert result[0]["name"] == "src-one"
+        assert result[0]["source_type"] == "url_list"
+        assert result[0]["scope"] == "work"
 
     # ------------------------------------------------------------------
     # AC: scope filter passes scope to list_all(scope=scope)
@@ -99,15 +101,15 @@ class TestFromAC_ListSources:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_empty_returns_no_sources_found(self) -> None:
-        """list_sources returns 'No sources found.' when list_all returns []."""
+    async def test_empty_returns_empty_list(self) -> None:
+        """list_sources returns [] when list_all returns []."""
         store = MagicMock()
         store.list_all.return_value = []
         ctx = _make_ctx(source_store=store)
 
         result = await list_sources(ctx)
 
-        assert result == "No sources found."
+        assert result == []
 
     # ------------------------------------------------------------------
     # AC: calls list_all via asyncio.to_thread (sync method)

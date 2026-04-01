@@ -95,29 +95,23 @@ _app_context: AppContext | None = None
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
+async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[dict[str, Any]] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     qs = app_ctx.query_service
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit)
-    if not results:
-        return "No relevant knowledge found."
-    lines = [f"- {r.title} ({r.score:.2f}): {r.snippet[:200]}" for r in results]
-    return "\n".join(lines)
+    return [{"title": r.title, "score": r.score, "snippet": r.snippet} for r in results]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_sources(ctx: Context, scope: str | None = None) -> str:
+async def list_sources(ctx: Context, scope: str | None = None) -> list[dict[str, str]]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store
     sources = await asyncio.to_thread(store.list_all, scope=scope)
-    if not sources:
-        return "No sources found."
-    lines = [f"- {s.name} ({s.source_type}): scope={s.scope}" for s in sources]
-    return "\n".join(lines)
+    return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
@@ -147,7 +141,7 @@ async def list_entities(
     entity_type: str | None = None,
     offset: int = 0,
     limit: int = 50,
-) -> str:
+) -> list[dict[str, Any]] | str:
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
@@ -162,26 +156,20 @@ async def list_entities(
     else:
         entities = await asyncio.to_thread(gs.list_entities)
 
-    if not entities:
-        return "No entities found."
-
-    total = len(entities)
     page = entities[offset : offset + limit]
-    header = f"Entities ({offset}-{min(offset + limit, total)} of {total}):"
-    lines = [header, *[f"- {e.name} ({e.entity_type}): {e.description}" for e in page]]
-    return "\n".join(lines)
+    return [
+        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
+        for e in page
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def get_stats(ctx: Context) -> str:
+async def get_stats(ctx: Context) -> dict[str, int]:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
 
 
 async def knowledge_stats(ctx: Context) -> str:

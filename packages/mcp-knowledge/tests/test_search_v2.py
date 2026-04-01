@@ -61,7 +61,7 @@ class TestFromAC_SearchKnowledgeV2:
 
     @pytest.mark.asyncio
     async def test_returns_bullet_list_for_valid_query(self) -> None:
-        """search_knowledge returns bullet lines from list[StructuredSearchResult]."""
+        """search_knowledge returns a list of result dicts when results are found."""
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[_make_result(title="Alpha", score=0.9, snippet="alpha content")]
@@ -70,9 +70,8 @@ class TestFromAC_SearchKnowledgeV2:
 
         result = await search_knowledge(ctx, query="alpha")
 
-        assert isinstance(result, str)
-        lines = [ln for ln in result.splitlines() if ln.strip()]
-        assert any(ln.startswith("- ") for ln in lines)
+        assert isinstance(result, list)
+        assert len(result) >= 1
 
     # ------------------------------------------------------------------
     # AC: each bullet follows "- {title} ({score:.2f}): {snippet[:200]}" format
@@ -80,7 +79,7 @@ class TestFromAC_SearchKnowledgeV2:
 
     @pytest.mark.asyncio
     async def test_bullet_format_title_score_snippet(self) -> None:
-        """Each bullet line matches '- {title} ({score:.2f}): {snippet[:200]}'."""
+        """Result dict contains title, score, and snippet fields with correct values."""
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[_make_result(title="MyDoc", score=0.75, snippet="relevant text")]
@@ -89,12 +88,14 @@ class TestFromAC_SearchKnowledgeV2:
 
         result = await search_knowledge(ctx, query="test")
 
-        assert isinstance(result, str)
-        assert "- MyDoc (0.75): relevant text" in result
+        assert isinstance(result, list)
+        assert result[0]["title"] == "MyDoc"
+        assert result[0]["score"] == pytest.approx(0.75)
+        assert result[0]["snippet"] == "relevant text"
 
     @pytest.mark.asyncio
-    async def test_snippet_truncated_to_200_chars(self) -> None:
-        """Snippet in bullet output is truncated to at most 200 characters."""
+    async def test_snippet_full_not_truncated(self) -> None:
+        """Full snippet is returned in the dict (no truncation in structured output)."""
         long_snippet = "A" * 300
         qs = AsyncMock()
         qs.query = AsyncMock(
@@ -104,9 +105,8 @@ class TestFromAC_SearchKnowledgeV2:
 
         result = await search_knowledge(ctx, query="test")
 
-        assert isinstance(result, str)
-        assert "A" * 300 not in result
-        assert "A" * 200 in result
+        assert isinstance(result, list)
+        assert result[0]["snippet"] == long_snippet
 
     # ------------------------------------------------------------------
     # AC: multiple results produce multiple bullet lines (edge case)
@@ -114,7 +114,7 @@ class TestFromAC_SearchKnowledgeV2:
 
     @pytest.mark.asyncio
     async def test_multiple_results_produce_multiple_lines(self) -> None:
-        """Each StructuredSearchResult maps to exactly one bullet line."""
+        """Each StructuredSearchResult maps to exactly one dict in the returned list."""
         qs = AsyncMock()
         qs.query = AsyncMock(
             return_value=[
@@ -126,24 +126,23 @@ class TestFromAC_SearchKnowledgeV2:
 
         result = await search_knowledge(ctx, query="multi")
 
-        assert isinstance(result, str)
-        bullet_lines = [ln for ln in result.splitlines() if ln.startswith("- ")]
-        assert len(bullet_lines) == 2
+        assert isinstance(result, list)
+        assert len(result) == 2
 
     # ------------------------------------------------------------------
     # AC: returns "No relevant knowledge found." when query() returns []
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_empty_results_returns_no_relevant_knowledge(self) -> None:
-        """Returns 'No relevant knowledge found.' when query() returns empty list."""
+    async def test_empty_results_returns_empty_list(self) -> None:
+        """Returns [] when query() returns empty list."""
         qs = AsyncMock()
         qs.query = AsyncMock(return_value=[])
         ctx = _make_ctx(qs)
 
         result = await search_knowledge(ctx, query="test")
 
-        assert result == "No relevant knowledge found."
+        assert result == []
 
     # ------------------------------------------------------------------
     # AC: awaits query() directly (not via asyncio.to_thread)
