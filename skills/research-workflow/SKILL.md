@@ -68,6 +68,65 @@ Structure analysis as trade-off matrices, not prose:
 - Risks and mitigations for each option
 - Apply KISS, YAGNI, DRY principles
 
+## Step 3.5 — Challenge proposed recommendation
+
+Before writing the research document, challenge your Step 3 recommendation using the Challenger subagent.
+
+**Trigger conditions:**
+
+| Research type | Challenge? |
+|--------------|------------|
+| Step 3 produces a recommendation (section 4 will contain a recommendation with confidence score) | **Mandatory** |
+| Info-only or trivial research with no recommendation | Skip |
+
+**Prompt construction:** Use `runSubagent` with `agentName: "challenger"`, passing these 6 fields in the prompt text:
+
+| Field | Value |
+|-------|-------|
+| `task_id` | The research task ID |
+| `proposed_verdict` | Your Step 3 recommendation text + confidence score |
+| `reasoning` | Your Step 3 analysis summary |
+| `ac_lines` | The research question/scope |
+| `codebase_evidence` | Codebase findings from Step 2 |
+| `research_doc` | Path to draft if already written; omit if none |
+
+**Integration protocol:**
+
+| Challenger output | Researcher action |
+|-------------------|------------------|
+| `proceed` + confidence ≥ .80 | Continue with original recommendation. Note challenge in doc section 4. |
+| `reconsider` OR confidence < .80 | Revise recommendation/confidence or justify override with rebuttal. |
+| `block` | Revisit research scope; must provide rebuttal if proceeding. Distinct from T3 DR workflow. |
+
+**Researcher retains final authority.** The Challenger advises only — never decides.
+
+**Sequential fallback:** If `runSubagent` errors (timeout, tool error, malformed response):
+
+1. Proceed without challenge
+2. Note in doc section 4: `Challenge: FALLBACK — {reason}`
+3. No recommendation change required — the researcher's own analysis stands
+
+**Research doc (section 4)** must include a brief challenge note (1–2 lines):
+
+    Challenge: {proceed|reconsider|block} — confidence in original: {score}
+
+or on fallback:
+
+    Challenge: FALLBACK — {reason}
+
+**Kanban body** must include full challenge details (append via Channel B before advancing):
+
+    ## Challenge Results
+    - Challenger recommendation: {proceed|reconsider|block}
+    - Confidence in original: {score}
+    - Key challenges: {list}
+    - Researcher response: {accepted|rebutted|revised} — {brief rationale}
+
+or on fallback:
+
+    ## Challenge Results
+    Challenge: FALLBACK — {reason}
+
 ## Step 4 — Write research document
 
 Create `docs/research/{slug}.md`:
