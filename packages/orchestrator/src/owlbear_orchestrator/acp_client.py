@@ -37,6 +37,14 @@ class _CancelSignal(Protocol):
         ...
 
 
+class _ErrorLogger(Protocol):
+    """Duck-type protocol for error-logging objects."""
+
+    def log_error(self, *, category: ErrorCategory, method: str, message: str) -> None:
+        """Record a classified ACP error."""
+        ...
+
+
 _ACP_ERROR_CODES: dict[int, ErrorCategory] = {
     -32700: ErrorCategory.PERMANENT,   # Parse error
     -32600: ErrorCategory.PERMANENT,   # Invalid request
@@ -79,9 +87,11 @@ class AcpClient:
         conn: ClientSideConnection,
         *,
         cancel_signal: _CancelSignal | None = None,
+        error_logger: _ErrorLogger | None = None,
     ) -> None:
         self._conn = conn
         self._cancel_signal = cancel_signal
+        self._error_logger = error_logger
 
     async def __aenter__(self) -> Self:
         """Enter the async context manager; returns self."""
@@ -102,8 +112,17 @@ class AcpClient:
                 self._conn.initialize(protocol_version=protocol_version), timeout=30
             )
         except RequestError as exc:
-            raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
+            category = _classify_request_error(exc)
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=category, method="initialize", message=str(exc)
+                )
+            raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT, method="initialize", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
     async def new_session(self, cwd: str, mcp_servers: list | None = None) -> NewSessionResponse:
@@ -114,8 +133,17 @@ class AcpClient:
         try:
             return await asyncio.wait_for(self._conn.new_session(**call_kwargs), timeout=15)
         except RequestError as exc:
-            raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
+            category = _classify_request_error(exc)
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=category, method="new_session", message=str(exc)
+                )
+            raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT, method="new_session", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
     async def prompt(
@@ -140,6 +168,15 @@ class AcpClient:
             await self._conn.cancel(session_id=session_id)
             raise
         except RequestError as exc:
-            raise AcpClientError(str(exc), category=_classify_request_error(exc)) from exc
+            category = _classify_request_error(exc)
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=category, method="prompt", message=str(exc)
+                )
+            raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
+            if self._error_logger is not None:
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT, method="prompt", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
