@@ -2,6 +2,53 @@
 
 External repos and resources studied during OwlBear development.
 
+## deer-flow Broad Survey (Task #429)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| deer-flow repo (v2 main, MIT) | github.com/bytedance/deer-flow | Harness/app boundary test, skill validation patterns, middleware chain, guardrail protocol, summarization config, MCP caching, ACP config, embedded client, sandbox audit, reflection resolvers | docs/research/deer-flow-broad-survey.md | 2026-04-01 |
+| deer-flow test_harness_boundary.py | In-repo: backend/tests/test_harness_boundary.py | AST-based import boundary enforcement pattern | docs/research/deer-flow-broad-survey.md S2A | 2026-04-01 |
+| deer-flow skills/validation.py | In-repo: packages/harness/deerflow/skills/validation.py | Skill frontmatter validation patterns (naming, allowlist, safety) | docs/research/deer-flow-broad-survey.md S2D | 2026-04-01 |
+
+## MCP Server Error/Return Standardization (Task #496)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Spec 2025-06-18 — Tools § Error Handling | modelcontextprotocol.io/specification/2025-06-18/server/tools | Two error mechanisms: protocol errors (JSON-RPC) and tool execution errors (`isError: true`); `error: ` prefix supplements `isError` | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 README | github.com/modelcontextprotocol/python-sdk | FastMCP catches exceptions as ToolError → `isError: true`; normal returns yield `isError: false`; structured output auto-generation from type annotations | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
+
+## KanbanTask Model + outputSchema Validation (Task #495)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Prior outputSchema research (#477) | docs/research/mcp-kanban-outputschema-annotations.md | KanbanTask model design, ToolError pattern, annotation mapping | docs/research/kanbantask-model-outputschema.md | 2026-03-31 |
+| FastMCP func_metadata.py (v1.26.0) | Installed: `.venv/.../fastmcp/utilities/func_metadata.py` | BaseModel return type → outputSchema auto-generation, wrap_output logic | docs/research/kanbantask-model-outputschema.md | 2026-03-31 |
+| MCP low-level server.py | Installed: `.venv/.../mcp/server/lowlevel/server.py` | ToolError → isError:true, structured output validation and normalization | docs/research/kanbantask-model-outputschema.md | 2026-03-31 |
+| kanban-md v0.33.0 JSON output | Local binary: `kanban-md show/list --json` | Verified complete field superset (class, claimed_by, claimed_at corrections) | docs/research/kanbantask-model-outputschema.md | 2026-03-31 |
+
+## Knowledge & Project outputSchema + Annotations (Task #492)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Spec 2025-06-18 — Tools | modelcontextprotocol.io/specification/2025-06-18/server/tools | outputSchema, ToolAnnotations spec definitions (readOnlyHint, idempotentHint, destructiveHint, openWorldHint) | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
+| FastMCP docs — Output Schemas | gofastmcp.com/servers/tools#output-schemas | Auto-generation from return types, output_schema decorator param, manual schema control | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 internals | Installed: `.venv/.../mcp/server/fastmcp/` | Tool.output_schema cached_property, FuncMetadata auto-generation, FastMCP.list_tools() protocol mapping | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
+
+## Skill Validation Hardening (Task #511)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Agent Skills Specification | agentskills.io/specification | Name field rules (hyphen-case, 1-64 chars, no leading/trailing/consecutive hyphens), description max 1024 chars | docs/research/skill-validation-hardening.md | 2026-04-01 |
+| VS Code Agent Skills docs | code.visualstudio.com/docs/copilot/customization/agent-skills | Confirms spec naming constraints and directory-match requirement | docs/research/skill-validation-hardening.md | 2026-04-01 |
+| deer-flow validation.py (MIT) | github.com/bytedance/deer-flow → backend/packages/harness/deerflow/skills/validation.py | Regex pattern, angle-bracket rejection, implementation reference | docs/research/skill-validation-hardening.md | 2026-04-01 |
+
+## Test-Writer Non-Impl Fallback Heuristic (Task #498)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub Actions paths/paths-ignore | docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore | Content-based routing: skip test jobs for non-code changes | docs/research/test-writer-non-impl-fallback-heuristic.md | 2026-03-31 |
+| GitLab CI rules:changes | docs.gitlab.com/ci/yaml/#ruleschanges | File-type heuristic for pipeline routing | docs/research/test-writer-non-impl-fallback-heuristic.md | 2026-03-31 |
+
 ## deer-flow Memory + Subagent Deep Dive (Task #428)
 
 | Source | URL | What | Where Used | Date |
@@ -45,6 +92,13 @@ External repos and resources studied during OwlBear development.
 | MCP Python SDK v1.26.0 README | https://github.com/modelcontextprotocol/python-sdk | Structured output patterns: TypedDict, Pydantic, dict return types; outputSchema auto-detection | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
 | MCP Python SDK mcp.types module | (installed package: mcp.types L1310-1380) | Tool.outputSchema and CallToolResult.structuredContent field definitions | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
 
+## mcp-knowledge Structured Returns (Task #507)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP docs — Structured Output | gofastmcp.com/servers/tools#structured-output | Auto structuredContent + content for typed returns; list needs annotation for schema wrapping | docs/research/mcp-knowledge-structured-returns.md | 2026-03-31 |
+| FastMCP docs — Output Schemas | gofastmcp.com/servers/tools#output-schemas | Auto-generation from return type; primitives/lists wrapped in {"result": ...} | docs/research/mcp-knowledge-structured-returns.md | 2026-03-31 |
+
 ## end_work Compound Tool (Task #471)
 
 | Source | URL | What | Where Used | Date |
@@ -52,12 +106,35 @@ External repos and resources studied during OwlBear development.
 | FastMCP Tools docs | https://gofastmcp.com/servers/tools | Literal type support, ToolError, async patterns, structured output | docs/research/end-work-compound-tool.md | 2026-03-31 |
 | MCP Spec — Tools | https://modelcontextprotocol.io/specification/2025-03-26/server/tools | Tool design patterns, error reporting model | docs/research/end-work-compound-tool.md | 2026-03-31 |
 
+## deer-flow Subagent Patterns for Wave Dispatch (Task #500)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| deer-flow deep dive (#428) sections 3D–3F | docs/research/deer-flow-memory-subagent-deep-dive.md | SubagentLimitMiddleware truncation behavior; SubagentResult status lifecycle | docs/research/deer-flow-subagent-patterns-wave-dispatch.md | 2026-04-01 |
+| Python asyncio sync primitives | docs.python.org/3/library/asyncio-sync.html | Semaphore concurrency control — available but unnecessary for pre-computed wave sizes | docs/research/deer-flow-subagent-patterns-wave-dispatch.md | 2026-04-01 |
+| AutoGen AgentChat TaskResult pattern | microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/agents.html | Typed TaskResult objects for agent dispatch results; different execution model (in-process) | docs/research/deer-flow-subagent-patterns-wave-dispatch.md | 2026-04-01 |
+
+## deer-flow Memory Pattern Schema Definitions (Task #499)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| deer-flow deep dive (owning: #428) | `docs/research/deer-flow-memory-subagent-deep-dive.md` | Fact schema, confidence gating, dedup, pruning, injection, category taxonomy patterns | docs/research/deer-flow-memory-patterns-schema-definitions.md | 2026-03-31 |
+| DR #428 (approved) | `docs/decisions/resolved/428-adopt-deer-flow-memory-patterns.md` | Custom adoption decision: patterns 1,2,6 unchanged, 4 customized | docs/research/deer-flow-memory-patterns-schema-definitions.md | 2026-03-31 |
+| Mem0 memory system | github.com/mem0ai/mem0 | Scoping via user_id/agent_id, fact deduplication, Memory ABC pattern | docs/research/deer-flow-memory-patterns-schema-definitions.md | 2026-03-31 |
+
 ## ToolAnnotations for mcp-kanban (Task #494)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | ToolAnnotations spec: readOnlyHint, destructiveHint, idempotentHint defaults | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 mcp.types | Installed: `.venv/Lib/site-packages/mcp/types.py` L1247-1300 | ToolAnnotations class definition and field defaults | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
+
+## KB Data Loader Script and Sources Manifest (Task #176)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GraphRAG YAML config | microsoft.github.io/graphrag/config/yaml/ | YAML manifest format with `type`, `config`, `scope` fields for document discovery | packages/knowledge/src/owlbear_knowledge/loader.py | 2026-03-30 |
+| strictyaml docs | hitchdev.com/strictyaml/ | Type-safe YAML parsing with typed schema validation (Map, Seq, Enum, Bool, EmptyNone) | packages/knowledge/src/owlbear_knowledge/loader.py | 2026-03-30 |
 | mcp-knowledge server ToolAnnotations | `packages/mcp-knowledge/src/.../server.py` | Existing annotation pattern as implementation reference | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
 | mcp-knowledge annotation tests | `packages/mcp-knowledge/tests/test_ingest_graph_tools.py` L630-680 | `_get_tool_annotations()` test helper pattern | docs/research/mcp-kanban-toolannotations.md | 2026-03-31 |
 
@@ -67,6 +144,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | FastMCP tool registration docs | https://gofastmcp.com/servers/fastmcp#tools | Tool parameter typing conventions for Optional[bool] tri-state | docs/research/modernize-list-tasks.md | 2026-03-31 |
 | Python typing.Optional docs | https://docs.python.org/3/library/typing.html#typing.Optional | Optional[bool] tri-state pattern reference | docs/research/modernize-list-tasks.md | 2026-03-31 |
+
+## Challenger Researcher Expansion (Task #469)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Challenger subagent design (owning: #465) | docs/research/challenger-subagent-design.md | Expansion path S3h, I/O contract S3d, interaction model S3b | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
+| Arch-review Step 3.5 integration (#468) | skills/arch-review/SKILL.md | Implemented challenger integration pattern as template | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
+| Du et al. 2023 — Multiagent Debate | https://arxiv.org/abs/2305.14325 | Single-round debate improves factuality over self-reflection | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
+| Liang et al. 2024 — MAD (EMNLP) | https://arxiv.org/abs/2305.19118 | Degeneration-of-Thought in self-reflection; external challenge needed | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
 
 ## start_work Compound Tool (Task #470)
 
@@ -2528,6 +2614,13 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | MCP Python SDK (v1.26.0) | <https://github.com/modelcontextprotocol/python-sdk> | MIT | FastMCP v1 decorator patterns, lifespan context, `mcp.run()` stdio transport, `create_connected_server_and_client_session` testing | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+
+## AST-based Package Boundary Enforcement (Task #510)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| deer-flow test_harness_boundary.py (MIT) | github.com/bytedance/deer-flow | AST-based import boundary scan pattern (~50 LOC, zero deps) | docs/research/ast-package-boundary-enforcement.md | 2026-04-01 |
+| import-linter v2.11 (BSD-2) | github.com/seddonym/import-linter | Mature Python architecture linter with forbidden/independence/layers contracts | docs/research/ast-package-boundary-enforcement.md | 2026-04-01 |
 | VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | `.vscode/mcp.json` stdio server registration format, `uv run` command pattern | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 | MCP Tools Spec (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | CC-BY-4.0 | Tool definition schema, `isError` field semantics, input schema annotations | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 
@@ -2561,6 +2654,14 @@ External repos and resources studied during OwlBear development.
 | CrewAI Task Guardrails | <https://docs.crewai.com/concepts/tasks> | Sequential guardrail validation pattern — prerequisite check before task proceeds | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
 | AutoGen Human-in-the-Loop | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination early termination when prerequisite unmet | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
 | GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gate blocks before any work runs | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+
+## Challenger Arch-Review Integration (Task #468)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | agents array overrides disable-model-invocation, one-shot return model | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
+| OwlBear #465 Challenger design | docs/research/challenger-subagent-design.md | Integration protocol S3e-f, trigger points, error handling | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
+| OwlBear #228 nesting research | docs/research/subagent-nesting-architecture.md | L2 nesting confirmed, assign mode validation | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
 
 ## Agent Port to v2 Research (Task #8)
 

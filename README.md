@@ -57,6 +57,16 @@ board, knowledge base, and project metadata as tools inside VS Code.
 **Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
 through a shared kanban board in `kanban/`.
 
+## Knowledge Base
+
+Populate the knowledge base from a sources manifest:
+
+```bash
+uv run python -m owlbear_knowledge.loader --manifest data/knowledge/general/sources.yaml --root .
+```
+
+The manifest at `data/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_KB_PATH` to override the default `data/knowledge/knowledge.db` location.
+
 ## Development
 
 ```bash
