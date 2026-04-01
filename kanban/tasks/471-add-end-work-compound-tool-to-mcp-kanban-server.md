@@ -1,10 +1,12 @@
 ---
 id: 471
 title: Add end_work compound tool to mcp-kanban server
-status: todo
+status: archived
 priority: needed
 created: 2026-03-31T05:21:15.4470299+02:00
-updated: 2026-03-31T07:21:38.9787359+02:00
+updated: 2026-04-01T16:00:27.4483715+02:00
+started: 2026-04-01T16:00:15.2356325+02:00
+completed: 2026-04-01T16:00:15.2356325+02:00
 tags:
     - scope:mcp
     - ' type:build'
@@ -84,3 +86,107 @@ class: standard
 - Added: #497 (TDD RED tests, must complete before builder starts #471)
 - Verified: #470 (start_work) at todo, independent sibling (no hard dependency)
 - Verified: #473 (KANBAN_TOOLS_EXCLUDE) at backlog, soft dependency
+
+[[2026-04-01]] Wed 01:47
+## Test-Writer Notes
+- Non-standard pass-through: all testable AC was extracted to #497 (TDD RED task) per architect review.
+- Test file: packages/mcp-kanban/tests/test_server.py (extended in #497)
+- Classes: TestFromAC_AppContextStatuses, TestFromAC_EndWork (written in #497)
+- Confirmed: 18 tests pass against existing implementation (delivered by #497 builder).
+- Remaining AC: SKILL.md documentation update — non-testable, builder responsibility.
+- No new tests written for this task (all coverage delivered via #497).
+
+[[2026-04-01]] Wed 03:55
+## Builder Notes
+- Non-standard pass-through: all implementation delivered by #497 (builder + writer).
+- Verified: server.py has end_work tool (commit aa1ada0, #497 builder)
+- Verified: skills/mcp-kanban/SKILL.md documents end_work (commit 45338b5, #497 writer)
+- Tests: 53 passed in packages/mcp-kanban/tests/test_server.py (includes TestFromAC_AppContextStatuses and TestFromAC_EndWork)
+- Coverage: 87% on server.py (pre-existing, no code touched in #471)
+- Lint: ruff clean on packages/mcp-kanban/
+- No code commits needed for this task (all delivered upstream via #497)
+
+[[2026-04-01]] Wed 05:22
+## Review Evidence
+See docs/scratch/471-reviewer.md for full evidence.
+
+[[2026-04-01]] Wed 06:30
+## Test-Writer Notes (retry)
+- Retry reason: reviewer cited MISSING test for outcome default to 'success'; coverage gap at line 444 success-path edit failure
+- Added: test_outcome_defaults_to_success_when_omitted (FAILS: TypeError, outcome has no default - exposes AC violation)
+- Added: test_success_edit_failure_returns_error (PASSES: code at line 444 already handles this, gap now closed)
+- Preserved: 53 existing tests (all PASS)
+- ruff: clean
+- Commit: ef458da
+
+[[2026-04-01]] Wed 07:56
+## Builder Notes (retry)
+- Fix: added Literal default outcome='success' to end_work signature
+- Added Literal to typing import
+- Files changed: packages/mcp-kanban/src/owlbear_mcp_kanban/server.py (2-line diff)
+- Tests: 55 passed (was 53+2 new from test-writer retry)
+- Coverage: 87% on server.py (pre-existing, no regression)
+- Lint: ruff clean
+- Commit: a96e2f0
+
+[[2026-04-01]] Wed 14:03
+## Review Evidence (retry 2)
+See docs/scratch/471-reviewer.md for full evidence.
+
+[[2026-04-01]] Wed 14:49
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | No convention or server-count changes; mcp-kanban tool-level docs live in SKILL.md |
+| 2 | Docstrings | Yes | Pass | end_work in server.py has docstring covering all 4 outcomes (lines 405-411) |
+| 3 | docs/sources/overview.md | Yes | Pass | ## end_work Compound Tool (Task #471) section already present (FastMCP + MCP Spec sources) |
+| 4 | README.md | No | N/A | No CLI command changes |
+| 5 | Research doc | Yes | Pass | docs/research/end-work-compound-tool.md exists; referenced in sources/overview.md |
+| 6 | skills/mcp-kanban/SKILL.md | Yes | Pass | end_work row in Tools table + full end_work details section (confirmed by builder commit 45338b5) |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- docs/scratch/471-reviewer.md (deleted)
+
+[[2026-04-01]] Wed 16:00
+## Audit
+### AC Verification
+All 14 AC lines verified with code evidence. Signature, outcome paths (success/fail/block/reject), AppContext.statuses caching, next-status derivation, validation, KANBAN_TOOLS_EXCLUDE, SKILL.md update all confirmed.
+
+### Test Results
+- pytest (mcp-kanban): 95 passed, 0 failed
+- pytest (full suite): 222 failures, all pre-existing from unrelated tasks (quality-runner, rename-todo, skill-validation, stop-commit-guard-hooks, v2-test-infra, voice-channel)
+- ruff: All checks passed
+
+### Reviewer Evidence
+Review Evidence section present (retry 2). Docs Gate passed with full checklist.
+
+### AC Quality Score: 4
+AC was thorough (14 verifiable lines). Minor gap: optional claim param added during architecture review, not in original AC. Well-documented refinement.
+
+### Deduction breakdown: none
+### Confidence: 1.0
+### Action: archive
+
+[[2026-04-01]] Wed 16:00
+## Audit
+### AC Verification
+All 14 AC lines verified with code evidence. Signature, outcome paths (success/fail/block/reject), AppContext.statuses caching, next-status derivation, validation, KANBAN_TOOLS_EXCLUDE, SKILL.md update all confirmed.
+
+### Test Results
+- pytest (mcp-kanban): 95 passed, 0 failed
+- pytest (full suite): 222 failures, all pre-existing from unrelated tasks (quality-runner, rename-todo, skill-validation, stop-commit-guard-hooks, v2-test-infra, voice-channel)
+- ruff: All checks passed
+
+### Reviewer Evidence
+Review Evidence section present (retry 2). Docs Gate passed with full checklist.
+
+### AC Quality Score: 4
+AC was thorough (14 verifiable lines). Minor gap: optional claim param added during architecture review, not in original AC. Well-documented refinement.
+
+### Deduction breakdown: none
+### Confidence: 1.0
+### Action: archive
