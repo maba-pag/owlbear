@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
 
 from owlbear_mcp_kanban.models import KanbanTask
 
@@ -200,13 +202,18 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {"type": "array"}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: str) -> str:
+async def show_task(ctx: Context, task_id: str) -> KanbanTask:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        msg = stderr.strip()
+        raise ToolError(msg)
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Invalid task JSON: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -247,13 +254,18 @@ async def create_task(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def move_task(ctx: Context, task_id: str, status: str) -> str:
+async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status, "--json")
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        msg = stderr.strip()
+        raise ToolError(msg)
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Invalid task JSON: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -319,7 +331,7 @@ async def pick_task(
     claim: str = "",
     move: str = "",
     tags: str = "",
-) -> str:
+) -> KanbanTask:
     """Pick the next available unclaimed task matching the given filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["pick"]
@@ -334,8 +346,13 @@ async def pick_task(
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        msg = stderr.strip()
+        raise ToolError(msg)
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Invalid task JSON: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))

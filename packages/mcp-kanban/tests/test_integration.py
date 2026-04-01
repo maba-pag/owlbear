@@ -47,6 +47,7 @@ priorities:
 defaults:
     status: ideation
     priority: important
+    class: standard
 tui:
     title_lines: 1
 next_id: 1

@@ -22,6 +22,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Import target — will raise ImportError until builder implements #56 (RED)
 # ---------------------------------------------------------------------------
+from owlbear_mcp_kanban.models import KanbanTask
 from owlbear_mcp_kanban.server import (  # type: ignore[import]
     AppContext,
     _run_kanban,
@@ -178,6 +179,15 @@ class TestFromAC_RunKanban:
 
 _FAKE_STDOUT = "board output"
 _FAKE_STDERR = "something failed"
+_FAKE_TASK_JSON = json.dumps({
+    "id": 1,
+    "title": "Fake Task",
+    "status": "todo",
+    "priority": "important",
+    "created": "2026-01-01T00:00:00+00:00",
+    "updated": "2026-01-01T00:00:00+00:00",
+    "class": "standard",
+})
 
 
 class TestFromAC_Tools:
@@ -223,10 +233,10 @@ class TestFromAC_Tools:
     async def test_show_task_success_passes_args(self) -> None:
         """show_task passes task_id and --json flag to _run_kanban when rc=0."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             result = await show_task(mcp_ctx, task_id="42")
 
-        assert result == _FAKE_STDOUT
+        assert isinstance(result, KanbanTask)
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "show" in args_used
         assert "42" in args_used
@@ -264,10 +274,10 @@ class TestFromAC_Tools:
     async def test_move_task_success_passes_args(self) -> None:
         """move_task passes task_id and status to _run_kanban as positional args when rc=0."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             result = await move_task(mcp_ctx, task_id="42", status="in-progress")
 
-        assert result == _FAKE_STDOUT
+        assert isinstance(result, KanbanTask)
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "move" in args_used
         assert "42" in args_used
@@ -443,7 +453,7 @@ class TestFromAC_Tools:
     async def test_pick_task_success_passes_args(self) -> None:
         """pick_task passes optional filter args to _run_kanban when rc=0."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             result = await pick_task(
                 mcp_ctx,
                 status="todo",
@@ -452,7 +462,7 @@ class TestFromAC_Tools:
                 tags="phase-3",
             )
 
-        assert result == _FAKE_STDOUT
+        assert isinstance(result, KanbanTask)
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "pick" in args_used
         assert "--status" in args_used
@@ -468,18 +478,18 @@ class TestFromAC_Tools:
         ("tool_fn", "kwargs"),
         [
             (list_tasks, {}),
-            (show_task, {"task_id": "1"}),
             (create_task, {"title": "t"}),
-            (move_task, {"task_id": "1", "status": "done"}),
             (edit_task, {"task_id": "1"}),
-            (pick_task, {}),
         ],
-        ids=["list_tasks", "show_task", "create_task", "move_task", "edit_task", "pick_task"],
+        ids=["list_tasks", "create_task", "edit_task"],
     )
     async def test_all_tools_return_error_string_on_non_zero_rc(
         self, tool_fn: Any, kwargs: dict[str, Any]
     ) -> None:
-        """Every tool returns 'error: {stderr.strip()}' string when _run_kanban rc != 0."""
+        """list_tasks, create_task, edit_task return 'error: {stderr}' string when rc != 0.
+
+        Note: show_task, move_task, pick_task now raise ToolError instead (task #495).
+        """
         mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
