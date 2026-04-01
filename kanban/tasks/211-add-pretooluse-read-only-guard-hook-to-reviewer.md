@@ -4,14 +4,14 @@ title: Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-i
 status: ideation
 priority: nice-to-have
 created: 2026-03-30T08:52:23.636729+02:00
-updated: 2026-03-30T08:52:23.636729+02:00
+updated: 2026-04-01T20:38:47.3969464+02:00
 tags:
     - phase-1
     - scope:agents
     - hooks
     - type:build
-depends_on:
-    - 209
+claimed_by: researcher
+claimed_at: 2026-04-01T20:38:47.3969464+02:00
 class: standard
 ---
 

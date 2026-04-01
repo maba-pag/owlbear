@@ -1,17 +1,15 @@
 ---
 id: 210
 title: Add postToolUse lint guard hook to builder agent (Phase 2)
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-03-30T08:52:17.140436+02:00
-updated: 2026-03-30T08:52:17.140436+02:00
+updated: 2026-04-01T20:38:06.5803024+02:00
 tags:
     - phase-1
     - scope:agents
     - hooks
     - type:build
-depends_on:
-    - 209
 class: standard
 ---
 
