@@ -177,6 +177,8 @@ class TestFromAC_NameFieldNamingConvention:
         # Current code: name == dir_name → no mismatch error; no naming check → empty
         errors = validate_metadata(metadata, skill_dir)
         assert len(errors) >= 1
+        # Verify naming-convention check fires specifically for the name field (not just dir check)
+        assert any("name field" in e and "lowercase" in e for e in errors)
 
     def test_name_field_with_underscore_produces_error(self, tmp_path: Path) -> None:
         """Name field containing underscore must produce an error."""
@@ -185,6 +187,8 @@ class TestFromAC_NameFieldNamingConvention:
         metadata = {"name": "my_skill", "description": "Valid."}
         errors = validate_metadata(metadata, skill_dir)
         assert len(errors) >= 1
+        # Verify naming-convention check fires for the name field (not just mismatch)
+        assert any("name field" in e and "lowercase" in e for e in errors)
 
     def test_name_field_starting_with_hyphen_produces_error(self, tmp_path: Path) -> None:
         """Name field starting with a hyphen must produce an error."""
@@ -192,6 +196,8 @@ class TestFromAC_NameFieldNamingConvention:
         metadata = {"name": "-my-skill", "description": "Valid."}
         errors = validate_metadata(metadata, skill_dir)
         assert len(errors) >= 1
+        # Verify naming-convention check fires for the name field (not just mismatch)
+        assert any("name field" in e and "hyphen" in e and "does not match" not in e for e in errors)
 
     def test_name_field_with_consecutive_hyphens_produces_error(self, tmp_path: Path) -> None:
         """Name field with consecutive hyphens must produce an error."""
@@ -199,6 +205,8 @@ class TestFromAC_NameFieldNamingConvention:
         metadata = {"name": "my--skill", "description": "Valid."}
         errors = validate_metadata(metadata, skill_dir)
         assert len(errors) >= 1
+        # Verify naming-convention check fires for the name field (not just mismatch)
+        assert any("name field" in e and "consecutive" in e for e in errors)
 
     def test_naming_error_for_name_field_includes_offending_value(self, tmp_path: Path) -> None:
         """Naming error for the name field must include the offending value."""
@@ -207,6 +215,8 @@ class TestFromAC_NameFieldNamingConvention:
         metadata = {"name": bad_name, "description": "Valid."}
         errors = validate_metadata(metadata, skill_dir)
         assert any(bad_name in e for e in errors)
+        # Verify naming-convention check fires for the name field specifically (not just mismatch)
+        assert any("name field" in e and bad_name in e and "lowercase" in e for e in errors)
 
 
 # ---------------------------------------------------------------------------
