@@ -91,3 +91,30 @@ class TestFromAC_ScriptAutoDiscovery:
             f"explicit-args exit {explicit.returncode}.\n"
             f"Auto stderr: {auto.stderr.decode(errors='replace')!r}"
         )
+
+
+class TestFromAC_ScriptRelativePath:
+    """AC2(a): auto-discovery uses script-relative path, NOT CWD-based.
+
+    Path(__file__).parent.parent / 'skills' must be used so the script works
+    when invoked from any working directory (e.g. from a pre-commit hook run
+    inside a sub-directory or temp directory).
+    """
+
+    def test_no_args_succeeds_from_non_project_root_cwd(self, tmp_path: Path) -> None:
+        """AC2(a): script exits 0 when called with no args from an arbitrary CWD.
+
+        If path resolution were CWD-based, running from tmp_path (no skills/ there)
+        would either fail to find skills or find nothing. Script-relative resolution
+        always finds the project's skills/ regardless of CWD.
+        """
+        result = subprocess.run(
+            [sys.executable, str(_SCRIPT)],
+            capture_output=True,
+            cwd=str(tmp_path),
+        )
+        assert result.returncode == 0, (
+            f"Script failed when invoked from non-project CWD {tmp_path}.\n"
+            f"If this fails it means path resolution is CWD-based, not script-relative.\n"
+            f"stderr: {result.stderr.decode(errors='replace')}"
+        )

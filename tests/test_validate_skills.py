@@ -207,14 +207,6 @@ class TestFromAC_ExitCode:
         )
         assert result.returncode == 1
 
-    def test_exit_code_one_no_arguments(self) -> None:
-        """AC4: exit 1 when script is invoked with no arguments (usage error)."""
-        result = subprocess.run(
-            [sys.executable, str(_SCRIPT)],
-            capture_output=True,
-        )
-        assert result.returncode == 1
-
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ErrorPaths
