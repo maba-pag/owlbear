@@ -186,7 +186,7 @@ class TestFromAC_SearchKnowledgeV2:
 
         result = await search_knowledge(ctx, query="anything")
 
-        assert result == "Knowledge service not available."
+        assert result == "error: Knowledge service not available."
 
 
 # ---------------------------------------------------------------------------

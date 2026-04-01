@@ -440,7 +440,7 @@ class TestFromAC_ReadmeResource:
         monkeypatch.chdir(tmp_path)
         ctx = _make_mcp_ctx(_make_app_context(project_root=tmp_path))
         result = await project_readme(ctx)
-        assert result == "No README.md found in project root."
+        assert result == "error: No README.md found in project root."
 
     @pytest.mark.asyncio
     async def test_reads_file_as_utf8(

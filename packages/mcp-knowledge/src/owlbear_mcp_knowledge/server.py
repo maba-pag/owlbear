@@ -80,6 +80,16 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
+__all__ = [
+    "AppContext",
+    "app_lifespan",
+    "ingest_document",
+    "list_entities",
+    "list_sources",
+    "mcp",
+    "search_knowledge",
+]
+
 # Module-level context so zero-arg @mcp.resource handlers can access graph_store.
 _app_context: AppContext | None = None
 
@@ -90,7 +100,7 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     qs = app_ctx.query_service
     if qs is None:
-        return "Knowledge service not available."
+        return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit)
     if not results:
         return "No relevant knowledge found."
@@ -122,7 +132,7 @@ async def ingest_document(
     try:
         result = await pipeline.ingest_text(text, metadata=metadata)
     except Exception as exc:  # noqa: BLE001
-        return f"Ingestion failed: {exc}"
+        return f"error: ingestion failed: {exc}"
     else:
         return (
             f"Ingested: {result.document_id}, {result.chunk_count} chunks, "
@@ -147,7 +157,7 @@ async def list_entities(
             et = EntityType(entity_type)
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
-            return f"Invalid entity_type '{entity_type}'. Valid types: {valid}"
+            return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
         entities = await asyncio.to_thread(gs.list_entities, entity_type=et)
     else:
         entities = await asyncio.to_thread(gs.list_entities)

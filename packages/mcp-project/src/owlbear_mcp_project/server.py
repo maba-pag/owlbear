@@ -79,7 +79,7 @@ async def project_info(ctx: Context) -> dict[str, Any] | str:
     """Return project metadata dict, or a descriptive error string if config is absent."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     if app_ctx.project_file is None:
-        return "No owlbear-project.json found in project root."
+        return "error: No owlbear-project.json found in project root."
     pf = app_ctx.project_file
     return {
         "name": pf.name,
@@ -115,7 +115,7 @@ async def project_readme(ctx: Context) -> str:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     readme = app_ctx.project_root / "README.md"
     if not readme.exists():
-        return "No README.md found in project root."
+        return "error: No README.md found in project root."
     return readme.read_text(encoding="utf-8")
 
 
