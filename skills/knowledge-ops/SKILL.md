@@ -23,7 +23,7 @@ Register it in `.vscode/mcp.json` to use in Copilot agent mode.
 | `query` | str | required | Natural-language search query |
 | `limit` | int | 5 | Max results to return |
 
-Returns: bullet list `- {title} ({score:.2f}): {snippet[:200]}` or `"No relevant knowledge found."`
+Returns: `list[dict]` — `[{"title": str, "score": float, "snippet": str}, ...]`; `[]` if no results; error string if service unavailable.
 
 **ingest_document** — Ingest a text document into the knowledge base.
 
@@ -40,16 +40,18 @@ Returns: bullet list `- {title} ({score:.2f}): {snippet[:200]}` or `"No relevant
 | `offset` | int | 0 | Pagination offset |
 | `limit` | int | 50 | Max results |
 
+Returns: `list[dict]` — `[{"name": str, "entity_type": str, "description": str}, ...]`; `[]` if no results; error string if invalid `entity_type`.
+
 **list_sources** — List all registered knowledge sources.
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
 | `scope` | str | None | Filter by scope; omit for all |
 
-Returns: bullet list `- {name} ({source_type}): scope={scope}` or `"No sources found."`
+Returns: `list[dict]` — `[{"name": str, "source_type": str, "scope": str}, ...]`; `[]` if no sources.
 
 **get_stats** — Get knowledge base summary statistics. No parameters.
-Returns: `"Knowledge base: {N} documents, {N} entities, {N} edges"`
+Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}`
 
 **Resource:** `knowledge://stats` — same format as `get_stats`, readable as MCP resource.
 
