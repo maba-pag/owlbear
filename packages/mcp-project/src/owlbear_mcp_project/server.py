@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from owlbear_mcp_project.models import OwlbearProjectFile
@@ -72,7 +73,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 mcp = FastMCP("owlbear-project", lifespan=app_lifespan)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_info(ctx: Context) -> dict[str, Any] | str:
     """Return project metadata dict, or a descriptive error string if config is absent."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -88,7 +89,7 @@ async def project_info(ctx: Context) -> dict[str, Any] | str:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_list(ctx: Context) -> list[dict[str, str]]:
     """List registered projects from {owlbear_root}/data/projects/."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -107,7 +108,7 @@ async def project_list(ctx: Context) -> list[dict[str, str]]:
     return results
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_readme(ctx: Context) -> str:
     """Return README.md content from project root, or a fallback string if absent."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -150,7 +151,7 @@ def _build_tree(root: Path, max_depth: int = 3) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_structure(ctx: Context) -> str:
     """Return an indented directory tree (max depth 3) of the project root."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
