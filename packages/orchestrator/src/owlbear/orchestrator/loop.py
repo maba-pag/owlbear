@@ -229,10 +229,27 @@ async def _dispatch_parallel(  # noqa: PLR0913
         return_exceptions=True,
     )
     rate_limited = False
+    retry_entries: list[DispatchEntry] = []
     for entry, result in zip(wave.entries, results, strict=True):
+        # Bare Exception (not a subclass) is a transient unknown crash — retry once.
+        is_bare_exception = isinstance(result, BaseException) and type(result) is Exception
+        if is_bare_exception and not _is_rate_limit(result):
+            retry_entries.append(entry)
+            continue
         rl = _apply_wave_result(entry, result, successes, failures, state)
         if rl:
             rate_limited = True
+
+    if retry_entries:
+        retry_results = await asyncio.gather(
+            *[dispatch_entry(e, client, audit_log=audit_log) for e in retry_entries],
+            return_exceptions=True,
+        )
+        for entry, result in zip(retry_entries, retry_results, strict=True):
+            rl = _apply_wave_result(entry, result, successes, failures, state)
+            if rl:
+                rate_limited = True
+
     return rate_limited
 
 
@@ -293,11 +310,8 @@ async def run_loop(  # noqa: PLR0913
     while True:
         state.cycle += 1
         tasks = await read_board(kanban_bin=kanban_bin, kanban_dir=kanban_dir, scope=scope)
-        plan = select_tasks(
-            tasks,
-            crash_failures=state.crash_failures,
-            stale_retried=state.stale_retried,
-        )
+        filtered_tasks = [t for t in tasks if t.id not in state.crash_failures]
+        plan = select_tasks(filtered_tasks)
 
         if not plan.entries:
             break
