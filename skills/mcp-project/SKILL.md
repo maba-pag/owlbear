@@ -70,3 +70,28 @@ The `owlbear_root` is resolved from the `OWLBEAR_ROOT` environment variable, wit
 All tools follow the `error: ` prefix convention for error strings, consistent with
 other owlbear MCP servers. No tool raises an exception to the MCP transport — errors
 are returned as string values.
+
+## Configuration
+
+The `owlbear-project` MCP server reads the following environment variables at startup:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OWLBEAR_ROOT` | `..` (parent of CWD) | Path to the owlbear installation root |
+| `PROJECT_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated list of tool names to remove from the server |
+
+### PROJECT_TOOLS_EXCLUDE
+
+Set this variable to hide specific tools from the MCP server. This is useful when a client
+should only have access to a subset of project operations.
+
+**Syntax:** comma-separated tool names, whitespace around names is stripped.
+
+```
+PROJECT_TOOLS_EXCLUDE=project_list,project_structure
+```
+
+Valid names: `project_info`, `project_list`, `project_readme`, `project_structure`.
+
+Unknown names are silently ignored. If the variable is not set or is empty, all tools
+are registered (backwards-compatible default).

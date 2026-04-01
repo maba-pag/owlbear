@@ -197,3 +197,29 @@ Six-step process:
 4. **Track status** — pipeline records ingestion state and content hash
 5. **Verify** — `query_knowledge` to spot-check search relevance
 6. **Remove stale** — delete source + cascade to clean up decommissioned content
+
+## Configuration
+
+The `owlbear-knowledge` MCP server reads the following environment variables at startup:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OWLBEAR_KB_PATH` | `data/knowledge/knowledge.db` | Path to the SQLite knowledge database |
+| `OWLBEAR_MODEL` | `gpt-4o-mini` | LLM model used by the entity extractor |
+| `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated list of tool names to remove from the server |
+
+### KNOWLEDGE_TOOLS_EXCLUDE
+
+Set this variable to hide specific tools from the MCP server. This is useful when a client
+should only have access to a subset of knowledge operations (e.g., query-only access).
+
+**Syntax:** comma-separated tool names, whitespace around names is stripped.
+
+```
+KNOWLEDGE_TOOLS_EXCLUDE=ingest_document,list_entities
+```
+
+Valid names: `search_knowledge`, `ingest_document`, `list_entities`, `list_sources`.
+
+Unknown names are silently ignored. If the variable is not set or is empty, all tools
+are registered (backwards-compatible default).

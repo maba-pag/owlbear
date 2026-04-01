@@ -48,6 +48,27 @@ class AppContext:
     source_store: KnowledgeSourceStore | None
 
 
+def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+    """Read KNOWLEDGE_TOOLS_EXCLUDE and remove each listed tool from the server.
+
+    Returns the set of tool names successfully removed.
+    """
+    excluded: set[str] = set()
+    env_val = os.environ.get("KNOWLEDGE_TOOLS_EXCLUDE", "")
+    if not env_val:
+        return excluded
+    for raw in env_val.split(","):
+        tool_name = raw.strip()
+        if not tool_name:
+            continue
+        try:
+            server.remove_tool(tool_name)
+            excluded.add(tool_name)
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return excluded
+
+
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -72,6 +93,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             source_store=source_store,
         )
         _app_context = ctx
+        _apply_tool_exclusions(_server)
         yield ctx
     finally:
         _app_context = None
@@ -82,6 +104,7 @@ mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 
 __all__ = [
     "AppContext",
+    "_apply_tool_exclusions",
     "app_lifespan",
     "ingest_document",
     "list_entities",

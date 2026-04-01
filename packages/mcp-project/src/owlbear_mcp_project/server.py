@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AppContext",
+    "_apply_tool_exclusions",
     "app_lifespan",
     "mcp",
     "project_info",
@@ -36,6 +37,27 @@ _STRUCTURE_EXCLUDES: frozenset[str] = frozenset({
     ".venv",
     ".mypy_cache",
 })
+
+
+def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+    """Read PROJECT_TOOLS_EXCLUDE and remove each listed tool from the server.
+
+    Returns the set of tool names successfully removed.
+    """
+    excluded: set[str] = set()
+    env_val = os.environ.get("PROJECT_TOOLS_EXCLUDE", "")
+    if not env_val:
+        return excluded
+    for raw in env_val.split(","):
+        tool_name = raw.strip()
+        if not tool_name:
+            continue
+        try:
+            server.remove_tool(tool_name)
+            excluded.add(tool_name)
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return excluded
 
 
 @dataclass(slots=True)
@@ -64,6 +86,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         except (json.JSONDecodeError, ValidationError, OSError):
             project_file = None
 
+    _apply_tool_exclusions(_server)
     yield AppContext(
         project_file=project_file,
         project_root=project_root,
