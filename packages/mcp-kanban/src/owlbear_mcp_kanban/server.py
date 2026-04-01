@@ -8,7 +8,7 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -396,7 +396,7 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
     *,
     task_id: str,
     note: str,
-    outcome: str,
+    outcome: Literal["success", "fail", "block", "reject"] = "success",
     block_reason: str = "",
     move_to: str = "ideation",
     claim: str = "",
