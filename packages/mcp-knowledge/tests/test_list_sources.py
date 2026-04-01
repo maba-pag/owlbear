@@ -131,3 +131,122 @@ class TestFromAC_ListSources:
         # First positional arg should be the store.list_all callable
         first_arg = mock_thread.call_args[0][0]
         assert first_arg is store.list_all
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ListSourcesStructuredReturn (#507)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListSourcesStructuredReturn:
+    """Contract tests: list_sources returns list[dict] on success, [] on empty."""
+
+    # ------------------------------------------------------------------
+    # AC: success returns list not str
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_success_returns_list(self) -> None:
+        """list_sources returns a list (not str) when sources exist."""
+        source = _make_source(name="s1", source_type="url_list", scope="global")
+        store = MagicMock()
+        store.list_all.return_value = [source]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_success_result_items_are_dicts(self) -> None:
+        """Each item in the returned list is a dict."""
+        store = MagicMock()
+        store.list_all.return_value = [_make_source(), _make_source(name="s2")]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert all(isinstance(item, dict) for item in result)  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_each_dict_has_name_source_type_scope_keys(self) -> None:
+        """Each dict in the returned list has 'name', 'source_type', and 'scope' keys."""
+        store = MagicMock()
+        store.list_all.return_value = [_make_source(name="n", source_type="crawl", scope="work")]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        item = result[0]  # type: ignore[index]
+        assert "name" in item
+        assert "source_type" in item
+        assert "scope" in item
+
+    @pytest.mark.asyncio
+    async def test_dict_values_match_source_fields(self) -> None:
+        """name, source_type, scope values come from the source object fields."""
+        store = MagicMock()
+        store.list_all.return_value = [_make_source(name="my-src", source_type="file_glob", scope="work")]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        item = result[0]  # type: ignore[index]
+        assert item["name"] == "my-src"
+        assert item["source_type"] == "file_glob"
+        assert item["scope"] == "work"
+
+    @pytest.mark.asyncio
+    async def test_all_fields_are_str(self) -> None:
+        """name, source_type, and scope are all str values."""
+        store = MagicMock()
+        store.list_all.return_value = [_make_source()]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        item = result[0]  # type: ignore[index]
+        assert isinstance(item["name"], str)
+        assert isinstance(item["source_type"], str)
+        assert isinstance(item["scope"], str)
+
+    @pytest.mark.asyncio
+    async def test_multiple_sources_list_length_matches(self) -> None:
+        """List length equals the number of sources returned by list_all."""
+        store = MagicMock()
+        store.list_all.return_value = [
+            _make_source(name="a"),
+            _make_source(name="b"),
+            _make_source(name="c"),
+        ]
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert len(result) == 3  # type: ignore[arg-type]
+
+    # ------------------------------------------------------------------
+    # AC: empty results return [] not a string message
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_empty_returns_empty_list(self) -> None:
+        """list_sources returns [] (not 'No sources found.') when list_all returns []."""
+        store = MagicMock()
+        store.list_all.return_value = []
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_empty_result_is_list_not_str(self) -> None:
+        """Empty result is a list type, confirming no string sentinel is returned."""
+        store = MagicMock()
+        store.list_all.return_value = []
+        ctx = _make_ctx(source_store=store)
+
+        result = await list_sources(ctx)
+
+        assert isinstance(result, list)

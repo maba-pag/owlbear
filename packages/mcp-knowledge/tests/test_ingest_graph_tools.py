@@ -485,6 +485,208 @@ class TestFromAC_GetStats:
 
 
 # ---------------------------------------------------------------------------
+# TestFromAC_ListEntitiesStructured (#507)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListEntitiesStructured:
+    """Contract tests: list_entities returns list[dict] on success, [] on empty."""
+
+    # ------------------------------------------------------------------
+    # AC: success returns list not str
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_success_returns_list(self) -> None:
+        """list_entities returns a list (not str) when entities are found."""
+        entities = [_make_entity("Alpha", "concept", "desc")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_success_result_items_are_dicts(self) -> None:
+        """Each item in the returned list is a dict."""
+        entities = [_make_entity("A", "concept", "d1"), _make_entity("B", "pattern", "d2")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        assert all(isinstance(item, dict) for item in result)  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_each_dict_has_name_entity_type_description_keys(self) -> None:
+        """Each result dict has 'name', 'entity_type', and 'description' keys."""
+        entities = [_make_entity("MyEnt", "decision", "A decision")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        item = result[0]  # type: ignore[index]
+        assert "name" in item
+        assert "entity_type" in item
+        assert "description" in item
+
+    @pytest.mark.asyncio
+    async def test_dict_values_match_entity_fields(self) -> None:
+        """name, entity_type, description values come from the entity object fields."""
+        entities = [_make_entity("TestEnt", "function", "A function entity")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        item = result[0]  # type: ignore[index]
+        assert item["name"] == "TestEnt"
+        assert item["entity_type"] == "function"
+        assert item["description"] == "A function entity"
+
+    @pytest.mark.asyncio
+    async def test_all_dict_fields_are_str(self) -> None:
+        """name, entity_type, and description are all str values."""
+        entities = [_make_entity("N", "concept", "D")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        item = result[0]  # type: ignore[index]
+        assert isinstance(item["name"], str)
+        assert isinstance(item["entity_type"], str)
+        assert isinstance(item["description"], str)
+
+    @pytest.mark.asyncio
+    async def test_no_header_line_in_list_result(self) -> None:
+        """Result is a plain list with no text header — no 'Entities (0-...' prefix item."""
+        entities = [_make_entity("E1", "concept", "d")]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = entities
+            result = await list_entities(_make_mcp_ctx())
+
+        # Result must be a list of dicts; no dict should look like a header string
+        assert isinstance(result, list)
+        assert all(isinstance(item, dict) for item in result)  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_pagination_slice_returns_correct_dicts(self) -> None:
+        """Pagination offset/limit produces the correct slice of dicts."""
+        all_entities = [_make_entity(f"E{i}", "concept", f"desc{i}") for i in range(10)]
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = all_entities
+            result = await list_entities(_make_mcp_ctx(), offset=2, limit=3)
+
+        # Expect dicts for E2, E3, E4 only
+        assert isinstance(result, list)
+        assert len(result) == 3  # type: ignore[arg-type]
+        names = [item["name"] for item in result]  # type: ignore[index]
+        assert names == ["E2", "E3", "E4"]
+
+    # ------------------------------------------------------------------
+    # AC: empty results return [] not a string
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_empty_returns_empty_list(self) -> None:
+        """list_entities returns [] (not 'No entities found.') when result set is empty."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = []
+            result = await list_entities(_make_mcp_ctx())
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_empty_result_is_list_not_str(self) -> None:
+        """Empty result is a list type, confirming no string sentinel is returned."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = []
+            result = await list_entities(_make_mcp_ctx())
+
+        assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GetStatsStructured (#507)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GetStatsStructured:
+    """Contract tests: get_stats returns dict[str, int] with documents/entities/edges keys."""
+
+    # ------------------------------------------------------------------
+    # AC: returns dict not str
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_returns_dict(self) -> None:
+        """get_stats returns a dict (not str)."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (3, 7, 5)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_dict_has_documents_entities_edges_keys(self) -> None:
+        """Returned dict has exactly 'documents', 'entities', 'edges' keys."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (1, 2, 3)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert isinstance(result, dict)
+        assert "documents" in result  # type: ignore[operator]
+        assert "entities" in result  # type: ignore[operator]
+        assert "edges" in result  # type: ignore[operator]
+
+    @pytest.mark.asyncio
+    async def test_dict_values_are_int(self) -> None:
+        """All values in the returned dict are int."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (5, 10, 15)
+            result = await get_stats(_make_mcp_ctx())
+
+        for key in ("documents", "entities", "edges"):
+            assert isinstance(result[key], int), f"{key!r} should be int"  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_documents_matches_first_count(self) -> None:
+        """'documents' maps to the first value from get_counts()."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (42, 0, 0)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert result["documents"] == 42  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_entities_matches_second_count(self) -> None:
+        """'entities' maps to the second value from get_counts()."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (0, 77, 0)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert result["entities"] == 77  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_edges_matches_third_count(self) -> None:
+        """'edges' maps to the third value from get_counts()."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (0, 0, 99)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert result["edges"] == 99  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_all_three_values_correct_simultaneously(self) -> None:
+        """All three count values are mapped correctly from get_counts() in a single call."""
+        with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
+            mock_t.return_value = (11, 22, 33)
+            result = await get_stats(_make_mcp_ctx())
+
+        assert result["documents"] == 11  # type: ignore[index]
+        assert result["entities"] == 22  # type: ignore[index]
+        assert result["edges"] == 33  # type: ignore[index]
+
+
+# ---------------------------------------------------------------------------
 # TestFromAC_AppContextExtension
 # ---------------------------------------------------------------------------
 

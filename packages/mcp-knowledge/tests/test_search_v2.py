@@ -187,3 +187,144 @@ class TestFromAC_SearchKnowledgeV2:
         result = await search_knowledge(ctx, query="anything")
 
         assert result == "Knowledge service not available."
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SearchKnowledgeStructuredReturn (#507)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SearchKnowledgeStructuredReturn:
+    """Contract tests: search_knowledge returns list[dict] on success, [] on empty."""
+
+    # ------------------------------------------------------------------
+    # AC: success returns list not str
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_success_returns_list(self) -> None:
+        """search_knowledge returns a list (not str) when results are found."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result()])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="hello")
+
+        assert isinstance(result, list)
+
+    @pytest.mark.asyncio
+    async def test_success_result_items_are_dicts(self) -> None:
+        """Each item in the returned list is a dict."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(), _make_result(title="b")])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="q")
+
+        assert all(isinstance(item, dict) for item in result)  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_each_dict_has_title_score_snippet_keys(self) -> None:
+        """Each result dict contains 'title', 'score', and 'snippet' keys."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(title="T", score=0.9, snippet="S")])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="keys")
+
+        item = result[0]  # type: ignore[index]
+        assert "title" in item
+        assert "score" in item
+        assert "snippet" in item
+
+    @pytest.mark.asyncio
+    async def test_title_value_is_str(self) -> None:
+        """title field in the returned dict is a str."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(title="MyTitle")])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="t")
+
+        assert isinstance(result[0]["title"], str)  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_score_value_is_float(self) -> None:
+        """score field in the returned dict is a float."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(score=0.77)])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="s")
+
+        assert isinstance(result[0]["score"], float)  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_snippet_value_is_str(self) -> None:
+        """snippet field in the returned dict is a str."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[_make_result(snippet="abc")])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="sn")
+
+        assert isinstance(result[0]["snippet"], str)  # type: ignore[index]
+
+    @pytest.mark.asyncio
+    async def test_dict_values_match_source_result_fields(self) -> None:
+        """title, score, snippet values come from the StructuredSearchResult fields."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(
+            return_value=[_make_result(title="Alpha", score=0.95, snippet="alpha snip")]
+        )
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="values")
+
+        item = result[0]  # type: ignore[index]
+        assert item["title"] == "Alpha"
+        assert item["score"] == pytest.approx(0.95)
+        assert item["snippet"] == "alpha snip"
+
+    @pytest.mark.asyncio
+    async def test_multiple_results_list_length_matches(self) -> None:
+        """List length equals the number of results returned by query()."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(
+            return_value=[
+                _make_result(title="D1"),
+                _make_result(title="D2"),
+                _make_result(title="D3"),
+            ]
+        )
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="multi")
+
+        assert len(result) == 3  # type: ignore[arg-type]
+
+    # ------------------------------------------------------------------
+    # AC: empty results return [] not a string message
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_empty_results_returns_empty_list(self) -> None:
+        """search_knowledge returns [] (not a string) when query() yields no results."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="empty")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_empty_result_is_list_not_str(self) -> None:
+        """Empty result is a list type, confirming no string sentinel is returned."""
+        qs = AsyncMock()
+        qs.query = AsyncMock(return_value=[])
+        ctx = _make_ctx(qs)
+
+        result = await search_knowledge(ctx, query="empty")
+
+        assert isinstance(result, list)
