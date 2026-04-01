@@ -177,11 +177,18 @@ Restore before returning the terminal to foreground use: `$env:PYTEST_DISABLE_PL
 
 OwlBear defines three project-level markers in `pyproject.toml`:
 
-| Marker        | Meaning                                                                    |
-| ------------- | -------------------------------------------------------------------------- |
-| `api`         | Requires live API integrations or network services — skip in offline runs  |
-| `slow`        | Long-running test — skip in fast-feedback loops                            |
-| `integration` | Requires the `kanban-md` binary — deselect when it is not installed        |
+| Marker        | Meaning                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `api`         | Requires live API integrations or network services — skip in offline runs                    |
+| `slow`        | Long-running test — skip in fast-feedback loops                                              |
+| `integration` | Requires the `kanban-md` binary — deselect when it is not installed                          |
+| `e2e`         | Requires `gh` (GitHub CLI) on PATH; spawns real Copilot agent — expensive, run explicitly   |
+
+`e2e` tests are **excluded from the default run** via `addopts = "-m 'not e2e'"` in `pyproject.toml`. Run them explicitly:
+
+```powershell
+uv run pytest -m e2e
+```
 
 **Common `-m` filter flags:**
 
@@ -194,6 +201,9 @@ uv run pytest tests/ packages/ -m "not api and not slow" -q --tb=short
 
 # Run only integration tests
 uv run pytest tests/ packages/ -m "integration" -q --tb=short
+
+# Run e2e tests (requires gh CLI on PATH)
+uv run pytest -m e2e -q --tb=short
 ```
 
 ## Default flags
