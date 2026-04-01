@@ -494,15 +494,19 @@ class TestFromAC_DispatchWave:  # noqa: N801
         assert 1 in result.failures
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_non_rate_limit_crash_no_wave_level_retry_single_call(self) -> None:
-        """Non-rate-limit exception: dispatch_entry called exactly once — no wave-level retry."""
+    async def test_non_rate_limit_crash_dispatch_entry_called_twice_retry_once(
+        self,
+    ) -> None:
+        """Non-rate-limit error: dispatch_entry retried exactly once — new_session called twice."""
         client = _make_client()
         client.new_session = AsyncMock(side_effect=Exception("internal server error"))
         state = LoopState(sequential_remaining=0)
         result = await dispatch_wave(self._make_wave("builder"), client, state)
         assert 1 in result.failures
-        assert client.new_session.call_count == 1  # no retry within the wave
-        assert result.rate_limited is False
+        # AC: retry once on non-rate-limit error — dispatch_entry called twice
+        assert client.new_session.call_count == 2, (
+            "dispatch_wave must retry dispatch_entry once on non-rate-limit error"
+        )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_sequential_mode_dispatch_entry_returns_false_recorded_as_failure(
@@ -632,17 +636,17 @@ class TestFromAC_RunLoop:  # noqa: N801
         assert call_count == 2  # planned cycle 1 + empty replan
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_crash_failures_passed_to_planner_next_cycle(self) -> None:
-        """Crash failures from cycle N are forwarded to select_tasks in cycle N+1."""
+    async def test_crash_failures_pre_filtered_not_passed_as_kwarg(self) -> None:
+        """AC: run_loop pre-filters crash_failures from task list — must NOT pass crash_failures kwarg to select_tasks."""
         client = _make_client()
         client.new_session = AsyncMock(side_effect=Exception("crash"))
         call_count = 0
-        captured: list[dict] = []
+        captured_kwargs: list[dict] = []
 
-        def _select(*_args: object, **kwargs: object) -> MagicMock:
+        def _select(tasks: list, **kwargs: object) -> MagicMock:  # noqa: ARG001
             nonlocal call_count
             call_count += 1
-            captured.append(dict(kwargs))
+            captured_kwargs.append(dict(kwargs))
             if call_count <= 2:
                 return self._plan((5, "researcher"))
             return self._empty_plan()
@@ -656,23 +660,24 @@ class TestFromAC_RunLoop:  # noqa: N801
                 kanban_dir=Path("kanban"),
                 client=client,
             )
-        second_call = captured[1]
-        crash_ids = second_call.get(
-            "crash_failures", second_call.get("crash_failure_ids", set())
-        )
-        assert 5 in crash_ids
+        # AC: pre-filter crash_failures from task list BEFORE calling select_tasks —
+        # run_loop must NOT pass crash_failures as kwarg
+        for call_kw in captured_kwargs:
+            assert "crash_failures" not in call_kw, (
+                "run_loop must pre-filter crash_failures from task list, not pass as kwarg to select_tasks"
+            )
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_stale_retried_ids_tracked_across_cycles(self) -> None:
-        """Entry with retry_hint: its task_id tracked in stale_retried for next cycle."""
+    async def test_stale_retried_not_passed_as_kwarg_to_select_tasks(self) -> None:
+        """AC: stale_retried tracked in LoopState for logging only — must NOT be passed to select_tasks."""
         client = _make_client()
         call_count = 0
-        captured: list[dict] = []
+        captured_kwargs: list[dict] = []
 
-        def _select(*_args: object, **kwargs: object) -> MagicMock:
+        def _select(tasks: list, **kwargs: object) -> MagicMock:  # noqa: ARG001
             nonlocal call_count
             call_count += 1
-            captured.append(dict(kwargs))
+            captured_kwargs.append(dict(kwargs))
             if call_count == 1:
                 plan = MagicMock()
                 plan.entries = [
@@ -695,11 +700,11 @@ class TestFromAC_RunLoop:  # noqa: N801
                 kanban_dir=Path("kanban"),
                 client=client,
             )
-        second_call = captured[1]
-        stale = second_call.get(
-            "stale_retried", second_call.get("stale_retried_ids", set())
-        )
-        assert 77 in stale
+        # AC: stale_retried tracked in LoopState for logging only — NOT passed to select_tasks
+        for call_kw in captured_kwargs:
+            assert "stale_retried" not in call_kw, (
+                "stale_retried must not be passed to select_tasks — logging only per AC"
+            )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_cycle_counter_increments_each_iteration(self) -> None:
