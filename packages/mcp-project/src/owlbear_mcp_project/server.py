@@ -14,6 +14,7 @@ from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from owlbear_mcp_project.models import OwlbearProjectFile
+from owlbear_mcp_project.tree import build_tree
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -127,38 +128,14 @@ async def project_readme_resource() -> str:
     return readme.read_text(encoding="utf-8")
 
 
-def _build_tree(root: Path, max_depth: int = 3) -> str:
-    """Return an indented directory tree string, excluding common noise directories."""
-    lines: list[str] = []
-
-    def _walk(path: Path, depth: int) -> None:
-        if depth > max_depth:
-            return
-        try:
-            items = sorted(path.iterdir(), key=lambda p: p.name)
-        except (PermissionError, OSError):
-            return
-        for item in items:
-            if item.name in _STRUCTURE_EXCLUDES:
-                continue
-            indent = "  " * (depth - 1)
-            suffix = "/" if item.is_dir() else ""
-            lines.append(f"{indent}{item.name}{suffix}")
-            if item.is_dir():
-                _walk(item, depth + 1)
-
-    _walk(root, depth=1)
-    return "\n".join(lines)
-
-
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_structure(ctx: Context) -> str:
     """Return an indented directory tree (max depth 3) of the project root."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    return _build_tree(app_ctx.project_root)
+    return build_tree(app_ctx.project_root, exclude=set(_STRUCTURE_EXCLUDES))
 
 
 @mcp.resource("project://structure")
 async def project_structure_resource() -> str:
     """MCP resource: project://structure — indented tree of project root."""
-    return _build_tree(Path.cwd())
+    return build_tree(Path.cwd(), exclude=set(_STRUCTURE_EXCLUDES))
