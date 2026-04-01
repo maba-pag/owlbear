@@ -1,10 +1,12 @@
 ---
 id: 23
 title: End-to-end dispatch test
-status: review
+status: archived
 priority: needed
 created: 2026-03-26T17:22:57.6175767+01:00
-updated: 2026-03-30T22:55:23.3744643+02:00
+updated: 2026-04-01T19:27:17.2979025+02:00
+started: 2026-04-01T19:27:16.7292015+02:00
+completed: 2026-04-01T19:27:16.7292015+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -152,3 +154,103 @@ Test pattern follows existing integration tests:
 - Lint: ruff clean
 - Coverage: N/A (test-only file, no source modules touched)
 - Builder-discovered: no new tests needed (fix was in module-level helper only)
+
+[[2026-03-31]] Tue 12:14
+## Review Evidence
+See docs/scratch/23-reviewer.md for full evidence.
+
+**Verdict: FAIL (confidence 0.92)**
+Critical: AC line 'Tests excluded from default uv run pytest (addopts or marker-based)' not met. pyproject.toml addopts has no marker-exclusion filter. On any machine with gh on PATH, default pytest run would execute all 7 e2e tests (300s timeout each). Fix: add -m not-e2e exclusion to addopts.
+
+[[2026-03-31]] Tue 13:28
+## Test-Writer Notes (retry)
+- Retry reason: reviewer FAIL was about missing pyproject.toml addopts config, not missing tests.
+- All 7 AC lines remain covered by existing TestFromAC_* tests (confirmed via reviewer AC table).
+- Existing tests preserved. Builder will add -m 'not e2e' to pyproject.toml addopts.
+
+[[2026-03-31]] Tue 18:11
+## Builder Notes (retry)
+- Files changed: pyproject.toml (addopts fix only)
+- Fix: Added -m 'not e2e' to addopts so e2e tests are excluded from default uv run pytest
+- Default run: 7 deselected (exit 5), explicit uv run pytest -m e2e: 7 skipped (exit 0)
+- Lint: ruff clean
+- Coverage: N/A (config-only change, no source modules touched)
+- Commit: 7f09302
+
+[[2026-04-01]] Wed 01:37
+## Review Evidence (retry)
+See docs/scratch/23-reviewer.md for full evidence.
+
+**Verdict: PASS (confidence 0.95)**
+Critical finding from prior review resolved: addopts now includes -m not e2e. Default run deselects all 7 e2e tests (7 deselected confirmed). Explicit -m e2e run: 7 skipped (gh not on PATH). Ruff clean. All 21 AC lines met.
+
+[[2026-04-01]] Wed 01:38
+## Review Evidence (retry)
+See docs/scratch/23-reviewer.md for full evidence.
+
+**Verdict: PASS (confidence 0.95)**
+Prior FAIL resolved: addopts includes -m not e2e. 7 tests deselected on default run. 7 skipped on explicit e2e run. Ruff clean. All 21 AC lines met.
+
+[[2026-04-01]] Wed 01:38
+## Review Evidence (retry - see docs/scratch/23-reviewer.md)
+
+[[2026-04-01]] Wed 04:36
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | type:test task; no behavior/API change |
+| 2 | Docstrings | No | N/A | Test file only; no production modules changed |
+| 3 | sources/overview.md | No | N/A | Pattern follows internal test files (test_ci_integration.py); no external sources |
+| 4 | README.md | No | N/A | No CLI commands added (tests an existing CLI) |
+| 5 | Research doc | No | N/A | No research phase for this task |
+| 6 | Skill: pytest-and-linting | Yes | Updated | Added e2e marker to marker table; added run instructions |
+
+### Files Updated
+- skills/pytest-and-linting/SKILL.md (added e2e marker, excluded-by-default note, explicit run instructions)
+
+### Scratch Files Cleaned
+- Deleted docs/scratch/23-reviewer.md
+
+[[2026-04-01]] Wed 19:26
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| test_e2e_dispatch.py exists | read_file confirmed 284 lines | PASS |
+| All tests @pytest.mark.e2e | pytestmark = pytest.mark.e2e at module level | PASS |
+| Tests skip when gh not on PATH | _skip_if_no_copilot checks shutil.which('gh'), calls pytest.skip | PASS |
+| Excluded from default pytest | addopts has -m 'not e2e'; 7 deselected confirmed | PASS |
+| e2e marker registered | pyproject.toml markers list includes e2e | PASS |
+| Seed fixture creates UUID task at todo | _create_seed_task uses uuid4, status todo, tag e2e-test | PASS |
+| Fixture yields integer ID | seed_task fixture yields int from _create_seed_task | PASS |
+| Teardown deletes seed task | _delete_task in finally block with suppress(OSError) | PASS |
+| Dispatch exits 0 test | test_dispatch_exit_zero asserts returncode==0, timeout=300 | PASS |
+| Stdout contains Dispatched string | test_dispatch_stdout_contains_dispatched_string | PASS |
+| Status no longer todo | test_kanban_status_not_todo_after_dispatch | PASS |
+| claimed_by not null | test_kanban_claimed_by_not_null_after_dispatch | PASS |
+| Audit log .jsonl exists | test_audit_log_file_exists_after_dispatch | PASS |
+| Dispatch event in log | test_audit_log_contains_dispatch_event_for_seed | PASS |
+| Repeatable execution | test_two_sequential_dispatches_complete_independently, 2 seeds | PASS |
+| No production source changes | Only test file, pyproject.toml config, skill docs | PASS |
+| Idempotent teardown | contextlib.suppress(OSError) in _delete_task | PASS |
+| No hardcoded IDs | All IDs from UUID-based seed fixture | PASS |
+
+### Test Results
+- pytest: 2207 passed, 198 failed (all unrelated: quality-runner #264, rename-todo, stop-commit-guard, voice-channel, v2-test-infra), 7 e2e deselected, 0 failures in task scope
+- ruff: All checks passed
+
+### AC Quality Score: 5/5
+AC was specific, complete (18 verifiable lines), and led to clean implementation
+
+### Deduction breakdown: none (all AC lines have evidence, ruff clean, reviewer evidence present, no in-scope test failures, AC quality 5)
+### Confidence: .98
+### Action: archive
+
+### Commits (upstream)
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6e5984c | test | tests/test_e2e_dispatch.py | #23 |
+| b57a501 | fix | tests/test_e2e_dispatch.py | #23 |
+| 7f09302 | test | pyproject.toml | #23 |
+| 622d97d | docs | skills/pytest-and-linting/SKILL.md | #23 |
