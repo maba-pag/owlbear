@@ -84,7 +84,7 @@ mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 _app_context: AppContext | None = None
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -98,7 +98,7 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_sources(ctx: Context, scope: str | None = None) -> str:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -131,7 +131,7 @@ async def ingest_document(
         )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def list_entities(
     ctx: Context,
     entity_type: str | None = None,
@@ -162,7 +162,7 @@ async def list_entities(
     return "\n".join(lines)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def get_stats(ctx: Context) -> str:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
