@@ -901,6 +901,54 @@ class TestFromAC_EndWork:
         assert isinstance(result, str)
         assert "error" in result.lower()
 
+    # ------------------------------------------------------------------ outcome default (boundary)
+
+    # AC: outcome defaults to "success" when omitted
+    @pytest.mark.asyncio
+    async def test_outcome_defaults_to_success_when_omitted(self) -> None:
+        """Calling end_work without outcome param uses 'success' behavior (advances to next status).
+
+        RED: FAILS until builder adds outcome: Literal[...] = "success" default to end_work.
+        """
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress", claimed_by="builder"), "", 0)
+        edit_resp = ('{"id": 42, "status": "review"}', "", 0)
+
+        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
+            # outcome intentionally omitted — must default to "success" per AC
+            await end_work(mcp_ctx, task_id="42", note="done", claim="builder")
+
+        edit_calls = self._edit_calls(mock_run)
+        assert edit_calls, "edit was not called — success outcome behavior not triggered"
+        edit_args = list(edit_calls[-1][0])
+        assert "--status" in edit_args, "outcome default did not produce success behavior"
+        assert edit_args[edit_args.index("--status") + 1] == "review"
+
+    # ------------------------------------------------------------------ success-path edit failure (error)
+
+    # AC: all outcomes return error string when CLI call fails
+    @pytest.mark.asyncio
+    async def test_success_edit_failure_returns_error(self) -> None:
+        """outcome=success: if edit call fails (non-zero rc), end_work returns error string.
+
+        Covers line 444: return f"error: {stderr.strip()}" in success path.
+        Symmetric with TestBuilderDiscovered error tests for fail/block/reject.
+        """
+        statuses = ["todo", "in-progress", "review"]
+        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
+        show_resp = (self._show_json(status="in-progress", claimed_by="builder"), "", 0)
+        edit_fail = ("", "permission denied: cannot edit task", 1)
+
+        with self._patch_run_seq(show_resp, edit_fail):
+            result = await end_work(
+                mcp_ctx, task_id="42", note="done", outcome="success", claim="builder"
+            )
+
+        assert isinstance(result, str)
+        assert result.startswith("error:")
+        assert "permission denied" in result
+
 
 # ---------------------------------------------------------------------------
 # TestBuilderDiscovered
