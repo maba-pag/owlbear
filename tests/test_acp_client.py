@@ -493,3 +493,140 @@ class TestFromAC_ExplicitSignatureEnforcement:  # noqa: N801
         client = AcpClient(conn)
         with pytest.raises(TypeError):
             await client.new_session()
+
+
+# ---------------------------------------------------------------------------
+# ErrorLogger Protocol wiring (#521)
+# AcpClient must accept an optional _ErrorLogger and call log_error on
+# classified exceptions with keyword args: category, method, message.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorLoggerWiring:  # noqa: N801
+    """AcpClient must accept an optional _ErrorLogger and call log_error on classified exceptions."""
+
+    # --- AC: initialize + RequestError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_initialize_request_error_calls_log_error_with_category_method_message(self) -> None:
+        """log_error called with correct category/method/message when initialize raises RequestError."""
+        conn = _make_conn()
+        conn.initialize.side_effect = RequestError(-32700, "Parse error")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.initialize(protocol_version=1)
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.PERMANENT
+        assert call_kwargs["method"] == "initialize"
+        assert "Parse error" in call_kwargs["message"]
+
+    # --- AC: initialize + BrokenPipeError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_initialize_broken_pipe_calls_log_error_category_transient(self) -> None:
+        """log_error called with category=transient, method=initialize when initialize raises BrokenPipeError."""
+        conn = _make_conn()
+        conn.initialize.side_effect = BrokenPipeError("pipe broken")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.initialize(protocol_version=1)
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.TRANSIENT
+        assert call_kwargs["method"] == "initialize"
+
+    # --- AC: new_session + RequestError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_request_error_calls_log_error_with_correct_args(self) -> None:
+        """log_error called with correct category/method/message when new_session raises RequestError."""
+        conn = _make_conn()
+        conn.new_session.side_effect = RequestError(-32603, "Internal error")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.new_session(cwd="/work")
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.TRANSIENT
+        assert call_kwargs["method"] == "new_session"
+        assert "Internal error" in call_kwargs["message"]
+
+    # --- AC: new_session + ConnectionError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_new_session_connection_error_calls_log_error_category_transient(self) -> None:
+        """log_error called with category=transient, method=new_session when new_session raises ConnectionError."""
+        conn = _make_conn()
+        conn.new_session.side_effect = ConnectionError("EOF on stdout")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.new_session(cwd="/work")
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.TRANSIENT
+        assert call_kwargs["method"] == "new_session"
+
+    # --- AC: prompt + RequestError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_prompt_request_error_calls_log_error_with_correct_args(self) -> None:
+        """log_error called with correct category/method/message when prompt raises RequestError."""
+        conn = _make_conn()
+        conn.prompt.side_effect = RequestError(-32601, "Method not found")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.prompt(session_id=_SESSION_ID)
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.PERMANENT
+        assert call_kwargs["method"] == "prompt"
+        assert "Method not found" in call_kwargs["message"]
+
+    # --- AC: prompt + BrokenPipeError ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_prompt_broken_pipe_calls_log_error_category_transient(self) -> None:
+        """log_error called with category=transient, method=prompt when prompt raises BrokenPipeError."""
+        conn = _make_conn()
+        conn.prompt.side_effect = BrokenPipeError("connection reset")
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with pytest.raises(AcpClientError):
+            await client.prompt(session_id=_SESSION_ID)
+        error_logger.log_error.assert_called_once()
+        call_kwargs = error_logger.log_error.call_args.kwargs
+        assert call_kwargs["category"] == ErrorCategory.TRANSIENT
+        assert call_kwargs["method"] == "prompt"
+
+    # --- AC: error_logger is None (default behavior) ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_no_log_error_when_error_logger_is_none(self) -> None:
+        """log_error NOT called when error_logger is None — AcpClientError raised without AttributeError."""
+        conn = _make_conn()
+        conn.initialize.side_effect = RequestError(-32700, "Parse error")
+        # Explicitly pass None — must not raise AttributeError on None.log_error
+        client = AcpClient(conn, error_logger=None)
+        with pytest.raises(AcpClientError):
+            await client.initialize(protocol_version=1)
+
+    # --- AC: TimeoutError does NOT call log_error ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_timeout_error_in_prompt_does_not_call_log_error(self) -> None:
+        """TimeoutError in prompt() does NOT call log_error (excluded by design)."""
+        conn = _make_conn()
+        error_logger = MagicMock()
+        client = AcpClient(conn, error_logger=error_logger)
+        with (
+            patch(f"{_MODULE}.asyncio.wait_for", side_effect=asyncio.TimeoutError),
+            pytest.raises((asyncio.TimeoutError, AcpClientError)),
+        ):
+            await client.prompt(session_id=_SESSION_ID)
+        error_logger.log_error.assert_not_called()
