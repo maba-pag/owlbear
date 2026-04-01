@@ -169,6 +169,10 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
 | `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `skills_ref/`) |     | `v1/` | Archived v1 codebase for reference |
 
+### Package dependency rules
+
+Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `ALLOWED_IMPORTS` constant in that file maps each package namespace to its permitted owlbear-namespace imports. When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise. Full dependency rules and the TYPE_CHECKING import policy are documented in the test module docstring.
+
 ## File placement rules
 
 Keep the project root clean. Every file created during a task must go to the right location:
