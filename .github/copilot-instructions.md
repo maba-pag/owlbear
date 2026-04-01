@@ -157,7 +157,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 
 | Directory                 | Purpose                                                |
 | ------------------------- | ------------------------------------------------------ | --- | ---------- | ------------------------------------------------------------------------- | --- | ----- | ---------------------------------- |
-| `packages/orchestrator/`  | ACP client, dispatch planning, wave-based dispatch loop (wave assembly + ACP dispatch), orchestration CLI hooks, audit analysis (pattern detectors) |
+| `packages/orchestrator/`  | ACP client, dispatch planning, wave-based dispatch loop (wave assembly + ACP dispatch), `owlbear` CLI entry point (`dispatch`, `run`, `status` commands), audit analysis (pattern detectors) |
 | `packages/knowledge/`     | Knowledge engine (graph + vector)                      |
 | `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
 | `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |

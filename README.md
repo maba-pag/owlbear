@@ -57,6 +57,26 @@ board, knowledge base, and project metadata as tools inside VS Code.
 **Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
 through a shared kanban board in `kanban/`.
 
+## Orchestrator CLI
+
+After `uv sync`, the `owlbear` CLI is available:
+
+```bash
+# Dispatch a specific task by ID
+uv run owlbear dispatch <task_id>
+
+# Dispatch the top-priority actionable task
+uv run owlbear run
+
+# Loop until no actionable tasks remain
+uv run owlbear run --all
+
+# Show task counts per status and any blocked tasks
+uv run owlbear status
+```
+
+All commands require the Copilot CLI (`gh extension install github/gh-copilot`).
+
 ## Knowledge Base
 
 Populate the knowledge base from a sources manifest:
