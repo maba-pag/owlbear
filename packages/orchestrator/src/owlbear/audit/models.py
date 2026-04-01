@@ -18,6 +18,7 @@ class DispatchEvent(BaseModel):
     agent: str
     prompt_summary: str = Field(max_length=100)
     session_id: str
+    cycle_id: str = ""
 
 
 class CompletionEvent(BaseModel):
@@ -33,6 +34,7 @@ class CompletionEvent(BaseModel):
     duration_ms: int
     files_changed: list[str]
     error: str | None = None
+    cycle_id: str = ""
 
 
 AuditEvent = Annotated[DispatchEvent | CompletionEvent, Field(discriminator="type")]

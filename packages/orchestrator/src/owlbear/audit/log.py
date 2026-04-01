@@ -42,6 +42,7 @@ class AuditLog:
         date_range: tuple[str, str] | None = None,
         agent: str | None = None,
         outcome: str | None = None,
+        cycle_id: str | None = None,
     ) -> list[DispatchEvent | CompletionEvent]:
         """Return all events from audit_dir, filtered by optional parameters."""
         if not self._audit_dir.exists():
@@ -64,6 +65,9 @@ class AuditLog:
                 for e in events
                 if isinstance(e, CompletionEvent) and e.outcome == outcome
             ]
+
+        if cycle_id is not None:
+            events = [e for e in events if hasattr(e, "cycle_id") and e.cycle_id == cycle_id]
 
         if date_range is not None:
             start_dt = _parse_ts(date_range[0])

@@ -9,6 +9,7 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from owlbear.audit.models import CompletionEvent, DispatchEvent
 from owlbear.orchestrator.waves import Wave, assemble_waves
@@ -108,6 +109,7 @@ async def dispatch_entry(
     client: AcpClient,
     *,
     audit_log: AuditLog | None = None,
+    cycle_id: str = "",
 ) -> bool:
     """Dispatch a single entry via ACP.
 
@@ -115,6 +117,7 @@ async def dispatch_entry(
         entry: The dispatch entry to execute.
         client: ACP client to use for the session.
         audit_log: Optional audit logger for DispatchEvent and CompletionEvent.
+        cycle_id: Cycle trace ID propagated to both DispatchEvent and CompletionEvent.
 
     Returns:
         True on success, False on AcpClientError or TimeoutError.
@@ -135,6 +138,7 @@ async def dispatch_entry(
         agent=entry.agent,
         prompt_summary=prompt_text[:100],
         session_id=session_id,
+        cycle_id=cycle_id,
     )
 
     if audit_log is not None:
@@ -160,6 +164,7 @@ async def dispatch_entry(
         outcome="success",
         duration_ms=duration_ms,
         files_changed=files_changed,
+        cycle_id=cycle_id,
     )
 
     if audit_log is not None:
@@ -197,12 +202,13 @@ async def _dispatch_sequential(  # noqa: PLR0913
     failures: list[int],
     *,
     audit_log: AuditLog | None = None,
+    cycle_id: str = "",
 ) -> bool:
     """Dispatch wave entries one at a time, decrementing sequential_remaining each call."""
     rate_limited = False
     for entry in wave.entries:
         try:
-            ok = await dispatch_entry(entry, client, audit_log=audit_log)
+            ok = await dispatch_entry(entry, client, audit_log=audit_log, cycle_id=cycle_id)
         except Exception as exc:  # noqa: BLE001
             rl = _apply_wave_result(entry, exc, successes, failures, state)
         else:
@@ -222,10 +228,11 @@ async def _dispatch_parallel(  # noqa: PLR0913
     failures: list[int],
     *,
     audit_log: AuditLog | None = None,
+    cycle_id: str = "",
 ) -> bool:
     """Dispatch all wave entries concurrently via asyncio.gather."""
     results = await asyncio.gather(
-        *[dispatch_entry(e, client, audit_log=audit_log) for e in wave.entries],
+        *[dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id) for e in wave.entries],
         return_exceptions=True,
     )
     rate_limited = False
@@ -242,7 +249,10 @@ async def _dispatch_parallel(  # noqa: PLR0913
 
     if retry_entries:
         retry_results = await asyncio.gather(
-            *[dispatch_entry(e, client, audit_log=audit_log) for e in retry_entries],
+            *[
+                dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id)
+                for e in retry_entries
+            ],
             return_exceptions=True,
         )
         for entry, result in zip(retry_entries, retry_results, strict=True):
@@ -259,6 +269,7 @@ async def dispatch_wave(
     state: LoopState,
     *,
     audit_log: AuditLog | None = None,
+    cycle_id: str = "",
 ) -> CycleResult:
     """Dispatch all entries in a wave, respecting sequential/parallel mode.
 
@@ -267,6 +278,7 @@ async def dispatch_wave(
         client: ACP client.
         state: Mutable loop state (sequential_remaining updated in-place).
         audit_log: Optional audit logger passed through to dispatch_entry.
+        cycle_id: Cycle trace ID forwarded to every dispatch_entry call.
 
     Returns:
         CycleResult summarising successes, failures, and rate-limit status.
@@ -276,11 +288,11 @@ async def dispatch_wave(
 
     if state.sequential_remaining > 0:
         rate_limited = await _dispatch_sequential(
-            wave, client, state, successes, failures, audit_log=audit_log
+            wave, client, state, successes, failures, audit_log=audit_log, cycle_id=cycle_id
         )
     else:
         rate_limited = await _dispatch_parallel(
-            wave, client, state, successes, failures, audit_log=audit_log
+            wave, client, state, successes, failures, audit_log=audit_log, cycle_id=cycle_id
         )
 
     return CycleResult(successes=successes, failures=failures, rate_limited=rate_limited)
@@ -321,10 +333,13 @@ async def run_loop(  # noqa: PLR0913
         state.stale_retried = state.stale_retried | new_stale
 
         waves = assemble_waves(plan.entries, wave_size=wave_size, cycle=state.cycle)
+        cycle_id = uuid4().hex
 
         cycle_failures: set[int] = set()
         for wave in waves:
-            result = await dispatch_wave(wave, client, state, audit_log=audit_log)
+            result = await dispatch_wave(
+                wave, client, state, audit_log=audit_log, cycle_id=cycle_id
+            )
             cycle_failures |= set(result.failures)
 
         state.crash_failures = cycle_failures
