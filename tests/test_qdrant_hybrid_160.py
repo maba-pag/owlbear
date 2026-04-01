@@ -90,6 +90,28 @@ class TestFromAC_HybridSearchDispatch:
                 f"Expected FusionQuery for HybridEmbedding+sparse input, got {type(query_arg)}"
             )
 
+    def test_dense_fallback_when_hybrid_sparse_none(self, store: QdrantVectorStore) -> None:
+        """HybridEmbedding with sparse=None must use dense path — _hybrid_search not called.
+
+        AC4(b): falls back to dense-only search when HybridEmbedding.sparse is None.
+        The search_similar() dispatch condition is `sparse is not None`; when sparse is
+        absent, query_points must be called with a plain list[float] query (not FusionQuery),
+        and _hybrid_search must never be invoked.
+        """
+        hybrid_no_sparse = HybridEmbedding(dense=_dense(), sparse=None)
+        mock_resp = _mock_qresponse(("doc1", 0.9))
+        with (
+            patch.object(store._client, "query_points", return_value=mock_resp) as mock_qp,
+            patch.object(store, "_hybrid_search") as mock_hybrid,
+        ):
+            store.search_similar(hybrid_no_sparse, top_k=5)
+            mock_hybrid.assert_not_called()
+            call_kw = mock_qp.call_args.kwargs
+            assert not isinstance(call_kw.get("query"), qmodels.FusionQuery), (
+                "HybridEmbedding(sparse=None) must not produce a FusionQuery; "
+                "expected dense-only path with plain list[float] query"
+            )
+
 
 # ---------------------------------------------------------------------------
 # AC5 — _hybrid_search internals: 2x Prefetch, RRF fusion, query_filter
