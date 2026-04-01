@@ -42,7 +42,8 @@ class KnowledgeQueryService:
         embedding_provider: Provider for generating query embeddings.
         scopes: Optional scope filter passed to ``search_similar``.
         similarity_threshold: Minimum similarity score to include a result.
-        retriever: Unused — kept for API compatibility.
+        retriever: Optional retriever for graph-augmented retrieval. When set,
+            ``_search_chunks`` delegates to it instead of embedding directly.
         consolidation_conn: Unused — kept for API compatibility.
     """
 

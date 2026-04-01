@@ -253,3 +253,36 @@ class TestBuilderDiscovered:
         """query_for_context returns None immediately when retriever is not set."""
         svc = _make_service(retriever=None)
         assert svc.query_for_context("question") is None
+
+    def test_query_for_context_formats_output_correctly(self) -> None:
+        """query_for_context returns 'Relevant knowledge:\\n\\n- title: content' format."""
+        retriever = _fake_retriever()
+        svc = _make_service(retriever=retriever)
+        result = svc.query_for_context("q")
+        assert result is not None
+        assert result.startswith("Relevant knowledge:\n\n")
+        assert "- Title:" in result
+
+    def test_query_for_context_truncates_output_to_max_tokens(self) -> None:
+        """query_for_context truncates output to max_tokens words when exceeded."""
+        retriever = _fake_retriever()
+        svc = _make_service(retriever=retriever)
+        result = svc.query_for_context("q", max_tokens=5)
+        assert result is not None
+        assert len(result.split()) == 5
+
+    def test_query_for_context_returns_none_when_all_docs_unresolvable(self) -> None:
+        """query_for_context returns None when all chunks map to missing documents."""
+        retriever = _fake_retriever()
+        svc = _make_service(retriever=retriever)
+        svc._graph.get_document.return_value = None
+        result = svc.query_for_context("q")
+        assert result is None
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_query_returns_empty_list_when_retriever_returns_no_chunks(self) -> None:
+        """query() returns [] when the retriever returns an empty chunks list."""
+        retriever = _fake_retriever(chunks=[])
+        svc = _make_service(retriever=retriever)
+        result = await svc.query("q")
+        assert result == []
