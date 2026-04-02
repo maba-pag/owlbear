@@ -211,7 +211,7 @@ class TestFromAC_McpConfig:
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert len(data["servers"]) == 4, f"Expected 4 MCP servers, got {len(data['servers'])}"
+        assert len(data["servers"]) == 5, f"Expected 5 MCP servers, got {len(data['servers'])}"
 
     def test_mcp_args_contain_mcp_kanban_module(self, tmp_path: Path) -> None:
         project_dir = _project_dir(tmp_path)
@@ -428,7 +428,7 @@ class TestFromAC_McpServerNames:
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         server_names = set(data["servers"].keys())
-        expected = {"github", "owlbearKanban", "owlbearKnowledge", "owlbearProject"}
+        expected = {"github", "owlbearKanban", "owlbearKnowledge", "owlbearMemory", "owlbearProject"}
         assert server_names == expected, (
             f"MCP server names must be camelCase per AC. Expected {expected}, got {server_names}"
         )
@@ -593,13 +593,13 @@ class TestFromAC_GitHubMcpServer:
         )
 
     def test_mcp_json_has_exactly_four_server_entries(self, tmp_path: Path) -> None:
-        """AC: mcp.json must contain exactly 4 servers (github + 3 owlbear stdio servers)."""
+        """AC: mcp.json must contain exactly 5 servers (github + 4 owlbear stdio servers)."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert len(data["servers"]) == 4, (
-            f"Expected exactly 4 MCP server entries (github + 3 owlbear), "
+        assert len(data["servers"]) == 5, (
+            f"Expected exactly 5 MCP server entries (github + 4 owlbear), "
             f"got {len(data['servers'])}: {list(data['servers'].keys())}"
         )
 
