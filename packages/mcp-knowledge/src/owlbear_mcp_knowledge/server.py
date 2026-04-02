@@ -106,6 +106,7 @@ __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
+    "get_stats",
     "ingest_document",
     "list_entities",
     "list_sources",
@@ -129,10 +130,12 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[dic
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_sources(ctx: Context, scope: str | None = None) -> list[dict[str, str]]:
+async def list_sources(ctx: Context, scope: str | None = None) -> list[dict[str, str]] | str:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store
+    if store is None:
+        return "error: source store not available"
     sources = await asyncio.to_thread(store.list_all, scope=scope)
     return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
 
@@ -146,6 +149,8 @@ async def ingest_document(
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     pipeline = app_ctx.ingest_pipeline
+    if pipeline is None:
+        return "error: ingest pipeline not available"
     try:
         result = await pipeline.ingest_text(text, metadata=metadata)
     except Exception as exc:  # noqa: BLE001
@@ -168,6 +173,8 @@ async def list_entities(
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
+    if gs is None:
+        return "error: graph store not available"
 
     if entity_type is not None:
         try:
@@ -187,10 +194,12 @@ async def list_entities(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def get_stats(ctx: Context) -> dict[str, int]:
+async def get_stats(ctx: Context) -> dict[str, int] | str:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
+    if gs is None:
+        return "error: graph store not available"
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
     return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
 
