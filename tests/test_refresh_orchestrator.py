@@ -814,3 +814,249 @@ class TestFromAC_IngestResultCounting:  # noqa: N801
 
         assert result.failed == 1
         assert result.refreshed == 0
+
+
+# ===========================================================================
+# RETRY ADDITIONS — tests for reviewer-cited coverage gaps
+# (lines 105-106, 136-137, 189-192, 213-214, 228, 236-239)
+# ===========================================================================
+
+
+class TestFromAC_UnsupportedSourceType:  # noqa: N801
+    """refresh() raises ValueError for a SourceType not handled by any dispatch branch."""
+
+    @pytest.mark.asyncio
+    async def test_unsupported_source_type_raises_value_error(self) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        store_mock = MagicMock()
+        # Create a source-like object with an unrecognised source_type
+        source = MagicMock(spec=KnowledgeSource)
+        source.enabled = True
+        source.source_type = "totally_unsupported"  # does not match any SourceType enum value
+
+        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock())
+        with pytest.raises(ValueError, match="Unsupported source type"):
+            await orch.refresh(source)
+
+
+class TestFromAC_RefreshAllExceptionHandling:  # noqa: N801
+    """refresh_all() catches exceptions from individual source refreshes and continues."""
+
+    @pytest.mark.asyncio
+    async def test_continues_processing_after_source_refresh_raises(self) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        # Source that will raise ValueError (unsupported type — gets past enabled filter)
+        bad_source = MagicMock(spec=KnowledgeSource)
+        bad_source.enabled = True
+        bad_source.priority = 1
+        bad_source.source_type = "unsupported_type"
+        bad_source.id = "bad-src-id"
+
+        # Good source with empty URL list — will succeed
+        good_source = _make_source(
+            name="good",
+            source_type=SourceType.URL_LIST,
+            config={"urls": []},
+            priority=0,
+        )
+
+        store_mock = MagicMock()
+        store_mock.list_all.return_value = [bad_source, good_source]
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock())
+        results = await orch.refresh_all()
+
+        # bad_source exception is swallowed; only good_source appears in results
+        assert len(results) == 1
+        assert results[0].source_id == good_source.id
+
+
+class TestFromAC_SandboxPathPermissionError:  # noqa: N801
+    """_handle_file_glob returns failed=1 when sandbox_path() itself raises PermissionError."""
+
+    @pytest.mark.asyncio
+    async def test_sandbox_path_permission_error_counted_as_failed_not_raised(
+        self, tmp_path: Path
+    ) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        pipeline_mock = MagicMock()
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        # Patch sandbox_path *in the refresh module* — this triggers lines 189-192
+        with patch(
+            "owlbear_knowledge.refresh.sandbox_path",
+            side_effect=PermissionError("path escape attempt"),
+        ):
+            orch = RefreshOrchestrator(
+                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
+            )
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                config={"pattern": "*.txt"},
+            )
+            result = await orch.refresh(source)  # must not raise PermissionError
+
+        assert result.failed == 1
+        assert result.refreshed == 0
+        assert len(result.errors) == 1
+        assert "path escape attempt" in result.errors[0]
+
+
+class TestFromAC_CrawlIngestResultCounting:  # noqa: N801
+    """_handle_crawl counts skipped and failed results correctly (lines 213-214)."""
+
+    @pytest.mark.asyncio
+    async def test_crawl_skipped_status_counted_as_skipped_not_refreshed(self) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        crawl_handler = AsyncMock(return_value=[_skipped_ingest_result()])
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(
+            store=store_mock,
+            pipeline=MagicMock(),
+            crawl_handler=crawl_handler,
+        )
+        source = _make_source(source_type=SourceType.CRAWL)
+        result = await orch.refresh(source)
+
+        assert result.skipped == 1
+        assert result.refreshed == 0
+
+    @pytest.mark.asyncio
+    async def test_crawl_failed_status_counted_as_failed(self) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        crawl_handler = AsyncMock(return_value=[_failed_ingest_result()])
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(
+            store=store_mock,
+            pipeline=MagicMock(),
+            crawl_handler=crawl_handler,
+        )
+        source = _make_source(source_type=SourceType.CRAWL)
+        result = await orch.refresh(source)
+
+        assert result.failed == 1
+        assert result.refreshed == 0
+
+
+class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
+    """_handle_file_glob per-file cancel, skipped counting, and exception counting."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_stops_per_file_loop_in_file_glob(self, tmp_path: Path) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        for i in range(3):
+            (tmp_path / f"file{i}.txt").write_text(f"content {i}")
+
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(return_value=_ok_ingest_result())
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_file",
+            new=AsyncMock(return_value=_make_intake_result()),
+        ):
+            orch = RefreshOrchestrator(
+                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
+            )
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                config={"pattern": "*.txt"},
+            )
+            result = await orch.refresh(source, cancel=_SetSignal())
+
+        # Cancel always set — loop stops before processing all 3 files
+        total_processed = result.refreshed + result.skipped + result.failed
+        assert total_processed < 3
+
+    @pytest.mark.asyncio
+    async def test_file_glob_skipped_status_counted_as_skipped(self, tmp_path: Path) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        (tmp_path / "file.txt").write_text("content")
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(return_value=_skipped_ingest_result())
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_file",
+            new=AsyncMock(return_value=_make_intake_result()),
+        ):
+            orch = RefreshOrchestrator(
+                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
+            )
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                config={"pattern": "*.txt"},
+            )
+            result = await orch.refresh(source)
+
+        assert result.skipped == 1
+        assert result.refreshed == 0
+
+    @pytest.mark.asyncio
+    async def test_file_glob_per_file_exception_counted_as_failed_not_raised(
+        self, tmp_path: Path
+    ) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        (tmp_path / "file.txt").write_text("content")
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(side_effect=RuntimeError("ingest failure"))
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_file",
+            new=AsyncMock(return_value=_make_intake_result()),
+        ):
+            orch = RefreshOrchestrator(
+                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
+            )
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                config={"pattern": "*.txt"},
+            )
+            result = await orch.refresh(source)  # must not raise
+
+        assert result.failed == 1
+        assert result.refreshed == 0
+
+    @pytest.mark.asyncio
+    async def test_file_glob_failed_ingest_status_counted_as_failed(self, tmp_path: Path) -> None:
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        (tmp_path / "file.txt").write_text("content")
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(return_value=_failed_ingest_result())
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_file",
+            new=AsyncMock(return_value=_make_intake_result()),
+        ):
+            orch = RefreshOrchestrator(
+                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
+            )
+            source = _make_source(
+                source_type=SourceType.FILE_GLOB,
+                config={"pattern": "*.txt"},
+            )
+            result = await orch.refresh(source)
+
+        assert result.failed == 1
+        assert result.refreshed == 0
