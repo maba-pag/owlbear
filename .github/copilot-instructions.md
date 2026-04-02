@@ -72,6 +72,7 @@ All three custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`) foll
 - **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
 - **Return types:** Use `dict` or `list[dict]` for queryable data (lists, metadata). Use `str` for content bodies, messages, and errors.
 - **Lifespan pattern:** Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan function passed to `FastMCP`.
+- **Tool exclusion:** Each server reads a `*_TOOLS_EXCLUDE` env var (`KANBAN_TOOLS_EXCLUDE`, `KNOWLEDGE_TOOLS_EXCLUDE`, `PROJECT_TOOLS_EXCLUDE`) at startup. Comma-separated tool names are removed via `server.remove_tool()`; unknown names are silently ignored. Default (unset) = all tools registered.
 - **Module exports:** Every `server.py` defines `__all__` listing its public symbols.
 
 GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
