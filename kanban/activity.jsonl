@@ -1,19 +1,3 @@
-{"timestamp":"2026-03-29T10:22:37.0948624+02:00","action":"claim","task_id":120,"detail":"researcher"}
-{"timestamp":"2026-03-29T10:24:06.8972499+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:24:06.8995333+02:00","action":"release","task_id":129,"detail":"architect"}
-{"timestamp":"2026-03-29T10:24:17.1415554+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T10:24:17.1431457+02:00","action":"claim","task_id":117,"detail":"researcher"}
-{"timestamp":"2026-03-29T10:24:17.9323998+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:24:17.9339422+02:00","action":"claim","task_id":129,"detail":"architect"}
-{"timestamp":"2026-03-29T10:24:24.8390889+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:24:43.4410907+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:24:50.750105+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:24:50.7516405+02:00","action":"release","task_id":129,"detail":"architect"}
-{"timestamp":"2026-03-29T10:24:57.9791848+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T10:25:37.8831081+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T10:25:37.885986+02:00","action":"release","task_id":117,"detail":"researcher"}
-{"timestamp":"2026-03-29T10:26:47.4921279+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
-{"timestamp":"2026-03-29T10:26:52.8037691+02:00","action":"move","task_id":116,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-29T10:26:53.0967637+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
 {"timestamp":"2026-03-29T10:26:53.0988613+02:00","action":"release","task_id":116,"detail":"auditor"}
 {"timestamp":"2026-03-29T10:27:06.2848518+02:00","action":"create","task_id":133,"detail":"Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml"}
@@ -9998,3 +9982,19 @@
 {"timestamp":"2026-04-02T17:45:56.7674101+02:00","action":"move","task_id":538,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-02T17:46:06.0419864+02:00","action":"edit","task_id":538,"detail":"Verify structuredContent behavior for KanbanTask MCP tools"}
 {"timestamp":"2026-04-02T17:46:06.0529781+02:00","action":"release","task_id":538,"detail":"auditor"}
+{"timestamp":"2026-04-02T19:02:17.3071686+02:00","action":"edit","task_id":223,"detail":"Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge"}
+{"timestamp":"2026-04-02T19:02:21.6271432+02:00","action":"edit","task_id":223,"detail":"Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge"}
+{"timestamp":"2026-04-02T20:20:47.4566997+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
+{"timestamp":"2026-04-02T20:20:47.4680958+02:00","action":"claim","task_id":476,"detail":"architect"}
+{"timestamp":"2026-04-02T20:20:50.3584155+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-02T20:20:50.3739501+02:00","action":"claim","task_id":477,"detail":"architect"}
+{"timestamp":"2026-04-02T20:21:01.2802214+02:00","action":"edit","task_id":532,"detail":"Verify PostToolUse hook output routing in subagent context"}
+{"timestamp":"2026-04-02T20:21:01.2908487+02:00","action":"claim","task_id":532,"detail":"writer"}
+{"timestamp":"2026-04-02T20:21:19.7852888+02:00","action":"edit","task_id":544,"detail":"Test: TypedDict return types for mcp-knowledge outputSchema"}
+{"timestamp":"2026-04-02T20:21:19.7971298+02:00","action":"claim","task_id":544,"detail":"auditor"}
+{"timestamp":"2026-04-02T20:23:54.4135976+02:00","action":"edit","task_id":532,"detail":"Verify PostToolUse hook output routing in subagent context"}
+{"timestamp":"2026-04-02T20:23:54.4283163+02:00","action":"release","task_id":532,"detail":"writer"}
+{"timestamp":"2026-04-02T20:29:50.683327+02:00","action":"edit","task_id":544,"detail":"Test: TypedDict return types for mcp-knowledge outputSchema"}
+{"timestamp":"2026-04-02T20:30:12.4871102+02:00","action":"move","task_id":544,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-02T20:30:12.904478+02:00","action":"edit","task_id":544,"detail":"Test: TypedDict return types for mcp-knowledge outputSchema"}
+{"timestamp":"2026-04-02T20:30:12.9152741+02:00","action":"release","task_id":544,"detail":"auditor"}
