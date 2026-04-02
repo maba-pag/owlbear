@@ -503,3 +503,205 @@ class TestFromAC_EditTaskFlagMapping:
         assert "--remove-dep" in argv
         assert "--parent" in argv
         assert "--title" in argv
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EditTaskIdempotentHint
+# AC: edit_task ToolAnnotations include explicit idempotentHint=False
+#     (add_dep/remove_dep are non-idempotent operations)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditTaskIdempotentHint:
+    """edit_task ToolAnnotations must set idempotentHint=False explicitly."""
+
+    # AC6: idempotentHint is explicitly False (not None/True)
+    def test_idempotent_hint_is_explicitly_false(self) -> None:
+        """edit_task annotations.idempotentHint must be explicitly False (add_dep/remove_dep are non-idempotent)."""
+        edit_tool = next(
+            (t for t in mcp._tool_manager._tools.values() if t.name == "edit_task"),  # noqa: SLF001
+            None,
+        )
+        assert edit_tool is not None, "edit_task tool must be registered in mcp"
+        assert edit_tool.annotations is not None, "edit_task must have ToolAnnotations"
+        assert edit_tool.annotations.idempotentHint is False, (
+            f"edit_task.annotations.idempotentHint must be explicitly False, "
+            f"got {edit_tool.annotations.idempotentHint!r}. "
+            "add_dep/remove_dep mutations are non-idempotent."
+        )
+
+    # Boundary: idempotentHint must not be None (unset is insufficient — AC requires explicit False)
+    def test_idempotent_hint_is_not_none(self) -> None:
+        """idempotentHint=None is not acceptable — must be explicitly set to False."""
+        edit_tool = next(
+            (t for t in mcp._tool_manager._tools.values() if t.name == "edit_task"),  # noqa: SLF001
+            None,
+        )
+        assert edit_tool is not None
+        assert edit_tool.annotations.idempotentHint is not None, (
+            "edit_task.annotations.idempotentHint must not be None; "
+            "the AC requires an *explicit* idempotentHint=False in the @mcp.tool decorator."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_JsonFlagAlwaysPresent
+# AC9: edit_task unconditionally appends --json to args
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_JsonFlagAlwaysPresent:
+    """--json must always appear in _run_kanban call regardless of params."""
+
+    # Happy: --json present with minimal args (task_id only)
+    @pytest.mark.asyncio
+    async def test_json_flag_present_with_task_id_only(self) -> None:
+        """--json must appear in _run_kanban args even when only task_id is provided."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42")
+
+        argv = mock_run.call_args[0]
+        assert "--json" in argv, "--json must always be present in edit_task args"
+
+    # Edge: --json present when all params are at their defaults
+    @pytest.mark.asyncio
+    async def test_json_flag_present_when_all_params_default(self) -> None:
+        """--json must appear even when all optional params are at their zero/empty defaults."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(
+                _make_mcp_ctx(),
+                task_id="42",
+                add_dep=0,
+                remove_dep=0,
+                parent=0,
+                title="",
+                body="",
+                status="",
+                priority="",
+                tags="",
+            )
+
+        argv = mock_run.call_args[0]
+        assert "--json" in argv, "--json must be present regardless of param values"
+
+    # Edge: --json present when all new params are set
+    @pytest.mark.asyncio
+    async def test_json_flag_present_when_all_new_params_set(self) -> None:
+        """--json must appear when all new params (add_dep, remove_dep, parent, title) are set."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(
+                _make_mcp_ctx(),
+                task_id="42",
+                add_dep=1,
+                remove_dep=2,
+                parent=3,
+                title="New",
+            )
+
+        argv = mock_run.call_args[0]
+        assert "--json" in argv, "--json must be unconditionally appended"
+
+    # Boundary: --json must be the LAST element in the args list
+    @pytest.mark.asyncio
+    async def test_json_flag_is_last_arg(self) -> None:
+        """--json must be appended at the end of the args list (unconditional final append)."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", status="done")
+
+        argv = list(mock_run.call_args[0])
+        assert argv[-1] == "--json", (
+            f"--json must be the last element in args, got last element {argv[-1]!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# _FAKE_TASK_JSON: realistic fixture with depends_on, parent, blocked, body fields
+# (AC11: fixture must include these optional fields for realistic validation)
+# ---------------------------------------------------------------------------
+
+_FAKE_TASK_JSON = json.dumps(
+    {
+        "id": 99,
+        "title": "Fake Task With All Fields",
+        "status": "in-progress",
+        "priority": "needed",
+        "created": "2026-01-15T10:00:00Z",
+        "updated": "2026-04-01T12:34:56Z",
+        "class": "standard",
+        "started": "2026-02-01T08:00:00Z",
+        "completed": None,
+        "assignee": None,
+        "claimed_by": "builder",
+        "claimed_at": "2026-03-01T09:00:00Z",
+        "tags": ["scope:mcp", "type:build"],
+        "due": None,
+        "estimate": None,
+        "parent": 10,
+        "depends_on": [5, 7],
+        "blocked": False,
+        "block_reason": None,
+        "body": "## AC\n- implement stuff\n- write tests",
+        "file": "/fake/kanban/tasks/99-fake.md",
+    }
+)
+
+
+class TestFromAC_FakeTaskJsonFixture:
+    """Tests verifying edit_task validates JSON containing all optional fields (AC11)."""
+
+    # Happy: edit_task validates realistic JSON with depends_on, parent, blocked, body
+    @pytest.mark.asyncio
+    async def test_validates_json_with_depends_on_field(self) -> None:
+        """KanbanTask.model_validate_json must parse depends_on list correctly."""
+        with _patch_run(stdout=_FAKE_TASK_JSON):
+            result = await edit_task(_make_mcp_ctx(), task_id="99")
+        assert result.depends_on == [5, 7], (
+            f"depends_on must be [5, 7], got {result.depends_on!r}"
+        )
+
+    # Happy: parent field is parsed correctly
+    @pytest.mark.asyncio
+    async def test_validates_json_with_parent_field(self) -> None:
+        """KanbanTask.model_validate_json must parse parent field correctly."""
+        with _patch_run(stdout=_FAKE_TASK_JSON):
+            result = await edit_task(_make_mcp_ctx(), task_id="99")
+        assert result.parent == 10, f"parent must be 10, got {result.parent!r}"
+
+    # Happy: blocked field is parsed correctly
+    @pytest.mark.asyncio
+    async def test_validates_json_with_blocked_field(self) -> None:
+        """KanbanTask.model_validate_json must parse blocked field correctly."""
+        with _patch_run(stdout=_FAKE_TASK_JSON):
+            result = await edit_task(_make_mcp_ctx(), task_id="99")
+        assert result.blocked is False, f"blocked must be False, got {result.blocked!r}"
+
+    # Happy: body field is parsed correctly
+    @pytest.mark.asyncio
+    async def test_validates_json_with_body_field(self) -> None:
+        """KanbanTask.model_validate_json must parse the body field correctly."""
+        with _patch_run(stdout=_FAKE_TASK_JSON):
+            result = await edit_task(_make_mcp_ctx(), task_id="99")
+        assert result.body is not None, "body must not be None when provided in JSON"
+        assert "AC" in result.body, f"body must contain task text, got {result.body!r}"
+
+    # Edge: validate KanbanTask is returned (not just passes validation silently)
+    @pytest.mark.asyncio
+    async def test_realistic_fixture_returns_kanbantask_instance(self) -> None:
+        """edit_task with realistic full-field JSON must return a KanbanTask instance."""
+        with _patch_run(stdout=_FAKE_TASK_JSON):
+            result = await edit_task(_make_mcp_ctx(), task_id="99")
+        assert isinstance(result, KanbanTask), (
+            f"edit_task must return KanbanTask even with all optional fields set, got {type(result)}"
+        )
