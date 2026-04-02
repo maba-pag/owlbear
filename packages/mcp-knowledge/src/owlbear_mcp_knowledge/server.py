@@ -7,7 +7,7 @@ import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
@@ -29,6 +29,38 @@ if TYPE_CHECKING:
 
 _DEFAULT_KB_PATH = "data/knowledge/knowledge.db"
 _DEFAULT_MODEL = "gpt-4o-mini"
+
+
+class SearchResult(TypedDict):
+    """A single knowledge-base search result."""
+
+    title: str
+    score: float
+    snippet: str
+
+
+class SourceInfo(TypedDict):
+    """A registered knowledge source entry."""
+
+    name: str
+    source_type: str
+    scope: str
+
+
+class EntityInfo(TypedDict):
+    """A knowledge-graph entity entry."""
+
+    name: str
+    entity_type: str
+    description: str
+
+
+class StatsResult(TypedDict):
+    """Knowledge-base summary statistics."""
+
+    documents: int
+    entities: int
+    edges: int
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -120,7 +152,7 @@ _app_context: AppContext | None = None
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[dict[str, Any]] | str:
+async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     qs = app_ctx.query_service
@@ -131,7 +163,7 @@ async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[dic
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def list_sources(ctx: Context, scope: str | None = None) -> list[dict[str, str]] | str:
+async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store
@@ -141,7 +173,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[dict[str,
     return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def ingest_document(
     ctx: Context,
     text: str,
@@ -170,7 +202,7 @@ async def list_entities(
     entity_type: str | None = None,
     offset: int = 0,
     limit: int = 50,
-) -> list[dict[str, Any]] | str:
+) -> list[EntityInfo] | str:
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
@@ -195,7 +227,7 @@ async def list_entities(
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def get_stats(ctx: Context) -> dict[str, int] | str:
+async def get_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
