@@ -188,6 +188,17 @@ _FAKE_TASK_JSON = json.dumps({
     "updated": "2026-01-01T00:00:00+00:00",
     "class": "standard",
 })
+# Valid JSON list returned by kanban-md --json; includes created/updated to verify stripping.
+_FAKE_LIST_JSON = json.dumps([{
+    "id": 1,
+    "title": "T",
+    "status": "todo",
+    "priority": "important",
+    "tags": [],
+    "class": "standard",
+    "created": "2026-01-01T00:00:00+00:00",
+    "updated": "2026-01-01T00:00:00+00:00",
+}])
 
 
 class TestFromAC_Tools:
@@ -203,9 +214,9 @@ class TestFromAC_Tools:
     # ------------------------------------------------------------------ list_tasks
     @pytest.mark.asyncio
     async def test_list_tasks_success_passes_args(self) -> None:
-        """list_tasks passes --json + all filter args to _run_kanban when rc=0."""
+        """list_tasks passes --json + all filter args to _run_kanban when rc=0; returns lean JSON."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             result = await list_tasks(
                 mcp_ctx,
                 status="todo",
@@ -217,7 +228,10 @@ class TestFromAC_Tools:
                 unclaimed=True,
             )
 
-        assert result == _FAKE_STDOUT
+        lean = json.loads(result)
+        assert len(lean) == 1
+        assert "created" not in lean[0]
+        assert "updated" not in lean[0]
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "list" in args_used
         assert "--json" in args_used
@@ -1086,3 +1100,49 @@ class TestBuilderDiscovered:
                 mcp_ctx, task_id="1", note="n", outcome="reject", claim="agent"
             )
         assert result.startswith("error:")
+
+    # ------------------------------------------------------------------ list_tasks output_schema (AC2 #505)
+
+    def test_list_tasks_output_schema_has_items_with_lean_fields(self) -> None:
+        """output_schema for list_tasks has items with object properties for lean field names."""
+        from owlbear_mcp_kanban.server import _list_tasks_tool_obj  # noqa: PLC0415
+
+        schema = _list_tasks_tool_obj.fn_metadata.output_schema
+        assert schema["type"] == "array"
+        assert "items" in schema, "output_schema missing 'items'"
+        items = schema["items"]
+        assert items["type"] == "object"
+        assert "properties" in items, "items missing 'properties'"
+        props = items["properties"]
+        lean_fields = {"id", "title", "status", "priority", "class", "tags"}
+        for field in lean_fields:
+            assert field in props, f"lean field {field!r} absent from items.properties"
+        for stripped in ("created", "updated"):
+            assert stripped not in props, f"stripped field {stripped!r} present in items.properties"
+
+    # ------------------------------------------------------------------ list_tasks edge cases (AC3/AC4 #505)
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_empty_array_returns_empty_json(self) -> None:
+        """list_tasks with empty JSON array '[]' from kanban-md returns '[]' (AC3 #505)."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("[]", "", 0)),
+        ):
+            result = await list_tasks(mcp_ctx)
+
+        assert result == "[]"
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_non_json_stdout_returns_raw_stdout(self) -> None:
+        """list_tasks returns raw stdout when kanban-md output is non-JSON (AC4 #505)."""
+        mcp_ctx = _make_mcp_ctx()
+        plain_text = "kanban-md: no tasks found (plain output)"
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(plain_text, "", 0)),
+        ):
+            result = await list_tasks(mcp_ctx)
+
+        assert result == plain_text

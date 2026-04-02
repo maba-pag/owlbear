@@ -198,7 +198,31 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
 _list_tasks_tool_obj = next(
     t for t in mcp._tool_manager._tools.values() if t.name == "list_tasks"  # noqa: SLF001
 )
-_list_tasks_tool_obj.fn_metadata.output_schema = {"type": "array"}
+_list_tasks_tool_obj.fn_metadata.output_schema = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "title": {"type": "string"},
+            "status": {"type": "string"},
+            "priority": {"type": "string"},
+            "class": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "blocked": {"type": "boolean"},
+            "block_reason": {"type": ["string", "null"]},
+            "claimed_by": {"type": ["string", "null"]},
+            "claimed_at": {"type": ["string", "null"]},
+            "started": {"type": ["string", "null"]},
+            "completed": {"type": ["string", "null"]},
+            "assignee": {"type": ["string", "null"]},
+            "due": {"type": ["string", "null"]},
+            "estimate": {"type": ["string", "null"]},
+            "parent": {"type": ["integer", "null"]},
+            "depends_on": {"type": "array", "items": {"type": "integer"}},
+        },
+    },
+}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
