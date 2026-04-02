@@ -57,7 +57,7 @@ class VoiceProcessManager:
         self,
         command: list[str],
         *,
-        init_timeout: float = 10.0,
+        init_timeout: float | None = None,
         shutdown_timeout: float = 5.0,
         kill_timeout: float = 2.0,
         max_restarts: int = 3,
@@ -212,9 +212,18 @@ class VoiceProcessManager:
 
         # Read lines until ready or EOF
         while True:
-            line = await proc.stdout.readline()
+            if self._init_timeout is not None:
+                try:
+                    line = await asyncio.wait_for(
+                        proc.stdout.readline(), timeout=self._init_timeout
+                    )
+                except TimeoutError as exc:
+                    timeout_msg = f"Voice addon did not send ready within {self._init_timeout}s"
+                    raise VoiceInitTimeout(timeout_msg) from exc
+            else:
+                line = await proc.stdout.readline()
             if not line:
-                timeout_msg = f"Voice addon did not send ready within {self._init_timeout}s"
+                timeout_msg = "Voice addon did not send ready (EOF received)"
                 raise VoiceInitTimeout(timeout_msg)
             try:
                 parsed = out_adapter.validate_json(line)
