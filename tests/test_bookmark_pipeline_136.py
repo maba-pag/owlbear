@@ -712,7 +712,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
     """AppContext extended; bookmark_source and list_bookmarks MCP tools registered."""
 
     def test_app_context_has_bookmark_pipeline_field(self) -> None:
-        from owlbear_mcp_knowledge.tools import AppContext  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext  # noqa: PLC0415
 
         import dataclasses  # noqa: PLC0415
 
@@ -720,7 +720,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
         assert "bookmark_pipeline" in fields
 
     def test_app_context_has_bookmark_store_field(self) -> None:
-        from owlbear_mcp_knowledge.tools import AppContext  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext  # noqa: PLC0415
 
         import dataclasses  # noqa: PLC0415
 
@@ -728,19 +728,19 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
         assert "bookmark_store" in fields
 
     def test_bookmark_source_function_registered(self) -> None:
-        from owlbear_mcp_knowledge import tools as tools_mod  # noqa: PLC0415
+        from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415
 
-        assert hasattr(tools_mod, "bookmark_source"), "bookmark_source tool missing from tools.py"
+        assert hasattr(server_mod, "bookmark_source"), "bookmark_source tool missing from server.py"
 
     def test_list_bookmarks_function_registered(self) -> None:
-        from owlbear_mcp_knowledge import tools as tools_mod  # noqa: PLC0415
+        from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415
 
-        assert hasattr(tools_mod, "list_bookmarks"), "list_bookmarks tool missing from tools.py"
+        assert hasattr(server_mod, "list_bookmarks"), "list_bookmarks tool missing from server.py"
 
     @pytest.mark.asyncio
     async def test_bookmark_source_calls_pipeline_process(self) -> None:
         from owlbear_knowledge.bookmark_pipeline import BookmarkResult  # noqa: PLC0415
-        from owlbear_mcp_knowledge.tools import AppContext, bookmark_source  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext, bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
         pipeline_mock.process = AsyncMock(
@@ -758,7 +758,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
     @pytest.mark.asyncio
     async def test_bookmark_source_reason_is_optional(self) -> None:
         from owlbear_knowledge.bookmark_pipeline import BookmarkResult  # noqa: PLC0415
-        from owlbear_mcp_knowledge.tools import AppContext, bookmark_source  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext, bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
         pipeline_mock.process = AsyncMock(
@@ -775,7 +775,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
 
     @pytest.mark.asyncio
     async def test_list_bookmarks_calls_store_list(self) -> None:
-        from owlbear_mcp_knowledge.tools import AppContext, list_bookmarks  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext, list_bookmarks  # noqa: PLC0415
 
         store_mock = MagicMock()
         store_mock.list.return_value = []
@@ -789,7 +789,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
 
     @pytest.mark.asyncio
     async def test_list_bookmarks_tag_and_min_score_optional(self) -> None:
-        from owlbear_mcp_knowledge.tools import AppContext, list_bookmarks  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import AppContext, list_bookmarks  # noqa: PLC0415
 
         store_mock = MagicMock()
         store_mock.list.return_value = []
