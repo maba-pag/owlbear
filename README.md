@@ -40,7 +40,7 @@ Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with 
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
 | `kanban/`                 | Kanban board data and tooling                          |
-| `scripts/`                | Project tooling scripts (setup, skill validation)      |
+| `scripts/`                | Project tooling scripts (setup, skill validation, e2e smoke testing) |
 | `v1/`                     | Archived v1 codebase for reference                     |
 
 ## How It Works

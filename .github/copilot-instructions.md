@@ -182,7 +182,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `skills_ref/`) |     | `v1/` | Archived v1 codebase for reference |
+| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `e2e_smoke.py`, `skills_ref/`) |     | `v1/` | Archived v1 codebase for reference |
 
 ### Package dependency rules
 
