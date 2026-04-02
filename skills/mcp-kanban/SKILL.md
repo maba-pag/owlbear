@@ -58,8 +58,8 @@ Returns JSON from the final `kanban-md edit --json` call on success, or `error: 
 
 Error handling differs by tool:
 
-- **`show_task`, `move_task`, `pick_task`** — raise `ToolError` when `kanban-md` exits with a non-zero code. The MCP client receives `isError: true` in the call result. These tools also raise `ToolError` when the JSON output cannot be validated into a `KanbanTask` (wraps `ValidationError` with details).
-- **`list_tasks`, `create_task`, `edit_task`, `start_work`, `end_work`** — return `error: {message}` string on failure. Check for the `error:` prefix to detect failures.
+- **`show_task`, `move_task`, `pick_task`, `edit_task`** — raise `ToolError` when `kanban-md` exits with a non-zero code. The MCP client receives `isError: true` in the call result. These tools also raise `ToolError` when the JSON output cannot be validated into a `KanbanTask` (wraps `ValidationError` with details).
+- **`list_tasks`, `create_task`, `start_work`, `end_work`** — return `error: {message}` string on failure. Check for the `error:` prefix to detect failures.
 
 ## Binary discovery
 

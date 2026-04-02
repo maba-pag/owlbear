@@ -311,7 +311,7 @@ async def edit_task(  # noqa: PLR0913, C901
     remove_dep: int = 0,
     parent: int = 0,
     title: str = "",
-) -> str:
+) -> KanbanTask:
     """Edit task fields: status, priority, body, claim, block state, deps, parent, and title."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["edit", task_id]
@@ -344,8 +344,13 @@ async def edit_task(  # noqa: PLR0913, C901
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip()}"
-    return stdout
+        msg = stderr.strip()
+        raise ToolError(msg)
+    try:
+        return KanbanTask.model_validate_json(stdout)
+    except ValidationError as exc:
+        msg = f"Invalid task JSON: {exc}"
+        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -504,6 +509,6 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
 # This overrides FastMCP's auto-generated schema (which uses Python field names) before
 # tool.output_schema cached_property is first accessed.
 _kanbantask_schema = KanbanTask.model_json_schema(by_alias=True)
-for _tool_name in ("show_task", "move_task", "pick_task"):
+for _tool_name in ("show_task", "move_task", "pick_task", "edit_task"):
     _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
     _tool_obj.fn_metadata.output_schema = _kanbantask_schema
