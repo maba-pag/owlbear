@@ -1,10 +1,12 @@
 ---
 id: 164
 title: Wire audit log into orchestrator dispatch loop
-status: todo
+status: archived
 priority: needed
 created: 2026-03-29T19:44:23.6292421+02:00
-updated: 2026-03-30T08:12:59.4360763+02:00
+updated: 2026-04-02T14:45:33.7037242+02:00
+started: 2026-04-02T14:45:33.2630305+02:00
+completed: 2026-04-02T14:45:33.2630305+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -111,3 +113,64 @@ See docs/research/wire-audit-log-dispatch-loop.md for full analysis.
 - Verified: #163 (archived), #19 (archived)
 - Verified: #146 (backlog, blocking). Dispatch loop must exist before wiring.
 - Added: #204 (TDD RED tests, todo). Test-writer writes failing tests first.
+
+[[2026-04-02]] Thu 08:22
+## Test-Writer Notes
+- Test file: tests/test_audit_wiring_164.py
+- Classes: TestFromAC_AuditWiringWarnings
+- Tests per category: happy 0, edge 2, error 4, boundary 0
+- Total: 6 tests, all FAIL (AssertionError: no WARNING log emitted) CHECKMARK
+- ruff: clean
+- AC coverage:
+  - AC7 (audit I/O errors logged as warning): test_log_dispatch_io_error_emits_warning_log, test_log_dispatch_io_error_warning_contains_context, test_log_completion_success_path_io_error_emits_warning_log, test_log_completion_failure_path_io_error_emits_warning_log, test_log_completion_new_session_failure_io_error_emits_warning_log, test_both_log_dispatch_and_log_completion_io_errors_emit_warnings
+- Gap identified: AC7 requires audit I/O errors be logged as warning, but current implementation uses contextlib.suppress(OSError) with no logging call. Task #204 tests verify dispatch continues but not that a warning is logged.
+- AC items 1-6 and AC8 already fully covered by tests/test_dispatch_audit_wiring.py (task #204, archived).
+
+[[2026-04-02]] Thu 11:01
+## Review Evidence
+See docs/scratch/164-reviewer.md for full evidence.
+
+[[2026-04-02]] Thu 11:56
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | No API or convention change; audit log already listed in tech stack (Safety row) and orchestrator dir note |
+| 2 | Docstrings complete | Yes | Pass | loop.py: _try_audit, dispatch_entry, dispatch_wave, run_loop all have accurate docstrings covering audit_log param |
+| 3 | sources/overview.md | No | N/A | No external patterns used; pure internal wiring |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/wire-audit-log-dispatch-loop.md exists; linked in task body |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- docs/scratch/164-reviewer.md
+- docs/scratch/164-notes.tmp
+- docs/scratch/164-research-body.tmp
+
+[[2026-04-02]] Thu 14:45
+## Audit
+### AC Verification
+| AC | Description | Evidence | Status |
+|---|---|---|---|
+| AC1 | AuditLog in dispatch loop | audit_log param in run_loop, orchestrate, dispatch_entry | PASS |
+| AC2 | Constructor injection | Parameter injection, no global AuditLog | PASS |
+| AC3 | log_dispatch before prompt | _try_audit(audit_log.log_dispatch) before client.prompt() | PASS |
+| AC4 | log_completion after prompt | Success, failure, new_session failure paths all covered | PASS |
+| AC5 | time.monotonic duration | t_start/t_end monotonic, int ms conversion | PASS |
+| AC6 | git diff files_changed | _git_diff_names() with subprocess.run before/after | PASS |
+| AC7 | try/except warning logging | _try_audit catches OSError, _logger.warning() | PASS |
+| AC8 | Integration test passes | 22/22 pass (6 #164, 16 #204) | PASS |
+
+### Test Results
+- pytest (task-scoped): 22 passed, 0 failed
+- pytest (full suite): pre-existing failures only (agent_port_v2, analysis, audit_log fixture) -- none in task scope
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC was specific and verifiable. Minor: says constructor but impl uses function params. Arch notes clarify intent.
+
+### Deduction breakdown: none -- all 8 AC verified, lint clean, tests pass, reviewer evidence present, AC quality 4
+### Confidence: 1.0
+### Action: archive
