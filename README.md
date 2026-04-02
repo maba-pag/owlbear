@@ -34,6 +34,7 @@ Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with 
 | `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
 | `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
 | `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
+| `packages/mcp-memory/`    | MCP server for persistent agent memory (SQLite-backed) |
 | `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
 | `agents/`                 | Agent definitions (`.agent.md`)                        |
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
@@ -51,8 +52,8 @@ stage (research → architect → test-writer → builder → reviewer → write
 **Skills** in `skills/` auto-load by relevance, carrying domain knowledge and
 reusable workflows for each agent role.
 
-**MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`) expose the kanban
-board, knowledge base, and project metadata as tools inside VS Code.
+**MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) expose the kanban
+board, knowledge base, project metadata, and persistent agent memory as tools inside VS Code.
 
 **Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
 through a shared kanban board in `kanban/`.
@@ -86,6 +87,20 @@ uv run python -m owlbear_knowledge.loader --manifest data/knowledge/general/sour
 ```
 
 The manifest at `data/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_KB_PATH` to override the default `data/knowledge/knowledge.db` location.
+
+## Memory Migration
+
+To bulk-import existing `/memories/repo/` files into memory.db:
+
+```bash
+uv run --project packages/mcp-memory python -m owlbear_mcp_memory.migrate \
+  --source-dir <path-to-GitHub.copilot-chat/memory-tool/memories/repo/>
+```
+
+Optional flags:
+
+- `--db-path PATH` — override the default `data/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
+- `--dry-run` — print entries that would be imported without writing to the DB
 
 ## Development
 

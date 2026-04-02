@@ -102,6 +102,8 @@ GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to pre
 
 **Management:** Run `Chat: Show Memory Files` to view stored memories. Delete stale entries with the `memory delete` command. GitHub-hosted Copilot Memory stays disabled — see the paragraph above.
 
+To migrate existing `/memories/repo/` files from a previous session into memory.db, run: `uv run --project packages/mcp-memory python -m owlbear_mcp_memory.migrate --source-dir <path>`. Use `--dry-run` to preview entries before writing. See README.md § Memory Migration for full usage.
+
 ## kanban-md usage
 
 The project uses [kanban-md](https://github.com/antopolskiy/kanban-md) (v0.33.0) for file-based task management. The binary lives at `kanban/kanban-md.exe` (gitignored); run `kanban/setup.ps1` to download it.
