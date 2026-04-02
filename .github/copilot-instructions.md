@@ -69,6 +69,9 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 All four custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) follow these conventions:
 
 - **Error prefix:** Tool execution errors return a string starting with `error: ` (e.g., `f"error: {stderr.strip()}"`). Empty-result messages (e.g., "No sources found.") are informational — no prefix.
+  - `ToolError` exception (`isError=true`): use when the return type is a pure model (`dict`, `list[dict]`) and an error string cannot be embedded in the typed return.
+  - `error: ` string prefix (`isError=false`): use for `str`-return and union-return tools (`dict | str`).
+  - Both approaches are MCP-spec-valid; the spec distinguishes protocol errors from tool execution errors.
 - **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
 - **Return types:** Use `dict` or `list[dict]` for queryable data (lists, metadata). Use `str` for content bodies, messages, and errors.
 - **Lifespan pattern:** Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan function passed to `FastMCP`.
