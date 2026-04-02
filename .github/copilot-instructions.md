@@ -56,7 +56,7 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 | Agents       | VS Code / Copilot custom agents             | Agents are defined via `.agent.md` files and can delegate to nested subagents.                                                                                                                |
 | LLM provider | GitHub Copilot (flat-rate)                  | Copilot is the primary model/runtime for orchestration and implementation tasks.                                                                                                              |
 | Orchestrator | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout.                                                                                                |
-| MCP servers  | 4 servers (3 custom stdio + 1 GitHub remote) | Core: `mcp-kanban`, `mcp-knowledge`, `mcp-project` (stdio) + `github` remote (`api.githubcopilot.com/mcp/`) — all scaffolded by `setup.py`.                                                  |
+| MCP servers  | 5 servers (4 custom stdio + 1 GitHub remote) | Core: `mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory` (stdio) + `github` remote (`api.githubcopilot.com/mcp/`) — all scaffolded by `setup.py`.                                    |
 | Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                                                                                              |
 | Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                                                                                                 |
 | Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.                                                                                            |
@@ -66,7 +66,7 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 
 ## MCP Server Conventions
 
-All three custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`) follow these conventions:
+All four custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) follow these conventions:
 
 - **Error prefix:** Tool execution errors return a string starting with `error: ` (e.g., `f"error: {stderr.strip()}"`). Empty-result messages (e.g., "No sources found.") are informational — no prefix.
 - **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
@@ -173,6 +173,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
 | `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
 | `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
+| `packages/mcp-memory/`    | MCP server for persistent agent memory (SQLite-backed) |
 | `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
 | `agents/`                 | Agent definitions (`.agent.md`)                        |
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
