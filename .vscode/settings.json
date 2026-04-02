@@ -62,7 +62,6 @@
     "uv run python": true,
     "uv run ruff": true
   },
-  "chat.tools.terminal.autoReplyToPrompts": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.tools.urls.autoApprove": {
     "*": true
@@ -88,7 +87,7 @@
     "docs/scratch": true,
     "v1/.venv": true
   },
-  "github.copilot.chat.agent.autoFix": true,
+  "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
   "github.copilot.chat.anthropic.tools.websearch.maxUses": 20,
@@ -104,8 +103,8 @@
   "github.copilot.chat.tools.memory.enabled": true,
   "github.copilot.enable": {
     "*": false,
-    "plaintext": true,
     "markdown": false,
+    "plaintext": true,
     "scminput": true
   },
   "github.copilot.nextEditSuggestions.enabled": true,
