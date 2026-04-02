@@ -139,8 +139,11 @@ Why this action is needed and what task is blocked. Link to relevant task or doc
 
 ## Completion instructions
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
-The planner will unblock the task automatically on its next cycle.
+When all steps above are checked off, set `completed: true` in the YAML header.
+Write your findings in the `notes:` field. If you need more space, add a section
+(e.g., `## My Findings`) and reference it in `notes:` (e.g., `notes: "All passed,
+see ## My Findings"`). The planner copies `notes:` — and any referenced section —
+into the task body so the next agent can see what you found.
 ```
 
 ## Frontmatter fields
@@ -153,7 +156,7 @@ The planner will unblock the task automatically on its next cycle.
 | `approved`     | `false` (pending) / `true` (user approved) / `auto` (5-day auto-resolve) | decision   | User       |
 | `decision`     | Pre-filled with agent recommendation; user edits if they disagree        | decision   | Agent/User |
 | `completed`    | `false` (pending) / `true` (user completed all steps)                    | action     | User       |
-| `notes`        | Empty string; user may add caveats, conditions, or reasoning             | all        | User       |
+| `notes`        | Findings, caveats, or conditions. For long content, add a body section and reference it here (e.g., `"see ## My Findings"`) | all        | User       |
 
 ### Agent metadata (bottom of frontmatter — user should not edit)
 
@@ -197,10 +200,11 @@ That's it. The planner handles the rest.
 
 **Alternatively**, use the CLI: `bearclaw decisions resolve {task_id}` — it prompts for choice, notes, and updates the file automatically.
 
-**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true` (decisions) or `completed: true` (action requests). For each:
+**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true` (decisions) or `completed: true` (action requests). For each resolved file, the planner performs three steps in order:
 
-- Unblock the task: `kanban\kanban-md.exe edit {task_id} --unblock`
-- Move the file to `docs/decisions/resolved/`
+1. **Write summary to task body** — extracts `decision:`/`notes:` (decisions) or `notes:` (action requests) from the frontmatter and appends a `## Decision Resolved` or `## Action Completed` section to the task body via `kanban-md edit`. This is the critical step — without it, downstream agents cannot see the user's feedback.
+2. **Unblock the task** — `kanban\kanban-md.exe edit {task_id} --unblock`
+3. **Move the pending file** to `docs/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
 
 The user never moves files — the planner does this automatically.
 
@@ -221,7 +225,10 @@ The user never moves files — the planner does this automatically.
 3. Set `completed: false` → `completed: true` in the YAML header
 4. Save. Done.
 
-The planner treats `completed: true` the same as `approved: true` — it unblocks the task and moves the file to `resolved/`.
+The planner treats `completed: true` the same as `approved: true` — it writes the
+user's `notes:` to the task body (as `## Action Completed`), unblocks the task, and
+moves the file to `resolved/`. See the resolution workflow above for the full
+three-step process.
 
 ## Pre-flight: check for existing decisions before creating new ones
 

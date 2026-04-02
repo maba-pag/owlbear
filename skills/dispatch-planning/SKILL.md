@@ -74,7 +74,11 @@ For each file found, read frontmatter. **Type detection:** if the `completed:` f
 present, treat as an action request; otherwise treat as a decision request
 (backwards-compatible — files without `request_type` default to decision).
 
-For **decision requests**: if `approved: true`:
+**All three steps below are mandatory for both request types.** The body-writing
+step is the most important — without it, downstream agents have no visibility into
+the user's feedback.
+
+#### Decision requests (`approved: true`)
 
 1. **Write decision summary to task body.** Read the `decision:` and `notes:` fields
    from the file. Append a `## Decision Resolved` section to the task body:
@@ -83,12 +87,31 @@ For **decision requests**: if `approved: true`:
    kanban\kanban-md.exe edit {id} -a "## Decision Resolved\nChosen: {decision}\nUser notes: {notes}\nSource: docs/decisions/resolved/{filename}" -t
    ```
 
-   For **action requests** with `completed: true`, also extract the `## User findings`
-   section (if present) and include it in the summary. This ensures the user's
-   observations reach downstream agents via the task body.
+2. **Unblock the task:** `kanban\kanban-md.exe edit {id} --unblock`
+3. **Move the pending file** to `docs/decisions/resolved/` (PowerShell `Move-Item`).
+   If the file already exists in `resolved/`, delete the `pending/` copy instead.
+
+#### Action requests (`completed: true`)
+
+1. **Write action summary to task body.** Read the `notes:` field from the
+   frontmatter. Then check if `notes:` references a body section (look for patterns
+   like `see ## SectionName` or `## SectionName`). If it does, extract that section's
+   content from the body too. Append a `## Action Completed` section to the task body:
+
+   ```powershell
+   kanban\kanban-md.exe edit {id} -a "## Action Completed\nUser notes: {notes}\n{referenced_section_content_if_any}\nSource: docs/decisions/resolved/{filename}" -t
+   ```
+
+   If the `notes:` field is non-empty, it **must** appear in the task body — this is
+   how the user's observations reach downstream agents. Do not skip this step even
+   if the notes seem redundant. If `notes:` references a section that doesn't exist
+   in the body, just write the `notes:` value as-is.
 
 2. **Unblock the task:** `kanban\kanban-md.exe edit {id} --unblock`
-3. **Move the file** to `docs/decisions/resolved/`.
+3. **Move the pending file** to `docs/decisions/resolved/` (PowerShell `Move-Item`).
+   If the file already exists in `resolved/`, delete the `pending/` copy instead.
+
+#### Auto-resolution (5-day timeout)
 
 Before applying the 5-day auto-resolve, read the
 `impact_tier` field from the file frontmatter. If `impact_tier: 3`, skip the 5-day
@@ -99,8 +122,7 @@ treated as T2. If `impact_tier` is 2 (or absent) and `approved: false` and older
 5 days, auto-resolve: set `approved: auto`, unblock, and move to
 `docs/decisions/resolved/`.
 
-For **action requests**: if `completed: true`, unblock the task and move the file to
-`docs/decisions/resolved/`. If `completed: false` and older than 5 days,
+For **action requests**: if `completed: false` and older than 5 days,
 auto-resolve: set `completed: auto`, unblock, and move. Note: `completed: auto`
 signals the user action was not manually confirmed. `impact_tier` does not apply to
 action requests — they always use the 5-day auto-resolve.
