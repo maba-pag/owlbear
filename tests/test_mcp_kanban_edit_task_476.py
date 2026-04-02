@@ -1,13 +1,12 @@
-"""Failing tests for task #476 (revised AC): edit_task returns KanbanTask, raises ToolError.
+"""Tests for task #476: edit_task returns KanbanTask, raises ToolError, and new flag params.
 
-Covers the REVISED AC items from architect review -- the items NOT yet implemented:
+Covers all AC items from architect review (including revised AC with flag-mapping tests):
   - edit_task returns KanbanTask object (not raw str)
   - edit_task raises ToolError on rc != 0 (not returns "error: ...")
   - edit_task catches ValidationError and raises ToolError with details
   - edit_task is included in outputSchema override loop (same as show_task/move_task/pick_task)
-  - SKILL.md moves edit_task from error-string group to ToolError group
-
-All tests FAIL in RED phase -- current implementation returns str and does not raise ToolError.
+  - SKILL.md: edit_task in ToolError group, new params in edit_task row
+  - Flag-mapping: --add-dep, --remove-dep, --parent, --title flags from AC #7
 """
 
 from __future__ import annotations
@@ -318,3 +317,189 @@ class TestFromAC_EditTaskSkillMdErrorGroup:
             "edit_task must NOT appear in the error-string return group in SKILL.md. "
             f"Found: {error_string_line!r}"
         )
+
+    # AC: new params (add_dep, remove_dep, parent, title) listed in edit_task row in SKILL.md
+    def test_skill_md_edit_task_row_includes_new_params(self) -> None:
+        """SKILL.md edit_task row must list add_dep, remove_dep, parent, title."""
+        content = _SKILL_MD.read_text(encoding="utf-8")
+        edit_task_row = next(
+            (line for line in content.splitlines() if "edit_task" in line and "|" in line),
+            None,
+        )
+        assert edit_task_row is not None, "SKILL.md must have an edit_task table row"
+        for param in ("add_dep", "remove_dep", "parent", "title"):
+            assert param in edit_task_row, (
+                f"SKILL.md edit_task row must list '{param}' parameter. Row: {edit_task_row!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EditTaskFlagMapping
+# AC: flag-mapping assertions verifying _run_kanban.call_args contains
+#     --add-dep, --remove-dep, --parent, --title flags (AC #7)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditTaskFlagMapping:
+    """Flag-mapping contract tests for new edit_task parameters (AC #7)."""
+
+    # ------------------------------------------------------------------ add_dep
+
+    # Happy: --add-dep {value} is passed when add_dep > 0
+    @pytest.mark.asyncio
+    async def test_add_dep_passes_flag_and_value_when_positive(self) -> None:
+        """edit_task passes --add-dep {value} to _run_kanban when add_dep > 0."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", add_dep=7)
+
+        argv = mock_run.call_args[0]
+        assert "--add-dep" in argv, "--add-dep must be present when add_dep=7"
+        idx = list(argv).index("--add-dep")
+        assert argv[idx + 1] == "7", f"--add-dep value must be '7', got {argv[idx + 1]!r}"
+
+    # Boundary: --add-dep NOT passed when add_dep == 0 (sentinel no-op)
+    @pytest.mark.asyncio
+    async def test_add_dep_omitted_when_zero(self) -> None:
+        """edit_task must NOT pass --add-dep when add_dep=0 (zero is the sentinel no-op)."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", add_dep=0)
+
+        argv = mock_run.call_args[0]
+        assert "--add-dep" not in argv, "--add-dep must NOT appear when add_dep=0"
+
+    # ------------------------------------------------------------------ remove_dep
+
+    # Happy: --remove-dep {value} is passed when remove_dep > 0
+    @pytest.mark.asyncio
+    async def test_remove_dep_passes_flag_and_value_when_positive(self) -> None:
+        """edit_task passes --remove-dep {value} to _run_kanban when remove_dep > 0."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep=3)
+
+        argv = mock_run.call_args[0]
+        assert "--remove-dep" in argv, "--remove-dep must be present when remove_dep=3"
+        idx = list(argv).index("--remove-dep")
+        assert argv[idx + 1] == "3", f"--remove-dep value must be '3', got {argv[idx + 1]!r}"
+
+    # Boundary: --remove-dep NOT passed when remove_dep == 0 (sentinel no-op)
+    @pytest.mark.asyncio
+    async def test_remove_dep_omitted_when_zero(self) -> None:
+        """edit_task must NOT pass --remove-dep when remove_dep=0 (zero is the sentinel no-op)."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep=0)
+
+        argv = mock_run.call_args[0]
+        assert "--remove-dep" not in argv, "--remove-dep must NOT appear when remove_dep=0"
+
+    # ------------------------------------------------------------------ parent (edit_task specific)
+
+    # Happy: --parent {value} is passed when parent > 0
+    @pytest.mark.asyncio
+    async def test_parent_passes_flag_and_value_when_positive(self) -> None:
+        """edit_task passes --parent {value} to _run_kanban when parent > 0."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", parent=10)
+
+        argv = mock_run.call_args[0]
+        assert "--parent" in argv, "--parent must be present when parent=10"
+        idx = list(argv).index("--parent")
+        assert argv[idx + 1] == "10", f"--parent value must be '10', got {argv[idx + 1]!r}"
+
+    # Boundary: --parent NOT passed when parent == 0 (sentinel no-op)
+    @pytest.mark.asyncio
+    async def test_parent_omitted_when_zero(self) -> None:
+        """edit_task must NOT pass --parent when parent=0 (zero is the sentinel no-op)."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", parent=0)
+
+        argv = mock_run.call_args[0]
+        assert "--parent" not in argv, "--parent must NOT appear when parent=0"
+
+    # ------------------------------------------------------------------ title
+
+    # Happy: --title {value} is passed when title is non-empty
+    @pytest.mark.asyncio
+    async def test_title_passes_flag_and_value_when_non_empty(self) -> None:
+        """edit_task passes --title {value} to _run_kanban when title is non-empty."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", title="New Title")
+
+        argv = mock_run.call_args[0]
+        assert "--title" in argv, "--title must be present when title='New Title'"
+        idx = list(argv).index("--title")
+        assert argv[idx + 1] == "New Title", (
+            f"--title value must be 'New Title', got {argv[idx + 1]!r}"
+        )
+
+    # Boundary: --title NOT passed when title is empty string (default)
+    @pytest.mark.asyncio
+    async def test_title_omitted_when_empty(self) -> None:
+        """edit_task must NOT pass --title when title='' (empty string default)."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", title="")
+
+        argv = mock_run.call_args[0]
+        assert "--title" not in argv, "--title must NOT appear when title=''"
+
+    # ------------------------------------------------------------------ combined flags
+
+    # Edge: add_dep and remove_dep can be set in same call, both flags appear
+    @pytest.mark.asyncio
+    async def test_add_dep_and_remove_dep_both_passed_when_both_positive(self) -> None:
+        """Both --add-dep and --remove-dep must appear when both params > 0."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(_make_mcp_ctx(), task_id="42", add_dep=5, remove_dep=2)
+
+        argv = mock_run.call_args[0]
+        assert "--add-dep" in argv, "--add-dep must appear when add_dep=5"
+        assert "--remove-dep" in argv, "--remove-dep must appear when remove_dep=2"
+
+    # Edge: all four new params set together — all four flags appear
+    @pytest.mark.asyncio
+    async def test_all_new_params_positive_all_flags_appear(self) -> None:
+        """All four new flags (--add-dep, --remove-dep, --parent, --title) appear when all params set."""
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
+        ) as mock_run:
+            await edit_task(
+                _make_mcp_ctx(),
+                task_id="42",
+                add_dep=1,
+                remove_dep=2,
+                parent=3,
+                title="Updated",
+            )
+
+        argv = mock_run.call_args[0]
+        assert "--add-dep" in argv
+        assert "--remove-dep" in argv
+        assert "--parent" in argv
+        assert "--title" in argv
