@@ -30,6 +30,7 @@ from owlbear.orchestrator import dispatch_entry, run_loop  # type: ignore[import
 from owlbear.orchestrator.loop import LoopState, dispatch_wave
 from owlbear.orchestrator.waves import assemble_waves
 from owlbear.planner.models import DispatchEntry
+from owlbear_orchestrator.acp_client import AcpClientError, ErrorCategory
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +343,55 @@ class TestFromAC_CycleIdDispatchEntry:  # noqa: N801
         """dispatch_entry must still return bool — no Channel A/B format change (#434 AC6)."""
         result = await dispatch_entry(entry, mock_client, audit_log=mock_audit_log, cycle_id="x")
         assert isinstance(result, bool)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cycle_id_on_completion_event_when_session_create_fails(
+        self,
+        entry: DispatchEntry,
+        mock_audit_log: MagicMock,
+    ) -> None:
+        """CompletionEvent must carry cycle_id when new_session() raises AcpClientError (AC4)."""
+        client = MagicMock()
+        client.new_session = AsyncMock(
+            side_effect=AcpClientError("conn failed", category=ErrorCategory.TRANSIENT)
+        )
+
+        result = await dispatch_entry(
+            entry, client, audit_log=mock_audit_log, cycle_id="error-sess-hexval"
+        )
+
+        assert result is False
+        mock_audit_log.log_completion.assert_called_once()
+        event: CompletionEvent = mock_audit_log.log_completion.call_args.args[0]
+        assert isinstance(event, CompletionEvent)
+        assert event.cycle_id == "error-sess-hexval"
+        assert event.outcome == "failure"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_cycle_id_on_completion_event_when_prompt_fails(
+        self,
+        entry: DispatchEntry,
+        mock_audit_log: MagicMock,
+    ) -> None:
+        """CompletionEvent must carry cycle_id when client.prompt() raises AcpClientError (AC4)."""
+        client = MagicMock()
+        session_resp = MagicMock()
+        session_resp.session_id = "prompt-fail-sess"
+        client.new_session = AsyncMock(return_value=session_resp)
+        client.prompt = AsyncMock(
+            side_effect=AcpClientError("prompt failed", category=ErrorCategory.TRANSIENT)
+        )
+
+        result = await dispatch_entry(
+            entry, client, audit_log=mock_audit_log, cycle_id="error-prompt-hexval"
+        )
+
+        assert result is False
+        mock_audit_log.log_completion.assert_called_once()
+        event: CompletionEvent = mock_audit_log.log_completion.call_args.args[0]
+        assert isinstance(event, CompletionEvent)
+        assert event.cycle_id == "error-prompt-hexval"
+        assert event.outcome == "failure"
 
 
 # ---------------------------------------------------------------------------
