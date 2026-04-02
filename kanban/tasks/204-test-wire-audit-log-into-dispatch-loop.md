@@ -1,10 +1,12 @@
 ---
 id: 204
 title: 'Test: Wire audit log into dispatch loop'
-status: review
+status: archived
 priority: needed
 created: 2026-03-30T08:11:23.2576692+02:00
-updated: 2026-03-30T23:10:50.6593741+02:00
+updated: 2026-04-02T07:51:11.9063433+02:00
+started: 2026-04-02T07:51:06.8872082+02:00
+completed: 2026-04-02T07:51:06.8872082+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -61,3 +63,50 @@ TDD RED tests for #164 (wire audit log into dispatch loop).
 - Lint: ruff clean
 - Evidence: uv run pytest tests/test_dispatch_audit_wiring.py tests/test_orchestrator_loop.py -q — 67 passed in 16s
 - Fixes applied: None — clean GREEN pass
+
+[[2026-04-02]] Thu 06:46
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Already mentions 'audit log' (safety row) and 'dispatch loop' (orchestrator dir). No behavior change to document. |
+| 2 | Docstrings | Yes | Pass | All public symbols in loop.py have accurate docstrings: CycleResult, LoopState, format_prompt, _git_diff_names, dispatch_entry, _apply_wave_result, _dispatch_sequential, _dispatch_parallel, dispatch_wave, run_loop, orchestrate. __init__.py is exports only. |
+| 3 | sources/overview.md | No | N/A | No external patterns used — internal wiring of owlbear.audit into existing loop.py. |
+| 4 | README.md | No | N/A | No CLI changes. audit_log is an internal API parameter. |
+| 5 | Research doc | No | N/A | No research phase for this test/build task. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/204-* files found)
+
+[[2026-04-02]] Thu 07:51
+## Audit
+### AC Verification
+| AC | Evidence | Status |
+|-----|----------|--------|
+| AC1: AuditLog injected | run_loop has audit_log param (loop.py L363); test_run_loop_accepts_audit_log_parameter via inspect.signature | PASS |
+| AC2: log_dispatch before prompt, DispatchEvent fields | dispatch_entry calls log_dispatch before client.prompt (loop.py L165-170); 5 tests cover field validation | PASS |
+| AC3: log_completion after prompt, CompletionEvent fields | dispatch_entry calls log_completion after prompt (loop.py L190-200); 4 tests cover fields | PASS |
+| AC4: duration_ms monotonic | time.monotonic() at L176/L185; test patches monotonic, asserts 1500ms | PASS |
+| AC5: files_changed via git diff | _git_diff_names() before/after dispatch (loop.py L123-133); 2 tests | PASS |
+| AC6: log_dispatch I/O error suppressed | contextlib.suppress(OSError) wraps log_dispatch (L170); test confirms dispatch continues | PASS |
+| AC7: log_completion I/O error suppressed | contextlib.suppress(OSError) wraps log_completion (L200); test confirms success return | PASS |
+| AC8: integration round-trip | test_integration_round_trip uses real AuditLog, verifies 2 events in JSONL | PASS |
+| AC9: RED phase | test-writer notes confirm 16 tests failed with ImportError pre-implementation | PASS |
+
+### Test Results
+- pytest (scoped): 16 passed in 5.35s
+- pytest (full suite): 2327 passed, 257 failed, 1 error (no failures in task scope)
+- ruff: All checks passed
+
+### Architect Quality
+- AC specificity: excellent, 8 testable items with clear measurable criteria
+- Edge case coverage: I/O errors, empty diff, long prompt covered in AC
+- AC quality score: 5/5
+
+### Deduction breakdown
+- -.02 missing reviewer evidence section
+### Confidence: .98
+### Action: archive
