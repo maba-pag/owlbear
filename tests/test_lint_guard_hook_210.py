@@ -325,12 +325,6 @@ class TestFromAC_BuilderAgentHooks:
         content = _BUILDER_AGENT.read_text(encoding="utf-8")
         return _extract_frontmatter(content)
 
-    def test_builder_agent_file_exists(self) -> None:
-        """Precondition: agents/builder.agent.md must exist (no file to patch)."""
-        assert _BUILDER_AGENT.is_file(), (
-            "agents/builder.agent.md does not exist — unexpected missing file."
-        )
-
     def test_frontmatter_has_hooks_section(self) -> None:
         """AC7: builder.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
@@ -363,8 +357,17 @@ class TestFromAC_BuilderAgentHooks:
         )
 
     def test_frontmatter_no_duplicate_keys(self) -> None:
-        """AC9: builder.agent.md frontmatter must have no duplicate YAML keys."""
+        """AC9: builder.agent.md frontmatter must have no duplicate YAML keys.
+
+        Fails pre-impl (hooks: absent) by requiring the section is present before
+        the duplicate-key regression check is meaningful.
+        """
         fm = self._frontmatter()
+        # Fail if hooks: not present yet — duplicate check is only meaningful post-addition
+        assert "hooks:" in fm, (
+            "Builder must add the hooks: section — no duplicate-key check is meaningful "
+            "before the PostToolUse hook is added."
+        )
         # Extract all top-level YAML keys (lines starting with a word followed by :)
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
@@ -377,8 +380,12 @@ class TestFromAC_BuilderAgentHooks:
             f"Duplicate YAML keys found in builder.agent.md frontmatter: {duplicates}"
         )
 
-    def test_frontmatter_is_parseable_yaml(self) -> None:
-        """AC10: builder.agent.md frontmatter must parse as valid YAML without errors."""
+    def test_frontmatter_is_parseable_yaml_with_posttooluse_hook(self) -> None:
+        """AC10: builder.agent.md frontmatter must parse as valid YAML after hook addition.
+
+        Asserts both YAML validity AND presence of hooks/PostToolUse keys so this
+        test fails pre-impl (no hooks yet) and passes once the builder is done.
+        """
         import yaml  # noqa: PLC0415
 
         fm = self._frontmatter()
@@ -390,4 +397,14 @@ class TestFromAC_BuilderAgentHooks:
             )
         assert isinstance(parsed, dict), (
             f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
+        )
+        # Compound check: hooks must be present for AC10 to be meaningful
+        assert "hooks" in parsed, (
+            "Frontmatter parsed successfully but is missing 'hooks:' key — "
+            "builder must add the PostToolUse hooks section."
+        )
+        hooks = parsed["hooks"]
+        assert "PostToolUse" in hooks, (
+            "hooks: section is missing a PostToolUse entry — "
+            "builder must add the PostToolUse lint guard hook."
         )
