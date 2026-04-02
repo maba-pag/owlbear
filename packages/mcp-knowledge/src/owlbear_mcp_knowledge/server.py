@@ -108,6 +108,7 @@ __all__ = [
     "app_lifespan",
     "get_stats",
     "ingest_document",
+    "init_db",
     "list_entities",
     "list_sources",
     "mcp",

@@ -176,7 +176,10 @@ async def project_readme(ctx: Context) -> str:
     readme = app_ctx.project_root / "README.md"
     if not readme.exists():
         return "error: No README.md found in project root."
-    return readme.read_text(encoding="utf-8")
+    try:
+        return readme.read_text(encoding="utf-8")
+    except OSError as exc:
+        return f"error: could not read README.md: {exc}"
 
 
 @mcp.resource("project://readme")
@@ -192,7 +195,10 @@ async def project_readme_resource() -> str:
 async def project_structure(ctx: Context) -> str:
     """Return an indented directory tree (max depth 3) of the project root."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    return build_tree(app_ctx.project_root, exclude=set(_STRUCTURE_EXCLUDES))
+    try:
+        return build_tree(app_ctx.project_root, exclude=set(_STRUCTURE_EXCLUDES))
+    except Exception as exc:  # noqa: BLE001
+        return f"error: could not build directory tree: {exc}"
 
 
 @mcp.resource("project://structure")
