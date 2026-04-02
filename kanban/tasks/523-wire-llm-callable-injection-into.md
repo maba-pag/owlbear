@@ -1,18 +1,18 @@
 ---
 id: 523
 title: Wire LLM callable injection into ConsolidationService and SourceEvaluator
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-01T15:27:37.9672707+02:00
-updated: 2026-04-02T06:01:24.5887293+02:00
+updated: 2026-04-02T22:22:02.2747618+02:00
+started: 2026-04-02T22:21:59.4567453+02:00
+completed: 2026-04-02T22:21:59.4567453+02:00
 tags:
     - phase-1
     - scope:knowledge
     - type:build
 depends_on:
     - 135
-claimed_by: auditor
-claimed_at: 2026-04-02T06:01:24.5876926+02:00
 class: standard
 ---
 
@@ -130,3 +130,55 @@ Single domain (knowledge package, memory layer). Both modules in packages/knowle
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/523-* files found)
+
+[[2026-04-02]] Thu 22:21
+## Audit
+### AC Verification (spot-check, 3rd-line)
+All 17+ AC sub-criteria verified by code inspection:
+
+**ConsolidationService** (consolidation.py):
+- Constructor(conn, llm_fn): L48-50 PASS
+- consolidate(batch_size=50) returns int: L52 PASS
+- SQL query matches AC: L59-62 PASS
+- Prompt format Chunk N: L67-69 PASS
+- await llm_fn(prompt): L72 PASS
+- Success path (uuid4, JSON source_ids, UTC ISO, commit, return 1): L77-90 PASS
+- Exception handling (broad catch, warning, exc_info, return 0): L73-75 PASS
+- No rows returns 0: L64-65 PASS
+- schedule_periodic(interval=3600): L92-103 PASS
+- CancelledError re-raise: L99-100 PASS
+- Imports (asyncio, json, uuid, datetime UTC, logging): L10-16 PASS
+- summary/scope NULL (not in INSERT): L82-84 PASS
+
+**SourceEvaluator** (evaluator.py):
+- Constructor(llm_fn: EvaluateFn): L95 PASS
+- No model/_agent/tracker/provider: PASS
+- evaluate() empty/whitespace path: L107-112 PASS
+- evaluate() project_context=None path: L114-115 PASS
+- evaluate() valid path with _build_prompt: L117-119 PASS
+- evaluate() exception handling (warning, exc_info, neutral result): L120-126 PASS
+- MAX_CONTENT_LENGTH = 2000: L16 PASS
+- _build_prompt truncation and format: L75-85 PASS
+- _default_result values: L66-72 PASS
+- EVALUATION_PROMPT constant: L18 PASS
+- No PydanticAI imports: PASS (grep verified)
+
+### Test Results
+- pytest (task-scoped): 66 passed, 0 failed
+- pytest (full suite): 2937 passed, 376 failed (all failures in other tasks' RED-phase tests)
+- ruff: All checks passed
+
+### Upstream Commits
+- dd50309 test: add failing tests for LLM callable injection (#523, test-writer)
+- 2354c51 feat: wire LLM callable injection (#523, builder)
+
+### AC Quality Score: 5/5
+AC was exceptionally specific (exact signatures, SQL, prompt format, return values, exception patterns, v1 line refs). Edge cases covered. Design direction productive.
+
+### Deduction breakdown
+- Start: 1.00
+- Missing Review Evidence section in task body: -.02
+- All other criteria clean (tests pass, ruff clean, AC quality 5)
+
+### Confidence: .98
+### Action: archive
