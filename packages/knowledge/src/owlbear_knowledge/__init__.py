@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline, BookmarkResult
 from owlbear_knowledge.bookmark_store import Bookmark, BookmarkStore
 from owlbear_knowledge.cancellation import CancelSignal, LinkedCancelSignal
 from owlbear_knowledge.consolidation import ConsolidationInsight, ConsolidationService
@@ -11,6 +12,7 @@ from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
 from owlbear_knowledge.query_service import KnowledgeQueryService, StructuredSearchResult
+from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
@@ -18,6 +20,8 @@ from owlbear_knowledge.status_store import DocumentStatus, StatusStore, compute_
 
 __all__ = [
     "Bookmark",
+    "BookmarkPipeline",
+    "BookmarkResult",
     "BookmarkStore",
     "CancelSignal",
     "ConsolidationInsight",
@@ -33,6 +37,8 @@ __all__ = [
     "KnowledgeQueryService",
     "KnowledgeSourceStore",
     "LinkedCancelSignal",
+    "RefreshOrchestrator",
+    "RefreshResult",
     "RetrievalResult",
     "SourceEvaluator",
     "StatusStore",

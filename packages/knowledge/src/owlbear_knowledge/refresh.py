@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict
 
 import owlbear_knowledge.intake as _intake
+from owlbear_knowledge._paths import sandbox_path
 from owlbear_knowledge.ingest import IngestResult
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 
@@ -205,9 +206,20 @@ class RefreshOrchestrator:
     ) -> RefreshResult:
         pattern: str = source.config.get("pattern", "*")
         base_dir_raw: str | None = source.config.get("base_dir")
-        base_dir = Path(base_dir_raw) if base_dir_raw else self._workspace_root
+        base_dir_path = Path(base_dir_raw) if base_dir_raw else self._workspace_root
 
-        matching_files = sorted(base_dir.glob(pattern))
+        try:
+            safe_base = sandbox_path(self._workspace_root, base_dir_path)
+        except PermissionError as exc:
+            return RefreshResult(
+                source_id=source.id,
+                refreshed=0,
+                skipped=0,
+                failed=1,
+                errors=[str(exc)],
+            )
+
+        matching_files = sorted(safe_base.glob(pattern))
         refreshed = skipped = failed = 0
         errors: list[str] = []
 

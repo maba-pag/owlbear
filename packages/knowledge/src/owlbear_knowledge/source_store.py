@@ -140,6 +140,20 @@ class KnowledgeSourceStore:
             raise ValueError(msg)
         self._conn.commit()
 
+    def list_enabled(self, scope: str | None = None) -> list[KnowledgeSource]:
+        """Return enabled sources, optionally filtered by *scope*, ordered by priority DESC."""
+        if scope is not None:
+            rows = self._conn.execute(
+                f"{self._select_from_sources()} WHERE enabled = 1 AND scope = ?"  # noqa: S608,RUF100
+                " ORDER BY priority DESC",
+                (scope,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                f"{self._select_from_sources()} WHERE enabled = 1 ORDER BY priority DESC",  # noqa: S608,RUF100
+            ).fetchall()
+        return [self._row_to_model(r) for r in rows]
+
     def delete(self, source_id: str) -> bool:
         """Delete the source with *source_id*. Return ``True`` if it existed."""
         cur = self._conn.execute(
