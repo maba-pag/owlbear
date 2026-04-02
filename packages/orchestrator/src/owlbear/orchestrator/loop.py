@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import dataclasses
 import logging
 import subprocess
@@ -21,6 +20,8 @@ from owlbear_orchestrator.acp_client import AcpClient, AcpClientError
 from owlbear_orchestrator.process_supervisor import ProcessSupervisor
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear.audit import AuditLog
     from owlbear.planner.models import DispatchEntry
 
@@ -42,6 +43,14 @@ except ImportError:  # pragma: no cover
 
 
 _logger = logging.getLogger(__name__)
+
+
+def _try_audit(fn: Callable[..., None], *args: object, context: str) -> None:
+    """Call an audit function, emitting a WARNING on OSError — never blocks dispatch."""
+    try:
+        fn(*args)
+    except OSError as exc:
+        _logger.warning("Audit I/O error in %s: %s", context, exc)
 
 
 class _OrchestratorClient(Client):  # type: ignore[misc]
@@ -151,8 +160,12 @@ async def dispatch_entry(
                 error=str(exc),
                 cycle_id=cycle_id,
             )
-            with contextlib.suppress(OSError):
-                audit_log.log_completion(_failure_event, uuid4().hex)
+            _try_audit(
+                audit_log.log_completion,
+                _failure_event,
+                uuid4().hex,
+                context="log_completion (new_session failure)",
+            )
         return False
 
     session_id = session_resp.session_id
@@ -167,8 +180,7 @@ async def dispatch_entry(
     )
 
     if audit_log is not None:
-        with contextlib.suppress(OSError):
-            audit_log.log_dispatch(dispatch_event, session_id)
+        _try_audit(audit_log.log_dispatch, dispatch_event, session_id, context="log_dispatch")
 
     t_start = time.monotonic()
     try:
@@ -186,8 +198,12 @@ async def dispatch_entry(
                 error=str(exc),
                 cycle_id=cycle_id,
             )
-            with contextlib.suppress(OSError):
-                audit_log.log_completion(_failure_event, session_id)
+            _try_audit(
+                audit_log.log_completion,
+                _failure_event,
+                session_id,
+                context="log_completion (prompt failure)",
+            )
         return False
     t_end = time.monotonic()
 
@@ -207,8 +223,12 @@ async def dispatch_entry(
     )
 
     if audit_log is not None:
-        with contextlib.suppress(OSError):
-            audit_log.log_completion(completion_event, session_id)
+        _try_audit(
+            audit_log.log_completion,
+            completion_event,
+            session_id,
+            context="log_completion (success)",
+        )
 
     return True
 
