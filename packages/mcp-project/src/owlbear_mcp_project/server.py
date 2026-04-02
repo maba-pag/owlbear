@@ -7,9 +7,10 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AppContext",
+    "ProjectInfoResult",
+    "ProjectListItem",
     "_apply_tool_exclusions",
     "app_lifespan",
     "mcp",
@@ -29,6 +32,23 @@ __all__ = [
     "project_readme",
     "project_structure",
 ]
+
+
+class ProjectInfoResult(TypedDict):
+    """Return type for project_info tool."""
+
+    name: str
+    type: str
+    project_path: str
+    owlbear_path: str
+    created_at: str
+
+
+class ProjectListItem(TypedDict):
+    """Single entry in the project_list result."""
+
+    name: str
+    path: str
 
 _STRUCTURE_EXCLUDES: frozenset[str] = frozenset({
     ".git",
@@ -98,29 +118,30 @@ mcp = FastMCP("owlbear-project", lifespan=app_lifespan)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def project_info(ctx: Context) -> dict[str, Any] | str:
-    """Return project metadata dict, or a descriptive error string if config is absent."""
+async def project_info(ctx: Context) -> ProjectInfoResult:
+    """Return project metadata, or raise ToolError if config is absent."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     if app_ctx.project_file is None:
-        return "error: No owlbear-project.json found in project root."
+        msg = "No owlbear-project.json found in project root."
+        raise ToolError(msg)
     pf = app_ctx.project_file
-    return {
-        "name": pf.name,
-        "type": pf.type,
-        "project_path": str(app_ctx.project_root),
-        "owlbear_path": pf.owlbear_path,
-        "created_at": str(pf.created_at),
-    }
+    return ProjectInfoResult(
+        name=pf.name,
+        type=pf.type,
+        project_path=str(app_ctx.project_root),
+        owlbear_path=pf.owlbear_path,
+        created_at=str(pf.created_at),
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def project_list(ctx: Context) -> list[dict[str, str]]:
+async def project_list(ctx: Context) -> list[ProjectListItem]:
     """List registered projects from {owlbear_root}/data/projects/."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     projects_dir = app_ctx.owlbear_root / "data" / "projects"
     if not projects_dir.is_dir():
         return []
-    results: list[dict[str, str]] = []
+    results: list[ProjectListItem] = []
     for path in sorted(projects_dir.iterdir()):
         if path.suffix != ".json":
             continue
@@ -128,8 +149,24 @@ async def project_list(ctx: Context) -> list[dict[str, str]]:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        results.append({"name": path.stem, "path": data.get("path", "")})
+        results.append(ProjectListItem(name=path.stem, path=data.get("path", "")))
     return results
+
+
+# Override output_schema for project_list: flatten $ref/$defs into inline items.properties
+_project_list_tool = mcp._tool_manager._tools.get("project_list")  # noqa: SLF001
+if _project_list_tool is not None:
+    _project_list_tool.fn_metadata.output_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "path": {"type": "string"},
+            },
+            "required": ["name", "path"],
+        },
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))

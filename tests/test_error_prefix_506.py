@@ -158,21 +158,23 @@ class TestFromAC_ErrorPrefixProject:
 
     @pytest.mark.asyncio
     async def test_project_info_no_config_returns_error_prefix(self) -> None:
-        """project_info returns string starting with 'error: ' when project_file is None."""
+        """project_info raises ToolError when project_file is None."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
         ctx = _make_proj_ctx(project_file=None)
-        result = await project_info(ctx)
-        assert isinstance(result, str), "Expected str return when config absent"
-        assert result.startswith("error: "), (
-            f"Expected 'error: ' prefix, got: {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await project_info(ctx)
 
     @pytest.mark.asyncio
     async def test_project_info_no_config_exact_error_string(self) -> None:
-        """project_info returns exact message 'error: No owlbear-project.json found in project root.'."""
+        """project_info ToolError message describes the missing config file."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
         ctx = _make_proj_ctx(project_file=None)
-        result = await project_info(ctx)
-        assert result == "error: No owlbear-project.json found in project root.", (
-            f"Expected exact string, got: {result!r}"
+        with pytest.raises(ToolError) as exc_info:
+            await project_info(ctx)
+        assert "owlbear-project.json" in str(exc_info.value).lower() or "project" in str(exc_info.value).lower(), (
+            f"Expected config-describing message, got: {exc_info.value!r}"
         )
 
     # -- AC5: project_readme — no README.md -----------------------------------

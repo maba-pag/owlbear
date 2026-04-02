@@ -285,18 +285,22 @@ class TestFromAC_ProjectInfoTool:
 
     @pytest.mark.asyncio
     async def test_returns_string_when_project_file_is_none(self) -> None:
-        """project_info returns a string (error) when project_file is None."""
+        """project_info raises ToolError when project_file is None."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
         ctx = _make_mcp_ctx(_make_app_context(project_file=None))
-        result = await project_info(ctx)
-        assert isinstance(result, str)
+        with pytest.raises(ToolError):
+            await project_info(ctx)
 
     @pytest.mark.asyncio
     async def test_error_string_is_non_empty_and_descriptive(self) -> None:
-        """project_info error string is non-empty and meaningful (not blank)."""
+        """project_info ToolError message is non-empty and meaningful (not blank)."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
         ctx = _make_mcp_ctx(_make_app_context(project_file=None))
-        result = await project_info(ctx)
-        assert isinstance(result, str)
-        assert len(result.strip()) > 10
+        with pytest.raises(ToolError) as exc_info:
+            await project_info(ctx)
+        assert len(str(exc_info.value).strip()) > 10
 
 
 # ---------------------------------------------------------------------------
