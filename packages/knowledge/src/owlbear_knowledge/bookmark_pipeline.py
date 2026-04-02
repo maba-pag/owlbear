@@ -61,7 +61,7 @@ class BookmarkPipeline:
         bookmark_store: BookmarkStore | object,
         evaluator: SourceEvaluator | object,
         ingest_pipeline: IngestPipeline | object | None = None,
-        web_read_fn: Callable[[str], Awaitable[str | None]],
+        web_read_fn: Callable[[str], Awaitable[str | None]] | None = None,
         ingest_threshold: float = 0.7,
     ) -> None:
         self._store = bookmark_store
@@ -70,7 +70,7 @@ class BookmarkPipeline:
         self._web_read_fn = web_read_fn
         self._ingest_threshold = ingest_threshold
 
-    async def process(
+    async def process(  # noqa: PLR0911
         self,
         url: str,
         reason: str | None = None,
@@ -112,14 +112,16 @@ class BookmarkPipeline:
         if cancel is not None and cancel.is_set():
             return BookmarkResult(url=url)
 
-        # Stage 2 — extract content
-        try:
-            content = await self._web_read_fn(url)
-        except Exception as exc:  # noqa: BLE001
-            return BookmarkResult(url=url, skipped_reason=str(exc))
-
-        if content is None:
-            return BookmarkResult(url=url, skipped_reason="No content fetched")
+        # Stage 2 — extract content (skip when no web_read_fn)
+        content: str = ""
+        if self._web_read_fn is not None:
+            try:
+                fetched = await self._web_read_fn(url)
+            except Exception as exc:  # noqa: BLE001
+                return BookmarkResult(url=url, skipped_reason=str(exc))
+            if fetched is None:
+                return BookmarkResult(url=url, skipped_reason="No content fetched")
+            content = fetched
 
         # Stage 3 — cancel check before evaluate
         if cancel is not None and cancel.is_set():
@@ -127,36 +129,45 @@ class BookmarkPipeline:
 
         # Stage 4 — evaluate
         evaluation: EvaluationResult = await self._evaluator.evaluate(
-            content, project_context
+            content, project_context=project_context
         )
 
-        # Stage 5 — create and store bookmark
+        # Stage 5 — cancel check before create/ingest
+        if cancel is not None and cancel.is_set():
+            return BookmarkResult(url=url, evaluation=evaluation)
+
+        # Stage 6 — conditional ingest
+        ingested = False
+        document_id: str | None = None
+        if (
+            self._ingest_pipeline is not None
+            and content
+            and evaluation.relevance_score >= self._ingest_threshold
+            and evaluation.worth_ingesting
+        ):
+            try:
+                ingest_result = await self._ingest_pipeline.ingest_text(content)
+                ingested = True
+                document_id = getattr(ingest_result, "document_id", None)
+            except Exception:
+                logger.exception("Ingest failed for %r", url)
+
+        # Stage 7 — create and store bookmark
         now = datetime.now(tz=UTC).isoformat()
         title = evaluation.summary[:120] if evaluation.summary else url
+        effective_reason = reason if reason is not None else evaluation.summary
         bookmark = Bookmark(
             url=url,
             title=title,
             tags=list(evaluation.tags),
             relevance_score=evaluation.relevance_score,
-            reason=reason,
+            reason=effective_reason,
             scope=scope,
+            document_id=document_id,
             created_at=now,
             updated_at=now,
         )
         stored = self._store.create(bookmark)
-
-        # Stage 6 — conditional ingest
-        ingested = False
-        if (
-            self._ingest_pipeline is not None
-            and evaluation.relevance_score >= self._ingest_threshold
-            and evaluation.worth_ingesting
-        ):
-            try:
-                await self._ingest_pipeline.ingest_text(content)
-                ingested = True
-            except Exception:
-                logger.exception("Ingest failed for %r", url)
 
         return BookmarkResult(
             url=url,
