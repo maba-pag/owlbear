@@ -1,12 +1,13 @@
-"""RED-phase tests for the search quality benchmark CLI — AC coverage for task #534.
+"""Tests for the search quality benchmark CLI and sources manifest — AC coverage for task #178.
 
-Tests the contract of packages/knowledge/src/owlbear_knowledge/benchmark.py.
-All tests are expected to FAIL (RED phase) because benchmark.py does not exist yet.
+Tests the contract of:
+  - packages/knowledge/src/owlbear_knowledge/benchmark.py  (built during task #534)
+  - data/knowledge/general/sources.yaml                     (header comment — remaining deliverable)
 
-Contract under test:
+Benchmark CLI contract:
   - main(args) accepts --db-path and returns an integer exit code
   - SAMPLE_QUERIES constant with exactly 5 string entries
-  - get_stats() output (doc/entity/edge counts) appears in stdout
+  - get_counts() output (doc/entity/edge counts) appears in stdout
   - Each query searched in both hybrid and dense modes
   - Per-query hybrid vs dense top-3 comparison printed to stdout
   - Summary line "Hybrid differs from dense-only on N/5 queries" in stdout
@@ -14,16 +15,25 @@ Contract under test:
   - exit 1 when any query returns 0 results
   - exit 1 when fewer than 3/5 queries show different hybrid vs dense-only top-3
   - exit 0 when all assertions pass (>= 3/5 differing rankings)
+
+Sources manifest contract (task #178 remaining deliverable):
+  - sources.yaml has a header comment block at the top of the file
+  - Header comment documents corpus size: ~547 documents (519 research, 23 skills, 5 instructions)
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from owlbear_knowledge.protocol import HybridEmbedding, SparseVector
+
+# Root of the project, two levels above this test file (tests/ → project root)
+_PROJECT_ROOT = Path(__file__).parent.parent
+_SOURCES_YAML = _PROJECT_ROOT / "data" / "knowledge" / "general" / "sources.yaml"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -319,3 +329,66 @@ class TestFromAC_BenchmarkCLI:
             code = main(["--db-path", str(tmp_path)])
 
         assert code == 0
+
+
+class TestFromAC_SourcesManifest:
+    """Tests for the sources.yaml header comment — remaining deliverable for task #178."""
+
+    # ---------------------------------------------------------------- Happy path
+
+    def test_sources_yaml_has_header_comment(self) -> None:
+        """sources.yaml must start with at least one YAML comment line (#)."""
+        raw = _SOURCES_YAML.read_text(encoding="utf-8")
+        first_non_blank = next(
+            (line for line in raw.splitlines() if line.strip()), ""
+        )
+        assert first_non_blank.startswith("#"), (
+            "sources.yaml must begin with a header comment (# ...) but first "
+            f"non-blank line is: {first_non_blank!r}"
+        )
+
+    def test_sources_yaml_header_documents_total_count(self) -> None:
+        """Header comment must mention the approximate total document count (~547)."""
+        raw = _SOURCES_YAML.read_text(encoding="utf-8")
+        comment_block = "\n".join(
+            line for line in raw.splitlines() if line.strip().startswith("#")
+        )
+        # Accept 547 or nearby approximation (540-550)
+        found = any(str(n) in comment_block for n in range(540, 551))
+        assert found, (
+            "sources.yaml header comment must mention the approximate total corpus "
+            "size (e.g. 547) but no number in range 540-550 was found in comment lines."
+        )
+
+    def test_sources_yaml_header_documents_research_count(self) -> None:
+        """Header comment must mention the research document count (519)."""
+        raw = _SOURCES_YAML.read_text(encoding="utf-8")
+        comment_block = "\n".join(
+            line for line in raw.splitlines() if line.strip().startswith("#")
+        )
+        assert "519" in comment_block, (
+            "sources.yaml header comment must mention 519 research documents."
+        )
+
+    def test_sources_yaml_header_documents_skills_count(self) -> None:
+        """Header comment must mention the skills count (23)."""
+        raw = _SOURCES_YAML.read_text(encoding="utf-8")
+        comment_block = "\n".join(
+            line for line in raw.splitlines() if line.strip().startswith("#")
+        )
+        assert "23" in comment_block, (
+            "sources.yaml header comment must mention 23 skills."
+        )
+
+    def test_sources_yaml_header_documents_instructions_count(self) -> None:
+        """Header comment must mention the instructions count (5)."""
+        raw = _SOURCES_YAML.read_text(encoding="utf-8")
+        comment_block = "\n".join(
+            line for line in raw.splitlines() if line.strip().startswith("#")
+        )
+        assert "5" in comment_block, (
+            "sources.yaml header comment must mention 5 instruction files."
+        )
+        assert "instruction" in comment_block.lower(), (
+            "sources.yaml header comment must mention 'instruction' files."
+        )
