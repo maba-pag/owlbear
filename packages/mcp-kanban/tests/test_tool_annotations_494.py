@@ -7,8 +7,10 @@ AC coverage:
   - move_task:     destructiveHint=False, idempotentHint=True
   - edit_task:     destructiveHint=False
   - pick_task:     destructiveHint=False
+  - start_work:    destructiveHint=False
+  - end_work:      destructiveHint=False
   - ToolAnnotations imported from mcp.types in server module
-  - All 6 tools have annotations (not None)
+  - All 8 tools have annotations (not None)
 
 All tests FAIL in RED phase — ToolAnnotations not yet applied to @mcp.tool() decorators.
 """
@@ -63,6 +65,8 @@ class TestFromAC_ToolAnnotations:
             "move_task",
             "edit_task",
             "pick_task",
+            "start_work",
+            "end_work",
         ],
     )
     def test_all_tools_have_annotations(self, tool_name: str) -> None:
@@ -155,6 +159,26 @@ class TestFromAC_ToolAnnotations:
         assert ann is not None, "pick_task has no ToolAnnotations"
         assert ann.destructiveHint is False, (  # type: ignore[union-attr]
             f"Expected destructiveHint=False for pick_task, got: {ann.destructiveHint!r}"
+        )
+
+    # -- start_work -----------------------------------------------------------
+
+    def test_start_work_destructive_hint_false(self) -> None:
+        """start_work is non-destructive: destructiveHint must be False."""
+        ann = _get_tool_annotations("start_work")
+        assert ann is not None, "start_work has no ToolAnnotations"
+        assert ann.destructiveHint is False, (  # type: ignore[union-attr]
+            f"Expected destructiveHint=False for start_work, got: {ann.destructiveHint!r}"
+        )
+
+    # -- end_work -------------------------------------------------------------
+
+    def test_end_work_destructive_hint_false(self) -> None:
+        """end_work is non-destructive: destructiveHint must be False."""
+        ann = _get_tool_annotations("end_work")
+        assert ann is not None, "end_work has no ToolAnnotations"
+        assert ann.destructiveHint is False, (  # type: ignore[union-attr]
+            f"Expected destructiveHint=False for end_work, got: {ann.destructiveHint!r}"
         )
 
 
