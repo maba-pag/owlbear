@@ -10,6 +10,7 @@ from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
+from owlbear_knowledge.query_service import KnowledgeQueryService, StructuredSearchResult
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.source_store import KnowledgeSourceStore
@@ -29,11 +30,13 @@ __all__ = [
     "IngestPipeline",
     "IngestResult",
     "IntakeResult",
+    "KnowledgeQueryService",
     "KnowledgeSourceStore",
     "LinkedCancelSignal",
     "RetrievalResult",
     "SourceEvaluator",
     "StatusStore",
+    "StructuredSearchResult",
     "compute_content_hash",
     "init_db",
 ]

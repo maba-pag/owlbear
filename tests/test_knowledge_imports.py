@@ -3,7 +3,7 @@
 Tests the contract for:
 - KnowledgeQueryService and StructuredSearchResult accessible from owlbear_knowledge top-level
 - Both names listed in owlbear_knowledge.__all__
-- import owlbear_knowledge succeeds without optional deps
+- import owlbear_knowledge succeeds without optional deps installed
 
 AC4 tests fail in RED phase — re-exports not yet added to __init__.py.
 AC3 (20-module smoke test content) is a builder deliverable per arch review.
@@ -86,3 +86,50 @@ class TestFromAC_KnowledgeReExports:
         }
         missing = pre_existing - set(owlbear_knowledge.__all__)
         assert not missing, f"Missing from __all__: {missing}"
+
+
+class TestBuilderDiscovered:
+    """AC3: smoke-import all public modules — no ImportError at module load time.
+
+    Optional-dep modules (qdrant, embeddings, intake) use try/except or
+    TYPE_CHECKING guards and must load successfully without the optional
+    packages installed.
+    """
+
+    PUBLIC_MODULES = (
+        "owlbear_knowledge.bookmark_store",
+        "owlbear_knowledge.cancellation",
+        "owlbear_knowledge.chunker",
+        "owlbear_knowledge.consolidation",
+        "owlbear_knowledge.document_store",
+        "owlbear_knowledge.embeddings",
+        "owlbear_knowledge.evaluator",
+        "owlbear_knowledge.extractor",
+        "owlbear_knowledge.graph_builder",
+        "owlbear_knowledge.graph_store",
+        "owlbear_knowledge.ingest",
+        "owlbear_knowledge.intake",
+        "owlbear_knowledge.inter_doc_graph_builder",
+        "owlbear_knowledge.loader",
+        "owlbear_knowledge.models",
+        "owlbear_knowledge.protocol",
+        "owlbear_knowledge.qdrant",
+        "owlbear_knowledge.query_service",
+        "owlbear_knowledge.retrieval",
+        "owlbear_knowledge.schema",
+        "owlbear_knowledge.source_store",
+        "owlbear_knowledge.status_store",
+    )
+
+    def test_all_public_modules_importable_without_optional_deps(self) -> None:
+        """All public modules must import without raising ImportError."""
+        import importlib
+
+        failed: list[str] = []
+        for mod_name in self.PUBLIC_MODULES:
+            try:
+                importlib.import_module(mod_name)
+            except ImportError as exc:
+                failed.append(f"{mod_name}: {exc}")
+
+        assert not failed, "Module-level ImportError(s):\n" + "\n".join(failed)
