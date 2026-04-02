@@ -146,7 +146,7 @@ $tasks = $raw | ConvertFrom-Json
 if (-not $tasks) { '(empty)'; return }
 $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
   $w=@()
-  # NON_IMPL_TAGS — authoritative list. See also: tdd-red SKILL.md Step 1a, agent-audit.prompt.md
+  # NON_IMPL_TAGS — authoritative list. See also: tdd-red SKILL.md Step 1a, arch-review SKILL.md, agent-audit.prompt.md
   $nonImpl = @('research','docs','type:config','type:docs','test','type:test','agent','quality')
   if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes' -and
       -not ($_.tags | Where-Object { $_ -in $nonImpl })) {$w+='TW:MISSING'}
