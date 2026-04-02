@@ -47,9 +47,9 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
 
 
 def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
-    """Create .vscode/mcp.json with four MCP server entries.
+    """Create .vscode/mcp.json with five MCP server entries.
 
-    Entries: github remote + three owlbear stdio servers. Skips if already exists.
+    Entries: github remote + four owlbear stdio servers. Skips if already exists.
     """
     vscode_dir = project_dir / ".vscode"
     vscode_dir.mkdir(parents=True, exist_ok=True)
@@ -74,6 +74,11 @@ def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
                 "type": "stdio",
                 "command": "uv",
                 "args": ["run", "--project", rel, "-m", "owlbear_mcp_knowledge"],
+            },
+            "owlbearMemory": {
+                "type": "stdio",
+                "command": "uv",
+                "args": ["run", "--project", rel, "-m", "owlbear_mcp_memory"],
             },
             "owlbearProject": {
                 "type": "stdio",

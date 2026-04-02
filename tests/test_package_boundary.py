@@ -37,10 +37,11 @@ _PACKAGES_DIR = Path(__file__).parent.parent / "packages"
 # Allowed cross-namespace imports per owlbear package namespace.
 # Self-imports (a namespace importing from itself) are always allowed and are
 # excluded from the check before consulting this map.
-ALLOWED_IMPORTS: dict[str, set[str]] = {
+ALLOWED_IMPORTS = {
     "owlbear_knowledge": set(),
     "owlbear_mcp_kanban": set(),
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
+    "owlbear_mcp_memory": set(),
     "owlbear_mcp_project": set(),
     "owlbear": {"owlbear_orchestrator"},
     "owlbear_orchestrator": {"owlbear"},

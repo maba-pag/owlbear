@@ -34,6 +34,7 @@ src = [
   "packages/knowledge/src",
   "packages/mcp-kanban/src",
   "packages/mcp-knowledge/src",
+  "packages/mcp-memory/src",
   "packages/mcp-project/src",
   "packages/voice/src",
 ]
@@ -122,6 +123,7 @@ source_pkgs = [
   "owlbear_knowledge",
   "owlbear_mcp_kanban",
   "owlbear_mcp_knowledge",
+  "owlbear_mcp_memory",
   "owlbear_mcp_project",
   "owlbear_voice",
 ]
