@@ -303,7 +303,7 @@ class TestFromAC_Tools:
     async def test_edit_task_success_passes_args(self) -> None:
         """edit_task maps all flag kwargs to the correct CLI flags for _run_kanban when rc=0."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             result = await edit_task(
                 mcp_ctx,
                 task_id="42",
@@ -319,7 +319,7 @@ class TestFromAC_Tools:
                 timestamp=True,
             )
 
-        assert result == _FAKE_STDOUT
+        assert isinstance(result, KanbanTask)
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "edit" in args_used
         assert "42" in args_used
@@ -339,7 +339,7 @@ class TestFromAC_Tools:
     async def test_edit_task_passes_unblock_flag_when_true(self) -> None:
         """edit_task passes --unblock to _run_kanban when unblock=True (not False)."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             await edit_task(mcp_ctx, task_id="42", unblock=True)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -349,7 +349,7 @@ class TestFromAC_Tools:
     async def test_edit_task_omits_unblock_flag_when_false(self) -> None:
         """edit_task does NOT include --unblock when unblock=False."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             await edit_task(mcp_ctx, task_id="42", unblock=False)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -359,7 +359,7 @@ class TestFromAC_Tools:
     async def test_edit_task_passes_release_flag_when_true(self) -> None:
         """edit_task passes --release to _run_kanban when release=True (not False)."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             await edit_task(mcp_ctx, task_id="42", release=True)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -369,7 +369,7 @@ class TestFromAC_Tools:
     async def test_edit_task_omits_release_flag_when_false(self) -> None:
         """edit_task does NOT include --release when release=False."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
             await edit_task(mcp_ctx, task_id="42", release=False)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -493,16 +493,15 @@ class TestFromAC_Tools:
         [
             (list_tasks, {}),
             (create_task, {"title": "t"}),
-            (edit_task, {"task_id": "1"}),
         ],
-        ids=["list_tasks", "create_task", "edit_task"],
+        ids=["list_tasks", "create_task"],
     )
     async def test_all_tools_return_error_string_on_non_zero_rc(
         self, tool_fn: Any, kwargs: dict[str, Any]
     ) -> None:
-        """list_tasks, create_task, edit_task return 'error: {stderr}' string when rc != 0.
+        """list_tasks, create_task return 'error: {stderr}' string when rc != 0.
 
-        Note: show_task, move_task, pick_task now raise ToolError instead (task #495).
+        Note: show_task, move_task, pick_task, edit_task now raise ToolError instead.
         """
         mcp_ctx = _make_mcp_ctx()
         with patch(
