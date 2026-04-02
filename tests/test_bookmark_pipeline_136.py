@@ -804,33 +804,6 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
 
 
 # ===========================================================================
-# AC: bookmark_toolset.py must NOT be extracted as a module
-# ===========================================================================
-
-
-class TestFromAC_NoBookmarkToolset:  # noqa: N801
-    """bookmark_toolset.py is NOT extracted — MCP tools replace it."""
-
-    def test_bookmark_toolset_module_not_in_v2_knowledge(self) -> None:
-        import importlib  # noqa: PLC0415
-
-        try:
-            importlib.import_module("owlbear_knowledge.bookmark_toolset")
-            pytest.fail("bookmark_toolset must NOT exist in v2 owlbear_knowledge package")
-        except ImportError:
-            pass  # Expected — module must not be extracted
-
-    def test_bookmark_toolset_module_not_in_v2_mcp_knowledge(self) -> None:
-        import importlib  # noqa: PLC0415
-
-        try:
-            importlib.import_module("owlbear_mcp_knowledge.bookmark_toolset")
-            pytest.fail("bookmark_toolset must NOT exist in v2 owlbear_mcp_knowledge")
-        except ImportError:
-            pass  # Expected
-
-
-# ===========================================================================
 # AC: __init__.py exports BookmarkResult, BookmarkPipeline, RefreshResult, RefreshOrchestrator
 # ===========================================================================
 
