@@ -1,18 +1,18 @@
 ---
 id: 428
 title: 'deer-flow deep dive: memory system + subagent delegation patterns'
-status: done
+status: archived
 priority: needed
 created: 2026-03-30T21:17:52.6808313+02:00
-updated: 2026-04-01T16:13:58.5143224+02:00
+updated: 2026-04-02T05:35:12.4838601+02:00
+started: 2026-04-02T05:35:12.0193317+02:00
+completed: 2026-04-02T05:35:12.0193317+02:00
 tags:
     - research
     - ' scope:agents'
     - ' phase-2'
 depends_on:
     - 386
-claimed_by: auditor
-claimed_at: 2026-04-01T16:13:58.5132561+02:00
 class: standard
 ---
 
@@ -210,3 +210,36 @@ Confidence: .92 -- all 9 AC lines have specific, verifiable evidence.
 
 ### Scratch Files Cleaned
 - docs/scratch/428-architect.tmp (deleted)
+
+[[2026-04-02]] Thu 05:34
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Memory extraction prompts | Research doc 3A: MEMORY_UPDATE_PROMPT analysis, LLM input format, categories, confidence guidelines | PASS |
+| 2. Fact lifecycle | Research doc 3B: 7-stage lifecycle table (creation through persistence) | PASS |
+| 3. Compare to 4D scoping | Research doc 3C: 9-aspect comparison table | PASS |
+| 4. Subagent dual-pool | Research doc 3D: two-pool table, execution flow, timeout, dual-pool rationale | PASS |
+| 5. Subagent discovery/registry | Research doc 3E: registry dict, built-ins, config overrides | PASS |
+| 6. Compare subagent delegation | Research doc 3F: 8-aspect comparison table | PASS |
+| 7. Per-system recommendations | Research doc section 4: 9 recommendations with confidence scores | PASS |
+| 8. Create DR | docs/decisions/resolved/428-adopt-deer-flow-memory-patterns.md exists, approved:true | PASS |
+| 9. Follow-up tasks at ideation | #499 ideation, #500 archived. Both reference research doc. | PASS |
+
+### Research Task Checks
+- Research doc: docs/research/deer-flow-memory-subagent-deep-dive.md (committed 3facecf)
+- DR resolved: docs/decisions/resolved/428-adopt-deer-flow-memory-patterns.md (committed b6c0e75)
+- Follow-up #499 references task #428 and research doc
+- Sources logged in docs/sources/overview.md L59
+
+### Test Results
+- pytest: 2362 passed, 239 failed (all failures unrelated to #428 scope -- quality-runner wiring, renames, setup, voice)
+- ruff: N/A (no Python source code changed)
+
+### AC Quality Score: 4
+AC was specific (9 items referencing actual deer-flow paths), adequate for verification. Minor gap: no explicit DR rejection handling, but researcher/architect improvised cleanly.
+
+### Deduction breakdown: no deductions. All 9 AC lines have specific evidence, no lint issues, AC quality 4, reviewer evidence present and detailed, 0 in-scope test failures.
+### Confidence: .98
+-.02: duplicate Research sections in task body from two researcher passes (process friction, not AC failure)
+### Action: archive
