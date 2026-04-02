@@ -104,6 +104,8 @@ Verify that: (a) every dispatchable status has an assigned agent, (b) no two age
 move the same transition, (c) non-pipeline agents (orchestrator, planner, curator,
 kanban-planner) never run `kanban-md move`.
 
+<!-- NON_IMPL_TAGS: Authoritative list at skills/dispatch-planning/SKILL.md
+     (agent dispatch table). Update there first, then sync here. -->
 **Non-implementation tasks:** Tasks tagged `research`, `docs`, `type:config`,
 `type:docs`, `test`, `type:test`, `agent`, or `quality` still flow through the full
 pipeline. The test-writer and builder recognize these tags and pass through without

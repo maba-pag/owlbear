@@ -144,6 +144,8 @@ Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using t
 | **Approve** | AC precise, architecture sound    | `kanban\kanban-md.exe edit {id} --status todo --release`               |
 | **Refine**  | Good concept, AC needs tightening | Use temp-file pattern (see command table above) to rewrite `--body` |
 
+<!-- NON_IMPL_TAGS: Authoritative list at skills/dispatch-planning/SKILL.md
+     (agent dispatch table). Update there first, then sync here. -->
 > **Non-implementation tagging:** Before approving, verify tasks that produce no testable
 > Python code (agent files, skill files, config-only, docs) carry at least one pass-through
 > tag from the non-impl list: `research`, `docs`, `type:config`, `type:docs`, `test`,

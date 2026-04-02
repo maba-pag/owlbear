@@ -14,6 +14,10 @@ orchestrator should dispatch in parallel.
 
 The planner assigns agents based on task status:
 
+<!-- NON_IMPL_TAGS: This is the authoritative list. Secondary copies:
+     skills/tdd-red/SKILL.md (Step 1 item 3),
+     skills/arch-review/SKILL.md (non-impl tagging note),
+     .github/prompts/agent-audit.prompt.md (Non-impl paragraph). -->
 | Task status   | Dispatch agent | Pipeline action                                          | Non-impl pass-through? |
 | ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
 | `ideation`    | `researcher`   | Research investigation → move to `backlog`               | No                     |

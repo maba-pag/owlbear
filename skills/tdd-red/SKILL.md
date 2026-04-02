@@ -23,6 +23,8 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+<!-- NON_IMPL_TAGS: Authoritative list at skills/dispatch-planning/SKILL.md
+     (agent dispatch table). Update there first, then sync here. -->
 3. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, or `quality`). If so, go to **Step 1a — Pass-through**.
 4. Check if this is a **retry cycle** (task body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
 5. Identify referenced source files, modules, and interfaces in the AC
