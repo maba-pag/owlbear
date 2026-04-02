@@ -1,10 +1,12 @@
 ---
 id: 454
 title: Add Step 6.7 loop-detection check to code-review skill
-status: docs
+status: archived
 priority: needed
 created: 2026-03-30T23:40:39.0685332+02:00
-updated: 2026-03-31T07:26:01.2699503+02:00
+updated: 2026-04-02T06:52:53.5411756+02:00
+started: 2026-04-02T06:52:53.060182+02:00
+completed: 2026-04-02T06:52:53.060182+02:00
 tags:
     - scope:agents
     - phase-2
@@ -153,3 +155,43 @@ Verified: agent-common loop detection section exists (line 274, committed via #4
 - Architect implied: Builder Process Quality evidence table added after Implementation-Aware Test Gaps. Confirmed present. PASS
 
 ### Verdict: PASS -- confidence .93
+
+[[2026-04-02]] Thu 05:14
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Skill-level edit only -- no project-level convention change |
+| 2 | Docstrings | No | N/A | Markdown-only edit, no Python files modified |
+| 3 | docs/sources/overview.md | Yes | Pass | 'Reviewer Loop Pattern Detection (Task 436)' section present at line 287-288; deer-flow LoopDetectionMiddleware + AutoGen termination conditions correctly attributed |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/reviewer-loop-pattern-detection.md exists and linked from task body; follow-up tasks 455 and 463 created |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/454-* files found)
+
+[[2026-04-02]] Thu 06:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Step 6.7 added after 6.6 | SKILL.md L251, commit 46a4415 | PASS |
+| Counts retry sections + approach variation | Steps 1+2 in added content | PASS |
+| LOOP triggers automatic FAIL | 'Any LOOP assessment = automatic FAIL.' present | PASS |
+| FRICTION informational, no block | 'FRICTION is informational only' present | PASS |
+| CLEAN noted, no action | CLEAN row 'Note, no action' present | PASS |
+| Evidence table in output template (architect-implied) | Builder Process Quality table at L397 | PASS |
+
+### Test Results
+- pytest: 2782 passed, 239 failed (all unrelated: quality-runner wiring, rename, voice, setup script, etc.), 8 skipped
+- ruff: clean (no output)
+
+### AC Quality Score: 5/5
+AC was specific, all binary outcomes, mechanically verifiable. No builder improvisation needed.
+
+### Deduction breakdown: none (all AC verified, lint clean, no task-scope failures, AC quality 5/5)
+### Confidence: 1.0
+### Action: archive
