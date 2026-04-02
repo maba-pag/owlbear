@@ -741,3 +741,285 @@ class TestFromAC_ErrorHandling:
         ).fetchall()
         conn.close()
         assert len(rows) > 0, "Valid file was not imported after encountering bad file"
+
+
+# ===========================================================================
+# Builder-discovered: in-process coverage of internal functions
+# ===========================================================================
+
+
+class TestBuilderDiscovered:
+    """In-process tests for internal helpers — ensures coverage ≥ 90% on migrate.py."""
+
+    # --- _resolve_db_path ---
+
+    def test_resolve_db_path_uses_explicit_arg(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _resolve_db_path
+
+        result = _resolve_db_path(str(tmp_path / "explicit.db"))
+        assert result == tmp_path / "explicit.db"
+
+    def test_resolve_db_path_uses_env_var(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from owlbear_mcp_memory.migrate import _resolve_db_path
+
+        monkeypatch.setenv("OWLBEAR_MEMORY_DB_PATH", str(tmp_path / "env.db"))
+        result = _resolve_db_path(None)
+        assert result == tmp_path / "env.db"
+
+    def test_resolve_db_path_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from owlbear_mcp_memory.migrate import _resolve_db_path
+        from pathlib import Path
+
+        monkeypatch.delenv("OWLBEAR_MEMORY_DB_PATH", raising=False)
+        result = _resolve_db_path(None)
+        assert result == Path("data/memory/memory.db")
+
+    # --- _slugify ---
+
+    def test_slugify_lowercases(self) -> None:
+        from owlbear_mcp_memory.migrate import _slugify
+
+        assert _slugify("## UPPER CASE") == "upper-case"
+
+    def test_slugify_replaces_spaces(self) -> None:
+        from owlbear_mcp_memory.migrate import _slugify
+
+        assert _slugify("## My Section") == "my-section"
+
+    def test_slugify_strips_hashes(self) -> None:
+        from owlbear_mcp_memory.migrate import _slugify
+
+        assert _slugify("## Simple") == "simple"
+
+    def test_slugify_removes_special_chars(self) -> None:
+        from owlbear_mcp_memory.migrate import _slugify
+
+        assert _slugify("## Hello, World!") == "hello-world"
+
+    # --- _parse_inbox_file ---
+
+    def test_parse_inbox_file_returns_entries(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_inbox_file
+
+        f = tmp_path / "task.md"
+        f.write_text(
+            "# Lessons: #42 (builder, 2026-02-01)\n\n- problems_faced: DB timeout\n",
+            encoding="utf-8",
+        )
+        entries = _parse_inbox_file(f, "2026-02-01T00:00:00+00:00")
+        assert len(entries) == 1
+        assert entries[0]["content"] == "DB timeout"
+        assert entries[0]["category"] == "knowledge"
+        assert entries[0]["scope_agent"] == "builder"
+        assert entries[0]["approval_state"] == "pending"
+
+    def test_parse_inbox_file_empty_bullet_skipped(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_inbox_file
+
+        f = tmp_path / "empty.md"
+        f.write_text(
+            "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: \n",
+            encoding="utf-8",
+        )
+        assert _parse_inbox_file(f, "now") == []
+
+    def test_parse_inbox_file_bad_bytes_returns_empty(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_inbox_file
+
+        f = tmp_path / "bad.md"
+        f.write_bytes(b"\xff\xfe bad binary")
+        result = _parse_inbox_file(f, "now")
+        assert result == []
+
+    # --- _extract_created_at ---
+
+    def test_extract_created_at_from_title(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _extract_created_at
+
+        f = tmp_path / "dated.md"
+        f.write_text("# Notes (2026-03-15)\n\nContent.\n", encoding="utf-8")
+        lines = f.read_text(encoding="utf-8").splitlines()
+        result = _extract_created_at(lines, f)
+        assert result == "2026-03-15"
+
+    def test_extract_created_at_falls_back_to_mtime(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _extract_created_at
+
+        f = tmp_path / "nodated.md"
+        f.write_text("# Notes\n\nContent.\n", encoding="utf-8")
+        lines = f.read_text(encoding="utf-8").splitlines()
+        result = _extract_created_at(lines, f)
+        assert "-" in result  # ISO 8601 contains hyphens
+
+    # --- _make_established_entry ---
+
+    def test_make_established_entry_fields(self) -> None:
+        from owlbear_mcp_memory.migrate import _make_established_entry
+
+        entry = _make_established_entry("body", "migration:f.md#sec", "2026-01-01", "2026-02-01")
+        assert entry["content"] == "body"
+        assert entry["source"] == "migration:f.md#sec"
+        assert entry["category"] == "knowledge"
+        assert entry["confidence"] == 0.7
+        assert entry["approval_state"] == "approved"
+        assert entry["scope_agent"] is None
+        assert entry["scope_project"] is None
+
+    # --- _split_into_sections ---
+
+    def test_split_empty_sections_not_included(self) -> None:
+        from owlbear_mcp_memory.migrate import _split_into_sections
+
+        lines = ["# File", "", "## Empty Section", "", "## Real Section", "", "Content."]
+        entries = _split_into_sections(lines, "f.md", "2026-01-01", "now")
+        sources = {e["source"] for e in entries}
+        assert "migration:f.md#real-section" in sources
+        assert "migration:f.md#empty-section" not in sources
+
+    def test_split_multiple_sections(self) -> None:
+        from owlbear_mcp_memory.migrate import _split_into_sections
+
+        lines = ["# File", "## A", "Alpha.", "## B", "Beta."]
+        entries = _split_into_sections(lines, "f.md", "2026-01-01", "now")
+        sources = {e["source"] for e in entries}
+        assert "migration:f.md#a" in sources
+        assert "migration:f.md#b" in sources
+
+    # --- _parse_established_file ---
+
+    def test_parse_established_single_no_sections(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_established_file
+
+        f = tmp_path / "flat.md"
+        f.write_text("# Title\n\nSome flat notes.\n", encoding="utf-8")
+        entries = _parse_established_file(f, "now")
+        assert len(entries) == 1
+        assert entries[0]["source"] == "migration:flat.md"
+        assert "Title" not in entries[0]["content"]
+
+    def test_parse_established_empty_content_returns_empty(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_established_file
+
+        f = tmp_path / "empty.md"
+        f.write_text("# Title\n", encoding="utf-8")
+        assert _parse_established_file(f, "now") == []
+
+    def test_parse_established_bad_bytes_returns_empty(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _parse_established_file
+
+        f = tmp_path / "bad.md"
+        f.write_bytes(b"\xff\xfe bad binary")
+        assert _parse_established_file(f, "now") == []
+
+    # --- _collect_entries ---
+
+    def test_collect_entries_combines_inbox_and_established(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _collect_entries
+
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        (inbox / "i.md").write_text(
+            "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: X\n", encoding="utf-8",
+        )
+        (tmp_path / "e.md").write_text("# Notes\n\n## Sec\n\nY.\n", encoding="utf-8")
+        entries = _collect_entries(tmp_path, "now")
+        sources = {str(e["source"]) for e in entries}
+        assert any("inbox/i.md" in s for s in sources)
+        assert any("e.md" in s for s in sources)
+
+    def test_collect_entries_no_inbox_dir(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _collect_entries
+
+        (tmp_path / "e.md").write_text("# Notes\n\nContent.\n", encoding="utf-8")
+        entries = _collect_entries(tmp_path, "now")
+        assert len(entries) == 1
+
+    # --- _dry_run ---
+
+    def test_dry_run_outputs_to_stdout(self, capsys: pytest.CaptureFixture) -> None:
+        from owlbear_mcp_memory.migrate import _dry_run
+
+        entries = [
+            {"source": "migration:f.md#s", "category": "knowledge", "content": "Hello world"},
+        ]
+        _dry_run(entries)
+        out = capsys.readouterr().out
+        assert "f.md" in out
+        assert "knowledge" in out
+        assert "Hello world" in out
+
+    def test_dry_run_truncates_preview(self, capsys: pytest.CaptureFixture) -> None:
+        from owlbear_mcp_memory.migrate import _dry_run
+
+        long = "X" * 200
+        entries = [{"source": "migration:f.md", "category": "knowledge", "content": long}]
+        _dry_run(entries)
+        out = capsys.readouterr().out
+        x_runs = [part for part in out.split() if set(part) == {"X"}]
+        assert x_runs
+        assert max(len(r) for r in x_runs) <= 80
+
+    # --- _insert_entry + main() ---
+
+    def test_insert_entry_writes_to_db(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import _DDL, _insert_entry
+        import sqlite3
+
+        db = tmp_path / "t.db"
+        conn = sqlite3.connect(str(db))
+        conn.execute(_DDL)
+        entry = {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "content": "test",
+            "category": "knowledge",
+            "confidence": 0.7,
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-02",
+            "source": "migration:test.md",
+            "scope_agent": None,
+            "scope_project": None,
+            "approval_state": "approved",
+            "deleted_at": None,
+        }
+        _insert_entry(conn, entry)
+        conn.commit()
+        rows = conn.execute("SELECT content FROM memory_entries").fetchall()
+        conn.close()
+        assert rows == [("test",)]
+
+    def test_main_missing_source_dir_returns_nonzero(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import main
+
+        result = main(["--source-dir", str(tmp_path / "nonexistent")])
+        assert result == 1
+
+    def test_main_dry_run_returns_zero(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import main
+
+        (tmp_path / "inbox").mkdir()
+        result = main(["--source-dir", str(tmp_path), "--dry-run"])
+        assert result == 0
+
+    def test_main_writes_db(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import main
+
+        (tmp_path / "inbox").mkdir()
+        (tmp_path / "n.md").write_text("# Notes\n\n## Sec\n\nContent.\n", encoding="utf-8")
+        db = tmp_path / "out.db"
+        result = main(["--source-dir", str(tmp_path), "--db-path", str(db)])
+        assert result == 0
+        assert db.exists()
+
+    def test_main_idempotent_in_process(self, tmp_path: Path) -> None:
+        from owlbear_mcp_memory.migrate import main
+        import sqlite3
+
+        (tmp_path / "inbox").mkdir()
+        (tmp_path / "n.md").write_text("# Notes\n\n## Sec\n\nContent.\n", encoding="utf-8")
+        db = tmp_path / "idem.db"
+        main(["--source-dir", str(tmp_path), "--db-path", str(db)])
+        main(["--source-dir", str(tmp_path), "--db-path", str(db)])
+        conn = sqlite3.connect(str(db))
+        count = conn.execute("SELECT COUNT(*) FROM memory_entries").fetchone()[0]
+        conn.close()
+        assert count == 1
