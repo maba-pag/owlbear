@@ -1,13 +1,13 @@
-"""RED-phase tests for SourceEvaluator and EvaluationResult (#138).
+"""Tests for SourceEvaluator — LLM callable injection (#523).
 
-Covers:
-  - SourceEvaluator instantiation and evaluate() contract (TestFromAC_SourceEvaluator)
-  - EvaluationResult model validation and frozen constraint (TestFromAC_EvaluationResult)
-
-All tests fail in RED phase — modules not implemented yet.
+Updated from #138 stub tests to use the new llm_fn-injected constructor.
+Covers: constructor w/ llm_fn, evaluate() three-path flow (empty / no-context
+/ valid), exception handling, and module-level helpers.
 """
 
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -21,59 +21,156 @@ from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
 
 
 class TestFromAC_SourceEvaluator:  # noqa: N801
-    """AC: SourceEvaluator instantiation and evaluate() stub contract."""
+    """AC: SourceEvaluator(llm_fn) constructor and evaluate() paths for #523."""
 
-    def test_instantiates_with_no_args(self) -> None:
-        """SourceEvaluator() instantiates without arguments."""
-        evaluator = SourceEvaluator()
+    # -- Constructor --
+
+    def test_constructor_accepts_llm_fn_keyword(self) -> None:
+        """SourceEvaluator(llm_fn=<async callable>) instantiates correctly."""
+        mock_result = EvaluationResult(relevance_score=0.9, tags=[], summary="ok")
+        llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
         assert evaluator is not None
 
-    def test_instantiates_with_model_param(self) -> None:
-        """SourceEvaluator(model=...) accepts an optional model parameter."""
-        evaluator = SourceEvaluator(model="gpt-4o")
-        assert evaluator is not None
+    # -- evaluate(): empty / whitespace content --
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_evaluate_neutral_fallback_no_llm(self) -> None:
-        """evaluate(content='test', project_context=None) returns neutral stub result."""
-        evaluator = SourceEvaluator()
-        result = await evaluator.evaluate(content="test", project_context=None)
-        assert result.relevance_score == 0.5
-        assert result.worth_ingesting is False
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_evaluate_empty_content_returns_zero_score(self) -> None:
-        """evaluate(content='', project_context=None) returns zero relevance, not worth ingesting."""
-        evaluator = SourceEvaluator()
-        result = await evaluator.evaluate(content="", project_context=None)
+    async def test_evaluate_empty_content_returns_zero_relevance(self) -> None:
+        """Empty content returns EvaluationResult(relevance_score=0.0)."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="", project_context={"name": "proj"})
         assert result.relevance_score == 0.0
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_empty_content_returns_specific_summary(self) -> None:
+        """Empty content returns summary 'Empty content -- nothing to evaluate.'"""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="", project_context=None)
+        assert result.summary == "Empty content -- nothing to evaluate."
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_empty_content_worth_ingesting_false(self) -> None:
+        """Empty content returns worth_ingesting=False."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="", project_context=None)
         assert result.worth_ingesting is False
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_evaluate_with_project_context_returns_stub_neutral(self) -> None:
-        """evaluate(content='test', project_context={'name': 'proj'}) returns stub neutral (no LLM)."""
-        evaluator = SourceEvaluator()
-        result = await evaluator.evaluate(
-            content="test", project_context={"name": "proj"}
-        )
+    async def test_evaluate_empty_content_no_llm_call(self) -> None:
+        """Empty content does NOT call llm_fn."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        await evaluator.evaluate(content="", project_context=None)
+        llm_fn.assert_not_awaited()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_whitespace_content_short_circuits(self) -> None:
+        """Whitespace-only content returns zero-score without calling llm_fn."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="   \t\n  ", project_context=None)
+        assert result.relevance_score == 0.0
+        llm_fn.assert_not_awaited()
+
+    # -- evaluate(): project_context is None --
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_none_context_no_llm_call(self) -> None:
+        """project_context=None does NOT call llm_fn."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        await evaluator.evaluate(content="valid content", project_context=None)
+        llm_fn.assert_not_awaited()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_none_context_returns_default_relevance(self) -> None:
+        """project_context=None returns relevance_score=0.5 (from _default_result)."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="valid content", project_context=None)
         assert result.relevance_score == 0.5
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_none_context_returns_worth_ingesting_true(self) -> None:
+        """project_context=None returns worth_ingesting=True (from _default_result)."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="valid content", project_context=None)
+        assert result.worth_ingesting is True
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_none_context_default_summary_text(self) -> None:
+        """project_context=None returns summary containing 'No project context available'."""
+        llm_fn: AsyncMock = AsyncMock()
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="valid content", project_context=None)
+        assert "No project context available" in result.summary
+
+    # -- evaluate(): valid content + project_context --
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_valid_calls_llm_fn_once(self) -> None:
+        """evaluate(content, project_context) with valid args awaits llm_fn once."""
+        mock_result = EvaluationResult(relevance_score=0.9, tags=["ai"], summary="relevant")
+        llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        await evaluator.evaluate(content="some content", project_context={"name": "project"})
+        llm_fn.assert_awaited_once()
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_valid_returns_llm_fn_result(self) -> None:
+        """evaluate() returns the EvaluationResult produced by llm_fn."""
+        mock_result = EvaluationResult(
+            relevance_score=0.9, tags=["ai"], summary="relevant", worth_ingesting=True
+        )
+        llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(
+            content="some content", project_context={"name": "project"}
+        )
+        assert result.relevance_score == 0.9
+        assert result.summary == "relevant"
+        assert result.worth_ingesting is True
+
+    # -- evaluate(): exception path --
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_exception_returns_neutral_relevance(self) -> None:
+        """When llm_fn raises, evaluate() returns relevance_score=0.5."""
+        llm_fn: AsyncMock = AsyncMock(side_effect=RuntimeError("LLM error"))
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="content", project_context={"name": "proj"})
+        assert result.relevance_score == 0.5
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_exception_returns_failure_summary(self) -> None:
+        """When llm_fn raises, summary is 'Evaluation failed -- returning neutral score.'"""
+        llm_fn: AsyncMock = AsyncMock(side_effect=ValueError("bad response"))
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="content", project_context={"name": "proj"})
+        assert result.summary == "Evaluation failed -- returning neutral score."
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_evaluate_exception_worth_ingesting_false(self) -> None:
+        """When llm_fn raises, worth_ingesting=False."""
+        llm_fn: AsyncMock = AsyncMock(side_effect=RuntimeError("error"))
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(content="content", project_context={"name": "proj"})
         assert result.worth_ingesting is False
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_evaluate_returns_evaluation_result_type(self) -> None:
-        """evaluate() always returns an EvaluationResult instance."""
-        evaluator = SourceEvaluator()
-        result = await evaluator.evaluate(content="hello world", project_context=None)
-        assert isinstance(result, EvaluationResult)
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_evaluate_no_llm_call_made(self) -> None:
-        """Stub evaluate() does not rely on external LLM (pure schema model default)."""
-        # No mocking needed — if LLM were called and credentials missing, this would error.
-        evaluator = SourceEvaluator()
-        # Should complete without network activity or import of pydantic_ai
-        result = await evaluator.evaluate(content="some content", project_context=None)
-        assert result is not None
+    async def test_evaluate_exception_logs_warning_with_exc_info(self) -> None:
+        """When llm_fn raises, logger.warning is called with exc_info=True."""
+        llm_fn: AsyncMock = AsyncMock(side_effect=RuntimeError("error"))
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        with patch("owlbear_knowledge.evaluator.logger") as mock_logger:
+            await evaluator.evaluate(content="content", project_context={"name": "proj"})
+        mock_logger.warning.assert_called_once()
+        call_kwargs = mock_logger.warning.call_args[1]
+        assert call_kwargs.get("exc_info") is True
 
 
 # ---------------------------------------------------------------------------
@@ -179,3 +276,81 @@ class TestFromAC_EvaluationResult:  # noqa: N801
         result = EvaluationResult(relevance_score=0.5, tags=[], summary="")
         with pytest.raises((TypeError, ValidationError)):
             result.worth_ingesting = True  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SourceEvaluatorModuleFunctions
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SourceEvaluatorModuleFunctions:  # noqa: N801
+    """AC: MAX_CONTENT_LENGTH, _build_prompt, _default_result module symbols for #523."""
+
+    def test_max_content_length_equals_2000(self) -> None:
+        """MAX_CONTENT_LENGTH constant equals 2000."""
+        from owlbear_knowledge.evaluator import MAX_CONTENT_LENGTH  # noqa: PLC0415
+
+        assert MAX_CONTENT_LENGTH == 2000
+
+    def test_build_prompt_truncates_long_content(self) -> None:
+        """_build_prompt truncates content exceeding MAX_CONTENT_LENGTH chars."""
+        from owlbear_knowledge.evaluator import MAX_CONTENT_LENGTH, _build_prompt  # noqa: PLC0415
+
+        unique = "ZQXJK"
+        long_content = unique * (MAX_CONTENT_LENGTH // len(unique) + 100)  # ~2500 chars
+        ctx: dict[str, object] = {"name": "test_proj"}
+        result = _build_prompt(long_content, ctx)
+        # Distinctive prefix preserved, but full overlong string is not
+        assert unique in result
+        assert long_content not in result
+
+    def test_build_prompt_short_content_preserved(self) -> None:
+        """_build_prompt preserves content shorter than MAX_CONTENT_LENGTH."""
+        from owlbear_knowledge.evaluator import _build_prompt  # noqa: PLC0415
+
+        content = "hello world"
+        ctx: dict[str, object] = {"name": "proj"}
+        result = _build_prompt(content, ctx)
+        assert "hello world" in result
+
+    def test_build_prompt_has_project_context_header(self) -> None:
+        """_build_prompt output contains a '## Project Context' section header."""
+        from owlbear_knowledge.evaluator import _build_prompt  # noqa: PLC0415
+
+        result = _build_prompt("content", {"name": "proj"})
+        assert "## Project Context" in result
+
+    def test_build_prompt_has_content_excerpt_header(self) -> None:
+        """_build_prompt output contains a '## Content Excerpt' section header."""
+        from owlbear_knowledge.evaluator import _build_prompt  # noqa: PLC0415
+
+        result = _build_prompt("content", {"name": "proj"})
+        assert "## Content Excerpt" in result
+
+    def test_default_result_relevance_score(self) -> None:
+        """_default_result().relevance_score == 0.5 (neutral)."""
+        from owlbear_knowledge.evaluator import _default_result  # noqa: PLC0415
+
+        result = _default_result()
+        assert result.relevance_score == 0.5
+
+    def test_default_result_worth_ingesting_true(self) -> None:
+        """_default_result().worth_ingesting is True."""
+        from owlbear_knowledge.evaluator import _default_result  # noqa: PLC0415
+
+        result = _default_result()
+        assert result.worth_ingesting is True
+
+    def test_default_result_summary_contains_no_project_context(self) -> None:
+        """_default_result().summary contains 'No project context available'."""
+        from owlbear_knowledge.evaluator import _default_result  # noqa: PLC0415
+
+        result = _default_result()
+        assert "No project context available" in result.summary
+
+    def test_default_result_tags_empty(self) -> None:
+        """_default_result().tags is an empty list."""
+        from owlbear_knowledge.evaluator import _default_result  # noqa: PLC0415
+
+        result = _default_result()
+        assert result.tags == []
