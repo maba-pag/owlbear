@@ -100,6 +100,12 @@ External repos and resources studied during OwlBear development.
 | Mem0 Memory class | github.com/mem0ai/mem0 | Memory add/get/delete/update/history operations, scoping via user_id/agent_id/run_id, LLM-driven curation (ADD/UPDATE/DELETE events) | docs/research/curator-workflow-memory-mcp.md S6 | 2026-04-01 |
 | LangMem conceptual guide | langchain-ai.github.io/langmem/concepts/conceptual_guide | Background memory manager consolidation pattern, collection vs profile memory types, hot-path vs background formation | docs/research/curator-workflow-memory-mcp.md S7 | 2026-04-01 |
 
+## PostToolUse Subagent Output Routing (Task #532)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Hooks docs (4/2/2026) | code.visualstudio.com/docs/copilot/customization/hooks | PostToolUse I/O schema (additionalContext, systemMessage, exit codes), subagent routing behavior — additionalContext confirmed model-facing, exit code 2 NOT model-facing via -Command | docs/research/posttooluse-subagent-output-routing.md | 2026-04-02 |
+
 ## Switch move/pick to JSON, Remove board_context (Task #477)
 
 | Source | URL | What | Where Used | Date |
