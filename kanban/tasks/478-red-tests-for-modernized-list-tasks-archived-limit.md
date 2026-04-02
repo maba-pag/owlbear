@@ -1,16 +1,16 @@
 ---
 id: 478
 title: 'RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)'
-status: done
+status: archived
 priority: needed
 created: 2026-03-31T06:13:41.4018366+02:00
-updated: 2026-03-31T21:31:39.6858891+02:00
+updated: 2026-04-02T05:57:23.3627651+02:00
+started: 2026-04-02T05:57:22.9086739+02:00
+completed: 2026-04-02T05:57:22.9086739+02:00
 tags:
     - scope:mcp
     - type:test
     - phase-2
-claimed_by: auditor
-claimed_at: 2026-03-31T21:31:39.6858891+02:00
 class: standard
 ---
 
@@ -164,3 +164,34 @@ Confidence: .95
 
  Files Updated: skills/mcp-kanban/SKILL.md
  Scratch: None
+
+[[2026-04-02]] Thu 05:57
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| archived=True passes --archived; False omits | test_archived_true_passes_archived_flag, test_archived_false_omits_archived_flag (L155-168) | PASS |
+| limit>0 passes --limit N; 0 omits | test_limit_positive_passes_limit_flag_and_value, test_limit_one_passes_limit_1, test_limit_zero_omits_limit_flag | PASS |
+| reverse=True passes --reverse; False omits | test_reverse_true_passes_reverse_flag, test_reverse_false_omits_reverse_flag | PASS |
+| blocked=True passes --blocked (not --not-blocked) | test_blocked_true_passes_blocked_flag; server.py L183-186 tri-state | PASS |
+| blocked=False passes --not-blocked (not --blocked) | test_blocked_false_passes_not_blocked_flag; server.py L183-186 | PASS |
+| blocked=None passes neither flag | test_blocked_none_passes_no_block_filter_flags | PASS |
+| lean JSON strips body/file/created/updated | test_stripped_fields_absent + 5 presence guards in LeanJsonPresence; server.py L188-192 | PASS |
+| All tests fail before implementation (RED) | Test-writer notes: 21 FAIL confirmed | PASS |
+
+### Test Results
+- pytest (task scope): 26 passed, 0 failed
+- pytest (full suite): 2784 passed, 239 failed (all pre-existing, none in mcp-kanban scope)
+- ruff: All checks passed
+
+### AC Quality: 4/5
+AC was specific, testable, and led to clean implementation. Minor gap: lean JSON AC only specified absence; presence guards came from reviewer retry. Test-writer gap, not AC gap.
+
+### Deduction breakdown
+- Per AC line with no evidence: 0 x -.02 = 0
+- Lint issues: 0 x -.05 = 0
+- AC quality at 3 or below: N/A (score 4)
+- Missing reviewer evidence: N/A (present, detailed)
+- Full-suite failures in task scope: 0 x -.05 = 0
+### Confidence: 1.0
+### Action: archive
