@@ -1,10 +1,12 @@
 ---
 id: 387
 title: Design per-agent institutional knowledge system via dedicated memory-mcp server
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-30T20:59:19.0983269+02:00
-updated: 2026-03-30T21:18:28.1015015+02:00
+updated: 2026-04-02T15:10:49.2160333+02:00
+started: 2026-04-02T15:10:48.8183283+02:00
+completed: 2026-04-02T15:10:48.8183283+02:00
 tags:
     - research
     - ' scope:agents'
@@ -60,3 +62,146 @@ The goal is per-agent institutional knowledge that accumulates conclusions (not 
 - [ ] Assess migration path from current `/memories/repo/` inbox and established repo memory files to the new system
 - [ ] Create a decision request with the proposed architecture for user approval before implementation
 - [ ] Create follow-up implementation tasks at ideation
+
+[[2026-04-02]] Thu 05:42
+## Research
+Doc: docs/research/memory-mcp-server-design.md (178 lines)
+DR: docs/decisions/resolved/387-memory-mcp-architecture.md (approved: full architecture)
+
+All 13 AC items addressed:
+- Storage: SQLite + WAL (sec 3A)
+- Schema: 12-field MemoryEntry (sec 3B)
+- Scoping: 4D nullable agent x project matrix (sec 3C)
+- Storage config: single-path, env var OWLBEAR_MEMORY_DB_PATH (sec 3D)
+- Tools: get_knowledge, record_learning, list_entries, mark_for_deletion (sec 3E)
+- Approval: pending/approved/deleted, user-only permanent delete (sec 3F)
+- Auto-load: agent-common Step 0 calls get_knowledge (sec 3G)
+- Write: record_learning at task end, dual-write during migration (sec 3H)
+- Curation: curator uses list_entries + mark_for_deletion + cross-pollinate (sec 3I)
+- Cross-project: single central DB, scope_project column (sec 3J)
+- Deer-flow: patterns 1,2,4(custom),6 adopted per DR 428 (sec 3K)
+- Migration: 5-phase gradual cutover (sec 3L)
+- Follow-ups: #524 (scaffold), #525 (tools), #526 (agent-common), #527 (migration), #528 (curator design), #529 (set_approval_state), #530 (curator update), #531 (CLI wrapper)
+
+Challenge: reconsider, revised confidence .78
+Note: #499 is redundant (blocked, merge candidate) -- content incorporated into this research
+
+Research complete, advancing to backlog
+
+[[2026-04-02]] Thu 06:53
+## Architecture Review
+**Verdict:** Approve
+**DR Verification:** docs/decisions/resolved/387-memory-mcp-architecture.md approved: true
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| 1. Design memory-mcp architecture (storage, schema, API) | Research doc 3A (SQLite+WAL), 3B (12-field schema), 3E (4 tools) | Pass |
+| 2. Design multi-dimensional scoping model | Research doc 3C (4D nullable agent x project matrix) | Pass |
+| 3. Design configurable storage location | Research doc 3D (OWLBEAR_MEMORY_DB_PATH env var, central vs in-repo). Hybrid YAGNI'd with rationale -- user approved Option A in DR. | Pass |
+| 4. Design agent-facing MCP tool interface | Research doc 3E (get_knowledge, record_learning, list_entries, mark_for_deletion) | Pass |
+| 5. Design approval workflow | Research doc 3F (pending/approved/deleted, user-only permanent delete) | Pass |
+| 6. Design auto-loading mechanism | Research doc 3G (agent-common Step 0 calls get_knowledge) | Pass |
+| 7. Design write mechanism | Research doc 3H (record_learning replaces inbox, dual-write during migration) | Pass |
+| 8. Design curation interface | Research doc 3I (list_entries + mark_for_deletion + cross-pollinate) | Pass |
+| 9. Design cross-project knowledge aggregation | Research doc 3J (single central DB, scope_project column) | Pass |
+| 10. Assess deer-flow patterns | Research doc 3K (patterns 1,2,4-custom,6 adopted per DR 428) | Pass |
+| 11. Assess migration path | Research doc 3L (5-phase gradual cutover) | Pass |
+| 12. Create decision request | DR at docs/decisions/resolved/387-memory-mcp-architecture.md, approved: true, decision: Option A | Pass |
+| 13. Create follow-up tasks at ideation | #524-#531 created. #524 already at docs status. | Pass |
+
+### Architecture Notes
+Research is thorough (178-line design doc, 10 sources, all 13 AC items addressed). Design follows existing MCP server patterns consistently (AppContext, lifespan, SQLite+asyncio.to_thread, ToolAnnotations, env-var tool exclusion). DR approved by user as Option A (full architecture without dedup/token-budgeting). Follow-up implementation tasks properly decomposed into scaffold, tools, agent-common update, migration, and curator workflow.
+
+Non-implementation task tagged research -- test-writer pass-through applies.
+
+Downstream notes for implementation task architects:
+- Implementation tasks should include graceful degradation if mcp-memory is unavailable at Step 0 (blind spot from challenge)
+- #529 (set_approval_state) extends the 4-tool design to 5 tools based on #528 curator analysis -- natural evolution, not contradiction
+- #499 is blocked and redundant (content incorporated into #387). Board hygiene: should be archived or deleted by next auditor cycle.
+
+### Changes Made
+- Verified all 13 AC items against research doc sections
+- Verified DR approved: true at docs/decisions/resolved/387-memory-mcp-architecture.md
+- Verified dependency #428 archived
+- Moving to todo with release
+
+### Dependencies
+- Verified: #428 (deer-flow deep dive) archived
+- Noted: #499 blocked as redundant merge candidate (not blocking)
+
+### Challenge Results
+- Challenger: reconsider
+- Confidence in original: .85
+- Key challenges: C1 (follow-ups ran ahead of formal approval), C2 (patterns 3/5 not declined with follow-up), C3 (5th tool from #529 outdates 4-tool design), C4 (hybrid YAGNI'd without explicit DR note), C5 (#499 debris)
+- Architect response: C1 rebutted (DR user-approval was the real implementation gate, not backlog-to-todo of research task). C2 rebutted (user chose Option A over B in DR, declining patterns 3/5 -- no follow-up for rejected options). C3 accepted as natural evolution (design docs are snapshots, implementation tasks have own AC). C4 rebutted (YAGNI documented in research and user approved Option A). C5 accepted as board hygiene note.
+- Revised confidence: .88
+
+[[2026-04-02]] Thu 08:11
+## Test-Writer Notes
+
+[[2026-04-02]] Thu 08:11
+- Non-implementation task (tagged research) -- no tests applicable.
+
+[[2026-04-02]] Thu 08:11
+- Passing through to builder.
+
+[[2026-04-02]] Thu 11:54
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Research/design task -- no behavior change yet. mcp-memory refs already in copilot-instructions (tech stack L59, conventions L69, directory L179) from follow-up scaffold task #524 |
+| 2 | Docstrings | No | N/A | No Python modules created or modified -- pure design task |
+| 3 | docs/sources/overview.md | Yes | Pass | Section 'memory-mcp Server Architecture Design (Task #387)' present at L120-125 with Mem0 and DR #428 sources |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research doc linked | Yes | Pass | docs/research/memory-mcp-server-design.md exists (178 lines, 10 sources, all 13 AC items). DR at docs/decisions/resolved/387-memory-mcp-architecture.md approved. Follow-up tasks #524-#531 confirmed created per task body |
+| 6 | Scratch files | No | Pass | No docs/scratch/387-* files found |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None
+
+[[2026-04-02]] Thu 15:10
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Storage/schema/API design | Research doc 3A (SQLite+WAL), 3B (12-field), 3E (4 tools) | PASS |
+| 2. Multi-dimensional scoping | Research doc 3C (4D nullable agent x project) | PASS |
+| 3. Configurable storage location | Research doc 3D (OWLBEAR_MEMORY_DB_PATH) | PASS |
+| 4. Agent-facing MCP tool interface | Research doc 3E (get_knowledge, record_learning, list_entries, mark_for_deletion) | PASS |
+| 5. Approval workflow | Research doc 3F (pending/approved/deleted, user-only permanent delete) | PASS |
+| 6. Auto-loading mechanism | Research doc 3G (agent-common Step 0) | PASS |
+| 7. Write mechanism | Research doc 3H (record_learning, dual-write migration) | PASS |
+| 8. Curation interface | Research doc 3I (list_entries + mark_for_deletion + cross-pollinate) | PASS |
+| 9. Cross-project aggregation | Research doc 3J (single central DB, scope_project) | PASS |
+| 10. Deer-flow pattern assessment | Research doc 3K (patterns 1,2,4-custom,6 per DR 428) | PASS |
+| 11. Migration path | Research doc 3L (5-phase gradual cutover) | PASS |
+| 12. Create decision request | docs/decisions/resolved/387-memory-mcp-architecture.md approved: true | PASS |
+| 13. Follow-up tasks at ideation | #524-#531 confirmed on board, all reference research doc | PASS |
+
+### Research Task Verification
+- Research doc: docs/research/memory-mcp-server-design.md (178 lines, 10 sources)
+- DR: docs/decisions/resolved/387-memory-mcp-architecture.md (approved: true, Option A)
+- Follow-ups: #524 (docs), #525 (backlog), #526 (ideation), #527 (in-progress), #528 (backlog), #529-531 (ideation)
+- Attribution: docs/sources/overview.md L120-125
+- Deliverables committed: 82821ac
+
+### Test Results
+- pytest: 2363 passed, 285 failed, 8 skipped. Zero failures in task scope (pure research, no code changes).
+- ruff: 2 violations in test_necessity_check_196.py (unrelated to task)
+
+### Architect Quality
+- AC specificity: 13 AC items, each maps to a specific research doc section. No vague criteria.
+- Edge cases: None missed. Challenger surfaced 5 challenges, all addressed.
+- Design direction: Architecture Review approved with thorough AC mapping.
+- AC quality score: 5/5
+
+### Deduction breakdown
+No deductions. All 13 AC lines have specific evidence. No lint issues in scope. AC quality 5. No reviewer section expected (research task pass-through). No test failures in scope.
+
+### Confidence: .98
+### Action: archive
