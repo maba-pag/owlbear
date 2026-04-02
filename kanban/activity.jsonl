@@ -1,16 +1,3 @@
-{"timestamp":"2026-03-29T10:19:22.2292012+02:00","action":"release","task_id":8,"detail":"writer"}
-{"timestamp":"2026-03-29T10:19:33.5885993+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
-{"timestamp":"2026-03-29T10:19:33.5901524+02:00","action":"block","task_id":9,"detail":"Fully decomposed epic: all AC covered by subtasks #115, #116, #131, #117, #42, #79, #44. No standalone implementation. Archive when subtasks complete."}
-{"timestamp":"2026-03-29T10:19:33.5917096+02:00","action":"release","task_id":9,"detail":"architect"}
-{"timestamp":"2026-03-29T10:21:22.3108209+02:00","action":"move","task_id":127,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-29T10:21:27.1205072+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
-{"timestamp":"2026-03-29T10:21:27.1216341+02:00","action":"release","task_id":127,"detail":"auditor"}
-{"timestamp":"2026-03-29T10:21:56.9122571+02:00","action":"edit","task_id":127,"detail":"Add confidence scoring and structured options rules to copilot-instructions.md"}
-{"timestamp":"2026-03-29T10:22:27.895854+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
-{"timestamp":"2026-03-29T10:22:27.8963767+02:00","action":"claim","task_id":129,"detail":"architect"}
-{"timestamp":"2026-03-29T10:22:32.5102303+02:00","action":"edit","task_id":116,"detail":"Update .github/skills/ references to skills/ after copy"}
-{"timestamp":"2026-03-29T10:22:32.5128411+02:00","action":"claim","task_id":116,"detail":"auditor"}
-{"timestamp":"2026-03-29T10:22:37.093297+02:00","action":"edit","task_id":120,"detail":"Add __main__.py entry points to mcp-knowledge and mcp-project"}
 {"timestamp":"2026-03-29T10:22:37.0948624+02:00","action":"claim","task_id":120,"detail":"researcher"}
 {"timestamp":"2026-03-29T10:24:06.8972499+02:00","action":"edit","task_id":129,"detail":"Add mcp.json customization hint to setup.py output"}
 {"timestamp":"2026-03-29T10:24:06.8995333+02:00","action":"release","task_id":129,"detail":"architect"}
@@ -9998,3 +9985,16 @@
 {"timestamp":"2026-04-02T17:39:09.3160574+02:00","action":"move","task_id":537,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-02T17:39:18.1130602+02:00","action":"edit","task_id":537,"detail":"Add annotation tests for start_work and end_work tools"}
 {"timestamp":"2026-04-02T17:39:18.1253492+02:00","action":"release","task_id":537,"detail":"auditor"}
+{"timestamp":"2026-04-02T17:39:40.8604894+02:00","action":"edit","task_id":537,"detail":"Add annotation tests for start_work and end_work tools"}
+{"timestamp":"2026-04-02T17:40:04.0034538+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-02T17:40:09.203584+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-02T17:40:13.8855921+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-02T17:40:13.8961731+02:00","action":"block","task_id":548,"detail":"Action request pending: docs/decisions/pending/548-exit-code-2-file-verification.md"}
+{"timestamp":"2026-04-02T17:40:18.2467697+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-02T17:40:23.0681997+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-02T17:40:23.0788052+02:00","action":"release","task_id":548,"detail":"researcher"}
+{"timestamp":"2026-04-02T17:41:23.3424286+02:00","action":"edit","task_id":538,"detail":"Verify structuredContent behavior for KanbanTask MCP tools"}
+{"timestamp":"2026-04-02T17:41:23.3523151+02:00","action":"claim","task_id":538,"detail":"auditor"}
+{"timestamp":"2026-04-02T17:45:56.7674101+02:00","action":"move","task_id":538,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-02T17:46:06.0419864+02:00","action":"edit","task_id":538,"detail":"Verify structuredContent behavior for KanbanTask MCP tools"}
+{"timestamp":"2026-04-02T17:46:06.0529781+02:00","action":"release","task_id":538,"detail":"auditor"}
