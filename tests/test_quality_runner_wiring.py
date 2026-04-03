@@ -258,9 +258,15 @@ class TestFromAC_TddRedSkillQualityRunner:
         assert "mode: scoped" in self._skill()
 
     def test_tdd_red_has_fallback_section_heading(self) -> None:
-        assert re.search(r"#+\s+.*fallback", self._skill(), re.IGNORECASE), (
-            "tdd-red/SKILL.md: missing fallback section heading"
+        skill = self._skill()
+        assert "quality-runner" in skill.lower(), (
+            "quality-runner not wired — no QR fallback section can exist yet"
+        )
+        assert re.search(r"#+\s+.*fallback", skill, re.IGNORECASE), (
+            "tdd-red/SKILL.md: missing fallback section heading for QR unavailability"
         )
 
     def test_tdd_red_fallback_references_pytest_and_linting_skill(self) -> None:
-        assert "pytest-and-linting" in self._skill()
+        skill = self._skill()
+        assert "quality-runner" in skill.lower(), "quality-runner not wired — fallback context absent"
+        assert "pytest-and-linting" in skill
