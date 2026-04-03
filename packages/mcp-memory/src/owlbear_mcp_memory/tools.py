@@ -6,6 +6,7 @@ mark_for_deletion; plus _apply_tool_exclusions for MEMORY_TOOLS_EXCLUDE.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ __all__ = [
     "record_learning",
 ]
 
-_VALID_CATEGORIES = frozenset({"preference", "knowledge", "context", "behavior", "goal"})
+_VALID_CATEGORIES = ("preference", "knowledge", "context", "behavior", "goal")
 _MIN_CONFIDENCE: float = 0.7
 
 
@@ -110,7 +111,11 @@ LIMIT ?
     # Params order matches SQL left-to-right:
     # WHERE scope_params, WHERE extra_params, ORDER BY tier_params, LIMIT
     all_params: list[Any] = scope_params + extra_params + tier_params + [limit]
-    rows = conn.execute(sql, all_params).fetchall()
+
+    def _run_query() -> list:
+        return conn.execute(sql, all_params).fetchall()
+
+    rows = await asyncio.to_thread(_run_query)
     return [dict(row) for row in rows]
 
 
@@ -130,10 +135,10 @@ async def record_learning(  # noqa: PLR0913
     validation failures (confidence < 0.7 or invalid category).
     """
     if confidence < _MIN_CONFIDENCE:
-        return f"error: confidence must be >= {_MIN_CONFIDENCE}"
+        return f"error: confidence must be >= {_MIN_CONFIDENCE}, got {confidence}"
     if category not in _VALID_CATEGORIES:
-        valid = ", ".join(sorted(_VALID_CATEGORIES))
-        return f"error: invalid category '{category}'. Valid categories: {valid}"
+        valid = ", ".join(_VALID_CATEGORIES)
+        return f"error: invalid category '{category}'. Valid: {valid}"
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
@@ -143,16 +148,22 @@ async def record_learning(  # noqa: PLR0913
 
     entry_id = str(uuid.uuid4())
     now = _now_utc()
-
-    conn.execute(
-        """INSERT INTO memory_entries
-           (id, content, category, confidence, created_at, updated_at, source,
-            scope_agent, scope_project, approval_state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
-        (entry_id, content, category, confidence, now, now, agent_id,
-         scope_agent, scope_project),
+    insert_params = (
+        entry_id, content, category, confidence, now, now, agent_id,
+        scope_agent, scope_project,
     )
-    conn.commit()
+
+    def _run_insert() -> None:
+        conn.execute(
+            """INSERT INTO memory_entries
+               (id, content, category, confidence, created_at, updated_at, source,
+                scope_agent, scope_project, approval_state)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
+            insert_params,
+        )
+        conn.commit()
+
+    await asyncio.to_thread(_run_insert)
     return entry_id
 
 
@@ -198,7 +209,11 @@ SELECT id, content, category, confidence, created_at, updated_at, source,
 FROM memory_entries
 WHERE {where}
 """  # noqa: S608
-    rows = conn.execute(sql, params).fetchall()
+
+    def _run_query() -> list:
+        return conn.execute(sql, params).fetchall()
+
+    rows = await asyncio.to_thread(_run_query)
     return [dict(row) for row in rows]
 
 
@@ -212,25 +227,33 @@ async def mark_for_deletion(ctx: Context, entry_id: str) -> str:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
 
-    row = conn.execute(
-        "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-    ).fetchone()
+    def _get_state() -> str | None:
+        r = conn.execute(
+            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
+        ).fetchone()
+        return r[0] if r is not None else None
 
-    if row is None:
+    state = await asyncio.to_thread(_get_state)
+
+    if state is None:
         msg = f"Entry {entry_id!r} not found"
         raise ToolError(msg)
 
-    if row[0] == "deleted":
+    if state == "deleted":
         return f"Entry {entry_id!r} is already deleted (no-op)"
 
     now = _now_utc()
-    conn.execute(
-        """UPDATE memory_entries
-           SET approval_state = 'deleted', deleted_at = ?, updated_at = ?
-           WHERE id = ?""",
-        (now, now, entry_id),
-    )
-    conn.commit()
+
+    def _run_update() -> None:
+        conn.execute(
+            """UPDATE memory_entries
+               SET approval_state = 'deleted', deleted_at = ?, updated_at = ?
+               WHERE id = ?""",
+            (now, now, entry_id),
+        )
+        conn.commit()
+
+    await asyncio.to_thread(_run_update)
     return f"Entry {entry_id!r} marked for deletion"
 
 
@@ -254,3 +277,6 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
         except Exception:  # noqa: BLE001, S110
             pass
     return excluded
+
+
+_apply_tool_exclusions(mcp)

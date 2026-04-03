@@ -17,8 +17,13 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AppContext",
+    "_apply_tool_exclusions",  # noqa: F822 — defined in tools.py
     "app_lifespan",
+    "get_knowledge",  # noqa: F822 — defined in tools.py
+    "list_entries",  # noqa: F822 — defined in tools.py
+    "mark_for_deletion",  # noqa: F822 — defined in tools.py
     "mcp",
+    "record_learning",  # noqa: F822 — defined in tools.py
 ]
 
 _DEFAULT_DB_PATH = "data/memory/memory.db"
@@ -69,7 +74,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # (c) Open connection
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     try:
         # (d) Set PRAGMAs
         conn.execute("PRAGMA journal_mode=WAL")

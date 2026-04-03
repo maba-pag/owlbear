@@ -85,8 +85,9 @@ def _make_conn() -> sqlite3.Connection:
     """Create a fresh in-memory SQLite connection with the memory_entries table.
 
     AC18: all tests use in-memory SQLite — no disk files.
+    check_same_thread=False required for asyncio.to_thread usage in tools.
     """
-    conn = sqlite3.connect(":memory:")
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute(_DDL)
     conn.commit()
