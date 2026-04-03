@@ -37,7 +37,7 @@ description: "Python coding conventions for this workspace."
 ### Known gotchas
 
 - **Pydantic v2 + MagicMock:** `MagicMock(spec=PydanticModel)` cannot auto-generate Pydantic v2 fields (`hasattr` returns `False` at class level). Explicitly set every accessed field on the mock: `mock_settings.field_name = value`.
-- **Schema version bumps:** When bumping `_SCHEMA_VERSION`, grep all test files for the old version (`Select-String -Path "tests/*.py" -Pattern "_SCHEMA_VERSION"`) and update every assertion. Common breakage: `assert db.version == N`, fresh-database version checks.
+- **Schema version bumps:** When bumping `_SCHEMA_VERSION`, search all test files for the old version (e.g., `grep_search` for `_SCHEMA_VERSION`) and update every assertion. Common breakage: `assert db.version == N`, fresh-database version checks.
 - **`patch.dict("sys.modules")` on Python 3.12+:** Copies the entire dict on entry and restores on exit. Modules first imported inside the context are removed when it exits. Pre-import needed modules at file scope. Prefer `patch("module.attr")` over `patch.dict("sys.modules")`.
 
 ## Patterns

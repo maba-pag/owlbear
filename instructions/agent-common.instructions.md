@@ -5,12 +5,12 @@ description: "Cross-agent rules that apply to all OwlBear agents"
 
 # Cross-Agent Rules
 
-All agents inherit project conventions from `instructions/copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
+All agents inherit project conventions from `.github/copilot-instructions.md` (principles, coding discipline, process habits). This file covers only rules specific to the multi-agent dispatch model.
 
 ## Task discipline
 
 - **ONE task per invocation.** Never work on multiple kanban tasks in a single session. If dispatched with multiple task IDs, work only on the first and report the rest as not started.
-- **This rule applies to ALL agents** — builder, reviewer, writer, architect, auditor, researcher. No agent is exempt. The orchestrator enforces this by dispatching separate subagent calls (one per task) and running them in parallel waves.
+- **This rule applies to ALL agents** — no agent is exempt. The orchestrator enforces this by dispatching separate subagent calls (one per task) and running them in parallel waves.
 
 ## Task coordination
 
@@ -23,7 +23,7 @@ The kanban board is shared — multiple agents and humans may work on it simulta
 - **Never modify tasks you were not dispatched for.** You may `show` (read) any task and `create` new follow-up tasks, but you must not `move`, `edit --status`, `edit --claim`, `edit --release`, or otherwise modify tasks outside your dispatched assignment. This prevents destructive race conditions between parallel agents.
 - **Always leave a handoff.** Before you park a task, write a short update in the body so someone else can continue.
 
-For the complete claiming protocol (three-phase lifecycle, dispatched vs self-selected rules, cross-task boundaries, crash safety), see the **kanban-md skill** → **Agent Task Lifecycle Protocol**.
+For the complete claiming protocol (three-phase lifecycle, dispatched vs self-selected rules, cross-task boundaries, crash safety), see the **kanban-md skill** → **Claiming Protocol**.
 
 ### Handoff / blocked
 
@@ -190,7 +190,7 @@ Three-step protocol for all tool failures:
 | Search tools (`grep_search`, `semantic_search`, `file_search`) | No results, overly narrow pattern | Broaden query; try an alternative search tool; use regex alternation (`word1\|word2`) |
 | MCP tools (`kanban`, `knowledge`) | Tool not found, connection error, invalid args | Verify tool is loaded via `tool_search_tool_regex`; check arg names and formats against tool description |
 
-For retry counts and escalation tiers, see **Loop detection and retry discipline** above.
+For retry counts and escalation tiers, see **Loop detection and retry discipline** below.
 
 ### Structured error context for handoff
 
@@ -270,12 +270,6 @@ Content: agent name, task ID, date, then bullet points. Example:
 
 **Keep it brief.** If nothing notable happened, skip the entry entirely. Don't fabricate lessons for the sake of having them.
 
-**The curator triages inbox entries** on a periodic schedule:
-
-- **Discard** (most common) — noise, obvious findings, one-offs
-- **Propose changes** (medium) — update instructions, skills, or agent files
-- **Keep as repo memory** (rare) — valid long-term project knowledge
-
 ## Common red flags — STOP and reassess
 
 These apply to ALL agents:
@@ -293,7 +287,7 @@ Built-in tools are the primary interface for workspace interaction. They handle 
 
 ### Use built-in tools for workspace interaction
 
-`read_file` is the primary tool for reading file contents — source code, configuration, skill files, test files. It handles encoding, line ranges, and large files reliably.
+`read_file` is the primary tool for reading file contents — source code, configuration, skill files, test files.
 
 `grep_search` and `semantic_search` are the primary tools for finding content across files. They index the workspace and return precise matches.
 
@@ -301,7 +295,7 @@ Terminal file-reading commands (`Get-Content`, `type`, `cat`) and search command
 
 ### Use `uv run` for all Python tool invocations
 
-`uv run` is the standard prefix for pytest, ruff, coverage, and Python scripts. It resolves the virtual environment and dependencies from `pyproject.toml` automatically.
+`uv run` is the standard prefix for pytest, ruff, coverage, and Python scripts.
 
 ```powershell
 uv run pytest tests/test_module.py -q --tb=short
@@ -363,12 +357,6 @@ The pipeline uses three lines of defense:
 | 1st  | Test-writer, Builder | Own work                      | "Did I do it right?" — focused on the specific implementation                        |
 | 2nd  | Reviewer             | Test-writer + Builder quality | "Did THEY do it right?" — adversarial check of test coverage, code quality, security |
 | 3rd  | Auditor              | Architect + Full integration  | "Was the design right? Does everything still work?" — full suite, architect quality  |
-
-Each line defends against the upstream agents' failures:
-
-- 1st line: detailed, function-level verification of own work
-- 2nd line: verifies test-writer wrote adequate tests from AC, verifies builder's code quality and security
-- 3rd line: runs full test suite for cross-task regressions, evaluates architect's AC quality, spot-checks AC completion
 
 ## Confidence thresholds
 

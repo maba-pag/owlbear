@@ -5,7 +5,7 @@ description: "Guardrails for research/analysis documents — ensures findings be
 
 # Research Document Guardrails
 
-Use this file for document-specific guardrails. For the complete research procedure and task lifecycle, see the `research-workflow` skill.
+For the complete research procedure and task lifecycle, see the `research-workflow` skill.
 
 ## Document requirements
 
@@ -17,12 +17,12 @@ Use this file for document-specific guardrails. For the complete research proced
 
 ### When a finding requires a user decision
 
-If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, create a **decision request** file in `docs/decisions/pending/`. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the format and workflow.
+If a research finding recommends a feature, architectural direction, or approach that the user hasn't approved — and there is no clear winner among options — **do not create follow-up tasks**. Instead, use the **scribe** agent to check/create a decision request:
 
-Block the current task with a reference to the decision request:
-
-```powershell
-kanban\kanban-md.exe edit {ID} --block "Decision pending: docs/decisions/pending/{id}-{slug}.md"
 ```
+runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, request_type=decision, agent=researcher, concern={description}", "Check/create DR for #{id}")
+```
+
+The scribe checks for duplicates, creates the DR if needed, and blocks the task automatically.
 
 If no other unblocked tasks are available on the board, create the decision request, proceed with the recommended option, create the follow-up tasks, and mark the request `urgency: advisory` with `approved: auto`. The user can override later.

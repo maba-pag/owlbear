@@ -10,7 +10,6 @@ These conventions apply to all frontend/UI code in OwlBear projects. They are en
 ## Design guidance
 
 For deeper design guidance, use the `frontend-design` skill.
-It covers typography, color, spatial layout, motion, interaction, responsive patterns, and UX writing.
 
 ## Design system
 
