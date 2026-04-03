@@ -96,9 +96,8 @@ After committing, append the commit log to the task body (Channel B), not your r
 kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |\n|--------|------|-------|-------|\n| {hash} | {type} | {files} | #{id} |" -t
 ```
 
-</output_format>
+> **MCP tools (owlbear-kanban):** `start_work` (claim + show task), `edit_task` (Channel B body updates), `end_work` (advance status + release claim).
 
-<boundaries>
 
 - Only process tasks in `done` status
 - Always record rejection reasons in Channel B (task body). Use `--block` only for backlog rejections per critical rules.

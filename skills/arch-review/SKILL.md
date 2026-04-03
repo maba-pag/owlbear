@@ -22,6 +22,9 @@ ensuring architectural soundness, and approving tasks for development.
 | Split (create TDD test) | `kanban\kanban-md.exe create "Test: TITLE" --priority P --tags T,test --body "AC"` |
 | Merge (delete redundant) | `kanban\kanban-md.exe delete ID --yes` |
 | Block | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

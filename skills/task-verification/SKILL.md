@@ -18,6 +18,9 @@ Step-by-step process for the exit gate (done → archived).
 | Archive (pass) | `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release` |
 | Reject (fixable) | `kanban\kanban-md.exe edit {id} --status review --release` |
 | Reject (fundamental) | `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

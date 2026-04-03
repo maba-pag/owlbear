@@ -15,6 +15,9 @@ consolidating, and pruning lessons learned from agent task notes.
 |--------|---------|
 | Read task (if dispatched with ID) | `kanban\kanban-md.exe show {id}` |
 | Append report (if dispatched with ID) | `kanban\kanban-md.exe edit {id} -a "## Curation\n{content}" -t` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 Most curator work uses the memory tool, not kanban-md. These commands are only needed when dispatched with a specific curation task ID. See kanban-md skill for claiming protocol and pitfalls.
 

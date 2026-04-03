@@ -278,3 +278,5 @@ Agents encountering a `## Decision Resolved` section in the task body (written b
 - **Architects:** If an architecture review reveals a decision that needs user input, use the scribe to create a decision request and block the task.
 - **Planner:** Calls the scribe in resolve mode at Step 1 of each planning cycle. The scribe writes decision summaries to task bodies and moves resolved files (see `dispatch-planning` skill Recipe 0).
 - **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process. All agents must run the pre-flight check in `agent-common.instructions.md` → **Resolved decision pre-flight** before starting work on any task.
+
+> **MCP note:** Use `edit_task` to append Channel B block notes before blocking, `end_work` to advance status when a decision is resolved.

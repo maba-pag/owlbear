@@ -168,6 +168,8 @@ Classify every research finding before acting on it:
 Generate `kanban-md create` commands for every actionable finding.
 **Execute them** to create tasks at `ideation` status.
 
+> **MCP equivalent:** `create_task` (owlbear-kanban) for programmatic follow-up task creation.
+
 If a finding requires a user decision with no clear winner, use the **scribe** agent
 to check/create a decision request. The scribe checks for duplicates, creates the DR
 if needed, and blocks the task automatically. Move on to other work if available.

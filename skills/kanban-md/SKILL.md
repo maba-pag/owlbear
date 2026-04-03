@@ -23,6 +23,8 @@ kanban\kanban-md.exe edit {id} --status <next> --release     # Phase 3: advance
 
 **Dispatch rule:** Always claim by ID. Never use `pick` — it grabs the highest-priority unclaimed task, which may not be yours.
 
+> **MCP equivalents (owlbear-kanban):** `start_work` (Phase 1+2 combined), `edit_task` (Phase 2 body edits), `end_work` (Phase 3 advance + release).
+
 ## Command Synopsis
 
 | Command | Purpose |

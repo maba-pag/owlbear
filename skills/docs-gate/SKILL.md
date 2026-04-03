@@ -17,6 +17,9 @@ Step-by-step process for the documentation gate (docs → done).
 | Append report | `kanban\kanban-md.exe edit {id} -a "## Docs Gate\n{content}" -t --claim <agent>` |
 | Advance (pass) | `kanban\kanban-md.exe edit {id} --status done --release` |
 | Reject to review | `kanban\kanban-md.exe edit {id} --status review --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

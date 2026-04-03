@@ -1,14 +1,15 @@
-"""Failing RED-phase tests for task #562 (parent #483).
+"""RED-phase tests for task #572 (parent #483).
 
-Validates that MCP tool references exist alongside CLI in all target files:
-  - skills/mcp-kanban/SKILL.md — agent workflow pattern section
-  - instructions/agent-common.instructions.md — Channel B and task coordination sections
-  - instructions/research-docs.instructions.md — MCP syntax alongside CLI kanban refs
-  - 10 pipeline agent .agent.md files — MCP tool examples in body text
-  - 8 skill SKILL.md files with ## kanban-md Commands — MCP tool rows alongside CLI
+Augments the #562 test suite with 5 additional checks:
+  1. scribe added to PIPELINE_AGENTS (11 total)
+  2. edit_task assertion on all pipeline agent bodies
+  3. edit_task assertion on all cheatsheet-skill kanban-md Commands sections
+  4. Parametrized tests for 4 inline-ref skills (decision-requests, dispatch-planning,
+     research-workflow, kanban-md) — whole-body presence of any MCP tool name
+  5. Channel B protocol heading test on skills/mcp-kanban/SKILL.md
 
-All tests must FAIL on current HEAD (zero MCP refs in target files).
-They pass when sibling tasks #563-#566 complete the MCP reference additions.
+New tests must FAIL on current HEAD (MCP refs not yet present in target files).
+They pass when sibling tasks #573-#576 complete the MCP reference additions.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ MCP_KANBAN_SKILL = ROOT / "skills" / "mcp-kanban" / "SKILL.md"
 AGENT_COMMON = ROOT / "instructions" / "agent-common.instructions.md"
 RESEARCH_DOCS = ROOT / "instructions" / "research-docs.instructions.md"
 
-# AC: 10 pipeline agents (scribe excluded — utility agent, no pipeline stage ownership)
+# AC: 11 pipeline agents (scribe added — owns Channel B handoff protocol)
 PIPELINE_AGENTS = [
     "architect",
     "auditor",
@@ -35,8 +36,17 @@ PIPELINE_AGENTS = [
     "planner",
     "researcher",
     "reviewer",
+    "scribe",
     "test-writer",
     "writer",
+]
+
+# AC: 4 inline-ref skills (CLI refs in body, no ## kanban-md Commands section)
+INLINE_REF_SKILLS = [
+    "decision-requests",
+    "dispatch-planning",
+    "research-workflow",
+    "kanban-md",
 ]
 
 # AC: 8 skills with ## kanban-md Commands sections
@@ -130,6 +140,13 @@ class TestFromAC_McpKanbanSkillWorkflowPattern:
         assert section is not None, "Agent Workflow section not found in mcp-kanban SKILL.md"
         assert "edit_task" in section, (
             "Agent Workflow section must contain edit_task (Channel B intermediate step)"
+        )
+
+    def test_channel_b_protocol_heading_present(self) -> None:
+        """Body must contain a heading matching 'channel.b' (regex, case-insensitive)."""
+        body = self._body()
+        assert re.search(r"^#+\s+channel.b", body, re.MULTILINE | re.IGNORECASE), (
+            "Expected a 'Channel B Protocol' heading in skills/mcp-kanban/SKILL.md"
         )
 
 
@@ -242,6 +259,13 @@ class TestFromAC_PipelineAgentMcpBodyRefs:
             f"agents/{agent_name}.agent.md body must contain end_work MCP tool reference"
         )
 
+    def test_agent_body_has_edit_task(self, agent_name: str) -> None:
+        """Agent body text must contain edit_task MCP tool reference."""
+        body = self._agent_body(agent_name)
+        assert "edit_task" in body, (
+            f"agents/{agent_name}.agent.md body must contain edit_task MCP tool reference"
+        )
+
 
 # ============================================================
 # AC Item 6: Skill ## kanban-md Commands sections — MCP tool rows alongside CLI
@@ -275,4 +299,43 @@ class TestFromAC_SkillCheatsheetMcpRefs:
         )
         assert "end_work" in section, (
             f"skills/{skill_name}/SKILL.md ## kanban-md Commands must contain end_work"
+        )
+
+    def test_kanban_commands_section_has_edit_task(self, skill_name: str) -> None:
+        """## kanban-md Commands section must contain edit_task MCP tool reference."""
+        section = self._kanban_commands_section(skill_name)
+        assert section is not None, (
+            f"## kanban-md Commands section not found in skills/{skill_name}/SKILL.md"
+        )
+        assert "edit_task" in section, (
+            f"skills/{skill_name}/SKILL.md ## kanban-md Commands must contain edit_task"
+        )
+
+
+# ============================================================
+# AC Item 7: Inline-ref skills — whole-body MCP tool name presence
+# ============================================================
+
+_INLINE_MCP_TOOLS = frozenset({"edit_task", "start_work", "end_work", "create_task", "list_tasks"})
+
+
+@pytest.mark.parametrize("skill_name", INLINE_REF_SKILLS)
+class TestFromAC_InlineRefSkillMcpRefs:
+    """Each inline-ref skill body must contain at least one MCP tool name.
+
+    These skills have CLI commands scattered in the body (no ## kanban-md Commands
+    cheatsheet section), so we check the whole file body for any MCP tool name.
+    """
+
+    def _body(self, skill_name: str) -> str:
+        path = ROOT / "skills" / skill_name / "SKILL.md"
+        return _strip_frontmatter(path.read_text(encoding="utf-8"))
+
+    def test_body_contains_at_least_one_mcp_tool_name(self, skill_name: str) -> None:
+        """Skill body must contain at least one of edit_task/start_work/end_work/create_task/list_tasks."""
+        body = self._body(skill_name)
+        found = [t for t in sorted(_INLINE_MCP_TOOLS) if t in body]
+        assert found, (
+            f"skills/{skill_name}/SKILL.md body must contain at least one of "
+            f"{sorted(_INLINE_MCP_TOOLS)!r} as an MCP tool reference. Found none."
         )

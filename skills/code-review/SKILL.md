@@ -17,6 +17,9 @@ Step-by-step process for reviewing a completed implementation task.
 | Append evidence | `kanban\kanban-md.exe edit {id} -a "## Review Evidence\n{content}" -t --claim <agent>` |
 | PASS (advance) | `kanban\kanban-md.exe edit {id} --status docs --release` |
 | FAIL (reject) | `kanban\kanban-md.exe edit {id} --status todo --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

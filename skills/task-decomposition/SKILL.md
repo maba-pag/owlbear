@@ -19,6 +19,9 @@ Step-by-step process for breaking complex features into atomic, test-driven kanb
 | Read parent task | `kanban\kanban-md.exe show {id}` |
 | Append plan to parent | `kanban\kanban-md.exe edit {id} -a "## Planning\n{content}" -t` |
 | Create task | `kanban\kanban-md.exe create "P{n}-{nn}: TITLE" --priority P --tags T --depends-on ID --body "AC"` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 **Execution mode:** When **planner-dispatched** (parent task ID provided), execute `create` commands directly and report created IDs. When **user-invoked**, output `create` commands for review — do NOT execute them. Read-only commands (`list`, `show`, `board`) and `edit` (for appending to a parent task) are always executed directly.
 

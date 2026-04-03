@@ -17,6 +17,9 @@ Step-by-step process for implementing a kanban task using test-driven developmen
 | Append notes | `kanban\kanban-md.exe edit {id} -a "## Builder Notes\n{content}" -t --claim <agent>` |
 | Advance to review | `kanban\kanban-md.exe edit {id} --status review --release` |
 | BLOCK (fundamental) | `kanban\kanban-md.exe edit {id} --status todo --block "reason" --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

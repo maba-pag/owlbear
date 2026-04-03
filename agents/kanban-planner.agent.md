@@ -76,6 +76,8 @@ Return **only** the signal line as your final output:
 DONE | {N} tasks planned
 ```
 
+> **MCP tools (owlbear-kanban):** `start_work` (claim + show task), `edit_task` (Channel B body updates), `end_work` (advance status + release claim).
+
 </output_format>
 
 <boundaries>

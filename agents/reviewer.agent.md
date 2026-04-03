@@ -74,6 +74,8 @@ See docs/scratch/{id}-reviewer.md for full evidence." -t
 
 Return **only** the signal line — no other text after it.
 
+> **MCP tools (owlbear-kanban):** `start_work` (claim + show task), `edit_task` (Channel B body updates), `end_work` (advance status + release claim).
+
 </output_format>
 
 <boundaries>

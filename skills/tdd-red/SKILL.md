@@ -16,6 +16,9 @@ Step-by-step process for the test-writer to produce failing tests from a task's 
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append summary | `kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n{content}" -t --claim <agent>` |
 | Advance | `kanban\kanban-md.exe edit {id} --status in-progress --release` |
+| Claim + show task (MCP) | `start_work {id}` |
+| Append to task body (MCP) | `edit_task {id}` |
+| Advance + release (MCP) | `end_work {id}` |
 
 No other kanban-md commands needed. See kanban-md skill for claiming protocol and pitfalls.
 

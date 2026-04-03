@@ -25,6 +25,8 @@ The kanban board is shared — multiple agents and humans may work on it simulta
 
 For the complete claiming protocol (three-phase lifecycle, dispatched vs self-selected rules, cross-task boundaries, crash safety), see the **kanban-md skill** → **Claiming Protocol**.
 
+> **MCP tools (owlbear-kanban):** `start_work` (atomic claim + show task), `end_work` (advance status + release claim).
+
 ### Handoff / blocked
 
 If you cannot continue without the user:
@@ -279,6 +281,8 @@ kanban\kanban-md.exe edit {ID} -a "## {Section Header}\n{content}" -t
 ```
 
 Downstream agents read this via `kanban\kanban-md.exe show {ID}`. The orchestrator never reads it.
+
+> **MCP equivalents:** `edit_task` (append Channel B content mid-task), `end_work` (final status advance + release claim).
 
 ### Per-agent signal and body mapping
 

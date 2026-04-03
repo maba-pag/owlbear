@@ -12,6 +12,9 @@ For the complete research procedure and task lifecycle, see the `research-workfl
 - Keep recommendations concrete and actionable. Vague findings ("consider doing X") are not useful.
 - End the document with a **Follow-up Tasks** section listing every recommended action as a numbered task with: title, priority rationale, dependencies, and a one-line AC.
 - Include a concrete `kanban-md create` command for each follow-up task and record the created task IDs after execution.
+
+> **MCP equivalents:** `create_task` (programmatic task creation), `start_work` (claim + show), `end_work` (advance + release).
+
 - Ensure each created task body links back to the research doc (for example, `See docs/research/p7.md §4`).
 - If the research doc recommends zero follow-up tasks, explicitly state why no action is needed.
 

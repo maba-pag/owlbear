@@ -40,6 +40,8 @@ Make findings concrete, comparisons tabular, and recommendations actionable.
 
 **Channel A** (return last): `DONE #{id} -> backlog | doc: docs/research/{slug}.md`
 
+> **MCP tools (owlbear-kanban):** `start_work` (claim + show task), `edit_task` (Channel B body updates), `end_work` (advance status + release claim).
+
 </output_format>
 
 <boundaries>

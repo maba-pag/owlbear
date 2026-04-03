@@ -53,6 +53,8 @@ Step 6 for the full spec.
 {"dispatch":[{"id":101,"agent":"architect"},{"id":103,"agent":"builder"}]}
 ```
 
+> **MCP tools (owlbear-kanban):** `start_work` (claim + show task), `edit_task` (Channel B body updates), `end_work` (advance status + release claim).
+
 </output_format>
 
 <boundaries>

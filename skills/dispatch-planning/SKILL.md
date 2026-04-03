@@ -53,6 +53,8 @@ The kanban-planner reads the task, produces a decomposition plan, executes the
 The task itself is not moved — the kanban-planner creates child tasks at `ideation`
 and the parent may be closed or split depending on the plan.
 
+> **MCP note:** When operating via the owlbear-kanban MCP server, dispatched agents use `start_work` to begin their assigned task and `end_work` to advance status upon completion.
+
 ---
 
 ## Command Recipes
