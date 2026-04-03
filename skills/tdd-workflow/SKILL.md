@@ -27,7 +27,17 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 3. Verify task is in `in-progress` status (the test-writer already moved it here)
 4. Read referenced source files to understand existing code
 
-### Step 1a — Pass-through for non-implementation tasks
+### Step 1a — Decision / action request pre-flight
+
+Follow the **Resolved decision pre-flight** in `agent-common.instructions.md` before creating any decision or action request. It covers checking the task body for resolved decisions, querying the scribe, and treating user notes as binding constraints.
+
+To create a new request, always go through the scribe:
+
+```
+runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, request_type=action, agent=builder, concern={description}", "Check/create DR for #{id}")
+```
+
+### Step 1b — Pass-through for non-implementation tasks
 
 Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or
 "non-impl pass-through". If found:
@@ -172,4 +182,5 @@ kanban\kanban-md.exe edit {id} --status review --release
 - [ ] Diff is surgical — smallest change that achieves the AC
 - [ ] `from __future__ import annotations` on new files
 - [ ] Type hints on all signatures, docstrings on public API
+- [ ] Deliverables committed (`git commit`) before advancing
 - [ ] Deliverables committed (`git commit`) before advancing

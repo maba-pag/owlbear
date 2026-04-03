@@ -12,7 +12,6 @@ Step-by-step process for the exit gate (done → archived).
 
 | Action | Command |
 |--------|---------|
-
 | Read task | `kanban\kanban-md.exe show {id}` |
 | Claim | `kanban\kanban-md.exe edit {id} --claim <agent>` |
 | Append audit | `kanban\kanban-md.exe edit {id} -a "## Audit\n{content}" -t --claim <agent>` |
@@ -166,3 +165,14 @@ tasks rejected, remaining items.
 
 Your return to the caller is **Channel A only** — the signal line(s). No commit tables,
 no summaries in the return text.
+
+## Verification checklist
+
+- [ ] Each task's AC verified with specific evidence (not self-reports)
+- [ ] Reviewer evidence section present and evaluated
+- [ ] Architect quality score assigned (1–5)
+- [ ] Full test suite passed (cross-task regressions checked)
+- [ ] Confidence score calculated using deduction rubric
+- [ ] Audit report appended to task body (Channel B)
+- [ ] Upstream commits verified; leftover files committed
+- [ ] Channel A signal returned as final output

@@ -28,7 +28,7 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 3. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, or `quality`). If so, go to **Step 1a — Pass-through**.
 4. Check if this is a **retry cycle** (task body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
 5. Identify referenced source files, modules, and interfaces in the AC
-6. Do NOT move task status yet — movement happens in Step 7 after all tests are verified
+6. Do NOT move task status yet — movement happens in Step 8 after all tests are verified
 
 ### Step 1a — Pass-through for non-implementation tasks
 
@@ -110,7 +110,7 @@ Run this check **only if Step 2 found no testable interfaces**:
    Return: `DONE #{id} -> in-progress | non-impl pass-through (heuristic), no tests needed`
    **Stop here.**
 
-5. **If ambiguous** (neither clear impl nor clear non-impl): default to pass-through with strong warning. Use the note format from step 4, appending `- Ambiguous AC — builder should verify intent.` Escalate to a decision request targeting the architect for re-tagging only when AC content is too ambiguous to determine whether the builder needs to produce code or config; escalation must designate a clear next actor.
+5. **If ambiguous** (neither clear impl nor clear non-impl): default to pass-through with strong warning. Use the note format from step 4, appending `- Ambiguous AC — builder should verify intent.` Escalate to a decision request only when AC content is too ambiguous to determine whether the builder needs to produce code or config. The escalation must designate the architect as the next actor for re-tagging.
 
 ## Step 3 — Plan test categories
 
