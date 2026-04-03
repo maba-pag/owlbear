@@ -229,10 +229,13 @@ class RefreshOrchestrator:
             if cancel is not None and cancel.is_set():
                 break
             try:
+                safe_path = sandbox_path(self._workspace_root, file_path)
                 intake_result = await _intake.read_file(
-                    file_path, workspace_root=self._workspace_root
+                    safe_path, workspace_root=self._workspace_root
                 )
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result)
+                ingest_result: IngestResult = await self._pipeline.ingest(
+                    intake_result, scope=source.scope
+                )
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":
