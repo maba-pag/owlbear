@@ -182,11 +182,14 @@ async def list_entries(
     status: str | None = None,
     *,
     include_deleted: bool = False,
-) -> list[dict[str, Any]]:
+) -> list[dict[str, Any]] | str:
     """List memory entries with optional filters.
 
     By default excludes deleted entries. Pass include_deleted=True to show them.
     Filters agent_id (scope_agent), category, and status (approval_state) are ANDed.
+    Returns an empty JSON array string "[]" when no entries match, so that MCP
+    callers always receive at least one TextContent item in the response (FastMCP
+    1.26.x gives zero content items for empty list returns).
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
@@ -221,7 +224,10 @@ WHERE {where}
         return conn.execute(sql, params).fetchall()
 
     rows = await asyncio.to_thread(_run_query)
-    return [dict(row) for row in rows]
+    results = [dict(row) for row in rows]
+    # FastMCP 1.26.x gives zero TextContent items for empty list returns;
+    # return "[]" string so MCP callers always receive content[0].
+    return results or "[]"
 
 
 @mcp.tool(annotations=ToolAnnotations(
