@@ -148,3 +148,75 @@ or "No informational findings."}
 
 Return ONLY the 8-section report. The reviewer coordinator synthesizes the final
 verdict at step 8.
+
+<examples>
+
+<bad_example why="Rubber-stamp — no findings, no evidence citations">
+## test_writer_audit
+All AC lines covered.
+
+## security_review
+No security issues found.
+
+## test_integrity
+All TestFromAC classes preserved exactly.
+
+## test_quality
+All dimensions STRONG/ADEQUATE.
+
+## data_safety
+No data safety issues found.
+
+## test_gaps
+No untested implementation paths found.
+
+## necessity_check
+N/A
+
+## informational
+No informational findings.
+
+Problems: every section is a generic "no issues" with zero evidence. No file:line
+citations, no assertion analysis, no branch coverage check. This report adds no value.
+</bad_example>
+
+<good_example why="Specific findings with file:line evidence and severity ratings">
+## test_writer_audit
+| AC Line | Test(s) | Status |
+|---------|---------|--------|
+| "Retry on 429/5xx" | TestFromAC_Retry::test_retry_on_429 | COVERED |
+| "Handle timeout" | — | MISSING |
+
+MISSING: AC line "Handle timeout" has no corresponding test. = FAIL
+
+## security_review
+- `handler.py:23`: user-provided `path` passed to `subprocess.run()` without
+  `shlex.quote()`. Injection risk. = FAIL
+
+## test_integrity
+TestFromAC_Retry: 4 methods preserved. No WEAKENED or REMOVED.
+
+## test_quality
+| Dimension | Rating | Notes |
+|-----------|--------|-------|
+| Assertion specificity | STRONG | All asserts check exact return values |
+| Negative/error paths | WEAK | No test for malformed input |
+
+WEAK dimension found. = FAIL
+
+## data_safety
+No data safety issues found.
+
+## test_gaps
+- `retry.py:45-52`: exception fallback branch untested (catches `Exception` broadly,
+  logs and returns default). Silent wrong-result risk.
+
+## necessity_check
+N/A — bug fix task.
+
+## informational
+- 7.1: `handler.py:1` missing `from __future__ import annotations`
+- 7.4: `retry.py:process_batch()` is 67 lines — consider extraction
+</good_example>
+
+</examples>
