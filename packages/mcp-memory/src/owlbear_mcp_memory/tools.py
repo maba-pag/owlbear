@@ -19,15 +19,22 @@ from mcp.types import ToolAnnotations
 from owlbear_mcp_memory.server import AppContext, mcp
 
 __all__ = [
+    "_VALID_TRANSITIONS",
     "_apply_tool_exclusions",
     "get_knowledge",
     "list_entries",
     "mark_for_deletion",
     "record_learning",
+    "set_approval_state",
 ]
 
 _VALID_CATEGORIES = ("preference", "knowledge", "context", "behavior", "goal")
 _MIN_CONFIDENCE: float = 0.7
+_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset({
+    ("pending", "approved"),
+    ("pending", "deleted"),
+    ("deleted", "pending"),
+})
 
 
 def _now_utc() -> str:
@@ -215,6 +222,53 @@ WHERE {where}
 
     rows = await asyncio.to_thread(_run_query)
     return [dict(row) for row in rows]
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    readOnlyHint=False, idempotentHint=False, destructiveHint=True
+))
+async def set_approval_state(ctx: Context, entry_id: str, new_state: str) -> str:
+    """Transition a memory entry to a new approval_state.
+
+    Allowed transitions: pending→approved, pending→deleted, deleted→pending.
+    Returns a success message string on success, or an 'error: ...' string
+    for disallowed transitions (including same-state and invalid states).
+    Raises ToolError if the entry_id does not exist.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    conn = app_ctx.conn
+
+    def _get_state() -> str | None:
+        r = conn.execute(
+            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
+        ).fetchone()
+        return r[0] if r is not None else None
+
+    current_state = await asyncio.to_thread(_get_state)
+
+    if current_state is None:
+        msg = f"Entry {entry_id!r} not found"
+        raise ToolError(msg)
+
+    if (current_state, new_state) not in _VALID_TRANSITIONS:
+        return (
+            f"error: transition from '{current_state}' to '{new_state}' is not allowed"
+        )
+
+    now = _now_utc()
+    deleted_at: str | None = now if new_state == "deleted" else None
+
+    def _run_update() -> None:
+        conn.execute(
+            """UPDATE memory_entries
+               SET approval_state = ?, updated_at = ?, deleted_at = ?
+               WHERE id = ?""",
+            (new_state, now, deleted_at, entry_id),
+        )
+        conn.commit()
+
+    await asyncio.to_thread(_run_update)
+    return f"Entry {entry_id!r} transitioned to '{new_state}'"
 
 
 @mcp.tool(annotations=ToolAnnotations(idempotentHint=True, destructiveHint=True))

@@ -24,6 +24,7 @@ __all__ = [
     "mark_for_deletion",  # noqa: F822 — defined in tools.py
     "mcp",
     "record_learning",  # noqa: F822 — defined in tools.py
+    "set_approval_state",  # noqa: F822 — defined in tools.py
 ]
 
 _DEFAULT_DB_PATH = "data/memory/memory.db"
