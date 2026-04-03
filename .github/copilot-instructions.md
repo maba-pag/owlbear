@@ -69,11 +69,11 @@ Pipeline-only skills (owned by orchestrator pipeline agents — researcher, arch
 All four custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) follow these conventions:
 
 - **Error prefix:** Tool execution errors return a string starting with `error: ` (e.g., `f"error: {stderr.strip()}"`). Empty-result messages (e.g., "No sources found.") are informational — no prefix.
-  - `ToolError` exception (`isError=true`): use when the return type is a pure model (`dict`, `list[dict]`) and an error string cannot be embedded in the typed return.
-  - `error: ` string prefix (`isError=false`): use for `str`-return and union-return tools (`dict | str`).
+  - `ToolError` exception (`isError=true`): use when the return type is a pure model (TypedDict, BaseModel, or list thereof) and an error string cannot be embedded in the typed return.
+  - `error: ` string prefix (`isError=false`): use for `str`-return and union-return tools (`TypedDict | str`).
   - Both approaches are MCP-spec-valid; the spec distinguishes protocol errors from tool execution errors.
 - **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
-- **Return types:** Use `dict` or `list[dict]` for queryable data (lists, metadata). Use `str` for content bodies, messages, and errors.
+- **Return types:** Use `TypedDict` or `list[TypedDict]` for structured queryable data (lists, metadata) — preferred for field-level outputSchema auto-generation. Use `BaseModel` subclasses for complex entities with validation. Use `str` for content bodies, messages, and errors.
 - **Lifespan pattern:** Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan function passed to `FastMCP`.
 - **Tool exclusion:** Each server reads a `*_TOOLS_EXCLUDE` env var (`KANBAN_TOOLS_EXCLUDE`, `KNOWLEDGE_TOOLS_EXCLUDE`, `PROJECT_TOOLS_EXCLUDE`) at startup. Comma-separated tool names are removed via `server.remove_tool()`; unknown names are silently ignored. Default (unset) = all tools registered.
 - **Module exports:** Every `server.py` defines `__all__` listing its public symbols.
@@ -166,7 +166,7 @@ Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,
 
 ### Research tasks
 
-Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, create a decision request in `docs/decisions/pending/` instead (see the `decision-requests` skill at `skills/decision-requests/SKILL.md`).
+Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, use the **scribe** agent to check/create a decision request instead (see the `decision-requests` skill).
 It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
 
 ## Directory structure
