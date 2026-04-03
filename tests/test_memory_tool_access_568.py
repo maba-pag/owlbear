@@ -10,7 +10,9 @@ AC coverage:
           researcher, reviewer, scribe, test-writer, writer)
   - AC2: 3 agents are NOT modified: challenger, code-reader, orchestrator
   - AC3: validate_agents.py passes (exit 0 on all HEAD agent files)
-  - AC4: No other frontmatter changes (surgical edit only — checked by AC1/AC2)
+  - AC4: No other frontmatter changes (surgical edit only) — tested by
+         TestFromAC_SurgicalEditOnly which compares current tools against the
+         pre-#568 git baseline and asserts the only difference is owlbear-memory/*
 """
 
 from __future__ import annotations
@@ -77,6 +79,30 @@ def _has_memory_tool(content: str) -> bool:
     """Return True if tools section contains 'owlbear-memory/*'."""
     tools_text = _extract_tools_text(content)
     return "owlbear-memory/*" in tools_text
+
+
+def _parse_tools_from_content(content: str) -> list[str]:
+    """Parse individual tool names from the tools: section (strips surrounding quotes)."""
+    tools_text = _extract_tools_text(content)
+    match = re.search(r"\[(.+)\]", tools_text, re.DOTALL)
+    if not match:
+        return []
+    tools_str = match.group(1)
+    return [t.strip().strip("'\"") for t in tools_str.split(",") if t.strip()]
+
+
+def _git_agent_content(commit: str, agent_name: str) -> str:
+    """Return agent file content at a given git ref (exits non-zero raises AssertionError)."""
+    result = subprocess.run(
+        ["git", "show", f"{commit}:agents/{agent_name}.agent.md"],
+        capture_output=True,
+        text=True,
+        cwd=_REPO_ROOT,
+    )
+    assert result.returncode == 0, (
+        f"git show {commit}:agents/{agent_name}.agent.md failed: {result.stderr.strip()}"
+    )
+    return result.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -185,3 +211,79 @@ class TestFromAC_ValidateAgentsPasses:
         assert result.returncode == 0, (
             f"validate_agents.py failed:\n{result.stdout}\n{result.stderr}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_SurgicalEditOnly — AC4
+# ---------------------------------------------------------------------------
+
+# The git commit immediately before the task #568 builder commit (54c3710).
+# This is the authoritative pre-task baseline for each agent's tools list.
+_PRE_TASK_COMMIT = "54c3710~1"
+
+
+def _assert_only_memory_tool_added(agent_name: str) -> None:
+    """Shared assertion: current tools = baseline + owlbear-memory/* and nothing else.
+
+    Fails if any tool was added beyond owlbear-memory/*, or if any existing tool was
+    removed.  This is the precise gate for AC4 (surgical edit only).
+    """
+    baseline_tools = set(_parse_tools_from_content(_git_agent_content(_PRE_TASK_COMMIT, agent_name)))
+    current_tools = set(_parse_tools_from_content(_read_agent(agent_name)))
+
+    extra_added = current_tools - baseline_tools - {"owlbear-memory/*"}
+    removed = baseline_tools - current_tools
+
+    assert not extra_added, (
+        f"agents/{agent_name}.agent.md: unauthorized tools added (AC4 violation): "
+        f"{sorted(extra_added)}"
+    )
+    assert not removed, (
+        f"agents/{agent_name}.agent.md: tools unexpectedly removed: {sorted(removed)}"
+    )
+    assert "owlbear-memory/*" in current_tools, (
+        f"agents/{agent_name}.agent.md: 'owlbear-memory/*' missing from tools"
+    )
+
+
+class TestFromAC_SurgicalEditOnly:
+    """AC4: Each target agent's tools list must differ from the pre-#568 baseline by
+    exactly one addition: 'owlbear-memory/*'.  No other tools may be added or removed.
+
+    Regression guard: the original builder commit added 'edit/rename' to architect
+    alongside owlbear-memory/*, violating this AC.  These tests must fail until that
+    unauthorised addition is reverted.
+    """
+
+    def test_architect_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("architect")
+
+    def test_auditor_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("auditor")
+
+    def test_builder_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("builder")
+
+    def test_curator_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("curator")
+
+    def test_kanban_planner_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("kanban-planner")
+
+    def test_planner_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("planner")
+
+    def test_researcher_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("researcher")
+
+    def test_reviewer_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("reviewer")
+
+    def test_scribe_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("scribe")
+
+    def test_test_writer_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("test-writer")
+
+    def test_writer_surgical_edit_only(self) -> None:
+        _assert_only_memory_tool_added("writer")
