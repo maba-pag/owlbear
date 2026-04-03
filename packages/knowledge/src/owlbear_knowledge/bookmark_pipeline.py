@@ -76,6 +76,7 @@ class BookmarkPipeline:
         reason: str | None = None,
         scope: str = "global",
         project_context: dict[str, object] | None = None,
+        *,
         cancel: CancelSignal | None = None,
     ) -> BookmarkResult:
         """Process a URL through the bookmark pipeline.
@@ -100,7 +101,7 @@ class BookmarkPipeline:
             BookmarkResult describing what happened.
         """
         # Stage 0 — dedup
-        existing = self._store.get_by_url(url)
+        existing = self._store.get_by_url(url, scope)
         if existing is not None:
             return BookmarkResult(
                 url=url,
@@ -146,7 +147,9 @@ class BookmarkPipeline:
             and evaluation.worth_ingesting
         ):
             try:
-                ingest_result = await self._ingest_pipeline.ingest_text(content)
+                ingest_result = await self._ingest_pipeline.ingest_text(
+                    content, metadata={"url": url}, scope=scope
+                )
                 ingested = True
                 document_id = getattr(ingest_result, "document_id", None)
             except Exception:
@@ -159,6 +162,7 @@ class BookmarkPipeline:
         bookmark = Bookmark(
             url=url,
             title=title,
+            description=evaluation.summary,
             tags=list(evaluation.tags),
             relevance_score=evaluation.relevance_score,
             reason=effective_reason,
