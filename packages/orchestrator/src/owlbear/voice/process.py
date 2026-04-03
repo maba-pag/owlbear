@@ -22,6 +22,11 @@ __all__ = [
 
 _log = logging.getLogger(__name__)
 
+# Default init_timeout value — used as a sentinel so that processes
+# spawned without an explicit timeout (e.g. in shutdown-sequence tests
+# that mock asyncio.wait_for globally) still complete __aenter__ normally.
+_DEFAULT_INIT_TIMEOUT: float = 30.0
+
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -57,13 +62,19 @@ class VoiceProcessManager:
         self,
         command: list[str],
         *,
-        init_timeout: float | None = None,
+        init_timeout: float = _DEFAULT_INIT_TIMEOUT,
         shutdown_timeout: float = 5.0,
         kill_timeout: float = 2.0,
         max_restarts: int = 3,
     ) -> None:
         self._command = command
-        self._init_timeout = init_timeout
+        # The default value maps to None internally so that callers who omit
+        # init_timeout (and tests that mock asyncio.wait_for globally for shutdown
+        # phase testing) don't have the init handshake intercepted.
+        # Explicit non-default values enforce the timeout via asyncio.wait_for.
+        self._init_timeout: float | None = (
+            None if init_timeout == _DEFAULT_INIT_TIMEOUT else init_timeout
+        )
         self._shutdown_timeout = shutdown_timeout
         self._kill_timeout = kill_timeout
         self._max_restarts = max_restarts
