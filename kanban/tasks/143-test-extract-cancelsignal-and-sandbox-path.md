@@ -1,10 +1,12 @@
 ---
 id: 143
 title: 'Test: Extract CancelSignal and sandbox_path'
-status: docs
+status: archived
 priority: someday
 created: 2026-03-29T16:12:59.6641148+02:00
-updated: 2026-03-30T23:24:00.0847695+02:00
+updated: 2026-04-03T02:11:01.7943742+02:00
+started: 2026-04-03T02:10:43.0453515+02:00
+completed: 2026-04-03T02:10:43.0453515+02:00
 tags:
     - phase-1
     - ' scope:knowledge'
@@ -75,3 +77,53 @@ Consolidation + evaluator tests removed per scope refinement (overlap with #138)
 [[2026-03-30]] Mon 08:30
 ## Review Evidence
 See docs/scratch/143-reviewer.md for full evidence.
+
+[[2026-04-03]] Fri 01:35
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | Internal utility modules; no behavior/API/convention change described there |
+| 2 | Docstrings | Yes | Pass | cancellation.py: CancelSignal+LinkedCancelSignal fully documented; _paths.py: sandbox_path() has full Args/Returns/Raises docstring |
+| 3 | docs/sources/overview.md | Yes | Pass | v1 cancellation.py + paths.py attributed (lines 579-580); .NET CancellationToken prior art (line 699) already recorded |
+| 4 | README.md | No | N/A | No CLI changes |
+| 5 | Research docs linked | Yes | Pass | Both research docs exist and referenced in task body |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (docs/scratch/143-* - no files found)
+
+[[2026-04-03]] Fri 02:10
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test file: tests/test_knowledge_cancel_sandbox.py | File exists, 28 tests | PASS |
+| CancelSignal is @runtime_checkable Protocol | test_cancel_signal_is_runtime_checkable_protocol L41 | PASS |
+| Any object with is_set() satisfies CancelSignal | test_object_with_is_set_satisfies_cancel_signal L51 | PASS |
+| LinkedCancelSignal no source is_set() False | test_no_sources_is_never_set L97 | PASS |
+| LinkedCancelSignal any source set returns True | test_single_set_source_returns_true L108, L123, L138 | PASS |
+| LinkedCancelSignal composes 3+ sources | test_three_sources_none_set_returns_false L152, test_three_sources_middle_set_returns_true L162 | PASS |
+| Valid relative path resolves under root | test_valid_relative_path_resolves_under_root L233 | PASS |
+| Null byte raises PermissionError | test_null_byte_in_path_raises_permission_error L247 | PASS |
+| dotdot traversal raises PermissionError | test_dotdot_traversal_outside_root_raises_permission_error L264 | PASS |
+| Absolute path inside root resolves | test_absolute_path_inside_root_resolves_correctly L277 | PASS |
+| Absolute path outside root raises PermissionError | test_absolute_path_outside_root_raises_permission_error L284 | PASS |
+| All tests import from owlbear_knowledge | Verified all imports use owlbear_knowledge namespace | PASS |
+| ruff check passes | All checks passed on all 3 files | PASS |
+
+### Test Results
+- pytest (scoped): 28 passed in 0.51s
+- pytest (full suite): 3131 passed, 247 failed (all pre-existing RED tests from other tasks, none in #143 scope)
+- ruff: clean
+
+### AC Quality Score: 5/5
+AC was specific, complete, and mapped directly to verifiable test cases. Architect refined scope well (removed #138 overlap). All AC items were directly testable.
+
+### Deduction breakdown
+- -.02 reviewer evidence file (docs/scratch/143-reviewer.md) referenced but missing
+
+### Confidence: .98
+### Action: archive
