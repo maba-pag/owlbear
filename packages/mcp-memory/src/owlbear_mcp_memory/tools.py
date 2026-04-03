@@ -217,7 +217,7 @@ WHERE {where}
     return [dict(row) for row in rows]
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=True))
+@mcp.tool(annotations=ToolAnnotations(idempotentHint=True, destructiveHint=True))
 async def mark_for_deletion(ctx: Context, entry_id: str) -> str:
     """Soft-delete a memory entry by setting its approval_state to 'deleted'.
 
