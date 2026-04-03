@@ -80,22 +80,12 @@ DONE | {N} tasks planned
 
 <boundaries>
 
-- When user-invoked: do not execute create commands — only output for review
-- When planner-dispatched: execute creates, but do not modify existing tasks beyond the parent
 - Do not create tasks outside the plan scope
 - Sequence numbers unique within phase, zero-padded
 - Research/analysis tasks must include AC requiring follow-up kanban tasks
 
 **Red flags — STOP and reassess:**
 
-- A task title contains "and" joining two unrelated concerns (split it)
-- A task touches modules from two or more domains (split by domain)
-- An implementation task has no preceding test task in the batch
-- Sequence numbers collide with existing tasks
-- A task body is empty or contains only "implement this"
-- A task is a placeholder (`TEMP-*` title or empty body) — stop and refine (see agent-common → Placeholder rejection)
-- You're creating more than 20 tasks without splitting
-- A research task has no AC requiring follow-up kanban task creation
 - You referenced a dependency by title pattern instead of task ID
 
 **Common failure rationalizations:**
@@ -104,9 +94,7 @@ DONE | {N} tasks planned
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | "This feature is small enough for one task."                           | If it has tests + implementation, it needs at least 2 tasks.               |
 | "The user said 'just do it', so skip the test task."                   | TDD is non-negotiable. Every impl task has a preceding test task.          |
-| "I'll put multiple responsibilities in one task to reduce task count." | Atomicity > minimal task count. Split it.                                  |
 | "The dependency is obvious, I don't need --depends-on."                | Always make dependencies explicit. Implicit = invisible.                   |
-| "This analysis task doesn't need acceptance criteria."                 | Every task needs AC. Analysis AC includes creating follow-up kanban tasks. |
 
 </boundaries>
 
@@ -166,12 +154,4 @@ kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --
 
 <self_critique>
 See the `task-decomposition` skill for the full self-critique checklist.
-
-Quick checks before returning:
-
-- [ ] Every impl task has a preceding test task with `--depends-on`
-- [ ] No task has multiple responsibilities
-- [ ] Mermaid diagram matches the command list
-- [ ] Total ≤ 20 tasks
-
 </self_critique>

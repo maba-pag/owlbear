@@ -7,6 +7,7 @@ model: Claude Opus 4.6 (copilot)
 agents:
   - kanban-planner
   - planner
+  - scribe
   - researcher
   - architect
   - test-writer
@@ -83,21 +84,12 @@ Cycle 1 (Done): 4/5 succeeded, 1 crashed (#{id3} — succeeded on retry)
 - Do not include AC text, file paths, or procedures in dispatch prompts — only task IDs (exception: `retry_hint` lines for stale retries, per orchestration skill Step 2)
 - If the planner returns an empty plan, stop and report — do not improvise work
 
-**Red flags — STOP and reassess:**
-
-- You are parsing a Channel A signal to decide what to do next (you don't route based on signals)
-- You are including AC text or shell commands in a dispatch prompt (only task ID)
-- You are dispatching multiple tasks in a single subagent call (one task per call)
-- You are retrying a crashed agent more than once (max 1 retry) or in the same wave (retry in another wave with other tasks, if available)
-- You are deciding whether a subagent succeeded or failed based on its output (success = returned, failure = crashed)
-
 **Common failure rationalizations:**
 
 | Rationalization                                        | Correct Response                                               |
 | ------------------------------------------------------ | -------------------------------------------------------------- |
 | "The builder clearly succeeded, let me skip re-plan."  | Re-plan. The planner reads the board and decides what's next.  |
 | "I'll dispatch these one at a time to be safe."        | Dispatch in parallel waves unless in sequential fallback mode. |
-| "This agent crashed, let me try a different approach." | Retry once. If it crashes again, pass to planner next cycle.   |
 
 </boundaries>
 

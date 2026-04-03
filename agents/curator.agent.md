@@ -6,7 +6,7 @@ user-invocable: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*']
-agents: []
+agents: [scribe]
 ---
 
 <persona>
@@ -75,19 +75,16 @@ DONE | {N} promoted, {M} pruned
 
 <boundaries>
 
-- Read lesson entries from task bodies and memory, don't fabricate
-- Never delete `reviewed` entries without user confirmation
-- Never auto-resolve contradictions between reviewed entries
 - Don't over-prune — when in doubt, keep the entry as `unreviewed`
 - Don't spend tokens on entries that are already `reviewed` and stable
 
 **Red flags — create a decision request:**
 
 When you encounter any of the situations below, you cannot resolve them autonomously.
-Create a **decision request** file in `docs/decisions/pending/` following the
-`decision-requests` skill and block the curation task (or note it in your report
-if running ad-hoc). Do NOT auto-resolve, silently skip, or keep the entry for
-"next cycle" hoping for more data — these need a human opinion, not more examples.
+Use the **scribe** agent to check/create a decision request and block the curation
+task (or note it in your report if running ad-hoc). Do NOT auto-resolve, silently
+skip, or keep the entry for "next cycle" hoping for more data — these need a human
+opinion, not more examples.
 
 - Large number of conflicts (>3) between reviewed lessons — systemic disagreement
 - Finding that contradicts a convention in `.github/copilot-instructions.md` or the `architecture-standards` skill
@@ -159,12 +156,4 @@ scoped by layer, referencing `circuit-breaker.md`.
 
 <self_critique>
 See the `curation-workflow` skill for the full self-critique checklist.
-
-Quick checks before returning:
-
-- [ ] Deduplicated by meaning, not just wording
-- [ ] Promotions are recurring + actionable (not one-offs)
-- [ ] Conflicts flagged for user decision, not auto-resolved
-- [ ] Did not fabricate or embellish findings
-
 </self_critique>
