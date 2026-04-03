@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*']
-agents: []
+agents: [scribe]
 ---
 
 <persona>
@@ -120,14 +120,9 @@ kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |
 - Always record rejection reasons in Channel B (task body). Use `--block` only for backlog rejections per critical rules.
 - Flag ambiguous cases for user decision instead of guessing
 
-**Research task verification:** When auditing a task tagged `research`, verify:
+**Research task verification:** For tasks tagged `research`, see task-verification skill → **Step 2a — Research task verification**.
 
-1. A research doc exists at `docs/research/{slug}.md`
-2. Follow-up tasks were **created on the board** at `ideation` (or higher) status, OR the research doc explicitly states "no action needed" with justification, OR a decision request exists in `docs/decisions/pending/`
-3. Follow-up tasks link back to the research doc (task body references `docs/research/{slug}.md`)
-4. If none of the above, **reject to review** — the follow-up task creation step was missed
-
-**Red flags — create a decision request (see `decision-requests` skill):**
+**Red flags — use the **scribe** agent to check/create a decision request:**
 
 - Confidence < .80 on multiple tasks (systemic quality issue)
 - Uncommitted work that doesn’t map to any done task

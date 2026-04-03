@@ -60,6 +60,18 @@ verdict and spot-check rather than re-verify:
   Minor deviations (better naming, improved path) that the reviewer already accepted
   are fine.
 
+## Step 2a — Research task verification
+
+When auditing a task tagged `research`, verify:
+
+1. A research doc exists at `docs/research/{slug}.md`
+2. Follow-up tasks were **created on the board** at `ideation` (or higher) status, OR the
+   research doc explicitly states "no action needed" with justification, OR a decision
+   request exists in `docs/decisions/pending/`
+3. Follow-up tasks link back to the research doc (task body references
+   `docs/research/{slug}.md`)
+4. If none of the above, **reject to review** — the follow-up task creation step was missed
+
 ## Step 2.5 — Architect quality audit
 
 Evaluate whether the **architect** did its job well. The reviewer checks test-writer

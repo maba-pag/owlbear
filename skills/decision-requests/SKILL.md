@@ -1,6 +1,7 @@
 ---
 name: decision-requests
 description: "Structured async decision request process — create decision files to ask the user for input, block the task, and continue other work. Used by any agent that hits a decision point requiring user approval."
+user-invocable: false
 ---
 
 # Decision Requests
@@ -232,18 +233,30 @@ three-step process.
 
 ## Pre-flight: check for existing decisions before creating new ones
 
-Before creating any new decision or action request, **always check for prior resolutions**:
+**Always use the scribe agent** to check for existing DRs and create new ones.
+Never read or write `docs/decisions/` directly — the scribe is the exclusive interface.
 
-1. Search `docs/decisions/resolved/{task-id}-*` for files matching the current task ID.
-2. If a resolved decision exists:
-   - **Read it.** Extract the `decision:` (user's chosen option) and `notes:` (user feedback).
-   - **Apply the user's choice** to your work — do not recreate the same request.
-   - If the user's notes invalidate part of the AC or change requirements, treat them as **AC amendments**: update the task body to reflect the user's constraints before proceeding.
-3. Also check `docs/decisions/pending/{task-id}-*` — if a request is already pending for this task, do not create a duplicate.
+To check or create a DR:
 
-> **Why this matters:** Without this check, agents re-dispatched on the same task will
-> create duplicate decision requests, forcing the user to answer the same question
-> repeatedly while their previous feedback is ignored.
+```
+runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, request_type={decision|action}, agent={your_name}, concern={what_you_need}", "Check/create DR for #{id}")
+```
+
+The scribe:
+1. Searches pending and resolved DRs for the task
+2. If a resolved DR covers the same concern, returns the user's answer verbatim
+3. If a pending DR covers the same concern, returns "already pending"
+4. If no match, creates the DR with proper frontmatter and blocks the task
+
+To query existing DRs without creating:
+
+```
+runSubagent("scribe", "Scribe: task_id={id}, mode=query, agent={your_name}", "Query DRs for #{id}")
+```
+
+> **Why this matters:** Without the scribe's duplicate check, agents re-dispatched on
+> the same task create duplicate decision requests, forcing the user to answer the same
+> question repeatedly while their previous feedback is ignored.
 
 ## User notes are AC amendments
 
@@ -257,7 +270,8 @@ Agents encountering a `## Decision Resolved` section in the task body (written b
 
 ## Integration with existing processes
 
-- **Researchers:** After completing research, if findings require a user decision (feature-gate, architectural direction), create a decision request instead of follow-up tasks. See `research-workflow` skill Step 5.
-- **Architects:** If an architecture review reveals a decision that needs user input, create a decision request and block the task.
-- **Planner:** Checks `docs/decisions/pending/` at Step 1 of each planning cycle. Writes decision summaries to task bodies on resolution (see `dispatch-planning` skill Recipe 0).
+- **Scribe agent:** The exclusive handler of `docs/decisions/`. All agents create DRs through the scribe (check-or-create mode) and the planner delegates DR resolution to the scribe (resolve mode).
+- **Researchers:** After completing research, if findings require a user decision (feature-gate, architectural direction), use the scribe to create a decision request instead of follow-up tasks. See `research-workflow` skill Step 5.
+- **Architects:** If an architecture review reveals a decision that needs user input, use the scribe to create a decision request and block the task.
+- **Planner:** Calls the scribe in resolve mode at Step 1 of each planning cycle. The scribe writes decision summaries to task bodies and moves resolved files (see `dispatch-planning` skill Recipe 0).
 - **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process. All agents must run the pre-flight check in `agent-common.instructions.md` → **Resolved decision pre-flight** before starting work on any task.

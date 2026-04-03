@@ -1,6 +1,7 @@
 ---
 name: architecture-standards
 description: "OwlBear architectural standards: module layering, interface design, error handling, dependency injection, toolset wrapping, workspace confinement. Use when reviewing, building, or planning changes to src/ code."
+user-invocable: false
 ---
 
 # Architecture Standards
