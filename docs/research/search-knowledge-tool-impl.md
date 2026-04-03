@@ -115,6 +115,6 @@ The work described in this document was completed through three successor tasks:
 
 **Current state:** `server.py` uses `await qs.query()` returning `list[StructuredSearchResult]`, formatted as bullet lines (`- {title} ({score:.2f}): {snippet[:200]}`). This supersedes the original recommendation to use `query_for_context()` via `asyncio.to_thread()`.
 
-**Dead code:** `tools.py` and `test_search_knowledge.py` implement the old approach and are not registered on the FastMCP server. Follow-up cleanup task created.
+**Dead code cleaned up:** `tools.py` and `test_search_knowledge.py` were deleted in #223 (chore: clean up dead tools.py and test_search_knowledge.py).
 
 **Async purity note:** `KnowledgeQueryService.query()` is `async def` but calls sync internals (`embed()`, `search_similar()`, `get_document()`). Acceptable for single-user stdio MCP; noted for future consideration if concurrent requests become relevant.
