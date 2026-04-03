@@ -69,7 +69,7 @@ class KnowledgeQueryService:
         """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
         if self._retriever is not None:
             result = self._retriever.retrieve(prompt, top_k, self._scopes)
-            return result.chunks
+            return result.chunks[:top_k]
         embeddings = self._embedder.embed([prompt])
         if not embeddings:
             return []

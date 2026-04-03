@@ -168,6 +168,7 @@ class GraphAugmentedRetriever:
                 break
 
             neighbors = self._graph_store.get_neighbors(seed.id, scopes=scopes)
+            neighbors = neighbors[: self._max_neighbors_per_entity]
 
             if self._weight_by_importance:
                 neighbors = sorted(neighbors, key=lambda pair: pair[0].importance, reverse=True)
