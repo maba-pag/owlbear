@@ -1,80 +1,3 @@
-{"timestamp":"2026-03-29T14:56:08.9167265+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T14:56:26.4451343+02:00","action":"edit","task_id":132,"detail":"Add pre-commit guard against agent tool name regression"}
-{"timestamp":"2026-03-29T14:56:29.67776+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T14:56:33.2872847+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T14:56:33.2893681+02:00","action":"release","task_id":61,"detail":"architect"}
-{"timestamp":"2026-03-29T14:56:39.0491297+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-29T14:56:39.0503904+02:00","action":"claim","task_id":134,"detail":"architect"}
-{"timestamp":"2026-03-29T14:56:43.9729598+02:00","action":"edit","task_id":132,"detail":"Add pre-commit guard against agent tool name regression"}
-{"timestamp":"2026-03-29T14:56:43.9776944+02:00","action":"release","task_id":132,"detail":"architect"}
-{"timestamp":"2026-03-29T14:56:44.2973477+02:00","action":"delete","task_id":132,"detail":"Add pre-commit guard against agent tool name regression"}
-{"timestamp":"2026-03-29T14:56:49.0101811+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-29T14:56:49.0128417+02:00","action":"release","task_id":134,"detail":"architect"}
-{"timestamp":"2026-03-29T14:56:54.1031238+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
-{"timestamp":"2026-03-29T14:56:54.1041397+02:00","action":"claim","task_id":96,"detail":"reviewer"}
-{"timestamp":"2026-03-29T14:56:58.3544279+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
-{"timestamp":"2026-03-29T14:56:58.3566384+02:00","action":"claim","task_id":68,"detail":"writer"}
-{"timestamp":"2026-03-29T14:56:58.7035014+02:00","action":"edit","task_id":133,"detail":"Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml"}
-{"timestamp":"2026-03-29T14:56:58.7050524+02:00","action":"claim","task_id":133,"detail":"builder"}
-{"timestamp":"2026-03-29T14:57:37.8801946+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
-{"timestamp":"2026-03-29T14:57:47.9955814+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
-{"timestamp":"2026-03-29T14:57:47.9976704+02:00","action":"release","task_id":68,"detail":"writer"}
-{"timestamp":"2026-03-29T14:58:08.1013218+02:00","action":"edit","task_id":133,"detail":"Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml"}
-{"timestamp":"2026-03-29T14:58:12.0434125+02:00","action":"edit","task_id":133,"detail":"Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml"}
-{"timestamp":"2026-03-29T14:58:12.0450488+02:00","action":"release","task_id":133,"detail":"builder"}
-{"timestamp":"2026-03-29T14:59:54.0965909+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
-{"timestamp":"2026-03-29T14:59:54.0976873+02:00","action":"release","task_id":96,"detail":"reviewer"}
-{"timestamp":"2026-03-29T15:00:29.3674938+02:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
-{"timestamp":"2026-03-29T15:00:29.3685113+02:00","action":"claim","task_id":52,"detail":"builder"}
-{"timestamp":"2026-03-29T15:02:54.5690346+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-29T15:02:54.5714142+02:00","action":"claim","task_id":1,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:02:58.2158646+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:02:58.2179814+02:00","action":"claim","task_id":93,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:03:03.0074968+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-29T15:03:06.412775+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-29T15:03:06.4149344+02:00","action":"release","task_id":1,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:03:10.8914681+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:03:11.6455971+02:00","action":"edit","task_id":52,"detail":"Create owlbear-voice workspace package"}
-{"timestamp":"2026-03-29T15:03:11.6471473+02:00","action":"release","task_id":52,"detail":"builder"}
-{"timestamp":"2026-03-29T15:03:14.8326563+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:03:18.9722082+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:03:21.9631745+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T15:03:21.9652155+02:00","action":"claim","task_id":15,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:03:24.088876+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:03:24.3832086+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T15:03:24.4157288+02:00","action":"release","task_id":93,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:03:34.8112951+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T15:03:34.8138961+02:00","action":"claim","task_id":94,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:03:35.9729878+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T15:03:39.961164+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T15:03:39.9632985+02:00","action":"release","task_id":15,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:04:17.8799022+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T15:04:21.9726078+02:00","action":"edit","task_id":94,"detail":"Test: AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T15:04:21.9741745+02:00","action":"release","task_id":94,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:04:47.5048166+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T15:04:47.5069069+02:00","action":"claim","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:04:56.669977+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T15:04:58.7566565+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-29T15:04:58.7592994+02:00","action":"claim","task_id":55,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:05:00.6838727+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T15:05:00.6848863+02:00","action":"release","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:05:20.7084597+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T15:05:20.7105332+02:00","action":"claim","task_id":117,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:05:23.4300483+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T15:05:23.431089+02:00","action":"claim","task_id":18,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:05:27.9112475+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
-{"timestamp":"2026-03-29T15:05:27.9133687+02:00","action":"claim","task_id":96,"detail":"writer"}
-{"timestamp":"2026-03-29T15:05:30.7254661+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
-{"timestamp":"2026-03-29T15:05:30.7275532+02:00","action":"claim","task_id":68,"detail":"auditor"}
-{"timestamp":"2026-03-29T15:05:57.8711702+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T15:06:04.1245522+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T15:06:07.09146+02:00","action":"edit","task_id":96,"detail":"Test: Port agents to agent-md v2 location"}
-{"timestamp":"2026-03-29T15:06:07.0925108+02:00","action":"release","task_id":96,"detail":"writer"}
-{"timestamp":"2026-03-29T15:06:33.0261504+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T15:06:33.0281712+02:00","action":"release","task_id":117,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:07:08.9439403+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T15:07:13.2701957+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T15:07:13.2712608+02:00","action":"release","task_id":18,"detail":"test-writer"}
 {"timestamp":"2026-03-29T15:09:18.3082257+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
 {"timestamp":"2026-03-29T15:09:21.5461008+02:00","action":"move","task_id":68,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-29T15:09:26.1424533+02:00","action":"edit","task_id":68,"detail":"Implement OwlbearProjectFile Pydantic model in mcp-project"}
@@ -9998,3 +9921,80 @@
 {"timestamp":"2026-04-03T04:45:48.5322073+02:00","action":"move","task_id":520,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-03T04:46:01.4770151+02:00","action":"edit","task_id":520,"detail":"Update task #136 AC to reference server.py instead of tools.py"}
 {"timestamp":"2026-04-03T04:46:01.4887824+02:00","action":"release","task_id":520,"detail":"auditor"}
+{"timestamp":"2026-04-03T04:47:29.6731821+02:00","action":"edit","task_id":520,"detail":"Update task #136 AC to reference server.py instead of tools.py"}
+{"timestamp":"2026-04-03T04:48:23.0350417+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T04:48:23.0464221+02:00","action":"claim","task_id":553,"detail":"builder"}
+{"timestamp":"2026-04-03T04:48:39.8043775+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T04:48:39.8159771+02:00","action":"claim","task_id":34,"detail":"reviewer"}
+{"timestamp":"2026-04-03T04:48:44.1296699+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T04:48:44.1439512+02:00","action":"claim","task_id":477,"detail":"test-writer-agent"}
+{"timestamp":"2026-04-03T04:48:49.0731321+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T04:48:49.086343+02:00","action":"release","task_id":477,"detail":"test-writer-agent"}
+{"timestamp":"2026-04-03T04:50:39.0324568+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T04:50:51.537486+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T04:50:51.5512476+02:00","action":"release","task_id":553,"detail":"builder"}
+{"timestamp":"2026-04-03T04:54:51.0869836+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T04:54:57.1824622+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T04:54:57.1937208+02:00","action":"release","task_id":34,"detail":"reviewer"}
+{"timestamp":"2026-04-03T05:08:18.3306044+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:08:18.3438422+02:00","action":"claim","task_id":477,"detail":"builder"}
+{"timestamp":"2026-04-03T05:08:30.7492778+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:08:30.7633094+02:00","action":"release","task_id":477,"detail":"builder"}
+{"timestamp":"2026-04-03T05:08:34.4016819+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:08:34.4136535+02:00","action":"claim","task_id":553,"detail":"reviewer-copilot"}
+{"timestamp":"2026-04-03T05:08:38.7002087+02:00","action":"edit","task_id":554,"detail":"Test: Refresh orchestrator"}
+{"timestamp":"2026-04-03T05:08:38.7127675+02:00","action":"claim","task_id":554,"detail":"reviewer-2"}
+{"timestamp":"2026-04-03T05:12:45.317662+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:12:45.3285018+02:00","action":"release","task_id":553,"detail":"reviewer-copilot"}
+{"timestamp":"2026-04-03T05:13:04.209781+02:00","action":"edit","task_id":554,"detail":"Test: Refresh orchestrator"}
+{"timestamp":"2026-04-03T05:13:04.2211759+02:00","action":"release","task_id":554,"detail":"reviewer-2"}
+{"timestamp":"2026-04-03T05:19:49.9339216+02:00","action":"edit","task_id":211,"detail":"Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-in-depth)"}
+{"timestamp":"2026-04-03T05:19:49.9467839+02:00","action":"claim","task_id":211,"detail":"builder"}
+{"timestamp":"2026-04-03T05:20:06.69085+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:20:06.7013413+02:00","action":"claim","task_id":553,"detail":"writer"}
+{"timestamp":"2026-04-03T05:20:08.3006694+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:20:08.3124997+02:00","action":"claim","task_id":34,"detail":"writer"}
+{"timestamp":"2026-04-03T05:20:15.8473261+02:00","action":"edit","task_id":554,"detail":"Test: Refresh orchestrator"}
+{"timestamp":"2026-04-03T05:20:15.8593012+02:00","action":"claim","task_id":554,"detail":"writer"}
+{"timestamp":"2026-04-03T05:20:53.5447303+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:20:57.3150002+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:20:57.3320202+02:00","action":"release","task_id":553,"detail":"writer"}
+{"timestamp":"2026-04-03T05:21:21.2470342+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:21:21.2580607+02:00","action":"release","task_id":34,"detail":"writer"}
+{"timestamp":"2026-04-03T05:21:38.6048659+02:00","action":"edit","task_id":554,"detail":"Test: Refresh orchestrator"}
+{"timestamp":"2026-04-03T05:21:46.4567874+02:00","action":"edit","task_id":554,"detail":"Test: Refresh orchestrator"}
+{"timestamp":"2026-04-03T05:21:46.4691549+02:00","action":"release","task_id":554,"detail":"writer"}
+{"timestamp":"2026-04-03T05:23:43.0572204+02:00","action":"edit","task_id":211,"detail":"Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-in-depth)"}
+{"timestamp":"2026-04-03T05:23:56.604889+02:00","action":"edit","task_id":211,"detail":"Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-in-depth)"}
+{"timestamp":"2026-04-03T05:24:05.1692133+02:00","action":"edit","task_id":211,"detail":"Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-in-depth)"}
+{"timestamp":"2026-04-03T05:24:05.1834573+02:00","action":"release","task_id":211,"detail":"builder"}
+{"timestamp":"2026-04-03T05:24:31.6280456+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-03T05:24:31.642137+02:00","action":"claim","task_id":62,"detail":"builder"}
+{"timestamp":"2026-04-03T05:24:43.5057196+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:24:43.5180723+02:00","action":"claim","task_id":477,"detail":"reviewer"}
+{"timestamp":"2026-04-03T05:25:50.3712299+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-03T05:26:02.7827768+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-03T05:26:02.7995608+02:00","action":"release","task_id":62,"detail":"builder"}
+{"timestamp":"2026-04-03T05:28:30.402192+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:28:44.1104754+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:28:50.7979236+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-03T05:28:50.8117011+02:00","action":"release","task_id":477,"detail":"reviewer"}
+{"timestamp":"2026-04-03T05:30:17.8316811+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T05:30:17.8420095+02:00","action":"claim","task_id":555,"detail":"architect"}
+{"timestamp":"2026-04-03T05:31:31.5147482+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:31:31.5289427+02:00","action":"claim","task_id":34,"detail":"auditor"}
+{"timestamp":"2026-04-03T05:45:49.2085365+02:00","action":"move","task_id":34,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T05:46:04.4035141+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:46:04.4145668+02:00","action":"release","task_id":34,"detail":"auditor"}
+{"timestamp":"2026-04-03T05:46:59.6921378+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T05:47:03.9373455+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T05:47:03.9484482+02:00","action":"release","task_id":555,"detail":"architect"}
+{"timestamp":"2026-04-03T05:51:16.7949395+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:51:27.5674055+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:52:18.0962646+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
+{"timestamp":"2026-04-03T05:55:23.4951441+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T05:55:23.508388+02:00","action":"claim","task_id":553,"detail":"auditor"}
+{"timestamp":"2026-04-03T06:06:15.6353829+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T06:06:30.0300834+02:00","action":"move","task_id":553,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T06:06:43.4781613+02:00","action":"edit","task_id":553,"detail":"Extract bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-03T06:06:43.495569+02:00","action":"release","task_id":553,"detail":"auditor"}
