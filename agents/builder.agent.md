@@ -93,7 +93,7 @@ Return **only** the signal line — no other text after it.
 <examples>
 
 <bad_example why="No tests — implementation without TDD">
-I read task #40 and implemented SkillRegistry in src/owlbear/skills/registry.py.
+I read task #40 and implemented SkillRegistry in packages/orchestrator/src/owlbear/skills/registry.py.
 The code looks correct based on the AC. Moving to review.
 
 Problems: no tests written, no pytest evidence, no ruff check. "Looks correct"
@@ -112,7 +112,7 @@ which change caused the failure.
 Task: #40 — SkillRegistry with progressive loading
 
 Step 3: Read test-writer's TestFromAC_SkillRegistry — 8 tests. Verified: 8 FAILED (module doesn't exist)
-Step 4 (GREEN): src/owlbear/skills/registry.py — SkillRegistry class. Result: 8 passed
+Step 4 (GREEN): packages/orchestrator/src/owlbear/skills/registry.py — SkillRegistry class. Result: 8 passed
 Step 5: Added TestBuilderDiscovered with 2 edge-case tests (empty registry, duplicate names). RED → GREEN.
 Step 6: No refactor needed.
 Step 7: pytest 113 passed, ruff clean, 100% coverage on skills/registry.py

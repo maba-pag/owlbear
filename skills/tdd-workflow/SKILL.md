@@ -155,7 +155,7 @@ Verify zero remaining references. Single-file updates cause 10–40 test regress
 Stage and commit source code and any builder-discovered tests:
 
 ```powershell
-git add src/owlbear/{module}.py tests/test_{module}.py
+git add packages/{package}/src/{namespace}/{module}.py tests/test_{module}.py
 git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 

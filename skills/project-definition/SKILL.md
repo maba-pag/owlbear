@@ -9,10 +9,8 @@ argument-hint: "[project name or idea]"
 > **Agent status:** User-invocable skill — not dispatched by the orchestrator
 > pipeline. Invoked directly by the user in VS Code chat for ad-hoc project scoping.
 
-> **Tool note:** This skill uses `ask_user` (PydanticAI runtime tool) for interactive
-> refinement. In VS Code agent mode, present structured options to the user instead. Both are appropriate
-> for iterative project scoping — do not use decision requests for this frequent
-> back-and-forth.
+> **Tool note:** Present structured options to the user via `askQuestions` for iterative
+> refinement. Do not use decision requests for this frequent back-and-forth.
 
 Structured workflow for turning a user's idea into an actionable project
 definition. This skill is user-invocable for ad-hoc project scoping —

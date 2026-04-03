@@ -101,9 +101,9 @@ Format:
 
 | Contributor | Commits | +/- | Test ratio | Top area |
 |------------|---------|-----|------------|----------|
-| Alice | 20 | +800/-300 | 42% | src/owlbear/core/ |
+| Alice | 20 | +800/-300 | 42% | packages/orchestrator/ |
 | Bob | 15 | +350/-200 | 35% | tests/ |
-| builder-agent | 7 | +84/-67 | 50% | src/owlbear/tools/ |
+| builder-agent | 7 | +84/-67 | 50% | packages/knowledge/ |
 ```
 
 ## Step 4 — Session detection

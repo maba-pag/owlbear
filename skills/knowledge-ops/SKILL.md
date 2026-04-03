@@ -1,13 +1,12 @@
 ---
 name: knowledge-ops
-description: Query, ingest, and manage the knowledge base (graph + vector store). Use when the agent needs to search for information, add documents, register sources, refresh content, or manage bookmarks. Covers 8 tools across 3 toolsets (knowledge, knowledge_source, bookmark).
+description: Query, ingest, and manage the knowledge base (graph + vector store) via the owlbear-knowledge MCP server. Covers search, ingestion, entity listing, source management, and statistics.
 ---
 
 # knowledge-ops
 
-> **VS Code agent note:** This skill documents both the **owlbear-knowledge MCP server tools**
-> (available in VS Code Copilot agent mode via `.vscode/mcp.json`) and the OwlBear PydanticAI
-> runtime tools (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset).
+> **Scope:** This skill documents the **owlbear-knowledge MCP server** tools,
+> registered in `.vscode/mcp.json` as `owlbear-knowledge`.
 
 ## MCP Server Tools (owlbear-knowledge)
 
@@ -62,26 +61,18 @@ Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}
 ## Rules
 
 - Always set `scope` to `project:{id}` when a project is active; use `global` otherwise.
-- Use `query_knowledge` before ingesting — avoid duplicates.
-- Prefer `doc_type='url'` over manually fetching + `doc_type='text'` when a URL exists.
+- Use `search_knowledge` before ingesting — avoid duplicates.
 - `config_json` must be valid JSON as a **string**, not a dict.
-- File paths in `ingest_document(doc_type='file')` are workspace-relative and sandboxed.
 
 ## Decision Tree
 
 | I want to… | MCP tool | Notes |
 |---|---|---|
-| Search the knowledge base | `search_knowledge` | PydanticAI: `query_knowledge` (param `top_k` instead of `limit`) |
-| Ingest text/file/URL | `ingest_document` | PydanticAI: adds `doc_type` param (`text`/`file`/`url`) and `source` instead of `text` |
-| List entities in graph | `list_entities` | MCP only — filter by `entity_type`, supports pagination |
-| List registered sources | `list_sources` | Same in both interfaces |
+| Search the knowledge base | `search_knowledge` | Natural-language query, returns ranked snippets |
+| Ingest a document | `ingest_document` | Pass text content + optional metadata |
+| List entities in graph | `list_entities` | Filter by `entity_type`, supports pagination |
+| List registered sources | `list_sources` | Filter by `scope` |
 | Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
-| Register a recurring source | — | PydanticAI only: `add_source` (knowledge_source toolset) |
-| Trigger source refresh | — | PydanticAI only: `refresh_source` (knowledge_source toolset) |
-| Evaluate + bookmark a URL | — | PydanticAI only: `bookmark_source` (bookmark toolset) |
-| List saved bookmarks | — | PydanticAI only: `list_bookmarks` (bookmark toolset) |
-
-MCP tools are the primary interface (VS Code agents). PydanticAI toolsets (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset) are the runtime interface — see the MCP Tool Reference above for shared parameter details.
 
 ## Scope Conventions
 
@@ -90,7 +81,7 @@ MCP tools are the primary interface (VS Code agents). PydanticAI toolsets (Knowl
 | Global | `global` | Default. Cross-project knowledge. |
 | Project | `project:{id}` | When a project is active. Auto-set by toolset constructors. |
 
-Queries auto-filter to `["global", "project:{id}"]` when `project_scope` is set.
+Queries auto-filter to `["global", "project:{id}"]` when a project is active.
 
 ## Domain Reference
 
@@ -115,15 +106,10 @@ Config examples per source type:
 
 ## Ingest Workflow
 
-1. **Check first:** `query_knowledge("topic")` — avoid re-ingesting existing content.
-2. **Ingest:** Choose the right `doc_type`:
-   - `text` — raw content string (e.g., conversation notes, summaries)
-   - `file` — workspace-relative path (sandboxed to workspace root)
-   - `url` — fetches and extracts content from the URL
+1. **Check first:** `search_knowledge("topic")` — avoid re-ingesting existing content.
+2. **Ingest:** Use `ingest_document` with text content and optional metadata.
 3. **Result:** Returns document ID, chunk count, entity count, edge count, and status.
 4. **Delta checking:** The pipeline deduplicates by content hash. Re-ingesting the same content is a no-op.
-
-For recurring sources, prefer `add_source` + `refresh_source` over repeated `ingest_document` calls.
 
 ## Curation Workflow
 
@@ -131,11 +117,11 @@ Full lifecycle for adding, updating, and removing knowledge sources. See [docs/r
 
 Six-step process:
 
-1. **Register** — `add_source` to track where content comes from
-2. **Check delta** — `StatusStore.check_content_changed()` skips unchanged documents (SHA-256 hash)
-3. **Ingest** — `ingest_document` or `refresh_source` to chunk, extract, and store
+1. **Register** — track where content comes from (source metadata)
+2. **Check delta** — content-hash comparison skips unchanged documents
+3. **Ingest** — `ingest_document` to chunk, extract entities, and store
 4. **Track status** — pipeline records ingestion state and content hash
-5. **Verify** — `query_knowledge` to spot-check search relevance
+5. **Verify** — `search_knowledge` to spot-check search relevance
 6. **Remove stale** — delete source + cascade to clean up decommissioned content
 
 ## Configuration

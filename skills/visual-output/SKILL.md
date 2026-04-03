@@ -6,10 +6,8 @@ argument-hint: "[diagram or visual description]"
 
 # Visual Output Skill
 
-> **VS Code agent note:** This skill references OwlBear PydanticAI runtime tools
-> (FileToolset, BrowserToolset, VisualFeedbackToolset, DiagramToolset) not available
-> in VS Code Copilot agent mode. Use VS Code edit/file/terminal tools instead when
-> adapting these procedures for agent use.
+> Use VS Code file tools (`create_file`) for writing output files, `open_browser_page`
+> for previewing HTML, and Kroki HTTP API for diagram rendering.
 
 Produce high-quality, self-contained visual output (diagrams, tables, architecture maps)
 for delivery to the user via browser screenshot or Kroki render.
@@ -76,15 +74,14 @@ Before delivering, verify:
 
 For styled HTML pages, tables, CSS Grid layouts, Mermaid-embedded diagrams:
 
-1. **Write** — `FileToolset.write_file` → `.owlbear/diagrams/{name}.html` (self-contained, inline CSS)
-2. **Open** — `BrowserToolset.browser_navigate` → `file://{absolute_path}`
-3. **Capture** — `VisualFeedbackToolset.share_screenshot` → deliver PNG to channel
+1. **Write** — `create_file` → `docs/scratch/{name}.html` (self-contained, inline CSS)
+2. **Open** — `open_browser_page` to preview in the user's browser
 
 ### Path B: Kroki (quick diagrams)
 
 For simple Mermaid, PlantUML, Graphviz, or D2 diagrams that don't need custom styling:
 
-1. **Render** — `DiagramToolset.generate_diagram` with diagram type and source code
+1. **Render** — POST diagram source to Kroki HTTP API with the appropriate `diagram_type` and `output_format`
 2. Output is SVG/PNG, delivered directly — no browser step needed
 
 ### When to use which

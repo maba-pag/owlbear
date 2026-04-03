@@ -141,10 +141,9 @@ Three lines of defense (documented in agent-common):
 
 ## Tool availability
 
-Some tools exist in OwlBear's PydanticAI runtime but are NOT available in VS Code
-Copilot agents (e.g., knowledge graph tools). References to unavailable tools should
-be deactivated (HTML comments or explicit notices). Check all tool references against
-what VS Code actually provides.
+Some tools are only available through specific MCP servers or VS Code built-in
+capabilities. References to unavailable tools should be deactivated (HTML comments
+or explicit notices). Check all tool references against what VS Code actually provides.
 
 ## What to look for
 

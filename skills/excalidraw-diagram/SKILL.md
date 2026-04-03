@@ -6,9 +6,8 @@ argument-hint: "[diagram description]"
 
 # Excalidraw Diagram Skill
 
-> **VS Code agent note:** This skill references OwlBear PydanticAI runtime tools
-> (FileToolset, DiagramToolset) not available in VS Code Copilot agent mode. Use
-> VS Code edit/file/terminal tools instead when adapting these procedures for agent use.
+> Use VS Code file tools (`create_file`) for writing diagram output and Kroki
+> for rendering. See Phase 4 — Validate and Step 5 — Deliver below.
 
 Generate valid `.excalidraw` JSON diagrams that communicate ideas visually.
 Diagrams should **argue, not just display** — use layout, color, and grouping to
@@ -84,8 +83,8 @@ Before delivering, check:
 
 Save the JSON to a `.excalidraw` file:
 
-1. **Write** — `FileToolset.write_file` → `.owlbear/diagrams/{name}.excalidraw`
-2. **Render** — If Kroki is available: `DiagramToolset.generate_diagram(diagram_type="excalidraw", source=json_string, output_format="svg")`
+1. **Write** — `create_file` → `docs/scratch/{name}.excalidraw`
+2. **Render** — If Kroki is available, POST the JSON to the Kroki HTTP API with `diagram_type=excalidraw` and `output_format=svg`
 
 ## Diagram Patterns
 

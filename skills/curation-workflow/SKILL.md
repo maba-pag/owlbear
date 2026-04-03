@@ -47,7 +47,7 @@ Group findings by semantic similarity:
 For each unique finding, evaluate:
 
 1. **Actionable?** — Can an agent actually use this to make a better decision?
-   "Tests should be good" = low signal. "Mock PydanticAI deps with `MagicMock(spec=...)` to avoid runtime type errors" = high signal.
+   "Tests should be good" = low signal. "Mock pydantic-settings models with `MagicMock(spec=...)` and set every accessed field explicitly" = high signal.
 2. **Non-obvious?** — Would a competent developer already know this?
    "Use type hints" = obvious. "Coverage.py MRO crash when using dotted module names with --cov" = non-obvious.
 3. **Recurring?** — Has this come up more than once? Recurring findings are stronger signals.
@@ -72,12 +72,10 @@ For HIGH findings: identify which file to change (instruction, skill, or agent) 
 propose the specific edit. Write the proposal to the curation report. After user
 approval, make the change and delete the inbox entry.
 
-For CONFLICT / UNCERTAIN findings: create a decision request file in
-`docs/decisions/pending/` following the `decision-requests` skill. Present the
-conflicting entries or the uncertain finding as options, include your confidence
-scores, and pre-fill the recommended disposition. If a curation task ID exists,
-block it with a reference to the decision file. The planner will unblock it once
-the user resolves the decision.
+For CONFLICT / UNCERTAIN findings: use the **scribe** agent to check/create a
+decision request. Present the conflicting entries or the uncertain finding as the
+concern, include your confidence scores, and the recommended disposition. The scribe
+creates the DR with proper frontmatter and blocks the task automatically.
 
 For deletions: `memory delete /memories/repo/inbox/{filename}`
 

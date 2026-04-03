@@ -16,7 +16,7 @@ items 7–8 are **recommended**. The steps below satisfy these items — verify 
 1. **Theoretical validity** — Is this a sound concept? Does the abstraction make sense? Is it the right approach?
 2. **Environment audit** — Is this capability already provided by the IDE, runtime, installed extensions, or existing tooling? Check VS Code built-in features, extension-provided servers, and installed packages before recommending additions.
 3. **Prior art** — Find 2+ GitHub repos, articles, or docs showing how others solved this problem.
-4. **Technical feasibility** — Will it work in our stack (Python 3.12, PydanticAI, etc.)? Any blockers or dependencies?
+4. **Technical feasibility** — Will it work in our stack (Python 3.12, FastMCP, Copilot CLI)? Any blockers or dependencies?
 5. **Architecture fit** — How does it integrate with existing OwlBear components? What interfaces does it touch?
 6. **Implementation approach** — What patterns, idioms, and data structures should we adopt from prior art?
 7. **Testing strategy** _(recommended)_ — How will we test this? Unit, integration, mocks? Coverage approach?

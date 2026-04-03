@@ -72,7 +72,7 @@ Assess the task against the `architecture-standards` skill and general architect
    If the capability exists, block to ideation with evidence. Applies to ALL tasks
    including ones labeled trivial.
 8. **Pattern consistency** — follows existing codebase patterns (protocols, error taxonomy,
-   toolset wrapping, config via pydantic-settings)?
+   MCP server conventions, config via pydantic-settings)?
 9. **Security surface** — does the task introduce new system boundaries (user input,
    external APIs, file I/O)? If so, AC must include input validation requirements.
 10. **Single domain** — does this task target exactly one domain (see `architecture-standards`
