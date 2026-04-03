@@ -26,6 +26,16 @@
         "-m",
         "owlbear_mcp_knowledge"
       ]
+    },
+    "owlbear-project": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_project"
+      ]
     }
   },
   "inputs": []
