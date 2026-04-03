@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*']
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
 agents: [scribe]
 ---
 
@@ -167,7 +167,3 @@ are within scope.
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `docs-gate` skill verification checklist for the full pre-advance check.
-</self_critique>

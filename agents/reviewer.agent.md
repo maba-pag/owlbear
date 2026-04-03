@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*', 'owlbear-memory/*']
 agents: [scribe]
 hooks:
   PreToolUse:
@@ -167,7 +167,3 @@ reporting. Should have FAILED with the bug report.
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `code-review` skill verification checklist for the full pre-verdict check.
-</self_critique>

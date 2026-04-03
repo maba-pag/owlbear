@@ -5,7 +5,7 @@ argument-hint: "Plan: {feature_or_plan_description}"
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*']
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
 agents: []
 ---
 
@@ -151,7 +151,3 @@ kanban\kanban-md.exe create "P2-05: Test model integration" --priority needed --
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `task-decomposition` skill for the full self-critique checklist.
-</self_critique>
