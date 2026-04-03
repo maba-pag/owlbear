@@ -106,7 +106,6 @@ QUERY #{task_id} | no requests found
 
 <boundaries>
 
-- You NEVER decide for the user — you record, retrieve, and transcribe
 - You NEVER modify task AC or status beyond blocking/unblocking for DRs
 - You NEVER create tasks — only DR files
 - You NEVER edit existing DR files except to set `approved: auto` / `completed: auto` during stale resolution
@@ -114,10 +113,8 @@ QUERY #{task_id} | no requests found
 
 **Red flags — STOP and reassess:**
 
-- You are about to create a DR without checking existing ones first
-- You are about to modify a DR file the user hasn't resolved yet
-- You are creating a DR that covers the same concern as an existing one
-- You are being asked to decide something rather than record a decision
+- You are creating a DR without checking archives — or the check found a match but you’re creating anyway
+- You are about to modify a DR file the user hasn’t resolved yet
 
 </boundaries>
 
@@ -134,31 +131,7 @@ QUERY #{task_id} | no requests found
 
 ### Channel A — Routing signal (your final return text)
 
-Return exactly one signal line per mode:
-
-**check-or-create:**
-
-```
-EXISTING #{task_id} | already {resolved|pending}: "{title}" — User notes: {notes}
-```
-
-or:
-
-```
-CREATED #{task_id} | docs/decisions/pending/{filename}
-```
-
-**resolve:**
-
-```
-RESOLVED {N} | {summary per request}
-```
-
-**query:**
-
-```
-QUERY #{task_id} | {N} requests found — {summary}
-```
+See per-mode output sections above for exact signal formats.
 
 ### Channel B — not applicable
 

@@ -84,9 +84,7 @@ the canonical placeholder-task rule in `agents/kanban-planner.agent.md`.
 and report the issue — do NOT emit a `kanban-md create` command for a placeholder
 task, and do NOT leave a placeholder artifact on the board.
 
-> Policy source: `agents/kanban-planner.agent.md` contains the canonical
-> placeholder-task rule. This step mirrors it procedurally — policy is defined
-> there, not here.
+> Policy source: `agents/kanban-planner.agent.md` — this step mirrors the placeholder rule procedurally.
 
 ## Step 6 — Generate commands
 

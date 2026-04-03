@@ -80,7 +80,6 @@ Cycle 1 (Done): 4/5 succeeded, 1 crashed (#{id3} — succeeded on retry)
 
 <boundaries>
 
-- Do not interpret subagent results — you only check success vs. crash
 - Do not include AC text, file paths, or procedures in dispatch prompts — only task IDs (exception: `retry_hint` lines for stale retries, per orchestration skill Step 2)
 - If the planner returns an empty plan, stop and report — do not improvise work
 

@@ -6,9 +6,7 @@ user-invocable: false
 
 # Orchestration Workflow
 
-The orchestrator is a mechanical dispatch loop. It asks the planner for a dispatch list,
-runs all tasks in parallel, then re-plans from fresh board state. The board is the state
-machine — subagents move their own tasks, and the planner reads reality each cycle.
+Step-by-step process for the orchestrator's plan-dispatch-loop cycle.
 
 ## Context budget
 
@@ -33,6 +31,22 @@ dispatchable and stop.
 **Subagent → Orchestrator:** Channel A diagnostic line. You do NOT parse this for
 routing. Only check: did the agent return normally (success) or crash (failure)?
 Subagents move their own tasks; the planner reads the board next cycle.
+
+## Step 0 — Resolve pending decision requests
+
+Before planning, call the **scribe** agent to process any resolved decision or action
+requests. This ensures the board is up-to-date before the planner scans it.
+
+```
+runSubagent("scribe", "Scribe: task_id=all, mode=resolve, agent=orchestrator", "Resolve pending DRs")
+```
+
+The scribe scans `docs/decisions/pending/`, processes files where `approved: true` or
+`completed: true` (writes `## Decision Resolved` / `## Action Completed` to task
+bodies, unblocks tasks, moves files to resolved), and handles 5-day auto-resolution.
+
+If the scribe reports errors, note them but proceed to Step 1.
+If the scribe resolves zero requests, proceed to Step 1.
 
 ## Step 1 — Plan
 
@@ -67,12 +81,6 @@ dispatchable and stop.
 After receiving the plan, process `gate_warnings` (if present in the JSON):
 1. For each task ID in `gate_warnings`, increment its count in the `gate_warned` dict.
 2. Remove any ID from `gate_warned` that no longer appears in `gate_warnings`.
-
-Optionally pass gate_warned context to the planner (future use — include only if gate_warned is non-empty):
-
-```
-runSubagent("planner", "Plan: {scope_filter}\n\nGate-warned tasks: #{id} (N cycles)", "Plan dispatch")
-```
 
 ## Configuration
 
@@ -142,21 +150,21 @@ Step 3 — builder waves (fill with remaining light, then heavy):
 ```
 Wave 2: #853 (builder), #728 (writer), #862 (reviewer), #780 (reviewer)  ← 1+1 light+2 heavy (full)
 Wave 3: #934 (builder), #920 (test-writer)                               ← 1+1 heavy
-Wave 4–7: #521, #556, #733, #775 (builders)                              ← solo each
+Wave 4: #521 (builder)                                                    ← solo
+Wave 5: #556 (builder)                                                    ← solo
+Wave 6: #733 (builder)                                                    ← solo
+Wave 7: #775 (builder)                                                    ← solo
 ```
 
 Step 4 — overflow: nothing remaining.
 
 Step 5 — Not a cycle mod 5 → no curator.
 
-Step 6 — consolidation: Waves 4–7 are four solo-builder waves → merge into one wave:
-```
-Wave 4: #521 (builder), #556 (builder), #733 (builder), #775 (builder)   ← 4 builders (full)
-```
+Step 6 — DEACTIVATED. Solo builder waves stay as-is.
 
-Step 7 — drop rule: no solo non-auditor waves remain → nothing dropped.
+Step 7 — drop rule: Waves 4–7 are solo non-auditor waves → drop Waves 5–7 (keep Wave 4 to preserve at least one non-auditor wave).
 
-**Final plan — 4 waves, 14 tasks.** 0 deferred.
+**Final plan — 4 waves, 11 tasks.** 3 deferred (#556, #733, #775).
 
 After all waves from this plan complete, proceed to Step 3.
 
@@ -276,10 +284,6 @@ Before reporting session complete:
 - [ ] Every task in `dispatch` was dispatched (none silently dropped)
 - [ ] Waves respect wave-size limit from Configuration (unless in sequential mode)
 - [ ] Wave assembly uses agent-type compatibility rules (auditor + light flex only, max 1 builder per wave except consolidated waves, heavy flex excluded from auditor waves)
-- [ ] ONE task per subagent call — no batching multiple tasks into one call
-- [ ] Dispatch prompts contained ONLY task IDs — except `retry_hint` lines for stale retries
-- [ ] Errors retried exactly once — no infinite retry loops (rate-limit retries follow sequential fallback)
-- [ ] Rate-limit sequential fallback applied correctly (≥ 3 sequential dispatches, reset on new cycle)
 - [ ] Failure context passed to planner on next cycle — failures not silently dropped
 - [ ] gate_warned counts updated from gate_warnings each cycle — IDs cleared when task exits gate_warnings
 - [ ] Gate warnings logged to output when any task count >= 2
