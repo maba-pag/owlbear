@@ -61,7 +61,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     Steps:
     (a) Resolve DB path from OWLBEAR_MEMORY_DB_PATH env var; default data/memory/memory.db.
     (b) Create parent directories if absent.
-    (c) Open sqlite3 connection.
+    (c) Open sqlite3 connection; set row_factory = sqlite3.Row so rows are accessible
+        both by index and column name.
     (d) Set PRAGMA journal_mode=WAL and PRAGMA busy_timeout=5000.
     (e) Read project name from owlbear-project.json via stdlib json.
     (f) Run CREATE TABLE IF NOT EXISTS memory_entries DDL.
