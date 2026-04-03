@@ -173,3 +173,135 @@ class TestFromAC_FileGlobScopeForwarding:  # noqa: N801
         # Arch Review: file_glob must forward scope=source.scope
         # Current implementation calls ingest(intake_result) — no scope — this FAILS
         pipeline_mock.ingest.assert_called_once_with(ANY, scope="my-project")
+
+
+# ===========================================================================
+# AC: url_list "calls pipeline.ingest(intake_result, scope=source.scope)"
+# Restored from cycle-1 (removed when cycle-2 overwrote this file)
+# ===========================================================================
+
+
+class TestFromAC_UrlListScopeForwarding:  # noqa: N801
+    """AC: url_list handler calls pipeline.ingest(intake_result, scope=source.scope).
+
+    The reviewer found no test asserting scope kwarg for url_list: all three
+    url_list tests in test_refresh_orchestrator.py only check call_count and
+    result.refreshed — none assert scope=source.scope.  This test would fail
+    if the scope kwarg were dropped or hard-coded.
+    """
+
+    @pytest.mark.asyncio
+    async def test_url_list_passes_source_scope_to_pipeline_ingest(self) -> None:
+        """pipeline.ingest must receive scope=source.scope in the url_list handler."""
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(return_value=_ok_ingest_result())
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_url",
+            new=AsyncMock(return_value=_make_intake_result("https://a.com")),
+        ):
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock)
+            source = _make_source(
+                source_type=SourceType.URL_LIST,
+                config={"urls": ["https://a.com"]},
+                scope="my-project",
+            )
+            await orch.refresh(source)
+
+        # AC: url_list must call pipeline.ingest(intake_result, scope=source.scope)
+        # Drops scope kwarg? -> assert_called_once_with fails -> regression caught
+        pipeline_mock.ingest.assert_called_once_with(ANY, scope="my-project")
+
+    @pytest.mark.asyncio
+    async def test_url_list_scope_forwarded_for_every_url(self) -> None:
+        """scope=source.scope is forwarded for all URLs, not just the first."""
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(return_value=_ok_ingest_result())
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        with patch(
+            "owlbear_knowledge.intake.read_url",
+            new=AsyncMock(return_value=_make_intake_result("https://x.com")),
+        ):
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock)
+            source = _make_source(
+                source_type=SourceType.URL_LIST,
+                config={"urls": ["https://a.com", "https://b.com", "https://c.com"]},
+                scope="team-wiki",
+            )
+            await orch.refresh(source)
+
+        assert pipeline_mock.ingest.call_count == 3
+        for call in pipeline_mock.ingest.call_args_list:
+            _, kwargs = call
+            assert kwargs.get("scope") == "team-wiki", (
+                f"pipeline.ingest call missing scope='team-wiki'; got kwargs={kwargs}"
+            )
+
+
+# ===========================================================================
+# AC: crawl "delegates to crawl_handler(config)" — config dict, not full source
+# Restored from cycle-1 (removed when cycle-2 overwrote this file)
+# ===========================================================================
+
+
+class TestFromAC_CrawlHandlerReceivesConfigDict:  # noqa: N801
+    """AC: crawl handler receives source.config dict, not the full KnowledgeSource.
+
+    The reviewer found test_delegates_to_injected_handler only does
+    assert_called_once() with no argument check.  A regression where config is
+    replaced with the full KnowledgeSource would pass undetected.
+    """
+
+    @pytest.mark.asyncio
+    async def test_crawl_handler_receives_config_dict_not_full_source(self) -> None:
+        """crawl_handler is called with source.config dict as the sole argument."""
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        config = {"seed": "https://example.com", "max_pages": 10}
+        crawl_handler = AsyncMock(return_value=[])
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(
+            store=store_mock,
+            pipeline=MagicMock(),
+            crawl_handler=crawl_handler,
+        )
+        source = _make_source(source_type=SourceType.CRAWL, config=config)
+        await orch.refresh(source)
+
+        # AC: crawl_handler receives source.config dict, not the full KnowledgeSource
+        # Passes full source? -> assert_called_once_with(config) fails -> caught
+        crawl_handler.assert_called_once_with(config)
+
+    @pytest.mark.asyncio
+    async def test_crawl_handler_not_called_with_knowledge_source_instance(self) -> None:
+        """crawl_handler argument is NOT a KnowledgeSource — it must be the config dict."""
+        from owlbear_knowledge.models import KnowledgeSource  # noqa: PLC0415
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        crawl_handler = AsyncMock(return_value=[])
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(
+            store=store_mock,
+            pipeline=MagicMock(),
+            crawl_handler=crawl_handler,
+        )
+        source = _make_source(source_type=SourceType.CRAWL, config={"key": "value"})
+        await orch.refresh(source)
+
+        call_arg = crawl_handler.call_args[0][0]
+        assert not isinstance(call_arg, KnowledgeSource), (
+            f"crawl_handler received a KnowledgeSource instance, expected config dict; "
+            f"got {type(call_arg)}"
+        )
