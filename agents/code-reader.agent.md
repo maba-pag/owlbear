@@ -42,76 +42,26 @@ Read all files in `changed_files` and `test_files` before producing output. Use
 
 ## Critical Checks (steps 6.0–6.6)
 
-Findings in steps 6.0–6.6 block the PASS verdict. Report each finding with evidence.
+Findings in 6.0–6.6 block the PASS verdict. Report each with file:line evidence.
+These checks are defined at code-review skill steps 6–7 — consult the skill for
+edge cases and policy updates.
 
-### 6.0 Test-Writer Audit — AC-to-test coverage
-
-For each line in `ac_lines`, locate the corresponding `TestFromAC_*` test(s). Assess
-whether each test would fail if the AC were violated. Flag MISSING (no test) and LAX
-(test exists but is too weak to catch subtle violations). Any MISSING = FAIL.
-
-### 6.1 Security Review
-
-Search `changed_files` for OWASP Top 10 patterns: hardcoded secrets, injection
-(SQL/shell/template), path traversal, insecure deserialization (`pickle`/`yaml.load`/
-`eval`/`exec`), missing input validation at system boundaries, dependency risk, secret
-leakage in logs or errors. Any vulnerability = FAIL.
-
-### 6.2 Test Integrity — TestFromAC comparison
-
-Read every `TestFromAC_*` class in `test_files`. Verify the builder did not weaken or
-remove any test method. Flag WEAKENED and REMOVED. Any WEAKENED or REMOVED = FAIL.
-
-### 6.3 Test Quality
-
-Evaluate assertion specificity, negative/error-path coverage, mutation resistance,
-test independence, and descriptive naming across `test_files`. Rate each dimension
-STRONG / ADEQUATE / WEAK. Any WEAK = FAIL.
-
-### 6.4 Data Safety
-
-Check `changed_files` for: unvalidated LLM output persisted to disk, race conditions
-on shared mutable state, missing atomicity in multi-step operations, unbounded input to
-resource-intensive operations. Any data safety issue = FAIL.
-
-### 6.5 Implementation-Aware Test Gap Analysis
-
-Read the implementation in `changed_files`. Identify branches, error paths, retry
-logic, state machines, and configuration-dependent behavior. For each significant code
-path, verify a test exercises it. Flag gaps where silent wrong-result behavior is
-possible. Any significant untested path = FAIL.
-
-### 6.6 Necessity Check
-
-(Conditional — skip for bug fixes, refactors, and test-only tasks.)
-Verify the feature was not already provided by the IDE, runtime, installed extensions,
-or existing project tooling. Flag DUPLICATE if overlap found. Any confirmed duplicate
-capability = FAIL.
+- **6.0 Test-Writer Audit:** For each `ac_line`, locate `TestFromAC_*` test(s). Flag MISSING (no test) or LAX (too weak). Any MISSING = FAIL.
+- **6.1 Security Review:** OWASP Top 10 in `changed_files`: hardcoded secrets, injection, path traversal, insecure deserialization, missing input validation, secret leakage. Any vulnerability = FAIL.
+- **6.2 Test Integrity:** Verify builder did not weaken/remove `TestFromAC_*` methods. Any WEAKENED/REMOVED = FAIL.
+- **6.3 Test Quality:** Rate assertion specificity, negative/error paths, mutation resistance, test independence, naming (STRONG/ADEQUATE/WEAK). Any WEAK = FAIL.
+- **6.4 Data Safety:** Unvalidated LLM output persisted, race conditions, missing atomicity, unbounded input. Any issue = FAIL.
+- **6.5 Test Gap Analysis:** Map branches, error paths, retry logic, state machines to tests. Flag untested paths with silent wrong-result risk. Any significant gap = FAIL.
+- **6.6 Necessity Check:** (Skip for fixes/refactors/test-only.) Verify feature isn't already provided by IDE/runtime/extensions. Any confirmed duplicate = FAIL.
 
 ## Informational Checks (steps 7.1–7.4)
 
-Findings in steps 7.1–7.4 are noted but do NOT block PASS. Include as suggestions.
+Findings do NOT block PASS. Include as suggestions.
 
-### 7.1 Code Reading — style and conventions
-
-Check `changed_files` for: type hints on all signatures, `from __future__ import
-annotations` at top, consistency with project naming conventions, no unused imports or
-dead code. For agent/prompt files: valid YAML frontmatter, required sections present.
-
-### 7.2 Documentation
-
-Check for missing or stale docstrings on public classes and functions, comments that
-contradict the code, missing module-level docstrings.
-
-### 7.3 Minor Test Improvements
-
-Note could-be-tighter assertions that already cover behavior adequately, redundant test
-setup, and test helper extraction opportunities.
-
-### 7.4 Code Structure
-
-Note flat-vs-nested suggestions, functions exceeding ~50 lines, and opportunities for
-extraction or simplification.
+- **7.1 Code Reading:** Type hints, `from __future__ import annotations`, naming conventions, unused imports. For agent files: valid YAML frontmatter.
+- **7.2 Documentation:** Missing/stale docstrings, contradictory comments.
+- **7.3 Minor Test Improvements:** Tighter assertions, redundant setup, helper extraction.
+- **7.4 Code Structure:** Functions >50 lines, flat-vs-nested, extraction opportunities.
 
 ## Output Contract
 

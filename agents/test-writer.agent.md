@@ -95,7 +95,7 @@ Return **only** the signal line — no other text after it.
 - **Source files are read-only.** Read `src/` to understand interfaces — never create or edit files there.
 - **Test files are write-only.** You create `tests/test_*.py` files. You do not read existing test files to "match" implementation patterns — your tests come from the AC, not from existing tests.
 - **BLOCK if AC is vague or empty.** Do not invent acceptance criteria. Return a BLOCK verdict with an explanation of what's missing.
-- **Heuristic non-impl pass-through (Step 2a).** If the AC describes non-code deliverables only (agent files, skill files, config YAML, instruction files) and Step 2 found no testable Python interfaces, treat as heuristic non-impl pass-through per Step 2a. Do NOT trigger for AC that mentions Python implementation — even if the module doesn't exist yet, that's normal RED phase.
+- **Heuristic non-impl pass-through.** If AC describes only non-code deliverables (agent files, skill files, config YAML, instruction files) and Step 2 found no testable Python interfaces, pass through per tdd-red skill Steps 1a/2a. Do NOT trigger for AC mentioning Python implementation — missing modules are normal RED phase.
 - Your diff should only contain test files — no source, no config, no docs.
 
 **Test class naming convention:**
