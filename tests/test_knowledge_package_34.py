@@ -500,3 +500,174 @@ class TestFromAC_GraphAugmentedRetrieverInterface:
         r._embed("some query")
 
         ep.embed.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# AC (retry gap): max_neighbors_per_entity limits the number of neighbors
+#   expanded per seed entity during _expand().
+#
+# Reviewer evidence: parameter is stored at construction but never applied
+# in _expand() — it silently has no effect (dead parameter / missing feature).
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MaxNeighborsPerEntity:
+    """Contract tests: max_neighbors_per_entity limits expansion neighbors per entity."""
+
+    @staticmethod
+    def _make_neighbors(count: int) -> list[tuple[MagicMock, MagicMock]]:
+        """Return count (neighbor, edge) mock pairs with distinct names."""
+        pairs = []
+        for i in range(count):
+            neighbor = MagicMock()
+            neighbor.name = f"Neighbor_{i}"
+            neighbor.description = f"description_{i}"
+            edge = MagicMock()
+            edge.relation = "related_to"
+            pairs.append((neighbor, edge))
+        return pairs
+
+    @staticmethod
+    def _make_retriever_with_seed(
+        seed_name: str,
+        chunk_id: str,
+        neighbors: list[tuple[MagicMock, MagicMock]],
+        max_neighbors_per_entity: int,
+    ) -> GraphAugmentedRetriever:
+        """Return a retriever wired to return one seed entity with the given neighbors."""
+        vector_store = MagicMock()
+        vector_store.search_similar.return_value = [(chunk_id, 0.9)]
+
+        ep = MagicMock(spec=["embed"])
+        ep.embed.return_value = [[0.1, 0.2]]
+
+        seed = MagicMock()
+        seed.chunk_id = chunk_id
+        seed.id = f"entity-{chunk_id}"
+        seed.name = seed_name
+
+        graph_store = MagicMock()
+        graph_store.list_entities.return_value = [seed]
+        graph_store.get_neighbors.return_value = neighbors
+
+        return GraphAugmentedRetriever(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=ep,
+            max_neighbors_per_entity=max_neighbors_per_entity,
+            max_expansion_tokens=100_000,  # large budget so token limit doesn't interfere
+        )
+
+    # -- Happy path ----------------------------------------------------------
+
+    def test_limits_neighbors_per_entity_to_configured_max(self) -> None:
+        """AC: max_neighbors_per_entity=3 limits expansion to at most 3 lines per seed."""
+        neighbors = self._make_neighbors(10)
+        retriever = self._make_retriever_with_seed(
+            seed_name="SeedEntity",
+            chunk_id="chunk-1",
+            neighbors=neighbors,
+            max_neighbors_per_entity=3,
+        )
+
+        result = retriever.retrieve("query")
+
+        seed_lines = [ln for ln in result.expansion_text.splitlines() if "SeedEntity" in ln]
+        assert len(seed_lines) <= 3, (
+            f"max_neighbors_per_entity=3 should yield at most 3 expansion lines, got {len(seed_lines)}"
+        )
+
+    def test_limit_applies_independently_per_seed_entity(self) -> None:
+        """AC: max_neighbors_per_entity limit is applied per seed entity, not globally."""
+        neighbors = self._make_neighbors(5)
+
+        vector_store = MagicMock()
+        vector_store.search_similar.return_value = [("chunk-A", 0.9), ("chunk-B", 0.8)]
+
+        ep = MagicMock(spec=["embed"])
+        ep.embed.return_value = [[0.1]]
+
+        seed_a = MagicMock()
+        seed_a.chunk_id = "chunk-A"
+        seed_a.id = "entity-A"
+        seed_a.name = "SeedA"
+
+        seed_b = MagicMock()
+        seed_b.chunk_id = "chunk-B"
+        seed_b.id = "entity-B"
+        seed_b.name = "SeedB"
+
+        graph_store = MagicMock()
+        graph_store.list_entities.return_value = [seed_a, seed_b]
+        graph_store.get_neighbors.return_value = neighbors
+
+        retriever = GraphAugmentedRetriever(
+            vector_store=vector_store,
+            graph_store=graph_store,
+            embedding_provider=ep,
+            max_neighbors_per_entity=2,
+            max_expansion_tokens=100_000,
+        )
+
+        result = retriever.retrieve("query")
+
+        lines_a = [ln for ln in result.expansion_text.splitlines() if "SeedA" in ln]
+        lines_b = [ln for ln in result.expansion_text.splitlines() if "SeedB" in ln]
+        assert len(lines_a) <= 2, (
+            f"SeedA should have at most 2 expansion lines, got {len(lines_a)}"
+        )
+        assert len(lines_b) <= 2, (
+            f"SeedB should have at most 2 expansion lines, got {len(lines_b)}"
+        )
+
+    # -- Boundary conditions -------------------------------------------------
+
+    def test_boundary_limit_of_one_neighbor_per_entity(self) -> None:
+        """AC: max_neighbors_per_entity=1 yields exactly one expansion line per entity."""
+        neighbors = self._make_neighbors(5)
+        retriever = self._make_retriever_with_seed(
+            seed_name="SingleSeed",
+            chunk_id="chunk-1",
+            neighbors=neighbors,
+            max_neighbors_per_entity=1,
+        )
+
+        result = retriever.retrieve("query")
+
+        seed_lines = [ln for ln in result.expansion_text.splitlines() if "SingleSeed" in ln]
+        assert len(seed_lines) <= 1, (
+            f"max_neighbors_per_entity=1 should yield at most 1 expansion line, got {len(seed_lines)}"
+        )
+
+    def test_zero_limit_yields_no_expansion_lines(self) -> None:
+        """AC: max_neighbors_per_entity=0 produces no expansion even when neighbors exist."""
+        neighbors = self._make_neighbors(5)
+        retriever = self._make_retriever_with_seed(
+            seed_name="ZeroSeed",
+            chunk_id="chunk-1",
+            neighbors=neighbors,
+            max_neighbors_per_entity=0,
+        )
+
+        result = retriever.retrieve("query")
+
+        assert result.expansion_text == "", (
+            "max_neighbors_per_entity=0 should produce empty expansion text"
+        )
+
+    def test_default_ten_allows_up_to_ten_neighbors_per_entity(self) -> None:
+        """AC: default max_neighbors_per_entity=10 allows up to 10 neighbors, not more."""
+        neighbors = self._make_neighbors(15)
+        retriever = self._make_retriever_with_seed(
+            seed_name="DefaultSeed",
+            chunk_id="chunk-1",
+            neighbors=neighbors,
+            max_neighbors_per_entity=10,
+        )
+
+        result = retriever.retrieve("query")
+
+        seed_lines = [ln for ln in result.expansion_text.splitlines() if "DefaultSeed" in ln]
+        assert len(seed_lines) <= 10, (
+            f"max_neighbors_per_entity=10 should yield at most 10 expansion lines, got {len(seed_lines)}"
+        )
