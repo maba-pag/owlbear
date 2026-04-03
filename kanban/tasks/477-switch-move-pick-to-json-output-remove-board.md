@@ -1,14 +1,17 @@
 ---
 id: 477
 title: Switch move/pick to JSON output, remove board_context tool
-status: backlog
+status: done
 priority: needed
 created: 2026-03-31T06:06:24.5978486+02:00
-updated: 2026-03-31T06:47:37.9199746+02:00
+updated: 2026-04-03T07:08:01.4661009+02:00
 tags:
     - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+    - type:build
+    - phase-2
+    - quality
+claimed_by: auditor
+claimed_at: 2026-04-03T07:08:01.4661009+02:00
 class: standard
 ---
 
@@ -31,3 +34,127 @@ Follow-up tasks created at ideation:
 
 [[2026-03-31]] Tue 06:30
 ## Update: Add outputSchema + tool annotations\n\n- [ ] Define outputSchema for move_task and pick_task return (task object)\n- [ ] Return structuredContent alongside text content\n- [ ] Add tool annotations to ALL tools in server.py:\n  - list_tasks: readOnlyHint=true, idempotentHint=true\n  - show_task: readOnlyHint=true, idempotentHint=true\n  - create_task: (no special hints)\n  - move_task: (no special hints)\n  - edit_task: (no special hints)\n  - pick_task: (no special hints)\n  - start_work: (no special hints)\n  - end_work: (no special hints)
+
+[[2026-04-03]] Fri 00:11
+## Architecture Review
+**Verdict:** APPROVED
+**DR Verification:** N/A -- T1 autonomous (single approach, .95 confidence, no trade-offs per research doc)
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| Switch move_task to --json | Complete -- server.py L287, KanbanTask return type | Kept (verified in codebase) |
+| Switch pick_task to --json | Complete -- server.py L377, KanbanTask return type | Kept (verified in codebase) |
+| Remove board_context entirely | Complete -- absent from server.py, __all__ | Kept (verified in codebase) |
+| Tests cover move/pick JSON + board_context removal | Complete -- test_server.py + test_drop_board_context_489.py | Kept (verified via #485/#489 audits) |
+| Update mcp-kanban SKILL.md | Complete -- move/pick note JSON, tool count correct | Kept (verified via #490 audit) |
+
+### Scope Note
+The Update section appended to the task body (outputSchema, structuredContent, tool annotations) was completed independently by #494 (annotations) and #489 (outputSchema). Those items are NOT part of this task's binding AC -- they were scope creep that was properly handled as separate tasks. The original 5 AC items above are the binding contract.
+
+### Architecture Notes
+Umbrella task -- all implementation completed by archived children:
+- #485 (TDD RED tests) -- archived, auditor confidence 1.0
+- #489 (GREEN build) -- archived, auditor confidence .98
+- #490 (docs update) -- archived, auditor confidence .98
+
+No new code needed. Downstream agents should verify child deliverables exist and pass through. MCP protocol handles KanbanTask serialization transparently -- no downstream consumer breakage risk (verified: agents/skills reference move_task/pick_task only in SKILL.md documentation).
+
+### Changes Made
+- Fixed tag formatting (removed leading spaces, added quality for pass-through)
+- Moved task to todo
+
+### Dependencies
+- #485 (tests): archived
+- #489 (build): archived
+- #490 (docs): archived
+- No unresolved dependencies
+
+### Challenge Results
+- Challenger: reconsider (confidence .60)
+- Key challenges: (1) AC not yet rewritten in task body; (2) pipeline path for completed umbrella; (3) no fresh test run; (4) #494 scope conflation; (5) tag formatting
+- Architect response: accepted (1) scoped AC to original 5 items with completion notes; accepted (4) clarified Update section as independent scope; accepted (5) fixed tags; rebutted (2) architect must use todo per rules, quality tag enables pass-through; rebutted (3) test execution is builder/auditor scope, not architect
+
+[[2026-04-03]] Fri 01:34
+## Test-Writer Notes
+- Non-implementation task (tagged quality) -- no tests applicable.
+- Umbrella task: all implementation completed by archived children (#485, #489, #490).
+- Architect confirmed: pass through to builder.
+
+[[2026-04-03]] Fri 02:13
+## Builder Notes - Non-implementation task -- no code changes needed. Umbrella task: all implementation completed by archived children (#485, #489, #490). Passing through to review.
+
+[[2026-04-03]] Fri 05:28
+## Review Evidence
+
+### Test Results
+
+Run: uv run pytest packages/mcp-kanban/tests/test_server.py tests/test_drop_board_context_489.py -q --tb=short
+
+- **60 passed, 2 FAILED**
+- FAILED: 	est_drop_board_context_489.py::TestFromAC_MovePickJsonOutput::test_move_task_passes_json_flag_to_run_kanban
+- FAILED: 	est_drop_board_context_489.py::TestFromAC_MovePickJsonOutput::test_pick_task_passes_json_flag_to_run_kanban
+
+Failure cause: Both tests mock _run_kanban with minimal JSON '{"id": 1}'. The implementation calls KanbanTask.model_validate_json(stdout) which requires 	itle, status, priority, created, updated, class -- all missing from the mock. The function raises ToolError before the assertion is reached.
+
+### Lint Results
+
+Not run -- no changed source files (umbrella pass-through).
+
+### TestFromAC Integrity Check
+
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC_DropBoardContext::test_board_context_not_registered_as_mcp_tool | No change | PRESERVED (passes) |
+| TestFromAC_DropBoardContext::test_board_context_not_in_server_all | No change | PRESERVED (passes) |
+| TestFromAC_DropBoardContext::test_board_context_not_defined_on_server_module | No change | PRESERVED (passes) |
+| TestFromAC_MovePickJsonOutput::test_move_task_passes_json_flag_to_run_kanban | Not modified but FAILS | BROKEN -- mock '{"id": 1}' incomplete for KanbanTask model |
+| TestFromAC_MovePickJsonOutput::test_pick_task_passes_json_flag_to_run_kanban | Not modified but FAILS | BROKEN -- same issue |
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Switch move_task to --json | server.py L284 passes --json; 	est_server.py::test_move_task_success_passes_args PASSES | PASS |
+| Switch pick_task to --json | server.py L375 passes --json; 	est_server.py::test_pick_task_success_passes_args PASSES | PASS |
+| Remove oard_context entirely | Not in __all__, not in server.py; TestFromAC_DropBoardContext 3/3 PASS | PASS |
+| Tests cover move/pick JSON + board_context | 	est_server.py tests pass; but 2 TestFromAC_* tests in 	est_drop_board_context_489.py FAIL | FAIL |
+| Update mcp-kanban SKILL.md | No oard_context reference; move_task/pick_task note JSON return; tool list = 8 | PASS |
+
+### Root Cause
+
+	est_drop_board_context_489.py::TestFromAC_MovePickJsonOutput was written in RED phase with a stub mock '{"id": 1}'. The builder (#489) added KanbanTask.model_validate_json(stdout) to move_task and pick_task, which requires a complete KanbanTask payload. The mock was never updated to provide a valid payload. The tests fail before reaching the --json assertion.
+
+Fix: Replace the mock return in both failing tests with a full _FAKE_TASK_JSON payload (as used in 	est_server.py line 182).
+
+### Verdict: FAIL (confidence .92 that implementation is correct; tests must be fixed)
+
+[[2026-04-03]] Fri 06:26
+## Builder Notes (re-dispatch)
+- Re-dispatch after reviewer FAIL verdict.
+- Root cause per reviewer: incomplete mock in TestFromAC_MovePickJsonOutput.
+- Actual state: test file already has full _FAKE_TASK_JSON with all required fields.
+- All 5 tests in test_drop_board_context_489.py: PASSED (0 failures).
+- Full run: 62 passed (packages/mcp-kanban/tests/test_server.py + test_drop_board_context_489.py).
+- Lint: ruff clean on mcp-kanban + test file.
+- No code changes needed -- umbrella pass-through confirmed.
+
+[[2026-04-03]] Fri 06:48
+## Review Evidence (Cycle 3)\n\n**Reviewer:** reviewer | **Date:** 2026-04-03\n\n### Test Results\nRun: uv run pytest packages/mcp-kanban/tests/test_server.py tests/test_drop_board_context_489.py -q --tb=short\n- **62 passed, 0 failed**\n\n### Lint Results\nRun: uv run ruff check packages/mcp-kanban/\n- All checks passed!\n\n### TestFromAC Integrity Check\n\n| Original Test | Change Made | Assessment |\n|---|---|---|\n| TestFromAC_DropBoardContext::test_board_context_not_registered_as_mcp_tool | No change | PRESERVED |\n| TestFromAC_DropBoardContext::test_board_context_not_in_server_all | No change | PRESERVED |\n| TestFromAC_DropBoardContext::test_board_context_not_defined_on_server_module | No change | PRESERVED |\n| TestFromAC_MovePickJsonOutput::test_move_task_passes_json_flag_to_run_kanban | No change -- PASSES in Cycle 3 | PRESERVED |\n| TestFromAC_MovePickJsonOutput::test_pick_task_passes_json_flag_to_run_kanban | No change -- PASSES in Cycle 3 | PRESERVED |\n\nRoot diagnosis of Cycle 1 FAIL: _FAKE_TASK_JSON already had all required fields in the committed test file. Cycle 1 reviewer appears to have tested against a pre-commit (RED phase) snapshot. Cycle 3 confirms implementation was correct.\n\n### AC Compliance\n\n| AC Line | Evidence | Status |\n|---|---|---|\n| Switch move_task to --json | server.py passes '--json' to _run_kanban; test_server.py::test_move_task_success_passes_args PASSES | PASS |\n| Switch pick_task to --json | server.py appends '--json' before _run_kanban call; test PASSES | PASS |\n| Remove board_context entirely | Not in __all__ (lines 22-38); hasattr check fails; 3 TestFromAC tests PASS | PASS |\n| Tests cover move/pick JSON + board_context | 62 tests pass across test_server.py and test_drop_board_context_489.py | PASS |\n| Update mcp-kanban SKILL.md | No board_context reference; move_task row: 'returns JSON task object'; pick_task row: 'returns JSON task object'; tool count 8 (correct) | PASS |\n\n### Security Review\nNo changed source files. No new dependencies. Existing server.py: no hardcoded credentials, no SQL, no shell=True, no eval/exec, no user-controlled path traversal. Input validation delegated to kanban-md binary (consistent with all other tools).\n\n### Verdict: PASS (confidence .93)\n\nAll 5 AC items verified with specific line/test evidence. All TestFromAC tests preserved. 62 tests pass.
+
+[[2026-04-03]] Fri 06:51
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | .github/copilot-instructions.md | No | N/A | MCP Server Conventions section accurate; move/pick JSON return is impl detail, not convention-level; board_context never listed in copilot-instructions.md |
+| 2 | Docstrings | Yes | Pass | move_task: 'Move a task to the specified status column.' (server.py L281); pick_task: 'Pick the next available unclaimed task matching the given filters.' (server.py L362) -- both accurate |
+| 3 | docs/sources/overview.md | No | N/A | Pattern mirrors existing show_task --json (internal pattern, no external source) |
+| 4 | README.md | No | N/A | MCP tool changes, not CLI command changes |
+| 5 | Research doc | Yes | Pass | docs/research/move-pick-json-remove-board-context.md exists and linked in task body |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/477-* files found)

@@ -4,7 +4,7 @@ title: Add TypedDict return types for outputSchema specificity on mcp-knowledge
 status: archived
 priority: important
 created: 2026-04-02T06:16:15.54793+02:00
-updated: 2026-04-03T04:33:02.4322271+02:00
+updated: 2026-04-03T04:34:33.2302585+02:00
 started: 2026-04-03T04:33:01.76317+02:00
 completed: 2026-04-03T04:33:01.76317+02:00
 tags:
@@ -162,3 +162,9 @@ AC was specific and testable. Minor gap: error-path convention (ToolError vs str
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-04-03]] Fri 04:34
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2724915 | chore | kanban/tasks/541-*, activity.jsonl | #541 |

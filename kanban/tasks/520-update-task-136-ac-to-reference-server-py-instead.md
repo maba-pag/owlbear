@@ -4,7 +4,7 @@ title: 'Update task #136 AC to reference server.py instead of tools.py'
 status: archived
 priority: nice-to-have
 created: 2026-04-01T15:04:50.8907765+02:00
-updated: 2026-04-03T04:46:01.4759446+02:00
+updated: 2026-04-03T04:47:29.6721631+02:00
 started: 2026-04-03T04:45:48.5311726+02:00
 completed: 2026-04-03T04:45:48.5311726+02:00
 tags:
@@ -152,3 +152,9 @@ No docs impact. Pure kanban-metadata task: updated #136 body and frontmatter onl
 ### Notes
 - #370 remains as a blocked duplicate in ideation (planner cleanup item)
 - Builder omitted Builder Notes section (reviewer observation); deliverables independently verified
+
+[[2026-04-03]] Fri 04:47
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 36f3cd6 | chore | kanban/tasks/520,136,370 + activity.jsonl | #520 |

@@ -4,7 +4,7 @@ title: Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge
 status: archived
 priority: nice-to-have
 created: 2026-03-30T16:48:43.7634243+02:00
-updated: 2026-04-03T02:59:31.7538538+02:00
+updated: 2026-04-03T03:00:20.7452595+02:00
 started: 2026-03-30T20:46:51.7457455+02:00
 completed: 2026-04-03T02:59:31.2170606+02:00
 tags:
@@ -202,3 +202,13 @@ All 4 AC lines verified with evidence. The single FAIL from round 1 (AC3 stale i
 
 ### Scratch Files Cleaned
 - None (no scratch files found for #223)
+
+[[2026-04-03]] Fri 03:00
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c91c63f | test | tests/test_cleanup_tools_223.py | #223 |
+| 2ad91cd | chore | deleted tools.py, test_search_knowledge.py | #223 |
+| 7cefe9c | chore | deleted tools.py, fixed test_bookmark_pipeline_136.py | #223 |
+| 4981614 | docs | docs/research/search-knowledge-tool-impl.md | #223 |
+| b9457a6 | chore | kanban/tasks/223-*.md | #223 |

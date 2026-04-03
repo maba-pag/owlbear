@@ -4,7 +4,7 @@ title: Knowledge package integration + hybrid search
 status: archived
 priority: needed
 created: 2026-03-26T18:33:53.2231299+01:00
-updated: 2026-04-03T05:51:27.5663344+02:00
+updated: 2026-04-03T05:52:18.0962646+02:00
 started: 2026-04-03T05:45:49.2075379+02:00
 completed: 2026-04-03T05:45:49.2075379+02:00
 tags:
@@ -224,3 +224,9 @@ All 12 AC lines verified with evidence: PASS
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-04-03]] Fri 05:52
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 58c85bb | chore | 034-knowledge-package-integration-hybrid-search.md | #34 |

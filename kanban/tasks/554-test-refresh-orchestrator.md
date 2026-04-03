@@ -4,7 +4,7 @@ title: 'Test: Refresh orchestrator'
 status: archived
 priority: nice-to-have
 created: 2026-04-02T16:07:01.483946+02:00
-updated: 2026-04-03T06:16:00.5439991+02:00
+updated: 2026-04-03T06:16:37.0375376+02:00
 started: 2026-04-03T06:15:47.3639693+02:00
 completed: 2026-04-03T06:15:47.3639693+02:00
 tags:
@@ -318,3 +318,8 @@ Most critical: gap 3 (security path) and gap 4 (CRAWL mutation blind spot -- ski
 
 ### Scratch Files Cleaned
 - Deleted docs/scratch/554-cov.txt.err
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 0e9dbca | chore | kanban/tasks/554-test-refresh-orchestrator.md | #554 |

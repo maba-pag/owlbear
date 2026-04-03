@@ -1,15 +1,17 @@
 ---
 id: 209
 title: Add stop commit guard hooks to builder and writer agents (Phase 1)
-status: backlog
+status: ideation
 priority: nice-to-have
 created: 2026-03-30T08:52:09.122925+02:00
-updated: 2026-03-30T20:47:08.237953+02:00
+updated: 2026-04-02T23:50:29.1503276+02:00
 tags:
     - phase-1
     - scope:agents
     - hooks
     - type:build
+blocked: true
+block_reason: 'Premise invalidated: blocking model deadlocks in parallel dispatch, systemMessage empirically does not reach subagent models, no viable alternative. Research recommends archive. See stop-hook-multi-agent-viability.md.'
 class: standard
 ---
 

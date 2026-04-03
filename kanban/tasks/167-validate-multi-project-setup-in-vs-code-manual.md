@@ -4,7 +4,7 @@ title: Validate multi-project setup in VS Code (manual)
 status: in-progress
 priority: important
 created: 2026-03-29T19:49:30.9245641+02:00
-updated: 2026-03-31T07:37:48.0225492+02:00
+updated: 2026-04-03T00:48:10.4096424+02:00
 tags:
     - phase-2
     - scope:build
@@ -12,6 +12,8 @@ tags:
     - rigor:lean
 depends_on:
     - 18
+blocked: true
+block_reason: 'Action request pending: docs/decisions/pending/167-manual-vscode-validation.md - 5 AC items require VS Code UI interaction (AC2, AC3, AC4, AC6, AC8, AC9)'
 class: standard
 ---
 
@@ -164,3 +166,17 @@ Human executor must: (1) create test-project/ sibling directory, (2) execute all
 - settings.json correctness: chat.agentFilesLocations, chat.agentSkillsLocations, chat.instructionsFilesLocations all pointing to ../owlbear
 - mcp.json correctness: all 4 servers (github, owlbearKanban, owlbearKnowledge, owlbearProject) configured
 - REMAINING (requires VS Code UI - human must complete): AC2 (agent picker), AC3 (skills menu), AC4 (Diagnostics view), AC6 (References section), AC8 (no agent shadowing), AC9 (cleanup after verification)
+
+[[2026-04-03]] Fri 00:03
+## Builder Notes (session 4)
+- Files changed: docs/decisions/pending/167-manual-vscode-validation.md (action request)
+- AC1 PASS: test-project/ recreated at C:\Users\p362329\Coding\Projects\test-project - setup.py output: 'OwlBear workspace setup complete for test-project'. settings.json maps agents/skills/instructions all to ../owlbear. mcp.json has 4 servers.
+- AC5 PASS: owlbear-kanban MCP confirmed operational this session
+- AC7 PASS: test-project/.github/agents/test-agent.agent.md created with correct frontmatter
+- REMAINING: AC2 (agent picker), AC3 (skills menu), AC4 (Diagnostics view), AC6 (References section), AC8 (no shadowing), AC9 (cleanup) - all require VS Code UI
+- ACTION REQUEST: docs/decisions/pending/167-manual-vscode-validation.md created
+
+[[2026-04-03]] Fri 00:48
+## Action Completed
+User notes: All AC (2,3,4,6,8,9) tested successfully.
+Source: docs/decisions/resolved/167-manual-vs-code-validation.md

@@ -4,7 +4,7 @@ title: 'Test: Voice process manager'
 status: archived
 priority: nice-to-have
 created: 2026-03-29T15:39:36.7418317+02:00
-updated: 2026-04-03T02:45:01.9019163+02:00
+updated: 2026-04-03T02:47:24.7015227+02:00
 started: 2026-04-03T02:44:48.7370316+02:00
 completed: 2026-04-03T02:44:48.7370316+02:00
 tags:
@@ -326,3 +326,10 @@ test-writer strengthened test_aenter_raises_voice_init_timeout but did not commi
 No deductions. All AC verified, lint clean, AC quality 5, reviewer evidence thorough, no task-scope failures.
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-04-03]] Fri 02:47
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8c857af | test | tests/test_voice_process_manager.py | #141 |
+| 569a9bf | chore | kanban/tasks/141-*.md | #141 |

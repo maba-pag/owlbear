@@ -4,7 +4,7 @@ title: Extract bookmark pipeline orchestrator
 status: archived
 priority: nice-to-have
 created: 2026-04-02T16:06:30.3206592+02:00
-updated: 2026-04-03T06:06:43.4756959+02:00
+updated: 2026-04-03T06:07:12.0429423+02:00
 started: 2026-04-03T06:06:30.0290749+02:00
 completed: 2026-04-03T06:06:30.0290749+02:00
 tags:
@@ -165,3 +165,6 @@ Score: 5/5. AC was exceptionally precise: exact signatures, field mappings, stag
 - Missing Review Evidence section in task body: -.02
 ### Confidence: .98
 ### Action: archive
+
+## Commits
+eb3b39e chore: archive task #553 (kanban board files)

@@ -4,7 +4,7 @@ title: 'Test: Bookmark pipeline orchestrator'
 status: archived
 priority: nice-to-have
 created: 2026-04-02T16:06:05.0798824+02:00
-updated: 2026-04-03T03:10:11.7239837+02:00
+updated: 2026-04-03T03:11:07.4616741+02:00
 started: 2026-04-03T03:10:11.2070438+02:00
 completed: 2026-04-03T03:10:11.2070438+02:00
 tags:
@@ -145,3 +145,11 @@ See docs/scratch/552-reviewer.md for full evidence.
 - -.02: reviewer evidence file (docs/scratch/552-reviewer.md) missing (deleted by writer during docs gate but still referenced in task body)
 ### Confidence: .98
 ### Action: archive
+
+[[2026-04-03]] Fri 03:11
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d85d884 | test | tests/test_bookmark_pipeline.py | #552 |
+| 2523262 | feat | packages/knowledge/src/owlbear_knowledge/bookmark_pipeline.py | #552 |
+| e973395 | chore | kanban/tasks/552-*.md | #552 |

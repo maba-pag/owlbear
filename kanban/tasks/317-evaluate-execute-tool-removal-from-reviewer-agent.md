@@ -4,7 +4,7 @@ title: Evaluate execute/* tool removal from reviewer agent
 status: archived
 priority: nice-to-have
 created: 2026-03-30T20:32:19.1638978+02:00
-updated: 2026-04-03T03:40:22.3388594+02:00
+updated: 2026-04-03T03:41:06.268215+02:00
 started: 2026-04-03T03:40:11.9101151+02:00
 completed: 2026-04-03T03:40:11.9101151+02:00
 tags:
@@ -134,3 +134,9 @@ Score: 4/5 â€” Implicit research AC correctly identified by architect. Thor
 - -.02 Missing reviewer evidence section (no Review Evidence in task body)
 ### Confidence: .98
 ### Action: archive
+
+[[2026-04-03]] Fri 03:41
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b2b895f | chore | kanban/tasks/317-*.md | #317 |

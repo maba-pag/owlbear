@@ -4,7 +4,7 @@ title: 'Test: Extract CancelSignal and sandbox_path'
 status: archived
 priority: someday
 created: 2026-03-29T16:12:59.6641148+02:00
-updated: 2026-04-03T02:11:01.7943742+02:00
+updated: 2026-04-03T02:11:58.7132586+02:00
 started: 2026-04-03T02:10:43.0453515+02:00
 completed: 2026-04-03T02:10:43.0453515+02:00
 tags:
@@ -127,3 +127,9 @@ AC was specific, complete, and mapped directly to verifiable test cases. Archite
 
 ### Confidence: .98
 ### Action: archive
+
+[[2026-04-03]] Fri 02:11
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 065c8e6 | chore | kanban/tasks/143-*.md | #143 |

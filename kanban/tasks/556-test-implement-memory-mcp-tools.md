@@ -4,7 +4,7 @@ title: 'Test: Implement memory-mcp tools'
 status: archived
 priority: needed
 created: 2026-04-02T16:34:22.2953439+02:00
-updated: 2026-04-03T01:05:48.8421313+02:00
+updated: 2026-04-03T01:06:37.0266206+02:00
 started: 2026-04-03T01:05:38.6400589+02:00
 completed: 2026-04-03T01:05:38.6400589+02:00
 tags:
@@ -132,3 +132,9 @@ AC was specific (18 testable items), complete (edge cases included), and led to 
 
 ### Confidence: 0.98
 ### Action: archive
+
+[[2026-04-03]] Fri 01:06
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d813d56 | chore | kanban/tasks/556-*.md | #556 |

@@ -1,16 +1,18 @@
 ---
 id: 26
 title: Slack notification integration
-status: backlog
+status: ideation
 priority: nice-to-have
 created: 2026-03-26T17:23:41.5689417+01:00
-updated: 2026-03-30T20:42:56.140287+02:00
+updated: 2026-04-02T23:35:00.3691204+02:00
 tags:
     - phase-3
     - scope:notifications
     - type:build
 depends_on:
     - 21
+blocked: true
+block_reason: 'Feature deferred per user decision (DR 514): no Slack available, Teams not possible'
 class: standard
 ---
 

@@ -4,7 +4,7 @@ title: Add dep/parent/title params to edit_task, switch to JSON output
 status: archived
 priority: needed
 created: 2026-03-31T06:06:19.0737281+02:00
-updated: 2026-04-03T04:11:29.6916861+02:00
+updated: 2026-04-03T04:12:30.9960494+02:00
 started: 2026-04-03T04:11:19.4718226+02:00
 completed: 2026-04-03T04:11:19.4718226+02:00
 tags:
@@ -223,3 +223,9 @@ Specific, complete, led to clean implementation. Challenger gaps incorporated.
 ### Deduction breakdown: none
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-04-03]] Fri 04:12
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c2b2ed8 | chore | kanban/tasks/476-*.md | #476 |

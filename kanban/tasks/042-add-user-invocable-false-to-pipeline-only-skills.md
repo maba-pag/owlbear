@@ -4,7 +4,7 @@ title: 'Add user-invocable: false to pipeline-only skills'
 status: archived
 priority: important
 created: 2026-03-26T18:55:38.450539+01:00
-updated: 2026-03-30T00:29:28.5565332+02:00
+updated: 2026-04-02T22:57:59.7079864+02:00
 started: 2026-03-30T00:29:06.0548815+02:00
 completed: 2026-03-30T00:29:06.0548815+02:00
 tags:
@@ -311,3 +311,15 @@ AC 1 and AC 2 were clear and verifiable. AC 3 was slightly ambiguous (manual UI 
 | Commit | Type | Files | Tasks |
 |--------|------|-------|-------|
 | 666b4ca | docs | docs/decisions/resolved/42-ac3-slash-command-menu-verification.md | #42 |
+
+[[2026-04-02]] Thu 22:57
+## Decision Resolved
+Chosen: A: Accept frontmatter-inference test as sufficient for AC 3
+User notes: 
+Source: docs/decisions/resolved/42-ac3-slash-command-menu-verification.md
+
+[[2026-04-02]] Thu 22:57
+## Decision Resolved
+Chosen: A: Accept frontmatter-inference test as sufficient for AC 3
+User notes: 
+Source: docs/decisions/resolved/42-ac3-slash-command-menu-verification.md

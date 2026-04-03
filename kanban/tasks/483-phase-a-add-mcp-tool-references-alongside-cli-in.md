@@ -4,7 +4,7 @@ title: 'Phase A: Add MCP tool references alongside CLI in all agents and skills'
 status: ideation
 priority: needed
 created: 2026-03-31T06:20:39.2789758+02:00
-updated: 2026-03-31T06:20:39.2789758+02:00
+updated: 2026-04-03T07:07:39.1803408+02:00
 tags:
     - scope:mcp
     - ' scope:agents'
@@ -18,6 +18,8 @@ depends_on:
     - 475
     - 476
     - 477
+claimed_by: researcher
+claimed_at: 2026-04-03T07:07:39.1786955+02:00
 class: standard
 ---
 
