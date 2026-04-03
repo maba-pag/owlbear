@@ -274,14 +274,34 @@ class TestFromAC_InitHandshake:  # noqa: N801
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_aenter_raises_voice_init_timeout(self) -> None:
-        """If ready message never arrives within init_timeout, VoiceInitTimeout is raised."""
+        """VoiceInitTimeout is raised when asyncio.wait_for fires during handshake.
+
+        Strengthened past LAX version: verifies wait_for is actually called with
+        init_timeout — not just that VoiceInitTimeout propagates via EOF.
+
+        Fails on current HEAD because _spawn_and_handshake uses bare readline()
+        with no asyncio.wait_for, so recorded_timeouts stays empty.
+        """
         proc = _make_proc(lines=[])  # no ready message
-        # Patch wait_for to simulate timeout
+        recorded_timeouts: list[float] = []
+
+        async def _timed_out_wait_for(_coro: Any, *, timeout: float, **_kw: Any) -> Any:  # noqa: ASYNC109
+            recorded_timeouts.append(timeout)
+            raise TimeoutError  # simulate timeout expiry
+
         with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError
+            f"{_MODULE}.asyncio.wait_for", new=_timed_out_wait_for
         ), pytest.raises(VoiceInitTimeout):
-            async with VoiceProcessManager(_COMMAND, init_timeout=0.01):
+            async with VoiceProcessManager(_COMMAND, init_timeout=0.5):
                 pass
+
+        # wait_for must have been called with the init_timeout value during handshake.
+        # On current HEAD this assertion fails because wait_for is never called —
+        # VoiceInitTimeout was raised via EOF, not via the timeout mechanism.
+        assert 0.5 in recorded_timeouts, (
+            f"asyncio.wait_for must be called with timeout=init_timeout (0.5) "
+            f"during _spawn_and_handshake; recorded timeouts: {recorded_timeouts}"
+        )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_non_ready_messages_queued_during_handshake(self) -> None:
