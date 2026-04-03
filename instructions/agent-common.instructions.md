@@ -62,19 +62,7 @@ See the `decision-requests` skill for full T3 trigger list and file format.
 
 #### Decision requests — when you need the user to choose
 
-Use when there are multiple valid options and no clear winner. The user picks an option, sets `approved: true`, and the task unblocks automatically.
-
-**Per-role triggers — when to create a decision request:**
-
-| Agent      | Trigger                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------- |
-| Researcher | T3 outcome per research classification (mandatory blocking DR, no auto-resolve); T2 outcome with no clear winner (advisory DR) |
-| Architect  | T3-origin task without an approved decision request; scope decision affecting downstream tasks (T2/T3) |
-| Builder    | T3 design fork with product implications (not just a technical choice)                              |
-| Reviewer   | Quality concern is preference-based, not objectively wrong; the correct standard is ambiguous       |
-| Writer     | Documentation structure decision has no clear right answer                                          |
-| Curator    | Conflicting findings between reviewed lessons; finding where disposition depends on user preference |
-| Any agent  | Scope or priority decision that affects multiple downstream tasks                                   |
+Use when there are multiple valid options and no clear winner. The user picks an option, sets `approved: true`, and the task unblocks automatically. Each agent's `critical_rules` define its specific DR triggers — see the `decision-requests` skill for the full file format and resolution workflow.
 
 If in doubt, create the decision request — the cost of an unnecessary request is far lower than the cost of guessing wrong on a product decision.
 
@@ -82,16 +70,7 @@ If in doubt, create the decision request — the cost of an unnecessary request 
 
 #### Action requests — when you need the user to do something
 
-Use when you need the user to perform a physical action before the task can continue. The user completes the action, sets `completed: true`, and the task unblocks automatically.
-
-**Per-role triggers — when to create an action request:**
-
-| Agent     | Trigger                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------ |
-| Builder   | Manual testing or GUI verification required to confirm implementation is correct           |
-| Builder   | Credential or API key setup needed before integration tests can run                        |
-| Any agent | External service configuration or account access required to proceed                       |
-| Any agent | Push, release, or deployment action that only the user can perform                         |
+Use when you need the user to perform a physical action (manual testing, credential setup, deployments) before the task can continue. The user completes the action, sets `completed: true`, and the task unblocks automatically.
 
 ### Blocking convention
 
@@ -118,14 +97,7 @@ type: description (#task-id, agent-role)
 
 **Types:** `feat` (new feature), `fix` (bug fix), `test` (test additions/changes), `docs` (documentation), `chore` (tooling, deps, config), `refactor` (code restructure, no behavior change).
 
-**Examples:**
-
-```
-test: add failing tests for retry logic (#480, test-writer)
-feat: implement retry logic (#480, builder)
-docs: add retry module docstrings (#480, writer)
-chore: archive tasks #478 #479 #480 (#480, auditor)
-```
+**Example:** `feat: implement retry logic (#480, builder)`
 
 ### Who commits what
 
@@ -146,22 +118,12 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 
 ## Resolved decision pre-flight
 
-Before starting work on any task, check whether the task was previously blocked by a decision or action request. This ensures user feedback reaches the agent that needs it.
+Before starting work on any task, check whether the task was previously blocked by a decision or action request.
 
-1. **Check the task body** (from `kanban-md show`) for `## Decision Resolved` or `## Action Completed` sections. If present, read the chosen option and user notes — these are binding constraints on your work.
-2. **If no summary in the body** (legacy tasks resolved before this rule existed), call the **scribe** agent in query mode to check for existing DRs:
-   ```
-   runSubagent("scribe", "Scribe: task_id={id}, mode=query, agent={your_name}", "Query DRs for #{id}")
-   ```
-   If the scribe returns resolved DRs with user notes, treat those notes as binding constraints.
-3. **Treat user notes as hard requirements.** If the user's notes contradict part of the AC or narrow the approach, adjust your implementation accordingly. If the notes make the current AC infeasible, update the task body with the conflict and block for clarification.
-4. **To create a new decision or action request**, always use the scribe agent — never write DR files directly:
-   ```
-   runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, request_type={decision|action}, agent={your_name}, concern={what_you_need}", "Check/create DR for #{id}")
-   ```
-   The scribe checks for existing DRs that cover the same concern and either returns the existing answer or creates a new request. This prevents duplicate DRs.
-
-This pre-flight applies to ALL agents — builder, researcher, architect, test-writer, reviewer, writer, auditor.
+1. **Check the task body** (from `kanban-md show`) for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints on your work.
+2. **If no summary in the body**, call the scribe agent in query mode to check for existing DRs. If resolved DRs exist, treat the user's notes as binding constraints.
+3. **If user notes contradict the AC** or narrow the approach, adjust accordingly. If they make the AC infeasible, block for clarification.
+4. **To create or check DRs**, always use the scribe agent — never write to `docs/decisions/` directly. See the `decision-requests` skill for the exact invocation.
 
 ## Evidence over claims
 
@@ -181,25 +143,7 @@ Three-step protocol for all tool failures:
 2. **Diagnose** — Identify the root cause before retrying (wrong path? missing file? bad syntax? permission issue? tool not loaded?).
 3. **Adapt** — Choose an alternative approach based on the tool type (see table below).
 
-### Recovery by tool type
-
-| Tool type | Common failures | Recovery action |
-|-----------|----------------|-----------------|
-| Terminal commands (`git`, `pytest`, `kanban-md`, `uv`) | Bad flags, missing deps, non-zero exit code | Re-read skill for correct syntax; fix the specific input; do not vary flags blindly |
-| File operations (`read_file`, `create_file`, `replace_string_in_file`) | File not found, wrong path, `oldString` match failure | Verify path with `file_search` or `list_dir`; for edits, confirm exact whitespace/indentation match |
-| Search tools (`grep_search`, `semantic_search`, `file_search`) | No results, overly narrow pattern | Broaden query; try an alternative search tool; use regex alternation (`word1\|word2`) |
-| MCP tools (`kanban`, `knowledge`) | Tool not found, connection error, invalid args | Verify tool is loaded via `tool_search_tool_regex`; check arg names and formats against tool description |
-
 For retry counts and escalation tiers, see **Loop detection and retry discipline** below.
-
-### Structured error context for handoff
-
-When a tool failure requires escalating (blocking, handing off, or writing to Channel B), record:
-
-- **Tool name and inputs** — exact tool and the arguments that were passed
-- **Error message** — abbreviated text of the error (not a raw dump)
-- **Alternatives attempted** — what other approaches were tried and why they failed
-- **Likely root cause** — your best diagnosis of what is actually broken
 
 ## Self-defense against orchestrator degradation
 
@@ -252,77 +196,18 @@ Before completing your work (before the final kanban status move), every agent w
 - `time_sinks` — what took longer than expected and why (so others can avoid it)
 - `quality_gaps` — issues found in upstream work (vague AC, weak tests, missing deps)
 
-**Format:** Write to repo memory inbox using the memory tool:
-
-```
-memory create /memories/repo/inbox/{task-id}-{agent}.md
-```
-
-Content: agent name, task ID, date, then bullet points. Example:
-
-```markdown
-# Lessons: #{task-id} ({agent-name}, {date})
-
-- problems_faced: Coverage command failed with --cov=module.path — MRO crash
-- workarounds_applied: Used bare --cov per python.instructions.md
-- time_sinks: 3 retries before reading the instruction file
-```
-
-**Keep it brief.** If nothing notable happened, skip the entry entirely. Don't fabricate lessons for the sake of having them.
-
-## Common red flags — STOP and reassess
-
-These apply to ALL agents:
-
-- You are retrying the same command with different flag variations (max 2 retries — see Loop detection and retry discipline below)
-- You are about to work on a second task in the same invocation
-- You are trusting another agent's self-report without your own evidence
-- You are about to produce output without running tests/lint yourself (when applicable)
-- You are about to skip a step because "it's obvious"
-- You hit a decision point with multiple valid options but are about to proceed without user input — create a decision request (see defer-to-user triggers above)
+**Format:** `memory create /memories/repo/inbox/{task-id}-{agent}.md` — content is agent name, task ID, date, then bullet points. Keep it brief. If nothing notable happened, skip the entry entirely.
 
 ## Tool and terminal discipline
 
-Built-in tools are the primary interface for workspace interaction. They handle encoding, output capture, and environment context reliably. Terminal is for operations that genuinely require it: `git`, `kanban-md`, and Python tool invocations via `uv run`.
+Built-in tools (read_file, grep_search, semantic_search, file_search) are primary for workspace interaction. Terminal is for: `git`, `kanban-md`, and Python invocations via `uv run`.
 
-### Use built-in tools for workspace interaction
-
-`read_file` is the primary tool for reading file contents — source code, configuration, skill files, test files.
-
-`grep_search` and `semantic_search` are the primary tools for finding content across files. They index the workspace and return precise matches.
-
-Terminal file-reading commands (`Get-Content`, `type`, `cat`) and search commands (`Select-String`, `findstr`) are redundant when these tools are available.
-
-### Use `uv run` for all Python tool invocations
-
-`uv run` is the standard prefix for pytest, ruff, coverage, and Python scripts.
-
-```powershell
-uv run pytest tests/test_module.py -q --tb=short
-uv run ruff check src/ tests/
-```
-
-### Run terminal commands plain
-
-The terminal tool captures stdout and stderr automatically (60 KB limit). Commands run plain without output redirection or piping. The `pytest-and-linting` skill documents the full output-handling approach and file-capture fallback for truncated output.
-
-### Load referenced skills before running their commands
-
-Skills define exact command syntax, flags, and known pitfalls. When a workflow step references a skill (e.g., "See the `pytest-and-linting` skill"), load it with `read_file` before running any commands from that step. Exact flags matter — commands reproduced from memory drift.
-
-### Cache task context
-
-Read kanban task details once with `kanban-md show` at the start of your workflow. Reference that output for subsequent steps — the task doesn't change while you're working on it.
-
-### Terminal command mechanics
-
-These rules apply to all terminal usage:
-
-- **First-call discipline.** Get the invocation right the first time. Load the relevant skill first if unsure of the exact syntax.
-- **No brute-force retries.** If a command fails, read the error and diagnose before retrying. See Loop detection and retry discipline below for tier-based escalation limits.
-- **No Write-Host fencing.** The terminal tool reports exit codes automatically. Don't wrap commands in `Write-Host` markers.
+- **`uv run`** for all Python tool invocations (pytest, ruff, coverage, scripts).
+- **Load referenced skills** before running their commands — exact flags matter, commands reproduced from memory drift.
+- **Cache task context** — read `kanban-md show` once at the start, reference it for subsequent steps.
 - **Chain with `;`** — never `&&` (PowerShell 5.1).
-- **Command decomposition.** Break complex multi-step operations into separate terminal calls rather than long chained pipelines. Each call is independently reviewable and reduces approval friction. Use `;`-chaining for closely related commands within one logical operation (e.g., `cd dir ; run cmd`), but separate distinct logical steps into their own calls.
+- **Break complex operations** into separate terminal calls rather than long chained pipelines.
+- **No Write-Host fencing** — the terminal tool reports exit codes automatically.
 
 ## Loop detection and retry discipline
 

@@ -59,8 +59,6 @@ Returns: `dict[str, int]` — `{"documents": int, "entities": int, "edges": int}
 > Available to any agent or VS Code chat participant that needs knowledge-base
 > operations.
 
-Operate the hybrid knowledge base (SQLite graph + Qdrant vectors).
-
 ## Rules
 
 - Always set `scope` to `project:{id}` when a project is active; use `global` otherwise.
@@ -71,77 +69,19 @@ Operate the hybrid knowledge base (SQLite graph + Qdrant vectors).
 
 ## Decision Tree
 
-| I want to… | Tool | Toolset |
+| I want to… | MCP tool | Notes |
 |---|---|---|
-| Search the knowledge base | `query_knowledge` | knowledge |
-| Ingest raw text | `ingest_document` (doc_type=`text`) | knowledge |
-| Ingest a local file | `ingest_document` (doc_type=`file`) | knowledge |
-| Ingest from a URL | `ingest_document` (doc_type=`url`) | knowledge |
-| List ingested documents | `list_knowledge_sources` | knowledge |
-| Register a new source | `add_source` | knowledge_source |
-| List registered sources | `list_sources` | knowledge_source |
-| Trigger a source refresh | `refresh_source` | knowledge_source |
-| Evaluate + bookmark a URL | `bookmark_source` | bookmark |
-| List saved bookmarks | `list_bookmarks` | bookmark |
+| Search the knowledge base | `search_knowledge` | PydanticAI: `query_knowledge` (param `top_k` instead of `limit`) |
+| Ingest text/file/URL | `ingest_document` | PydanticAI: adds `doc_type` param (`text`/`file`/`url`) and `source` instead of `text` |
+| List entities in graph | `list_entities` | MCP only — filter by `entity_type`, supports pagination |
+| List registered sources | `list_sources` | Same in both interfaces |
+| Get KB statistics | `get_stats` | Also available as resource `knowledge://stats` |
+| Register a recurring source | — | PydanticAI only: `add_source` (knowledge_source toolset) |
+| Trigger source refresh | — | PydanticAI only: `refresh_source` (knowledge_source toolset) |
+| Evaluate + bookmark a URL | — | PydanticAI only: `bookmark_source` (bookmark toolset) |
+| List saved bookmarks | — | PydanticAI only: `list_bookmarks` (bookmark toolset) |
 
-## Tool Reference
-
-### knowledge toolset
-
-**query_knowledge** — Search for relevant information.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `query` | str | required | Natural-language search query |
-| `top_k` | int | 5 | Max results to return |
-
-**ingest_document** — Add a document to the knowledge base.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `source` | str | required | Text content, workspace-relative path, or URL |
-| `doc_type` | str | `text` | `text`, `file`, or `url` |
-
-**list_knowledge_sources** — List all ingested documents. No parameters.
-
-### knowledge_source toolset
-
-**add_source** — Register a recurring knowledge source.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `name` | str | required | Human-readable source name |
-| `source_type` | str | required | `url_list`, `crawl`, or `file_glob` |
-| `config_json` | str | required | JSON string with source config |
-| `scope` | str | `global` | `global` or `project:{id}` |
-
-**list_sources** — List registered sources.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `scope` | str | None | Filter by scope; omit for all |
-
-**refresh_source** — Re-fetch and ingest content from a source.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `name` | str | required | Name of the source to refresh |
-
-### bookmark toolset
-
-**bookmark_source** — Evaluate a URL for relevance and save as bookmark.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `url` | str | required | URL to evaluate |
-| `reason` | str | None | Optional reason for bookmarking |
-
-**list_bookmarks** — List saved bookmarks.
-
-| Param | Type | Default | Notes |
-|---|---|---|---|
-| `tag` | str | None | Filter by tag |
-| `min_score` | float | None | Minimum relevance score |
+MCP tools are the primary interface (VS Code agents). PydanticAI toolsets (KnowledgeToolset, KnowledgeSourceToolset, BookmarkToolset) are the runtime interface — see the MCP Tool Reference above for shared parameter details.
 
 ## Scope Conventions
 

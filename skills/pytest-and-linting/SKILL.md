@@ -48,36 +48,14 @@ async def test_something():
 
 `norecursedirs = ["v1"]` in `pyproject.toml` excludes the `v1/` directory from test discovery. Tests under `v1/` are never collected or run — this is intentional to keep the legacy codebase isolated.
 
-The terminal tool captures stdout + stderr automatically (60 KB limit).
-No piping needed.
-
 ## NEVER pipe `uv run` output through PowerShell cmdlets
 
+The terminal tool captures stdout + stderr automatically (60 KB limit). No piping needed.
+
 PS 5.1 wraps stderr from `2>&1` in ErrorRecord objects. Every pipe combination
-corrupts, truncates, or drops output. **All of these break — no exceptions:**
-
-```powershell
-# BAD — Out-File uses UTF-16LE, mangles output
-uv run pytest ... 2>&1 | Out-File file.txt
-
-# BAD — Out-String corrupts ErrorRecord objects
-uv run pytest ... 2>&1 | Out-String
-
-# BAD — Select-String drops non-matching lines
-uv run pytest ... 2>&1 | Select-String "passed"
-
-# BAD — Tee-Object has the same pipeline issues
-uv run pytest ... 2>&1 | Tee-Object -Variable out
-
-# BAD — ForEach-Object pipeline corruption
-uv run pytest ... 2>&1 | ForEach-Object { $_ }
-
-# BAD — redirect operator (UTF-16LE)
-uv run pytest ... 2>&1 > file.txt
-
-# BAD — [IO.File] with pipeline subexpression
-[IO.File]::WriteAllText($p, (uv run pytest ... 2>&1 | Out-String), ...)
-```
+corrupts, truncates, or drops output — `Out-File`, `Out-String`, `Select-String`,
+`Tee-Object`, `ForEach-Object`, redirect operators, and `[IO.File]` with pipeline
+subexpressions all break. No exceptions.
 
 **Just run the command plain.** The terminal tool captures everything.
 
@@ -112,7 +90,7 @@ Target >= 90% on touched modules.
 - `--cov=packages/mcp-kanban/src/` — reports 0% (src-layout; use bare `--cov` instead)
 - `coverage run --source=...` — incompatible with pytest-cov config
 
-Only bare `--cov` works. It picks up `[tool.coverage.run] source_pkgs` from `pyproject.toml`, which lists all 7 installed package names: `owlbear`, `owlbear_orchestrator`, `owlbear_knowledge`, `owlbear_mcp_kanban`, `owlbear_mcp_knowledge`, `owlbear_mcp_project`, `owlbear_voice`. Coverage is measured across all of them automatically.
+Only bare `--cov` works. It picks up `[tool.coverage.run] source_pkgs` from `pyproject.toml`, which lists all 8 installed package names: `owlbear`, `owlbear_orchestrator`, `owlbear_knowledge`, `owlbear_mcp_kanban`, `owlbear_mcp_knowledge`, `owlbear_mcp_memory`, `owlbear_mcp_project`, `owlbear_voice`. Coverage is measured across all of them automatically.
 
 ## Known hang: WMI + logfire pydantic plugin on Windows
 

@@ -96,7 +96,7 @@ Each task targets exactly one domain. Multi-domain work → split into separate 
 | bootstrap    | `bootstrap/`, `daemon.py`, `heartbeat.py`                            |
 | providers    | `providers/`, `auth/`                                                |
 | cli          | `bearclaw/`                                                          |
-| agent-config | `.github/agents,skills,instructions,prompts/`, `src/owlbear/agents/` |
+| agent-config | `agents/`, `skills/`, `instructions/`, `.github/copilot-instructions.md` |
 | test-infra   | shared conftest, fixtures, factories (not individual test files)     |
 | docs         | `docs/`, `README.md`, `SECURITY.md`                                  |
 

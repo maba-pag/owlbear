@@ -10,8 +10,8 @@ Each task is a `.md` file in `kanban/tasks/`.
 
 ## Claiming Protocol
 
-See agent-common → **Task coordination** for the full three-phase claiming lifecycle
-(claim → maintain → advance+release), dispatched vs self-selected rules, and crash safety.
+See agent-common → **Task coordination** for concurrency rules (claim before editing,
+one task per agent, never steal/release others' claims).
 
 Key commands:
 
