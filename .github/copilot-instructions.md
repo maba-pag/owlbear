@@ -82,7 +82,14 @@ GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to pre
 
 ## Memory governance
 
-**Built-in memory tool** (`/memories/`) stores agent-centric learning only. This prevents duplication with the general KB and project KB layers.
+OwlBear uses a four-tier memory model:
+
+| Tier | Store | Scope | What goes here |
+|------|-------|-------|----------------|
+| 1 | `/memories/` (user) | Cross-workspace, persistent | User tool patterns, CLI flag recipes, process pitfalls |
+| 2 | `/memories/session/` (session) | Current conversation only | Task-specific context, in-progress notes |
+| 3 | `/memories/repo/inbox/` (legacy inbox) | Repo-scoped, dual-write during migration | Agent lessons-learned written by pipeline agents |
+| 4 | mcp-memory `owlbearMemory` (canonical) | Agent + project scoped, queryable | Agent institutional knowledge — patterns, problems, workarounds |
 
 **User memory** (`/memories/`) — store:
 
@@ -98,7 +105,11 @@ GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to pre
 - Code snippets or implementation details
 - Task-specific context (use session memory — auto-cleared)
 
-**Repo memory** (`/memories/repo/`) follows the built-in `repoMemoryInstructions` constraints. Agents write lessons-learned to `/memories/repo/inbox/` per `agent-common.instructions.md`.
+**mcp-memory** (`owlbearMemory`) is the canonical store for agent institutional knowledge. Agents query it at task start via `get_knowledge` and write to it during post-task reflection via `record_learning`. See `agent-common.instructions.md` → **Institutional knowledge pre-flight** and **Post-task reflection**. See the `mcp-memory` skill for tool reference.
+
+Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge.
+
+**Repo memory inbox** (`/memories/repo/inbox/`) receives dual-write during migration. Not yet deprecated — the curator agent migrates entries from inbox to memory.db.
 
 **Management:** Run `Chat: Show Memory Files` to view stored memories. Delete stale entries with the `memory delete` command. GitHub-hosted Copilot Memory stays disabled — see the paragraph above.
 

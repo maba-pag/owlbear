@@ -118,6 +118,19 @@ type: description (#task-id, agent-role)
 
 > **VS Code auto-staging trap:** VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities (execute/runTask, execute/testFailure, etc.). Any task that writes `.agent.md` frontmatter is at risk of having those edits silently reverted before commit. Always run `git diff --cached agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>` before the final commit.
 
+## Institutional knowledge pre-flight
+
+Before starting work on any task, load relevant accumulated learnings from the memory server.
+
+1. **Call `get_knowledge`** with your agent name:
+   ```
+   get_knowledge(agent_id=<agent_name>, limit=20, min_confidence=0.7)
+   ```
+   - `agent_name` = the `name:` field from your `.agent.md` frontmatter (e.g., `builder`, `reviewer`)
+   - Single call — not per-category
+2. **Apply returned entries** as context for the current task — patterns, pitfalls, workarounds, and behavioral norms accumulated by past agents.
+3. **Graceful degradation** — if the call fails, returns empty, or `owlbear-memory/*` is not in your tool allowlist, proceed normally without error.
+
 ## Resolved decision pre-flight
 
 Before starting work on any task, check whether the task was previously blocked by a decision or action request.
@@ -198,7 +211,25 @@ Before completing your work (before the final kanban status move), every agent w
 - `time_sinks` — what took longer than expected and why (so others can avoid it)
 - `quality_gaps` — issues found in upstream work (vague AC, weak tests, missing deps)
 
-**Format:** `memory create /memories/repo/inbox/{task-id}-{agent}.md` — content is agent name, task ID, date, then bullet points. Keep it brief. If nothing notable happened, skip the entry entirely.
+**Dual-write format (during migration):**
+
+1. **`record_learning` call (canonical):** one call per notable finding:
+   - `agent_id=<agent_name>`, `scope_agent=<agent_name>`, `confidence=0.8`
+   - Category mapping:
+
+   | Bullet type | MCP category |
+   |-------------|-------------|
+   | `problems_faced` | `knowledge` |
+   | `workarounds_applied` | `knowledge` |
+   | `patterns_discovered` | `behavior` |
+   | `time_sinks` | `context` |
+   | `quality_gaps` | `context` |
+
+   - Error handling: if `record_learning` fails, continue — the `memory create` fallback still captures the data; do not block task completion.
+
+2. **`memory create` call (legacy fallback):** `/memories/repo/inbox/{task-id}-{agent}.md` — content is agent name, task ID, date, then bullet points. Keep it brief.
+
+If nothing notable happened, skip both writes entirely.
 
 ## Tool and terminal discipline
 
