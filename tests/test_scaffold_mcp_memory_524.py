@@ -718,8 +718,8 @@ class TestFromAC_SetupMcp:
         return (_REPO_ROOT / "scripts" / "setup.py").read_text(encoding="utf-8")
 
     def test_setup_source_contains_owlbear_memory_key(self) -> None:
-        assert "owlbearMemory" in self._setup_source(), (
-            "scripts/setup.py must include 'owlbearMemory' server key in create_mcp_config()"
+        assert "owlbear-memory" in self._setup_source(), (
+            "scripts/setup.py must include 'owlbear-memory' server key in create_mcp_config() (kebab-case)"
         )
 
     def test_setup_source_contains_owlbear_mcp_memory_module(self) -> None:
@@ -742,19 +742,22 @@ class TestFromAC_SetupMcp:
         )
 
     def test_create_mcp_config_owlbear_memory_entry_shape(self, tmp_path: Path) -> None:
-        """owlbearMemory entry has type=stdio, command=uv, -m owlbear_mcp_memory in args."""
+        """owlbear-memory entry has type=stdio, command=uv, -m owlbear_mcp_memory in args, no --project."""
         from setup import create_mcp_config  # type: ignore[import]
 
         create_mcp_config(tmp_path, _REPO_ROOT)
         config = json.loads((tmp_path / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
-        assert "owlbearMemory" in config["servers"], (
-            f"'owlbearMemory' key missing from servers: {list(config['servers'])}"
+        assert "owlbear-memory" in config["servers"], (
+            f"'owlbear-memory' key missing from servers: {list(config['servers'])}"
         )
-        entry = config["servers"]["owlbearMemory"]
+        entry = config["servers"]["owlbear-memory"]
         assert entry.get("type") == "stdio"
         assert entry.get("command") == "uv"
         assert "-m" in entry.get("args", [])
         assert "owlbear_mcp_memory" in entry.get("args", [])
+        assert "--project" not in entry.get("args", []), (
+            f"owlbear-memory must not use --project flag (matching workspace convention), got: {entry.get('args')}"
+        )
 
     def test_create_mcp_config_docstring_mentions_five_servers(self) -> None:
         """create_mcp_config() docstring must mention five MCP server entries."""

@@ -414,23 +414,23 @@ class TestFromAC_PathDetectionAndOutput:
 
 
 # ---------------------------------------------------------------------------
-# AC: MCP server names must be camelCase (task #12 gap — not in task #92 tests)
+# AC: MCP server names must be kebab-case (task #570 — fixes camelCase bug)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_McpServerNames:
-    """AC: server keys must be owlbearKanban, owlbearKnowledge, owlbearProject (camelCase)."""
+    """AC: server keys must be owlbear-kanban, owlbear-knowledge, owlbear-memory, owlbear-project (kebab-case)."""
 
-    def test_mcp_server_names_are_camelcase(self, tmp_path: Path) -> None:
-        """Server entry keys must be camelCase per AC — not kebab-case."""
+    def test_mcp_server_names_are_kebab_case(self, tmp_path: Path) -> None:
+        """Server entry keys must be kebab-case — camelCase breaks owlbear-kanban/* tool routing."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
         server_names = set(data["servers"].keys())
-        expected = {"github", "owlbearKanban", "owlbearKnowledge", "owlbearMemory", "owlbearProject"}
+        expected = {"github", "owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "owlbear-project"}
         assert server_names == expected, (
-            f"MCP server names must be camelCase per AC. Expected {expected}, got {server_names}"
+            f"MCP server names must be kebab-case for tool routing. Expected {expected}, got {server_names}"
         )
 
     def test_mcp_server_name_owlbear_kanban_exists(self, tmp_path: Path) -> None:
@@ -438,8 +438,8 @@ class TestFromAC_McpServerNames:
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert "owlbearKanban" in data["servers"], (
-            f"owlbearKanban not in server keys: {list(data['servers'].keys())}"
+        assert "owlbear-kanban" in data["servers"], (
+            f"owlbear-kanban not in server keys: {list(data['servers'].keys())}"
         )
 
     def test_mcp_server_name_owlbear_knowledge_exists(self, tmp_path: Path) -> None:
@@ -447,8 +447,8 @@ class TestFromAC_McpServerNames:
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert "owlbearKnowledge" in data["servers"], (
-            f"owlbearKnowledge not in server keys: {list(data['servers'].keys())}"
+        assert "owlbear-knowledge" in data["servers"], (
+            f"owlbear-knowledge not in server keys: {list(data['servers'].keys())}"
         )
 
     def test_mcp_server_name_owlbear_project_exists(self, tmp_path: Path) -> None:
@@ -456,9 +456,30 @@ class TestFromAC_McpServerNames:
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
         data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        assert "owlbearProject" in data["servers"], (
-            f"owlbearProject not in server keys: {list(data['servers'].keys())}"
+        assert "owlbear-project" in data["servers"], (
+            f"owlbear-project not in server keys: {list(data['servers'].keys())}"
         )
+
+    def test_mcp_server_name_owlbear_memory_exists(self, tmp_path: Path) -> None:
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        assert "owlbear-memory" in data["servers"], (
+            f"owlbear-memory not in server keys: {list(data['servers'].keys())}"
+        )
+
+    def test_mcp_server_args_have_no_project_flag(self, tmp_path: Path) -> None:
+        """No owlbear server entry may use --project flag — matching workspace convention."""
+        project_dir = _project_dir(tmp_path)
+        owlbear_dir = _make_owlbear_dir(tmp_path)
+        create_mcp_config(project_dir, owlbear_dir)
+        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
+        for name, entry in data["servers"].items():
+            args = entry.get("args", [])
+            assert "--project" not in args, (
+                f"Server '{name}' must not use --project flag in args, got: {args}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -614,7 +635,7 @@ class TestFromAC_GitHubMcpServer:
         assert "github" in servers, (
             f"github entry absent — cannot verify co-existence. Found: {list(servers.keys())}"
         )
-        for key in ("owlbearKanban", "owlbearKnowledge", "owlbearProject"):
+        for key in ("owlbear-kanban", "owlbear-knowledge", "owlbear-project"):
             assert key in servers, (
                 f"Expected owlbear server '{key}' to remain present alongside github entry. "
                 f"Found: {list(servers.keys())}"
