@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from owlbear_knowledge.chunker import TextChunker
@@ -168,7 +169,8 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store
     if store is None:
-        return "error: source store not available"
+        msg = "error: source store not available"
+        raise ToolError(msg)
     sources = await asyncio.to_thread(store.list_all, scope=scope)
     return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
 
@@ -232,7 +234,8 @@ async def get_stats(ctx: Context) -> StatsResult:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
     if gs is None:
-        return "error: graph store not available"
+        msg = "error: graph store not available"
+        raise ToolError(msg)
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
     return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
 
