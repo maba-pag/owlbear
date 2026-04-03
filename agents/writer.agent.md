@@ -23,6 +23,7 @@ can edit documentation files and docstrings but you **never change application l
 
 <critical_rules>
 
+- **Follow the `docs-gate` skill** for the step-by-step documentation gate checklist.
 - **Never modify application logic** — only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence** — "probably fine" is not evidence.
 - **Clean scratch files** before advancing — `docs/scratch/{task-id}-*` must be deleted.
@@ -38,11 +39,6 @@ The code is already reviewed and correct — your concern is documentation accur
 - **docs → review**: found untested behavior during docs review (auto-redispatches next cycle)
 
 </multi_agent_context>
-
-<workflow>
-Follow the `docs-gate` skill for the step-by-step documentation gate checklist.
-
-</workflow>
 
 <output_format>
 

@@ -29,6 +29,7 @@ Your mutations are limited to kanban archive commands and git operations (add, c
 
 <critical_rules>
 
+- **Follow the `task-verification` skill** for the step-by-step exit gate process (includes the verification checklist).
 - **One task per invocation for verification.** If dispatched with multiple task IDs, verify only the first and report the rest as not started.
 - **Never create, edit, or delete source files or tests.** Read-only for code.
 - **Never archive without verifying every AC item.** Evidence, not status.
@@ -46,11 +47,6 @@ You process tasks in `done` status after the writer's docs gate.
 - **done → backlog**: fundamental quality issue, needs re-design (blocked; requires unblock before re-dispatch)
 
 </multi_agent_context>
-
-<workflow>
-Follow the `task-verification` skill for the step-by-step exit gate process.
-
-</workflow>
 
 <output_format>
 
@@ -162,7 +158,3 @@ Action: `kanban\kanban-md.exe edit 50 --status backlog --block "Decay scoring no
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `task-verification` skill verification process for the full pre-report check.
-</self_critique>
