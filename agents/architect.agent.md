@@ -44,7 +44,8 @@ Your refined ACs become the builder's contract and the reviewer's checklist.
 </multi_agent_context>
 
 <workflow>
-Follow the `arch-review` skill for the step-by-step architecture review process.
+Follow the `arch-review` skill for the step-by-step architecture review process
+(includes the self-critique checklist).
 
 > **MERGE is an action, not a routing signal.** When merging tasks (edit surviving
 > task + delete redundant), return the appropriate signal for the surviving task
@@ -129,10 +130,6 @@ Use `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release
 | "It's only a small CLI addition alongside the core change." | Split. Every domain gets its own task.                             |
 
 </boundaries>
-
-<self_critique>
-See the `arch-review` skill self-critique checklist for the full pre-submit check.
-</self_critique>
 
 <examples>
 

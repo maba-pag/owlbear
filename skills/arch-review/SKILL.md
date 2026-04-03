@@ -42,7 +42,7 @@ Read the single task dispatched to you:
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
 3. If task references a research doc (`docs/research/{slug}.md`), read it
 4. Note each AC line for evaluation
-5. **Reject placeholder inputs.** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), do not proceed to Step 2. Block back to `ideation` (see Step 4). See agent-common → **Placeholder and unscoped task rejection**.
+5. **Reject placeholders** — block to `ideation` (Step 4) before proceeding.
 
 ## Step 2 — Analyze codebase context
 
@@ -55,9 +55,7 @@ Read the single task dispatched to you:
 
 ## Step 3 — Evaluate architecture
 
-Assess the task against the codified standards in the `architecture-standards` skill
-(read it with `read_file` if not already loaded)
-and general architectural principles:
+Assess the task against the `architecture-standards` skill and general architectural principles:
 
 1. **Single responsibility** — one thing only? If "and" joins unrelated concerns, split.
 2. **Interface clarity** — inputs, outputs, side effects clear from AC?
@@ -106,7 +104,7 @@ Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using t
 | SPLIT | Skip |
 | BLOCK | Skip |
 
-**Prompt construction** — pass these fields to the challenger subagent:
+**Prompt fields:**
 
 | Field | Value |
 |-------|-------|
@@ -125,13 +123,12 @@ Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using t
 | `reconsider` OR confidence < .80 | Re-evaluate. May revise AC, change verdict, or justify override with rebuttal. |
 | `block` | Strong signal to move task to ideation. Must provide rebuttal if overriding. |
 
-**Architect retains final authority.** The Challenger advises only — never decides.
+**The architect retains final authority** — the challenger advises only.
 
 **Sequential fallback:** If `runSubagent` errors (timeout, tool error, malformed response):
 
 1. Proceed without challenge
 2. Note in Challenge Results: `Challenge: FALLBACK — {error reason}`
-3. No verdict change required — the architect's own analysis stands
 
 ## Step 4 — Decide and act
 
@@ -166,18 +163,9 @@ Output a structured ArchitectReview for the task (see agent output format).
 
 ## Self-critique checklist
 
-Before submitting:
+Before submitting, verify all 12 Step 3 criteria were checked. Additional checks:
 
 - [ ] Read full task details and research doc
 - [ ] Searched codebase for related patterns
-- [ ] Checked task body for prior context on these modules
-- [ ] Every AC line evaluated individually
-- [ ] No vague AC remains
-- [ ] TDD compliance checked
-- [ ] Module layering validated against `architecture-standards` skill
-- [ ] Security surface assessed (new boundaries have validation AC)
+- [ ] Checked task body for prior context (architecture notes, reviewer feedback)
 - [ ] Did NOT create/edit .py, .toml, or test files
-- [ ] Dependency graph has no cycles
-- [ ] Single-domain verified — task targets exactly one domain from the canonical list
-- [ ] Premise challenge applied — verified capability is not already provided by environment (IDE/runtime/tooling/extensions)
-- [ ] Failure mode map assessed (for tasks with new/modified codepaths)

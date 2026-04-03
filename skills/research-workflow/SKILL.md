@@ -8,18 +8,10 @@ user-invocable: false
 
 Step-by-step process for investigating a topic and producing structured, actionable findings.
 
-## kanban-md Commands
-
-See kanban-md skill for claiming protocol and pitfalls. Key researcher commands:
-
-| Action | Command |
-|--------|--------|
-| Create follow-up | `kanban\kanban-md.exe create "TITLE" --priority P --status ideation --tags T` |
-
 ## Research checklist
 
 Before a task can leave `ideation`, complete this checklist. Items 1–6 are **mandatory**;
-items 7–8 are **recommended**.
+items 7–8 are **recommended**. The steps below satisfy these items — verify the checklist before advancing.
 
 1. **Theoretical validity** — Is this a sound concept? Does the abstraction make sense? Is it the right approach?
 2. **Environment audit** — Is this capability already provided by the IDE, runtime, installed extensions, or existing tooling? Check VS Code built-in features, extension-provided servers, and installed packages before recommending additions.
@@ -40,9 +32,7 @@ Claim by ID per kanban-md skill → Claiming Protocol.
 
 ## Step 1 — Clarify scope
 
-**Fail fast on invalid inputs before starting any research:**
-
-- If the task is a placeholder (`TEMP-*` title or empty/unscoped body), refuse dispatch immediately. See agent-common → **Placeholder and unscoped task rejection**. Example: a task titled `TEMP-planner-test` with no scoped body must be blocked or handed off — it must not be clarified by question or have scope invented for it. See `docs/research/planner-temp-task-hygiene.md`.
+**Fail fast on invalid inputs.** Example: a task titled `TEMP-planner-test` with no scoped body → block or handoff, never clarify or invent scope. See `docs/research/planner-temp-task-hygiene.md`.
 
 If the task has scoped content but needs clarification:
 
@@ -82,14 +72,9 @@ Structure analysis as trade-off matrices, not prose:
 
 Before writing the research document, challenge your Step 3 recommendation using the Challenger subagent.
 
-**Trigger conditions:**
+**Trigger:** Challenge is mandatory when Step 3 produces a recommendation. Skip for info-only or trivial research.
 
-| Research type | Challenge? |
-|--------------|------------|
-| Step 3 produces a recommendation (section 4 will contain a recommendation with confidence score) | **Mandatory** |
-| Info-only or trivial research with no recommendation | Skip |
-
-**Prompt construction** — pass these fields to the challenger subagent:
+**Prompt fields:**
 
 | Field | Value |
 |-------|-------|
@@ -108,13 +93,12 @@ Before writing the research document, challenge your Step 3 recommendation using
 | `reconsider` OR confidence < .80 | Revise recommendation/confidence or justify override with rebuttal. |
 | `block` | Revisit research scope; must provide rebuttal if proceeding. Distinct from T3 DR workflow. |
 
-**Researcher retains final authority.** The Challenger advises only — never decides.
+**The researcher retains final authority** — the challenger advises only.
 
 **Sequential fallback:** If `runSubagent` errors (timeout, tool error, malformed response):
 
 1. Proceed without challenge
 2. Note in doc section 4: `Challenge: FALLBACK — {reason}`
-3. No recommendation change required — the researcher's own analysis stands
 
 **Research doc (section 4)** must include a brief challenge note:
 
@@ -182,7 +166,7 @@ Classify every research finding before acting on it:
 ### Create follow-up tasks
 
 Generate `kanban-md create` commands for every actionable finding.
-**Execute them** to create tasks at `ideation` status — the architect still gates them before `todo`.
+**Execute them** to create tasks at `ideation` status.
 
 If a finding requires a user decision with no clear winner, use the **scribe** agent
 to check/create a decision request. The scribe checks for duplicates, creates the DR
@@ -203,13 +187,9 @@ kanban\kanban-md.exe edit {id} --status backlog --release
 Before submitting:
 
 - [ ] Every claim has ≥ 2 sources
-- [ ] Analysis uses comparison tables
-- [ ] Confidence scores on recommendations
+- [ ] Analysis uses comparison tables with confidence scores
 - [ ] Research doc ≤ 200 lines
 - [ ] Follow-up kanban tasks are concrete and actionable
 - [ ] Did NOT create/edit source code
-- [ ] External sources logged in sources/overview.md
-- [ ] Cloned repos deleted
+- [ ] Step 6 cleanup complete (sources logged, cloned repos deleted)
 - [ ] Task advanced to `backlog` and claim released
-- [ ] Verified no environment duplication
-- [ ] Recommendations align with KISS/YAGNI
