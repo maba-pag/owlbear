@@ -4,7 +4,7 @@ title: Knowledge package integration + hybrid search
 status: archived
 priority: needed
 created: 2026-03-26T18:33:53.2231299+01:00
-updated: 2026-04-03T05:46:04.4024597+02:00
+updated: 2026-04-03T05:51:27.5663344+02:00
 started: 2026-04-03T05:45:49.2075379+02:00
 completed: 2026-04-03T05:45:49.2075379+02:00
 tags:
@@ -182,3 +182,45 @@ This is a dead parameter masking a missing feature.
 [[2026-04-03]] Fri 04:54
 ## Review Evidence (Cycle 2)
 See docs/scratch/34-reviewer.md for full evidence.
+
+[[2026-04-03]] Fri 05:51
+## Audit
+
+### AC Verification
+All 12 AC lines verified with evidence: PASS
+
+### Test Results
+- Task-scope: 73 passed (test_retrieval.py + test_query_for_context.py + test_knowledge_package_34.py)
+- Full suite: 3166 passed, 232 failed, 8 skipped; zero failures in task scope
+- ruff: All checks passed
+
+### Architect Quality
+- AC quality score: 4/5 (one gap: max_neighbors_per_entity behavior unspecified, caught by reviewer)
+- Design direction productive (v1 port + DI pattern)
+
+### Deduction breakdown
+- -.02 reviewer cycle 2 evidence file missing (docs/scratch/34-reviewer.md referenced but not found)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-03]] Fri 05:51
+## Audit
+
+### AC Verification
+All 12 AC lines verified with evidence: PASS
+
+### Test Results
+- Task-scope: 73 passed (test_retrieval.py + test_query_for_context.py + test_knowledge_package_34.py)
+- Full suite: 3166 passed, 232 failed, 8 skipped; zero failures in task scope
+- ruff: All checks passed
+
+### Architect Quality
+- AC quality score: 4/5 (one gap: max_neighbors_per_entity behavior unspecified, caught by reviewer)
+- Design direction productive (v1 port + DI pattern)
+
+### Deduction breakdown
+- -.02 reviewer cycle 2 evidence file missing (docs/scratch/34-reviewer.md referenced but not found)
+
+### Confidence: .98
+### Action: archive
