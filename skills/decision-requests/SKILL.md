@@ -201,15 +201,18 @@ That's it. The planner handles the rest.
 
 **Alternatively**, use the CLI: `bearclaw decisions resolve {task_id}` — it prompts for choice, notes, and updates the file automatically.
 
-**Planner detects approval:** Each planning cycle, the planner checks `docs/decisions/pending/` for files with `approved: true` (decisions) or `completed: true` (action requests). For each resolved file, the planner performs three steps in order:
+**Scribe detects approval:** Each planning cycle, the orchestrator calls the scribe
+agent in resolve mode to check `docs/decisions/pending/` for files with `approved: true`
+(decisions) or `completed: true` (action requests). For each resolved file, the scribe
+performs three steps in order:
 
 1. **Write summary to task body** — extracts `decision:`/`notes:` (decisions) or `notes:` (action requests) from the frontmatter and appends a `## Decision Resolved` or `## Action Completed` section to the task body via `kanban-md edit`. This is the critical step — without it, downstream agents cannot see the user's feedback.
 2. **Unblock the task** — `kanban\kanban-md.exe edit {task_id} --unblock`
 3. **Move the pending file** to `docs/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
 
-The user never moves files — the planner does this automatically.
+The user never moves files — the scribe does this automatically.
 
-**Auto-resolution (5-day timeout):** If an `impact_tier: 2` decision (or a decision with no `impact_tier` field) stays `approved: false` for 5+ days, the planner auto-resolves with the agent's pre-filled recommendation. The file is updated with `approved: auto` and the task is unblocked. Missing `impact_tier` defaults to tier 2 for backwards compatibility — existing files retain current auto-resolve behavior.
+**Auto-resolution (5-day timeout):** If an `impact_tier: 2` decision (or a decision with no `impact_tier` field) stays `approved: false` for 5+ days, the scribe auto-resolves with the agent's pre-filled recommendation. The file is updated with `approved: auto` and the task is unblocked. Missing `impact_tier` defaults to tier 2 for backwards compatibility — existing files retain current auto-resolve behavior.
 
 **T3 decisions do not auto-resolve.** When `impact_tier: 3`, the planner skips the 5-day timer entirely. These decisions block indefinitely until the user explicitly approves or overrides. Use `impact_tier: 3` for mandatory decisions: new capabilities, architecture changes, security/process changes, and breaking changes.
 
@@ -226,7 +229,7 @@ The user never moves files — the planner does this automatically.
 3. Set `completed: false` → `completed: true` in the YAML header
 4. Save. Done.
 
-The planner treats `completed: true` the same as `approved: true` — it writes the
+The scribe treats `completed: true` the same as `approved: true` — it writes the
 user's `notes:` to the task body (as `## Action Completed`), unblocks the task, and
 moves the file to `resolved/`. See the resolution workflow above for the full
 three-step process.

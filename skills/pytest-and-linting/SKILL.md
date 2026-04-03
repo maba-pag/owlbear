@@ -175,7 +175,7 @@ Restore before returning the terminal to foreground use: `$env:PYTEST_DISABLE_PL
 
 ## Test markers
 
-OwlBear defines three project-level markers in `pyproject.toml`:
+OwlBear defines four project-level markers in `pyproject.toml`:
 
 | Marker        | Meaning                                                                                      |
 | ------------- | -------------------------------------------------------------------------------------------- |

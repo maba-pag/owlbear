@@ -155,6 +155,21 @@ class TestFromAC_Spawn:  # noqa: N801
             async with VoiceProcessManager(_COMMAND):
                 pass
 
+    def test_init_timeout_default_is_30_seconds(self) -> None:
+        """AC: __init__(..., init_timeout: float = 30.0, ...)
+
+        The constructor must default init_timeout to 30.0 so that callers
+        who omit the parameter get a 30-second handshake deadline, not an
+        indefinite block.
+        """
+        import inspect  # noqa: PLC0415
+
+        sig = inspect.signature(VoiceProcessManager.__init__)
+        param = sig.parameters["init_timeout"]
+        assert param.default == 30.0, (
+            f"init_timeout default must be 30.0 per AC; got {param.default!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Read loop (TestFromAC_ReadLoop)

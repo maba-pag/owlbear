@@ -37,7 +37,7 @@ kanban\kanban-md.exe handoff <ID> --claim <agent> --block "Waiting on user: <wha
 - Next step:" --timestamp --release
 ```
 
-For user-must-do-X scenarios (manual testing, GUI verification, credential setup), create an action request file instead of writing raw block text. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the action request format.
+For user-must-do-X scenarios (manual testing, GUI verification, credential setup), use the **scribe** agent to create an action request instead of writing raw block text.
 
 ### Defer-to-user boundary
 
@@ -48,7 +48,7 @@ Agents should take tasks all the way through the pipeline. Defer to the user onl
 - Credentials/access or external actions are needed (push, releases, deployments)
 - Repeated test/lint failures cannot be resolved
 
-**For async deferral (agents running unsupervised),** use one of two structured request types. Both live in `docs/decisions/pending/` and use the same skill. Read the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the file format, blocking behavior, and resolution workflow. The planner checks `docs/decisions/pending/` each cycle and unblocks tasks when requests are resolved.
+**For async deferral (agents running unsupervised),** use the **scribe** agent to check/create decision or action requests. The scribe checks for existing DRs (preventing duplicates), creates new ones with proper frontmatter, and blocks the task. The orchestrator calls the scribe in resolve mode each cycle to process completed requests and unblock tasks.
 
 **Tier classification quick reference:**
 
@@ -77,6 +77,8 @@ Use when there are multiple valid options and no clear winner. The user picks an
 | Any agent  | Scope or priority decision that affects multiple downstream tasks                                   |
 
 If in doubt, create the decision request — the cost of an unnecessary request is far lower than the cost of guessing wrong on a product decision.
+
+**All DR creation goes through the scribe agent.** Never write to `docs/decisions/` directly. Use: `runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, ...")`.
 
 #### Action requests — when you need the user to do something
 
@@ -146,10 +148,18 @@ chore: archive tasks #478 #479 #480 (#480, auditor)
 
 Before starting work on any task, check whether the task was previously blocked by a decision or action request. This ensures user feedback reaches the agent that needs it.
 
-1. **Check the task body** (from `kanban-md show`) for a `## Decision Resolved` section. If present, read the chosen option and user notes — these are binding constraints on your work.
-2. **If no summary in the body** (legacy tasks resolved before this rule existed), check `docs/decisions/resolved/{task-id}-*` for files matching the task ID. If found, read the `decision:` and `notes:` fields.
+1. **Check the task body** (from `kanban-md show`) for `## Decision Resolved` or `## Action Completed` sections. If present, read the chosen option and user notes — these are binding constraints on your work.
+2. **If no summary in the body** (legacy tasks resolved before this rule existed), call the **scribe** agent in query mode to check for existing DRs:
+   ```
+   runSubagent("scribe", "Scribe: task_id={id}, mode=query, agent={your_name}", "Query DRs for #{id}")
+   ```
+   If the scribe returns resolved DRs with user notes, treat those notes as binding constraints.
 3. **Treat user notes as hard requirements.** If the user's notes contradict part of the AC or narrow the approach, adjust your implementation accordingly. If the notes make the current AC infeasible, update the task body with the conflict and block for clarification.
-4. **If you are about to create a new decision request**, first run the duplicate check from the `decision-requests` skill → **Pre-flight: check for existing decisions**.
+4. **To create a new decision or action request**, always use the scribe agent — never write DR files directly:
+   ```
+   runSubagent("scribe", "Scribe: task_id={id}, mode=check-or-create, request_type={decision|action}, agent={your_name}, concern={what_you_need}", "Check/create DR for #{id}")
+   ```
+   The scribe checks for existing DRs that cover the same concern and either returns the existing answer or creates a new request. This prevents duplicate DRs.
 
 This pre-flight applies to ALL agents — builder, researcher, architect, test-writer, reviewer, writer, auditor.
 
