@@ -20,6 +20,7 @@ All tests FAIL in RED phase:
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -36,6 +37,17 @@ import owlbear_mcp_kanban.server as server_mod
 # ---------------------------------------------------------------------------
 # Helpers (copied from packages/mcp-kanban/tests/test_server.py conventions)
 # ---------------------------------------------------------------------------
+
+_FAKE_TASK_JSON = json.dumps({
+    "id": 1,
+    "title": "Fake Task",
+    "status": "todo",
+    "priority": "important",
+    "created": "2026-01-01T00:00:00+00:00",
+    "updated": "2026-01-01T00:00:00+00:00",
+    "class": "standard",
+})
+
 
 def _make_app_ctx() -> AppContext:
     from pathlib import Path
@@ -124,7 +136,7 @@ class TestFromAC_MovePickJsonOutput:
         mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=('{"id": 1}', "", 0)),
+            new=AsyncMock(return_value=(_FAKE_TASK_JSON, "", 0)),
         ) as mock_run:
             await move_task(mcp_ctx, task_id="1", status="review")
 
@@ -143,7 +155,7 @@ class TestFromAC_MovePickJsonOutput:
         mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=('{"id": 1}', "", 0)),
+            new=AsyncMock(return_value=(_FAKE_TASK_JSON, "", 0)),
         ) as mock_run:
             await pick_task(mcp_ctx, status="todo", claim="builder")
 
