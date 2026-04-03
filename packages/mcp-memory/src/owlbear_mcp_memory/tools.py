@@ -10,7 +10,7 @@ import asyncio
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 from mcp.server.fastmcp.exceptions import ToolError
@@ -227,7 +227,11 @@ WHERE {where}
 @mcp.tool(annotations=ToolAnnotations(
     readOnlyHint=False, idempotentHint=False, destructiveHint=True
 ))
-async def set_approval_state(ctx: Context, entry_id: str, new_state: str) -> str:
+async def set_approval_state(
+    ctx: Context,
+    entry_id: str,
+    new_state: Literal["approved", "deleted", "pending"],
+) -> str:
     """Transition a memory entry to a new approval_state.
 
     Allowed transitions: pending→approved, pending→deleted, deleted→pending.
