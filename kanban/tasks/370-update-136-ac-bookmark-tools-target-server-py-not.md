@@ -1,15 +1,17 @@
 ---
 id: 370
 title: 'Update #136 AC: bookmark tools target server.py not tools.py'
-status: backlog
+status: ideation
 priority: nice-to-have
 created: 2026-03-30T20:46:21.9111795+02:00
-updated: 2026-03-30T23:50:41.4952989+02:00
+updated: 2026-04-03T00:25:42.0224559+02:00
 tags:
     - phase-2
     - scope:mcp
     - scope:knowledge
     - chore
+blocked: true
+block_reason: 'Duplicate of #520 which already absorbed this scope and is at todo with approved AC'
 class: standard
 ---
 
@@ -22,3 +24,19 @@ Task #136 AC line 4 references `packages/mcp-knowledge/src/owlbear_mcp_knowledge
 
 ## Context
 See docs/research/dead-code-mcp-knowledge-tools.md §3.3. tools.py was the v1 approach (#72); server.py is the v2 pattern (#152). Task #223 deletes tools.py.
+
+[[2026-04-03]] Fri 00:25
+## Architecture Review
+**Verdict:** BLOCK (duplicate of #520)
+**DR Verification:** N/A
+
+### AC Assessment
+AC1 (Update #136 tools.py ref to server.py): Identical to #520 AC1 -- Duplicate
+AC2 (AppContext extension AC update): Identical to #520 AC2 -- Duplicate
+
+### Architecture Notes
+Task #370 is a duplicate of #520. Task #520 was created during the architect review of #223, and #370 was explicitly merged into #520 (see #520 body). The merge noted Deleted #370 but the deletion did not execute, leaving #370 as a zombie duplicate.
+
+#520 is already at todo with a full Architecture Review (APPROVED, confidence .92), refined AC covering all of #370 scope plus an additional dependency guard (AC4: add depends_on 223 to #136).
+
+Action: Block #370 to ideation. The planner should archive or delete this duplicate. All work proceeds through #520.
