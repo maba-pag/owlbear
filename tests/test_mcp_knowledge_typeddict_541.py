@@ -29,7 +29,13 @@ from __future__ import annotations
 
 import typing
 
+import pytest
+from unittest.mock import MagicMock
+
+from mcp.server.fastmcp.exceptions import ToolError
+
 import owlbear_mcp_knowledge.server as server_mod
+from owlbear_mcp_knowledge.server import get_stats, list_sources
 
 
 # ---------------------------------------------------------------------------
@@ -284,3 +290,97 @@ class TestFromAC_FunctionReturnAnnotations:
             f"ingest_document return annotation expected 'str' (unchanged), got: {ret!r}. "
             "AC9 requires this function's return type to stay as str."
         )
+
+
+# ---------------------------------------------------------------------------
+# Helpers for retry-cycle additions (AC10 + error path tests)
+# ---------------------------------------------------------------------------
+
+
+def _get_tool_annotations(tool_name: str) -> object | None:
+    """Return the ToolAnnotations for a named tool registered in the mcp server, or None."""
+    if hasattr(server_mod.mcp, "_tool_manager"):
+        for t in server_mod.mcp._tool_manager.list_tools():  # noqa: SLF001
+            if getattr(t, "name", None) == tool_name:
+                return getattr(t, "annotations", None)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ToolAnnotations (retry) — AC10: ingest_document destructiveHint=False
+# The original RED phase omitted this test entirely (MISSING in reviewer's AC table).
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ToolAnnotations:
+    """Contract: ingest_document ToolAnnotations must include destructiveHint=False (AC10).
+
+    NOTE: This test PASSES immediately — the builder already implemented destructiveHint=False.
+    It was added in the retry cycle to fill the coverage gap flagged by the reviewer.
+    """
+
+    def test_ingest_document_destructive_hint_is_false(self) -> None:
+        """ingest_document must be registered with destructiveHint=False (AC10).
+
+        AC10 requires ToolAnnotations(readOnlyHint=False, destructiveHint=False) on
+        ingest_document. This was the sole MISSING AC line in the original test suite.
+        """
+        annotations = _get_tool_annotations("ingest_document")
+        assert annotations is not None, (
+            "ingest_document has no ToolAnnotations attached; expected "
+            "ToolAnnotations(readOnlyHint=False, destructiveHint=False)."
+        )
+        assert annotations.destructiveHint is False, (  # type: ignore[union-attr]
+            f"Expected destructiveHint=False for ingest_document, "
+            f"got: {annotations.destructiveHint!r}. "
+            "AC10: @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False)) "
+            "must be present."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ErrorPathConventions (retry) — reviewer FAIL reason 2
+# list_sources and get_stats return str literals on None-store error paths,
+# but their return annotations carry no str union.  Per project convention
+# (copilot-instructions.md): typed-return tools must raise ToolError, not
+# return error strings.  Same fix was applied to mcp-project task #542.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ErrorPathConventions:
+    """Contract: typed-return tools raise ToolError (not return str) on unavailable-service paths.
+
+    - list_sources -> list[SourceInfo]  — no str union: must raise ToolError when store is None
+    - get_stats    -> StatsResult       — no str union: must raise ToolError when gs is None
+
+    Both tests FAIL in current state (functions return string literals instead of raising).
+    Builder must change 'return "error: ..."' to 'raise ToolError(msg)' at those paths.
+    """
+
+    @pytest.mark.asyncio
+    async def test_list_sources_raises_tool_error_when_source_store_none(self) -> None:
+        """list_sources must raise ToolError when source_store is None.
+
+        Return type is list[SourceInfo] with no str union — returning a string literal
+        violates the annotation and suppresses the MCP isError flag.  Per convention,
+        this unavailable-service path must raise ToolError.
+        """
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context.source_store = None
+
+        with pytest.raises(ToolError):
+            await list_sources(ctx)
+
+    @pytest.mark.asyncio
+    async def test_get_stats_raises_tool_error_when_graph_store_none(self) -> None:
+        """get_stats must raise ToolError when graph_store is None.
+
+        Return type is StatsResult with no str union — returning
+        'error: graph store not available' violates the annotation.  Builder must
+        raise ToolError per project convention (same fix as mcp-project #542).
+        """
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context.graph_store = None
+
+        with pytest.raises(ToolError):
+            await get_stats(ctx)
