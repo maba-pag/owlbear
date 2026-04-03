@@ -155,7 +155,9 @@ class RefreshOrchestrator:
                 break
             try:
                 intake_result = await _intake.read_url(url)
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result)
+                ingest_result: IngestResult = await self._pipeline.ingest(
+                    intake_result, scope=source.scope
+                )
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":
@@ -179,7 +181,7 @@ class RefreshOrchestrator:
             msg = "crawl_handler is required for CRAWL sources but was not provided"
             raise ValueError(msg)
 
-        ingest_results: list[IngestResult] = await self._crawl_handler(source)
+        ingest_results: list[IngestResult] = await self._crawl_handler(source.config)
         refreshed = skipped = failed = 0
         errors: list[str] = []
 
