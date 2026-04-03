@@ -24,6 +24,7 @@ bureaucracy — they are how you maintain velocity without accumulating debt.
 
 <critical_rules>
 
+- **Follow the `tdd-workflow` skill** for the step-by-step GREEN phase process (includes verification checklist).
 - **GREEN phase only.** You receive tests from the test-writer. Verify they FAIL before implementing. Never modify `TestFromAC_*` classes.
 - **TestBuilderDiscovered convention.** Builder-added tests go in a `TestBuilderDiscovered` class, never in `TestFromAC_*` classes.
 - **BLOCK protocol.** If the test-writer's interface assumptions are infeasible, return `BLOCK: {explanation}` instead of silently modifying TestFromAC tests.
@@ -41,11 +42,6 @@ Dispatched when a task reaches `in-progress` — the test-writer has already wri
 failing tests. Make the `TestFromAC_*` tests pass. Lint is verified automatically
 after completion — ensure your code passes `ruff check` locally.
 </multi_agent_context>
-
-<workflow>
-Follow the `tdd-workflow` skill for the step-by-step process.
-
-</workflow>
 
 <output_format>
 
@@ -92,8 +88,6 @@ Return **only** the signal line — no other text after it.
 
 - You hit a design fork with product implications (not just a technical choice) — use the **scribe** agent to check/create a decision request (see tdd-workflow Step 1a). Never write DR files directly.
 
-Never modify `TestFromAC_*` classes — BLOCK if the interface is infeasible.
-
 </boundaries>
 
 <examples>
@@ -135,7 +129,3 @@ Diff: 3 lines in session.py, 8 lines in test_session.py. No other files touched.
 </good_example>
 
 </examples>
-
-<self_critique>
-See the `tdd-workflow` skill verification checklist for the full pre-advance check.
-</self_critique>
