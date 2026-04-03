@@ -76,6 +76,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
     # (c) Open connection
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
     try:
         # (d) Set PRAGMAs
         conn.execute("PRAGMA journal_mode=WAL")
