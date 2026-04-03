@@ -292,7 +292,7 @@ async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
         raise ToolError(msg) from exc
 
 
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
 async def edit_task(  # noqa: PLR0913, C901
     ctx: Context,
     *,
