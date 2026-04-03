@@ -36,7 +36,7 @@ OwlBear is an on-demand, laptop-resident AI development system built around Copi
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `.prompt.md` | You are defining a user-facing one-shot command that should run only when explicitly invoked.                                                   | `prompts/orchestrate.prompt.md`     |
 | `SKILL.md`   | You are defining reusable domain knowledge that should auto-load by relevance, or you need co-located resources (scripts, templates, examples). | `skills/research-workflow/SKILL.md` |
-| `.agent.md`  | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, or handoff boundaries.        | `agents/reviewer.agent.md`          |
+| `.agent.md`  | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, handoff boundaries, or behavioral hooks (e.g., PreToolUse guards). | `agents/reviewer.agent.md`          |
 
 Default rule: user-facing one-shot commands use `.prompt.md` unless they need auto-loading or co-located resources.
 
@@ -184,7 +184,7 @@ It is encouraged to clone repos that are the subject of research into `docs/scra
 | `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `instructions/`           | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `e2e_smoke.py`, `skills_ref/`) |     | `v1/` | Archived v1 codebase for reference |
+| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `e2e_smoke.py`, `skills_ref/`, `hooks/`) |     | `v1/` | Archived v1 codebase for reference |
 
 ### Package dependency rules
 
