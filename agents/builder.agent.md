@@ -8,6 +8,10 @@ model: [Claude Sonnet 4.6 (copilot), GPT-5.3-Codex (copilot)]
 tools:
   [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*', 'owlbear-memory/*']
 agents: [scribe]
+hooks:
+  PostToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File scripts/hooks/lint-changed.ps1
 ---
 
 <persona>
