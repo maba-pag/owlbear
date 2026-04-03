@@ -25,7 +25,7 @@ The kanban board is shared — multiple agents and humans may work on it simulta
 
 For the complete claiming protocol (three-phase lifecycle, dispatched vs self-selected rules, cross-task boundaries, crash safety), see the **kanban-md skill** → **Claiming Protocol**.
 
-> **MCP tools (owlbear-kanban):** `start_work` (atomic claim + show task), `end_work` (advance status + release claim).
+> **MCP tools (owlbear-kanban):** `start_work` (atomic claim + show task), `end_work` (advance status + release claim), `edit_task` (edit fields, append body, block/release), `show_task` (read task body + metadata), `create_task` (create follow-up tasks), `move_task` (move task to a status).
 
 ### Handoff / blocked
 
@@ -40,6 +40,8 @@ kanban\kanban-md.exe handoff <ID> --claim <agent> --block "Waiting on user: <wha
 ```
 
 For user-must-do-X scenarios (manual testing, GUI verification, credential setup), use the **scribe** agent to create an action request instead of writing raw block text.
+
+> **MCP equivalents:** `edit_task(block=..., release=True)` to block and release via MCP. See the `mcp-kanban` skill for full parameter reference.
 
 ### Defer-to-user boundary
 
@@ -86,6 +88,8 @@ Use `--block` **only** for situations requiring human intervention before redisp
 - Decision requests — blocked pending async user decision
 - Action requests — blocked pending user action completion
 - Stale tasks — blocked for triage
+
+> **MCP equivalents:** `edit_task` with `block` / `unblock` params. See the `mcp-kanban` skill for parameter reference.
 
 ## Commit discipline
 
@@ -140,6 +144,8 @@ Before starting work on any task, check whether the task was previously blocked 
 3. **If user notes contradict the AC** or narrow the approach, adjust accordingly. If they make the AC infeasible, block for clarification.
 4. **To create or check DRs**, always use the scribe agent — never write to `docs/decisions/` directly. See the `decision-requests` skill for the exact invocation.
 
+> **MCP equivalents:** `show_task` as alternative to `kanban-md show` for reading the task body and checking for resolved decisions.
+
 ## Evidence over claims
 
 - **Never trust self-reports.** Verify deliverables yourself — run tests, read files, check the board. "The builder said it's done" is not evidence.
@@ -191,6 +197,8 @@ Most follow-up tasks are simple enough to create inline with `kanban-md create`.
 
 **Do not dispatch the kanban-planner yourself.** Only the planner includes it in dispatch lists. Your job is to mark the need by writing the `Needs decomposition:` marker in the task body.
 
+> **MCP equivalents:** `create_task` as alternative to `kanban-md create` for inline follow-up tasks.
+
 ## Placeholder and unscoped task rejection
 
 Entry-gate agents (architect, researcher, kanban-planner) must reject invalid task inputs immediately:
@@ -198,6 +206,8 @@ Entry-gate agents (architect, researcher, kanban-planner) must reject invalid ta
 - **`TEMP-*` titles** (e.g., `TEMP-planner-test`) are placeholder artifacts, not legitimate tasks. Block back to `ideation` without inventing scope. Point to the owning task or `docs/research/planner-temp-task-hygiene.md`.
 - **Empty or unscoped bodies** (no AC, no context) are insufficient to proceed. Missing body content alone is reason to refuse — do not treat it as ambiguity to resolve by asking questions.
 - **Kanban-planner:** do not emit `kanban-md create` commands for placeholder tasks. Refine the task or stop.
+
+> **MCP equivalents:** `create_task` as alternative to `kanban-md create`.
 
 ## Post-task reflection (lessons learned)
 
@@ -242,6 +252,8 @@ Built-in tools (read_file, grep_search, semantic_search, file_search) are primar
 - **Break complex operations** into separate terminal calls rather than long chained pipelines.
 - **No Write-Host fencing** — the terminal tool reports exit codes automatically.
 
+> **MCP equivalents:** `show_task` as alternative to `kanban-md show` for reading task context.
+
 ## Loop detection and retry discipline
 
 These rules apply to ALL agents and ALL operations — tool calls, terminal commands, searches, file reads.
@@ -255,6 +267,8 @@ These rules apply to ALL agents and ALL operations — tool calls, terminal comm
 | 3 — Stop | 3+ failed attempts at the same goal | Stop. Write what you tried in the task body. Move to handoff/blocked. |
 
 **Tier 3 is mandatory:** When you reach tier 3, you MUST update the task body with what you tried and why it failed, then use `kanban\kanban-md.exe handoff` or `--block` to park the task.
+
+> **MCP equivalents:** `edit_task` with `block` and `release` params for handoff/blocking via MCP.
 
 ### Category-specific retry limits
 
@@ -313,7 +327,7 @@ kanban\kanban-md.exe edit {ID} -a "## {Section Header}\n{content}" -t
 
 Downstream agents read this via `kanban\kanban-md.exe show {ID}`. The orchestrator never reads it.
 
-> **MCP equivalents:** `edit_task` (append Channel B content mid-task), `end_work` (final status advance + release claim).
+> **MCP equivalents:** `edit_task(append_body=..., timestamp=True)` (append Channel B content mid-task with auto-timestamp), `end_work` (final status advance + release claim).
 
 ### Per-agent signal and body mapping
 
@@ -361,3 +375,5 @@ Additional body-content gotchas (confirmed by multiple agents, #980–#990):
 - **Orchestrator:** does not read Channel A signals or task bodies. It re-plans from fresh board state each cycle.
 - **Pipeline agents** (reviewer, writer, auditor): read task body via `kanban\kanban-md.exe show {ID}` to access predecessor notes.
 - **Architect / builder:** read task body for AC, architecture notes, and research pointers.
+
+> **MCP equivalents:** `show_task` as alternative to `kanban\kanban-md.exe show {ID}`.
