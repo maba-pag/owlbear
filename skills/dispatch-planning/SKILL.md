@@ -62,75 +62,24 @@ The planner uses exactly these commands. No improvisation — no `rg` on frontma
 data comes from `kanban-md.exe` commands that respect server-side filtering (claim
 timeout, dependency resolution, block flags).
 
-### Recipe 0 — Decision and action requests
+### Recipe 0 — Decision and action request resolution (handled by orchestrator)
 
-Run before the Board Scan. Check for resolved decision requests and action requests:
+The **orchestrator** calls the scribe agent in resolve mode **before** invoking the
+planner (see orchestration skill Step 0). By the time the planner runs, all resolved
+DRs have already been written to task bodies and tasks unblocked. The planner does
+not modify `docs/decisions/` — it only reads pending files to count them.
+
+Scan `docs/decisions/pending/` (excluding `.gitkeep`) to compute the `pending` output
+field:
 
 ```powershell
-Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Select-Object -ExpandProperty FullName
+Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Where-Object { $_.Name -ne '.gitkeep' }
 ```
 
-For each file found, read frontmatter. **Type detection:** if the `completed:` field is
-present, treat as an action request; otherwise treat as a decision request
-(backwards-compatible — files without `request_type` default to decision).
-
-**All three steps below are mandatory for both request types.** The body-writing
-step is the most important — without it, downstream agents have no visibility into
-the user's feedback.
-
-#### Decision requests (`approved: true`)
-
-1. **Write decision summary to task body.** Read the `decision:` and `notes:` fields
-   from the file. Append a `## Decision Resolved` section to the task body:
-
-   ```powershell
-   kanban\kanban-md.exe edit {id} -a "## Decision Resolved\nChosen: {decision}\nUser notes: {notes}\nSource: docs/decisions/resolved/{filename}" -t
-   ```
-
-2. **Unblock the task:** `kanban\kanban-md.exe edit {id} --unblock`
-3. **Move the pending file** to `docs/decisions/resolved/` (PowerShell `Move-Item`).
-   If the file already exists in `resolved/`, delete the `pending/` copy instead.
-
-#### Action requests (`completed: true`)
-
-1. **Write action summary to task body.** Read the `notes:` field from the
-   frontmatter. Then check if `notes:` references a body section (look for patterns
-   like `see ## SectionName` or `## SectionName`). If it does, extract that section's
-   content from the body too. Append a `## Action Completed` section to the task body:
-
-   ```powershell
-   kanban\kanban-md.exe edit {id} -a "## Action Completed\nUser notes: {notes}\n{referenced_section_content_if_any}\nSource: docs/decisions/resolved/{filename}" -t
-   ```
-
-   If the `notes:` field is non-empty, it **must** appear in the task body — this is
-   how the user's observations reach downstream agents. Do not skip this step even
-   if the notes seem redundant. If `notes:` references a section that doesn't exist
-   in the body, just write the `notes:` value as-is.
-
-2. **Unblock the task:** `kanban\kanban-md.exe edit {id} --unblock`
-3. **Move the pending file** to `docs/decisions/resolved/` (PowerShell `Move-Item`).
-   If the file already exists in `resolved/`, delete the `pending/` copy instead.
-
-#### Auto-resolution (5-day timeout)
-
-Before applying the 5-day auto-resolve, read the
-`impact_tier` field from the file frontmatter. If `impact_tier: 3`, skip the 5-day
-timer — the decision stays pending indefinitely until the user manually sets
-`approved: true`. Missing `impact_tier` defaults to T2; `impact_tier: 1` in a pending
-file should not exist in practice (T1 outcomes are autonomous) but if encountered is
-treated as T2. If `impact_tier` is 2 (or absent) and `approved: false` and older than
-5 days, auto-resolve: set `approved: auto`, unblock, and move to
-`docs/decisions/resolved/`.
-
-For **action requests**: if `completed: false` and older than 5 days,
-auto-resolve: set `completed: auto`, unblock, and move. Note: `completed: auto`
-signals the user action was not manually confirmed. `impact_tier` does not apply to
-action requests — they always use the 5-day auto-resolve.
-
-Track unresolved counts by tier for the `pending` field in the JSON output:
-`{"decisions_t2": N, "decisions_t3": N, "actions": N}`. `decisions_t2` = pending T2
-or untiered decision requests; `decisions_t3` = pending T3 decision requests;
-`actions` = pending action request files.
+For each pending file, read the frontmatter to classify: T2 (`impact_tier` is 2 or
+absent — auto-resolvable after 5 days), T3 (`impact_tier: 3` — require explicit user
+approval, never auto-resolve), or action request. Count by type for the `pending`
+output field (see Step 3 for field format).
 
 ### Recipe 1 — Board Scan
 
@@ -175,15 +124,10 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 
 - Dual-key sort: priority rank (critical first) → pipeline proximity (done first,
   ideation last). **= Step 5 ordering.**
-- `TW:MISSING` flag: `in-progress` task without `## Test-Writer Notes`. **= Gate 4.**
-  Exempt: tasks tagged with any non-impl pass-through tag (`research`, `docs`, `type:config`,
-  `type:docs`, `test`, `type:test`, `agent`, `quality`) — these tasks pass through the
-  test-writer without tests, so missing notes indicate a TW skip, not a pipeline violation.
-- `AC:MISSING` flag: `todo+` task without bullet (`- `) or numbered (`1. `) AC items.
-  **= Gate 5.** Not flagged for ideation/backlog — those tasks don't need AC yet
-  (the researcher/architect adds it).
+- `TW:MISSING` → **Gate 4** violation (see Step 2 gate checks for full conditions and exemptions).
+- `AC:MISSING` → **Gate 5** violation (see Step 2 gate checks).
+- `ARCH:REVIEWED` → **Gate 3** exemption (architect already evaluated atomicity).
 - Tags inline for scope/category context.
-- `ARCH:REVIEWED` flag: task body contains `## Architecture Review` section. **= Gate 3 exemption.** Tasks with this marker have already had atomicity evaluated by the architect.
 
 **What remains for LLM reasoning (no terminal commands needed):**
 
@@ -214,7 +158,6 @@ foreach ($id in {stale_ids}) { "===TASK $id==="; kanban\kanban-md.exe show $id; 
 | -------- | ----- | ----- |
 | Normal cycle | 1–2 | Recipe 0 + Recipe 1 |
 | With stale tasks | 2–3 | + Recipe 2 for retry_hint extraction |
-| Previous approach | 20+ | Individual `show` calls, foreach loops, `rg` on files |
 
 ## Step 1 — Receive scope and scan board
 
@@ -223,11 +166,8 @@ cycle.
 
 ### Check pending decision and action requests
 
-Run **Recipe 0** (Decision and action requests). Process any resolved requests before
-scanning. Recipe 0 distinguishes T2 (auto-resolvable after 5 days when `impact_tier` is
-2 or absent) from T3 (permanently pending — `impact_tier: 3` decisions skip the 5-day
-timer and require explicit user approval). Count unresolved files by tier for the
-`pending` field in the JSON output.
+Run **Recipe 0** (Decision and action requests). Count unresolved files by tier for
+the `pending` output field.
 
 ### Board Scan
 
@@ -315,32 +255,10 @@ appear in the scan. Never manually inspect `claimed_by`/`claimed_at` fields.
 ### Gate failure remediation
 
 For each task excluded by **Gate 3** (atomicity) or **Gate 4** (TDD), record a
-`gate_warnings` entry. Gate 5 is excluded from this collection — its failures are
-content gaps (missing AC), not process violations, and populating warnings for every
-incomplete task would produce false-positive noise.
+`gate_warnings` entry (format in Step 3). Gate 5 is excluded — its failures are content
+gaps (missing AC), not process violations.
 
-**Format:**
-
-```json
-{"id": 102, "gate": "Gate 3", "reason": "Title contains 'and' joining unrelated concerns: implement parser and update config"}
-```
-
-**Fields:**
-
-- `id` — task ID (int)
-- `gate` — one of `"Gate 3"` or `"Gate 4"` (string)
-- `reason` — short description of why the gate failed (string, ≤ 120 chars)
-
-`gate_warnings` is always emitted — use an empty array when no Gate 3/4 exclusions
-occurred. This keeps the planner stateless: the orchestrator receives a deterministic
-signal every cycle without needing to diff board state.
-
-**Rejected alternative — auto-move back:**
-Auto-moving failed tasks to an earlier status was considered but rejected. It creates
-feedback loops (tasks could oscillate between statuses), violates the planner's
-read-only constraint (the planner never mutates board state), and adds remediation
-complexity outside the planner's responsibility. Gate failures are surfaced as warnings
-only; human or orchestrator decides how to act on them.
+**Rejected alternative:** Auto-moving failed tasks back was rejected — it creates oscillation loops and violates the planner's read-only constraint. Gate failures are surfaced as warnings only.
 
 ### Filter and prioritize
 
@@ -353,9 +271,8 @@ From the gate-passing tasks, build the dispatch list:
 2. **Batch size cap:** Max 20 tasks per dispatch list. If more qualify, take the top 20
    from the sorted list. The rest are silently deferred to the next planning cycle.
 
-**No deconfliction needed.** The planner produces a priority-sorted flat list. The
-orchestrator handles parallel batching and agent-type compatibility when grouping tasks
-into concurrent dispatches — the planner does not need to know about batching strategy.
+**No deconfliction needed.** The planner produces a priority-sorted flat list; the
+orchestrator handles parallel batching.
 
 ## Step 3 — Output JSON plan
 
@@ -392,11 +309,8 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
 - `gate_warnings` — Always-present array of `{id, gate, reason}` objects for tasks
   excluded by Gate 3 or Gate 4. Empty array when no failures. Each object: `id` (int),
   `gate` (one of `"Gate 3"` or `"Gate 4"`), `reason` (string, ≤ 120 chars).
-- `pending` — Always-present object with counts of unresolved requests from Recipe 0.
-  Format: `{"decisions_t2": N, "decisions_t3": N, "actions": N}`. `decisions_t2` = pending
-  T2 or untiered decision requests (auto-resolvable after 5 days); `decisions_t3` = pending
-  T3 decision requests (never auto-resolve — require explicit user approval); `actions` =
-  unresolved action request files. All zero when no pending requests.
+- `pending` — Always-present object: `{"decisions_t2": N, "decisions_t3": N, "actions": N}`.
+  Counts from Recipe 0. All zero when no pending requests.
 
 **Rules:**
 
@@ -404,7 +318,6 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
 - Fields: `dispatch`, `gate_warnings`, and `pending` (all required)
 - Empty dispatch array is fine: `{"dispatch":[],"gate_warnings":[],"pending":{"decisions_t2":0,"decisions_t3":0,"actions":0}}`
 - Gate names do not appear in `dispatch` entries; gate failures surface only via `gate_warnings`
-- If more than 20 tasks pass gates, include only the top 20 by priority
 
 ---
 
@@ -412,10 +325,9 @@ excluded the gate failures, and I’m finalizing the capped 20-task dispatch lis
 
 Before outputting:
 
-- [ ] Board Scan (Recipe 1) was used — not individual `show` calls or `rg`/`Get-ChildItem` on task files
+- [ ] Board Scan (Recipe 1) was used for all candidate data — no individual `show` calls, `rg`, `Get-ChildItem`, or foreach loops (batch only via Recipe 2 for stale tasks)
 - [ ] Board Scan used triple filter `--unblocked --not-blocked --unclaimed` (claim timeout handled by kanban-md)
 - [ ] Scope filter from orchestrator was substituted into `{scope}` placeholder
-- [ ] No foreach loops over individual `show` calls (batch only via Recipe 2 for stale tasks)
 - [ ] Total terminal calls ≤ 3
 - [ ] All 6 gate checks accounted for (Gates 2+6 by filter, Gates 4+5 by markers, Gates 1+3 by reasoning)
 - [ ] No task with `[!TW:MISSING]` or `[!AC:MISSING]` marker in `dispatch`
@@ -427,6 +339,3 @@ Before outputting:
 - [ ] Output is a single-line JSON object with `dispatch`, `gate_warnings`, and `pending` fields
 - [ ] `gate_warnings` populated for every Gate 3/4 exclusion; empty array if none
 - [ ] No prose preamble or narrative in the output
-- [ ] No `kanban-md move` commands were run
-- [ ] No subagents were dispatched
-- [ ] No source/test files were edited
