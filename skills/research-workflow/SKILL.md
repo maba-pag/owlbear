@@ -49,6 +49,16 @@ If the task has scoped content but needs clarification:
 - Present structured options to the user (what aspects? what decision? what constraints?)
 - Read `.github/copilot-instructions.md` for tech stack and principles
 
+## Step 1.5 — Pre-flight: check for existing research
+
+Before gathering any sources, confirm no prior research exists for this task:
+
+1. **Scan docs/research/**: `file_search("docs/research/**")` or `grep_search` the task ID and topic keywords. If a doc references this task, read it before doing anything else.
+2. **Check the task body**: look for `See docs/research/` links — a prior researcher may have completed the work but failed to advance the task status.
+3. **If a complete, recent doc exists**: do a validation pass instead of full research — confirm the doc is current, verify codebase state, then skip to Step 5 if findings still hold. See process-patterns "Validation-only research when prior research exists".
+
+> Skipping this check is the most common research time-sink — multiple prior instances wasted partial or full research cycles because existing docs were missed.
+
 ## Step 2 — Gather sources
 
 Find 2+ authoritative sources per claim:
@@ -79,7 +89,7 @@ Before writing the research document, challenge your Step 3 recommendation using
 | Step 3 produces a recommendation (section 4 will contain a recommendation with confidence score) | **Mandatory** |
 | Info-only or trivial research with no recommendation | Skip |
 
-**Prompt construction:** Use `runSubagent` with `agentName: "challenger"`, passing these 6 fields in the prompt text:
+**Prompt construction** — pass these fields to the challenger subagent:
 
 | Field | Value |
 |-------|-------|
@@ -106,26 +116,18 @@ Before writing the research document, challenge your Step 3 recommendation using
 2. Note in doc section 4: `Challenge: FALLBACK — {reason}`
 3. No recommendation change required — the researcher's own analysis stands
 
-**Research doc (section 4)** must include a brief challenge note (1–2 lines):
+**Research doc (section 4)** must include a brief challenge note:
 
     Challenge: {proceed|reconsider|block} — confidence in original: {score}
+    (fallback: Challenge: FALLBACK — {reason})
 
-or on fallback:
-
-    Challenge: FALLBACK — {reason}
-
-**Kanban body** must include full challenge details (append via Channel B before advancing):
+**Kanban body** must include challenge details (append via Channel B before advancing):
 
     ## Challenge Results
-    - Challenger recommendation: {proceed|reconsider|block}
+    - Challenger recommendation: {proceed|reconsider|block} (or FALLBACK — {reason})
     - Confidence in original: {score}
     - Key challenges: {list}
     - Researcher response: {accepted|rebutted|revised} — {brief rationale}
-
-or on fallback:
-
-    ## Challenge Results
-    Challenge: FALLBACK — {reason}
 
 ## Step 4 — Write research document
 
@@ -173,7 +175,7 @@ Classify every research finding before acting on it:
 
 **Decision tree:**
 
-1. Check T3 triggers → any match? → **T3**: create blocking DR in `docs/decisions/pending/` (no auto-resolve), block task, stop
+1. Check T3 triggers → any match? → **T3**: use the **scribe** agent to create a blocking DR (no auto-resolve), task gets blocked automatically
 2. No T3 triggers + multiple valid approaches with trade-offs? → **T2**: create advisory DR (5-day auto-resolve)
 3. No T3 triggers + no meaningful trade-offs? → **T1**: proceed directly
 
@@ -182,9 +184,9 @@ Classify every research finding before acting on it:
 Generate `kanban-md create` commands for every actionable finding.
 **Execute them** to create tasks at `ideation` status — the architect still gates them before `todo`.
 
-If a finding requires a user decision with no clear winner, create a **decision request**
-in `docs/decisions/pending/` instead. See the `decision-requests` skill (`skills/decision-requests/SKILL.md`) for the format.
-Block the current task and move on to other work if available.
+If a finding requires a user decision with no clear winner, use the **scribe** agent
+to check/create a decision request. The scribe checks for duplicates, creates the DR
+if needed, and blocks the task automatically. Move on to other work if available.
 
 ## Step 6 — Finalize
 

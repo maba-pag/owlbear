@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.3-Codex (copilot)]
 tools:
   [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*']
-agents: []
+agents: [scribe]
 ---
 
 <persona>
@@ -71,23 +71,11 @@ See docs/scratch/{id}-builder.md for full evidence." -t
 
 ### Channel A — Routing signal (your final return text)
 
-On success:
-
-```
-DONE #{id} -> review | {test_count} passed, ruff {status}
-```
-
-On blocked:
-
-```
-BLOCKED #{id} -> todo | {reason}
-```
-
-On interface mismatch with test-writer's tests:
-
-```
-BLOCK #{id} -> todo | {interface mismatch explanation} — AC suggestion: {what needs to change}
-```
+| Verdict | Signal format |
+|---------|---------------|
+| Success | `DONE #{id} -> review \| {test_count} passed, ruff {status}` |
+| Blocked | `BLOCKED #{id} -> todo \| {reason}` |
+| Interface mismatch | `BLOCK #{id} -> todo \| {mismatch explanation} — AC suggestion: {change}` |
 
 Return **only** the signal line — no other text after it.
 
@@ -102,21 +90,9 @@ Return **only** the signal line — no other text after it.
 
 **Red flags — STOP and reassess:**
 
-- You are modifying a `TestFromAC_*` class (only test-writer writes those — add your tests to `TestBuilderDiscovered` instead)
-- You are implementing code without first verifying the test-writer's tests fail
-- You are editing files unrelated to the current task
-- Your diff touches more than 3 files not mentioned in the AC
-- You are adding a new dependency to `pyproject.toml`
-- The task AC is vague or empty — flag it and stop, don't invent AC
-- Tests pass but you didn't see them fail first (TDD red phase skipped)
-- You have run 3+ terminal commands for the same logical operation (coverage, test, lint)
-- You hit a design fork with product implications (not just a technical choice) — create a decision request instead of guessing (see `decision-requests` skill)
+- You hit a design fork with product implications (not just a technical choice) — use the **scribe** agent to check/create a decision request (see tdd-workflow Step 1a). Never write DR files directly.
 
-**Common failure rationalizations:**
-
-| Rationalization                                  | Correct Response                                                       |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| "I'll just tweak TestFromAC to match my design." | Never modify TestFromAC classes. BLOCK if the interface is infeasible. |
+Never modify `TestFromAC_*` classes — BLOCK if the interface is infeasible.
 
 </boundaries>
 
@@ -162,12 +138,4 @@ Diff: 3 lines in session.py, 8 lines in test_session.py. No other files touched.
 
 <self_critique>
 See the `tdd-workflow` skill verification checklist for the full pre-advance check.
-
-Quick checks before returning:
-
-- [ ] Verified test-writer tests fail before implementing
-- [ ] No TestFromAC test classes modified — only added new tests if needed
-- [ ] pytest + ruff pass locally
-- [ ] Coverage ≥ 90% on touched modules
-
 </self_critique>

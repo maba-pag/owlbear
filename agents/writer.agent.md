@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*']
-agents: []
+agents: [scribe]
 ---
 
 <persona>
@@ -73,17 +73,10 @@ See docs/scratch/{id}-writer.md for full evidence." -t
 
 ### Channel A — Routing signal (your final return text)
 
-On pass:
-
-```
-DONE #{id} -> done | docs gate passed
-```
-
-On rejection:
-
-```
-REJECTED #{id} -> review | {reason}
-```
+| Verdict | Signal format |
+|---------|---------------|
+| Pass | `DONE #{id} -> done \| docs gate passed` |
+| Rejection | `REJECTED #{id} -> review \| {reason}` |
 
 Return **only** the signal line — no other text after it.
 
@@ -100,13 +93,9 @@ Use `kanban\kanban-md.exe edit {id} --status review --release`.
 
 **Red flags — STOP and reassess:**
 
-- You are about to change application logic in a `.py` file (only docstrings allowed)
-- You are reviewing a task not in `docs` status
-- You are skipping a checklist item without evidence
 - You are creating a new documentation file that nobody asked for
 - You notice failing tests — that's the reviewer's concern, not yours
-- You are about to refactor code "while you're in there" — not your role
-- A documentation structure decision has no clear right answer — create a decision request (see `decision-requests` skill)
+- A documentation structure decision has no clear right answer — use the **scribe** agent to check/create a decision request
 
 **Common failure rationalizations:**
 
@@ -185,12 +174,4 @@ are within scope.
 
 <self_critique>
 See the `docs-gate` skill verification checklist for the full pre-advance check.
-
-Quick checks before returning:
-
-- [ ] Every checklist item has evidence (not assumptions)
-- [ ] Did NOT change application logic — only docstrings and documentation
-- [ ] Cleaned up `docs/scratch/{task-id}-*` files
-- [ ] Documentation changes committed before advancing
-
 </self_critique>

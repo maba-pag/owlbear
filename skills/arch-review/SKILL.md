@@ -53,10 +53,6 @@ Read the single task dispatched to you:
 5. Check the task body for prior context — architecture notes, research pointers,
    reviewer feedback from previous cycles.
 
-<!-- DEACTIVATED for VS Code agents: knowledge graph (query_knowledge) not yet available.
-Original: Query the knowledge graph for past failures via `query_knowledge`.
-See kanban board for KG research task. -->
-
 ## Step 3 — Evaluate architecture
 
 Assess the task against the codified standards in the `architecture-standards` skill
@@ -92,10 +88,10 @@ and general architectural principles:
     | `store()` | DB write fails | `sqlite3.OperationalError` | Yes — retry 2× | Stale data until next sync |
 
 12. **Decision-request verification** — if the task body references `docs/research/*.md`
-    or the task is tagged `research`, check `docs/decisions/` for a decision request file
-    whose frontmatter `task_id` matches the owning task of the research doc and whose
-    frontmatter `approved: true`. If none exists, note the gap and apply the T3 research
-    block path in Step 4. Skip this check for tasks with no research reference.
+    or the task is tagged `research`, use the **scribe** agent in query mode to check
+    for an approved decision request for the owning task of the research doc. If the
+    scribe returns no approved DR, note the gap and apply the T3 research block path
+    in Step 4. Skip this check for tasks with no research reference.
 
 ## Step 3.5 — Challenge proposed verdict
 
@@ -110,7 +106,7 @@ Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using t
 | SPLIT | Skip |
 | BLOCK | Skip |
 
-**Prompt construction:** Use `runSubagent` with `agentName: "challenger"`, passing these 6 fields in the prompt text:
+**Prompt construction** — pass these fields to the challenger subagent:
 
 | Field | Value |
 |-------|-------|
@@ -161,8 +157,6 @@ Before deciding in Step 4, challenge your reasoning for APPROVE verdicts using t
 | **Split**   | Multiple responsibilities         | Create new tasks, update deps, edit/delete original, then `--release`   |
 | **Merge**   | Two tasks = one logical change    | Edit one, delete redundant, then `--release`                            |
 | **Block**   | Missing prerequisite or unclear   | `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release` |
-
-> **Placeholder block path:** If the task is a placeholder (`TEMP-*` title or empty/unscoped body), use the Block path: `kanban\kanban-md.exe edit {id} --status ideation --block "reason" --release`. See agent-common → **Placeholder and unscoped task rejection**.
 
 > **T3 research block path:** If sub-step 12 finds no approved decision request for a task originating from T3 research, use the Block path with reason `"T3 research outcome requires approved decision request"`.
 

@@ -83,23 +83,11 @@ See docs/scratch/{id}-auditor.md for full evidence." -t
 
 ### Channel A — Routing signal (your final return text)
 
-On archive:
-
-```
-ARCHIVED #{id} -> archived | confidence {.XX}
-```
-
-On reject to review:
-
-```
-REJECTED #{id} -> review | {reason}
-```
-
-On reject to backlog:
-
-```
-REJECTED #{id} -> backlog | {reason}
-```
+| Verdict | Signal format |
+|---------|---------------|
+| Archive | `ARCHIVED #{id} -> archived \| confidence {.XX}` |
+| Reject to review | `REJECTED #{id} -> review \| {reason}` |
+| Reject to backlog | `REJECTED #{id} -> backlog \| {reason}` |
 
 Return **only** the signal line — no conversational text, no commit tables, no
 summaries. Channel A is the absolute last thing you produce.
@@ -137,8 +125,6 @@ kanban\kanban-md.exe edit {ID} -a "## Commits\n| Commit | Type | Files | Tasks |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | "The reviewer already checked, I'll just archive." | Spot-check AC, run full suite, evaluate architect quality. Trust reviewer's code-level detail. |
 | "This task is trivial, skip verification."         | Every task gets verified. Evidence, not assumptions.                                           |
-| "I'll commit everything together to save time."    | Group by cohesion. Each commit tells one story.                                                |
-| "The tests probably still pass."                   | Run them. "Probably" is not evidence.                                                          |
 | "AC quality doesn't matter, it already shipped."   | AC quality feedback prevents future architect failures. Always score it.                       |
 
 </boundaries>
@@ -179,13 +165,4 @@ Action: `kanban\kanban-md.exe edit 50 --status backlog --block "Decay scoring no
 
 <self_critique>
 See the `task-verification` skill verification process for the full pre-report check.
-
-Quick checks before reporting:
-
-- [ ] Read actual code, not just trusted file existence
-- [ ] Ran tests myself — confirmed pass
-- [ ] Checked every AC item with evidence
-- [ ] Confidence scores backed by specifics
-- [ ] Rejections have block reasons and target status
-
 </self_critique>
