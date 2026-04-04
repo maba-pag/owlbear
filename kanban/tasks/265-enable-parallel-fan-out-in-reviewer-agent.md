@@ -1,10 +1,10 @@
 ---
 id: 265
 title: Enable parallel fan-out in reviewer agent
-status: backlog
+status: review
 priority: important
 created: 2026-03-30T19:31:23.5606586+02:00
-updated: 2026-03-30T21:48:52.8109697+02:00
+updated: 2026-04-04T23:03:55.9828805+02:00
 tags:
     - scope:agents
     - phase-2
@@ -72,3 +72,19 @@ Code-review SKILL.md changes (Step 2.5, Step 8) are same-domain (agent-config) a
 - Verified: #263 (Quality-Runner subagent): backlog, blocked by decision 228-esub
 - Created: #437 (test task): preceding RED phase
 - Blocking decisions: 228-parallel-fan-out (approved: false), 228-esub-utility-subagents (approved: false)
+
+[[2026-04-04]] Sat 23:03
+## Builder Notes
+- Files changed: `.github/agents/reviewer.agent.md`, `.github/skills/w-code-review/SKILL.md`
+- RED verified: 14/14 `TestFromAC_ReviewerParallelFanOutDetailed` tests FAILED before implementation
+- GREEN: 14/14 passed after implementation
+- ruff: clean (docs-only changes, no Python touched)
+- Pre-existing failures in `test_agent_port_v2.py`: 18 failures confirmed identical before/after changes (stash comparison)
+
+### Changes Applied
+1. `reviewer.agent.md` `<subagents>` table: added quality-runner row with When="Implementation reviews requiring test/lint/coverage evidence" and example invocation format
+2. `w-code-review/SKILL.md` Step 2.5: replaced minimal dispatch with correct `runSubagent` format for both agents, full 5-field QR contract (mode, task_id, test_paths, coverage_modules, lint_paths), full 4-field CR contract (task_id, ac_lines, changed_files, test_files), step mapping (QR→steps 3–5, CR→steps 6–7), execution error fallback with Channel B format
+3. `w-code-review/SKILL.md` Step 8: enriched synthesis paragraph with unified AC compliance table, cross-walk description, and automatic FAIL triggers (MISSING/WEAK from Code-Reader; test failure from Quality-Runner; security finding from Code-Reader)
+
+### Commit
+e3871be feat: wire quality-runner and code-reader parallel fan-out in reviewer (#265, builder)

@@ -1,63 +1,3 @@
-{"timestamp":"2026-03-30T02:56:17.8080546+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T02:56:17.8106332+02:00","action":"claim","task_id":89,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:56:24.6146523+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T02:56:24.6189036+02:00","action":"claim","task_id":55,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:56:31.3157647+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T02:56:31.3191753+02:00","action":"claim","task_id":19,"detail":"builder"}
-{"timestamp":"2026-03-30T02:58:22.774471+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T02:58:22.7765467+02:00","action":"claim","task_id":166,"detail":"test-writer"}
-{"timestamp":"2026-03-30T02:58:58.1534804+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T02:59:07.3172016+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T02:59:12.9155106+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T02:59:12.9183881+02:00","action":"release","task_id":57,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:59:37.9146242+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-30T02:59:37.9183919+02:00","action":"release","task_id":78,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:59:53.7948833+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T02:59:57.8305491+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T02:59:57.8334852+02:00","action":"release","task_id":19,"detail":"builder"}
-{"timestamp":"2026-03-30T03:00:10.317689+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:00:17.618694+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T03:00:23.1133669+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T03:00:23.1170559+02:00","action":"release","task_id":166,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:00:31.2626166+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:00:36.2412448+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:00:36.2445831+02:00","action":"release","task_id":89,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:03:35.4031915+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T03:03:39.9072075+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T03:03:39.910348+02:00","action":"release","task_id":55,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:04:34.4931246+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:04:34.4963005+02:00","action":"claim","task_id":90,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:04:40.707141+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:04:40.709738+02:00","action":"claim","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:04:46.3266904+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:04:46.3293156+02:00","action":"release","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:04:55.6623926+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:04:55.6644893+02:00","action":"claim","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:04:56.0211414+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:04:56.0232648+02:00","action":"release","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:05:15.664943+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-30T03:05:15.6686449+02:00","action":"claim","task_id":86,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:05:35.9528714+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:05:39.4600694+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:06:01.6296838+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:06:02.5021483+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-30T03:06:02.5058446+02:00","action":"claim","task_id":134,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:06:04.6937432+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:06:04.6967556+02:00","action":"claim","task_id":112,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:06:11.9060094+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T03:06:11.9096504+02:00","action":"claim","task_id":143,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:06:40.6265593+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:06:53.182701+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:06:58.5571027+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:06:58.5617602+02:00","action":"release","task_id":90,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:07:44.8593014+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-30T03:07:49.0208188+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-30T03:07:49.0239392+02:00","action":"release","task_id":86,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:08:26.0227805+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:08:36.1306626+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:08:39.7580572+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T03:09:32.7880351+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:09:37.1283176+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
 {"timestamp":"2026-03-30T03:09:37.1309609+02:00","action":"release","task_id":112,"detail":"reviewer"}
 {"timestamp":"2026-03-30T03:11:19.369414+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
 {"timestamp":"2026-03-30T03:11:19.3725348+02:00","action":"release","task_id":143,"detail":"reviewer"}
@@ -9998,3 +9938,63 @@
 {"timestamp":"2026-04-04T21:20:52.6236469+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
 {"timestamp":"2026-04-04T21:20:52.6346782+02:00","action":"release","task_id":586,"detail":"cedar-hill"}
 {"timestamp":"2026-04-04T21:20:53.1310513+02:00","action":"move","task_id":586,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:03:31.3994042+02:00","action":"move","task_id":580,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-04-04T23:03:31.4166548+02:00","action":"move","task_id":581,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-04-04T23:03:31.4331467+02:00","action":"move","task_id":583,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-04-04T23:03:31.4491406+02:00","action":"move","task_id":584,"detail":"ideation -\u003e done"}
+{"timestamp":"2026-04-04T23:03:31.6601022+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T23:03:55.983879+02:00","action":"move","task_id":265,"detail":"todo -\u003e review"}
+{"timestamp":"2026-04-04T23:04:05.4896197+02:00","action":"edit","task_id":580,"detail":"P2-B1: Remove CLI refs from agent files, MCP-only"}
+{"timestamp":"2026-04-04T23:04:06.0865889+02:00","action":"edit","task_id":581,"detail":"P2-B2: Rewrite skill cheatsheet tables to MCP-only"}
+{"timestamp":"2026-04-04T23:04:06.6713838+02:00","action":"edit","task_id":583,"detail":"P2-B4: Rewrite instruction files to MCP-only"}
+{"timestamp":"2026-04-04T23:04:07.2398021+02:00","action":"edit","task_id":584,"detail":"P2-B5: Update copilot-instructions.md to MCP-primary"}
+{"timestamp":"2026-04-04T23:04:24.6569944+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-04T23:04:24.6778456+02:00","action":"claim","task_id":320,"detail":"hail-lily"}
+{"timestamp":"2026-04-04T23:04:46.5273678+02:00","action":"edit","task_id":580,"detail":"P2-B1: Remove CLI refs from agent files, MCP-only"}
+{"timestamp":"2026-04-04T23:04:46.5439445+02:00","action":"claim","task_id":580,"detail":"steel-wick"}
+{"timestamp":"2026-04-04T23:04:53.2244377+02:00","action":"edit","task_id":580,"detail":"P2-B1: Remove CLI refs from agent files, MCP-only"}
+{"timestamp":"2026-04-04T23:04:53.2375223+02:00","action":"release","task_id":580,"detail":"steel-wick"}
+{"timestamp":"2026-04-04T23:04:53.854795+02:00","action":"move","task_id":580,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:05:36.7973475+02:00","action":"edit","task_id":581,"detail":"P2-B2: Rewrite skill cheatsheet tables to MCP-only"}
+{"timestamp":"2026-04-04T23:05:36.809605+02:00","action":"claim","task_id":581,"detail":"mist-holt"}
+{"timestamp":"2026-04-04T23:05:42.9339384+02:00","action":"edit","task_id":581,"detail":"P2-B2: Rewrite skill cheatsheet tables to MCP-only"}
+{"timestamp":"2026-04-04T23:05:42.946303+02:00","action":"release","task_id":581,"detail":"mist-holt"}
+{"timestamp":"2026-04-04T23:05:43.575795+02:00","action":"move","task_id":581,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:05:48.7817292+02:00","action":"edit","task_id":583,"detail":"P2-B4: Rewrite instruction files to MCP-only"}
+{"timestamp":"2026-04-04T23:05:48.7948216+02:00","action":"claim","task_id":583,"detail":"quail-haven"}
+{"timestamp":"2026-04-04T23:05:55.329237+02:00","action":"edit","task_id":583,"detail":"P2-B4: Rewrite instruction files to MCP-only"}
+{"timestamp":"2026-04-04T23:05:55.3444585+02:00","action":"release","task_id":583,"detail":"quail-haven"}
+{"timestamp":"2026-04-04T23:05:56.0680072+02:00","action":"move","task_id":583,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:06:02.0591713+02:00","action":"edit","task_id":584,"detail":"P2-B5: Update copilot-instructions.md to MCP-primary"}
+{"timestamp":"2026-04-04T23:06:02.072378+02:00","action":"claim","task_id":584,"detail":"cove-wing"}
+{"timestamp":"2026-04-04T23:06:21.7376094+02:00","action":"edit","task_id":584,"detail":"P2-B5: Update copilot-instructions.md to MCP-primary"}
+{"timestamp":"2026-04-04T23:06:21.753067+02:00","action":"release","task_id":584,"detail":"cove-wing"}
+{"timestamp":"2026-04-04T23:06:22.3590718+02:00","action":"move","task_id":584,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:06:35.9958098+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-04T23:06:36.0112938+02:00","action":"claim","task_id":596,"detail":"aspen-elder"}
+{"timestamp":"2026-04-04T23:07:31.6799454+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-04T23:07:39.031703+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-04T23:07:39.0461539+02:00","action":"release","task_id":596,"detail":"aspen-elder"}
+{"timestamp":"2026-04-04T23:07:47.8250197+02:00","action":"move","task_id":574,"detail":"review -\u003e docs"}
+{"timestamp":"2026-04-04T23:07:51.7637575+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T23:07:51.7788667+02:00","action":"claim","task_id":574,"detail":"crow-wheat"}
+{"timestamp":"2026-04-04T23:08:00.4831429+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T23:08:00.497231+02:00","action":"claim","task_id":37,"detail":"gorge-south"}
+{"timestamp":"2026-04-04T23:08:45.9994436+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T23:08:53.4439022+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T23:08:53.4585985+02:00","action":"release","task_id":37,"detail":"gorge-south"}
+{"timestamp":"2026-04-04T23:08:56.5189977+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T23:08:56.5340589+02:00","action":"release","task_id":574,"detail":"crow-wheat"}
+{"timestamp":"2026-04-04T23:09:14.0773835+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T23:09:14.0933879+02:00","action":"claim","task_id":574,"detail":"shore-haven"}
+{"timestamp":"2026-04-04T23:09:46.7576008+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-04T23:09:46.77231+02:00","action":"release","task_id":320,"detail":"hail-lily"}
+{"timestamp":"2026-04-04T23:09:56.182987+02:00","action":"move","task_id":320,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-04-04T23:10:01.6404959+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T23:10:08.4059123+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T23:10:08.421056+02:00","action":"release","task_id":574,"detail":"shore-haven"}
+{"timestamp":"2026-04-04T23:10:09.1407064+02:00","action":"move","task_id":574,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T23:10:24.2868869+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-04T23:10:24.3030661+02:00","action":"claim","task_id":430,"detail":"steel-hawk"}
+{"timestamp":"2026-04-04T23:10:25.9910267+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
+{"timestamp":"2026-04-04T23:10:26.0061039+02:00","action":"claim","task_id":595,"detail":"warp-dove"}

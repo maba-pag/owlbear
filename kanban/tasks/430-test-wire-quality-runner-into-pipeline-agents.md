@@ -4,13 +4,15 @@ title: 'Test: Wire Quality-Runner into pipeline agents'
 status: in-progress
 priority: needed
 created: 2026-03-30T21:24:44.6433602+02:00
-updated: 2026-04-03T19:47:04.9038327+02:00
+updated: 2026-04-04T23:10:24.2851296+02:00
 tags:
     - scope:agents
     - phase-2
     - test
 depends_on:
     - 263
+claimed_by: steel-hawk
+claimed_at: 2026-04-04T23:10:24.28355+02:00
 class: standard
 ---
 
