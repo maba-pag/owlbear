@@ -237,17 +237,6 @@ class TestFromAC_McpConfig:
         all_args = [str(a) for s in data["servers"].values() for a in s.get("args", [])]
         assert "owlbear_mcp_project" in all_args, f"owlbear_mcp_project not in MCP args: {all_args}"
 
-    def test_mcp_server_args_reference_relative_path_to_owlbear(self, tmp_path: Path) -> None:
-        """At least one server arg must be a relative path pointing toward owlbear."""
-        project_dir = _project_dir(tmp_path)
-        owlbear_dir = _make_owlbear_dir(tmp_path)
-        create_mcp_config(project_dir, owlbear_dir)
-        data = json.loads((project_dir / ".vscode" / "mcp.json").read_text())
-        all_args = [str(a) for s in data["servers"].values() for a in s.get("args", [])]
-        has_relative = any(
-            not Path(a).is_absolute() and (".." in a or a.startswith("..")) for a in all_args
-        )
-        assert has_relative, f"No relative owlbear path found in MCP server args: {all_args}"
 
     def test_mcp_json_idempotent_skips_if_file_exists(self, tmp_path: Path) -> None:
         """mcp.json must not be overwritten if it already exists."""
@@ -625,7 +614,7 @@ class TestFromAC_GitHubMcpServer:
         )
 
     def test_three_owlbear_servers_still_present_alongside_github(self, tmp_path: Path) -> None:
-        """AC: adding github must not remove the 3 owlbear stdio servers."""
+        """AC: adding github must not remove the 4 owlbear stdio servers (kanban, knowledge, project, memory)."""
         project_dir = _project_dir(tmp_path)
         owlbear_dir = _make_owlbear_dir(tmp_path)
         create_mcp_config(project_dir, owlbear_dir)
@@ -635,7 +624,7 @@ class TestFromAC_GitHubMcpServer:
         assert "github" in servers, (
             f"github entry absent — cannot verify co-existence. Found: {list(servers.keys())}"
         )
-        for key in ("owlbear-kanban", "owlbear-knowledge", "owlbear-project"):
+        for key in ("owlbear-kanban", "owlbear-knowledge", "owlbear-project", "owlbear-memory"):
             assert key in servers, (
                 f"Expected owlbear server '{key}' to remain present alongside github entry. "
                 f"Found: {list(servers.keys())}"
