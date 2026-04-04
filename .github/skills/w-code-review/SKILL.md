@@ -51,14 +51,30 @@ See `h-pytest-and-linting` for flags and known pitfalls.
 
 ## Step 2.5 — Parallel Fan-Out Dispatch
 
-For complex reviews, dispatch **quality-runner** and **code-reader** subagents in parallel to analyse the changed files independently. Each subagent returns a structured report. Synthesise their findings before proceeding to Step 3.
+For implementation reviews, dispatch **quality-runner** (steps 3–5: tests, lint, coverage) and **code-reader** (steps 6–7: code analysis, AC compliance) in parallel. This is the **default dispatch path** for implementation reviews. Steps 3–7 are the sequential fallback, used only when subagents return execution errors.
+
+Dispatch both subagents:
 
 ```
-quality-runner: {task_id, changed_files}
-code-reader: Analyze: {task_id, ac_lines, changed_files, test_files}
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  coverage_modules: ["{module}"]
+  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
 ```
 
-Collect both reports before continuing. If a subagent is unavailable, proceed solo and note the gap.
+```
+agentName: code-reader
+prompt: |
+  task_id: {id}
+  ac_lines: ["{ac line 1}", "{ac line 2}"]
+  changed_files: ["{file1}", "{file2}"]
+  test_files: ["tests/test_{module}.py"]
+```
+
+Collect both reports before continuing to Step 8. If either subagent returns an **execution error** (crash, timeout, exception — not a FAIL verdict), run the full sequential workflow (steps 3–7). Note in Channel B: "Parallel fan-out failed: {reason}. Fell back to sequential."
 
 ## Step 3 — Run Lint
 
@@ -246,7 +262,7 @@ Build an evidence table — every AC line needs specific proof:
 
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
 
-If Step 2.5 was used, synthesise findings from the Quality-Runner and Code-Reader subagent reports into the verdict. Note any divergence between subagent findings and your own analysis.
+If Step 2.5 was used, build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
 
 **PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
 

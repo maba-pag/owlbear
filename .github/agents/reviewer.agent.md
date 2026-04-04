@@ -57,7 +57,8 @@ the builder can fix it without guessing.
 
 | Agent | When | Example |
 |-------|------|---------|
-| code-reader | Complex reviews needing deep code analysis | `Analyze: task_id=42, ac_lines=[...], changed_files=[...], test_files=[...]` |
+| quality-runner | Implementation reviews requiring test/lint/coverage evidence | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
+| code-reader | Complex reviews needing deep code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
 | scribe | Quality concern is preference-based, not objectively wrong | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
 
 </subagents>
