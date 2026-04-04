@@ -156,8 +156,8 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
     limit: int = 0,
     reverse: bool = False,
     blocked: bool | None = None,
-) -> str:
-    """List kanban tasks with optional filters. Returns lean JSON array."""
+) -> list[dict]:
+    """List kanban tasks with optional filters. Returns lean task array."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["list", "--json"]
     if status:
@@ -184,14 +184,15 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
         args.append("--not-blocked")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip() or stdout.strip()}"
+        msg = stderr.strip() or stdout.strip()
+        raise ToolError(msg)
     _strip = {"body", "file", "created", "updated"}
     try:
         tasks = json.loads(stdout)
-        lean = [{k: v for k, v in task.items() if k not in _strip} for task in tasks]
-        return json.dumps(lean)
-    except (json.JSONDecodeError, AttributeError):
-        return stdout
+        return [{k: v for k, v in task.items() if k not in _strip} for task in tasks]
+    except (json.JSONDecodeError, AttributeError) as exc:
+        msg = f"Invalid task JSON: {stdout[:200]}"
+        raise ToolError(msg) from exc
 
 
 # Set outputSchema for list_tasks (lean task array)

@@ -18,6 +18,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 # ---------------------------------------------------------------------------
 # Import target — will raise ImportError until builder implements #56 (RED)
@@ -228,10 +229,10 @@ class TestFromAC_Tools:
                 unclaimed=True,
             )
 
-        lean = json.loads(result)
-        assert len(lean) == 1
-        assert "created" not in lean[0]
-        assert "updated" not in lean[0]
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert "created" not in result[0]
+        assert "updated" not in result[0]
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "list" in args_used
         assert "--json" in args_used
@@ -380,7 +381,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_passes_search_flag(self) -> None:
         """list_tasks passes --search and value to _run_kanban when search is non-empty."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, search="keyword")
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -391,7 +392,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_omits_search_flag_when_empty(self) -> None:
         """list_tasks does NOT pass --search when search is empty string (default)."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, search="")
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -401,7 +402,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_passes_sort_flag(self) -> None:
         """list_tasks passes --sort and value to _run_kanban when sort is non-empty."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, sort="priority")
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -412,7 +413,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_omits_sort_flag_when_empty(self) -> None:
         """list_tasks does NOT pass --sort when sort is empty string (default)."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, sort="")
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -422,7 +423,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_passes_unclaimed_flag_when_true(self) -> None:
         """list_tasks passes --unclaimed to _run_kanban when unclaimed=True."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, unclaimed=True)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -432,7 +433,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_omits_unclaimed_flag_when_false(self) -> None:
         """list_tasks does NOT pass --unclaimed when unclaimed=False (default)."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, unclaimed=False)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -443,10 +444,10 @@ class TestFromAC_Tools:
     async def test_list_tasks_not_blocked_filter(self) -> None:
         """list_tasks passes --not-blocked to _run_kanban when blocked=False."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             result = await list_tasks(mcp_ctx, blocked=False)
 
-        assert result == _FAKE_STDOUT
+        assert isinstance(result, list)
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "--not-blocked" in args_used
         assert "--blocked" not in args_used
@@ -455,7 +456,7 @@ class TestFromAC_Tools:
     async def test_list_tasks_blocked_filter_does_not_pass_not_blocked(self) -> None:
         """list_tasks passes --blocked (not --not-blocked) when blocked=True."""
         mcp_ctx = _make_mcp_ctx()
-        with self._patch_run() as mock_run:
+        with self._patch_run(stdout=_FAKE_LIST_JSON) as mock_run:
             await list_tasks(mcp_ctx, blocked=True)
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
@@ -491,17 +492,16 @@ class TestFromAC_Tools:
     @pytest.mark.parametrize(
         ("tool_fn", "kwargs"),
         [
-            (list_tasks, {}),
             (create_task, {"title": "t"}),
         ],
-        ids=["list_tasks", "create_task"],
+        ids=["create_task"],
     )
     async def test_all_tools_return_error_string_on_non_zero_rc(
         self, tool_fn: Any, kwargs: dict[str, Any]
     ) -> None:
-        """list_tasks, create_task return 'error: {stderr}' string when rc != 0.
+        """create_task returns 'error: {stderr}' string when rc != 0.
 
-        Note: show_task, move_task, pick_task, edit_task now raise ToolError instead.
+        Note: show_task, move_task, pick_task, edit_task, list_tasks raise ToolError instead.
         """
         mcp_ctx = _make_mcp_ctx()
         with patch(
@@ -1122,8 +1122,8 @@ class TestBuilderDiscovered:
     # ------------------------------------------------------------------ list_tasks edge cases (AC3/AC4 #505)
 
     @pytest.mark.asyncio
-    async def test_list_tasks_empty_array_returns_empty_json(self) -> None:
-        """list_tasks with empty JSON array '[]' from kanban-md returns '[]' (AC3 #505)."""
+    async def test_list_tasks_empty_array_returns_empty_list(self) -> None:
+        """list_tasks with empty JSON array '[]' from kanban-md returns [] (AC3 #505)."""
         mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
@@ -1131,17 +1131,25 @@ class TestBuilderDiscovered:
         ):
             result = await list_tasks(mcp_ctx)
 
-        assert result == "[]"
+        assert result == []
 
     @pytest.mark.asyncio
-    async def test_list_tasks_non_json_stdout_returns_raw_stdout(self) -> None:
-        """list_tasks returns raw stdout when kanban-md output is non-JSON (AC4 #505)."""
+    async def test_list_tasks_non_json_stdout_raises_tool_error(self) -> None:
+        """list_tasks raises ToolError when kanban-md output is non-JSON (AC4 #505)."""
         mcp_ctx = _make_mcp_ctx()
         plain_text = "kanban-md: no tasks found (plain output)"
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=(plain_text, "", 0)),
-        ):
-            result = await list_tasks(mcp_ctx)
+        ), pytest.raises(ToolError, match="Invalid task JSON"):
+            await list_tasks(mcp_ctx)
 
-        assert result == plain_text
+    @pytest.mark.asyncio
+    async def test_list_tasks_raises_tool_error_on_non_zero_rc(self) -> None:
+        """list_tasks raises ToolError when kanban-md exits with non-zero rc."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", "some error", 1)),
+        ), pytest.raises(ToolError, match="some error"):
+            await list_tasks(mcp_ctx)
