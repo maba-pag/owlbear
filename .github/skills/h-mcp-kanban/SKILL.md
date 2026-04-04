@@ -18,7 +18,7 @@ For direct CLI access (deprecated, fallback only), see `h-kanban-md`.
 | `list_tasks` | List tasks with optional filters |
 | `show_task` | Show full task details by ID |
 | `create_task` | Create a new task |
-| `move_task` | Move task to a status column |
+| `move_task` | Move task to a status column, or archive it (status="archived") |
 | `edit_task` | Edit task fields |
 | `start_work` | Claim task and return full details |
 | `end_work` | Append note, advance or resolve status, release claim |

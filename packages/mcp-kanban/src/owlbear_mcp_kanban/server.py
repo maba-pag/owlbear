@@ -285,7 +285,7 @@ async def create_task(  # noqa: PLR0913
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
 async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
-    """Move a task to the specified status column."""
+    """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     if status == "archived":
         stdout, stderr, rc = await _run_kanban(app_ctx, "archive", task_id)
