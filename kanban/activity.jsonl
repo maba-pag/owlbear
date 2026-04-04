@@ -1,87 +1,3 @@
-{"timestamp":"2026-03-30T01:17:41.1659757+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T01:17:45.8099915+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T01:17:45.8136285+02:00","action":"release","task_id":69,"detail":"reviewer"}
-{"timestamp":"2026-03-30T01:19:35.2198171+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T01:19:35.2234353+02:00","action":"release","task_id":181,"detail":"test-writer"}
-{"timestamp":"2026-03-30T01:21:14.6653693+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-30T01:21:14.6669064+02:00","action":"claim","task_id":18,"detail":"auditor"}
-{"timestamp":"2026-03-30T01:21:17.8945719+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T01:21:17.8985745+02:00","action":"claim","task_id":25,"detail":"architect"}
-{"timestamp":"2026-03-30T01:21:19.0082771+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T01:21:19.0137332+02:00","action":"claim","task_id":69,"detail":"writer"}
-{"timestamp":"2026-03-30T01:21:22.3011283+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T01:21:22.3047906+02:00","action":"claim","task_id":163,"detail":"writer"}
-{"timestamp":"2026-03-30T01:22:26.6420073+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T01:22:36.0279246+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T01:22:46.6910979+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T01:22:46.6942611+02:00","action":"block","task_id":25,"detail":"Fully superseded: AC covered by #12 (tests), #167 (manual validation), #169 (docs). Auditor should archive."}
-{"timestamp":"2026-03-30T01:22:46.698033+02:00","action":"release","task_id":25,"detail":"architect"}
-{"timestamp":"2026-03-30T01:23:20.3866814+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T01:23:29.1188368+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T01:23:29.1231002+02:00","action":"release","task_id":69,"detail":"writer"}
-{"timestamp":"2026-03-30T01:23:48.3889797+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T01:24:00.7898016+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T01:24:00.7931208+02:00","action":"release","task_id":163,"detail":"writer"}
-{"timestamp":"2026-03-30T01:27:33.3598015+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-30T01:27:42.7481257+02:00","action":"move","task_id":18,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T01:27:43.1174146+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-30T01:27:43.1205802+02:00","action":"release","task_id":18,"detail":"auditor"}
-{"timestamp":"2026-03-30T01:28:09.8371297+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-30T01:28:17.6188082+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T01:28:36.8970708+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T01:28:36.9001662+02:00","action":"claim","task_id":192,"detail":"builder"}
-{"timestamp":"2026-03-30T01:28:39.2248835+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T01:28:39.2280166+02:00","action":"claim","task_id":197,"detail":"researcher"}
-{"timestamp":"2026-03-30T01:28:41.5662026+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T01:28:41.568994+02:00","action":"claim","task_id":167,"detail":"researcher"}
-{"timestamp":"2026-03-30T01:28:43.3873611+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T01:28:44.3723918+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T01:28:44.3753979+02:00","action":"claim","task_id":182,"detail":"reviewer"}
-{"timestamp":"2026-03-30T01:28:46.5999201+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T01:28:46.602551+02:00","action":"release","task_id":192,"detail":"builder"}
-{"timestamp":"2026-03-30T01:30:53.6500889+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T01:30:57.5353636+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T01:30:57.5387624+02:00","action":"release","task_id":182,"detail":"reviewer"}
-{"timestamp":"2026-03-30T01:32:55.7391323+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T01:33:06.0140707+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T01:33:06.3543585+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T01:33:06.3569332+02:00","action":"release","task_id":167,"detail":"researcher"}
-{"timestamp":"2026-03-30T01:33:31.186624+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T01:33:42.2855614+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T01:33:42.2897901+02:00","action":"release","task_id":197,"detail":"researcher"}
-{"timestamp":"2026-03-30T01:34:16.1017156+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T01:34:16.1027469+02:00","action":"claim","task_id":195,"detail":"test-writer"}
-{"timestamp":"2026-03-30T01:34:20.2124916+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T01:34:20.216111+02:00","action":"claim","task_id":194,"detail":"test-writer"}
-{"timestamp":"2026-03-30T01:34:28.3082926+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T01:34:34.3993584+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T01:34:42.1548189+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T01:34:45.3199893+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T01:34:45.3232364+02:00","action":"claim","task_id":185,"detail":"builder"}
-{"timestamp":"2026-03-30T01:34:45.9215584+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T01:34:45.9241666+02:00","action":"release","task_id":195,"detail":"test-writer"}
-{"timestamp":"2026-03-30T01:35:05.2691236+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T01:35:05.271682+02:00","action":"claim","task_id":196,"detail":"test-writer"}
-{"timestamp":"2026-03-30T02:39:12.6309678+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T02:39:12.6562873+02:00","action":"claim","task_id":164,"detail":"researcher"}
-{"timestamp":"2026-03-30T02:39:13.4181778+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T02:39:13.4212685+02:00","action":"claim","task_id":193,"detail":"researcher"}
-{"timestamp":"2026-03-30T02:39:28.2252272+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T02:39:28.2289103+02:00","action":"claim","task_id":182,"detail":"writer"}
-{"timestamp":"2026-03-30T02:39:34.5605989+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-30T02:39:34.5637532+02:00","action":"claim","task_id":69,"detail":"auditor"}
-{"timestamp":"2026-03-30T02:39:51.9408503+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T02:39:51.9440376+02:00","action":"release","task_id":182,"detail":"writer"}
-{"timestamp":"2026-03-30T02:41:44.8891105+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T02:41:44.8934783+02:00","action":"claim","task_id":188,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:41:46.2425698+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T02:41:46.245982+02:00","action":"claim","task_id":187,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:41:49.2442633+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-30T02:41:49.24688+02:00","action":"claim","task_id":189,"detail":"reviewer"}
-{"timestamp":"2026-03-30T02:43:08.6613112+02:00","action":"create","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T02:43:43.548689+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T02:43:55.7163922+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T02:43:55.7195911+02:00","action":"release","task_id":187,"detail":"reviewer"}
 {"timestamp":"2026-03-30T02:43:57.7629632+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
 {"timestamp":"2026-03-30T02:44:02.6751716+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
 {"timestamp":"2026-03-30T02:44:02.6797458+02:00","action":"release","task_id":193,"detail":"researcher"}
@@ -9998,3 +9914,87 @@
 {"timestamp":"2026-04-04T19:48:51.222093+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
 {"timestamp":"2026-04-04T19:48:51.2351928+02:00","action":"release","task_id":318,"detail":"wind-coal"}
 {"timestamp":"2026-04-04T19:48:51.7508295+02:00","action":"move","task_id":318,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T19:52:40.3122972+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-04T19:52:54.8809953+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-04T19:53:02.2422046+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-04T19:53:02.2533274+02:00","action":"release","task_id":319,"detail":"flint-hazel"}
+{"timestamp":"2026-04-04T19:59:15.8221281+02:00","action":"edit","task_id":593,"detail":"Rewrite #486 AC to match current architecture"}
+{"timestamp":"2026-04-04T19:59:15.8325658+02:00","action":"release","task_id":593,"detail":"pearl-pond"}
+{"timestamp":"2026-04-04T19:59:43.982944+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T19:59:43.9957598+02:00","action":"claim","task_id":477,"detail":"path-warp"}
+{"timestamp":"2026-04-04T19:59:49.0199798+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
+{"timestamp":"2026-04-04T19:59:49.0316493+02:00","action":"claim","task_id":595,"detail":"glade-staff"}
+{"timestamp":"2026-04-04T19:59:51.5707223+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T19:59:51.5814937+02:00","action":"claim","task_id":265,"detail":"mesa-pond"}
+{"timestamp":"2026-04-04T19:59:53.1296878+02:00","action":"edit","task_id":594,"detail":"Re-scope #575 AC for v2 architecture: 10 agents, per-agent MCP lifecycle blocks"}
+{"timestamp":"2026-04-04T19:59:53.1456159+02:00","action":"claim","task_id":594,"detail":"wild-knoll"}
+{"timestamp":"2026-04-04T20:00:51.6158901+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T20:00:51.6263063+02:00","action":"release","task_id":477,"detail":"path-warp"}
+{"timestamp":"2026-04-04T20:03:28.3556918+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
+{"timestamp":"2026-04-04T20:03:35.0104943+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
+{"timestamp":"2026-04-04T20:03:35.0215028+02:00","action":"release","task_id":595,"detail":"glade-staff"}
+{"timestamp":"2026-04-04T20:09:51.9705905+02:00","action":"create","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-04T20:10:51.5758171+02:00","action":"edit","task_id":594,"detail":"Re-scope #575 AC for v2 architecture: 10 agents, per-agent MCP lifecycle blocks"}
+{"timestamp":"2026-04-04T20:11:01.7467722+02:00","action":"edit","task_id":594,"detail":"Re-scope #575 AC for v2 architecture: 10 agents, per-agent MCP lifecycle blocks"}
+{"timestamp":"2026-04-04T20:11:01.7566138+02:00","action":"release","task_id":594,"detail":"wild-knoll"}
+{"timestamp":"2026-04-04T20:11:07.004458+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T20:11:07.0178819+02:00","action":"release","task_id":265,"detail":"mesa-pond"}
+{"timestamp":"2026-04-04T20:11:37.2466313+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-04T20:11:37.2584511+02:00","action":"claim","task_id":576,"detail":"mace-mint"}
+{"timestamp":"2026-04-04T20:11:45.5071484+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T20:11:45.5175674+02:00","action":"claim","task_id":586,"detail":"prism-peak"}
+{"timestamp":"2026-04-04T20:11:45.8890955+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-04T20:11:45.9006872+02:00","action":"claim","task_id":592,"detail":"oxide-plume"}
+{"timestamp":"2026-04-04T20:11:54.9953051+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-04T20:11:55.0074414+02:00","action":"claim","task_id":484,"detail":"wren-leaf"}
+{"timestamp":"2026-04-04T20:12:10.1747845+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-04T20:12:10.1853038+02:00","action":"release","task_id":484,"detail":"wren-leaf"}
+{"timestamp":"2026-04-04T20:13:20.8101246+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-04T20:13:20.8246097+02:00","action":"release","task_id":576,"detail":"mace-mint"}
+{"timestamp":"2026-04-04T20:14:08.5462902+02:00","action":"create","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-04T20:14:52.7016584+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-04T20:14:52.7133305+02:00","action":"release","task_id":592,"detail":"oxide-plume"}
+{"timestamp":"2026-04-04T20:16:11.2457315+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T20:16:11.2567647+02:00","action":"release","task_id":586,"detail":"prism-peak"}
+{"timestamp":"2026-04-04T20:16:32.0316103+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T20:16:32.042737+02:00","action":"claim","task_id":37,"detail":"wheat-mist"}
+{"timestamp":"2026-04-04T20:16:33.1523628+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T20:16:33.1707454+02:00","action":"claim","task_id":574,"detail":"haven-fort"}
+{"timestamp":"2026-04-04T20:16:33.3335683+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-04T20:16:33.3482615+02:00","action":"claim","task_id":546,"detail":"ledge-peak"}
+{"timestamp":"2026-04-04T20:16:43.2701922+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T20:16:43.2832128+02:00","action":"claim","task_id":437,"detail":"sleet-basin"}
+{"timestamp":"2026-04-04T20:17:37.9902216+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T20:17:38.0019583+02:00","action":"release","task_id":37,"detail":"wheat-mist"}
+{"timestamp":"2026-04-04T20:18:36.2490561+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T20:18:36.260997+02:00","action":"release","task_id":437,"detail":"sleet-basin"}
+{"timestamp":"2026-04-04T20:19:44.7267543+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T20:19:44.7368596+02:00","action":"release","task_id":574,"detail":"haven-fort"}
+{"timestamp":"2026-04-04T20:21:35.718249+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-04T20:21:35.7297385+02:00","action":"release","task_id":546,"detail":"ledge-peak"}
+{"timestamp":"2026-04-04T20:25:09.3463685+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T20:25:09.3705979+02:00","action":"claim","task_id":586,"detail":"flux-holly"}
+{"timestamp":"2026-04-04T20:25:11.6164177+02:00","action":"edit","task_id":547,"detail":"Add model-facing lint feedback via additionalContext to builder PostToolUse hook"}
+{"timestamp":"2026-04-04T20:25:11.6269054+02:00","action":"claim","task_id":547,"detail":"spire-prism"}
+{"timestamp":"2026-04-04T20:25:14.2078717+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T20:25:14.218174+02:00","action":"claim","task_id":437,"detail":"isle-torch"}
+{"timestamp":"2026-04-04T20:25:37.3963855+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T20:25:37.4098132+02:00","action":"release","task_id":586,"detail":"flux-holly"}
+{"timestamp":"2026-04-04T20:26:35.0337055+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T20:26:35.045235+02:00","action":"release","task_id":437,"detail":"isle-torch"}
+{"timestamp":"2026-04-04T20:30:01.0941791+02:00","action":"create","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-04T20:30:11.3763259+02:00","action":"create","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-04T20:30:21.3267839+02:00","action":"create","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T20:30:31.2568317+02:00","action":"create","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-04T20:30:39.4505515+02:00","action":"create","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-04T20:30:51.9951073+02:00","action":"create","task_id":603,"detail":"Move project ops data to .owlbear/"}
+{"timestamp":"2026-04-04T20:31:05.5371477+02:00","action":"create","task_id":604,"detail":"Create seed/ templates and setup/init.py"}
+{"timestamp":"2026-04-04T20:31:16.8074484+02:00","action":"create","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-04T20:31:28.51682+02:00","action":"create","task_id":606,"detail":"Update MCP server path resolution for new structure"}
+{"timestamp":"2026-04-04T20:31:40.9157017+02:00","action":"create","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-04T20:31:51.973524+02:00","action":"create","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-04T20:32:03.4438846+02:00","action":"create","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-04T20:32:46.4577053+02:00","action":"edit","task_id":547,"detail":"Add model-facing lint feedback via additionalContext to builder PostToolUse hook"}
+{"timestamp":"2026-04-04T20:33:02.3686287+02:00","action":"edit","task_id":547,"detail":"Add model-facing lint feedback via additionalContext to builder PostToolUse hook"}
+{"timestamp":"2026-04-04T20:33:02.3791332+02:00","action":"release","task_id":547,"detail":"spire-prism"}
+{"timestamp":"2026-04-04T20:33:02.910962+02:00","action":"move","task_id":547,"detail":"done -\u003e archived"}
