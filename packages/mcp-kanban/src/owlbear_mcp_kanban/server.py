@@ -519,3 +519,98 @@ _kanbantask_schema = KanbanTask.model_json_schema(by_alias=True)
 for _tool_name in ("show_task", "move_task", "pick_task", "edit_task"):
     _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
     _tool_obj.fn_metadata.output_schema = _kanbantask_schema
+
+
+# ---------------------------------------------------------------------------
+# Patch input parameter descriptions for better agent discoverability.
+# FastMCP auto-generates titles from argument names but has no descriptions.
+# ---------------------------------------------------------------------------
+def _patch_param_descriptions(
+    tool_name: str,
+    descriptions: dict[str, str],
+) -> None:
+    tool = next(t for t in mcp._tool_manager._tools.values() if t.name == tool_name)  # noqa: SLF001
+    props = tool.parameters.get("properties", {})
+    for param, desc in descriptions.items():
+        if param in props:
+            props[param]["description"] = desc
+
+
+_patch_param_descriptions("list_tasks", {
+    "status": "Status column: ideation, backlog, todo, in-progress, review, docs, done",
+    "tag": "Filter by tag (e.g. 'phase-2', 'scope:agents')",
+    "priority": "Priority: someday, nice-to-have, important, needed, critical",
+    "search": "Full-text search across task titles and bodies",
+    "sort": "Sort field: priority, updated, id, title, status, created",
+    "unclaimed": "Only show tasks not claimed by any agent",
+    "archived": "Include archived tasks in results",
+    "limit": "Max number of tasks to return (0 = no limit)",
+    "reverse": "Reverse the sort order",
+    "blocked": "True = only blocked, False = only unblocked, null = all",
+})
+
+_patch_param_descriptions("show_task", {
+    "task_id": "Numeric task ID",
+})
+
+_patch_param_descriptions("create_task", {
+    "title": "Task title (short, descriptive)",
+    "body": "Task body in markdown (objectives, AC, context)",
+    "claim": "Agent name to claim this task",
+    "depends_on": "Comma-separated task IDs this depends on (e.g. '42,43')",
+    "parent": "Parent task ID for subtask hierarchy (0 = none)",
+    "priority": "Priority: someday, nice-to-have, important, needed, critical",
+    "status": "Initial status: ideation, backlog, todo, in-progress, review, docs, done",
+    "tags": "Comma-separated tags (e.g. 'phase-2,scope:agents')",
+})
+
+_patch_param_descriptions("move_task", {
+    "task_id": "Numeric task ID",
+    "status": "Target status: ideation, backlog, todo, in-progress, review, docs, done",
+})
+
+_patch_param_descriptions("edit_task", {
+    "task_id": "Numeric task ID",
+    "body": "Replace the entire task body with this markdown text",
+    "block": "Mark task as blocked with this reason string (empty = no change)",
+    "unblock": "Clear the blocked state",
+    "tags": "Set tags (comma-separated, replaces all existing tags)",
+    "priority": "Set priority: someday, nice-to-have, important, needed, critical",
+    "append_body": "Append text to end of task body (preserves existing content)",
+    "claim": "Claim the task for this agent name",
+    "release": "Release the current claim on this task",
+    "status": "Move to status: ideation, backlog, todo, in-progress, review, docs, done",
+    "timestamp": "Add a [[date]] timestamp before appended body",
+    "add_dep": "Add a dependency on this task ID (0 = no change)",
+    "remove_dep": "Remove dependency on this task ID (0 = no change)",
+    "parent": "Set parent task ID for subtask hierarchy (0 = no change)",
+    "title": "Change the task title (empty = no change)",
+})
+
+_patch_param_descriptions("pick_task", {
+    "status": "Pick from status: ideation, backlog, todo, in-progress, review, docs, done",
+    "claim": "Agent name to claim the picked task",
+    "move": "Move picked task to status: ideation, backlog, todo, in-progress, review, docs, done",
+    "tags": "Filter by tags when picking (comma-separated)",
+})
+
+_patch_param_descriptions("start_work", {
+    "task_id": "Numeric task ID",
+    "claim": "Agent name to claim (auto-generated if empty)",
+})
+
+_patch_param_descriptions("end_work", {
+    "task_id": "Numeric task ID",
+    "note": "Summary note appended to the task body (required)",
+    "outcome": (
+        "Work result: success (advance status), fail (stay + release),"
+        " block (mark blocked + release), reject (move to move_to + release)"
+    ),
+    "block_reason": "Required when outcome='block': the reason string",
+    "move_to": (
+        "Target status when outcome='reject':"
+        " ideation, backlog, todo, in-progress, review, docs, done"
+        " (default: ideation)"
+    ),
+    "claim": "Agent name for the claim (auto-detected from task if empty)",
+})
