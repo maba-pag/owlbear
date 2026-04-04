@@ -75,6 +75,8 @@ The architect retains final authority.
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `ideation` via `end_work(outcome="reject")`, appending findings |
 
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")` (APPROVE path)
+
 <!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
 
 > **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`. Add the bare tag if missing.

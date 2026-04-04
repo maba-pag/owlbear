@@ -83,6 +83,8 @@ Group by dependency layer (independent first, then dependents). Record created t
 
 If dispatched with a parent task ID, append the planning summary to the parent body via `edit_task` (with `append_body` and `timestamp=True`).
 
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Planning\n...", timestamp=True)`
+
 ## Step 7 — Visualize Dependencies
 
 Produce a Mermaid diagram showing task relationships. Arrows: dependency toward dependent.
@@ -90,6 +92,8 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 ## Step 8 — Advance
 
 If dispatched with a parent task ID, advance via `end_work` to release the claim and move status.
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 
