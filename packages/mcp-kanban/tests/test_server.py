@@ -1107,9 +1107,12 @@ class TestBuilderDiscovered:
         from owlbear_mcp_kanban.server import _list_tasks_tool_obj  # noqa: PLC0415
 
         schema = _list_tasks_tool_obj.fn_metadata.output_schema
-        assert schema["type"] == "array"
-        assert "items" in schema, "output_schema missing 'items'"
-        items = schema["items"]
+        assert schema["type"] == "object"
+        assert "result" in schema.get("properties", {}), "output_schema missing 'result' property"
+        result_schema = schema["properties"]["result"]
+        assert result_schema["type"] == "array"
+        assert "items" in result_schema, "result schema missing 'items'"
+        items = result_schema["items"]
         assert items["type"] == "object"
         assert "properties" in items, "items missing 'properties'"
         props = items["properties"]
