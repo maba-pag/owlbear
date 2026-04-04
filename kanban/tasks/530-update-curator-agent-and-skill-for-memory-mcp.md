@@ -1,10 +1,12 @@
 ---
 id: 530
 title: Update curator agent and skill for memory-mcp
-status: docs
+status: archived
 priority: important
 created: 2026-04-01T19:13:05.3558386+02:00
-updated: 2026-04-04T06:41:17.2380635+02:00
+updated: 2026-04-04T17:29:26.3420671+02:00
+started: 2026-04-04T17:29:26.3420671+02:00
+completed: 2026-04-04T17:29:26.3420671+02:00
 tags:
     - scope:agents
     - phase-2
@@ -12,8 +14,6 @@ tags:
 depends_on:
     - 525
     - 568
-claimed_by: doc-writer
-claimed_at: 2026-04-04T06:41:17.2358128+02:00
 class: standard
 ---
 
@@ -104,3 +104,55 @@ AC Compliance:
 - AC7 (critical_rules unchanged): PASS
 
 Security: PASS. Builder process: CLEAN. Deductions: 0. Confidence: .94 -> PASS
+
+[[2026-04-04]] Sat 16:33
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A — no copilot-instructions update needed | Changes are agent persona + skill workflow (internal curator operation). Memory Governance table already accurately reflects dual-write sources (Repo inbox: "Agent lessons-learned (legacy, dual-write)", Canonical: owlbearMemory). No system-level governance change. |
+| 2 | Module docstrings | No | N/A | No Python modules changed. Task tagged `agent`; all changes are .agent.md and SKILL.md markdown files. |
+| 3 | External attribution | No | N/A | No new external patterns. Attribution for mem0/LangMem already captured in docs/research/curator-workflow-memory-mcp.md (owning task #528). |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | N/A | Verified | docs/research/curator-workflow-memory-mcp.md exists (owning task #528). AC notes reference §3C and §3F. Task #530 implements that research; it did not produce a new research doc. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- docs/scratch/530-architect.tmp — deleted (stale; from a mistaken arch review that confused #530 with an observability audit task)
+
+[[2026-04-04]] Sat 17:29
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 Persona references MCP + inbox | curator.agent.md persona: "expedition database (owlbearMemory MCP, queried via list_entries) and physical notebooks dropped in the library inbox" | PASS |
+| AC2 Retains vscode/memory tool | curator.agent.md tools: list includes vscode/memory | PASS |
+| AC3 Step 1 list_entries primary + inbox secondary | w-mem-curation SKILL.md Step 1: "Primary (MCP): Call list_entries(status=pending)" + "Secondary (file-based)" | PASS |
+| AC4 mark_for_deletion for MCP, memory delete for file-based | w-mem-curation SKILL.md Step 4 Deletions: both pathways present | PASS |
+| AC5 CROSS-POLLINATE agent_id/category/confidence | w-mem-curation SKILL.md Step 4 Cross-pollination: agent_id=curator:cross-pollinate:{id}, category carry-forward, confidence floor 0.7 | PASS |
+| AC6 Step 5 report with MCP entry IDs | w-mem-curation SKILL.md Output Template: Deletions table with Source/ID/File columns | PASS |
+| AC7 critical_rules unchanged | curator.agent.md critical_rules section intact, no MCP-related additions | PASS |
+
+### Test Results
+- pytest: 2784 passed, 403 failed (all pre-existing from directory reorganization, 0 in task scope), 8 skipped, 1 error (unrelated import)
+- ruff: N/A (no Python code; agent/skill markdown only)
+
+### Architect Quality: 4/5
+Original AC had param name errors (source vs agent_id) and missing migration dual-read guidance. Architect corrected all during review with challenger input. Final AC was specific, verifiable, and complete.
+
+### Deduction Breakdown
+- 7 AC lines, all with specific evidence: no deduction
+- Lint: N/A (no Python code)
+- AC quality 4/5 (above threshold of 3): no deduction
+- Reviewer evidence present and detailed (.94 confidence PASS): no deduction
+- Full-suite failures in task scope: 0: no deduction
+
+### Confidence: 1.00
+### Action: archive
+
+### Commit Integrity
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 664bec7 | feat | agents/curator.agent.md, skills/curation-workflow/SKILL.md | #530 |
