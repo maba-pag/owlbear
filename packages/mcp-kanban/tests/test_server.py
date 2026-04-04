@@ -33,7 +33,6 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
     end_work,
     list_tasks,
     move_task,
-    pick_task,
     show_task,
     start_work,
 )
@@ -187,7 +186,6 @@ _FAKE_TASK_JSON = json.dumps({
     "priority": "important",
     "created": "2026-01-01T00:00:00+00:00",
     "updated": "2026-01-01T00:00:00+00:00",
-    "class": "standard",
 })
 # Valid JSON list returned by kanban-md --json; includes created/updated to verify stripping.
 _FAKE_LIST_JSON = json.dumps([{
@@ -196,7 +194,6 @@ _FAKE_LIST_JSON = json.dumps([{
     "status": "todo",
     "priority": "important",
     "tags": [],
-    "class": "standard",
     "created": "2026-01-01T00:00:00+00:00",
     "updated": "2026-01-01T00:00:00+00:00",
 }])
@@ -270,7 +267,6 @@ class TestFromAC_Tools:
                 tags="phase-3,mcp",
                 body="## AC\n- do stuff",
                 depends_on="7",
-                claim="builder",
             )
 
         assert result == _FAKE_STDOUT
@@ -282,7 +278,6 @@ class TestFromAC_Tools:
         assert "--tags" in args_used
         assert "--body" in args_used
         assert "--depends-on" in args_used
-        assert "--claim" in args_used
 
     # ------------------------------------------------------------------ move_task
     @pytest.mark.asyncio
@@ -314,8 +309,6 @@ class TestFromAC_Tools:
                 tags="phase-3",
                 priority="critical",
                 append_body="## Notes\n- added",
-                claim="builder",
-                release=False,
                 status="review",
                 timestamp=True,
             )
@@ -328,7 +321,6 @@ class TestFromAC_Tools:
         assert "--block" in args_used
         assert "--tags" in args_used
         assert "--priority" in args_used
-        assert "--claim" in args_used
         assert "--status" in args_used
         # append_body maps to -a or --append-body
         assert any(arg in args_used for arg in ("-a", "--append-body"))
@@ -355,26 +347,6 @@ class TestFromAC_Tools:
 
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "--unblock" not in args_used
-
-    @pytest.mark.asyncio
-    async def test_edit_task_passes_release_flag_when_true(self) -> None:
-        """edit_task passes --release to _run_kanban when release=True (not False)."""
-        mcp_ctx = _make_mcp_ctx()
-        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
-            await edit_task(mcp_ctx, task_id="42", release=True)
-
-        args_used: tuple[Any, ...] = mock_run.call_args[0]
-        assert "--release" in args_used
-
-    @pytest.mark.asyncio
-    async def test_edit_task_omits_release_flag_when_false(self) -> None:
-        """edit_task does NOT include --release when release=False."""
-        mcp_ctx = _make_mcp_ctx()
-        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
-            await edit_task(mcp_ctx, task_id="42", release=False)
-
-        args_used: tuple[Any, ...] = mock_run.call_args[0]
-        assert "--release" not in args_used
 
     # ------------------------------------------------------------------ list_tasks search/sort/unclaimed (retry: LAX coverage from cycle 1+2)
     @pytest.mark.asyncio
@@ -463,30 +435,6 @@ class TestFromAC_Tools:
         assert "--blocked" in args_used
         assert "--not-blocked" not in args_used
 
-    # ------------------------------------------------------------------ pick_task
-    @pytest.mark.asyncio
-    async def test_pick_task_success_passes_args(self) -> None:
-        """pick_task passes optional filter args to _run_kanban when rc=0."""
-        mcp_ctx = _make_mcp_ctx()
-        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
-            result = await pick_task(
-                mcp_ctx,
-                status="todo",
-                claim="builder",
-                move="in-progress",
-                tags="phase-3",
-            )
-
-        assert isinstance(result, KanbanTask)
-        args_used: tuple[Any, ...] = mock_run.call_args[0]
-        assert "pick" in args_used
-        assert "--status" in args_used
-        assert "todo" in args_used
-        assert "--claim" in args_used
-        assert "--move" in args_used
-        assert "--tags" in args_used
-        assert "--json" in args_used
-
     # ------------------------------------------------------------------ error path (parametrized)
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -501,7 +449,7 @@ class TestFromAC_Tools:
     ) -> None:
         """create_task returns 'error: {stderr}' string when rc != 0.
 
-        Note: show_task, move_task, pick_task, edit_task, list_tasks raise ToolError instead.
+        Note: show_task, move_task, edit_task, list_tasks raise ToolError instead.
         """
         mcp_ctx = _make_mcp_ctx()
         with patch(
@@ -745,7 +693,7 @@ class TestFromAC_EndWork:
 
         with self._patch_run_always() as mock_run:
             await end_work(
-                mcp_ctx, task_id="42", note="couldn't finish", outcome="fail", claim="my-agent"
+                mcp_ctx, task_id="42", note="couldn't finish", outcome="fail"
             )
 
         edit_calls = self._edit_calls(mock_run)
@@ -762,7 +710,7 @@ class TestFromAC_EndWork:
 
         with self._patch_run_always() as mock_run:
             await end_work(
-                mcp_ctx, task_id="42", note="context overflow", outcome="fail", claim="agent"
+                mcp_ctx, task_id="42", note="context overflow", outcome="fail"
             )
 
         edit_calls = self._edit_calls(mock_run)
@@ -787,7 +735,6 @@ class TestFromAC_EndWork:
                 note="blocked",
                 outcome="block",
                 block_reason=reason,
-                claim="agent",
             )
 
         edit_calls = self._edit_calls(mock_run)
@@ -832,7 +779,6 @@ class TestFromAC_EndWork:
                 note="fundamental issue",
                 outcome="reject",
                 move_to="backlog",
-                claim="agent",
             )
 
         edit_calls = self._edit_calls(mock_run)
@@ -850,7 +796,7 @@ class TestFromAC_EndWork:
 
         with self._patch_run_always() as mock_run:
             await end_work(
-                mcp_ctx, task_id="42", note="rejected", outcome="reject", claim="agent"
+                mcp_ctx, task_id="42", note="rejected", outcome="reject"
             )
 
         edit_calls = self._edit_calls(mock_run)
@@ -858,48 +804,6 @@ class TestFromAC_EndWork:
         edit_args = list(edit_calls[-1][0])
         assert "--status" in edit_args
         assert edit_args[edit_args.index("--status") + 1] == "ideation"
-
-    # ------------------------------------------------------------------ claim parameter (happy)
-
-    # AC: when provided, pass to edit's --claim flag
-    @pytest.mark.asyncio
-    async def test_claim_provided_passed_to_edit(self) -> None:
-        """When claim param is provided, it appears as --claim {claim} in the edit call."""
-        statuses = ["todo", "in-progress", "review"]
-        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
-        # claimed_by in show is different from provided claim — correct value must win
-        show_resp = (self._show_json(status="in-progress", claimed_by="old-agent"), "", 0)
-        edit_resp = ('{"id": 42}', "", 0)
-
-        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
-            await end_work(
-                mcp_ctx, task_id="42", note="done", outcome="success", claim="provided-agent"
-            )
-
-        edit_calls = self._edit_calls(mock_run)
-        assert edit_calls
-        edit_args = list(edit_calls[-1][0])
-        assert "--claim" in edit_args
-        assert edit_args[edit_args.index("--claim") + 1] == "provided-agent"
-
-    # AC: when absent, read claimed_by from show JSON output
-    @pytest.mark.asyncio
-    async def test_claim_absent_reads_claimed_by_from_show_json(self) -> None:
-        """When claim param is omitted, the claimed_by value from show JSON is used for --claim."""
-        statuses = ["todo", "in-progress", "review"]
-        mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
-        show_resp = (self._show_json(status="in-progress", claimed_by="the-builder-agent"), "", 0)
-        edit_resp = ('{"id": 42}', "", 0)
-
-        with self._patch_run_seq(show_resp, edit_resp) as mock_run:
-            # No claim param — must derive from show
-            await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
-
-        edit_calls = self._edit_calls(mock_run)
-        assert edit_calls
-        edit_args = list(edit_calls[-1][0])
-        assert "--claim" in edit_args
-        assert edit_args[edit_args.index("--claim") + 1] == "the-builder-agent"
 
     # ------------------------------------------------------------------ error propagation (error)
 
@@ -930,7 +834,7 @@ class TestFromAC_EndWork:
 
         with self._patch_run_seq(show_resp, edit_resp) as mock_run:
             # outcome intentionally omitted — must default to "success" per AC
-            await end_work(mcp_ctx, task_id="42", note="done", claim="builder")
+            await end_work(mcp_ctx, task_id="42", note="done")
 
         edit_calls = self._edit_calls(mock_run)
         assert edit_calls, "edit was not called — success outcome behavior not triggered"
@@ -955,7 +859,7 @@ class TestFromAC_EndWork:
 
         with self._patch_run_seq(show_resp, edit_fail):
             result = await end_work(
-                mcp_ctx, task_id="42", note="done", outcome="success", claim="builder"
+                mcp_ctx, task_id="42", note="done", outcome="success"
             )
 
         assert isinstance(result, str)
@@ -974,39 +878,23 @@ class TestBuilderDiscovered:
     # ------------------------------------------------------------------ start_work
 
     @pytest.mark.asyncio
-    async def test_start_work_with_claim_skips_agent_name(self) -> None:
-        """start_work with explicit claim skips agent-name, calls edit then show."""
+    async def test_start_work_calls_agent_name_then_edit_then_show(self) -> None:
+        """start_work always calls agent-name, then edit --claim, then show --json."""
         mcp_ctx = _make_mcp_ctx()
         show_json = '{"id": 1, "title": "my task"}'
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(side_effect=[("ok", "", 0), (show_json, "", 0)]),
-        ) as mock_run:
-            result = await start_work(mcp_ctx, task_id="1", claim="my-agent")
-
-        data = json.loads(result)
-        assert data["claim_name"] == "my-agent"
-        first_cmd = mock_run.call_args_list[0][0][1]
-        assert first_cmd == "edit"
-
-    @pytest.mark.asyncio
-    async def test_start_work_without_claim_calls_agent_name(self) -> None:
-        """start_work without claim calls agent-name to resolve claim_name."""
-        mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(
                 side_effect=[
                     ("auto-agent\n", "", 0),   # agent-name
                     ("ok", "", 0),              # edit --claim
-                    ('{"id": 1}', "", 0),       # show --json
+                    (show_json, "", 0),         # show --json
                 ]
             ),
         ) as mock_run:
             result = await start_work(mcp_ctx, task_id="1")
 
-        data = json.loads(result)
-        assert data["claim_name"] == "auto-agent"
+        assert json.loads(result)["id"] == 1
         first_cmd = mock_run.call_args_list[0][0][1]
         assert first_cmd == "agent-name"
 
@@ -1028,9 +916,14 @@ class TestBuilderDiscovered:
         mcp_ctx = _make_mcp_ctx()
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "edit failed", 1)),
+            new=AsyncMock(
+                side_effect=[
+                    ("agent\n", "", 0),   # agent-name ok
+                    ("", "edit failed", 1),  # edit fails
+                ]
+            ),
         ):
-            result = await start_work(mcp_ctx, task_id="1", claim="agent")
+            result = await start_work(mcp_ctx, task_id="1")
 
         assert result.startswith("error:")
 
@@ -1041,10 +934,14 @@ class TestBuilderDiscovered:
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(
-                side_effect=[("ok", "", 0), ("", "show failed", 1)]
+                side_effect=[
+                    ("agent\n", "", 0),       # agent-name ok
+                    ("ok", "", 0),             # edit ok
+                    ("", "show failed", 1),    # show fails
+                ]
             ),
         ):
-            result = await start_work(mcp_ctx, task_id="1", claim="agent")
+            result = await start_work(mcp_ctx, task_id="1")
 
         assert result.startswith("error:")
 
@@ -1055,7 +952,7 @@ class TestBuilderDiscovered:
         """end_work returns error string for unrecognized outcome value."""
         mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
         result = await end_work(
-            mcp_ctx, task_id="1", note="n", outcome="unknown", claim="agent"
+            mcp_ctx, task_id="1", note="n", outcome="unknown"
         )
         assert result.startswith("error:")
         assert "unknown" in result
@@ -1069,7 +966,7 @@ class TestBuilderDiscovered:
             new=AsyncMock(return_value=("", "edit fail error", 1)),
         ):
             result = await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="fail", claim="agent"
+                mcp_ctx, task_id="1", note="n", outcome="fail"
             )
         assert result.startswith("error:")
 
@@ -1083,7 +980,7 @@ class TestBuilderDiscovered:
         ):
             result = await end_work(
                 mcp_ctx, task_id="1", note="n", outcome="block",
-                block_reason="reason", claim="agent",
+                block_reason="reason",
             )
         assert result.startswith("error:")
 
@@ -1096,7 +993,7 @@ class TestBuilderDiscovered:
             new=AsyncMock(return_value=("", "reject error", 1)),
         ):
             result = await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="reject", claim="agent"
+                mcp_ctx, task_id="1", note="n", outcome="reject"
             )
         assert result.startswith("error:")
 
@@ -1116,10 +1013,10 @@ class TestBuilderDiscovered:
         assert items["type"] == "object"
         assert "properties" in items, "items missing 'properties'"
         props = items["properties"]
-        lean_fields = {"id", "title", "status", "priority", "class", "tags"}
+        lean_fields = {"id", "title", "status", "priority", "tags"}
         for field in lean_fields:
             assert field in props, f"lean field {field!r} absent from items.properties"
-        for stripped in ("created", "updated"):
+        for stripped in ("created", "updated", "class", "started", "completed", "assignee", "claimed_at", "due", "estimate"):
             assert stripped not in props, f"stripped field {stripped!r} present in items.properties"
 
     # ------------------------------------------------------------------ list_tasks edge cases (AC3/AC4 #505)

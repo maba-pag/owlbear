@@ -22,7 +22,6 @@ from owlbear_mcp_kanban.server import (
     create_task,
     list_tasks,
     move_task,
-    pick_task,
     show_task,
 )
 
@@ -118,7 +117,6 @@ def _make_test_server(board: Path, binary: Path) -> FastMCP:
     test_server.add_tool(create_task)
     test_server.add_tool(show_task)
     test_server.add_tool(move_task)
-    test_server.add_tool(pick_task)
     return test_server
 
 
@@ -294,7 +292,6 @@ class TestFromAC_StructuredContent:
         assert isinstance(sc.get("id"), int), f"'id' must be int, got: {sc.get('id')!r}"
         assert isinstance(sc.get("title"), str), f"'title' must be str, got: {sc.get('title')!r}"
         assert isinstance(sc.get("status"), str), f"'status' must be str, got: {sc.get('status')!r}"
-        assert "class" in sc, f"'class' alias key must be present (not 'class_'): {list(sc.keys())}"
 
     # AC: move_task structuredContent — non-None dict with status matching target
     @pytest.mark.integration
@@ -314,19 +311,4 @@ class TestFromAC_StructuredContent:
             f"structuredContent['status'] must equal 'backlog', got: {sc.get('status')!r}"
         )
 
-    # AC: pick_task structuredContent — non-None dict with id and title keys
-    @pytest.mark.integration
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_pick_task_structured_content(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
-        """pick_task CallToolResult.structuredContent contains id and title keys."""
-        server = _make_test_server(board_dir, real_kanban_bin)
-        async with create_connected_server_and_client_session(server) as client:
-            await client.call_tool("create_task", {"title": "Pick StructuredContent Task"})
-            result = await client.call_tool("pick_task", {"claim": "test-agent"})
-        sc = result.structuredContent
-        assert sc is not None, "structuredContent must be populated for KanbanTask return type"
-        assert isinstance(sc, dict), f"structuredContent must be a dict, got {type(sc)}"
-        assert "id" in sc, f"'id' key must be present in structuredContent: {list(sc.keys())}"
-        assert "title" in sc, f"'title' key must be present in structuredContent: {list(sc.keys())}"
+

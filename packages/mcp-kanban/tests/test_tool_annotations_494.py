@@ -6,11 +6,10 @@ AC coverage:
   - create_task:   destructiveHint=False
   - move_task:     destructiveHint=False, idempotentHint=True
   - edit_task:     destructiveHint=False
-  - pick_task:     destructiveHint=False
   - start_work:    destructiveHint=False
   - end_work:      destructiveHint=False
   - ToolAnnotations imported from mcp.types in server module
-  - All 8 tools have annotations (not None)
+  - All 7 tools have annotations (not None)
 
 All tests FAIL in RED phase — ToolAnnotations not yet applied to @mcp.tool() decorators.
 """
@@ -54,7 +53,7 @@ class TestFromAC_ToolAnnotations:
             "server module must import ToolAnnotations so it can be used in @mcp.tool() decorators"
         )
 
-    # -- All 6 tools have annotations (not None) ------------------------------
+    # -- All 7 tools have annotations (not None) ------------------------------
 
     @pytest.mark.parametrize(
         "tool_name",
@@ -64,7 +63,6 @@ class TestFromAC_ToolAnnotations:
             "create_task",
             "move_task",
             "edit_task",
-            "pick_task",
             "start_work",
             "end_work",
         ],
@@ -149,16 +147,6 @@ class TestFromAC_ToolAnnotations:
         assert ann is not None, "edit_task has no ToolAnnotations"
         assert ann.destructiveHint is False, (  # type: ignore[union-attr]
             f"Expected destructiveHint=False for edit_task, got: {ann.destructiveHint!r}"
-        )
-
-    # -- pick_task ------------------------------------------------------------
-
-    def test_pick_task_destructive_hint_false(self) -> None:
-        """pick_task is non-destructive: destructiveHint must be False."""
-        ann = _get_tool_annotations("pick_task")
-        assert ann is not None, "pick_task has no ToolAnnotations"
-        assert ann.destructiveHint is False, (  # type: ignore[union-attr]
-            f"Expected destructiveHint=False for pick_task, got: {ann.destructiveHint!r}"
         )
 
     # -- start_work -----------------------------------------------------------
