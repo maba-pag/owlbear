@@ -47,6 +47,8 @@ Before starting work, check whether the task was previously blocked by a decisio
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
 4. Never write to `docs/decisions/` directly — always use the **scribe** agent.
 
+> **MCP equivalent:** `show_task(task_id="{id}")` to read the full task body for resolved decision sections.
+
 ### Entry-Gate Agents
 
 Researcher, architect, and planner must reject invalid task inputs immediately:
@@ -94,6 +96,8 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - Target `backlog` status. Exception: researchers create follow-up tasks at `ideation`.
 - Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the dispatcher will dispatch the planner.
 
+> **MCP equivalent:** `create_task` for simple follow-up tasks; see MCP schema for current parameters.
+
 ## 3. Communication
 
 ### Channel A — Routing Signal
@@ -111,6 +115,8 @@ Channel A is diagnostic only — the orchestrator does not parse or interpret th
 Rich context appended to the task body before returning. Downstream agents read this via the task body. The orchestrator never reads it.
 
 For command syntax to append body content, see the `h-mcp-kanban` skill (`edit_task` tool).
+
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="...", timestamp=True)` — see MCP schema for current parameters.
 
 ### Per-Agent Signal Mapping
 
@@ -141,6 +147,8 @@ See docs/scratch/480-reviewer.md for full evidence.
 - **Orchestrator:** never reads task bodies. Re-plans from board state each cycle.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
 - **Architect / builder:** read task body for AC, architecture notes, and research pointers.
+
+> **MCP equivalent:** `show_task(task_id="{id}")` for agent task-body read operations.
 
 ## 4. Closing
 
@@ -191,6 +199,8 @@ The kanban `block` action is reserved for:
 - Stale tasks — blocked for triage by dispatcher
 - Tasks with pending DRs — blocked until user responds
 
+> **MCP equivalent:** `edit_task(block="reason")` to set and `edit_task(unblock=True)` to clear the block flag; see MCP schema for current parameters.
+
 ### Decision Tiers
 
 | Tier | When | Action |
@@ -204,3 +214,5 @@ All DR/AR creation goes through the **scribe** agent. Never write to `docs/decis
 ### Handoff
 
 When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments).
+
+> **MCP equivalent:** `edit_task(append_body="...")` to write current state to the task body.
