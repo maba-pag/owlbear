@@ -58,9 +58,9 @@ troubleshooting reference.
 
 | Resource | Location | Shared? |
 |----------|----------|---------|
-| Agents (`.agent.md`) | `../owlbear/agents/` | Yes — all teammates get the same agents |
-| Skills (`SKILL.md`) | `../owlbear/skills/` | Yes — all teammates get the same skills |
-| Instructions (`*.instructions.md`) | `../owlbear/instructions/` | Yes — shared baseline |
+| Agents (`.agent.md`) | `../owlbear/.github/agents/` | Yes — all teammates get the same agents |
+| Skills (`SKILL.md`) | `../owlbear/.github/skills/` | Yes — all teammates get the same skills |
+| Instructions (`*.instructions.md`) | `../owlbear/.github/instructions/` | Yes — shared baseline |
 | MCP server code | `../owlbear/packages/` | Yes — started from owlbear via `uv run --project` |
 | Kanban board | `kanban/tasks/` in project | No — per-project |
 | `owlbear-project.json` | project root | No — per-project |

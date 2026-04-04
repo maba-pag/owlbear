@@ -45,5 +45,5 @@ repos:
         name: Validate Agent Tool Names
         language: system
         entry: python scripts/validate_agents.py
-        files: ^agents/.*\.agent\.md$
+        files: ^\.github/agents/.*\.agent\.md$
         pass_filenames: true

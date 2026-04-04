@@ -71,9 +71,9 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 
 | What to check | How to verify |
 |---------------|---------------|
-| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/agents/` |
-| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/skills/` |
-| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/instructions/` |
+| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/.github/agents/` |
+| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/.github/skills/` |
+| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/.github/instructions/` |
 | MCP servers running | Run `MCP: List Servers` from the Command Palette — owlbearKanban should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
@@ -103,7 +103,7 @@ To register your local agent directory, add to `.vscode/settings.json`:
 ```json
 {
   "chat.agentFilesLocations": {
-    "../owlbear/agents": true,
+    "../owlbear/.github/agents": true,
     ".github/agents": true
   }
 }

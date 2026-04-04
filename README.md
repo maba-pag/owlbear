@@ -36,9 +36,9 @@ Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with 
 | `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
 | `packages/mcp-memory/`    | MCP server for persistent agent memory (SQLite-backed) |
 | `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
-| `agents/`                 | Agent definitions (`.agent.md`)                        |
-| `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
-| `instructions/`           | Shared instruction files (`*.instructions.md`)         |
+| `.github/agents/`        | Agent definitions (`.agent.md`)                        |
+| `.github/skills/`         | Agent skills (`SKILL.md`, agentskills.io style)        |
+| `.github/instructions/`   | Shared instruction files (`*.instructions.md`)         |
 | `docs/`                   | Research, decisions, sources, and supporting docs      |
 | `kanban/`                 | Kanban board data and tooling                          |
 | `scripts/`                | Project tooling scripts (setup, skill validation, e2e smoke testing) |
@@ -46,10 +46,10 @@ Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with 
 
 ## How It Works
 
-**Agents** in `agents/` appear in VS Code's agent picker, each owning a pipeline
+**Agents** in `.github/agents/` appear in VS Code's agent picker, each owning a pipeline
 stage (research → architect → test-writer → builder → reviewer → writer → auditor).
 
-**Skills** in `skills/` auto-load by relevance, carrying domain knowledge and
+**Skills** in `.github/skills/` auto-load by relevance, carrying domain knowledge and
 reusable workflows for each agent role.
 
 **MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) expose the kanban
@@ -114,8 +114,8 @@ uv run ruff check packages/ tests/
 
 Two local hooks guard agent and skill file quality:
 
-- **`validate-skills`** — runs on every commit, validates all `skills/*/SKILL.md` frontmatter.
-- **`validate-agents`** — runs when any `agents/*.agent.md` file is staged, checking for:
+- **`validate-skills`** — runs on every commit, validates all `.github/skills/*/SKILL.md` frontmatter.
+- **`validate-agents`** — runs when any `.github/agents/*.agent.md` file is staged, checking for:
   - Bare `todo` (instead of `todos`) in the `tools:` list
   - Stale `resolveMemoryFileUri` tool references anywhere in the file
 

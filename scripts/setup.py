@@ -31,13 +31,13 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
 
     owlbear_keys: dict = {
         "chat.agentFilesLocations": {
-            f"{rel}/agents": True,
+            f"{rel}/.github/agents": True,
         },
         "chat.agentSkillsLocations": {
-            f"{rel}/skills": True,
+            f"{rel}/.github/skills": True,
         },
         "chat.instructionsFilesLocations": {
-            f"{rel}/instructions": True,
+            f"{rel}/.github/instructions": True,
         },
     }
 

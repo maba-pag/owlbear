@@ -2,6 +2,19 @@
 
 External repos and resources studied during OwlBear development.
 
+## Register owlbear-memory MCP Server (Task #570)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code MCP Configuration Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | Server naming conventions (camelCase recommended, not enforced), stdio server config format | `docs/research/register-owlbear-memory-mcp.md` | 2026-04-03 |
+
+## approve_memory CLI Wrapper (Task #531)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Python SDK README §Writing MCP Clients | github.com/modelcontextprotocol/python-sdk | stdio_client, StdioServerParameters, ClientSession patterns for CLI-to-MCP communication | docs/research/approve-memory-cli-wrapper.md | 2026-04-03 |
+| MCP quickstart client tutorial | modelcontextprotocol.io/quickstart/client | MCP client connection management, call_tool pattern | docs/research/approve-memory-cli-wrapper.md | 2026-04-03 |
+
 ## deer-flow Broad Survey (Task #429)
 
 | Source | URL | What | Where Used | Date |
@@ -16,6 +29,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | MCP Spec 2025-06-18 — Tools § Error Handling | modelcontextprotocol.io/specification/2025-06-18/server/tools | Two error mechanisms: protocol errors (JSON-RPC) and tool execution errors (`isError: true`); `error: ` prefix supplements `isError` | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 README | github.com/modelcontextprotocol/python-sdk | FastMCP catches exceptions as ToolError → `isError: true`; normal returns yield `isError: false`; structured output auto-generation from type annotations | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
+
+## Register owlbear-memory MCP Server (Task #571)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code custom agents docs | code.visualstudio.com/docs/copilot/customization/custom-agents | Tool pattern format: `<server name>/*` uses mcp.json key as server name | docs/research/register-owlbear-memory-mcp-json.md | 2026-04-03 |
+| VS Code MCP server docs | code.visualstudio.com/docs/copilot/chat/mcp-servers | mcp.json configuration format for stdio servers | docs/research/register-owlbear-memory-mcp-json.md | 2026-04-03 |
 
 ## KanbanTask Model + outputSchema Validation (Task #495)
 
@@ -114,6 +134,12 @@ External repos and resources studied during OwlBear development.
 | kanban-md JSON schemas | `skills/kanban-md/references/json-schemas.md` | Task object schema returned by `--json` flag | docs/research/move-pick-json-remove-board-context.md | 2026-03-31 |
 | MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | outputSchema, structuredContent, ToolAnnotations spec definitions | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 types + func_metadata | Installed package `.venv/Lib/site-packages/mcp/` | ToolAnnotations class, Tool.outputSchema field, FastMCP structured_output auto-detection | docs/research/mcp-kanban-outputschema-annotations.md | 2026-03-31 |
+
+## set_approval_state MCP Tool Design (Task #529)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MCP Spec 2025-11-25 — ToolAnnotations schema | modelcontextprotocol.io/specification/2025-11-25 (schema.json) | readOnlyHint, idempotentHint, destructiveHint, openWorldHint definitions and defaults | docs/research/set-approval-state-mcp-tool.md S5 | 2026-04-03 |
 
 ## TOOLS_EXCLUDE for Knowledge and Project MCP Servers (Task #493)
 
