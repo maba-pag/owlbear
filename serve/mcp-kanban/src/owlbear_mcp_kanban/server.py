@@ -331,6 +331,8 @@ async def edit_task(  # noqa: PLR0913, C901
     block: str = "",
     unblock: bool = False,
     tags: str = "",
+    add_tag: str = "",
+    remove_tag: str = "",
     priority: str = "",
     append_body: str = "",
     status: str = "",
@@ -345,12 +347,14 @@ async def edit_task(  # noqa: PLR0913, C901
     if depends_on:
         msg = "edit_task does not accept 'depends_on'. Use 'add_dep' or 'remove_dep' instead."
         raise ToolError(msg)
+    if tags:
+        msg = "edit_task does not accept 'tags'. Use 'add_tag' or 'remove_tag' instead."
+        raise ToolError(msg)
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["edit", task_id]
     str_flags: list[tuple[str, str]] = [
         ("--body", body),
         ("--block", block),
-        ("--tags", tags),
         ("--priority", priority),
         ("--status", status),
         ("--title", title),
@@ -364,6 +368,10 @@ async def edit_task(  # noqa: PLR0913, C901
         args.append("--unblock")
     if timestamp:
         args.append("--timestamp")
+    if add_tag:
+        args += ["--add-tag", add_tag]
+    if remove_tag:
+        args += ["--remove-tag", remove_tag]
     if add_dep:
         args += ["--add-dep", add_dep]
     if remove_dep:

@@ -306,7 +306,7 @@ class TestFromAC_Tools:
                 body="new body",
                 block="waiting on user",
                 unblock=False,
-                tags="phase-3",
+                add_tag="phase-3",
                 priority="critical",
                 append_body="## Notes\n- added",
                 status="review",
@@ -319,7 +319,7 @@ class TestFromAC_Tools:
         assert "42" in args_used
         assert "--body" in args_used
         assert "--block" in args_used
-        assert "--tags" in args_used
+        assert "--add-tag" in args_used
         assert "--priority" in args_used
         assert "--status" in args_used
         # append_body maps to -a or --append-body
@@ -409,6 +409,45 @@ class TestFromAC_Tools:
         mcp_ctx = _make_mcp_ctx()
         with pytest.raises(ToolError, match="Use 'add_dep' or 'remove_dep'"):
             await edit_task(mcp_ctx, task_id="42", depends_on="99")
+
+    @pytest.mark.asyncio
+    async def test_edit_task_rejects_tags_param(self) -> None:
+        """edit_task raises ToolError when tags is passed (wrong parameter name)."""
+        mcp_ctx = _make_mcp_ctx()
+        with pytest.raises(ToolError, match="Use 'add_tag' or 'remove_tag'"):
+            await edit_task(mcp_ctx, task_id="42", tags="phase-3")
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_add_tag(self) -> None:
+        """edit_task passes --add-tag with a tag string."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", add_tag="phase-3")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--add-tag" in args_used
+        assert "phase-3" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_remove_tag(self) -> None:
+        """edit_task passes --remove-tag with a tag string."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", remove_tag="phase-2")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--remove-tag" in args_used
+        assert "phase-2" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_omits_add_tag_when_empty(self) -> None:
+        """edit_task does NOT pass --add-tag when add_tag is empty."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", add_tag="")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--add-tag" not in args_used
 
     # ------------------------------------------------------------------ StrId: int→str coercion
     @pytest.mark.asyncio
