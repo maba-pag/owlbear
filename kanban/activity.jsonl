@@ -1,10 +1,3 @@
-{"timestamp":"2026-03-30T03:09:37.1309609+02:00","action":"release","task_id":112,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:11:19.369414+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T03:11:19.3725348+02:00","action":"release","task_id":143,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:11:30.6166439+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:11:30.6202924+02:00","action":"claim","task_id":192,"detail":"writer"}
-{"timestamp":"2026-03-30T03:11:35.4476053+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T03:11:35.4507269+02:00","action":"claim","task_id":193,"detail":"architect"}
 {"timestamp":"2026-03-30T03:11:35.8038701+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
 {"timestamp":"2026-03-30T03:11:35.8075457+02:00","action":"claim","task_id":199,"detail":"researcher"}
 {"timestamp":"2026-03-30T03:11:37.0264454+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
@@ -9998,3 +9991,10 @@
 {"timestamp":"2026-04-04T23:10:24.3030661+02:00","action":"claim","task_id":430,"detail":"steel-hawk"}
 {"timestamp":"2026-04-04T23:10:25.9910267+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
 {"timestamp":"2026-04-04T23:10:26.0061039+02:00","action":"claim","task_id":595,"detail":"warp-dove"}
+{"timestamp":"2026-04-04T23:10:49.0067859+02:00","action":"edit","task_id":595,"detail":"Cancel stale subtasks #580-#584 under Phase B parent #484"}
+{"timestamp":"2026-04-04T23:10:49.0208695+02:00","action":"release","task_id":595,"detail":"warp-dove"}
+{"timestamp":"2026-04-04T23:11:06.1553393+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
+{"timestamp":"2026-04-04T23:11:06.1689986+02:00","action":"claim","task_id":567,"detail":"isle-shore"}
+{"timestamp":"2026-04-04T23:12:03.3459822+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
+{"timestamp":"2026-04-04T23:12:10.1814125+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
+{"timestamp":"2026-04-04T23:12:10.1961609+02:00","action":"release","task_id":567,"detail":"isle-shore"}

@@ -4,7 +4,7 @@ title: 'Cancel stale subtasks #580-#584 under Phase B parent #484'
 status: archived
 priority: important
 created: 2026-04-04T19:26:42.4504121+02:00
-updated: 2026-04-04T23:10:25.988892+02:00
+updated: 2026-04-04T23:10:49.0057276+02:00
 started: 2026-04-04T23:01:55.8768805+02:00
 completed: 2026-04-04T23:02:16.6879893+02:00
 tags:
@@ -13,8 +13,6 @@ tags:
     - ' scope:kanban'
     - ' type:config'
 parent: 484
-claimed_by: warp-dove
-claimed_at: 2026-04-04T23:10:25.9872876+02:00
 class: standard
 ---
 
@@ -104,3 +102,6 @@ All 3 AC complete: #580, #581, #583, #584 archived with cancellation notes. #582
 
 [[2026-04-04]] Sat 23:02
 Audit: config/cleanup task. AC 1: #580,581,583,584 archived (verified). AC 2: #582 excluded (in-progress). AC 3: #484 stale disposition documented. Confidence 1.00.
+
+[[2026-04-04]] Sat 23:10
+Task is archived (completed 2026-04-04). Type:config board-hygiene task — no testable Python interfaces. Releasing claim.
