@@ -1,10 +1,12 @@
 ---
 id: 585
 title: 'Test: Build approve_memory CLI wrapper'
-status: done
+status: archived
 priority: important
 created: 2026-04-03T17:54:42.3450216+02:00
-updated: 2026-04-04T06:43:49.396638+02:00
+updated: 2026-04-04T16:46:14.8041903+02:00
+started: 2026-04-04T16:46:14.8041903+02:00
+completed: 2026-04-04T16:46:14.8041903+02:00
 tags:
     - scope:agents
     - phase-2
@@ -84,3 +86,6 @@ Test file at root tests/ following existing convention (test_memory_tools_525.py
 
 [[2026-04-04]] Sat 03:09
 ## Review Evidence\n\n47/47 pass. ruff clean. 16 AC lines → all COVERED by TestFromAC_ classes.\nBuilder did not modify test file (git confirmed). Test quality STRONG: DB-state assertions, subprocess stderr checks, mutation-resilient.\ntools.py change (list_entries → str fallback for empty results) verified against test_memory_tools_556 (62/62 pass, no regression).\nNo security issues. Builder process: CLEAN (1 commit).\nMinor: no builder notes in task body.\n\n**Confidence: .96 → PASS**
+
+[[2026-04-04]] Sat 16:46
+## Audit\nSee docs/scratch/585-auditor.md for full evidence.\n16/16 AC lines PASS. 47/47 tests pass. Full suite: no regressions. ruff clean. Architect quality 5/5. Confidence .98.

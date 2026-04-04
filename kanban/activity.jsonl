@@ -1,43 +1,3 @@
-{"timestamp":"2026-03-29T23:21:09.6204652+02:00","action":"claim","task_id":185,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:23:22.2352681+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T23:23:22.2385398+02:00","action":"release","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:26:05.1501559+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T23:26:15.9086302+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T23:26:21.1241983+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T23:26:21.1266156+02:00","action":"release","task_id":59,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:26:52.4987918+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T23:27:01.6409193+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T23:27:04.00216+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:27:05.9523239+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T23:27:05.9559669+02:00","action":"release","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:27:09.4804134+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:27:16.4455625+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:27:16.4481454+02:00","action":"release","task_id":185,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:27:22.3465254+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:28:04.6688797+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:28:04.6719714+02:00","action":"claim","task_id":177,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:28:05.7312742+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T23:28:05.7339225+02:00","action":"claim","task_id":121,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:28:06.8752871+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T23:28:06.8784175+02:00","action":"claim","task_id":169,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:28:11.7126643+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:28:11.7131939+02:00","action":"claim","task_id":186,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:29:12.4835339+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T23:29:12.4863144+02:00","action":"release","task_id":169,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:29:48.9583767+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T23:29:48.9613863+02:00","action":"release","task_id":121,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:31:01.0722415+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:31:16.4286683+02:00","action":"move","task_id":177,"detail":"review -\u003e todo"}
-{"timestamp":"2026-03-29T23:31:24.3940827+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:31:24.3994426+02:00","action":"release","task_id":177,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:32:39.3628615+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:32:43.8409795+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:32:43.8445737+02:00","action":"release","task_id":186,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:33:09.8632246+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T23:33:09.8658916+02:00","action":"claim","task_id":89,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:33:21.5409362+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T23:33:21.5450483+02:00","action":"claim","task_id":77,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:33:28.6474973+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
 {"timestamp":"2026-03-29T23:33:28.650107+02:00","action":"claim","task_id":165,"detail":"reviewer"}
 {"timestamp":"2026-03-29T23:33:41.6949105+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
 {"timestamp":"2026-03-29T23:33:41.6985435+02:00","action":"claim","task_id":42,"detail":"reviewer"}
@@ -9998,3 +9958,43 @@
 {"timestamp":"2026-04-04T16:18:46.5439849+02:00","action":"release","task_id":589,"detail":"oaken-flint"}
 {"timestamp":"2026-04-04T16:20:32.1626742+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
 {"timestamp":"2026-04-04T16:20:32.1725803+02:00","action":"release","task_id":590,"detail":"glade-eagle"}
+{"timestamp":"2026-04-04T16:20:53.1743167+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T16:20:59.0137581+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T16:21:21.4420248+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T16:21:26.9260776+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-04T16:21:33.1566253+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T16:21:33.1696342+02:00","action":"release","task_id":318,"detail":"nova-river"}
+{"timestamp":"2026-04-04T16:21:58.0201417+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T16:21:58.0313318+02:00","action":"claim","task_id":548,"detail":"cliff-kelp"}
+{"timestamp":"2026-04-04T16:22:01.4990139+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T16:22:01.5117331+02:00","action":"claim","task_id":37,"detail":"wolf-fort"}
+{"timestamp":"2026-04-04T16:22:15.5367346+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T16:22:15.5494586+02:00","action":"claim","task_id":263,"detail":"robin-horn"}
+{"timestamp":"2026-04-04T16:22:29.0856883+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T16:22:29.0966996+02:00","action":"release","task_id":37,"detail":"wolf-fort"}
+{"timestamp":"2026-04-04T16:22:30.3277275+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T16:22:30.3393856+02:00","action":"release","task_id":263,"detail":"robin-horn"}
+{"timestamp":"2026-04-04T16:23:04.8142353+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T16:23:04.8243654+02:00","action":"release","task_id":548,"detail":"cliff-kelp"}
+{"timestamp":"2026-04-04T16:23:32.5156968+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T16:23:32.5272218+02:00","action":"claim","task_id":543,"detail":"south-solar"}
+{"timestamp":"2026-04-04T16:25:37.8749367+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T16:25:37.8854913+02:00","action":"release","task_id":543,"detail":"south-solar"}
+{"timestamp":"2026-04-04T16:28:06.6340808+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T16:28:06.6452932+02:00","action":"claim","task_id":543,"detail":"orbit-mist"}
+{"timestamp":"2026-04-04T16:28:21.3695692+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T16:28:21.3795233+02:00","action":"claim","task_id":477,"detail":"zinc-vivid"}
+{"timestamp":"2026-04-04T16:28:40.432993+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T16:28:40.4487862+02:00","action":"release","task_id":543,"detail":"orbit-mist"}
+{"timestamp":"2026-04-04T16:32:28.6810303+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-04T16:32:28.6921196+02:00","action":"claim","task_id":530,"detail":"mast-flora"}
+{"timestamp":"2026-04-04T16:33:07.6048538+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-04T16:33:07.6159461+02:00","action":"release","task_id":530,"detail":"mast-flora"}
+{"timestamp":"2026-04-04T16:37:59.6507728+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T16:38:05.6314776+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T16:38:05.6419678+02:00","action":"release","task_id":477,"detail":"zinc-vivid"}
+{"timestamp":"2026-04-04T16:38:47.9075727+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-04T16:38:47.9181815+02:00","action":"claim","task_id":585,"detail":"delta-hill"}
+{"timestamp":"2026-04-04T16:46:14.2076588+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-04T16:46:14.2204405+02:00","action":"release","task_id":585,"detail":"delta-hill"}
+{"timestamp":"2026-04-04T16:46:14.805838+02:00","action":"move","task_id":585,"detail":"done -\u003e archived"}
