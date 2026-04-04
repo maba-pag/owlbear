@@ -1,261 +1,3 @@
-{"timestamp":"2026-03-30T03:11:35.8038701+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:11:35.8075457+02:00","action":"claim","task_id":199,"detail":"researcher"}
-{"timestamp":"2026-03-30T03:11:37.0264454+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T03:11:37.029067+02:00","action":"claim","task_id":182,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:12:55.5136876+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:13:04.7050853+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:13:05.0167244+02:00","action":"edit","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:13:05.0188094+02:00","action":"release","task_id":199,"detail":"researcher"}
-{"timestamp":"2026-03-30T03:13:05.9603895+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:13:10.1490738+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:13:10.1516787+02:00","action":"release","task_id":192,"detail":"writer"}
-{"timestamp":"2026-03-30T03:13:19.229661+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-30T03:13:25.4074643+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-30T03:13:25.4112108+02:00","action":"release","task_id":134,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:13:53.779073+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:13:56.7331751+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:13:56.7368728+02:00","action":"claim","task_id":173,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:13:58.0993515+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:13:58.1019598+02:00","action":"claim","task_id":138,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:13:59.3315403+02:00","action":"delete","task_id":199,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:14:02.8199295+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:14:02.8231298+02:00","action":"claim","task_id":183,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:14:15.4649129+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:14:20.1933822+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:14:20.1965387+02:00","action":"release","task_id":193,"detail":"architect"}
-{"timestamp":"2026-03-30T03:14:27.1613716+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T03:14:34.1909461+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:14:34.1946698+02:00","action":"claim","task_id":193,"detail":"architect"}
-{"timestamp":"2026-03-30T03:14:38.0726452+02:00","action":"move","task_id":182,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:14:43.8312243+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T03:14:43.8343966+02:00","action":"release","task_id":182,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:14:52.7035265+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:14:52.7046004+02:00","action":"release","task_id":183,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:15:02.3704526+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-30T03:15:02.3730107+02:00","action":"claim","task_id":95,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:15:25.6168332+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-30T03:15:41.1547996+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T03:15:41.1590328+02:00","action":"release","task_id":193,"detail":"architect"}
-{"timestamp":"2026-03-30T03:15:57.8368988+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-30T03:15:57.8400865+02:00","action":"release","task_id":95,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:16:09.0991145+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T03:16:09.102289+02:00","action":"claim","task_id":194,"detail":"builder"}
-{"timestamp":"2026-03-30T03:16:09.3068369+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:16:15.2579328+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-30T03:16:15.2594823+02:00","action":"claim","task_id":189,"detail":"writer"}
-{"timestamp":"2026-03-30T03:16:16.4273879+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:16:16.4305312+02:00","action":"release","task_id":173,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:16:23.275011+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T03:16:23.2781968+02:00","action":"claim","task_id":85,"detail":"writer"}
-{"timestamp":"2026-03-30T03:16:27.7868957+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T03:16:56.974996+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:17:00.681495+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:17:21.5451434+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-30T03:17:21.5466798+02:00","action":"release","task_id":189,"detail":"writer"}
-{"timestamp":"2026-03-30T03:17:26.8897648+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T03:17:26.8929184+02:00","action":"release","task_id":85,"detail":"writer"}
-{"timestamp":"2026-03-30T03:17:36.2262219+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T03:17:36.2283191+02:00","action":"release","task_id":194,"detail":"builder"}
-{"timestamp":"2026-03-30T03:17:47.6539002+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:17:47.6565485+02:00","action":"release","task_id":138,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:18:09.7964988+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T03:18:09.7997658+02:00","action":"claim","task_id":177,"detail":"builder"}
-{"timestamp":"2026-03-30T03:18:16.8362504+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:18:16.8398952+02:00","action":"claim","task_id":61,"detail":"writer"}
-{"timestamp":"2026-03-30T03:18:17.5672201+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:18:17.5703356+02:00","action":"claim","task_id":185,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:18:21.1438682+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T03:18:21.1465314+02:00","action":"claim","task_id":57,"detail":"writer"}
-{"timestamp":"2026-03-30T03:18:22.7326592+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T03:18:22.7352509+02:00","action":"claim","task_id":198,"detail":"researcher"}
-{"timestamp":"2026-03-30T03:18:25.2094134+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:18:25.2145537+02:00","action":"claim","task_id":109,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:18:26.6719427+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:18:26.6745394+02:00","action":"claim","task_id":89,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:18:47.2436789+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:18:47.2462538+02:00","action":"claim","task_id":111,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:18:55.939273+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T03:18:55.9419002+02:00","action":"release","task_id":177,"detail":"builder"}
-{"timestamp":"2026-03-30T03:19:05.7724328+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T03:19:12.5966986+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T03:19:33.6769114+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T03:19:49.9213965+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:19:49.9224482+02:00","action":"release","task_id":61,"detail":"writer"}
-{"timestamp":"2026-03-30T03:20:01.636588+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T03:20:01.6376176+02:00","action":"release","task_id":57,"detail":"writer"}
-{"timestamp":"2026-03-30T03:20:17.5883544+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:21:07.3638078+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:21:11.5618992+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:21:21.8657328+02:00","action":"create","task_id":200,"detail":"Implement canonical tool registry validation in validate_agents.py"}
-{"timestamp":"2026-03-30T03:21:27.764572+02:00","action":"create","task_id":201,"detail":"Add tests for canonical tool registry validation"}
-{"timestamp":"2026-03-30T03:21:30.6289338+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:21:33.5557036+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:21:33.5572646+02:00","action":"release","task_id":89,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:21:37.1886883+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:21:37.1912733+02:00","action":"release","task_id":109,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:21:43.2294757+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:21:43.2315666+02:00","action":"release","task_id":111,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:21:52.5115242+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T03:21:52.5141157+02:00","action":"release","task_id":198,"detail":"researcher"}
-{"timestamp":"2026-03-30T03:24:06.0717776+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:24:14.7332766+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:24:19.3896068+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:24:19.3906404+02:00","action":"release","task_id":185,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:24:48.5930617+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:24:48.5956797+02:00","action":"claim","task_id":195,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:24:50.1390537+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:24:50.1390537+02:00","action":"claim","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:24:55.9586157+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T03:24:55.9613137+02:00","action":"claim","task_id":55,"detail":"test-writer-retry"}
-{"timestamp":"2026-03-30T03:25:05.6591266+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:25:05.6627857+02:00","action":"claim","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-30T03:25:27.3904998+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:25:35.3055808+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:25:39.2574652+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T03:25:39.2600935+02:00","action":"release","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-30T03:25:53.0361689+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:25:53.0392987+02:00","action":"claim","task_id":183,"detail":"writer"}
-{"timestamp":"2026-03-30T03:25:55.4054826+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:25:55.408071+02:00","action":"claim","task_id":187,"detail":"writer"}
-{"timestamp":"2026-03-30T03:25:59.3048924+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-30T03:25:59.3080532+02:00","action":"claim","task_id":78,"detail":"writer"}
-{"timestamp":"2026-03-30T03:26:08.5783049+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:26:08.580876+02:00","action":"claim","task_id":61,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:26:30.0070629+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:26:30.0096748+02:00","action":"release","task_id":195,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:26:47.4867259+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-30T03:26:47.4899247+02:00","action":"release","task_id":78,"detail":"writer"}
-{"timestamp":"2026-03-30T03:26:58.2354628+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:27:07.8892627+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:27:07.8914061+02:00","action":"release","task_id":183,"detail":"writer"}
-{"timestamp":"2026-03-30T03:27:45.2727174+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:27:55.1223759+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:28:02.3969043+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:28:02.4003714+02:00","action":"release","task_id":187,"detail":"writer"}
-{"timestamp":"2026-03-30T03:28:09.8903655+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:28:09.8929726+02:00","action":"claim","task_id":187,"detail":"writer"}
-{"timestamp":"2026-03-30T03:28:12.294701+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T03:28:13.994681+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:28:13.9972393+02:00","action":"release","task_id":187,"detail":"writer"}
-{"timestamp":"2026-03-30T03:28:17.3294135+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-30T03:28:19.8452685+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T03:28:19.8484266+02:00","action":"release","task_id":55,"detail":"test-writer-retry"}
-{"timestamp":"2026-03-30T03:31:29.3595233+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:32:22.3790821+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:32:39.1487766+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:32:39.1519634+02:00","action":"release","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:32:43.5288725+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:32:43.5309355+02:00","action":"claim","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:32:48.4975891+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T03:32:48.5001873+02:00","action":"release","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-30T03:33:27.8982665+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T03:33:27.9004117+02:00","action":"claim","task_id":166,"detail":"builder"}
-{"timestamp":"2026-03-30T03:33:37.3290112+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T03:33:37.3326615+02:00","action":"claim","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:33:44.1132789+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T03:33:44.1159357+02:00","action":"claim","task_id":197,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:33:50.4948131+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T03:33:53.8706175+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T03:33:53.8732489+02:00","action":"release","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:34:48.0137231+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:34:48.0197205+02:00","action":"claim","task_id":89,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:36:31.8954036+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T03:36:31.89907+02:00","action":"release","task_id":166,"detail":"builder"}
-{"timestamp":"2026-03-30T03:36:53.3158567+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:36:56.6911326+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T03:36:56.6952759+02:00","action":"release","task_id":89,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:38:13.0868457+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:38:25.294594+02:00","action":"move","task_id":61,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:38:25.6196609+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:38:25.6223443+02:00","action":"release","task_id":61,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:38:27.3245381+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T03:38:31.2987154+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T03:38:31.3018198+02:00","action":"release","task_id":197,"detail":"test-writer"}
-{"timestamp":"2026-03-30T03:38:50.4923992+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-30T03:38:50.4950094+02:00","action":"claim","task_id":134,"detail":"writer"}
-{"timestamp":"2026-03-30T03:38:56.8778831+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:38:56.8809986+02:00","action":"claim","task_id":112,"detail":"writer"}
-{"timestamp":"2026-03-30T03:39:00.1678096+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:39:00.1688407+02:00","action":"claim","task_id":138,"detail":"writer"}
-{"timestamp":"2026-03-30T03:39:04.0080686+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T03:39:04.0181028+02:00","action":"claim","task_id":57,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:39:55.7007995+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:39:56.2118592+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:39:56.2144974+02:00","action":"claim","task_id":195,"detail":"writer"}
-{"timestamp":"2026-03-30T03:40:00.434031+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:40:00.4372392+02:00","action":"claim","task_id":192,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:40:05.6043483+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:40:05.607493+02:00","action":"claim","task_id":185,"detail":"writer"}
-{"timestamp":"2026-03-30T03:40:10.3886177+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:40:14.7616538+02:00","action":"edit","task_id":112,"detail":"Test: Voice protocol Pydantic models"}
-{"timestamp":"2026-03-30T03:40:14.7643487+02:00","action":"release","task_id":112,"detail":"writer"}
-{"timestamp":"2026-03-30T03:40:59.3240705+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-30T03:40:59.327211+02:00","action":"release","task_id":134,"detail":"writer"}
-{"timestamp":"2026-03-30T03:41:05.4696839+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:41:05.9735512+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:41:13.6969097+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:41:21.2414506+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T03:41:21.2450248+02:00","action":"release","task_id":138,"detail":"writer"}
-{"timestamp":"2026-03-30T03:41:23.3415971+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:41:27.7677546+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T03:41:27.7699232+02:00","action":"release","task_id":195,"detail":"writer"}
-{"timestamp":"2026-03-30T03:43:32.3199325+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:43:38.630114+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T03:43:38.6333699+02:00","action":"release","task_id":185,"detail":"writer"}
-{"timestamp":"2026-03-30T03:46:38.6076758+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T03:46:43.8246519+02:00","action":"move","task_id":57,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:46:44.1440197+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-30T03:46:44.1463818+02:00","action":"release","task_id":57,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:47:03.2702571+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:47:08.4892207+02:00","action":"move","task_id":192,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:47:08.815488+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:47:08.8186386+02:00","action":"release","task_id":192,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:47:15.8594036+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-30T03:47:16.1239123+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-30T03:47:16.1276283+02:00","action":"claim","task_id":95,"detail":"writer"}
-{"timestamp":"2026-03-30T03:47:16.19919+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:47:16.2252135+02:00","action":"claim","task_id":111,"detail":"writer"}
-{"timestamp":"2026-03-30T03:47:17.7947598+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:47:17.7984334+02:00","action":"claim","task_id":173,"detail":"writer"}
-{"timestamp":"2026-03-30T03:47:18.3408104+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:47:18.3434804+02:00","action":"claim","task_id":188,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:47:47.2175483+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:47:47.2211725+02:00","action":"claim","task_id":183,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:48:02.3636382+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:48:14.1737203+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:48:20.8683086+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-30T03:48:20.8714607+02:00","action":"release","task_id":95,"detail":"writer"}
-{"timestamp":"2026-03-30T03:48:41.1954664+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:48:50.6726489+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-30T03:48:50.6758157+02:00","action":"release","task_id":111,"detail":"writer"}
-{"timestamp":"2026-03-30T03:48:53.5213798+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:48:57.7865416+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T03:48:57.7907378+02:00","action":"release","task_id":173,"detail":"writer"}
-{"timestamp":"2026-03-30T03:53:15.1491578+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:53:21.829139+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:53:30.4916843+02:00","action":"move","task_id":183,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:53:35.6809995+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-30T03:53:35.6846604+02:00","action":"release","task_id":183,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:54:14.5672923+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T03:54:14.5699187+02:00","action":"claim","task_id":85,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:55:06.3119842+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:55:13.6614245+02:00","action":"move","task_id":188,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T03:55:14.0442964+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:55:14.0485489+02:00","action":"release","task_id":188,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:56:33.2401302+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-30T03:56:33.2427001+02:00","action":"claim","task_id":188,"detail":"auditor"}
-{"timestamp":"2026-03-30T03:56:56.0418327+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:56:56.0444523+02:00","action":"claim","task_id":109,"detail":"writer"}
-{"timestamp":"2026-03-30T03:57:30.9293422+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:57:34.2886905+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-30T03:57:34.2913011+02:00","action":"release","task_id":109,"detail":"writer"}
-{"timestamp":"2026-03-30T04:00:25.5658806+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T04:00:29.9941029+02:00","action":"move","task_id":85,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T04:00:30.3354321+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T04:00:30.3375332+02:00","action":"release","task_id":85,"detail":"auditor"}
-{"timestamp":"2026-03-30T04:00:55.1385022+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T04:01:27.2504984+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-30T04:01:27.2550327+02:00","action":"claim","task_id":189,"detail":"auditor"}
 {"timestamp":"2026-03-30T04:04:56.854255+02:00","action":"move","task_id":189,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-30T04:04:57.2851052+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
 {"timestamp":"2026-03-30T04:04:57.2890272+02:00","action":"release","task_id":189,"detail":"auditor"}
@@ -9998,3 +9740,261 @@
 {"timestamp":"2026-04-04T23:12:03.3459822+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
 {"timestamp":"2026-04-04T23:12:10.1814125+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
 {"timestamp":"2026-04-04T23:12:10.1961609+02:00","action":"release","task_id":567,"detail":"isle-shore"}
+{"timestamp":"2026-04-04T23:17:58.026603+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-04T23:17:58.0407926+02:00","action":"claim","task_id":542,"detail":"quail-wild"}
+{"timestamp":"2026-04-04T23:18:58.3309622+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-04T23:18:58.3489606+02:00","action":"release","task_id":542,"detail":"quail-wild"}
+{"timestamp":"2026-04-04T23:21:39.6690517+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-04T23:21:39.6865174+02:00","action":"release","task_id":430,"detail":"steel-hawk"}
+{"timestamp":"2026-04-04T23:23:55.7944248+02:00","action":"move","task_id":531,"detail":"todo -\u003e review"}
+{"timestamp":"2026-04-04T23:24:01.8088372+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-04T23:24:01.8243369+02:00","action":"claim","task_id":531,"detail":"sleet-maple"}
+{"timestamp":"2026-04-04T23:24:54.7553201+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-04T23:24:54.7669878+02:00","action":"release","task_id":531,"detail":"sleet-maple"}
+{"timestamp":"2026-04-04T23:25:22.3319002+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-04T23:25:22.3455856+02:00","action":"claim","task_id":486,"detail":"cider-ghost"}
+{"timestamp":"2026-04-04T23:25:22.982573+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-04T23:25:22.9959472+02:00","action":"claim","task_id":601,"detail":"rose-elder"}
+{"timestamp":"2026-04-04T23:25:23.2212171+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-04T23:25:23.2327096+02:00","action":"claim","task_id":602,"detail":"robin-zone"}
+{"timestamp":"2026-04-04T23:25:25.0566714+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:25:25.0698829+02:00","action":"claim","task_id":600,"detail":"bone-wing"}
+{"timestamp":"2026-04-04T23:26:15.2570045+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:26:22.5361827+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:26:44.0479151+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:26:47.5420381+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:26:50.7955703+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-04T23:26:50.8098458+02:00","action":"release","task_id":600,"detail":"bone-wing"}
+{"timestamp":"2026-04-04T23:28:16.8335799+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-04T23:28:16.8441043+02:00","action":"release","task_id":602,"detail":"robin-zone"}
+{"timestamp":"2026-04-04T23:29:40.3485901+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-04T23:29:40.358435+02:00","action":"release","task_id":601,"detail":"rose-elder"}
+{"timestamp":"2026-04-04T23:43:18.1512073+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-04T23:43:18.163067+02:00","action":"release","task_id":486,"detail":"cider-ghost"}
+{"timestamp":"2026-04-04T23:43:30.0869407+02:00","action":"move","task_id":486,"detail":"backlog -\u003e review"}
+{"timestamp":"2026-04-04T23:43:55.4692273+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-04T23:43:55.4824383+02:00","action":"claim","task_id":570,"detail":"shell-cider"}
+{"timestamp":"2026-04-04T23:44:15.5800179+02:00","action":"edit","task_id":603,"detail":"Move project ops data to .owlbear/"}
+{"timestamp":"2026-04-04T23:44:15.5949367+02:00","action":"claim","task_id":603,"detail":"bolt-leaf"}
+{"timestamp":"2026-04-04T23:44:27.238546+02:00","action":"edit","task_id":603,"detail":"Move project ops data to .owlbear/"}
+{"timestamp":"2026-04-04T23:44:27.2524112+02:00","action":"release","task_id":603,"detail":"bolt-leaf"}
+{"timestamp":"2026-04-04T23:44:28.2283034+02:00","action":"edit","task_id":604,"detail":"Create seed/ templates and setup/init.py"}
+{"timestamp":"2026-04-04T23:44:28.2388597+02:00","action":"claim","task_id":604,"detail":"spray-grain"}
+{"timestamp":"2026-04-04T23:47:21.7951436+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-04T23:47:21.805718+02:00","action":"release","task_id":570,"detail":"shell-cider"}
+{"timestamp":"2026-04-04T23:50:43.923811+02:00","action":"edit","task_id":604,"detail":"Create seed/ templates and setup/init.py"}
+{"timestamp":"2026-04-04T23:50:43.9348855+02:00","action":"release","task_id":604,"detail":"spray-grain"}
+{"timestamp":"2026-04-04T23:52:58.8813395+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-04T23:52:58.8928903+02:00","action":"claim","task_id":264,"detail":"rapid-yarn"}
+{"timestamp":"2026-04-04T23:53:15.4774512+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-04T23:53:15.4901853+02:00","action":"claim","task_id":546,"detail":"forge-raven"}
+{"timestamp":"2026-04-04T23:54:41.1419817+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-04T23:54:41.1540926+02:00","action":"release","task_id":264,"detail":"rapid-yarn"}
+{"timestamp":"2026-04-04T23:54:50.067892+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-04T23:54:50.078416+02:00","action":"claim","task_id":484,"detail":"dawn-halo"}
+{"timestamp":"2026-04-04T23:55:40.1180834+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-04T23:55:40.1307288+02:00","action":"release","task_id":484,"detail":"dawn-halo"}
+{"timestamp":"2026-04-04T23:55:45.141334+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T23:55:45.1541032+02:00","action":"claim","task_id":477,"detail":"stem-dart"}
+{"timestamp":"2026-04-05T00:00:30.3518098+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T00:00:30.3647932+02:00","action":"release","task_id":546,"detail":"forge-raven"}
+{"timestamp":"2026-04-05T00:03:08.6863028+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T00:03:17.330671+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T00:03:50.5838299+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T00:03:50.5964187+02:00","action":"claim","task_id":477,"detail":"wild-linen"}
+{"timestamp":"2026-04-05T00:04:12.6324132+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T00:04:19.1346023+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T00:04:19.1460793+02:00","action":"release","task_id":477,"detail":"wild-linen"}
+{"timestamp":"2026-04-05T00:04:53.1013909+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T00:04:53.1154455+02:00","action":"claim","task_id":570,"detail":"slate-trout"}
+{"timestamp":"2026-04-05T00:05:10.7379025+02:00","action":"edit","task_id":606,"detail":"Update MCP server path resolution for new structure"}
+{"timestamp":"2026-04-05T00:05:10.7557864+02:00","action":"claim","task_id":606,"detail":"peak-rapid"}
+{"timestamp":"2026-04-05T00:05:11.720538+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T00:05:11.7355858+02:00","action":"claim","task_id":608,"detail":"eagle-solar"}
+{"timestamp":"2026-04-05T00:05:30.1344841+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:05:30.1489217+02:00","action":"claim","task_id":607,"detail":"shade-frost"}
+{"timestamp":"2026-04-05T00:06:23.1965109+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T00:06:23.2085948+02:00","action":"release","task_id":570,"detail":"slate-trout"}
+{"timestamp":"2026-04-05T00:13:44.1874395+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T00:14:33.2561155+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T00:14:41.1646779+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T00:14:41.1760731+02:00","action":"release","task_id":608,"detail":"eagle-solar"}
+{"timestamp":"2026-04-05T00:15:20.9495541+02:00","action":"edit","task_id":606,"detail":"Update MCP server path resolution for new structure"}
+{"timestamp":"2026-04-05T00:15:20.9627433+02:00","action":"release","task_id":606,"detail":"peak-rapid"}
+{"timestamp":"2026-04-05T00:15:46.4048273+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T00:16:00.8198435+02:00","action":"create","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T00:16:06.3308828+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T00:16:06.3429243+02:00","action":"claim","task_id":606,"detail":"flux-veil"}
+{"timestamp":"2026-04-05T00:16:36.128312+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T00:16:36.140778+02:00","action":"release","task_id":606,"detail":"flux-veil"}
+{"timestamp":"2026-04-05T00:18:40.0831811+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:18:40.094293+02:00","action":"release","task_id":607,"detail":"shade-frost"}
+{"timestamp":"2026-04-05T00:19:12.655081+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:19:41.1074552+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:19:46.2557748+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:19:46.2672519+02:00","action":"claim","task_id":607,"detail":"thyme-vale"}
+{"timestamp":"2026-04-05T00:20:28.7439537+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:20:35.8366956+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T00:20:35.8477756+02:00","action":"release","task_id":607,"detail":"thyme-vale"}
+{"timestamp":"2026-04-05T00:21:13.4158415+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T00:21:13.4335395+02:00","action":"claim","task_id":598,"detail":"smoke-spoke"}
+{"timestamp":"2026-04-05T00:21:32.0683633+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T00:21:32.0891002+02:00","action":"claim","task_id":609,"detail":"wild-crypt"}
+{"timestamp":"2026-04-05T00:21:36.3187834+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T00:21:36.3339937+02:00","action":"claim","task_id":430,"detail":"hill-wheat"}
+{"timestamp":"2026-04-05T00:22:18.6868359+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-05T00:22:18.7087041+02:00","action":"claim","task_id":320,"detail":"wren-solar"}
+{"timestamp":"2026-04-05T00:22:42.2017382+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T00:23:07.1292798+02:00","action":"move","task_id":598,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-04-05T00:23:07.1481375+02:00","action":"handoff","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T00:23:07.164851+02:00","action":"release","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T00:25:22.7381735+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T00:25:22.7537863+02:00","action":"release","task_id":430,"detail":"hill-wheat"}
+{"timestamp":"2026-04-05T00:26:30.0467099+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-05T00:26:30.0584914+02:00","action":"release","task_id":320,"detail":"wren-solar"}
+{"timestamp":"2026-04-05T00:33:32.7160485+02:00","action":"priority","task_id":486,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T00:34:06.1130476+02:00","action":"priority","task_id":576,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T00:34:58.8153164+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T00:34:58.8275266+02:00","action":"release","task_id":609,"detail":"wild-crypt"}
+{"timestamp":"2026-04-05T00:35:18.6814305+02:00","action":"priority","task_id":611,"detail":"needed -\u003e important"}
+{"timestamp":"2026-04-05T00:35:23.0736144+02:00","action":"priority","task_id":613,"detail":"needed -\u003e important"}
+{"timestamp":"2026-04-05T00:35:30.2761047+02:00","action":"priority","task_id":611,"detail":"important -\u003e nice-to-have"}
+{"timestamp":"2026-04-05T00:35:42.0294991+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T00:35:42.0406541+02:00","action":"claim","task_id":599,"detail":"horn-isle"}
+{"timestamp":"2026-04-05T00:35:43.7375863+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T00:35:43.7508595+02:00","action":"claim","task_id":486,"detail":"plume-timber"}
+{"timestamp":"2026-04-05T00:35:43.7561821+02:00","action":"priority","task_id":613,"detail":"important -\u003e nice-to-have"}
+{"timestamp":"2026-04-05T00:35:50.2910242+02:00","action":"priority","task_id":610,"detail":"needed -\u003e important"}
+{"timestamp":"2026-04-05T00:35:53.0221744+02:00","action":"priority","task_id":610,"detail":"important -\u003e nice-to-have"}
+{"timestamp":"2026-04-05T00:35:55.0001373+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T00:35:55.0130819+02:00","action":"claim","task_id":605,"detail":"gust-wave"}
+{"timestamp":"2026-04-05T00:36:02.734068+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T00:36:02.7476899+02:00","action":"release","task_id":605,"detail":"gust-wave"}
+{"timestamp":"2026-04-05T00:38:14.5254046+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T00:38:14.5376513+02:00","action":"release","task_id":599,"detail":"horn-isle"}
+{"timestamp":"2026-04-05T00:39:55.9188342+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T00:39:55.9336882+02:00","action":"release","task_id":486,"detail":"plume-timber"}
+{"timestamp":"2026-04-05T00:42:52.5413665+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T00:42:52.5590057+02:00","action":"claim","task_id":600,"detail":"cape-nova"}
+{"timestamp":"2026-04-05T00:43:09.6412565+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-05T00:43:09.6567233+02:00","action":"claim","task_id":320,"detail":"quake-wild"}
+{"timestamp":"2026-04-05T00:43:13.2954397+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T00:43:13.3082105+02:00","action":"claim","task_id":486,"detail":"keen-pond"}
+{"timestamp":"2026-04-05T00:43:14.8156079+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T00:43:14.8322102+02:00","action":"claim","task_id":430,"detail":"steel-spoke"}
+{"timestamp":"2026-04-05T00:44:33.6922945+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T00:44:33.7083348+02:00","action":"release","task_id":430,"detail":"steel-spoke"}
+{"timestamp":"2026-04-05T00:44:48.1898389+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
+{"timestamp":"2026-04-05T00:44:48.2037123+02:00","action":"release","task_id":320,"detail":"quake-wild"}
+{"timestamp":"2026-04-05T00:46:55.4601999+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T00:46:55.4727287+02:00","action":"release","task_id":600,"detail":"cape-nova"}
+{"timestamp":"2026-04-05T00:47:54.7039788+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T00:47:54.7185583+02:00","action":"release","task_id":486,"detail":"keen-pond"}
+{"timestamp":"2026-04-05T00:59:34.1857568+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-05T00:59:34.1996081+02:00","action":"claim","task_id":601,"detail":"hawk-bone"}
+{"timestamp":"2026-04-05T00:59:40.7473861+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T00:59:40.7602988+02:00","action":"claim","task_id":614,"detail":"crow-thorn"}
+{"timestamp":"2026-04-05T00:59:48.6608301+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T00:59:48.6749549+02:00","action":"claim","task_id":612,"detail":"spire-gale"}
+{"timestamp":"2026-04-05T01:00:09.2070298+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T01:00:09.2208751+02:00","action":"claim","task_id":37,"detail":"thyme-quiet"}
+{"timestamp":"2026-04-05T01:02:29.4474287+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T01:02:29.4612668+02:00","action":"release","task_id":37,"detail":"thyme-quiet"}
+{"timestamp":"2026-04-05T01:03:47.9307639+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T01:03:48.6155303+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-05T01:03:48.6275761+02:00","action":"release","task_id":601,"detail":"hawk-bone"}
+{"timestamp":"2026-04-05T01:04:07.3260551+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T01:04:17.9783862+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T01:04:17.991539+02:00","action":"release","task_id":612,"detail":"spire-gale"}
+{"timestamp":"2026-04-05T01:06:59.7167516+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T01:07:13.4192939+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T01:08:46.048829+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T01:08:46.0631384+02:00","action":"release","task_id":614,"detail":"crow-thorn"}
+{"timestamp":"2026-04-05T01:09:15.4806333+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-05T01:09:15.4945115+02:00","action":"claim","task_id":602,"detail":"swift-hull"}
+{"timestamp":"2026-04-05T01:09:23.4020402+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-05T01:09:23.4166836+02:00","action":"claim","task_id":596,"detail":"cedar-quiet"}
+{"timestamp":"2026-04-05T01:09:26.8793956+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-05T01:09:26.8946307+02:00","action":"claim","task_id":592,"detail":"helm-birch"}
+{"timestamp":"2026-04-05T01:12:36.6606509+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-05T01:12:36.6731525+02:00","action":"release","task_id":602,"detail":"swift-hull"}
+{"timestamp":"2026-04-05T01:12:47.9264721+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T01:12:47.9398322+02:00","action":"claim","task_id":437,"detail":"silk-hawk"}
+{"timestamp":"2026-04-05T01:13:06.0053921+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-05T01:13:06.0193753+02:00","action":"release","task_id":592,"detail":"helm-birch"}
+{"timestamp":"2026-04-05T01:14:18.846464+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-05T01:14:24.2297198+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-05T01:14:53.1356088+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-05T01:14:59.0685629+02:00","action":"edit","task_id":596,"detail":"Fix planner skill language: reconcile \"does NOT claim\" with end_work usage"}
+{"timestamp":"2026-04-05T01:14:59.0808947+02:00","action":"release","task_id":596,"detail":"cedar-quiet"}
+{"timestamp":"2026-04-05T01:15:33.7191388+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T01:15:33.7328841+02:00","action":"release","task_id":437,"detail":"silk-hawk"}
+{"timestamp":"2026-04-05T01:15:56.4050524+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T01:15:56.4194696+02:00","action":"claim","task_id":589,"detail":"torch-atlas"}
+{"timestamp":"2026-04-05T01:16:06.5786759+02:00","action":"edit","task_id":611,"detail":"Create dev branch and push to remote"}
+{"timestamp":"2026-04-05T01:16:06.5927561+02:00","action":"claim","task_id":611,"detail":"wren-gust"}
+{"timestamp":"2026-04-05T01:16:07.731376+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T01:16:07.742923+02:00","action":"claim","task_id":597,"detail":"zinc-void"}
+{"timestamp":"2026-04-05T01:16:09.0536086+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T01:16:09.0663813+02:00","action":"claim","task_id":616,"detail":"heron-rust"}
+{"timestamp":"2026-04-05T01:18:35.0803476+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T01:18:35.0953224+02:00","action":"release","task_id":597,"detail":"zinc-void"}
+{"timestamp":"2026-04-05T01:18:42.6335688+02:00","action":"edit","task_id":611,"detail":"Create dev branch and push to remote"}
+{"timestamp":"2026-04-05T01:18:42.6457944+02:00","action":"release","task_id":611,"detail":"wren-gust"}
+{"timestamp":"2026-04-05T01:26:02.3886329+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T01:26:02.401172+02:00","action":"release","task_id":589,"detail":"torch-atlas"}
+{"timestamp":"2026-04-05T01:26:23.6106878+02:00","action":"create","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-05T01:26:23.9761272+02:00","action":"create","task_id":618,"detail":"Build import/export tools for project-local knowledge snapshots"}
+{"timestamp":"2026-04-05T01:27:04.162798+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T01:27:04.1740776+02:00","action":"release","task_id":616,"detail":"heron-rust"}
+{"timestamp":"2026-04-05T01:27:41.4083714+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T01:27:41.4199131+02:00","action":"claim","task_id":599,"detail":"wheat-mast"}
+{"timestamp":"2026-04-05T01:27:47.2366147+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T01:27:47.2485351+02:00","action":"claim","task_id":600,"detail":"iron-mist"}
+{"timestamp":"2026-04-05T01:28:11.3223973+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T01:28:11.3326756+02:00","action":"claim","task_id":477,"detail":"dale-fire"}
+{"timestamp":"2026-04-05T01:30:40.2436265+02:00","action":"create","task_id":619,"detail":"Migrate dispatcher to plan_dispatch MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T01:30:52.404283+02:00","action":"create","task_id":620,"detail":"Test: plan_dispatch MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T01:31:03.9758424+02:00","action":"create","task_id":621,"detail":"Implement plan_dispatch tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T01:31:13.8806298+02:00","action":"create","task_id":622,"detail":"Wire plan_dispatch into orchestrator workflow"}
+{"timestamp":"2026-04-05T01:31:22.2324807+02:00","action":"create","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T01:31:32.215112+02:00","action":"create","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T01:31:52.8860855+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T01:31:52.8962578+02:00","action":"claim","task_id":570,"detail":"blade-fawn"}
+{"timestamp":"2026-04-05T01:32:06.2125447+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-05T01:32:06.2241648+02:00","action":"release","task_id":477,"detail":"dale-fire"}
+{"timestamp":"2026-04-05T01:32:18.2594782+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T01:32:18.2713416+02:00","action":"release","task_id":570,"detail":"blade-fawn"}
+{"timestamp":"2026-04-05T01:32:51.7596624+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T01:32:51.7749079+02:00","action":"release","task_id":600,"detail":"iron-mist"}
+{"timestamp":"2026-04-05T01:33:06.4870017+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T01:33:06.4994324+02:00","action":"release","task_id":599,"detail":"wheat-mast"}
+{"timestamp":"2026-04-05T01:36:08.2063958+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T01:36:08.2164934+02:00","action":"claim","task_id":486,"detail":"robin-spoke"}
+{"timestamp":"2026-04-05T01:36:18.6588423+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T01:36:18.6700655+02:00","action":"claim","task_id":599,"detail":"hill-void"}
+{"timestamp":"2026-04-05T01:36:19.3514479+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T01:36:19.3651724+02:00","action":"claim","task_id":570,"detail":"mink-otter"}
+{"timestamp":"2026-04-05T01:36:39.8566865+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T01:36:39.8675675+02:00","action":"claim","task_id":600,"detail":"tiger-grove"}
+{"timestamp":"2026-04-05T01:37:04.5784391+02:00","action":"edit","task_id":599,"detail":"Research: Verify kanban-md works from .owlbear/kanban/"}
+{"timestamp":"2026-04-05T01:37:04.5906034+02:00","action":"release","task_id":599,"detail":"hill-void"}
+{"timestamp":"2026-04-05T01:37:24.0122807+02:00","action":"edit","task_id":620,"detail":"Test: plan_dispatch MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T01:37:34.1901062+02:00","action":"edit","task_id":621,"detail":"Implement plan_dispatch tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T01:37:42.005409+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-05T01:37:42.0201085+02:00","action":"release","task_id":570,"detail":"mink-otter"}
+{"timestamp":"2026-04-05T01:37:45.2065896+02:00","action":"edit","task_id":622,"detail":"Wire plan_dispatch into orchestrator workflow"}
+{"timestamp":"2026-04-05T01:37:53.4301774+02:00","action":"edit","task_id":600,"detail":"Move .github/ customizations to share/"}
+{"timestamp":"2026-04-05T01:37:53.4472021+02:00","action":"release","task_id":600,"detail":"tiger-grove"}
+{"timestamp":"2026-04-05T01:37:59.6042228+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to plan_dispatch MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T01:46:06.8542546+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to plan_dispatch MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T01:46:11.801011+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T01:46:22.1949458+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T01:46:33.2704025+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T01:46:42.5039553+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T01:46:50.6061201+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T01:49:59.6069688+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T01:50:05.1167067+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T01:51:36.6692847+02:00","action":"edit","task_id":486,"detail":"Phase C: Consolidate kanban references to central skill + minimal agent config"}
+{"timestamp":"2026-04-05T01:51:36.6828383+02:00","action":"release","task_id":486,"detail":"robin-spoke"}
+{"timestamp":"2026-04-05T01:51:37.334856+02:00","action":"move","task_id":486,"detail":"done -\u003e archived"}
