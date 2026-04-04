@@ -33,6 +33,8 @@ kanban\kanban-md.exe show {id}
 kanban\kanban-md.exe edit {id} --claim <agent>
 ```
 
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call.
+
 ## Step 2 — Verify each task
 
 As 3rd-line defense (see agent-common → **Defense-in-depth**), the auditor focuses on
@@ -126,8 +128,11 @@ Thresholds from agent-common → **Confidence thresholds** (single source of tru
 | `< .85` | Incomplete or unverifiable | Reject to backlog |
 
 - **≥ .95:** `kanban\kanban-md.exe archive {id}` then `kanban\kanban-md.exe edit {id} --release`
+  > **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")` — archive + release in one call.
 - **< .95 fixable:** `kanban\kanban-md.exe edit {id} --status review --release`
+  > **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="reject")`
 - **< .95 fundamental:** `kanban\kanban-md.exe edit {id} --status backlog --block "reason" --release`
+  > **MCP equivalent:** `edit_task(task_id="{id}", status="backlog", block="reason", release=true)`
 
 ## Step 4 — Audit report
 

@@ -27,6 +27,9 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call (replaces steps 1–2).
+
 3. Verify task is in `in-progress` status (the test-writer already moved it here)
 4. Read referenced source files to understand existing code
 
@@ -51,7 +54,12 @@ Check the task body for `## Test-Writer Notes` containing "Non-implementation ta
    kanban\kanban-md.exe edit {id} -a "## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review." -t
    ```
 
+   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Builder Notes\n- Non-implementation task...", timestamp=true)`
+
 2. Advance + release: `kanban\kanban-md.exe edit {id} --status review --release`
+
+   > **MCP equivalent:** `end_work(task_id="{id}", note="non-impl pass-through", outcome="success")`
+
 3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
 4. **Stop here.** Do not proceed to Step 2.
 
@@ -171,6 +179,8 @@ Advance the task to `review` and release the claim in one atomic command:
 ```powershell
 kanban\kanban-md.exe edit {id} --status review --release
 ```
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 ## Verification checklist
 

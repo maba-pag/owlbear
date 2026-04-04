@@ -40,6 +40,8 @@ Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 kanban\kanban-md.exe list --compact
 ```
 
+> **MCP equivalent:** `list_tasks()` — returns the same task list via MCP.
+
 Note: highest existing ID, existing dependencies, current phase landscape.
 
 ## Step 3 — Decompose into atomic tasks
@@ -99,6 +101,8 @@ One command per task:
 ```
 kanban\kanban-md.exe create "P{phase}-{nn}: {Title}" --priority {p} --status ideation --tags "{tags}" --depends-on {id} --body "{AC}"
 ```
+
+> **MCP equivalent:** `create_task(title="P{phase}-{nn}: {Title}", priority="{p}", status="ideation", tags="{tags}", depends_on="{id}", body="{AC}")`
 
 Group by dependency layer (independent first, then dependents).
 

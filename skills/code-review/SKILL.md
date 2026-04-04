@@ -27,6 +27,9 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call (replaces steps 1–2).
+
 3. Note every AC line — each will be verified individually
 
 ## Step 2 — Check source control changes
@@ -253,7 +256,7 @@ absence of a confirmed requirement. Document the specific overlap found.
 
 ### 6.7 Builder process quality (loop detection)
 
-Read the full task body via `kanban\kanban-md.exe show {id}`. Check builder notes for loop patterns:
+Read the full task body via `kanban\kanban-md.exe show {id}` (MCP: `show-task(task_id="{id}")`). Check builder notes for loop patterns:
 
 1. **Count retry sections.** Count `## Builder Notes` headers (including suffixed retries like `Builder Notes (retry)`, `Builder Notes (retry 2)`). Record the count.
 2. **Check approach variation.** For each retry, verify the builder describes a different diagnosis, changed approach, or new strategy. Identical approaches across retries = loop pattern.
@@ -344,12 +347,14 @@ Confidence threshold: ≥ .90 = PASS (see agent-common → **Confidence threshol
 **PASS** (all Pass 1 criteria met, no CRITICAL findings):
 
 - `kanban\kanban-md.exe edit {id} --status docs --release`
+  > **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 - Your job ends here — writer owns the docs gate
 
 **FAIL** (any Pass 1 criterion unmet):
 
 - List every failing criterion with evidence
 - `kanban\kanban-md.exe edit {id} --status todo --release`
+  > **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="reject")`
 
 Pass 2 informational findings are included in the review body but do not affect the verdict.
 

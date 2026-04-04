@@ -180,6 +180,8 @@ After creating the decision request file:
    kanban\kanban-md.exe edit {ID} --block "Decision pending: docs/decisions/pending/{id}-{slug}.md"
    ```
 
+   > **MCP equivalent:** `edit_task(task_id="{ID}", block="Decision pending: docs/decisions/pending/{id}-{slug}.md")`
+
 2. **If NO other unblocked tasks exist:** Proceed with the recommended option. Create follow-up tasks. Mark the decision request as `urgency: advisory` and `approved: auto`.
 
 ## Resolution workflow
@@ -207,7 +209,7 @@ agent in resolve mode to check `docs/decisions/pending/` for files with `approve
 performs three steps in order:
 
 1. **Write summary to task body** — extracts `decision:`/`notes:` (decisions) or `notes:` (action requests) from the frontmatter and appends a `## Decision Resolved` or `## Action Completed` section to the task body via `kanban-md edit`. This is the critical step — without it, downstream agents cannot see the user's feedback.
-2. **Unblock the task** — `kanban\kanban-md.exe edit {task_id} --unblock`
+2. **Unblock the task** — `kanban\kanban-md.exe edit {task_id} --unblock` (MCP: `edit_task(task_id="{task_id}", unblock=true)`)
 3. **Move the pending file** to `docs/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
 
 The user never moves files — the scribe does this automatically.
@@ -279,4 +281,4 @@ Agents encountering a `## Decision Resolved` section in the task body (written b
 - **Planner:** Calls the scribe in resolve mode at Step 1 of each planning cycle. The scribe writes decision summaries to task bodies and moves resolved files (see `dispatch-planning` skill Recipe 0).
 - **All agents:** The defer-to-user boundary in `agent-common.instructions.md` references this process. All agents must run the pre-flight check in `agent-common.instructions.md` → **Resolved decision pre-flight** before starting work on any task.
 
-> **MCP note:** Use `edit_task` to append Channel B block notes before blocking, `end_work` to advance status when a decision is resolved.
+> **MCP equivalent:** Use `edit_task` to append Channel B block notes before blocking, `end_work` to advance status when a decision is resolved.

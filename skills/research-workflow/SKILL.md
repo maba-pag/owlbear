@@ -184,6 +184,8 @@ if needed, and blocks the task automatically. Move on to other work if available
 kanban\kanban-md.exe edit {id} --status backlog --release
 ```
 
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
+
 ## Self-critique checklist
 
 Before submitting:

@@ -26,6 +26,9 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 1. `kanban\kanban-md.exe show {id}` — read full acceptance criteria
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call (replaces steps 1–2).
+
 <!-- NON_IMPL_TAGS: Authoritative list at skills/dispatch-planning/SKILL.md
      (agent dispatch table). Update there first, then sync here. -->
 3. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, or `quality`). If so, go to **Step 1a — Pass-through**.
@@ -44,7 +47,11 @@ you encounter one:
    kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder." -t
    ```
 
+   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes\n- Non-implementation task...", timestamp=true)`
+
 2. Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
+
+   > **MCP equivalent:** `end_work(task_id="{id}", note="non-impl pass-through", outcome="success")`
 3. Return the signal:
 
    ```
@@ -73,6 +80,8 @@ normal RED phase — the existing tests are valid artifacts from the prior cycle
      kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes (retry)\n- Retry reason: reviewer cited missing tests\n- Added: {N} new failing tests for: {gap summary}\n- Preserved: {M} existing tests (all PASS)" -t
      ```
 
+     > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes (retry)\n...", timestamp=true)`
+
 3. **If the reviewer cites code quality, weak tests, or security** (not missing tests):
    pass through without changes — the builder will address the findings. Append:
 
@@ -80,7 +89,11 @@ normal RED phase — the existing tests are valid artifacts from the prior cycle
    kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes (retry)\n- Retry reason: reviewer FAIL was about {code quality / weak tests / security}, not missing tests.\n- Existing tests preserved. Builder will address reviewer findings." -t
    ```
 
+   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes (retry)\n...", timestamp=true)`
+
 4. Advance + release: `kanban\kanban-md.exe edit {id} --status in-progress --release`
+
+   > **MCP equivalent:** `end_work(task_id="{id}", note="retry, tests preserved", outcome="success")`
 5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
 6. **Stop here.** Do not proceed to Step 2.
 
@@ -180,6 +193,8 @@ kanban\kanban-md.exe edit {id} -a "## Test-Writer Notes
 - ruff: clean" -t
 ```
 
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes\n...", timestamp=true)`
+
 ## Step 7 — Commit test files
 
 Stage and commit the test file(s) you created:
@@ -198,6 +213,8 @@ Advance the task to `in-progress` and release the claim in one atomic command:
 ```powershell
 kanban\kanban-md.exe edit {id} --status in-progress --release
 ```
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 ## Verification checklist
 

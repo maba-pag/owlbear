@@ -30,7 +30,7 @@ Gather pending lessons from both active sources:
 3. Scan parent directory: `memory view /memories/repo/` — check for misplaced entries
    that agents wrote directly to `/memories/repo/` instead of the inbox. Move any
    unreviewed entries found there into the inbox before processing.
-4. Also check task bodies (`kanban\kanban-md.exe show {id}`) for any inline agent notes
+4. Also check task bodies (`kanban\kanban-md.exe show {id}`) (MCP: `show-task(task_id="{id}")`) for any inline agent notes
    that weren't written to the inbox (legacy pattern)
 5. Filter to the scope specified (all, last N tasks, tag filter)
 6. Collect all entries from both sources for the remaining steps

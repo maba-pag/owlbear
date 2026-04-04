@@ -53,7 +53,7 @@ The kanban-planner reads the task, produces a decomposition plan, executes the
 The task itself is not moved — the kanban-planner creates child tasks at `ideation`
 and the parent may be closed or split depending on the plan.
 
-> **MCP note:** When operating via the owlbear-kanban MCP server, dispatched agents use `start_work` to begin their assigned task and `end_work` to advance status upon completion.
+> **MCP equivalent:** When operating via the owlbear-kanban MCP server, dispatched agents use `start_work` to begin their assigned task and `end_work` to advance status upon completion.
 
 ---
 
@@ -113,6 +113,8 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 "$($tasks.Count) candidates"
 ```
 
+> **MCP equivalent:** `list_tasks(status=["ideation","backlog","todo","in-progress","review","docs","done"], unblocked=true, unclaimed=true)` — returns the same candidate set via MCP.
+
 **What the `--unblocked --not-blocked --unclaimed` triple does:**
 
 - `--unblocked` → all `depends_on` tasks at terminal status (done or archived). **= Gate 2.**
@@ -153,6 +155,8 @@ $tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
 ```powershell
 foreach ($id in {stale_ids}) { "===TASK $id==="; kanban\kanban-md.exe show $id; "===END===" }
 ```
+
+> **MCP equivalent:** `show-task(task_id="{id}")` per stale task.
 
 ### Terminal call budget
 

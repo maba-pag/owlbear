@@ -37,12 +37,17 @@ kanban\kanban-md.exe edit $id --body $body --claim <agent>
 Remove-Item "docs/scratch/$id-ac.tmp"
 ```
 
+> **MCP equivalent:** `edit_task(task_id="$id", body="...", claim="<agent>")` — no temp file needed; body can be set directly.
+
 ## Step 1 — Read task and research
 
 Read the single task dispatched to you:
 
 1. `kanban\kanban-md.exe show {id}` — read full details, verify `backlog` status
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call (replaces steps 1–2).
+
 3. If task references a research doc (`docs/research/{slug}.md`), read it
 4. Note each AC line for evaluation
 5. **Reject placeholders** — block to `ideation` (Step 4) before proceeding.

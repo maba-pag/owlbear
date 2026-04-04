@@ -27,6 +27,9 @@ No other kanban-md commands needed. See kanban-md skill for claiming protocol an
 
 1. `kanban\kanban-md.exe show {id}` — read full task details
 2. `kanban\kanban-md.exe edit {id} --claim <agent>` — claim by ID (never use `pick`)
+
+> **MCP equivalent:** `start_work(task_id="{id}")` — claim + read in one call (replaces steps 1–2).
+
 3. Verify task is in `docs` status
 4. Identify what changed: files created/modified, behavior added
 
@@ -90,6 +93,8 @@ Advance the task to `done` and release the claim in one atomic command:
 kanban\kanban-md.exe edit {id} --status done --release
 ```
 
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
+
 ## Docs gate output format
 
 ```
@@ -112,6 +117,7 @@ kanban\kanban-md.exe edit {id} --status done --release
 ## Boundaries
 
 - If you find untested behavior: reject to review with `kanban\kanban-md.exe edit {id} --status review --release`
+  (MCP: `end_work(task_id="{id}", note="...", outcome="reject")`)
 
 ## Verification checklist
 
