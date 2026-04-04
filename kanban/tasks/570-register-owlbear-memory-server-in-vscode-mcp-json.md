@@ -1,13 +1,15 @@
 ---
 id: 570
 title: Register owlbear-memory server in .vscode/mcp.json
-status: in-progress
+status: todo
 priority: needed
 created: 2026-04-03T11:04:47.5649332+02:00
-updated: 2026-04-03T13:07:36.4932797+02:00
+updated: 2026-04-04T06:46:54.5028347+02:00
 tags:
     - scope:config
     - phase-2
+claimed_by: fawn-staff
+claimed_at: 2026-04-04T06:46:54.5028347+02:00
 class: standard
 ---
 
@@ -68,3 +70,33 @@ Duplicate #571 exists with stale architect claim — planner should archive it.
 - Key challenges: incomplete test surface (critical), scope creep (moderate), prior AC contradiction (task #12)
 - Architect response: accepted test-surface expansion (added 2 missing test locations). Rebutted split proposal — all changes are in the same function's dict literal, splitting creates unnecessary task overhead. Rebutted prior-AC concern — camelCase was a bug (tool routing requires matching), not a deliberate convention.
 - Final confidence in verdict: .90
+
+[[2026-04-04]] Sat — Builder REJECT
+## Builder Notes
+
+**REJECT → todo — conflicting `TestFromAC_*` tests; test-writer must update old test**
+
+### Conflict
+
+Implementing the AC (removing `--project` flag per `TestFromAC_McpServerNames::test_mcp_server_args_have_no_project_flag`) **breaks** the previously-passing `TestFromAC_McpConfig::test_mcp_server_args_reference_relative_path_to_owlbear`. Builder cannot modify either `TestFromAC_*` class.
+
+| Test | Class | Requires |
+|------|-------|---------|
+| `test_mcp_server_args_have_no_project_flag` | `TestFromAC_McpServerNames` (#570) | NO `--project` flag in args |
+| `test_mcp_server_args_reference_relative_path_to_owlbear` | `TestFromAC_McpConfig` (older task) | At least one arg with `..` |
+
+**Old args**: `["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"]` — `../owlbear` has `..` → old test passes  
+**New args**: `["run", "python", "-m", "owlbear_mcp_kanban"]` — no `..` → old test fails
+
+### Required fix (test-writer)
+
+Remove or update `tests/test_setup_script.py::TestFromAC_McpConfig::test_mcp_server_args_reference_relative_path_to_owlbear` — it tests the old `--project` behavior that the new AC explicitly removes.
+
+### Pre-existing failures (not this task's concern)
+- `TestFromAC_VscodeSettings::test_agent_files_locations_has_root_path_only`
+- `TestFromAC_VscodeSettings::test_agent_skills_locations_has_root_path`
+- `TestFromAC_VscodeSettings::test_instructions_locations_has_root_path_only`
+
+### Progress in working tree (apply once old test is resolved)
+- `scripts/setup.py`: kebab-case keys, `--project` removed — `TestFromAC_McpServerNames` (6) PASS
+- `.vscode/mcp.json`: `owlbear-memory` entry added — `TestFromAC_SetupMcp` (6) PASS
