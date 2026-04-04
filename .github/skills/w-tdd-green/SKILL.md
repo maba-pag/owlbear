@@ -162,6 +162,44 @@ See `h-pytest-and-linting` for exact flags and known pitfalls.
 Select-String -Path "tests/*.py" -Pattern "old_name"
 ```
 
+### Step 6.1 — Pass: Continue
+
+If verification passes (`failed: []`, `clean: true`, coverage ≥ 90%), proceed to Step 7.
+
+### Step 6.2 — Fail: Same-Context Retry
+
+If verification fails:
+
+1. Read the error output — identify the specific failing test and error message.
+2. Diagnose the root cause.
+3. Apply a targeted fix.
+4. Re-verify via Quality-Runner (or fallback).
+
+If this second run passes, proceed to Step 7.
+
+### Step 6.3 — Fail Again: Delegate to fix-attempt
+
+If the second verification also fails, construct and invoke the fix-attempt subagent:
+
+```
+agentName: fix-attempt
+prompt: |
+  task_id: {id}
+  test_file: tests/test_{module}.py
+  source_files: packages/{package}/src/{namespace}/{module}.py
+  retry_hint: {specific error diagnosis and suggested fix direction — Reflexion-style verbal feedback describing what went wrong and where to look, not generic "tests failed"}
+  error_summary: {condensed pytest failure output, max 500 tokens}
+```
+
+Handle fix-attempt result:
+
+| Verdict | Action |
+|---------|--------|
+| `FIXED` | Re-verify via Quality-Runner (or fallback). If pass → proceed to Step 7. If still failing → treat as `FAILED`. |
+| `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`. AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Append Channel B notes with diagnosis from both attempts. |
+
+> **Total retry cap:** 2 retries after initial attempt — 1 same-context (Step 6.2) + 1 fresh-context (Step 6.3 via fix-attempt). Sequence is fixed: initial → same-context → fix-attempt. No skipping.
+
 ## Step 7 — Deliverables
 
 Append builder notes to task body via `edit_task` (with `append_body` and `timestamp=True`).
