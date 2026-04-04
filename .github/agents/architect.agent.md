@@ -73,6 +73,13 @@ kanban task edits, AC refinements, and architectural reasoning.
 
 Append `## Architecture Review` section with: verdict, AC assessment table (AC line / assessment / action), architecture notes, dependency analysis, challenger results. See `w-arch-review` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Architecture Review`
+- On reject: `end_work(outcome="reject")` — moves to ideation
+- Follow-ups: via challenger / scribe agents
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

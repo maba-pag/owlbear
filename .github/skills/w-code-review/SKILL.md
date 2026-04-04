@@ -8,13 +8,13 @@ user-invocable: false
 
 Evidence-based review of a completed implementation task. Run tests, lint, read code, verify AC, and produce a verdict.
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
-
-> **MCP equivalent:** `start_work(task_id="{id}")`
 
 Note every AC line from the task body — each will be verified individually.
 
@@ -217,8 +217,6 @@ If yes to any = FAIL with evidence.
 
 Read the full task body via `show_task`. Check builder notes for loop patterns:
 
-> **MCP equivalent:** `show_task(task_id="{id}")`
-
 1. Count `## Builder Notes` sections (including retries).
 2. Verify approach variation across retries.
 3. Check for tier-3 violation (3+ retries without handoff/block).
@@ -265,8 +263,6 @@ Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thre
 If Step 2.5 was used, build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
 
 **PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
-
-> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 **FAIL** (any Pass 1 criterion unmet): list every failing criterion with evidence. Choose target based on issue type:
 

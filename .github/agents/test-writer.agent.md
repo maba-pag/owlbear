@@ -70,6 +70,13 @@ in it must fail when you hand it off.
 
 Append `## Test-Writer Notes` section with: test file path, class names, tests per category (happy/edge/error/boundary), total count with fail confirmation, AC coverage table. See `w-tdd-red` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Test-Writer Notes`
+- On advance: `end_work(outcome="success")` — moves to in-progress
+- Follow-ups: via scribe agent (when AC too vague to write tests)
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

@@ -74,6 +74,13 @@ infeasible, you escalate — you don't silently reshape the contract.
 
 Append `## Builder Notes` section with: files changed, test results (count + coverage), lint status, evidence summary, fixes applied. See `w-tdd-green` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Builder Notes`
+- On reject: `end_work(outcome="reject", move_to="todo")` (test assumption) or `move_to="backlog"` (AC wrong)
+- Follow-ups: via scribe agent
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

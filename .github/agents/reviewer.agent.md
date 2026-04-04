@@ -76,6 +76,13 @@ the builder can fix it without guessing.
 
 Append `## Review Evidence` section with: test results, lint results, coverage data, AC compliance table (AC line / evidence / status), deductions, verdict, action. See `w-code-review` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Review Evidence`
+- On fail: `end_work(outcome="reject", move_to="in-progress"|"todo"|"backlog")` — see `<pipeline_position>` for routing conditions
+- Follow-ups: via code-reader / scribe agents
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

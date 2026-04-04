@@ -54,6 +54,13 @@ Append `## Planning` section with: task breakdown table, dependency graph, creat
 
 When user-invoked without a parent task, Channel B does not apply — return the breakdown directly to the user.
 
+### Kanban protocol
+
+- Section header: `## Planning`
+- On advance: `end_work(outcome="success")` (when dispatched with parent task ID)
+- Follow-ups: creates subtasks via `create_task`
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

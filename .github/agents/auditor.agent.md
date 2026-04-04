@@ -67,6 +67,13 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 Append `## Audit` section with: AC verification table (AC line / evidence / status), test results, deduction breakdown, confidence score, action. See `w-task-verification` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Audit`
+- On reject: `end_work(outcome="reject", move_to="backlog")`
+- Follow-ups: via scribe / Explore agents
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

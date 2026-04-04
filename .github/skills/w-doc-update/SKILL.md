@@ -8,13 +8,13 @@ user-invocable: false
 
 Verify and update documentation for a task that has passed review. The doc-writer evaluates what changed, updates affected docs, cleans scratch files, and advances to done.
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
-
-> **MCP equivalent:** `start_work(task_id="{id}")`
 
 Verify the task is in `docs` status.
 
@@ -79,8 +79,6 @@ Verify only documentation files are staged. Skip if no files were updated.
 Append docs gate report to task body via `edit_task` (with `append_body` and `timestamp=True`).
 
 Advance via `end_work` (moves to `done` + releases claim).
-
-> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

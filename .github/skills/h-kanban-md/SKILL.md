@@ -36,7 +36,7 @@ kanban\kanban-md.exe edit {id} -a "..." -t --claim <agent>             # Phase 2
 kanban\kanban-md.exe edit {id} --status <next> --release               # Phase 3: advance
 ```
 
-> **MCP equivalent:** `start_work(task_id="{id}")` (Phase 1: claim + retrieve) · `edit_task(task_id="{id}", append_body="...", timestamp=True)` (Phase 2: maintain) · `end_work(task_id="{id}", note="...", outcome="success")` (Phase 3: advance)
+**MCP migration:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern` for Phase 1–3 equivalents.
 
 **Dispatch rule:** Always claim by ID. Never use `pick` — it grabs the highest-priority unclaimed task, which may not be yours.
 

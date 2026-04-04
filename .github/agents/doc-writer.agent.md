@@ -69,6 +69,13 @@ to review, you don't fix it yourself.
 
 Append `## Docs Gate` section with: checklist table (check / applies? / status / evidence), files updated, scratch files cleaned. See `w-doc-update` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Docs Gate`
+- On reject: `end_work(outcome="reject", move_to="review")`
+- Follow-ups: via scribe agent
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

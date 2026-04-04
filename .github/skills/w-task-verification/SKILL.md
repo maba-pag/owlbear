@@ -8,13 +8,13 @@ user-invocable: false
 
 Step-by-step exit gate process (done → archived).
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read the `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
-
-> **MCP equivalent:** `start_work(task_id="{id}")`
 
 ## Step 1 — Verify the task
 
@@ -107,13 +107,9 @@ Before committing: `git status --short` and `git diff --cached` to verify only t
 
 Append the audit section to the task body via `edit_task` (with `append_body` and `timestamp=True`).
 
-> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Audit\n...", timestamp=True)`
-
 Then advance based on confidence:
 
 - **≥ .95 — Archive:** via `end_work` (advances status + releases claim).
-
-  > **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 - **< .95 — Reject to backlog:** via `end_work(outcome="reject", move_to="backlog")`.
 

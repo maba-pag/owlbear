@@ -68,6 +68,13 @@ can choose — you never disguise opinion as conclusion.
 
 Append `## Research` section with: key findings summary, trade-off matrix reference, follow-up task IDs created, attribution updates made. See `w-research` skill for the full output template.
 
+### Kanban protocol
+
+- Section header: `## Research`
+- On advance: `end_work(outcome="success")` — moves to backlog
+- Follow-ups: create follow-up tasks via `create_task` (ideation status)
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

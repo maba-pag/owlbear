@@ -14,6 +14,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 This skill does NOT claim a task — the scribe operates on behalf of the calling agent. It receives three parameters: `task_id`, `mode`, and optionally `request_type`/`concern`.
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Modes
 
 ### Mode 1: check-or-create
@@ -28,9 +30,7 @@ This skill does NOT claim a task — the scribe operates on behalf of the callin
 Scan `docs/decisions/pending/` for files where `approved: true` (decisions) or `completed: true` (action requests). For each resolved file, perform three steps in order:
 
 1. **Write summary to task body** — extract `decision:`/`notes:` (decisions) or `notes:` (actions) and append `## Decision Resolved` or `## Action Completed` to the task body via `edit_task` (with `append_body`).
-   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Decision Resolved\n...", timestamp=True)`
 2. **Unblock the task** — via `edit_task` (with `unblock=True`).
-   > **MCP equivalent:** `edit_task(task_id="{id}", unblock=True)`
 3. **Move the pending file** to `docs/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
 
 **Auto-resolution (5-day timeout):** `impact_tier: 2` decisions (or missing `impact_tier`) staying `approved: false` for 5+ days get auto-resolved with the agent's pre-filled recommendation. Update with `approved: auto` and unblock.

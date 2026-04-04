@@ -65,6 +65,13 @@ Append `## Curation` section with: statistics table, promotions table, conflicts
 
 When invoked directly (no task ID), Channel B does not apply — the curation actions and summary signal are the deliverable.
 
+### Kanban protocol
+
+- Section header: `## Curation`
+- On advance: `end_work(outcome="success")` (when dispatched with task ID)
+- Follow-ups: via scribe agent
+- See `h-mcp-kanban` skill for tool workflows
+
 </output_format>
 
 <boundaries>

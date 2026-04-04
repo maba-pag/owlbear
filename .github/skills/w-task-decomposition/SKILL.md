@@ -8,6 +8,8 @@ user-invocable: false
 
 Break complex features into atomic, test-driven kanban tasks with explicit dependency graphs and priority assignments.
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
@@ -25,8 +27,6 @@ Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 ## Step 2 — Check Board State
 
 Read the current board via `list_tasks` to note: highest existing ID, existing dependencies, and current phase landscape.
-
-> **MCP equivalent:** `list_tasks()` (with optional `status`, `tag`, or other filters)
 
 ## Step 3 — Decompose into Atomic Tasks
 
@@ -77,13 +77,9 @@ If a planned task fails: refine the title and body or stop. Never create a place
 
 Create each task via `create_task` with title, priority, status `ideation`, tags, depends_on, and body containing AC.
 
-> **MCP equivalent:** `create_task(title="...", priority="...", status="ideation", tags=[...], depends_on=[...], body="...")`
-
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
 If dispatched with a parent task ID, append the planning summary to the parent body via `edit_task` (with `append_body` and `timestamp=True`).
-
-> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Planning\n...", timestamp=True)`
 
 ## Step 7 — Visualize Dependencies
 
@@ -92,8 +88,6 @@ Produce a Mermaid diagram showing task relationships. Arrows: dependency toward 
 ## Step 8 — Advance
 
 If dispatched with a parent task ID, advance via `end_work` to release the claim and move status.
-
-> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

@@ -8,13 +8,13 @@ user-invocable: false
 
 Implement the minimum code to make all failing tests pass. This is the GREEN phase of TDD — the test-writer already wrote the RED tests.
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
-
-> **MCP equivalent:** `start_work(task_id="{id}")`
 
 Verify the task is in `in-progress` status (the test-writer already moved it here).
 
@@ -23,9 +23,7 @@ Verify the task is in `in-progress` status (the test-writer already moved it her
 Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or "non-impl pass-through". If found:
 
 1. Append note via `edit_task` (with `append_body`): "## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review."
-   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Builder Notes\n...", timestamp=True)`
 2. Advance via `end_work` (moves to `review` + releases claim).
-   > **MCP equivalent:** `end_work(task_id="{id}", note="non-impl pass-through", outcome="success")`
 3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
 4. **Stop here.**
 
@@ -206,8 +204,6 @@ Handle fix-attempt result:
 
 Append builder notes to task body via `edit_task` (with `append_body` and `timestamp=True`).
 
-> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Builder Notes\n...", timestamp=True)`
-
 Commit per `r-project-standards` → Commit Discipline:
 
 ```powershell
@@ -220,8 +216,6 @@ Verify only task-related files are staged.
 ## Step 8 — Advance
 
 Advance via `end_work` (moves to `review` + releases claim).
-
-> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

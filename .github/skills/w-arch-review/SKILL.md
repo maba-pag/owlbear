@@ -8,13 +8,13 @@ user-invocable: false
 
 Review researched tasks at `backlog`, refine acceptance criteria, ensure architectural soundness, and approve for development (move to `todo`).
 
+**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
-
-> **MCP equivalent:** `start_work(task_id="{id}")`
 
 Verify the task is in `backlog` status. If the task references a research doc (`docs/research/{slug}.md`), read it.
 
@@ -75,8 +75,6 @@ The architect retains final authority.
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `ideation` via `end_work(outcome="reject")`, appending findings |
 
-> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")` (APPROVE path)
-
 <!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
 
 > **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`. Add the bare tag if missing.
@@ -84,8 +82,6 @@ The architect retains final authority.
 > **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 
 Append the architecture review to the task body via `edit_task` (with `append_body` and `timestamp=True`) before the final status move.
-
-> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Architecture Review\n...", timestamp=True)`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

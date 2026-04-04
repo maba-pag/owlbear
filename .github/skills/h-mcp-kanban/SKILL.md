@@ -60,6 +60,17 @@ edit_task(task_id="480", append_body="## Builder Notes\n- Files changed: ...", t
 end_work(task_id="480", note="12 tests passed, ruff clean", outcome="success")
 ```
 
+## Channel B Protocol
+
+Append running notes and the final agent section to the task body via `edit_task`:
+
+```python
+# Mid-task notes or final section (repeatable, always timestamped)
+edit_task(task_id="480", append_body="## Builder Notes\n- Files changed: ...", timestamp=True)
+```
+
+For the section header to use per agent, see `agent-common.instructions.md` — `## Per-Agent Section Mapping`.
+
 ## Compound vs Single Tool Guidance
 
 | Situation | Recommended Tools |
