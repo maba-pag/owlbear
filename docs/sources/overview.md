@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Agent-Scoped Hooks Research (Task #37)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Agent Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | Hook lifecycle events, PreToolUse/PostToolUse I/O, `updatedInput`, `env`, `chat.hookFilesLocations`, PostToolUse `decision: "block"`, safety guidance | `docs/research/agent-scoped-hooks.md` | 2026-04-04 |
+
 ## Register owlbear-memory MCP Server (Task #570)
 
 | Source | URL | What | Where Used | Date |
