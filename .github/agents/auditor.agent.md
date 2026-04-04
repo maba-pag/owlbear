@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*', 'owlbear-memory/*']
-agents: [scribe, Explore]
+agents: [scribe, Explore, quality-runner]
 ---
 
 <persona>

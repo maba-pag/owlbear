@@ -58,7 +58,7 @@ Find interfaces, types, and existing patterns referenced in the AC:
 - Check existing `conftest.py` files for reusable fixtures.
 - Source files are **read-only** — never create or edit files in `src/`.
 
-### Step 2a — Non-Impl Fallback Check
+### Step 2a — Non-Implementation Assessment
 
 Run this only if Step 2 found no testable interfaces:
 
@@ -93,11 +93,29 @@ Create or extend `tests/test_{module}.py` with class `TestFromAC_{Feature}`:
 
 ## Step 5 — Verify RED
 
-Run pytest on the test file and confirm **every** test fails:
+Run pytest on the test file and confirm **every** test fails via Quality-Runner:
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  lint_paths: ["tests/test_{module}.py"]
+```
+
+Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runner report.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
+uv run ruff check tests/test_{module}.py
 ```
+
+See `h-pytest-and-linting` for flags and known pitfalls.
 
 **Expected failure types:** `ImportError`, `NotImplementedError`, `AssertionError`.
 

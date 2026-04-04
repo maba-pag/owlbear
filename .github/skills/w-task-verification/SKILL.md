@@ -24,15 +24,29 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 - **File exists:** Quick sanity check that deliverables exist.
 - **Scope check:** Verify changed files align with AC scope. Flag unexpected files outside the task's domain.
 - **AC spot-check:** Verify 1-2 key AC items rather than every line (the reviewer already mapped them all).
-- **Full test suite:** Run the full suite (not scoped to task files):
+- **Full test suite:** Run the full suite (not scoped to task files) via Quality-Runner:
+
+  ```
+  agentName: quality-runner
+  prompt: |
+    mode: full
+    task_id: {id}
+  ```
+
+  Confirm `failed: []` and `clean: true` from the Quality-Runner report. Unlike the reviewer (who scopes tests), the auditor runs the FULL suite to catch cross-task regressions. This is the auditor's primary unique value.
+
+  #### Fallback: Quality-Runner Unavailable
+
+  If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
   ```powershell
   uv run pytest tests/ -m "not api" -q --tb=short
+  uv run ruff check packages/ tests/
   ```
 
-  Unlike the reviewer (who scopes tests), the auditor runs the FULL suite to catch cross-task regressions. This is the auditor's primary unique value.
+  See `h-pytest-and-linting` for flags and known pitfalls.
 
-- **Lint:** `uv run ruff check src/ tests/`
+- **Lint:** Included in Quality-Runner `mode=full` report. If running fallback, use `uv run ruff check packages/ tests/`.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.
 
 ## Step 1a — Research task verification

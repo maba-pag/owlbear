@@ -50,13 +50,28 @@ The test-writer has already created `TestFromAC_*` classes in `tests/test_{modul
    - **AC describes wrong interface** (codebase contradicts the AC) → `end_work(outcome="reject", move_to="backlog")` with notes on the mismatch. Architect fixes AC.
 4. Plan implementation approach based on these interfaces.
 
-Verify all `TestFromAC_*` tests currently **fail**:
+Verify all `TestFromAC_*` tests currently **fail** via Quality-Runner:
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  lint_paths: ["tests/test_{module}.py"]
+```
+
+Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, investigate before implementing.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-If any `TestFromAC_*` tests already pass, investigate before implementing.
+See `h-pytest-and-linting` for flags and known pitfalls.
 
 > **Backward compatibility:** When no `TestFromAC_*` classes exist (old-style single-agent TDD), fall back to the full RED+GREEN workflow — write failing tests yourself, then implement.
 
@@ -70,13 +85,28 @@ Write the minimum code to make all tests pass:
 - Functions under ~50 lines.
 - Docstrings on public classes and functions.
 
-Run and verify:
+Run and verify via Quality-Runner:
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+```
+
+All tests must pass (`failed: []`), zero failures.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-All tests must pass, zero failures.
+See `h-pytest-and-linting` for flags and known pitfalls.
 
 ## Step 4 — Add Builder-Discovered Tests (Optional)
 
@@ -100,17 +130,31 @@ Only refactor code you just wrote:
 
 ## Step 6 — Verify
 
-Run the verification suite. **Always scope test runs** to avoid timeouts.
+Run the verification suite via Quality-Runner. **Always scope runs** to avoid timeouts:
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  coverage_modules: ["{module}"]
+  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+```
+
+All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
-uv run ruff check src/ tests/
+uv run ruff check packages/ tests/
 ```
 
-> **Prerequisite:** Load `h-pytest-and-linting` before running coverage commands. It defines exact flags and known pitfalls.
-
-All must pass. Target 90% coverage on touched modules.
+See `h-pytest-and-linting` for exact flags and known pitfalls.
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
 

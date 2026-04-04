@@ -26,29 +26,90 @@ For any changed function or class signatures, use `vscode_listCodeUsages` to tra
 
 ## Step 2 — Run Tests Independently
 
-Do NOT rely on builder self-reports. Run yourself.
+Do NOT rely on builder self-reports. Run yourself via Quality-Runner:
 
-**Always use terminal pytest** (never `runTests` — it deadlocks with parallel agents). Scope to task-specific files:
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  lint_paths: ["tests/test_{module}.py"]
+```
+
+Record: passed/failed counts from the `## Tests` section of the Quality-Runner report.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
-Record: passed/failed counts, failures, warnings.
+See `h-pytest-and-linting` for flags and known pitfalls.
+
+## Step 2.5 — Parallel Fan-Out Dispatch
+
+For complex reviews, dispatch **quality-runner** and **code-reader** subagents in parallel to analyse the changed files independently. Each subagent returns a structured report. Synthesise their findings before proceeding to Step 3.
+
+```
+quality-runner: {task_id, changed_files}
+code-reader: Analyze: {task_id, ac_lines, changed_files, test_files}
+```
+
+Collect both reports before continuing. If a subagent is unavailable, proceed solo and note the gap.
 
 ## Step 3 — Run Lint
 
-```powershell
-uv run ruff check src/ tests/
+Invoke Quality-Runner for lint if not already done in Step 2 report:
+
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: []
+  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
 ```
 
-Record: errors/warnings or "All checks passed!"
+Record: `clean: true/false` and any `violations` from the `## Lint` section.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+
+```powershell
+uv run ruff check packages/ tests/
+```
+
+See `h-pytest-and-linting` for flags and known pitfalls.
 
 ## Step 4 — Run Coverage
 
-> **Prerequisite:** Load `h-pytest-and-linting` before running coverage commands.
+Invoke Quality-Runner for coverage:
 
-Use bare `--cov` with `--cov-fail-under=0`. Verify touched modules have 90% coverage or higher.
+```
+agentName: quality-runner
+prompt: |
+  mode: scoped
+  task_id: {id}
+  test_paths: ["tests/test_{module}.py"]
+  coverage_modules: ["{module}"]
+  lint_paths: []
+```
+
+Verify touched modules have 90% coverage or higher from the `## Coverage` section.
+
+#### Fallback: Quality-Runner Unavailable
+
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+
+```powershell
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
+```
+
+See `h-pytest-and-linting` for exact flags and known pitfalls.
 
 ## Step 5 — Pass 1: CRITICAL Checks
 
@@ -184,6 +245,8 @@ Build an evidence table — every AC line needs specific proof:
 ## Step 8 — Produce Verdict
 
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
+
+If Step 2.5 was used, synthesise findings from the Quality-Runner and Code-Reader subagent reports into the verdict. Note any divergence between subagent findings and your own analysis.
 
 **PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
 
