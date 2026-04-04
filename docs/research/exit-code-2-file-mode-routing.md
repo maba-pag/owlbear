@@ -1,7 +1,7 @@
 # Exit Code 2 Routing via `-File` Invocation in Subagent Context
 
 > **Owning task:** #548 — Verify exit code 2 routing via -File invocation in subagent context
-> **Date:** 2026-04-02 **Status:** Theoretical complete, empirical pending
+> **Date:** 2026-04-02 **Status:** Complete
 
 ## 1. Context and Question
 
@@ -41,12 +41,13 @@ For `-File` mode, the docs state:
 So `exit 2` inside a `.ps1` script invoked via `-File` should become process
 exit code 2.
 
-### 3.2 Predicted Classification Chain
+### 3.2 Predicted and Empirical Classification
 
 | Mode | Script runs | PS process exit | Hooks engine sees | Classification |
 |------|------------|----------------|-------------------|----------------|
 | `-Command` | `exit 2` | 1 (converted) | 1 | NonBlockingError |
 | `-File` | `exit 2` | 2 (preserved) | 2 (predicted) | BlockingError (predicted) |
+| `-File` | `exit 2` | 2 (preserved) | 2 (empirical) | **NonBlockingError** (empirical, #548) |
 
 ### 3.3 Risk: Hooks Engine Spawn Intermediary
 
@@ -74,25 +75,22 @@ classification.
 |------|-----------|---------|
 | #209 | systemMessage reaches subagent model | Empirically false |
 | #532 | Exit code 2 = BlockingError (model-facing) | Empirically NonBlockingError |
-| #548 | Exit code 2 via -File = BlockingError | **Pending verification** |
+| #548 | Exit code 2 via -File = BlockingError | **NonBlockingError (0-for-3)** |
 
-## 4. Recommendation (.60 confidence)
+## 4. Conclusion
 
-**Prediction: `-File` mode will produce BlockingError classification.** The PS 5.1
-documentation clearly distinguishes exit code behavior between modes, and the
-`-Command` conversion to exit code 1 fully explains #532's finding. However:
+**Exit code 2 is NOT viable as a model-facing mechanism in PostToolUse subagent
+context via either PS 5.1 invocation mode.** The .60 prediction (BlockingError
+via `-File`) was disproven by empirical verification in #548: the hooks engine
+classified the hook as NonBlockingError regardless of `-File` vs `-Command`.
 
-- .60 (not higher) because of 0-for-2 track record on docs-based hook predictions
-- Hooks engine spawn mechanism (shell wrapping, internal mapping) is uninvestigated
-- Causal attribution of #532 is inferred, not empirically isolated
+This confirms that the distinction in PS 5.1 exit code propagation between
+`-Command` and `-File` is not the governing factor; the hooks engine's own
+classification logic (internal mapping or spawn intermediary) prevents exit
+code 2 from reaching BlockingError status in this context.
 
-Empirical verification via user action request is required before updating any
-downstream design assumptions.
-
-Challenge: reconsider (.55 confidence in original). Accepted C1 (hooks engine
-spawn intermediary), C2 (causal attribution assumed), C3 (lowered from .85 to
-.60). Rebutted A3 partially (understanding mechanisms has architectural value
-even if no current task depends on exit code 2).
+**Track record: 0-for-3.** Docs-based predictions on hook output routing are
+consistently unreliable. Use empirical verification first.
 
 ## 5. Follow-up Tasks
 

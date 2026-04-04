@@ -73,6 +73,11 @@ PS 5.1 `exit 2` inside `-Command` mode may not propagate exit codes correctly.
 invocation mode handles exit codes differently and may correctly propagate exit
 code 2. **This finding applies only to `-Command` invocation.**
 
+**`-File` verification (#548):** A `.ps1` script exiting with code 2 via
+`powershell -File` was also tested in subagent PostToolUse context. The hooks
+engine again classified it as NonBlockingError. Exit code 2 is NOT model-facing
+via either PS 5.1 invocation mode in this context.
+
 ### 3.5 PS 5.1 Stdin Parsing Pitfall
 
 The initial hook script form caused PS 5.1 to interpret JSON stdin as code.
@@ -99,9 +104,10 @@ for its stated scope (user-facing monitoring). Two corrections needed:
 1. Add `apply_patch` to the tool_name filter
 2. Future model-facing upgrade should use `additionalContext`, not exit code 2
 
-**Exit code 2:** NOT model-facing via `-Command` one-liners on PS 5.1.
-Behavior via `-File` invocation is untested and may differ. Do not dismiss
-exit code 2 entirely — a targeted `-File` test is recommended.
+**Exit code 2:** NOT model-facing via either PS 5.1 invocation mode (`-Command`
+or `-File`) in PostToolUse subagent context. Confirmed by #532 (`-Command`) and
+#548 (`-File`). Exit code 2 is not a viable model-facing mechanism via hooks in
+this context.
 
 **`decision:block`+`reason`:** Untested. Lower priority since
 `additionalContext` covers the non-blocking context injection use case.
