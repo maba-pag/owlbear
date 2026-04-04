@@ -14,6 +14,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+> **MCP equivalent:** `start_work(task_id="{id}")`
+
 Verify the task is in `backlog` status. If the task references a research doc (`docs/research/{slug}.md`), read it.
 
 **Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
@@ -80,6 +82,8 @@ The architect retains final authority.
 > **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 
 Append the architecture review to the task body via `edit_task` (with `append_body` and `timestamp=True`) before the final status move.
+
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Architecture Review\n...", timestamp=True)`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

@@ -14,6 +14,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+> **MCP equivalent:** `start_work(task_id="{id}")`
+
 Note every AC line from the task body — each will be verified individually.
 
 ## Step 1 — Check Source Control Changes
@@ -138,6 +140,8 @@ If yes to any = FAIL with evidence.
 
 Read the full task body via `show_task`. Check builder notes for loop patterns:
 
+> **MCP equivalent:** `show_task(task_id="{id}")`
+
 1. Count `## Builder Notes` sections (including retries).
 2. Verify approach variation across retries.
 3. Check for tier-3 violation (3+ retries without handoff/block).
@@ -182,6 +186,8 @@ Build an evidence table — every AC line needs specific proof:
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
 
 **PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 **FAIL** (any Pass 1 criterion unmet): list every failing criterion with evidence. Choose target based on issue type:
 

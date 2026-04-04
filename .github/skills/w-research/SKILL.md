@@ -14,6 +14,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+> **MCP equivalent:** `start_work(task_id="{id}")`
+
 Verify the task is in `ideation` status.
 
 ## Research Gate Checklist
@@ -132,6 +134,8 @@ Commit per `r-project-standards` → Commit Discipline (if research doc or sourc
 Append research summary and challenge results to task body via `edit_task` (with `append_body` and `timestamp=True`).
 
 Advance via `end_work` (moves to `backlog` + releases claim).
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

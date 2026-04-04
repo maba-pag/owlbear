@@ -14,6 +14,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
+> **MCP equivalent:** `start_work(task_id="{id}")`
+
 ## Step 1 — Assess Task Type
 
 From the task body retrieved by `start_work`:
@@ -30,7 +32,9 @@ From the task body retrieved by `start_work`:
 Some tasks have no testable implementation (research, documentation, config).
 
 1. Append a note to the task body via `edit_task` (with `append_body`): "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder."
+   > **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes\n...", timestamp=True)`
 2. Advance via `end_work` (moves to `in-progress` + releases claim).
+   > **MCP equivalent:** `end_work(task_id="{id}", note="non-impl pass-through", outcome="success")`
 3. Return: `DONE #{id} -> in-progress | non-impl pass-through, no tests needed`
 4. **Stop here.**
 
@@ -42,6 +46,7 @@ If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this 
 2. **If reviewer cites missing tests:** Write NEW failing tests addressing gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Run pytest to verify: old tests PASS, new tests FAIL. Append update via `edit_task`.
 3. **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings. Append note via `edit_task`.
 4. Advance via `end_work` (moves to `in-progress` + releases claim).
+   > **MCP equivalent:** `end_work(task_id="{id}", note="retry handled", outcome="success")`
 5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
 6. **Stop here.**
 
@@ -110,6 +115,8 @@ Must be clean.
 
 Append test summary to task body via `edit_task` (with `append_body` and `timestamp=True`):
 
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Test-Writer Notes\n...", timestamp=True)`
+
 ```
 ## Test-Writer Notes
 - Test file: tests/test_{module}.py
@@ -131,6 +138,8 @@ Verify only test files are staged.
 ## Step 7 — Advance
 
 Advance via `end_work` (moves to `in-progress` + releases claim).
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

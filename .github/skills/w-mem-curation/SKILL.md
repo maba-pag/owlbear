@@ -24,6 +24,8 @@ Gather from both active sources (during migration, both are active):
 2. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
 3. Scan parent directory: `memory view /memories/repo/` — check for misplaced entries that agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
 4. Also check task bodies via `show_task` for inline agent notes not written to either source (legacy pattern).
+
+> **MCP equivalent:** `show_task(task_id="{id}")`
 5. Filter to the scope specified (all, last N tasks, tag filter).
 6. Collect all entries from both sources for the remaining steps.
 
@@ -81,9 +83,13 @@ Cross-pollinated entries re-enter the pending queue and are evaluated in the nex
 
 If dispatched with a task ID, append curation report to task body via `edit_task` (with `append_body` and `timestamp=True`).
 
+> **MCP equivalent:** `edit_task(task_id="{id}", append_body="## Curation\n...", timestamp=True)`
+
 ## Step 6 — Advance
 
 If dispatched with a task ID, advance via `end_work` (advances status + releases claim).
+
+> **MCP equivalent:** `end_work(task_id="{id}", note="...", outcome="success")`
 
 Return Channel A signal per `r-pipeline-protocol`.
 

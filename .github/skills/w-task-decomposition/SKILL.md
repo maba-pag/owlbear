@@ -26,6 +26,8 @@ Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
 Read the current board via `list_tasks` to note: highest existing ID, existing dependencies, and current phase landscape.
 
+> **MCP equivalent:** `list_tasks()` (with optional `status`, `tag`, or other filters)
+
 ## Step 3 — Decompose into Atomic Tasks
 
 Each task must be:
@@ -74,6 +76,8 @@ If a planned task fails: refine the title and body or stop. Never create a place
 **Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
 Create each task via `create_task` with title, priority, status `ideation`, tags, depends_on, and body containing AC.
+
+> **MCP equivalent:** `create_task(title="...", priority="...", status="ideation", tags=[...], depends_on=[...], body="...")`
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
