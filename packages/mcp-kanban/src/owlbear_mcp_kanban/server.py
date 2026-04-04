@@ -287,6 +287,16 @@ async def create_task(  # noqa: PLR0913
 async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
     """Move a task to the specified status column."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    if status == "archived":
+        stdout, stderr, rc = await _run_kanban(app_ctx, "archive", task_id)
+        if rc != 0:
+            msg = stderr.strip()
+            raise ToolError(msg)
+        try:
+            return KanbanTask.model_validate_json(stdout)
+        except ValidationError as exc:
+            msg = f"Invalid task JSON: {exc}"
+            raise ToolError(msg) from exc
     stdout, stderr, rc = await _run_kanban(app_ctx, "move", task_id, status, "--json")
     if rc != 0:
         msg = stderr.strip()
@@ -497,7 +507,7 @@ _patch_params("create_task", {
 })
 
 _patch_params("move_task", {
-    "status": {"enum": _STATUSES},
+    "status": {"enum": [*_STATUSES, "archived"]},
 })
 
 _patch_params("edit_task", {
