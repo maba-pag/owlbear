@@ -24,6 +24,15 @@ External repos and resources studied during OwlBear development.
 | Teams webhook connector reference | <https://learn.microsoft.com/en-us/connectors/teams/#microsoft-teams-webhook> | TeamsIncomingWebhookTrigger API: HTTP POST, Adaptive Card schema, auth types, throttling limits | docs/research/power-automate-workflows-teams-notifications.md | 2026-04-04 |
 | Create incoming webhooks with Workflows | <https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498> | Step-by-step template/scratch setup, URL copy, auth options, channel selection | docs/research/power-automate-workflows-teams-notifications.md | 2026-04-04 |
 
+## Project-Local Knowledge Source (Task #616)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OwlBear #135 knowledge-scoping research | (internal) docs/research/knowledge-scoping.md | Column-based scope filtering design: scope TEXT column on all tables, vec0 post-filter, scope resolution | docs/research/project-local-knowledge-source.md | 2026-04-05 |
+| LightRAG workspace isolation | <https://github.com/HKUDS/LightRAG> | File-based: separate subdirectories per workspace. PG: workspace column isolation. 28.7k stars, MIT. | docs/research/project-local-knowledge-source.md | 2026-04-05 |
+| Mem0 multi-level scoping | <https://github.com/mem0ai/mem0> | user_id/session_id metadata keys for query-time scope filtering. Shared backend with logical separation. 48k stars, Apache-2.0. | docs/research/project-local-knowledge-source.md | 2026-04-05 |
+| SQLite ATTACH DATABASE | <https://www.sqlite.org/lang_attach.html> | Cross-database queries via qualified table names. Atomic transactions for file-backed DBs. Max 10 attached. | docs/research/project-local-knowledge-source.md | 2026-04-05 |
+
 ## Agent-Scoped Hooks Research (Task #37)
 
 | Source | URL | What | Where Used | Date |
