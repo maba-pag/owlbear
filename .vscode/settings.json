@@ -29,17 +29,8 @@
   },
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
-  "chat.agentFilesLocations": {
-    "agents": true
-  },
-  "chat.agentSkillsLocations": {
-    "skills": true
-  },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
-  "chat.instructionsFilesLocations": {
-    "instructions": true
-  },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
