@@ -26,7 +26,7 @@ The kanban board is shared — multiple agents work on it simultaneously.
 - You may read any task and create follow-up tasks freely. Never move, edit, claim, or release tasks that aren't yours.
 - Leave a handoff note in the task body before parking a task unfinished.
 
-For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show) or the `h-kanban-md` skill (CLI equivalent).
+For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show).
 
 ### Knowledge Pre-flight
 
@@ -110,7 +110,7 @@ Channel A is diagnostic only — the orchestrator does not parse or interpret th
 
 Rich context appended to the task body before returning. Downstream agents read this via the task body. The orchestrator never reads it.
 
-For command syntax to append body content, see the `h-mcp-kanban` skill (`edit_task` tool) or the `h-kanban-md` skill (CLI equivalent).
+For command syntax to append body content, see the `h-mcp-kanban` skill (`edit_task` tool).
 
 ### Per-Agent Signal Mapping
 

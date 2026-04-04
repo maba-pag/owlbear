@@ -51,65 +51,36 @@ For each pending file, read frontmatter to classify: T2 (`impact_tier` 2 or abse
 
 ## Recipe 1 — Board Scan
 
-**One terminal call.** Produces a classified, sorted, gate-checked candidate list.
+**One MCP call.** Produces a classified, sorted, gate-checked candidate list.
 
-```powershell
-$pr=@{critical=0;needed=1;important=2;'nice-to-have'=3;someday=4}
-$sr=@{done=0;docs=1;review=2;'in-progress'=3;todo=4;backlog=5;ideation=6}
-$raw = kanban\kanban-md.exe list --json --unblocked --not-blocked --unclaimed `
-  --status ideation,backlog,todo,in-progress,review,docs,done {scope} 2>&1 | Out-String
-$tasks = $raw | ConvertFrom-Json
-if (-not $tasks) { '(empty)'; return }
-$tasks | Sort-Object {$pr[$_.priority]},{$sr[$_.status]} | ForEach-Object {
-  $w=@()
-  # NON_IMPL_TAGS — authoritative list
-  $nonImpl = @('research','docs','type:config','type:docs','test','type:test','agent','quality')
-  if ($_.status -eq 'in-progress' -and $_.body -notmatch '## Test-Writer Notes' -and
-      -not ($_.tags | Where-Object { $_ -in $nonImpl })) {$w+='TW:MISSING'}
-  if ($_.status -in @('todo','in-progress','review','docs','done') -and
-      $_.body -notmatch '(?m)^\s*(-\s|\d+\.\s)') {$w+='AC:MISSING'}
-  if ($_.body -match 'Needs decomposition:') {$w+='DECOMP'}
-  if ($_.body -match '## Architecture Review') {$w+='ARCH:REVIEWED'}
-  $t=if($_.tags){"($($_.tags -join ','))"}else{''}
-  $x=if($w){" [!$($w -join ',')]"}else{''}
-  "#$($_.id) $($_.status)/$($_.priority) $($_.title) $t$x"
-}
-"---"
-"$($tasks.Count) candidates"
-```
+Call `list_tasks(status=["ideation","backlog","todo","in-progress","review","docs","done"], unblocked=true, unclaimed=true)`. The `unblocked=true` parameter excludes tasks where any `depends_on` dependency is not at terminal status (= Gate 2). The `unclaimed=true` parameter excludes currently claimed tasks (= Gate 6). Explicitly blocked tasks are excluded by the server automatically.
 
-> **MCP equivalent:** `list_tasks(status=["ideation","backlog","todo","in-progress","review","docs","done"], unblocked=true, unclaimed=true)` — returns the same candidate set via MCP.
+If the response is empty, output `{"dispatch":[]}` and stop.
 
-**What the `--unblocked --not-blocked --unclaimed` triple does:**
+**Sort** the returned array by dual-key: priority rank (critical=0, needed=1, important=2, nice-to-have=3, someday=4) first, then pipeline proximity (done=0, docs=1, review=2, in-progress=3, todo=4, backlog=5, ideation=6).
 
-- `--unblocked`: all `depends_on` tasks at terminal status (= Gate 2)
-- `--not-blocked`: no explicit block flag set (orthogonal to `--unblocked`)
-- `--unclaimed`: not claimed or claim expired per `claim_timeout` in config (= Gate 6)
+**Gate flags** — for each task, compute warning flags:
 
-**What the PowerShell layer adds:**
+<!-- NON_IMPL_TAGS — authoritative list -->
+- `TW:MISSING` — status is `in-progress`, body lacks `## Test-Writer Notes` section, and task has none of the non-impl pass-through tags: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`
+- `AC:MISSING` — status is `todo`, `in-progress`, `review`, `docs`, or `done`, and body contains no bullet lines (lines starting `- ` or `N. `)
+- `DECOMP` — body contains `Needs decomposition:`
+- `ARCH:REVIEWED` — body contains `## Architecture Review`
 
-- Dual-key sort: priority rank (critical first), then pipeline proximity (done first)
-- `TW:MISSING` = Gate 4 violation
-- `AC:MISSING` = Gate 5 violation
-- `ARCH:REVIEWED` = Gate 3 exemption
-- Tags inline for scope/category context
+**Output each task as one line:** `#{id} {status}/{priority} {title} ({tags}) [!{flags}]` — omit `({tags})` if no tags, omit `[!{flags}]` if no flags. Finish with `---` and `N candidates`.
 
-**Scope translation** — replace `{scope}` per orchestrator input:
+**Scope translation** — add `tag="{tag}"` parameter per orchestrator input:
 
-| Orchestrator scope | Substitute |
-| ------------------ | ---------- |
-| `"tag:phase-3"`    | `--tag phase-3` |
-| `"all"` or omitted | _(nothing)_ |
+| Orchestrator scope | Add parameter   |
+| ------------------ | --------------- |
+| `"tag:phase-3"`    | `tag="phase-3"` |
+| `"all"` or omitted | _(nothing)_     |
 
 ## Recipe 2 — Stale-Task Body Read
 
 **Conditional.** Run only when the orchestrator reports first-stale tasks needing a `retry_hint`:
 
-```powershell
-foreach ($id in {stale_ids}) { "===TASK $id==="; kanban\kanban-md.exe show $id; "===END===" }
-```
-
-> **MCP equivalent:** `show_task(task_id="{id}")` per stale task.
+Call `show_task(task_id="{id}")` for each stale task ID.
 
 ### Terminal Call Budget
 
@@ -136,7 +107,7 @@ Parse board scan output. Gates 2 and 6 are already applied by server-side filter
 
 **Gate 1 — Status gate:** Status must match the agent dispatch mapping. Always passes for board scan output.
 
-**Gate 2 — Dependency gate:** Handled by `--unblocked`.
+**Gate 2 — Dependency gate:** Handled by `unblocked=true` parameter.
 
 **Gate 3 — Atomicity gate:** Title describes a single responsibility. Red flag: "and" joining unrelated concerns. **Exemption:** tasks marked `[!ARCH:REVIEWED]`.
 
@@ -144,7 +115,7 @@ Parse board scan output. Gates 2 and 6 are already applied by server-side filter
 
 **Gate 5 — Clarity gate:** `[!AC:MISSING]` marker = exclude. Does not apply to `ideation` or `backlog`.
 
-**Gate 6 — Claim gate:** Handled by `--unclaimed`.
+**Gate 6 — Claim gate:** Handled by `unclaimed=true` parameter.
 
 ### Gate Failure Remediation
 
@@ -172,7 +143,7 @@ Single-line JSON object:
 
 ## Verification Checklist
 
-- [ ] Board scan used `--unblocked --not-blocked --unclaimed` triple (no manual dependency checking)
+- [ ] Board scan used `unblocked=true, unclaimed=true` parameters (no manual dependency or claim checking)
 - [ ] All 6 gates evaluated (4 automated, 2 manual)
 - [ ] Dispatch list respects 20-task cap
 - [ ] DECOMP tasks routed to planner, not status-based agent
@@ -183,7 +154,6 @@ Single-line JSON object:
 
 ## Known Pitfalls
 
-- **`--unblocked` vs `--not-blocked`:** These are orthogonal flags. `--unblocked` checks `depends_on` resolution; `--not-blocked` checks the explicit block flag. Both are needed.
+- **`unblocked` vs `unclaimed` parameters:** `unblocked=true` filters to tasks where all `depends_on` dependencies are at terminal status (Gate 2). `unclaimed=true` excludes currently claimed tasks (Gate 6). Both are required — omitting either passes tasks that should be gate-blocked.
 - **Non-impl tag Gate 4 exemption:** Tasks with pass-through tags legitimately skip the test-writer. Missing `## Test-Writer Notes` on these tasks is expected, not a gate violation.
 - **`AC:MISSING` on ideation/backlog:** These statuses don't need AC yet — the researcher/architect adds it. Don't flag them.
-- **Body content parsing in PowerShell:** Avoid `->` arrows and `--flag` patterns in any body text — they get parsed as CLI fragments.

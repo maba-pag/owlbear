@@ -9,7 +9,6 @@ user-invocable: false
 The `owlbear-kanban` MCP server exposes `kanban-md` board operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `owlbear-kanban`.
 
 For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
-For direct CLI access (deprecated, fallback only), see `h-kanban-md`.
 
 ## Tool Summary
 
