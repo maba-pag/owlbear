@@ -67,10 +67,16 @@ try {
 }
 
 if ($ruff_exit -eq 1) {
-    # Lint errors found — report via systemMessage (non-blocking)
+    # Lint errors found — report via systemMessage (user-facing) and additionalContext (model-facing)
     $ruff_output = ($ruff_result | ForEach-Object { "$_" }) -join "`n"
-    $response = @{ systemMessage = $ruff_output }
-    Write-Output ($response | ConvertTo-Json -Compress)
+    $response = @{
+        systemMessage      = $ruff_output
+        hookSpecificOutput = @{
+            hookEventName    = 'PostToolUse'
+            additionalContext = $ruff_output
+        }
+    }
+    Write-Output ($response | ConvertTo-Json -Compress -Depth 3)
 } else {
     # Exit code 0 (clean) or 2+ (error, e.g., file not found) -> return {}
     Write-Output '{}'
