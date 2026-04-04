@@ -12,7 +12,7 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
-This skill does NOT claim a task — the planner creates tasks rather than processing one through the pipeline. If dispatched with a parent task ID, read the parent via `show-task` to understand scope and context.
+This skill does NOT claim a task — the planner creates tasks rather than processing one through the pipeline. If dispatched with a parent task ID, read the parent via `show_task` to understand scope and context.
 
 **Execution mode:** When **dispatcher-dispatched** (parent task ID provided), execute `create_task` calls directly and report created IDs. When **user-invoked**, output planned tasks for review — do NOT execute them.
 

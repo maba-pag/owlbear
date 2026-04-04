@@ -136,7 +136,7 @@ If yes to any = FAIL with evidence.
 
 ### 5.7 Builder Process Quality (Loop Detection)
 
-Read the full task body via `show-task`. Check builder notes for loop patterns:
+Read the full task body via `show_task`. Check builder notes for loop patterns:
 
 1. Count `## Builder Notes` sections (including retries).
 2. Verify approach variation across retries.
@@ -192,7 +192,7 @@ Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thre
 
 Check the task body for prior `## Review Evidence` sections to detect repeat failures.
 
-Move via `move_task`, then release claim via `edit_task` (with `release=True`).
+Reject via `end_work(outcome="reject", move_to="{target_status}")` where target status depends on the failure type above.
 
 Return Channel A signal per `r-pipeline-protocol`.
 

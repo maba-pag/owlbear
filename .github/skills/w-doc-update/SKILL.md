@@ -18,7 +18,7 @@ Verify the task is in `docs` status.
 
 ### Step 0a — Verify Upstream Review Evidence
 
-Check the task body for a `## Review Evidence` section. If **absent**, the reviewer skipped this mandatory section — reject to `review` via `move_task`, then release claim via `edit_task` (with `release=True`). Note the rejection reason in the task body via `edit_task`.
+Check the task body for a `## Review Evidence` section. If **absent**, the reviewer skipped this mandatory section — reject via `end_work(outcome="reject", move_to="review", note="Missing ## Review Evidence section")`.
 
 This is a recurring pipeline gap. Enforcing it here catches the defect one stage earlier than the auditor.
 
@@ -80,7 +80,7 @@ Advance via `end_work` (moves to `done` + releases claim).
 
 Return Channel A signal per `r-pipeline-protocol`.
 
-**Rejection:** If untested behavior is found, reject to `review` via `move_task`, then release claim via `edit_task` (with `release=True`).
+**Rejection:** If untested behavior is found, reject via `end_work(outcome="reject", move_to="review")`.
 
 ## Output Template
 

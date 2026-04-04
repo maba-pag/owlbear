@@ -22,7 +22,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 
 1. Search for related modules, interfaces, and patterns.
 2. Read existing code the task will touch via `read_file`.
-3. Check `depends_on` — are dependencies actually `done`? Use `show-task` for each dependency if needed.
+3. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
 4. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
 5. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
 

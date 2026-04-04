@@ -23,7 +23,7 @@ Gather from both active sources (during migration, both are active):
 1. **Primary (MCP):** Call `list_entries(status=pending)` to fetch all pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
 2. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
 3. Scan parent directory: `memory view /memories/repo/` — check for misplaced entries that agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
-4. Also check task bodies via `show-task` for inline agent notes not written to either source (legacy pattern).
+4. Also check task bodies via `show_task` for inline agent notes not written to either source (legacy pattern).
 5. Filter to the scope specified (all, last N tasks, tag filter).
 6. Collect all entries from both sources for the remaining steps.
 

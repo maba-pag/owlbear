@@ -18,7 +18,7 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 As 3rd-line defense, focus on **cross-task integration** and **architect quality**. Trust the reviewer's code-level verdict and spot-check rather than re-verify:
 
-- **Read reviewer evidence:** Check the `## Review Evidence` section in the task body (retrieved by `start_work`, or via `show-task` if needed again). If detailed with PASS verdict, accept code-level findings. If missing or thin, escalate confidence penalty.
+- **Read reviewer evidence:** Check the `## Review Evidence` section in the task body (retrieved by `start_work`, or via `show_task` if needed again). If detailed with PASS verdict, accept code-level findings. If missing or thin, escalate confidence penalty.
 - **File exists:** Quick sanity check that deliverables exist.
 - **Scope check:** Verify changed files align with AC scope. Flag unexpected files outside the task's domain.
 - **AC spot-check:** Verify 1-2 key AC items rather than every line (the reviewer already mapped them all).
@@ -94,7 +94,7 @@ Append the audit section to the task body via `edit_task` (with `append_body` an
 Then advance based on confidence:
 
 - **≥ .95 — Archive:** via `end_work` (advances status + releases claim).
-- **< .95 — Reject to backlog:** via `move_task` to backlog status, then `edit_task` with `release=True`.
+- **< .95 — Reject to backlog:** via `end_work(outcome="reject", move_to="backlog")`.
 
 Return Channel A signal as final output — nothing else after it.
 
