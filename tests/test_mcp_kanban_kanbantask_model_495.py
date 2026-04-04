@@ -34,7 +34,7 @@ except ImportError:
     _KanbanTask = None  # type: ignore[assignment]
 
 from mcp.server.fastmcp.exceptions import ToolError
-from owlbear_mcp_kanban.server import AppContext, move_task, pick_task, show_task
+from owlbear_mcp_kanban.server import AppContext, move_task, show_task
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,6 @@ _MINIMAL_TASK_JSON: dict[str, Any] = {
     "priority": "important",
     "created": "2026-01-01T00:00:00+02:00",
     "updated": "2026-01-02T12:00:00+02:00",
-    "class": "standard",
 }
 
 # Full task JSON with all optional fields populated
@@ -61,14 +60,8 @@ _FULL_TASK_JSON: dict[str, Any] = {
     "created": "2026-03-31T06:47:09+02:00",
     "updated": "2026-03-31T22:34:38+02:00",
     "class": "standard",
-    "started": None,
-    "completed": None,
-    "assignee": None,
     "claimed_by": "cedar-cloud",
-    "claimed_at": "2026-03-31T10:00:00+02:00",
     "tags": ["scope:mcp", "type:build", "phase-2"],
-    "due": None,
-    "estimate": None,
     "parent": None,
     "depends_on": [489],
     "blocked": False,
@@ -167,7 +160,7 @@ class TestFromAC_KanbanTaskRequiredFields:
     """Required fields must be present and correctly typed."""
 
     # AC: Required fields: id (int), title (str), status (str), priority (str),
-    #     created (str), updated (str), class_ (str, Field(alias=class))
+    #     created (str), updated (str)
     def test_required_field_id_is_int(self) -> None:
         """id must be an int (not str)."""
         assert _KanbanTask is not None
@@ -206,16 +199,6 @@ class TestFromAC_KanbanTaskRequiredFields:
         task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
         assert isinstance(task.updated, str)
 
-    # AC: class_ (str, Field(alias=class)) — reserved word workaround
-    def test_required_field_class_via_alias(self) -> None:
-        """class_ field must be accessible via 'class' alias from JSON input."""
-        assert _KanbanTask is not None
-        task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        assert task.class_ == "standard", (  # type: ignore[union-attr]
-            "class_ must be set from 'class' alias in JSON; got: "
-            f"{getattr(task, 'class_', 'MISSING')}"
-        )
-
     def test_missing_required_id_raises_validation_error(self) -> None:
         """Omitting id must raise a ValidationError."""
         from pydantic import ValidationError
@@ -225,14 +208,13 @@ class TestFromAC_KanbanTaskRequiredFields:
         with pytest.raises(ValidationError):
             _KanbanTask.model_validate(data)
 
-    def test_missing_required_class_raises_validation_error(self) -> None:
-        """Omitting 'class' must raise a ValidationError (required field)."""
-        from pydantic import ValidationError
-
+    def test_extra_fields_silently_ignored(self) -> None:
+        """Fields kanban-md emits but KanbanTask doesn't define are silently ignored."""
         assert _KanbanTask is not None
-        data = {k: v for k, v in _MINIMAL_TASK_JSON.items() if k != "class"}
-        with pytest.raises(ValidationError):
-            _KanbanTask.model_validate(data)
+        data = {**_MINIMAL_TASK_JSON, "class": "standard", "started": "2026-01-01"}
+        task = _KanbanTask.model_validate(data)
+        assert not hasattr(task, "class_")
+        assert not hasattr(task, "started")
 
 
 # ---------------------------------------------------------------------------
@@ -264,26 +246,12 @@ class TestFromAC_KanbanTaskOptionalFields:
         task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
         assert task.blocked is False, f"blocked must default to False, got {task.blocked}"  # type: ignore[union-attr]
 
-    # AC: started (str or None)
-    def test_optional_started_defaults_to_none(self) -> None:
-        """started must default to None when absent."""
+    # AC: claimed_by (str or None) → coerced to claimed (bool)
+    def test_optional_claimed_defaults_to_false(self) -> None:
+        """claimed must default to False when claimed_by is absent."""
         assert _KanbanTask is not None
         task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        assert task.started is None  # type: ignore[union-attr]
-
-    # AC: claimed_by (str or None)
-    def test_optional_claimed_by_defaults_to_none(self) -> None:
-        """claimed_by must default to None when absent."""
-        assert _KanbanTask is not None
-        task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        assert task.claimed_by is None  # type: ignore[union-attr]
-
-    # AC: claimed_at (str or None)
-    def test_optional_claimed_at_defaults_to_none(self) -> None:
-        """claimed_at must default to None when absent."""
-        assert _KanbanTask is not None
-        task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        assert task.claimed_at is None  # type: ignore[union-attr]
+        assert task.claimed is False  # type: ignore[union-attr]
 
     # AC: body (str or None)
     def test_optional_body_defaults_to_none(self) -> None:
@@ -305,45 +273,41 @@ class TestFromAC_KanbanTaskOptionalFields:
         task = _KanbanTask.model_validate(_FULL_TASK_JSON)
         assert task.id == 495
         assert task.depends_on == [489]
-        assert task.claimed_by == "cedar-cloud"
+        assert task.claimed is True  # claimed_by was "cedar-cloud" → coerced to True
         assert task.tags == ["scope:mcp", "type:build", "phase-2"]
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_KanbanTaskAliasSerialisation — alias keys in serialisation
+# TestFromAC_KanbanTaskExtraFieldsIgnored — verify extra="ignore" for dropped fields
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_KanbanTaskAliasSerialisation:
-    """model_dump(by_alias=True) must emit 'class' key, not 'class_'."""
+class TestFromAC_KanbanTaskExtraFieldsIgnored:
+    """Fields emitted by kanban-md but not in KanbanTask must be silently ignored."""
 
-    # AC: Verify structuredContent uses alias keys (class not class_)
-    def test_model_dump_by_alias_emits_class_key(self) -> None:
-        """model_dump(by_alias=True) must contain 'class' key, not 'class_'."""
+    def test_class_field_silently_ignored(self) -> None:
+        """kanban-md emits 'class' but model must accept and ignore it."""
         assert _KanbanTask is not None
-        task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        dumped = task.model_dump(by_alias=True)
-        assert "class" in dumped, (
-            "model_dump(by_alias=True) must contain 'class' key for MCP structuredContent"
-        )
-        assert "class_" not in dumped, (
-            "model_dump(by_alias=True) must NOT contain 'class_' key"
-        )
-        assert dumped["class"] == "standard"
+        data = {**_MINIMAL_TASK_JSON, "class": "standard"}
+        task = _KanbanTask.model_validate(data)
+        assert not hasattr(task, "class_")
+        assert task.id == 42
 
-    def test_model_dump_without_alias_emits_class_underscore(self) -> None:
-        """model_dump() (no alias) must use Python field name 'class_'."""
+    def test_dropped_fields_silently_ignored(self) -> None:
+        """started, completed, assignee, claimed_at, due, estimate must be ignored."""
         assert _KanbanTask is not None
-        task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        dumped = task.model_dump()
-        assert "class_" in dumped, "model_dump() must contain 'class_' (Python field name)"
-
-    # AC: model_validate_json — must parse JSON with "class" key (alias path)
-    def test_model_validate_json_accepts_class_alias(self) -> None:
-        """model_validate_json must accept 'class' key from kanban-md JSON output."""
-        assert _KanbanTask is not None
-        task = _KanbanTask.model_validate_json(json.dumps(_MINIMAL_TASK_JSON))
-        assert task.class_ == "standard"  # type: ignore[union-attr]
+        data = {
+            **_MINIMAL_TASK_JSON,
+            "started": "2026-01-01",
+            "completed": "2026-01-02",
+            "assignee": "someone",
+            "claimed_at": "2026-01-01T10:00:00+02:00",
+            "due": "2026-02-01",
+            "estimate": "2h",
+        }
+        task = _KanbanTask.model_validate(data)
+        for attr in ("started", "completed", "assignee", "claimed_at", "due", "estimate"):
+            assert not hasattr(task, attr), f"{attr} should be silently ignored"
 
 
 # ---------------------------------------------------------------------------
@@ -439,52 +403,12 @@ class TestFromAC_MoveTaskReturnsKanbanTask:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_PickTaskReturnsKanbanTask — pick_task return type + error contract
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_PickTaskReturnsKanbanTask:
-    """pick_task must return KanbanTask on success and raise ToolError on failure."""
-
-    # AC: pick_task: return type str to KanbanTask
-    @pytest.mark.asyncio
-    async def test_pick_task_returns_kanbantask_on_success(self) -> None:
-        """pick_task must return a KanbanTask instance on rc==0."""
-        assert _KanbanTask is not None, "KanbanTask not importable — model not created yet"
-        mcp_ctx = _make_mcp_ctx()
-        stdout = json.dumps(_FULL_TASK_JSON)
-        with _patch_run(stdout=stdout, rc=0):
-            result = await pick_task(mcp_ctx)
-        assert isinstance(result, _KanbanTask), (
-            f"pick_task must return KanbanTask instance, got {type(result)}"
-        )
-
-    # AC: pick_task error path: raise ToolError(stderr.strip())
-    @pytest.mark.asyncio
-    async def test_pick_task_raises_tool_error_on_nonzero_rc(self) -> None:
-        """pick_task must raise ToolError when rc != 0."""
-        mcp_ctx = _make_mcp_ctx()
-        with _patch_run(stdout="", stderr="no tasks available", rc=1), pytest.raises(ToolError) as exc_info:
-            await pick_task(mcp_ctx, status="todo")
-        assert "no tasks available" in str(exc_info.value)
-
-    # AC: ValidationError caught and wrapped
-    @pytest.mark.asyncio
-    async def test_pick_task_wraps_validation_error_as_tool_error(self) -> None:
-        """pick_task must raise ToolError when stdout is invalid JSON for KanbanTask."""
-        mcp_ctx = _make_mcp_ctx()
-        bad_json = "{not valid json"
-        with _patch_run(stdout=bad_json, rc=0), pytest.raises(ToolError):
-            await pick_task(mcp_ctx)
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_OutputSchemaAnnotations — outputSchema on show/move/pick
+# TestFromAC_OutputSchemaAnnotations — outputSchema on show/move
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_OutputSchemaAnnotations:
-    """show_task, move_task, pick_task must have outputSchema in MCP tool listing."""
+    """show_task and move_task must have outputSchema in MCP tool listing."""
 
     def _get_tool(self, name: str) -> Any:
         from owlbear_mcp_kanban.server import mcp
@@ -521,19 +445,6 @@ class TestFromAC_OutputSchemaAnnotations:
             f"currently has: {list(props.keys())} — change return type to KanbanTask"
         )
 
-    # AC: outputSchema in tool listing for pick_task — must have KanbanTask fields
-    def test_pick_task_has_kanbantask_output_schema(self) -> None:
-        """pick_task outputSchema must describe KanbanTask fields, not a str wrapper."""
-        tool = self._get_tool("pick_task")
-        assert hasattr(tool, "output_schema"), "pick_task tool must have output_schema attribute"
-        schema = tool.output_schema
-        assert schema is not None, "pick_task must have a non-None outputSchema"
-        props = schema.get("properties", {})
-        assert "id" in props, (
-            "pick_task outputSchema must include KanbanTask fields; "
-            f"currently has: {list(props.keys())} — change return type to KanbanTask"
-        )
-
     def test_show_task_output_schema_has_required_fields(self) -> None:
         """show_task outputSchema must expose required KanbanTask fields: id, title, status, priority."""
         tool = self._get_tool("show_task")
@@ -546,21 +457,18 @@ class TestFromAC_OutputSchemaAnnotations:
                 f"current properties: {list(props.keys())}"
             )
 
-    # AC: structuredContent uses alias keys — outputSchema must contain "class" property
-    def test_show_task_output_schema_has_class_alias_property(self) -> None:
-        """show_task outputSchema must expose 'class' property (alias), not 'class_'."""
+    # Dropped fields must NOT appear in outputSchema
+    def test_show_task_output_schema_excludes_dropped_fields(self) -> None:
+        """show_task outputSchema must not contain dropped fields (class, started, etc.)."""
         tool = self._get_tool("show_task")
         schema = tool.output_schema
         assert schema is not None
         props = schema.get("properties", {})
-        assert "class" in props, (
-            "outputSchema for show_task must contain 'class' property (alias key); "
-            f"found properties: {list(props.keys())}"
-        )
-        assert "class_" not in props, (
-            "outputSchema for show_task must NOT contain 'class_' (Python field name); "
-            "configure model_json_schema to use aliases"
-        )
+        for dropped in ("class", "class_", "started", "completed", "assignee", "claimed_at", "due", "estimate"):
+            assert dropped not in props, (
+                f"outputSchema for show_task must NOT contain dropped field '{dropped}'; "
+                f"found properties: {list(props.keys())}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -578,14 +486,13 @@ class TestFromAC_ModelValidatesSampleJsonShapes:
         assert _KanbanTask is not None
         task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
         assert task.id == 42
-        assert task.class_ == "standard"  # type: ignore[union-attr]
 
     def test_validates_full_shape_with_all_optional_fields(self) -> None:
         """KanbanTask must accept the full field set from kanban-md --json output."""
         assert _KanbanTask is not None
         task = _KanbanTask.model_validate(_FULL_TASK_JSON)
         assert task.id == 495
-        assert task.claimed_by == "cedar-cloud"
+        assert task.claimed is True  # claimed_by was "cedar-cloud" → coerced to True
         assert task.depends_on == [489]
         assert task.blocked is False
 
@@ -595,7 +502,6 @@ class TestFromAC_ModelValidatesSampleJsonShapes:
         raw_json = json.dumps(_FULL_TASK_JSON)
         task = _KanbanTask.model_validate_json(raw_json)
         assert task.id == 495
-        assert task.class_ == "standard"  # type: ignore[union-attr]
 
     def test_id_coerced_from_int_field(self) -> None:
         """id must be stored as int (kanban-md emits it as a JSON number)."""
