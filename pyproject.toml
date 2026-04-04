@@ -2,7 +2,7 @@
 native-tls = true
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["serve/*"]
 
 [dependency-groups]
 dev = [
@@ -15,7 +15,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages"]
+testpaths = ["tests", "serve"]
 addopts = "--import-mode=importlib -m 'not e2e'"
 norecursedirs = ["v1"]
 asyncio_mode = "strict"
@@ -30,13 +30,13 @@ markers = [
 target-version = "py312"
 line-length = 100
 src = [
-  "packages/orchestrator/src",
-  "packages/knowledge/src",
-  "packages/mcp-kanban/src",
-  "packages/mcp-knowledge/src",
-  "packages/mcp-memory/src",
-  "packages/mcp-project/src",
-  "packages/voice/src",
+  "serve/orchestrator/src",
+  "serve/knowledge/src",
+  "serve/mcp-kanban/src",
+  "serve/mcp-knowledge/src",
+  "serve/mcp-memory/src",
+  "serve/mcp-project/src",
+  "serve/voice/src",
 ]
 
 [tool.ruff.lint]
@@ -54,7 +54,7 @@ ignore = [
   "INP001", # scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
-"packages/*/examples/**/*.py" = [
+"serve/*/examples/**/*.py" = [
   "INP001", # examples/ is a script-style directory, not a package
   "T201",   # print() is intentional in example output
   "EM101",  # string literals in stub raises are acceptable in examples
@@ -84,7 +84,7 @@ ignore = [
   "TRY003",  # exception messages — test helper functions
   "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
 ]
-"packages/*/tests/**/*.py" = [
+"serve/*/tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
   "DTZ001",  # naive datetimes used intentionally in negative test cases

@@ -82,7 +82,7 @@ v1/.coverage
 v1/htmlcov/
 
 # v2 package artifacts
-packages/*/dist/
+serve/*/dist/
 
 # Knowledge data
 data/knowledge/*.db
