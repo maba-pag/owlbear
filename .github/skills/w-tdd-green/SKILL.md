@@ -179,7 +179,11 @@ If this second run passes, proceed to Step 7.
 
 ### Step 6.3 — Fail Again: Delegate to fix-attempt
 
-If the second verification also fails, construct and invoke the fix-attempt subagent:
+This triggers after exactly 2 failures (not 1, not 3): initial attempt → same-context retry (Step 6.2) → fix-attempt delegation. The sequence is mandatory; never skip steps.
+
+> **Prerequisite:** Before invoking, verify that `fix-attempt` is included in the builder's `agents:` array. Agents not listed in the array fail silently — confirm this agents-array dependency before delegation.
+
+Construct and invoke the fix-attempt subagent. Fields must conform to the Input Contract in `fix-attempt.agent.md`:
 
 ```
 agentName: fix-attempt
@@ -187,7 +191,7 @@ prompt: |
   task_id: {id}
   test_file: tests/test_{module}.py
   source_files: packages/{package}/src/{namespace}/{module}.py
-  retry_hint: {specific error diagnosis and suggested fix direction — Reflexion-style verbal feedback describing what went wrong and where to look, not generic "tests failed"}
+  retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
 ```
 
@@ -195,10 +199,8 @@ Handle fix-attempt result:
 
 | Verdict | Action |
 |---------|--------|
-| `FIXED` | Re-verify via Quality-Runner (or fallback). If pass → proceed to Step 7. If still failing → treat as `FAILED`. |
-| `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`. AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Append Channel B notes with diagnosis from both attempts. |
-
-> **Total retry cap:** 2 retries after initial attempt — 1 same-context (Step 6.2) + 1 fresh-context (Step 6.3 via fix-attempt). Sequence is fixed: initial → same-context → fix-attempt. No skipping.
+| `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). |
+| `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
 
 ## Step 7 — Deliverables
 
