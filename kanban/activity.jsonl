@@ -1,37 +1,3 @@
-{"timestamp":"2026-03-29T23:54:20.8331378+02:00","action":"claim","task_id":169,"detail":"writer"}
-{"timestamp":"2026-03-29T23:54:22.8377743+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:54:22.8404112+02:00","action":"claim","task_id":186,"detail":"writer"}
-{"timestamp":"2026-03-29T23:54:24.4452747+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T23:54:24.4483142+02:00","action":"claim","task_id":77,"detail":"writer"}
-{"timestamp":"2026-03-29T23:54:29.1895893+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T23:54:29.1937303+02:00","action":"claim","task_id":42,"detail":"writer"}
-{"timestamp":"2026-03-29T23:55:24.222957+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T23:55:28.9822813+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T23:55:28.9866443+02:00","action":"release","task_id":77,"detail":"writer"}
-{"timestamp":"2026-03-29T23:55:33.6555236+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T23:55:37.9395976+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T23:55:37.9427665+02:00","action":"release","task_id":169,"detail":"writer"}
-{"timestamp":"2026-03-29T23:55:45.0707457+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T23:55:45.9797904+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T23:55:46.6293895+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T23:55:46.6325431+02:00","action":"release","task_id":42,"detail":"writer"}
-{"timestamp":"2026-03-29T23:56:10.3074729+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:56:14.3164725+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:56:15.2455433+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T23:56:18.8576008+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T23:56:22.8679479+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T23:56:54.2234245+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T23:56:54.2265549+02:00","action":"claim","task_id":165,"detail":"writer"}
-{"timestamp":"2026-03-29T23:56:58.7403691+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T23:56:58.7435186+02:00","action":"claim","task_id":18,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:57:07.5657175+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:57:07.5693523+02:00","action":"claim","task_id":177,"detail":"test-writer"}
-{"timestamp":"2026-03-29T23:57:23.0738118+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:57:36.4310732+02:00","action":"move","task_id":177,"detail":"todo -\u003e in-progress"}
-{"timestamp":"2026-03-29T23:57:43.6154164+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T23:57:43.618018+02:00","action":"release","task_id":177,"detail":"test-writer"}
-{"timestamp":"2026-03-29T23:57:51.6699337+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T23:57:51.6725832+02:00","action":"claim","task_id":89,"detail":"test-writer"}
 {"timestamp":"2026-03-29T23:58:41.0746594+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
 {"timestamp":"2026-03-29T23:58:54.8726911+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
 {"timestamp":"2026-03-29T23:58:59.0456948+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
@@ -9998,3 +9964,37 @@
 {"timestamp":"2026-04-04T17:49:43.0308654+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
 {"timestamp":"2026-04-04T17:49:43.0427738+02:00","action":"release","task_id":543,"detail":"drift-spire"}
 {"timestamp":"2026-04-04T17:49:43.5386333+02:00","action":"move","task_id":543,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T17:50:20.6033786+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T17:50:20.6172002+02:00","action":"claim","task_id":318,"detail":"salt-wave"}
+{"timestamp":"2026-04-04T17:51:54.0260402+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T17:51:54.0372188+02:00","action":"release","task_id":318,"detail":"salt-wave"}
+{"timestamp":"2026-04-04T17:52:25.5573085+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T17:52:25.568915+02:00","action":"claim","task_id":263,"detail":"glade-prism"}
+{"timestamp":"2026-04-04T17:53:13.0361685+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T17:53:13.0463601+02:00","action":"release","task_id":263,"detail":"glade-prism"}
+{"timestamp":"2026-04-04T17:56:52.2434688+02:00","action":"edit","task_id":344,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T17:56:52.2554637+02:00","action":"claim","task_id":344,"detail":"sleet-nectar"}
+{"timestamp":"2026-04-04T17:56:53.8014255+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T17:56:53.8134179+02:00","action":"claim","task_id":548,"detail":"vivid-lotus"}
+{"timestamp":"2026-04-04T17:57:16.1652195+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T17:57:16.1769253+02:00","action":"claim","task_id":263,"detail":"flare-snow"}
+{"timestamp":"2026-04-04T17:59:57.1449012+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T17:59:57.1567205+02:00","action":"release","task_id":263,"detail":"flare-snow"}
+{"timestamp":"2026-04-04T18:01:23.7550356+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T18:01:23.7691583+02:00","action":"claim","task_id":477,"detail":"grain-foam"}
+{"timestamp":"2026-04-04T18:01:47.460824+02:00","action":"create","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-04T18:02:24.1483996+02:00","action":"edit","task_id":344,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T18:02:24.1640283+02:00","action":"release","task_id":344,"detail":"sleet-nectar"}
+{"timestamp":"2026-04-04T18:05:08.9594571+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T18:05:29.09405+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T18:05:35.7655269+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
+{"timestamp":"2026-04-04T18:05:35.7785511+02:00","action":"release","task_id":477,"detail":"grain-foam"}
+{"timestamp":"2026-04-04T18:08:52.784167+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T18:08:52.7948815+02:00","action":"release","task_id":548,"detail":"vivid-lotus"}
+{"timestamp":"2026-04-04T18:08:53.3025597+02:00","action":"move","task_id":548,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T18:10:32.705279+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T18:10:32.7181206+02:00","action":"claim","task_id":588,"detail":"lava-wick"}
+{"timestamp":"2026-04-04T18:17:13.0159394+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T18:17:37.5307236+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T18:17:37.5428818+02:00","action":"release","task_id":588,"detail":"lava-wick"}
+{"timestamp":"2026-04-04T18:17:38.0498305+02:00","action":"move","task_id":588,"detail":"done -\u003e archived"}

@@ -1,16 +1,16 @@
 ---
 id: 588
 title: Support 'archived' status in move_task MCP tool
-status: done
+status: archived
 priority: needed
 created: 2026-04-04T07:08:49.8265186+02:00
-updated: 2026-04-04T18:17:13.0148844+02:00
+updated: 2026-04-04T18:17:38.0487989+02:00
+started: 2026-04-04T18:17:38.0487989+02:00
+completed: 2026-04-04T18:17:38.0487989+02:00
 tags:
     - scope:mcp
     - type:build
     - phase-2
-claimed_by: lava-wick
-claimed_at: 2026-04-04T18:17:13.0148844+02:00
 class: standard
 ---
 
@@ -115,3 +115,6 @@ None found (`docs/scratch/588-*`).
 
 [[2026-04-04]] Sat 18:17
 @C:\Users\p362329\AppData\Local\Temp\1\588-audit.md
+
+[[2026-04-04]] Sat 18:17
+Audited: 4/4 AC lines PASS with test and code evidence. 96/96 mcp-kanban tests pass, no task-scope regressions in full suite. AC quality 4/5. Confidence .98.
