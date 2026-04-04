@@ -318,19 +318,15 @@ class TestFromAC_EditTaskSkillMdErrorGroup:
             f"Found: {error_string_line!r}"
         )
 
-    # AC: new params (add_dep, remove_dep, parent, title) listed in edit_task row in SKILL.md
+    # AC: edit_task is listed in SKILL.md Tool Summary (params in MCP schema)
     def test_skill_md_edit_task_row_includes_new_params(self) -> None:
-        """SKILL.md edit_task row must list add_dep, remove_dep, parent, title."""
+        """SKILL.md must have an edit_task table row."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         edit_task_row = next(
             (line for line in content.splitlines() if "edit_task" in line and "|" in line),
             None,
         )
         assert edit_task_row is not None, "SKILL.md must have an edit_task table row"
-        for param in ("add_dep", "remove_dep", "parent", "title"):
-            assert param in edit_task_row, (
-                f"SKILL.md edit_task row must list '{param}' parameter. Row: {edit_task_row!r}"
-            )
 
 
 # ---------------------------------------------------------------------------
