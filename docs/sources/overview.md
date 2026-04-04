@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Fix-Attempt Delegation Flow Testing Strategy (Task #320)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| tests/test_fix_attempt_agent_318.py | (internal) | Contract-level structural test pattern for agent .md files — 27 tests via regex/string assertions | docs/research/fix-attempt-delegation-tests.md | 2026-04-04 |
+| tests/test_quality_runner_wiring.py | (internal) | Skill file content validation + agent frontmatter wiring combined pattern | docs/research/fix-attempt-delegation-tests.md | 2026-04-04 |
+
 ## Notifier Protocol Duplicate Assessment (Task #344)
 
 | Source | URL | What | Where Used | Date |
