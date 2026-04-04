@@ -1,81 +1,3 @@
-{"timestamp":"2026-03-29T22:16:04.5091864+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T22:16:08.5452529+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T22:16:08.5489077+02:00","action":"release","task_id":188,"detail":"builder"}
-{"timestamp":"2026-03-29T22:16:38.2453383+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T22:16:38.2479282+02:00","action":"claim","task_id":189,"detail":"builder"}
-{"timestamp":"2026-03-29T22:20:47.3941421+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T22:20:58.4344954+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T22:20:58.4355561+02:00","action":"release","task_id":189,"detail":"builder"}
-{"timestamp":"2026-03-29T22:21:23.1221527+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T22:21:23.1233006+02:00","action":"claim","task_id":183,"detail":"builder"}
-{"timestamp":"2026-03-29T22:22:02.338495+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T22:22:02.3395719+02:00","action":"release","task_id":183,"detail":"builder"}
-{"timestamp":"2026-03-29T22:22:28.4728211+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T22:22:28.4740233+02:00","action":"claim","task_id":173,"detail":"builder"}
-{"timestamp":"2026-03-29T22:22:53.5933446+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T22:22:53.6015363+02:00","action":"release","task_id":173,"detail":"builder"}
-{"timestamp":"2026-03-29T22:23:01.155154+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T22:23:01.1572778+02:00","action":"claim","task_id":173,"detail":"builder"}
-{"timestamp":"2026-03-29T22:23:05.1219547+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T22:23:05.1251443+02:00","action":"release","task_id":173,"detail":"builder"}
-{"timestamp":"2026-03-29T22:23:32.0218705+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T22:23:32.0244561+02:00","action":"claim","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-29T22:25:54.5358304+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T22:26:02.1342604+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T22:26:02.1354018+02:00","action":"release","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-29T22:43:56.3634163+02:00","action":"create","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-29T22:44:09.0305257+02:00","action":"create","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-29T22:44:26.876158+02:00","action":"move","task_id":190,"detail":"ideation -\u003e in-progress"}
-{"timestamp":"2026-03-29T22:44:30.3182174+02:00","action":"move","task_id":191,"detail":"ideation -\u003e in-progress"}
-{"timestamp":"2026-03-29T22:45:20.5812476+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T22:54:56.8487732+02:00","action":"create","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-29T22:56:35.3762271+02:00","action":"create","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-29T23:02:20.3476657+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-29T23:02:20.3502493+02:00","action":"claim","task_id":192,"detail":"researcher"}
-{"timestamp":"2026-03-29T23:02:24.5837204+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-29T23:02:24.5857925+02:00","action":"claim","task_id":193,"detail":"researcher"}
-{"timestamp":"2026-03-29T23:07:55.4844424+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T23:07:59.1927932+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T23:08:04.1458437+02:00","action":"move","task_id":117,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-29T23:08:04.4719521+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T23:08:12.6892008+02:00","action":"create","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-29T23:08:21.4484036+02:00","action":"create","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-29T23:08:30.2508278+02:00","action":"create","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-29T23:08:40.6743535+02:00","action":"create","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-29T23:08:48.2162178+02:00","action":"create","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-29T23:08:59.9079303+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-29T23:09:26.41628+02:00","action":"edit","task_id":192,"detail":"Research: pipeline quality audit — why did 6 agents miss an obvious redundancy?"}
-{"timestamp":"2026-03-29T23:09:26.4173407+02:00","action":"release","task_id":192,"detail":"researcher"}
-{"timestamp":"2026-03-29T23:09:39.5019985+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-29T23:09:39.5046164+02:00","action":"block","task_id":193,"detail":"Decision pending: docs/decisions/pending/193-todos-vs-todo-tool-name.md"}
-{"timestamp":"2026-03-29T23:09:39.5077724+02:00","action":"release","task_id":193,"detail":"researcher"}
-{"timestamp":"2026-03-29T23:10:56.6967642+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T23:10:56.6977834+02:00","action":"claim","task_id":154,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:10:57.1845303+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T23:10:57.1865729+02:00","action":"claim","task_id":75,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:11:00.0019309+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T23:11:00.0045456+02:00","action":"claim","task_id":182,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:11:12.2669269+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:11:12.2695264+02:00","action":"claim","task_id":163,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:12:33.6017454+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T23:12:33.6048671+02:00","action":"release","task_id":154,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:14:15.5557586+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T23:15:05.4873739+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T23:15:09.9154821+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T23:15:09.918602+02:00","action":"release","task_id":182,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:15:21.5248875+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:15:59.2413748+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T23:19:27.1102184+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T23:20:20.56379+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T23:20:25.2079216+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T23:20:25.2099969+02:00","action":"release","task_id":75,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:20:55.5809393+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T23:20:55.5843044+02:00","action":"claim","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:20:56.8892875+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T23:20:56.8928024+02:00","action":"claim","task_id":19,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:21:06.4843656+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T23:21:06.4875173+02:00","action":"claim","task_id":59,"detail":"reviewer"}
-{"timestamp":"2026-03-29T23:21:09.6164696+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
 {"timestamp":"2026-03-29T23:21:09.6204652+02:00","action":"claim","task_id":185,"detail":"reviewer"}
 {"timestamp":"2026-03-29T23:23:22.2352681+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
 {"timestamp":"2026-03-29T23:23:22.2385398+02:00","action":"release","task_id":11,"detail":"reviewer"}
@@ -9998,3 +9920,81 @@
 {"timestamp":"2026-04-04T07:31:44.9997701+02:00","action":"unblock","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
 {"timestamp":"2026-04-04T07:32:46.6833454+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
 {"timestamp":"2026-04-04T07:32:46.6994536+02:00","action":"unblock","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:41:15.6221765+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-04T07:41:15.6362696+02:00","action":"unblock","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-04T07:41:15.7504888+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
+{"timestamp":"2026-04-04T07:41:15.8729803+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T07:41:15.9061316+02:00","action":"unblock","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T07:43:45.1572014+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:43:45.1716871+02:00","action":"claim","task_id":543,"detail":"test-writer"}
+{"timestamp":"2026-04-04T07:43:56.8846713+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T07:43:56.8990972+02:00","action":"claim","task_id":37,"detail":"researcher"}
+{"timestamp":"2026-04-04T07:45:38.4985226+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T07:45:38.5114605+02:00","action":"claim","task_id":548,"detail":"architect"}
+{"timestamp":"2026-04-04T07:46:00.1638577+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:46:03.7803451+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:46:04.2961166+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:46:04.3068605+02:00","action":"release","task_id":543,"detail":"test-writer"}
+{"timestamp":"2026-04-04T07:52:22.0928277+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T07:52:22.1063221+02:00","action":"release","task_id":548,"detail":"architect"}
+{"timestamp":"2026-04-04T07:55:54.2827908+02:00","action":"create","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T07:56:04.934863+02:00","action":"create","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-04T07:56:05.2580684+02:00","action":"create","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
+{"timestamp":"2026-04-04T07:58:17.771877+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T07:58:22.7539106+02:00","action":"move","task_id":37,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-04-04T07:58:39.0978256+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T07:58:39.1097688+02:00","action":"release","task_id":37,"detail":"researcher"}
+{"timestamp":"2026-04-04T14:37:05.8785691+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T14:37:21.8300088+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T15:48:29.8999606+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T15:48:29.9118979+02:00","action":"claim","task_id":543,"detail":"helm-vapor"}
+{"timestamp":"2026-04-04T15:48:44.2382886+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T15:48:44.2509601+02:00","action":"claim","task_id":263,"detail":"grove-foam"}
+{"timestamp":"2026-04-04T15:48:46.7669333+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T15:48:46.7787706+02:00","action":"claim","task_id":318,"detail":"knoll-spur"}
+{"timestamp":"2026-04-04T15:48:48.6647033+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T15:48:48.6852883+02:00","action":"claim","task_id":37,"detail":"ember-storm"}
+{"timestamp":"2026-04-04T15:49:07.888398+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T15:49:07.8995958+02:00","action":"release","task_id":543,"detail":"helm-vapor"}
+{"timestamp":"2026-04-04T15:50:57.3998791+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T15:51:07.9552418+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T15:51:07.9656362+02:00","action":"release","task_id":318,"detail":"knoll-spur"}
+{"timestamp":"2026-04-04T15:51:57.7337561+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T15:51:57.7442305+02:00","action":"release","task_id":37,"detail":"ember-storm"}
+{"timestamp":"2026-04-04T15:56:39.1733117+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T15:56:54.6353606+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T15:57:55.3633715+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T15:59:24.9335607+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T15:59:24.9453157+02:00","action":"release","task_id":263,"detail":"grove-foam"}
+{"timestamp":"2026-04-04T16:00:24.2939944+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T16:00:24.3066552+02:00","action":"claim","task_id":548,"detail":"peak-helm"}
+{"timestamp":"2026-04-04T16:00:25.1832757+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T16:00:25.1953353+02:00","action":"claim","task_id":588,"detail":"lunar-deep"}
+{"timestamp":"2026-04-04T16:00:37.3508896+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T16:00:37.3634627+02:00","action":"claim","task_id":589,"detail":"warp-ember"}
+{"timestamp":"2026-04-04T16:00:51.368946+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
+{"timestamp":"2026-04-04T16:00:51.3847375+02:00","action":"release","task_id":548,"detail":"peak-helm"}
+{"timestamp":"2026-04-04T16:03:53.2249048+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T16:03:53.2362301+02:00","action":"claim","task_id":437,"detail":"cedar-drift"}
+{"timestamp":"2026-04-04T16:04:57.3615395+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T16:04:57.3788395+02:00","action":"release","task_id":588,"detail":"lunar-deep"}
+{"timestamp":"2026-04-04T16:05:06.8870467+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T16:05:18.5971141+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-04T16:05:18.6072019+02:00","action":"release","task_id":437,"detail":"cedar-drift"}
+{"timestamp":"2026-04-04T16:09:57.7606787+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T16:09:57.7712256+02:00","action":"release","task_id":589,"detail":"warp-ember"}
+{"timestamp":"2026-04-04T16:13:28.0844522+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T16:13:28.0955417+02:00","action":"claim","task_id":588,"detail":"glen-brisk"}
+{"timestamp":"2026-04-04T16:13:42.7658675+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-04T16:13:42.7762473+02:00","action":"claim","task_id":590,"detail":"glade-eagle"}
+{"timestamp":"2026-04-04T16:13:51.6264144+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T16:13:51.6399262+02:00","action":"claim","task_id":318,"detail":"nova-river"}
+{"timestamp":"2026-04-04T16:15:54.5306837+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T16:15:54.5417473+02:00","action":"release","task_id":588,"detail":"glen-brisk"}
+{"timestamp":"2026-04-04T16:16:23.3685285+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T16:16:23.3795815+02:00","action":"claim","task_id":589,"detail":"oaken-flint"}
+{"timestamp":"2026-04-04T16:18:09.9252536+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T16:18:46.533139+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-04T16:18:46.5439849+02:00","action":"release","task_id":589,"detail":"oaken-flint"}
+{"timestamp":"2026-04-04T16:20:32.1626742+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-04T16:20:32.1725803+02:00","action":"release","task_id":590,"detail":"glade-eagle"}
