@@ -102,6 +102,30 @@ Optional flags:
 - `--db-path PATH` — override the default `data/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
 - `--dry-run` — print entries that would be imported without writing to the DB
 
+## Memory Approval
+
+To review pending memory entries (approve, reject, or skip):
+
+```bash
+# List pending entries as a numbered table
+uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve
+
+# Batch approve or reject by entry ID (first 8 chars or full UUID)
+uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --approve <id1> <id2>
+uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --reject <id1> <id2>
+
+# Interactive mode: approve (a), reject (r), skip (s) per entry
+uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --interactive
+```
+
+Optional flags:
+
+- `--db-path PATH` — override the default `data/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
+
+If `data/memory/curation-report.json` is present, a recommendation column is shown in the listing table.
+
+Exit codes: 0 on full success, 1 if any operation failed.
+
 ## Development
 
 ```bash
