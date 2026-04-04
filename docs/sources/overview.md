@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Notifier Protocol Duplicate Assessment (Task #344)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MS Teams Incoming Webhooks docs | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook> | Teams webhook HTTP POST pattern, Adaptive Card payload format, channel-scoped config | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
+| MS Teams connector deprecation notice | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using> | M365 Connectors nearing deprecation; migration to Power Automate Workflows with webhook trigger | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
+
 ## Agent-Scoped Hooks Research (Task #37)
 
 | Source | URL | What | Where Used | Date |
