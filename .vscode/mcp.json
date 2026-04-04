@@ -1,4 +1,4 @@
-{
+﻿{
   "servers": {
     "microsoft/markitdown": {
       "type": "stdio",
@@ -35,6 +35,16 @@
         "python",
         "-m",
         "owlbear_mcp_project"
+      ]
+    },
+    "owlbear-memory": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_memory"
       ]
     }
   },

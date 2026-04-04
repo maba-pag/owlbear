@@ -46,7 +46,7 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
     settings_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
 
 
-def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
+def create_mcp_config(project_dir: Path, _owlbear_dir: Path) -> None:
     """Create .vscode/mcp.json with five MCP server entries.
 
     Entries: github remote + four owlbear stdio servers. Skips if already exists.
@@ -58,32 +58,31 @@ def create_mcp_config(project_dir: Path, owlbear_dir: Path) -> None:
     if mcp_file.exists():
         return
 
-    rel = compute_owlbear_relpath(owlbear_dir, project_dir)
     config = {
         "servers": {
             "github": {
                 "type": "http",
                 "url": "https://api.githubcopilot.com/mcp/",
             },
-            "owlbearKanban": {
+            "owlbear-kanban": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "owlbear_mcp_kanban"],
+                "args": ["run", "python", "-m", "owlbear_mcp_kanban"],
             },
-            "owlbearKnowledge": {
+            "owlbear-knowledge": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "owlbear_mcp_knowledge"],
+                "args": ["run", "python", "-m", "owlbear_mcp_knowledge"],
             },
-            "owlbearMemory": {
+            "owlbear-memory": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "owlbear_mcp_memory"],
+                "args": ["run", "python", "-m", "owlbear_mcp_memory"],
             },
-            "owlbearProject": {
+            "owlbear-project": {
                 "type": "stdio",
                 "command": "uv",
-                "args": ["run", "--project", rel, "-m", "owlbear_mcp_project"],
+                "args": ["run", "python", "-m", "owlbear_mcp_project"],
             },
         }
     }
