@@ -1,16 +1,16 @@
 ---
 id: 558
 title: Add dispatch-cycle trace ID to orchestrator protocol
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-30T21:37:56.9725911+02:00
-updated: 2026-04-02T20:49:51.6934741+02:00
+updated: 2026-04-04T07:10:02.7388152+02:00
+started: 2026-04-04T07:09:37.194969+02:00
+completed: 2026-04-04T07:09:37.194969+02:00
 tags:
     - research
     - scope:agents
     - phase-2
-blocked: true
-block_reason: 'Duplicate of #434 -- dispatch-cycle trace ID already fully implemented (models, loop, log, tests). AC2 (Channel A/B embedding) is architecturally unsound.'
 class: standard
 ---
 

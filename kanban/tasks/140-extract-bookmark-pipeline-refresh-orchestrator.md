@@ -1,10 +1,12 @@
 ---
 id: 140
 title: Extract bookmark pipeline + refresh orchestrator
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-29T14:51:50.4920453+02:00
-updated: 2026-04-03T00:39:44.0073431+02:00
+updated: 2026-04-04T07:09:51.5129093+02:00
+started: 2026-04-04T07:09:25.5956065+02:00
+completed: 2026-04-04T07:09:25.5956065+02:00
 tags:
     - phase-1
     - ' scope:knowledge'
@@ -12,8 +14,6 @@ tags:
 depends_on:
     - 33
     - 139
-blocked: true
-block_reason: 'Duplicate of #136 — bookmark_pipeline.py and refresh.py already implemented by #136 builder (commit f315d26) and #554/#555 TDD pair. Task should be deleted.'
 class: standard
 ---
 

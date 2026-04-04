@@ -1,17 +1,17 @@
 ---
 id: 463
 title: Add loop-detection red flag to reviewer agent
-status: ideation
+status: archived
 priority: important
 created: 2026-03-31T03:44:55.6845277+02:00
-updated: 2026-04-03T00:53:33.2718155+02:00
+updated: 2026-04-04T07:09:57.6013152+02:00
+started: 2026-04-04T07:09:31.9399538+02:00
+completed: 2026-04-04T07:09:31.9399538+02:00
 tags:
     - scope:agents
     - phase-2
 depends_on:
     - 454
-blocked: true
-block_reason: 'Duplicate of archived #455 -- all AC already delivered (commit 8c69e3e). Delete this task.'
 class: standard
 ---
 

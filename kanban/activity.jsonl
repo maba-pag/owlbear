@@ -1,93 +1,3 @@
-{"timestamp":"2026-03-29T21:10:06.878758+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T21:10:10.5445451+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T21:10:10.5466513+02:00","action":"release","task_id":169,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:10:13.8236852+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T21:10:21.5701177+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T21:10:25.7116405+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T21:10:25.7147611+02:00","action":"release","task_id":165,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:15:57.3248392+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T21:15:57.328025+02:00","action":"claim","task_id":183,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:15:58.2761668+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T21:15:58.2787362+02:00","action":"claim","task_id":173,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:13.5711174+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T21:16:17.2521159+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T21:16:17.2542752+02:00","action":"release","task_id":183,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:20.6600165+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T21:16:20.6714544+02:00","action":"claim","task_id":182,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:35.0671686+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T21:16:37.51139+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T21:16:37.5134479+02:00","action":"claim","task_id":189,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:38.4643791+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T21:16:43.501972+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T21:16:43.5046617+02:00","action":"release","task_id":182,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:51.4952032+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T21:16:51.5018717+02:00","action":"release","task_id":173,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:55.2777162+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T21:16:55.2790161+02:00","action":"claim","task_id":173,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:16:59.9802142+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T21:16:59.983351+02:00","action":"release","task_id":173,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:18:17.3842321+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T21:18:31.5378186+02:00","action":"edit","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T21:18:31.5409745+02:00","action":"release","task_id":189,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:19:17.5038113+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:19:17.5038113+02:00","action":"claim","task_id":187,"detail":"architect"}
-{"timestamp":"2026-03-29T21:19:18.2009657+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T21:19:18.2042855+02:00","action":"claim","task_id":188,"detail":"architect"}
-{"timestamp":"2026-03-29T21:19:45.0206054+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:19:48.6871592+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:19:48.6930119+02:00","action":"release","task_id":187,"detail":"architect"}
-{"timestamp":"2026-03-29T21:19:49.2387668+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T21:19:49.2414145+02:00","action":"claim","task_id":143,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:20:50.3290797+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T21:20:50.3317152+02:00","action":"release","task_id":188,"detail":"architect"}
-{"timestamp":"2026-03-29T21:21:25.186032+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T21:21:37.8335703+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-29T21:21:37.8362102+02:00","action":"release","task_id":143,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:25:44.5353596+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:25:44.5385071+02:00","action":"claim","task_id":187,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:25:51.1553763+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:25:54.5500842+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T21:25:54.5521865+02:00","action":"release","task_id":187,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:26:06.7285139+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T21:26:06.730631+02:00","action":"claim","task_id":188,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:28:54.2758833+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T21:28:58.0464653+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T21:28:58.0520186+02:00","action":"release","task_id":188,"detail":"test-writer"}
-{"timestamp":"2026-03-29T21:39:20.3539045+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T21:39:20.3565556+02:00","action":"claim","task_id":163,"detail":"builder"}
-{"timestamp":"2026-03-29T21:42:36.3628695+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T21:42:39.6785333+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T21:42:39.6811508+02:00","action":"release","task_id":163,"detail":"builder"}
-{"timestamp":"2026-03-29T21:43:06.0058959+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T21:43:06.0090567+02:00","action":"claim","task_id":154,"detail":"builder"}
-{"timestamp":"2026-03-29T21:43:44.4734582+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T21:43:56.4996789+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T21:43:56.5023059+02:00","action":"release","task_id":154,"detail":"builder"}
-{"timestamp":"2026-03-29T21:44:54.3709985+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T21:44:54.374167+02:00","action":"claim","task_id":182,"detail":"builder"}
-{"timestamp":"2026-03-29T21:45:21.1699893+02:00","action":"delete","task_id":171,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T21:45:21.2195781+02:00","action":"delete","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T21:45:21.2776368+02:00","action":"delete","task_id":174,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T21:45:21.3303628+02:00","action":"delete","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T21:45:38.341589+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T21:45:57.1430222+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T21:45:57.1451367+02:00","action":"release","task_id":182,"detail":"builder"}
-{"timestamp":"2026-03-29T21:46:39.4849517+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T21:46:39.4873689+02:00","action":"claim","task_id":185,"detail":"builder"}
-{"timestamp":"2026-03-29T21:48:23.3525149+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T21:48:23.3551158+02:00","action":"release","task_id":185,"detail":"builder"}
-{"timestamp":"2026-03-29T21:49:33.3809444+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T21:49:33.3837445+02:00","action":"claim","task_id":99,"detail":"builder"}
-{"timestamp":"2026-03-29T21:59:54.6817181+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T21:59:54.6838599+02:00","action":"claim","task_id":59,"detail":"builder"}
-{"timestamp":"2026-03-29T22:02:36.4336639+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T22:02:40.7216911+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T22:02:40.7232378+02:00","action":"release","task_id":59,"detail":"builder"}
-{"timestamp":"2026-03-29T22:03:12.2218368+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T22:03:12.2228923+02:00","action":"claim","task_id":177,"detail":"builder"}
-{"timestamp":"2026-03-29T22:03:21.9792452+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T22:03:29.7131934+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T22:03:29.7163602+02:00","action":"release","task_id":177,"detail":"builder"}
 {"timestamp":"2026-03-29T22:04:07.5553068+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
 {"timestamp":"2026-03-29T22:04:07.5574012+02:00","action":"claim","task_id":186,"detail":"builder"}
 {"timestamp":"2026-03-29T22:06:03.941803+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
@@ -9998,3 +9908,93 @@
 {"timestamp":"2026-04-04T06:48:27.0921639+02:00","action":"claim","task_id":547,"detail":"smoke-willow"}
 {"timestamp":"2026-04-04T06:48:52.261377+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
 {"timestamp":"2026-04-04T06:48:52.2738121+02:00","action":"claim","task_id":576,"detail":"reviewer"}
+{"timestamp":"2026-04-04T07:08:49.8303774+02:00","action":"create","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
+{"timestamp":"2026-04-04T07:09:23.6109197+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
+{"timestamp":"2026-04-04T07:09:24.3917069+02:00","action":"move","task_id":31,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:24.9958381+02:00","action":"edit","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
+{"timestamp":"2026-04-04T07:09:25.0084099+02:00","action":"unblock","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
+{"timestamp":"2026-04-04T07:09:25.5966944+02:00","action":"move","task_id":140,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:26.2027863+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
+{"timestamp":"2026-04-04T07:09:26.2221094+02:00","action":"unblock","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
+{"timestamp":"2026-04-04T07:09:26.9439544+02:00","action":"move","task_id":148,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:27.6661414+02:00","action":"edit","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
+{"timestamp":"2026-04-04T07:09:27.6798708+02:00","action":"unblock","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
+{"timestamp":"2026-04-04T07:09:28.2999752+02:00","action":"move","task_id":159,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:29.0215368+02:00","action":"edit","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
+{"timestamp":"2026-04-04T07:09:29.0379307+02:00","action":"unblock","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
+{"timestamp":"2026-04-04T07:09:29.568677+02:00","action":"move","task_id":329,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:30.1058547+02:00","action":"edit","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
+{"timestamp":"2026-04-04T07:09:30.1179033+02:00","action":"unblock","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
+{"timestamp":"2026-04-04T07:09:30.6485115+02:00","action":"move","task_id":370,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:31.26579+02:00","action":"edit","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
+{"timestamp":"2026-04-04T07:09:31.2777805+02:00","action":"unblock","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
+{"timestamp":"2026-04-04T07:09:31.9419664+02:00","action":"move","task_id":463,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:32.6433702+02:00","action":"edit","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
+{"timestamp":"2026-04-04T07:09:32.6618088+02:00","action":"unblock","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
+{"timestamp":"2026-04-04T07:09:33.3095988+02:00","action":"move","task_id":492,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:33.9084435+02:00","action":"edit","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
+{"timestamp":"2026-04-04T07:09:33.9212878+02:00","action":"unblock","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
+{"timestamp":"2026-04-04T07:09:34.478825+02:00","action":"move","task_id":512,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:35.1024628+02:00","action":"edit","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-04T07:09:35.1191502+02:00","action":"unblock","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-04T07:09:35.8024138+02:00","action":"move","task_id":550,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:36.4926576+02:00","action":"edit","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:09:36.5093341+02:00","action":"unblock","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:09:37.1992109+02:00","action":"move","task_id":558,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:37.8715477+02:00","action":"edit","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:09:37.8835779+02:00","action":"unblock","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:09:38.4648541+02:00","action":"move","task_id":560,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:39.0230535+02:00","action":"edit","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
+{"timestamp":"2026-04-04T07:09:39.0355102+02:00","action":"unblock","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
+{"timestamp":"2026-04-04T07:09:39.594813+02:00","action":"move","task_id":561,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:40.3141263+02:00","action":"edit","task_id":26,"detail":"Slack notification integration"}
+{"timestamp":"2026-04-04T07:09:40.3263192+02:00","action":"unblock","task_id":26,"detail":"Slack notification integration"}
+{"timestamp":"2026-04-04T07:09:41.0371403+02:00","action":"move","task_id":26,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:41.5928542+02:00","action":"edit","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
+{"timestamp":"2026-04-04T07:09:41.6063482+02:00","action":"unblock","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
+{"timestamp":"2026-04-04T07:09:42.1522169+02:00","action":"move","task_id":514,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:42.7222757+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T07:09:42.7338157+02:00","action":"unblock","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T07:09:43.3729546+02:00","action":"move","task_id":515,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:44.0108835+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
+{"timestamp":"2026-04-04T07:09:44.0235395+02:00","action":"unblock","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
+{"timestamp":"2026-04-04T07:09:44.6909179+02:00","action":"move","task_id":516,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:45.2733323+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
+{"timestamp":"2026-04-04T07:09:45.2873368+02:00","action":"unblock","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
+{"timestamp":"2026-04-04T07:09:45.8264282+02:00","action":"move","task_id":517,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:46.3587216+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
+{"timestamp":"2026-04-04T07:09:46.3704545+02:00","action":"unblock","task_id":518,"detail":"Test: Decision-request notification scan"}
+{"timestamp":"2026-04-04T07:09:47.0560153+02:00","action":"move","task_id":518,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:47.7432528+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-04T07:09:47.7563635+02:00","action":"unblock","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-04T07:09:48.4299323+02:00","action":"move","task_id":519,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:49.1041807+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
+{"timestamp":"2026-04-04T07:09:49.1171494+02:00","action":"unblock","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
+{"timestamp":"2026-04-04T07:09:49.7958134+02:00","action":"move","task_id":209,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:09:50.4711971+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
+{"timestamp":"2026-04-04T07:09:51.5148755+02:00","action":"edit","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
+{"timestamp":"2026-04-04T07:09:52.7419401+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
+{"timestamp":"2026-04-04T07:09:54.1677803+02:00","action":"edit","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
+{"timestamp":"2026-04-04T07:09:55.2270091+02:00","action":"edit","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
+{"timestamp":"2026-04-04T07:09:56.2983403+02:00","action":"edit","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
+{"timestamp":"2026-04-04T07:09:57.6032282+02:00","action":"edit","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
+{"timestamp":"2026-04-04T07:09:58.9437846+02:00","action":"edit","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
+{"timestamp":"2026-04-04T07:10:00.1038934+02:00","action":"edit","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
+{"timestamp":"2026-04-04T07:10:01.3453494+02:00","action":"edit","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
+{"timestamp":"2026-04-04T07:10:02.7414249+02:00","action":"edit","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:10:04.1364158+02:00","action":"edit","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
+{"timestamp":"2026-04-04T07:10:05.3738217+02:00","action":"edit","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
+{"timestamp":"2026-04-04T07:10:06.7484027+02:00","action":"edit","task_id":26,"detail":"Slack notification integration"}
+{"timestamp":"2026-04-04T07:10:07.8411294+02:00","action":"edit","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
+{"timestamp":"2026-04-04T07:10:09.045851+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T07:10:10.3564447+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
+{"timestamp":"2026-04-04T07:10:11.5149324+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
+{"timestamp":"2026-04-04T07:10:12.9419065+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
+{"timestamp":"2026-04-04T07:10:14.2484972+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-04T07:10:15.4440013+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
+{"timestamp":"2026-04-04T07:10:32.003959+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-04T07:10:33.6114375+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
+{"timestamp":"2026-04-04T07:10:35.460467+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
+{"timestamp":"2026-04-04T07:10:37.324297+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
+{"timestamp":"2026-04-04T07:10:39.0875805+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-04T07:10:40.9030556+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}

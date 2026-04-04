@@ -1,10 +1,12 @@
 ---
 id: 519
 title: Add blocked-task scan for decision-request notifications
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-01T07:07:54.3480033+02:00
-updated: 2026-04-01T22:27:32.9924029+02:00
+updated: 2026-04-04T07:10:39.0861091+02:00
+started: 2026-04-04T07:09:48.4283503+02:00
+completed: 2026-04-04T07:09:48.4283503+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -13,8 +15,6 @@ tags:
 depends_on:
     - 518
     - 517
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available'
 class: standard
 ---
 

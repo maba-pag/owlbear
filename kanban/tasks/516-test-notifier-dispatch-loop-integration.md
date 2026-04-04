@@ -1,10 +1,12 @@
 ---
 id: 516
 title: 'Test: Notifier dispatch loop integration'
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-01T07:07:25.1531395+02:00
-updated: 2026-04-01T22:27:31.0635663+02:00
+updated: 2026-04-04T07:10:33.6098175+02:00
+started: 2026-04-04T07:09:44.6847136+02:00
+completed: 2026-04-04T07:09:44.6847136+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -12,8 +14,6 @@ tags:
     - test
 depends_on:
     - 515
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available'
 class: standard
 ---
 

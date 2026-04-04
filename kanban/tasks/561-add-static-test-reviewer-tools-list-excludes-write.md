@@ -1,16 +1,16 @@
 ---
 id: 561
 title: 'Add static test: reviewer tools list excludes write tools'
-status: ideation
+status: archived
 priority: important
 created: 2026-04-02T23:11:12.7175706+02:00
-updated: 2026-04-03T00:59:29.0942731+02:00
+updated: 2026-04-04T07:10:05.37224+02:00
+started: 2026-04-04T07:09:39.5937612+02:00
+completed: 2026-04-04T07:09:39.5937612+02:00
 tags:
     - scope:agents
     - test
     - type:test
-blocked: true
-block_reason: 'Duplicate of archived #533 — tests/test_reviewer_write_tools_533.py already delivers this exact test with 9 passing tests using edit/* prefix matching'
 class: standard
 ---
 

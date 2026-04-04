@@ -1,18 +1,18 @@
 ---
 id: 517
 title: Integrate Notifier into dispatch loop (run_loop)
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-01T07:07:35.0254784+02:00
-updated: 2026-04-01T22:27:31.7035356+02:00
+updated: 2026-04-04T07:10:35.4554556+02:00
+started: 2026-04-04T07:09:45.8254288+02:00
+completed: 2026-04-04T07:09:45.8254288+02:00
 tags:
     - phase-3
     - scope:orchestrator
     - type:build
 depends_on:
     - 516
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available'
 class: standard
 ---
 

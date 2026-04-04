@@ -1,10 +1,12 @@
 ---
 id: 29
 title: Clean up .github/ v1 prompts and residual files
-status: ideation
+status: archived
 priority: important
 created: 2026-03-26T17:59:04.1808507+01:00
-updated: 2026-03-30T15:52:14.4502627+02:00
+updated: 2026-04-04T06:39:36.9196789+02:00
+started: 2026-04-04T06:39:36.9196789+02:00
+completed: 2026-04-04T06:39:36.9196789+02:00
 tags:
     - phase-1
     - scope:docs
@@ -13,8 +15,6 @@ depends_on:
     - 8
     - 9
     - 10
-blocked: true
-block_reason: 'Superseded: all v1 .github/ content already cleaned up by #8, #9, #10, #117. Prompts are v2 in standard VS Code location. No actionable work remains.'
 class: standard
 ---
 

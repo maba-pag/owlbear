@@ -1,16 +1,16 @@
 ---
 id: 329
 title: Add NON_IMPL_TAGS cross-reference comments to 3 skill files
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-30T20:39:07.9214391+02:00
-updated: 2026-04-02T23:32:33.7157487+02:00
+updated: 2026-04-04T07:09:55.2254196+02:00
+started: 2026-04-04T07:09:29.5669962+02:00
+completed: 2026-04-04T07:09:29.5669962+02:00
 tags:
     - scope:agents
     - quality
     - type:config
-blocked: true
-block_reason: Work already committed (ba36a0a). All AC items satisfied in codebase. Task should be archived, not reprocessed.
 class: standard
 ---
 

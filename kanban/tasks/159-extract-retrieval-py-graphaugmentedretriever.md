@@ -1,18 +1,18 @@
 ---
 id: 159
 title: Extract retrieval.py (GraphAugmentedRetriever)
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-29T19:37:22.7410344+02:00
-updated: 2026-03-30T20:41:13.4164019+02:00
+updated: 2026-04-04T07:09:54.1661913+02:00
+started: 2026-04-04T07:09:28.2968981+02:00
+completed: 2026-04-04T07:09:28.2968981+02:00
 tags:
     - phase-1
     - scope:knowledge
     - type:build
 depends_on:
     - 32
-blocked: true
-block_reason: 'Redundant: all AC already delivered under #205 (archived). retrieval.py exists with 35 passing tests. Recommend deletion.'
 class: standard
 ---
 

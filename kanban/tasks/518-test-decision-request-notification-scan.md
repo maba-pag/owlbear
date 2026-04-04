@@ -1,10 +1,12 @@
 ---
 id: 518
 title: 'Test: Decision-request notification scan'
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-01T07:07:44.706718+02:00
-updated: 2026-04-01T22:27:32.3303322+02:00
+updated: 2026-04-04T07:10:37.3226931+02:00
+started: 2026-04-04T07:09:47.0542516+02:00
+completed: 2026-04-04T07:09:47.0542516+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -13,8 +15,6 @@ tags:
     - test
 depends_on:
     - 515
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available'
 class: standard
 ---
 

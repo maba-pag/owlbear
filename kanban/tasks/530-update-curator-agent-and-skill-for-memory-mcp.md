@@ -4,7 +4,7 @@ title: Update curator agent and skill for memory-mcp
 status: docs
 priority: important
 created: 2026-04-01T19:13:05.3558386+02:00
-updated: 2026-04-04T03:11:46.295627+02:00
+updated: 2026-04-04T06:41:17.2380635+02:00
 tags:
     - scope:agents
     - phase-2
@@ -12,6 +12,8 @@ tags:
 depends_on:
     - 525
     - 568
+claimed_by: doc-writer
+claimed_at: 2026-04-04T06:41:17.2358128+02:00
 class: standard
 ---
 

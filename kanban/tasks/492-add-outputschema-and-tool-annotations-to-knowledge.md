@@ -1,16 +1,16 @@
 ---
 id: 492
 title: Add outputSchema and tool annotations to knowledge and project MCP servers
-status: ideation
+status: archived
 priority: important
 created: 2026-03-31T06:37:12.6171658+02:00
-updated: 2026-04-03T01:02:17.3614695+02:00
+updated: 2026-04-04T07:09:58.9426709+02:00
+started: 2026-04-04T07:09:33.3075024+02:00
+completed: 2026-04-04T07:09:33.3075024+02:00
 tags:
     - scope:mcp
     - ' type:build'
     - ' phase-2'
-blocked: true
-block_reason: 'Fully decomposed into children #501, #502, #541-#544. All AC items covered by children or factually incorrect (listChanged). No remaining buildable work. Recommend planner archive as decomposed parent.'
 class: standard
 ---
 

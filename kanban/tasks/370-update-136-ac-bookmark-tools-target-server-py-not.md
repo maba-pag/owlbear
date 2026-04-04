@@ -1,17 +1,17 @@
 ---
 id: 370
 title: 'Update #136 AC: bookmark tools target server.py not tools.py'
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-30T20:46:21.9111795+02:00
-updated: 2026-04-03T00:25:42.0224559+02:00
+updated: 2026-04-04T07:09:56.2969147+02:00
+started: 2026-04-04T07:09:30.646974+02:00
+completed: 2026-04-04T07:09:30.646974+02:00
 tags:
     - phase-2
     - scope:mcp
     - scope:knowledge
     - chore
-blocked: true
-block_reason: 'Duplicate of #520 which already absorbed this scope and is at todo with approved AC'
 class: standard
 ---
 

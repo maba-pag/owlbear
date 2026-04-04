@@ -1,10 +1,12 @@
 ---
 id: 515
 title: Implement Notifier protocol and SlackNotifier (webhook + urllib)
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-01T07:07:15.8482534+02:00
-updated: 2026-04-01T22:27:30.4091351+02:00
+updated: 2026-04-04T07:10:32.003959+02:00
+started: 2026-04-04T07:09:43.3719527+02:00
+completed: 2026-04-04T07:09:43.3719527+02:00
 tags:
     - phase-3
     - scope:notifications
@@ -12,8 +14,6 @@ tags:
     - type:build
 depends_on:
     - 514
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available'
 class: standard
 ---
 

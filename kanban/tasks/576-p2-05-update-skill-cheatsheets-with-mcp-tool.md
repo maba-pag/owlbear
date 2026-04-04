@@ -4,7 +4,7 @@ title: 'P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI
 status: review
 priority: needed
 created: 2026-04-03T11:15:13.7738172+02:00
-updated: 2026-04-04T03:27:04.195503+02:00
+updated: 2026-04-04T06:48:52.2560158+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -14,6 +14,8 @@ parent: 483
 depends_on:
     - 572
     - 563
+claimed_by: reviewer
+claimed_at: 2026-04-04T06:48:52.2560158+02:00
 class: standard
 ---
 

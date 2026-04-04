@@ -1,18 +1,18 @@
 ---
 id: 514
 title: 'Test: Notifier protocol and SlackNotifier'
-status: ideation
+status: archived
 priority: someday
 created: 2026-04-01T07:07:05.2617758+02:00
-updated: 2026-04-01T22:27:21.2499837+02:00
+updated: 2026-04-04T07:10:07.8391597+02:00
+started: 2026-04-04T07:09:42.1509406+02:00
+completed: 2026-04-04T07:09:42.1509406+02:00
 tags:
     - phase-3
     - scope:notifications
     - scope:orchestrator
     - type:test
     - test
-blocked: true
-block_reason: 'Feature deferred per user decision (DR 514): no Slack available, Teams not possible'
 class: standard
 ---
 

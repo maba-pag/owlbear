@@ -1,10 +1,10 @@
 ---
 id: 585
 title: 'Test: Build approve_memory CLI wrapper'
-status: docs
+status: done
 priority: important
 created: 2026-04-03T17:54:42.3450216+02:00
-updated: 2026-04-04T03:09:45.2271713+02:00
+updated: 2026-04-04T06:43:49.396638+02:00
 tags:
     - scope:agents
     - phase-2

@@ -1,18 +1,18 @@
 ---
 id: 148
 title: Wire ErrorJournal into AcpClient when v2 error infrastructure exists
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-29T18:53:05.705807+02:00
-updated: 2026-04-03T01:09:21.5569503+02:00
+updated: 2026-04-04T07:09:52.7404645+02:00
+started: 2026-04-04T07:09:26.9395109+02:00
+completed: 2026-04-04T07:09:26.9395109+02:00
 tags:
     - phase-2
     - scope:orchestrator
     - type:build
 depends_on:
     - 184
-blocked: true
-block_reason: 'Fully implemented by #521 (archived). All 5 AC items already exist in acp_client.py + test_acp_client.py. Nothing to build.'
 class: standard
 ---
 

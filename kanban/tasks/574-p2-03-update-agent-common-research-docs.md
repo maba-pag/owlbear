@@ -1,10 +1,10 @@
 ---
 id: 574
 title: 'P2-03: Update agent-common + research-docs instructions with MCP alternatives'
-status: docs
+status: review
 priority: needed
 created: 2026-04-03T11:14:59.3306428+02:00
-updated: 2026-04-04T02:53:23.7519245+02:00
+updated: 2026-04-04T06:44:28.8252542+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -13,6 +13,8 @@ parent: 483
 depends_on:
     - 572
     - 563
+claimed_by: doc-writer
+claimed_at: 2026-04-04T06:44:28.8252542+02:00
 class: standard
 ---
 

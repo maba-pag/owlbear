@@ -1,17 +1,17 @@
 ---
 id: 550
 title: 'Test: Bookmark pipeline orchestrator'
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-04-02T16:05:37.0657812+02:00
-updated: 2026-04-02T18:50:51.42669+02:00
+updated: 2026-04-04T07:10:01.3441871+02:00
+started: 2026-04-04T07:09:35.8012563+02:00
+completed: 2026-04-04T07:09:35.8012563+02:00
 tags:
     - phase-1
     - scope:knowledge
     - type:test
     - test
-blocked: true
-block_reason: 'Confirmed duplicate of #552 (identical title and AC). #552 already in-progress. Archive this task.'
 class: standard
 ---
 
