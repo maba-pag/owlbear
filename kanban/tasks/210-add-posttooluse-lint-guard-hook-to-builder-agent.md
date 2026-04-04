@@ -1,10 +1,10 @@
 ---
 id: 210
 title: Add postToolUse lint guard hook to builder agent (Phase 2)
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-03-30T08:52:17.140436+02:00
-updated: 2026-04-03T00:47:02.5431576+02:00
+updated: 2026-04-04T02:50:53.9579795+02:00
 tags:
     - phase-1
     - scope:agents
@@ -82,3 +82,109 @@ Add a PostToolUse lint guard hook to builder.agent.md that fires after file edit
   - C6 ACCEPTED: apply_patch stays in #546
   - Alternative angle ADOPTED: ship original systemMessage scope, iterate via #546/#547
 - Confidence in original (revised): .85
+
+[[2026-04-03]] Fri 19:48
+## Builder Notes
+- Files changed: agents/builder.agent.md (hooks: PostToolUse added), scripts/hooks/lint-changed.ps1 (new)
+- Tests: 22 passed, ruff clean
+- Evidence: all TestFromAC_* GREEN -- AC1a/b, AC2, AC3a-f, AC5, AC6a-d, AC7, AC8a-c, AC9, AC10
+- Fixes: pre-filter with Test-Path for missing files (AC5); --ignore INP001 for temp file false positive
+
+[[2026-04-03]] Fri 20:00
+## Review Evidence
+
+### Test Results
+- pytest: 22 passed, 0 failed (tests/test_lint_guard_hook_210.py)
+
+### Lint
+- ruff: All checks passed! (scripts/hooks/ + test file)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1a: lint-changed.ps1 exists | TestFromAC_ScriptExists::test_lint_changed_ps1_exists | Yes — asserts exists() | COVERED |
+| AC1b: script is non-empty | TestFromAC_ScriptExists::test_script_is_nonempty | Yes — asserts stat().st_size > 0 | COVERED |
+| AC2: non-edit tools return {} | 3 tests (read_file, semantic_search, unknown) | Yes — asserts output == {} | COVERED |
+| AC3a-f: edit tools behavior (lint/clean) | 6 tests cover all 3 tool_names x 2 states | Yes — asserts systemMessage or {} | COVERED |
+| AC5: nonexistent file returns {} | test_ruff_failure_nonexistent_file_returns_empty_json | Yes — asserts output == {} | COVERED |
+| AC6a-c: exit code never 2 | 3 tests (clean/lint/non-edit) | Yes — asserts code != 2 | COVERED |
+| AC6d: all output valid JSON | test_output_is_always_valid_json | Yes — json.loads() must not raise | COVERED |
+| AC7: hooks: in builder.agent.md | test_frontmatter-has_hooks_section | Yes — regex on frontmatter | COVERED |
+| AC8a: PostToolUse entry | test_frontmatter-has_posttooluse_entry | Yes — asserts "PostToolUse" in fm | COVERED |
+| AC8b: type: command | test_posttooluse_hook_type_is_command | Yes — regex r"type:\s*command" | COVERED |
+| AC8c: command references lint-changed.ps1 | test_posttooluse_hook_command_references_lint_changed | Yes — asserts "lint-changed.ps1" in fm | COVERED |
+| AC9: no duplicate YAML keys | test_frontmatter-no_duplicate_keys | Yes — tracks seen keys | COVERED |
+| AC10: valid YAML | test_frontmatter-is_parseable_yaml_with-posttooluse_hook | Yes — yaml.safe_load must not raise | COVERED |
+| AC-settings: useCustomAgentHooks present | Verified: .vscode/settings.json L69 | N/A (no-action AC) | COVERED |
+
+No MISSING, no LAX entries.
+
+#### Security Review
+- No hardcoded secrets. Script reads VS Code hook stdin (trusted input).
+- File paths come from VS Code tool_input passed as array args to ruff (not shell string) — no injection risk.
+- Test-Path guard prevents processing of non-existent paths.
+- No new Python dependencies.
+- Script exits 0 in all paths (non-blocking). Clean.
+
+#### Test Integrity — TestFromAC Comparison
+Builder files: agents/builder.agent.md (+hooks section), scripts/hooks/lint-changed.ps1 (new).
+Test file NOT modified by builder (verified via git log). All TestFromAC_* classes: PRESERVED.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | output == {} exact check; exit code != 2; systemMessage non-empty check |
+| Negative/error-path coverage | STRONG | AC5 (nonexistent file), AC6 (never exit 2), AC2 (non-edit tools) |
+| Mutation reasoning | STRONG | Remove Test-Path or add exit 2 path — AC5, AC6a-c fail immediately |
+| Test independence | STRONG | Each test uses tmp_path; no shared mutable state |
+| Descriptive names | STRONG | All names describe scenario and expected outcome |
+
+#### Data Safety
+No LLM output, no races, no multi-step operations, no unbounded input. Clean.
+
+#### Implementation-Aware Gaps
+Minor defensive paths not explicitly tested: malformed JSON input, empty filePath. Both indirectly covered by AC6d and AC6a-c. Not significant gaps.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A (single attempt) |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- Commit attribution gap: lint-changed.ps1 and builder.agent.md hooks section are in commit 522d3c4 labeled "test: add failing tests for quality-runner wiring (#264, test-writer)". No feat: (#210, builder) commit exists. Deliverables ARE present and tested — mislabeled commit, not a missing artifact. Auditor should handle per pipeline commit-leftovers protocol.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| PostToolUse hook in builder.agent.md | agents/builder.agent.md L11-14: hooks: PostToolUse type:command powershell ... lint-changed.ps1 | AC7, AC8a-c tests PASS | PASS |
+| Create scripts/hooks/lint-changed.ps1 | File exists (78 lines), reads stdin via [Console]::In.ReadToEnd() | TestFromAC_ScriptExists PASS | PASS |
+| Filter on 3 edit tool_names | L15-19: edit_tools array with 3 names | AC3a-f tests PASS | PASS |
+| systemMessage with ruff output, exit!=2 | L55-62: ruff_exit==1 path produces systemMessage; L65: exit 0 | AC3a,c,e + AC6a-c tests PASS | PASS |
+| Non-edit/clean returns {} | Multiple {} return paths in script | AC2, AC3b,d,f, AC5 tests PASS | PASS |
+| All output valid JSON | exit 0 all paths, ConvertTo-Json or literal {} | AC6d test PASS | PASS |
+| useCustomAgentHooks present | .vscode/settings.json L69: "chat.useCustomAgentHooks": true | Verified via grep | PASS |
+| No duplicate keys, valid YAML | No duplicates found; yaml.safe_load succeeds | AC9, AC10 tests PASS | PASS |
+
+### Confidence: .97
+### Verdict: PASS
+
+[[2026-04-04]] Sat 02:50
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | builder.agent.md gained PostToolUse hook (agent-level impl detail). copilot-instructions.md scripts/ row already reads `Setup, validation, hooks` -- no system-convention update needed. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. Changed files: agents/builder.agent.md, scripts/hooks/lint-changed.ps1 (PowerShell). |
+| 3 | External attribution | Yes | Verified | docs/sources/overview.md L3536 has ## PostToolUse Lint Guard Feasibility (Task #210) entry with VS Code Hooks docs attribution. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | All three referenced research docs exist and are linked in task body: agent-scoped-hooks-pipeline-enforcement.md, hook-ac-command-execution-model.md, posttooluse-lint-guard-feasibility.md. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/210-* files found)

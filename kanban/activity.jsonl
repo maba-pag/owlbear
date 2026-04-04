@@ -1,711 +1,3 @@
-{"timestamp":"2026-03-29T15:54:53.6497222+02:00","action":"claim","task_id":63,"detail":"architect"}
-{"timestamp":"2026-03-29T15:54:57.173896+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-29T15:55:06.7906698+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T15:55:14.7108261+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T15:55:14.7134049+02:00","action":"release","task_id":61,"detail":"builder"}
-{"timestamp":"2026-03-29T15:55:29.7556501+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-29T15:55:29.7572774+02:00","action":"claim","task_id":51,"detail":"test-writer"}
-{"timestamp":"2026-03-29T15:58:17.095803+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-29T15:58:17.0999994+02:00","action":"release","task_id":51,"detail":"test-writer"}
-{"timestamp":"2026-03-29T16:01:07.153704+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-29T16:01:10.6119389+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-29T16:01:10.6140395+02:00","action":"release","task_id":141,"detail":"test-writer"}
-{"timestamp":"2026-03-29T16:01:31.5632573+02:00","action":"create","task_id":142,"detail":"Test: VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:01:32.6781666+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T16:01:32.6803727+02:00","action":"claim","task_id":93,"detail":"writer"}
-{"timestamp":"2026-03-29T16:01:34.738084+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T16:01:34.7402377+02:00","action":"claim","task_id":15,"detail":"auditor"}
-{"timestamp":"2026-03-29T16:01:45.8112032+02:00","action":"move","task_id":142,"detail":"ideation -\u003e todo"}
-{"timestamp":"2026-03-29T16:02:10.724762+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-29T16:02:10.726842+02:00","action":"claim","task_id":141,"detail":"test-writer"}
-{"timestamp":"2026-03-29T16:02:12.0521074+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:02:15.3010082+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-29T16:02:15.3026011+02:00","action":"release","task_id":141,"detail":"test-writer"}
-{"timestamp":"2026-03-29T16:02:35.8684643+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:02:40.0878009+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:02:40.0888308+02:00","action":"release","task_id":63,"detail":"architect"}
-{"timestamp":"2026-03-29T16:02:48.9128794+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T16:03:01.3472657+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T16:03:01.349589+02:00","action":"release","task_id":93,"detail":"writer"}
-{"timestamp":"2026-03-29T16:04:12.9040431+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:04:12.9062434+02:00","action":"claim","task_id":63,"detail":"architect"}
-{"timestamp":"2026-03-29T16:04:24.0983865+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:04:25.8055295+02:00","action":"move","task_id":15,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-29T16:04:29.6263481+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T16:04:29.6284616+02:00","action":"release","task_id":15,"detail":"auditor"}
-{"timestamp":"2026-03-29T16:04:33.0365022+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:04:46.1312873+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T16:04:55.0614121+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:05:00.1864312+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
-{"timestamp":"2026-03-29T16:05:00.188558+02:00","action":"release","task_id":63,"detail":"architect"}
-{"timestamp":"2026-03-29T16:05:02.3049301+02:00","action":"edit","task_id":15,"detail":"Extract knowledge engine from v1"}
-{"timestamp":"2026-03-29T16:05:33.0692071+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T16:05:33.0702406+02:00","action":"claim","task_id":61,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:05:37.1865314+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T16:05:37.1880898+02:00","action":"claim","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-29T16:05:38.6764443+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T16:05:38.679078+02:00","action":"claim","task_id":78,"detail":"architect"}
-{"timestamp":"2026-03-29T16:05:38.7356556+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:05:38.7556336+02:00","action":"claim","task_id":117,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:05:42.3154766+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T16:05:42.3170523+02:00","action":"claim","task_id":90,"detail":"architect"}
-{"timestamp":"2026-03-29T16:05:44.6277852+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-29T16:05:44.6298873+02:00","action":"claim","task_id":81,"detail":"architect"}
-{"timestamp":"2026-03-29T16:05:50.1385194+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T16:05:50.1406787+02:00","action":"claim","task_id":95,"detail":"architect"}
-{"timestamp":"2026-03-29T16:06:55.0464555+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T16:07:20.8117973+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T16:07:20.8128331+02:00","action":"release","task_id":95,"detail":"architect"}
-{"timestamp":"2026-03-29T16:07:50.564635+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T16:08:06.9227749+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T16:08:10.7551521+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T16:08:10.7567002+02:00","action":"release","task_id":78,"detail":"architect"}
-{"timestamp":"2026-03-29T16:08:16.3582139+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T16:08:16.3602704+02:00","action":"release","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-29T16:08:22.8526706+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-29T16:08:28.6229267+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-29T16:08:32.9160208+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-29T16:08:36.0443172+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T16:08:42.9365047+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-29T16:08:42.9386291+02:00","action":"release","task_id":81,"detail":"architect"}
-{"timestamp":"2026-03-29T16:08:45.5014171+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T16:08:53.3451723+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T16:08:54.7681426+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T16:08:57.7431092+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T16:08:57.7451976+02:00","action":"release","task_id":90,"detail":"architect"}
-{"timestamp":"2026-03-29T16:09:00.1098145+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T16:09:00.1118725+02:00","action":"release","task_id":61,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:09:03.2852317+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:09:08.7186286+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:09:08.7207004+02:00","action":"release","task_id":117,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:09:32.2583879+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-03-29T16:09:32.2610435+02:00","action":"claim","task_id":136,"detail":"architect"}
-{"timestamp":"2026-03-29T16:09:32.4674262+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:09:32.4695121+02:00","action":"claim","task_id":139,"detail":"architect"}
-{"timestamp":"2026-03-29T16:09:32.5198599+02:00","action":"edit","task_id":135,"detail":"Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package"}
-{"timestamp":"2026-03-29T16:09:32.5219483+02:00","action":"claim","task_id":135,"detail":"architect"}
-{"timestamp":"2026-03-29T16:09:35.1053847+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:09:35.107429+02:00","action":"claim","task_id":138,"detail":"architect"}
-{"timestamp":"2026-03-29T16:10:17.6371305+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T16:10:17.6397307+02:00","action":"claim","task_id":93,"detail":"auditor"}
-{"timestamp":"2026-03-29T16:10:28.4543238+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:10:28.4563969+02:00","action":"claim","task_id":117,"detail":"writer"}
-{"timestamp":"2026-03-29T16:12:11.2463181+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:12:15.6082979+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:12:15.6108457+02:00","action":"release","task_id":139,"detail":"architect"}
-{"timestamp":"2026-03-29T16:12:39.405465+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T16:12:39.4081162+02:00","action":"claim","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:12:59.6684021+02:00","action":"create","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T16:13:37.9139761+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:13:45.0267553+02:00","action":"edit","task_id":135,"detail":"Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package"}
-{"timestamp":"2026-03-29T16:14:11.3924553+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T16:14:11.3944993+02:00","action":"release","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-29T16:14:12.2067365+02:00","action":"edit","task_id":135,"detail":"Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package"}
-{"timestamp":"2026-03-29T16:14:33.5163189+02:00","action":"edit","task_id":135,"detail":"Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package"}
-{"timestamp":"2026-03-29T16:14:39.3483502+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:14:41.4830696+02:00","action":"edit","task_id":135,"detail":"Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package"}
-{"timestamp":"2026-03-29T16:14:41.4851456+02:00","action":"release","task_id":135,"detail":"architect"}
-{"timestamp":"2026-03-29T16:14:44.2261871+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T16:14:44.2277366+02:00","action":"release","task_id":138,"detail":"architect"}
-{"timestamp":"2026-03-29T16:15:39.3657931+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-03-29T16:16:03.8925897+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-03-29T16:16:56.2156722+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T16:16:56.216711+02:00","action":"claim","task_id":18,"detail":"builder"}
-{"timestamp":"2026-03-29T16:17:03.1999407+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-03-29T16:17:15.2528422+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-03-29T16:17:15.2578002+02:00","action":"release","task_id":136,"detail":"architect"}
-{"timestamp":"2026-03-29T16:17:50.3722336+02:00","action":"move","task_id":93,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-29T16:17:50.6962543+02:00","action":"edit","task_id":93,"detail":"Rewrite README.md for v2 architecture"}
-{"timestamp":"2026-03-29T16:17:50.6983897+02:00","action":"release","task_id":93,"detail":"auditor"}
-{"timestamp":"2026-03-29T16:17:57.489548+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T16:17:57.4921667+02:00","action":"claim","task_id":20,"detail":"researcher"}
-{"timestamp":"2026-03-29T16:18:19.6556047+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T16:18:25.0102212+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-29T16:18:25.0141286+02:00","action":"release","task_id":18,"detail":"builder"}
-{"timestamp":"2026-03-29T16:18:33.2662641+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:18:33.268286+02:00","action":"release","task_id":117,"detail":"writer"}
-{"timestamp":"2026-03-29T16:18:53.0211799+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T16:18:53.0243446+02:00","action":"claim","task_id":77,"detail":"builder"}
-{"timestamp":"2026-03-29T16:20:30.5840341+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T16:20:30.5887696+02:00","action":"claim","task_id":19,"detail":"researcher"}
-{"timestamp":"2026-03-29T16:21:41.3524342+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T16:21:41.3564209+02:00","action":"release","task_id":19,"detail":"researcher"}
-{"timestamp":"2026-03-29T16:23:01.1783676+02:00","action":"edit","task_id":117,"detail":"Delete .github/skills/ and remove dual-path settings"}
-{"timestamp":"2026-03-29T16:23:01.1804213+02:00","action":"claim","task_id":117,"detail":"auditor"}
-{"timestamp":"2026-03-29T16:23:15.598287+02:00","action":"edit","task_id":77,"detail":"Test: Add ingest and graph tools to mcp-knowledge"}
-{"timestamp":"2026-03-29T16:23:15.6004461+02:00","action":"release","task_id":77,"detail":"builder"}
-{"timestamp":"2026-03-29T16:23:29.2283963+02:00","action":"create","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T16:23:38.8744901+02:00","action":"create","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-29T16:23:47.2580839+02:00","action":"create","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-29T16:24:07.9523779+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T16:24:07.9577164+02:00","action":"claim","task_id":89,"detail":"builder"}
-{"timestamp":"2026-03-29T16:24:32.7582794+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T16:24:32.7617757+02:00","action":"release","task_id":20,"detail":"researcher"}
-{"timestamp":"2026-03-29T16:24:59.4930558+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T16:25:12.955999+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T16:25:12.9609018+02:00","action":"release","task_id":89,"detail":"builder"}
-{"timestamp":"2026-03-29T16:25:52.068739+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T16:25:52.0713519+02:00","action":"claim","task_id":42,"detail":"builder"}
-{"timestamp":"2026-03-29T18:47:09.5256229+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T18:47:09.5276814+02:00","action":"claim","task_id":121,"detail":"builder"}
-{"timestamp":"2026-03-29T18:48:41.9689337+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T18:48:41.9710356+02:00","action":"claim","task_id":19,"detail":"architect"}
-{"timestamp":"2026-03-29T18:48:42.7728104+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T18:48:42.7762307+02:00","action":"claim","task_id":32,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:48:43.9230141+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T18:48:43.9251067+02:00","action":"claim","task_id":59,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:48:44.2993753+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T18:48:44.3171991+02:00","action":"claim","task_id":99,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:50:26.2143093+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T18:50:26.2163793+02:00","action":"release","task_id":121,"detail":"builder"}
-{"timestamp":"2026-03-29T18:50:33.7677905+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T18:50:33.7704323+02:00","action":"claim","task_id":121,"detail":"builder"}
-{"timestamp":"2026-03-29T18:50:37.9841273+02:00","action":"edit","task_id":121,"detail":"Add GitHub remote MCP server to setup.py template"}
-{"timestamp":"2026-03-29T18:50:37.98719+02:00","action":"release","task_id":121,"detail":"builder"}
-{"timestamp":"2026-03-29T18:51:51.1880413+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T18:52:22.3054128+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T18:52:26.4121627+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T18:52:26.4131891+02:00","action":"release","task_id":19,"detail":"architect"}
-{"timestamp":"2026-03-29T18:52:57.5835473+02:00","action":"create","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T18:52:58.0428828+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T18:52:58.0449648+02:00","action":"release","task_id":99,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:53:05.7097021+02:00","action":"create","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-03-29T18:53:26.101581+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T18:53:30.1229397+02:00","action":"edit","task_id":42,"detail":"Add user-invocable: false to pipeline-only skills"}
-{"timestamp":"2026-03-29T18:53:40.8815962+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T18:53:40.8842695+02:00","action":"release","task_id":59,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:53:52.163718+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-29T18:53:52.1647695+02:00","action":"claim","task_id":111,"detail":"builder"}
-{"timestamp":"2026-03-29T18:55:12.5978974+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T18:55:24.10502+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T18:55:29.3613914+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T18:55:29.3646497+02:00","action":"release","task_id":32,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:56:11.4569342+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T18:56:11.4590364+02:00","action":"claim","task_id":16,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:56:14.6289569+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T18:56:14.6309912+02:00","action":"claim","task_id":144,"detail":"researcher"}
-{"timestamp":"2026-03-29T18:56:31.6201638+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T18:56:31.6222752+02:00","action":"claim","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-29T18:56:32.9111367+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T18:56:32.9132247+02:00","action":"claim","task_id":138,"detail":"test-writer"}
-{"timestamp":"2026-03-29T18:56:37.0461599+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T18:56:37.0482354+02:00","action":"release","task_id":11,"detail":"test-writer"}
-{"timestamp":"2026-03-29T18:59:18.6563773+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T18:59:26.7509665+02:00","action":"edit","task_id":138,"detail":"Test: Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-29T18:59:26.7520142+02:00","action":"release","task_id":138,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:00:23.2883711+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-29T19:00:26.8618372+02:00","action":"edit","task_id":111,"detail":"Clean up stale .github/instructions/ references"}
-{"timestamp":"2026-03-29T19:00:26.866626+02:00","action":"release","task_id":111,"detail":"builder"}
-{"timestamp":"2026-03-29T19:01:00.7224302+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-29T19:01:00.7265337+02:00","action":"claim","task_id":134,"detail":"builder"}
-{"timestamp":"2026-03-29T19:02:29.5331731+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:02:35.4422528+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:02:35.4438136+02:00","action":"release","task_id":144,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:03:29.6327272+02:00","action":"edit","task_id":134,"detail":"Implement validate_agents.py pre-commit hook"}
-{"timestamp":"2026-03-29T19:03:29.6347984+02:00","action":"release","task_id":134,"detail":"builder"}
-{"timestamp":"2026-03-29T19:03:48.6429005+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-29T19:03:48.6449607+02:00","action":"claim","task_id":57,"detail":"builder"}
-{"timestamp":"2026-03-29T19:04:04.6295999+02:00","action":"create","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T19:04:10.4201122+02:00","action":"create","task_id":150,"detail":"Add ingest_document tool to mcp-knowledge (phase B)"}
-{"timestamp":"2026-03-29T19:04:55.08774+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:04:55.0887596+02:00","action":"release","task_id":16,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:05:25.8830599+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:05:57.0258497+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T19:05:57.0288178+02:00","action":"claim","task_id":90,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:05:59.1222177+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T19:05:59.1247599+02:00","action":"claim","task_id":95,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:06:05.7521984+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T19:06:06.0214852+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T19:06:08.9494122+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T19:06:08.9520403+02:00","action":"release","task_id":90,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:06:09.8969751+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T19:06:09.8990356+02:00","action":"release","task_id":95,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:06:41.7239029+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T19:06:41.7249934+02:00","action":"claim","task_id":78,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:06:50.5052366+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T19:06:50.5102934+02:00","action":"claim","task_id":61,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:07:11.8561719+02:00","action":"edit","task_id":57,"detail":"Add mcp-kanban integration tests with real kanban-md binary"}
-{"timestamp":"2026-03-29T19:07:11.8579024+02:00","action":"release","task_id":57,"detail":"builder"}
-{"timestamp":"2026-03-29T19:07:37.7057821+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-29T19:07:37.7089373+02:00","action":"claim","task_id":44,"detail":"builder"}
-{"timestamp":"2026-03-29T19:07:48.8498753+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T19:07:48.8524976+02:00","action":"release","task_id":78,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:08:12.836583+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T19:08:16.2551184+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T19:08:16.2572798+02:00","action":"release","task_id":61,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:10:12.9399356+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:10:12.9415358+02:00","action":"claim","task_id":20,"detail":"architect"}
-{"timestamp":"2026-03-29T19:10:14.0487186+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:10:14.0508403+02:00","action":"claim","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-29T19:10:15.7802371+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:10:15.782365+02:00","action":"claim","task_id":16,"detail":"architect"}
-{"timestamp":"2026-03-29T19:10:37.5233871+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:10:37.5254774+02:00","action":"claim","task_id":19,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:10:56.4771423+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:11:05.7990543+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:11:10.05835+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:11:19.4645162+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:11:19.465555+02:00","action":"release","task_id":19,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:11:52.8352005+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-29T19:11:52.8374064+02:00","action":"block","task_id":44,"detail":"test_validate_skills.py::TestFromAC_ExitCode::test_exit_code_one_no_arguments expects exit 1 with no args (task 84 behavior), but test_ci_integration.py::TestFromAC_ScriptAutoDiscovery expects exit 0 with no args (task 44 new behavior). Both are TestFromAC_ — builder cannot modify either. Test-writer must resolve the contradiction."}
-{"timestamp":"2026-03-29T19:11:52.8379103+02:00","action":"release","task_id":44,"detail":"builder"}
-{"timestamp":"2026-03-29T19:13:25.7398135+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:13:25.7435109+02:00","action":"claim","task_id":19,"detail":"builder"}
-{"timestamp":"2026-03-29T19:13:26.8619827+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:13:47.4848385+02:00","action":"create","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T19:13:49.9445953+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:14:03.2798968+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T19:14:21.6851254+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:14:22.6053261+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:14:27.4950932+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:14:35.5541796+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:14:41.3452722+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-29T19:14:41.3463064+02:00","action":"release","task_id":19,"detail":"builder"}
-{"timestamp":"2026-03-29T19:14:44.5684936+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:14:46.488455+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:14:46.4905325+02:00","action":"release","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-29T19:14:57.2662484+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:14:57.2686046+02:00","action":"release","task_id":20,"detail":"architect"}
-{"timestamp":"2026-03-29T19:15:02.3101887+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-29T19:15:27.8667897+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-29T19:15:27.8704439+02:00","action":"claim","task_id":69,"detail":"builder"}
-{"timestamp":"2026-03-29T19:15:28.1251181+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:15:28.1281713+02:00","action":"claim","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-29T19:15:38.3115137+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-29T19:15:38.3141784+02:00","action":"release","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-29T19:18:14.4766901+02:00","action":"edit","task_id":69,"detail":"Add owlbear-project.json generation to setup script"}
-{"timestamp":"2026-03-29T19:18:14.4787815+02:00","action":"release","task_id":69,"detail":"builder"}
-{"timestamp":"2026-03-29T19:18:53.4889455+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T19:18:53.4915368+02:00","action":"claim","task_id":75,"detail":"builder"}
-{"timestamp":"2026-03-29T19:19:42.5780023+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:20:21.3860843+02:00","action":"create","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-29T19:20:38.7711705+02:00","action":"edit","task_id":75,"detail":"Test: owlbear-project.json generation in setup script"}
-{"timestamp":"2026-03-29T19:20:38.773274+02:00","action":"release","task_id":75,"detail":"builder"}
-{"timestamp":"2026-03-29T19:20:41.338285+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:21:19.289268+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T19:21:19.291343+02:00","action":"claim","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-29T19:21:23.3798669+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-29T19:21:23.3819145+02:00","action":"release","task_id":11,"detail":"builder"}
-{"timestamp":"2026-03-29T19:21:28.6735871+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:21:46.2854476+02:00","action":"edit","task_id":17,"detail":"Build mcp-project server"}
-{"timestamp":"2026-03-29T19:21:46.2886163+02:00","action":"claim","task_id":17,"detail":"builder"}
-{"timestamp":"2026-03-29T19:22:01.4195241+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:22:13.0370558+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:22:21.3960237+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:22:21.3991836+02:00","action":"release","task_id":16,"detail":"architect"}
-{"timestamp":"2026-03-29T19:23:00.5490606+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:23:00.5511975+02:00","action":"claim","task_id":99,"detail":"architect"}
-{"timestamp":"2026-03-29T19:23:00.7831041+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:23:00.7862724+02:00","action":"claim","task_id":144,"detail":"architect"}
-{"timestamp":"2026-03-29T19:23:00.8596608+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:23:00.8623216+02:00","action":"claim","task_id":59,"detail":"architect"}
-{"timestamp":"2026-03-29T19:23:03.813394+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-29T19:23:03.8160263+02:00","action":"claim","task_id":22,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:24:54.6644371+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:24:59.5217216+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:03.825917+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:07.8766123+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:31.1133295+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:35.031972+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:38.5532111+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:43.5169928+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:25:43.519765+02:00","action":"release","task_id":59,"detail":"architect"}
-{"timestamp":"2026-03-29T19:25:50.5689566+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:25:50.5710616+02:00","action":"release","task_id":99,"detail":"architect"}
-{"timestamp":"2026-03-29T19:26:04.8221062+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:26:04.8247126+02:00","action":"claim","task_id":99,"detail":"architect"}
-{"timestamp":"2026-03-29T19:26:15.8126868+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:26:36.9203632+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:26:40.8660704+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:26:40.8701999+02:00","action":"release","task_id":99,"detail":"architect"}
-{"timestamp":"2026-03-29T19:26:49.0563415+02:00","action":"create","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-29T19:26:53.8375554+02:00","action":"move","task_id":153,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-03-29T19:26:57.0192541+02:00","action":"move","task_id":153,"detail":"backlog -\u003e todo"}
-{"timestamp":"2026-03-29T19:27:15.7809973+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:27:30.1343349+02:00","action":"create","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T19:27:40.43493+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:28:01.7379546+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-29T19:28:01.7405799+02:00","action":"release","task_id":22,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:28:10.1988072+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:28:20.6176858+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-29T19:28:20.6192168+02:00","action":"release","task_id":144,"detail":"architect"}
-{"timestamp":"2026-03-29T19:28:58.291819+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-29T19:28:58.2949597+02:00","action":"claim","task_id":23,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:29:00.3695832+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-29T19:29:00.3722168+02:00","action":"claim","task_id":34,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:29:57.4736361+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:29:57.4746798+02:00","action":"claim","task_id":55,"detail":"builder"}
-{"timestamp":"2026-03-29T19:31:56.8678694+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-29T19:31:56.8699859+02:00","action":"claim","task_id":145,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:33:50.5581488+02:00","action":"create","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-29T19:33:58.2055297+02:00","action":"create","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-29T19:34:05.2188703+02:00","action":"create","task_id":157,"detail":"Create E2E smoke test script for real Copilot CLI"}
-{"timestamp":"2026-03-29T19:34:31.3952571+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-29T19:34:31.3963084+02:00","action":"release","task_id":145,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:34:40.7812083+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-29T19:34:40.7832401+02:00","action":"release","task_id":23,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:34:43.4412893+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-29T19:34:43.4443204+02:00","action":"claim","task_id":33,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:35:58.8615374+02:00","action":"create","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T19:36:51.3989572+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-29T19:36:51.4010825+02:00","action":"release","task_id":33,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:37:22.744196+02:00","action":"create","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
-{"timestamp":"2026-03-29T19:37:32.4250087+02:00","action":"create","task_id":160,"detail":"Upgrade query_service.py with retriever delegation and hybrid search"}
-{"timestamp":"2026-03-29T19:37:41.2127256+02:00","action":"create","task_id":161,"detail":"Knowledge package README and installability verification"}
-{"timestamp":"2026-03-29T19:37:50.9740923+02:00","action":"create","task_id":162,"detail":"Integration test: full ingest-to-search cycle"}
-{"timestamp":"2026-03-29T19:38:49.7213969+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-29T19:38:49.7245853+02:00","action":"release","task_id":34,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:39:35.606928+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-29T19:39:35.6079492+02:00","action":"claim","task_id":146,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:39:39.964875+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T19:39:39.9674546+02:00","action":"claim","task_id":147,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:39:40.5244035+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-29T19:39:40.5270659+02:00","action":"claim","task_id":21,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:39:43.0752769+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T19:39:43.0768426+02:00","action":"claim","task_id":149,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:42:04.0557063+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T19:42:04.0577777+02:00","action":"release","task_id":149,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:43:27.6403548+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T19:43:27.6424259+02:00","action":"release","task_id":147,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:44:05.3918658+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:44:14.1735261+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-29T19:44:14.1776208+02:00","action":"release","task_id":55,"detail":"builder"}
-{"timestamp":"2026-03-29T19:44:17.0374296+02:00","action":"create","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T19:44:19.8052145+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-29T19:44:19.8063109+02:00","action":"release","task_id":146,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:44:23.634095+02:00","action":"create","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-29T19:44:58.7631387+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-29T19:44:58.765264+02:00","action":"release","task_id":21,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:45:32.8211271+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-29T19:45:32.8227123+02:00","action":"claim","task_id":50,"detail":"builder"}
-{"timestamp":"2026-03-29T19:45:37.0531844+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-03-29T19:45:37.0552289+02:00","action":"claim","task_id":29,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:45:37.8275928+02:00","action":"edit","task_id":24,"detail":"General KB initial data load"}
-{"timestamp":"2026-03-29T19:45:37.8297682+02:00","action":"claim","task_id":24,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:45:38.5235596+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-29T19:45:38.5256788+02:00","action":"claim","task_id":25,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:45:38.7572188+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-03-29T19:45:38.7624293+02:00","action":"claim","task_id":31,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:49:17.610581+02:00","action":"create","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T19:49:25.9736726+02:00","action":"create","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T19:49:30.9283389+02:00","action":"create","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-29T19:49:32.5566707+02:00","action":"create","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T19:49:39.6323237+02:00","action":"create","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T19:49:45.505079+02:00","action":"create","task_id":171,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T19:49:54.7608482+02:00","action":"create","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T19:49:58.698723+02:00","action":"create","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T19:49:59.1457184+02:00","action":"create","task_id":174,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T19:50:06.9512153+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T19:50:07.0398348+02:00","action":"create","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T19:50:38.5634847+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-29T19:50:38.5661299+02:00","action":"release","task_id":25,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:50:47.4812524+02:00","action":"create","task_id":176,"detail":"Build KB data loader script and sources manifest"}
-{"timestamp":"2026-03-29T19:50:54.1001245+02:00","action":"create","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T19:51:00.1998829+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-29T19:51:00.9896742+02:00","action":"create","task_id":178,"detail":"Execute initial KB data load and verify search quality"}
-{"timestamp":"2026-03-29T19:51:18.7279465+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-03-29T19:51:18.7311541+02:00","action":"release","task_id":29,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:51:21.7444432+02:00","action":"create","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-29T19:51:28.6212714+02:00","action":"create","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-29T19:51:35.0021823+02:00","action":"edit","task_id":24,"detail":"General KB initial data load"}
-{"timestamp":"2026-03-29T19:51:35.0048335+02:00","action":"release","task_id":24,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:52:06.9026928+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-03-29T19:52:06.905341+02:00","action":"release","task_id":31,"detail":"researcher"}
-{"timestamp":"2026-03-29T19:53:56.6291989+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:53:56.6313334+02:00","action":"claim","task_id":99,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:53:57.3999603+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-29T19:53:57.402562+02:00","action":"claim","task_id":153,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:53:59.6205088+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T19:53:59.6231641+02:00","action":"claim","task_id":151,"detail":"architect"}
-{"timestamp":"2026-03-29T19:54:11.3611303+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T19:54:11.3637541+02:00","action":"claim","task_id":59,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:55:39.5928038+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T19:55:43.4395081+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T19:55:43.4416082+02:00","action":"release","task_id":151,"detail":"architect"}
-{"timestamp":"2026-03-29T19:57:33.432354+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:57:36.1461174+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-29T19:57:36.1487471+02:00","action":"release","task_id":99,"detail":"test-writer"}
-{"timestamp":"2026-03-29T19:57:53.6438241+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-29T19:57:53.6459464+02:00","action":"release","task_id":153,"detail":"test-writer"}
-{"timestamp":"2026-03-29T20:00:28.1685877+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T20:00:37.0694256+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-29T20:00:37.0714972+02:00","action":"release","task_id":59,"detail":"test-writer"}
-{"timestamp":"2026-03-29T20:01:10.4819384+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T20:01:10.4856533+02:00","action":"claim","task_id":149,"detail":"architect"}
-{"timestamp":"2026-03-29T20:01:13.0334988+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T20:01:13.035576+02:00","action":"claim","task_id":158,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:01:13.912808+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T20:01:13.9199908+02:00","action":"claim","task_id":147,"detail":"architect"}
-{"timestamp":"2026-03-29T20:01:14.403386+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T20:01:21.703501+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-29T20:01:21.7055832+02:00","action":"claim","task_id":152,"detail":"architect"}
-{"timestamp":"2026-03-29T20:01:26.2340265+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-29T20:01:26.2434014+02:00","action":"block","task_id":152,"detail":"Empty body: no acceptance criteria, no tool list, no research reference. Cannot review without knowing which tools are in Phase A remaining, what interfaces they must follow, or what coverage targets apply. Re-create with concrete AC or link to a research doc."}
-{"timestamp":"2026-03-29T20:01:26.2454698+02:00","action":"release","task_id":152,"detail":"architect"}
-{"timestamp":"2026-03-29T20:01:34.2000621+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-29T20:02:25.2853062+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T20:02:30.1269831+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-29T20:02:30.1269831+02:00","action":"block","task_id":149,"detail":"Already implemented: get_counts() exists in graph_store.py with 9 passing tests. Task is redundant, recommend archiving."}
-{"timestamp":"2026-03-29T20:02:30.1269831+02:00","action":"release","task_id":149,"detail":"architect"}
-{"timestamp":"2026-03-29T20:03:34.5466994+02:00","action":"create","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-29T20:03:43.0001349+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-29T20:04:26.215547+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T20:04:50.83517+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T20:04:56.2870323+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-29T20:04:56.2896625+02:00","action":"release","task_id":147,"detail":"architect"}
-{"timestamp":"2026-03-29T20:09:04.263432+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T20:09:20.1907016+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T20:09:42.2785866+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T20:09:47.7021159+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-29T20:09:47.7042451+02:00","action":"release","task_id":158,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:10:41.7553888+02:00","action":"edit","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:10:41.7575442+02:00","action":"claim","task_id":175,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:10:43.1586626+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:10:43.161245+02:00","action":"claim","task_id":154,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:10:44.9977392+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:10:44.9998352+02:00","action":"claim","task_id":163,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:10:56.120372+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T20:10:56.1235015+02:00","action":"claim","task_id":169,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:11:23.324215+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:11:37.5674099+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:11:42.4886522+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:11:42.490717+02:00","action":"release","task_id":154,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:13:37.5508388+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:13:37.5529058+02:00","action":"release","task_id":163,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:13:44.4083852+02:00","action":"create","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:14:41.7194275+02:00","action":"edit","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:14:41.722836+02:00","action":"release","task_id":175,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:14:53.8103315+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T20:14:53.8123891+02:00","action":"release","task_id":169,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:15:36.2382977+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:15:36.2408897+02:00","action":"claim","task_id":172,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:15:36.7658513+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:15:36.7699542+02:00","action":"claim","task_id":165,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:15:37.4826609+02:00","action":"edit","task_id":171,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:15:37.4852582+02:00","action":"claim","task_id":171,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:15:55.4357552+02:00","action":"edit","task_id":174,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:15:55.4378678+02:00","action":"claim","task_id":174,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:16:01.9835786+02:00","action":"edit","task_id":174,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:16:01.9859696+02:00","action":"block","task_id":174,"detail":"Waiting on user: task body is empty — needs acceptance criteria and scope before research can begin"}
-{"timestamp":"2026-03-29T20:16:01.9885829+02:00","action":"release","task_id":174,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:16:10.4993817+02:00","action":"edit","task_id":174,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:16:38.0761672+02:00","action":"move","task_id":165,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-03-29T20:16:43.2771974+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:16:43.2817079+02:00","action":"release","task_id":165,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:17:31.5029721+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-29T20:17:31.5050387+02:00","action":"block","task_id":50,"detail":"TestFromAC_ThreadSafeStdout tests use monkeypatch.setattr(sys.stdout, 'buffer', ...) which raises AttributeError: readonly attribute on Python 3.12. Test-writer must fix by using patch.object(stt_module, 'sys', mock_sys) pattern instead."}
-{"timestamp":"2026-03-29T20:17:31.5065901+02:00","action":"release","task_id":50,"detail":"builder"}
-{"timestamp":"2026-03-29T20:17:36.0669628+02:00","action":"edit","task_id":171,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:17:36.0685319+02:00","action":"block","task_id":171,"detail":"Duplicate of #169 — pending cleanup via #182"}
-{"timestamp":"2026-03-29T20:17:46.313928+02:00","action":"edit","task_id":171,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:17:46.3160546+02:00","action":"release","task_id":171,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:18:21.5255569+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:18:31.1744618+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:18:31.1755271+02:00","action":"release","task_id":172,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:18:39.4886408+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-29T20:18:39.4912496+02:00","action":"claim","task_id":51,"detail":"builder"}
-{"timestamp":"2026-03-29T20:19:06.6866989+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:19:06.6892939+02:00","action":"claim","task_id":177,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:19:08.5496227+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-03-29T20:19:08.5516839+02:00","action":"claim","task_id":148,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:19:09.897493+02:00","action":"edit","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:19:09.8990746+02:00","action":"claim","task_id":168,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:19:12.0673961+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:19:12.0700433+02:00","action":"claim","task_id":166,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:20:11.0668975+02:00","action":"edit","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:20:11.0695487+02:00","action":"release","task_id":168,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:20:45.8973465+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:20:45.8983974+02:00","action":"release","task_id":166,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:22:08.8298482+02:00","action":"create","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:22:22.7951455+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:23:15.5051441+02:00","action":"create","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:23:16.1729089+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:23:21.4076218+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:23:21.4102623+02:00","action":"release","task_id":177,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:24:08.6533061+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-03-29T20:24:41.9963098+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-03-29T20:24:47.516872+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-03-29T20:24:47.5194417+02:00","action":"release","task_id":148,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:26:33.4957332+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:26:33.4983647+02:00","action":"claim","task_id":154,"detail":"architect"}
-{"timestamp":"2026-03-29T20:26:36.0569841+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:26:36.0592149+02:00","action":"claim","task_id":163,"detail":"architect"}
-{"timestamp":"2026-03-29T20:26:54.8788322+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-29T20:26:54.881872+02:00","action":"release","task_id":51,"detail":"builder"}
-{"timestamp":"2026-03-29T20:27:00.1311686+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-29T20:27:16.2911047+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:27:16.3301484+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:27:16.3702062+02:00","action":"claim","task_id":182,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:27:20.3988235+02:00","action":"edit","task_id":154,"detail":"Add Typer dependency to orchestrator package"}
-{"timestamp":"2026-03-29T20:27:20.3998496+02:00","action":"release","task_id":154,"detail":"architect"}
-{"timestamp":"2026-03-29T20:27:31.9670333+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T20:27:31.9727758+02:00","action":"claim","task_id":61,"detail":"builder"}
-{"timestamp":"2026-03-29T20:28:43.8714689+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T20:28:43.8751001+02:00","action":"claim","task_id":151,"detail":"test-writer"}
-{"timestamp":"2026-03-29T20:29:17.8898197+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:29:33.085929+02:00","action":"move","task_id":182,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-03-29T20:29:38.24935+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:29:38.2514054+02:00","action":"release","task_id":182,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:29:44.1236683+02:00","action":"create","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:30:01.8019488+02:00","action":"move","task_id":185,"detail":"ideation -\u003e todo"}
-{"timestamp":"2026-03-29T20:30:09.6308191+02:00","action":"edit","task_id":61,"detail":"Implement voice protocol Pydantic models"}
-{"timestamp":"2026-03-29T20:30:09.6328899+02:00","action":"release","task_id":61,"detail":"builder"}
-{"timestamp":"2026-03-29T20:30:29.6410504+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T20:30:29.6431218+02:00","action":"claim","task_id":78,"detail":"builder"}
-{"timestamp":"2026-03-29T20:30:31.7193305+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:31:14.2282098+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:31:18.2216634+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:31:23.5621127+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:31:23.5641961+02:00","action":"release","task_id":163,"detail":"architect"}
-{"timestamp":"2026-03-29T20:31:27.9813693+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:32:00.4869177+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:32:06.3937593+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:32:16.6784484+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:32:20.5252461+02:00","action":"edit","task_id":163,"detail":"Implement audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-29T20:34:47.3349872+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T20:34:51.5377756+02:00","action":"edit","task_id":78,"detail":"Test: voice addon TTS backends and factory"}
-{"timestamp":"2026-03-29T20:34:51.5403859+02:00","action":"release","task_id":78,"detail":"builder"}
-{"timestamp":"2026-03-29T20:35:11.1307276+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:35:11.1317864+02:00","action":"claim","task_id":79,"detail":"builder"}
-{"timestamp":"2026-03-29T20:35:25.0071639+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-29T20:35:25.0107791+02:00","action":"release","task_id":151,"detail":"test-writer"}
-{"timestamp":"2026-03-29T20:35:34.1584601+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:35:44.1349329+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:35:44.4447298+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:35:44.4474498+02:00","action":"release","task_id":79,"detail":"builder"}
-{"timestamp":"2026-03-29T20:35:49.2815042+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:35:49.2841197+02:00","action":"claim","task_id":177,"detail":"architect"}
-{"timestamp":"2026-03-29T20:35:50.1461326+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:35:50.1493287+02:00","action":"claim","task_id":172,"detail":"architect"}
-{"timestamp":"2026-03-29T20:35:54.0128376+02:00","action":"edit","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:35:54.0155139+02:00","action":"claim","task_id":175,"detail":"architect"}
-{"timestamp":"2026-03-29T20:35:54.6632652+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:35:54.6654922+02:00","action":"claim","task_id":166,"detail":"architect"}
-{"timestamp":"2026-03-29T20:36:03.732393+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:36:03.7344524+02:00","action":"claim","task_id":85,"detail":"builder"}
-{"timestamp":"2026-03-29T20:36:41.8632326+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:36:46.7572173+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-29T20:36:46.7593306+02:00","action":"release","task_id":177,"detail":"architect"}
-{"timestamp":"2026-03-29T20:36:47.3331137+02:00","action":"edit","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:36:52.7445545+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:36:52.7467662+02:00","action":"block","task_id":172,"detail":"Duplicate of #169 (canonical). Pending archival by #182. See docs/research/duplicate-setup-guide-cleanup.md"}
-{"timestamp":"2026-03-29T20:36:52.7493543+02:00","action":"release","task_id":172,"detail":"architect"}
-{"timestamp":"2026-03-29T20:36:53.2115496+02:00","action":"edit","task_id":175,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:36:53.2136354+02:00","action":"block","task_id":175,"detail":"Duplicate of #169 -- cleanup tracked by #182"}
-{"timestamp":"2026-03-29T20:36:53.2157138+02:00","action":"release","task_id":175,"detail":"architect"}
-{"timestamp":"2026-03-29T20:37:00.3777979+02:00","action":"edit","task_id":172,"detail":"Document multi-project setup and sharing guide"}
-{"timestamp":"2026-03-29T20:37:53.9722743+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:38:03.2954202+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:38:03.6159042+02:00","action":"edit","task_id":85,"detail":"Test: Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-29T20:38:03.6186363+02:00","action":"release","task_id":85,"detail":"builder"}
-{"timestamp":"2026-03-29T20:38:09.4282636+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:38:21.6937175+02:00","action":"create","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:38:40.3579288+02:00","action":"move","task_id":186,"detail":"ideation -\u003e todo"}
-{"timestamp":"2026-03-29T20:38:52.7994011+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:39:10.3203505+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:39:13.9653278+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:39:13.967526+02:00","action":"release","task_id":166,"detail":"architect"}
-{"timestamp":"2026-03-29T20:39:22.9898306+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-29T20:39:22.9908829+02:00","action":"claim","task_id":86,"detail":"builder"}
-{"timestamp":"2026-03-29T20:39:41.7410359+02:00","action":"edit","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:39:41.742145+02:00","action":"claim","task_id":168,"detail":"architect"}
-{"timestamp":"2026-03-29T20:39:43.9187036+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T20:39:43.9209571+02:00","action":"claim","task_id":169,"detail":"architect"}
-{"timestamp":"2026-03-29T20:39:44.9917361+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:39:44.9944548+02:00","action":"claim","task_id":165,"detail":"architect"}
-{"timestamp":"2026-03-29T20:39:46.7159023+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:39:46.7169467+02:00","action":"claim","task_id":184,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:40:54.9329001+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:41:00.5940205+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T20:41:04.7008558+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T20:41:04.7030653+02:00","action":"release","task_id":169,"detail":"architect"}
-{"timestamp":"2026-03-29T20:41:05.7308622+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:41:15.005339+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T20:41:15.0085286+02:00","action":"release","task_id":165,"detail":"architect"}
-{"timestamp":"2026-03-29T20:41:36.9289774+02:00","action":"edit","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:41:36.9310368+02:00","action":"release","task_id":168,"detail":"architect"}
-{"timestamp":"2026-03-29T20:41:37.2836416+02:00","action":"delete","task_id":168,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T20:43:20.9260284+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:43:31.4910465+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:43:31.7966491+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:43:31.7998155+02:00","action":"release","task_id":184,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:44:16.481797+02:00","action":"edit","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:44:16.4850272+02:00","action":"claim","task_id":170,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:44:17.479773+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:44:17.4813476+02:00","action":"claim","task_id":173,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:44:38.4697164+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:44:38.4728692+02:00","action":"claim","task_id":183,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:44:51.0887049+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:44:51.0908198+02:00","action":"release","task_id":173,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:45:12.3542197+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:45:22.4593663+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:45:45.8086414+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:45:45.8117847+02:00","action":"release","task_id":183,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:46:45.7390976+02:00","action":"create","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T20:46:55.1086643+02:00","action":"create","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T20:47:40.1374169+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T20:47:40.1385294+02:00","action":"claim","task_id":143,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:47:45.749102+02:00","action":"edit","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:47:45.7522868+02:00","action":"block","task_id":170,"detail":"Duplicate of #173 (already at backlog)"}
-{"timestamp":"2026-03-29T20:47:59.780569+02:00","action":"edit","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:47:59.7816457+02:00","action":"release","task_id":170,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:49:04.8095189+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T20:49:39.0431425+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T20:49:44.9664254+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T20:49:44.9684849+02:00","action":"release","task_id":143,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:50:37.0822804+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-29T20:50:37.0853316+02:00","action":"release","task_id":86,"detail":"builder"}
-{"timestamp":"2026-03-29T20:51:16.354913+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T20:51:16.3581616+02:00","action":"claim","task_id":90,"detail":"builder"}
-{"timestamp":"2026-03-29T20:51:20.7977844+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:51:20.7998441+02:00","action":"claim","task_id":184,"detail":"architect"}
-{"timestamp":"2026-03-29T20:51:24.7614224+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T20:51:24.7651466+02:00","action":"claim","task_id":187,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:51:27.7622675+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T20:51:27.7632946+02:00","action":"claim","task_id":188,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:51:56.5381336+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:51:56.5408036+02:00","action":"claim","task_id":182,"detail":"architect"}
-{"timestamp":"2026-03-29T20:52:48.794326+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T20:52:48.8030666+02:00","action":"release","task_id":187,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:53:05.2733411+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:53:14.4477018+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T20:53:21.0016447+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T20:53:22.2386521+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T20:53:30.5537077+02:00","action":"edit","task_id":182,"detail":"Clean up duplicate setup-guide tasks (#171 #172 #174 #175)"}
-{"timestamp":"2026-03-29T20:53:30.5558433+02:00","action":"release","task_id":182,"detail":"architect"}
-{"timestamp":"2026-03-29T20:53:32.5517707+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T20:53:37.484159+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T20:53:37.4897156+02:00","action":"release","task_id":188,"detail":"researcher"}
-{"timestamp":"2026-03-29T20:53:53.1805315+02:00","action":"create","task_id":189,"detail":"Test: ErrorJournal module (ErrorEntry + JSONL persistence)"}
-{"timestamp":"2026-03-29T20:54:43.7953158+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:54:48.3962124+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:55:18.4091129+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:55:28.5024547+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:55:33.285284+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-29T20:55:33.288982+02:00","action":"release","task_id":184,"detail":"architect"}
-{"timestamp":"2026-03-29T20:55:56.1393611+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T20:56:00.9362307+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-29T20:56:00.9399611+02:00","action":"release","task_id":90,"detail":"builder"}
-{"timestamp":"2026-03-29T20:56:09.4499266+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:56:09.452521+02:00","action":"claim","task_id":173,"detail":"architect"}
-{"timestamp":"2026-03-29T20:56:14.1937401+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:56:14.1958701+02:00","action":"claim","task_id":183,"detail":"architect"}
-{"timestamp":"2026-03-29T20:56:18.9429162+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal, sandbox_path, consolidation, and evaluator"}
-{"timestamp":"2026-03-29T20:56:18.9456098+02:00","action":"claim","task_id":143,"detail":"architect"}
-{"timestamp":"2026-03-29T20:56:20.5570301+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T20:56:20.5602014+02:00","action":"claim","task_id":95,"detail":"builder"}
-{"timestamp":"2026-03-29T20:56:25.990724+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
-{"timestamp":"2026-03-29T20:56:25.9934251+02:00","action":"release","task_id":95,"detail":"builder"}
-{"timestamp":"2026-03-29T20:56:44.1595664+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-29T20:56:44.1627142+02:00","action":"claim","task_id":109,"detail":"builder"}
-{"timestamp":"2026-03-29T20:56:44.4257558+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:56:47.9979027+02:00","action":"edit","task_id":183,"detail":"Add curation process cross-reference to knowledge-ops skill"}
-{"timestamp":"2026-03-29T20:56:48.0000268+02:00","action":"release","task_id":183,"detail":"architect"}
-{"timestamp":"2026-03-29T20:56:57.7215446+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:57:02.5397756+02:00","action":"edit","task_id":173,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-29T20:57:02.5430095+02:00","action":"release","task_id":173,"detail":"architect"}
-{"timestamp":"2026-03-29T20:57:34.0500636+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
-{"timestamp":"2026-03-29T20:57:34.0521777+02:00","action":"release","task_id":109,"detail":"builder"}
 {"timestamp":"2026-03-29T20:57:41.754084+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
 {"timestamp":"2026-03-29T20:57:41.7567673+02:00","action":"claim","task_id":109,"detail":"builder"}
 {"timestamp":"2026-03-29T20:57:45.6988865+02:00","action":"edit","task_id":109,"detail":"Update instructions/README.md for v2"}
@@ -9998,3 +9290,711 @@
 {"timestamp":"2026-04-03T10:14:32.2175403+02:00","action":"move","task_id":525,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-03T10:14:32.6741876+02:00","action":"edit","task_id":525,"detail":"Implement memory-mcp tools"}
 {"timestamp":"2026-04-03T10:14:32.6848727+02:00","action":"release","task_id":525,"detail":"auditor"}
+{"timestamp":"2026-04-03T10:18:15.5146667+02:00","action":"edit","task_id":525,"detail":"Implement memory-mcp tools"}
+{"timestamp":"2026-04-03T10:19:12.3625714+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T10:19:12.3754177+02:00","action":"claim","task_id":530,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:19:12.6819868+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:19:12.6940097+02:00","action":"claim","task_id":526,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:19:14.1038289+02:00","action":"edit","task_id":528,"detail":"Design curator workflow for memory-mcp"}
+{"timestamp":"2026-04-03T10:19:14.1153084+02:00","action":"claim","task_id":528,"detail":"architect"}
+{"timestamp":"2026-04-03T10:19:20.3002596+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T10:19:20.3106887+02:00","action":"claim","task_id":531,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:21:51.7605195+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T10:21:51.7714405+02:00","action":"release","task_id":530,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:21:53.5557829+02:00","action":"edit","task_id":528,"detail":"Design curator workflow for memory-mcp"}
+{"timestamp":"2026-04-03T10:22:06.455632+02:00","action":"edit","task_id":528,"detail":"Design curator workflow for memory-mcp"}
+{"timestamp":"2026-04-03T10:22:06.4660159+02:00","action":"release","task_id":528,"detail":"architect"}
+{"timestamp":"2026-04-03T10:22:07.0850599+02:00","action":"delete","task_id":528,"detail":"Design curator workflow for memory-mcp"}
+{"timestamp":"2026-04-03T10:22:08.9126183+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T10:25:03.1534965+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T10:25:09.2548784+02:00","action":"create","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
+{"timestamp":"2026-04-03T10:25:35.2514613+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T10:25:45.5697395+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T10:25:46.0809572+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T10:25:46.09149+02:00","action":"release","task_id":531,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:40:51.4516994+02:00","action":"create","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T10:41:09.1204514+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:41:19.6248897+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:41:25.2072039+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:41:39.2869967+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:41:55.1359763+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:42:10.4221376+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:42:14.7451477+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T10:42:14.7556254+02:00","action":"release","task_id":526,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:44:10.560968+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:44:10.5713441+02:00","action":"claim","task_id":529,"detail":"architect"}
+{"timestamp":"2026-04-03T10:44:23.4454986+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T10:44:23.4555201+02:00","action":"claim","task_id":563,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:45:13.3855402+02:00","action":"edit","task_id":562,"detail":"Test: Validate MCP tool references in agents, skills, and instructions"}
+{"timestamp":"2026-04-03T10:45:13.3960613+02:00","action":"claim","task_id":562,"detail":"auditor"}
+{"timestamp":"2026-04-03T10:46:51.4447684+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T10:46:55.8265738+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T10:46:59.8752777+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T10:47:08.823883+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T10:47:08.8349953+02:00","action":"release","task_id":563,"detail":"researcher"}
+{"timestamp":"2026-04-03T10:57:25.8282432+02:00","action":"create","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:58:31.6242648+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:58:37.3500165+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:59:19.3324291+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:59:28.8136071+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:59:33.1907194+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T10:59:33.2007724+02:00","action":"release","task_id":529,"detail":"architect"}
+{"timestamp":"2026-04-03T10:59:55.3993461+02:00","action":"edit","task_id":562,"detail":"Test: Validate MCP tool references in agents, skills, and instructions"}
+{"timestamp":"2026-04-03T10:59:59.5550854+02:00","action":"move","task_id":562,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T11:00:04.3456172+02:00","action":"edit","task_id":562,"detail":"Test: Validate MCP tool references in agents, skills, and instructions"}
+{"timestamp":"2026-04-03T11:00:04.362666+02:00","action":"release","task_id":562,"detail":"auditor"}
+{"timestamp":"2026-04-03T11:01:11.1329051+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:01:11.1455593+02:00","action":"claim","task_id":568,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:01:15.8197444+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:01:15.8312764+02:00","action":"claim","task_id":530,"detail":"architect"}
+{"timestamp":"2026-04-03T11:01:36.2579207+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:01:36.2700782+02:00","action":"claim","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-04-03T11:04:47.5685408+02:00","action":"create","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:04:53.324572+02:00","action":"create","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:05:36.5493461+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:05:58.1171298+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:06:03.032501+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:06:03.0424184+02:00","action":"release","task_id":568,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:06:38.4429968+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:06:51.7823703+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:06:58.5260259+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:06:59.0094897+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:06:59.0211482+02:00","action":"release","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-04-03T11:07:04.3034594+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:09:44.0121118+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:09:52.8945101+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:10:15.9781096+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:10:40.6583114+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:10:44.5663556+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:10:49.5232626+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T11:10:49.5347099+02:00","action":"release","task_id":530,"detail":"architect"}
+{"timestamp":"2026-04-03T11:12:17.0121248+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:12:17.0242029+02:00","action":"claim","task_id":569,"detail":"architect"}
+{"timestamp":"2026-04-03T11:12:17.6642792+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:12:17.6747356+02:00","action":"claim","task_id":568,"detail":"architect"}
+{"timestamp":"2026-04-03T11:12:20.1881478+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:12:20.1987624+02:00","action":"claim","task_id":563,"detail":"architect"}
+{"timestamp":"2026-04-03T11:14:37.0043735+02:00","action":"create","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T11:14:49.2164223+02:00","action":"create","task_id":573,"detail":"P2-02: Expand mcp-kanban SKILL.md with workflow pattern + per-tool reference"}
+{"timestamp":"2026-04-03T11:14:59.3348184+02:00","action":"create","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T11:15:13.4455763+02:00","action":"create","task_id":575,"detail":"P2-04: Update pipeline agent files with MCP tool references alongside CLI"}
+{"timestamp":"2026-04-03T11:15:13.7813844+02:00","action":"create","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T11:15:26.2973747+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T11:15:44.2878868+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T11:20:32.3409303+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:20:32.35247+02:00","action":"release","task_id":569,"detail":"architect"}
+{"timestamp":"2026-04-03T11:21:00.9337578+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:21:00.9437776+02:00","action":"claim","task_id":569,"detail":"architect"}
+{"timestamp":"2026-04-03T11:22:34.0022004+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:22:34.0137732+02:00","action":"release","task_id":569,"detail":"architect"}
+{"timestamp":"2026-04-03T11:26:52.6124537+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:27:17.2969363+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:27:38.1253231+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:27:50.9933675+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:27:55.4309911+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:27:55.4409793+02:00","action":"release","task_id":568,"detail":"architect"}
+{"timestamp":"2026-04-03T11:32:16.942525+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:32:49.3392287+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:32:55.0116294+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:32:59.4973231+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:33:20.3559508+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:33:29.5745088+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:33:29.5855344+02:00","action":"release","task_id":563,"detail":"architect"}
+{"timestamp":"2026-04-03T11:34:03.2392078+02:00","action":"edit","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:34:03.2546216+02:00","action":"claim","task_id":571,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:34:08.2076906+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:34:08.2192443+02:00","action":"claim","task_id":570,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:34:15.5169581+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:34:15.5270486+02:00","action":"claim","task_id":555,"detail":"test-writer-4"}
+{"timestamp":"2026-04-03T11:38:38.7767709+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:38:43.2583815+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T11:38:43.2700108+02:00","action":"release","task_id":555,"detail":"test-writer-4"}
+{"timestamp":"2026-04-03T11:38:43.9678064+02:00","action":"create","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:38:44.934421+02:00","action":"create","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T11:39:01.2748984+02:00","action":"edit","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:39:01.2848179+02:00","action":"release","task_id":571,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:39:15.8271663+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:39:25.4447597+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:39:31.2875559+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T11:39:31.298547+02:00","action":"release","task_id":570,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:41:43.7064866+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:41:43.7186012+02:00","action":"claim","task_id":569,"detail":"test-writer"}
+{"timestamp":"2026-04-03T11:41:48.391703+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T11:41:48.4027038+02:00","action":"claim","task_id":572,"detail":"researcher"}
+{"timestamp":"2026-04-03T11:41:51.1161548+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:41:51.1263127+02:00","action":"claim","task_id":568,"detail":"test-writer"}
+{"timestamp":"2026-04-03T11:41:57.0966612+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:41:57.1070725+02:00","action":"claim","task_id":563,"detail":"test-writer-2026"}
+{"timestamp":"2026-04-03T11:42:05.6328068+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:42:09.6636262+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:42:11.544938+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:42:17.9413908+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T11:42:17.9520247+02:00","action":"release","task_id":568,"detail":"test-writer"}
+{"timestamp":"2026-04-03T11:42:40.5350897+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:42:44.5810334+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T11:42:44.5920497+02:00","action":"release","task_id":563,"detail":"test-writer-2026"}
+{"timestamp":"2026-04-03T11:44:41.5988951+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:44:45.0604309+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T11:44:45.0709166+02:00","action":"release","task_id":569,"detail":"test-writer"}
+{"timestamp":"2026-04-03T12:00:32.0250227+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:00:35.8728993+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:00:49.2078471+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:00:49.6747928+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:00:49.6847557+02:00","action":"release","task_id":572,"detail":"researcher"}
+{"timestamp":"2026-04-03T12:01:35.7687987+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:01:35.7817006+02:00","action":"claim","task_id":570,"detail":"architect"}
+{"timestamp":"2026-04-03T12:01:35.8321574+02:00","action":"edit","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:01:35.8436223+02:00","action":"claim","task_id":571,"detail":"architect"}
+{"timestamp":"2026-04-03T12:01:43.2340273+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:01:43.2439063+02:00","action":"claim","task_id":577,"detail":"researcher"}
+{"timestamp":"2026-04-03T12:01:44.026901+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:01:44.0418236+02:00","action":"claim","task_id":483,"detail":"architect"}
+{"timestamp":"2026-04-03T12:03:12.3020026+02:00","action":"create","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:11.4520678+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:39.3086563+02:00","action":"edit","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:39.7614885+02:00","action":"edit","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:47.5262036+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:51.7850239+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:55.8831887+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:04:55.8931642+02:00","action":"release","task_id":577,"detail":"researcher"}
+{"timestamp":"2026-04-03T12:12:22.1364944+02:00","action":"edit","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:12:22.1478354+02:00","action":"release","task_id":571,"detail":"architect"}
+{"timestamp":"2026-04-03T12:12:26.6266376+02:00","action":"delete","task_id":571,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:12:43.0829988+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:13:53.259292+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:14:07.5633807+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:14:08.01885+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:14:08.0293423+02:00","action":"release","task_id":570,"detail":"architect"}
+{"timestamp":"2026-04-03T12:14:10.3766986+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:14:10.3867579+02:00","action":"claim","task_id":570,"detail":"architect"}
+{"timestamp":"2026-04-03T12:14:21.7629554+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:14:21.7734213+02:00","action":"release","task_id":570,"detail":"architect"}
+{"timestamp":"2026-04-03T12:30:24.1107022+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:30:33.6539617+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:30:33.6656081+02:00","action":"release","task_id":483,"detail":"architect"}
+{"timestamp":"2026-04-03T12:34:33.5473542+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:34:33.5577885+02:00","action":"claim","task_id":572,"detail":"architect"}
+{"timestamp":"2026-04-03T12:34:37.5407004+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:34:37.551158+02:00","action":"claim","task_id":483,"detail":"architect"}
+{"timestamp":"2026-04-03T12:34:38.4429093+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:34:38.4532561+02:00","action":"claim","task_id":577,"detail":"architect"}
+{"timestamp":"2026-04-03T12:35:05.3689636+02:00","action":"edit","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:35:05.379418+02:00","action":"claim","task_id":579,"detail":"auditor"}
+{"timestamp":"2026-04-03T12:37:18.4893466+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:38:36.0778219+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:38:55.5611647+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:38:55.5717329+02:00","action":"release","task_id":572,"detail":"architect"}
+{"timestamp":"2026-04-03T12:38:57.2363461+02:00","action":"delete","task_id":564,"detail":"Update agent-common and research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T12:39:01.2588789+02:00","action":"delete","task_id":565,"detail":"Update pipeline agent files with MCP tool references alongside CLI"}
+{"timestamp":"2026-04-03T12:39:05.6879981+02:00","action":"delete","task_id":566,"detail":"Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T12:39:10.2279672+02:00","action":"delete","task_id":573,"detail":"P2-02: Expand mcp-kanban SKILL.md with workflow pattern + per-tool reference"}
+{"timestamp":"2026-04-03T12:39:15.7778096+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T12:39:19.9174638+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T12:39:24.3559229+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T12:40:45.8403651+02:00","action":"edit","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:40:57.7459397+02:00","action":"move","task_id":579,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T12:40:58.2103736+02:00","action":"edit","task_id":579,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:40:58.2208171+02:00","action":"release","task_id":579,"detail":"auditor"}
+{"timestamp":"2026-04-03T12:46:18.5526305+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:46:47.2429406+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:47:05.5368297+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:47:05.5473423+02:00","action":"release","task_id":577,"detail":"architect"}
+{"timestamp":"2026-04-03T12:47:51.0902385+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T12:57:53.6153723+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:58:29.6590872+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:59:34.8808741+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:59:46.4920269+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:59:56.715712+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T12:59:56.7276437+02:00","action":"release","task_id":483,"detail":"architect"}
+{"timestamp":"2026-04-03T13:00:44.1636596+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T13:00:44.1755764+02:00","action":"claim","task_id":570,"detail":"test-writer"}
+{"timestamp":"2026-04-03T13:00:49.9578331+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T13:00:49.9677772+02:00","action":"claim","task_id":578,"detail":"researcher"}
+{"timestamp":"2026-04-03T13:00:53.5468399+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T13:01:31.3968943+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T13:01:31.4083665+02:00","action":"claim","task_id":563,"detail":"builder-agent"}
+{"timestamp":"2026-04-03T13:01:44.5157977+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T13:01:49.8015883+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T13:02:56.5769961+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T13:02:56.5879991+02:00","action":"release","task_id":563,"detail":"builder-agent"}
+{"timestamp":"2026-04-03T13:05:03.7367031+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T13:05:03.7476058+02:00","action":"release","task_id":578,"detail":"researcher"}
+{"timestamp":"2026-04-03T13:07:36.494792+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T13:07:36.506188+02:00","action":"release","task_id":570,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:17:09.1381518+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T14:17:09.1497058+02:00","action":"claim","task_id":578,"detail":"auditor"}
+{"timestamp":"2026-04-03T14:28:04.7183052+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T14:28:09.3978696+02:00","action":"move","task_id":578,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T14:28:31.8156812+02:00","action":"edit","task_id":578,"detail":"Register owlbear-project server in workspace mcp.json"}
+{"timestamp":"2026-04-03T14:28:31.8257391+02:00","action":"release","task_id":578,"detail":"auditor"}
+{"timestamp":"2026-04-03T14:29:05.658925+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:29:05.6704972+02:00","action":"claim","task_id":572,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:29:08.020421+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:29:08.0326957+02:00","action":"claim","task_id":563,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:29:26.3951586+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T14:29:26.407291+02:00","action":"claim","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:29:32.6498495+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T14:29:32.6614077+02:00","action":"release","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:29:41.1370794+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T14:29:41.1485245+02:00","action":"claim","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:29:44.7740461+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T14:29:44.7845288+02:00","action":"release","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:30:14.6201344+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T14:30:14.6305818+02:00","action":"claim","task_id":568,"detail":"builder"}
+{"timestamp":"2026-04-03T14:31:53.7240933+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:32:07.8376775+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:32:07.8508941+02:00","action":"release","task_id":563,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:32:14.0268764+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:32:29.7293686+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:32:29.7420378+02:00","action":"claim","task_id":563,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:32:36.554551+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:32:36.5661919+02:00","action":"release","task_id":563,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:33:57.0889219+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:34:00.5694854+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:34:00.5813125+02:00","action":"release","task_id":572,"detail":"test-writer"}
+{"timestamp":"2026-04-03T14:34:45.2076529+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T14:34:45.2187416+02:00","action":"release","task_id":568,"detail":"builder"}
+{"timestamp":"2026-04-03T14:35:07.6961161+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T14:35:07.7072103+02:00","action":"claim","task_id":577,"detail":"opal-amber"}
+{"timestamp":"2026-04-03T14:35:07.9868766+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:35:08.0015414+02:00","action":"claim","task_id":569,"detail":"builder"}
+{"timestamp":"2026-04-03T14:35:47.7708864+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T14:36:01.5541787+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T14:36:43.2656943+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T14:36:43.2760888+02:00","action":"release","task_id":577,"detail":"opal-amber"}
+{"timestamp":"2026-04-03T14:38:36.3686051+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:38:48.7056635+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:38:48.7097416+02:00","action":"release","task_id":569,"detail":"builder"}
+{"timestamp":"2026-04-03T14:40:20.6119528+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:40:20.6253371+02:00","action":"claim","task_id":563,"detail":"writer"}
+{"timestamp":"2026-04-03T14:40:20.9528178+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:40:20.9686256+02:00","action":"claim","task_id":569,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:40:22.1089416+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T14:40:22.1214787+02:00","action":"claim","task_id":568,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:40:46.1217718+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:40:46.1347911+02:00","action":"claim","task_id":572,"detail":"builder"}
+{"timestamp":"2026-04-03T14:40:55.930012+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:40:59.1555855+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:40:59.1664801+02:00","action":"release","task_id":563,"detail":"writer"}
+{"timestamp":"2026-04-03T14:44:13.5140974+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T14:44:13.9816898+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T14:44:13.9931937+02:00","action":"release","task_id":568,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:44:19.8541002+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:44:32.1562512+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:44:32.1664163+02:00","action":"release","task_id":569,"detail":"reviewer"}
+{"timestamp":"2026-04-03T14:53:45.0490477+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:53:51.0172944+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T14:53:51.0273576+02:00","action":"release","task_id":572,"detail":"builder"}
+{"timestamp":"2026-04-03T14:56:56.8720405+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:56:56.8824414+02:00","action":"claim","task_id":569,"detail":"writer"}
+{"timestamp":"2026-04-03T14:57:18.863797+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T14:57:18.8748011+02:00","action":"claim","task_id":563,"detail":"auditor"}
+{"timestamp":"2026-04-03T14:59:18.998472+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T14:59:28.7786254+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:00:27.8497346+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:00:27.8608564+02:00","action":"release","task_id":569,"detail":"writer"}
+{"timestamp":"2026-04-03T15:09:09.4378998+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T15:09:23.3953036+02:00","action":"move","task_id":563,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T15:09:23.8505132+02:00","action":"edit","task_id":563,"detail":"Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference"}
+{"timestamp":"2026-04-03T15:09:23.8610463+02:00","action":"release","task_id":563,"detail":"auditor"}
+{"timestamp":"2026-04-03T15:10:35.9038323+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:10:35.9159911+02:00","action":"claim","task_id":568,"detail":"bloom-wick"}
+{"timestamp":"2026-04-03T15:10:36.9914764+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:10:37.0029659+02:00","action":"claim","task_id":572,"detail":"reviewer"}
+{"timestamp":"2026-04-03T15:10:37.14238+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:10:37.1551546+02:00","action":"claim","task_id":483,"detail":"builder"}
+{"timestamp":"2026-04-03T15:13:06.1917054+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:13:11.6074039+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:13:11.618038+02:00","action":"release","task_id":483,"detail":"builder"}
+{"timestamp":"2026-04-03T15:13:22.5387924+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:13:36.7291089+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:13:36.7395045+02:00","action":"release","task_id":572,"detail":"reviewer"}
+{"timestamp":"2026-04-03T15:17:13.3691997+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:17:21.7299037+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:17:25.7015116+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:17:25.7129753+02:00","action":"release","task_id":568,"detail":"bloom-wick"}
+{"timestamp":"2026-04-03T15:20:12.370251+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:20:12.3854682+02:00","action":"claim","task_id":572,"detail":"writer"}
+{"timestamp":"2026-04-03T15:21:00.9322936+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:21:00.9433946+02:00","action":"claim","task_id":569,"detail":"auditor"}
+{"timestamp":"2026-04-03T15:21:38.6887117+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:21:56.0913529+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:21:56.1018192+02:00","action":"release","task_id":572,"detail":"writer"}
+{"timestamp":"2026-04-03T15:36:15.5886543+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:36:45.5862891+02:00","action":"move","task_id":569,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T15:36:46.0951875+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:36:46.1091632+02:00","action":"release","task_id":569,"detail":"auditor"}
+{"timestamp":"2026-04-03T15:37:05.6925571+02:00","action":"edit","task_id":569,"detail":"Test: Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:37:44.0681747+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:37:44.0794256+02:00","action":"claim","task_id":568,"detail":"builder"}
+{"timestamp":"2026-04-03T15:37:45.0770631+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:37:45.0881427+02:00","action":"claim","task_id":529,"detail":"pulse-fjord"}
+{"timestamp":"2026-04-03T15:37:47.4730127+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:37:47.4838163+02:00","action":"claim","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T15:40:04.5657986+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:40:04.5778311+02:00","action":"release","task_id":568,"detail":"builder"}
+{"timestamp":"2026-04-03T15:40:15.7782512+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T15:44:54.9224417+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:44:59.0286925+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T15:44:59.0415861+02:00","action":"release","task_id":529,"detail":"pulse-fjord"}
+{"timestamp":"2026-04-03T15:46:23.9140749+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:46:38.0545595+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:46:44.8444411+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:46:44.8562367+02:00","action":"release","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T15:48:55.7878189+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:48:55.8008825+02:00","action":"claim","task_id":483,"detail":"writer"}
+{"timestamp":"2026-04-03T15:48:56.273102+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T15:48:56.2855884+02:00","action":"claim","task_id":574,"detail":"researcher"}
+{"timestamp":"2026-04-03T15:49:07.9557198+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T15:49:07.9759402+02:00","action":"claim","task_id":576,"detail":"researcher"}
+{"timestamp":"2026-04-03T15:49:30.4144614+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T15:49:30.4278697+02:00","action":"claim","task_id":572,"detail":"auditor"}
+{"timestamp":"2026-04-03T15:51:49.7375713+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:51:53.9961753+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T15:51:54.0072682+02:00","action":"release","task_id":483,"detail":"writer"}
+{"timestamp":"2026-04-03T15:52:47.652619+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T15:52:47.6647713+02:00","action":"release","task_id":574,"detail":"researcher"}
+{"timestamp":"2026-04-03T15:58:57.4545852+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T15:59:08.2765247+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T15:59:08.2916894+02:00","action":"release","task_id":576,"detail":"researcher"}
+{"timestamp":"2026-04-03T16:01:49.7791588+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T16:01:58.5506213+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T16:02:18.5835517+02:00","action":"move","task_id":572,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T16:02:19.1304174+02:00","action":"edit","task_id":572,"detail":"P2-01: Test — Validate MCP tool references in agents, skills, instructions"}
+{"timestamp":"2026-04-03T16:02:19.1444042+02:00","action":"release","task_id":572,"detail":"auditor"}
+{"timestamp":"2026-04-03T16:02:54.7976656+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:02:54.8094427+02:00","action":"claim","task_id":529,"detail":"builder"}
+{"timestamp":"2026-04-03T16:02:56.9902148+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:02:57.0035023+02:00","action":"claim","task_id":568,"detail":"reviewer"}
+{"timestamp":"2026-04-03T16:06:11.6644356+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:06:22.4078431+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:06:25.3783589+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:06:35.3851475+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:06:42.384756+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:06:42.3952698+02:00","action":"release","task_id":568,"detail":"reviewer"}
+{"timestamp":"2026-04-03T16:06:50.4114171+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:06:50.4259903+02:00","action":"release","task_id":529,"detail":"builder"}
+{"timestamp":"2026-04-03T16:08:28.9795411+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:08:28.9945531+02:00","action":"claim","task_id":568,"detail":"writer"}
+{"timestamp":"2026-04-03T16:08:29.1316083+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:08:29.1462575+02:00","action":"claim","task_id":576,"detail":"architect"}
+{"timestamp":"2026-04-03T16:08:29.5146267+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T16:08:29.5278143+02:00","action":"claim","task_id":574,"detail":"architect"}
+{"timestamp":"2026-04-03T16:08:49.5622983+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T16:08:49.575484+02:00","action":"claim","task_id":483,"detail":"auditor"}
+{"timestamp":"2026-04-03T16:10:24.7982839+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:10:24.812337+02:00","action":"release","task_id":568,"detail":"writer"}
+{"timestamp":"2026-04-03T16:23:28.3540185+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:24:04.170922+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:24:32.2635113+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:24:49.2069226+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:24:49.2194336+02:00","action":"release","task_id":576,"detail":"architect"}
+{"timestamp":"2026-04-03T16:26:04.2680193+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T16:26:28.3232787+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T16:26:38.5609874+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T16:26:38.5738037+02:00","action":"release","task_id":574,"detail":"architect"}
+{"timestamp":"2026-04-03T16:26:47.2755736+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T16:26:53.2260431+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T16:26:53.2381036+02:00","action":"release","task_id":483,"detail":"auditor"}
+{"timestamp":"2026-04-03T16:27:28.4665766+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-03T16:27:28.4786506+02:00","action":"claim","task_id":484,"detail":"echo-crow"}
+{"timestamp":"2026-04-03T16:27:29.3774303+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T16:27:29.3904172+02:00","action":"claim","task_id":577,"detail":"builder"}
+{"timestamp":"2026-04-03T16:27:30.4385967+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:27:30.4519995+02:00","action":"claim","task_id":529,"detail":"reviewer"}
+{"timestamp":"2026-04-03T16:28:53.4137561+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T16:28:53.4250373+02:00","action":"release","task_id":577,"detail":"builder"}
+{"timestamp":"2026-04-03T16:29:04.0278804+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T16:29:04.0402281+02:00","action":"claim","task_id":577,"detail":"builder"}
+{"timestamp":"2026-04-03T16:29:08.1809623+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T16:29:08.192719+02:00","action":"release","task_id":577,"detail":"builder"}
+{"timestamp":"2026-04-03T16:30:03.4642987+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:30:17.8608897+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:30:17.8725318+02:00","action":"release","task_id":529,"detail":"reviewer"}
+{"timestamp":"2026-04-03T16:42:18.9291743+02:00","action":"create","task_id":580,"detail":"P2-B1: Remove CLI refs from agent files, MCP-only"}
+{"timestamp":"2026-04-03T16:42:28.3891984+02:00","action":"create","task_id":581,"detail":"P2-B2: Rewrite skill cheatsheet tables to MCP-only"}
+{"timestamp":"2026-04-03T16:42:36.5997877+02:00","action":"create","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-03T16:42:46.1598624+02:00","action":"create","task_id":583,"detail":"P2-B4: Rewrite instruction files to MCP-only"}
+{"timestamp":"2026-04-03T16:42:56.8121933+02:00","action":"create","task_id":584,"detail":"P2-B5: Update copilot-instructions.md to MCP-primary"}
+{"timestamp":"2026-04-03T16:43:17.5169398+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-03T16:43:36.465376+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-03T16:43:36.4762297+02:00","action":"release","task_id":484,"detail":"echo-crow"}
+{"timestamp":"2026-04-03T16:46:35.3951854+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:46:35.408568+02:00","action":"claim","task_id":529,"detail":"writer"}
+{"timestamp":"2026-04-03T16:46:39.1975868+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T16:46:39.2088236+02:00","action":"claim","task_id":576,"detail":"architect"}
+{"timestamp":"2026-04-03T16:46:40.3724867+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T16:46:40.3846632+02:00","action":"claim","task_id":526,"detail":"architect"}
+{"timestamp":"2026-04-03T16:47:35.4616565+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T16:47:35.4720903+02:00","action":"claim","task_id":568,"detail":"auditor"}
+{"timestamp":"2026-04-03T16:47:46.6692629+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:47:59.2733839+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T16:47:59.2851578+02:00","action":"release","task_id":529,"detail":"writer"}
+{"timestamp":"2026-04-03T16:56:00.0228979+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T16:56:27.4549693+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T16:56:50.3195998+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T16:56:56.663193+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T16:56:56.6733605+02:00","action":"release","task_id":526,"detail":"architect"}
+{"timestamp":"2026-04-03T17:02:24.7805912+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:02:58.1985823+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:04:13.058862+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:04:20.4207435+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:04:38.288815+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:05:36.2815088+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:05:41.8460043+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T17:05:41.8574216+02:00","action":"release","task_id":576,"detail":"architect"}
+{"timestamp":"2026-04-03T17:06:01.1390523+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T17:06:30.6366089+02:00","action":"move","task_id":568,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T17:06:31.1594791+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T17:06:31.1699864+02:00","action":"release","task_id":568,"detail":"auditor"}
+{"timestamp":"2026-04-03T17:09:29.0445684+02:00","action":"edit","task_id":568,"detail":"Add owlbear-memory tool access to all pipeline agents"}
+{"timestamp":"2026-04-03T17:09:59.2462232+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T17:09:59.2593158+02:00","action":"claim","task_id":574,"detail":"architect"}
+{"timestamp":"2026-04-03T17:09:59.7471415+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T17:09:59.7614488+02:00","action":"claim","task_id":555,"detail":"builder"}
+{"timestamp":"2026-04-03T17:10:00.3254882+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T17:10:00.3378148+02:00","action":"claim","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T17:10:00.7311357+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:10:00.7422771+02:00","action":"claim","task_id":577,"detail":"reviewer"}
+{"timestamp":"2026-04-03T17:12:19.1770396+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T17:12:19.6949699+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T17:12:19.7066015+02:00","action":"release","task_id":555,"detail":"builder"}
+{"timestamp":"2026-04-03T17:12:31.064209+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T17:12:31.0747155+02:00","action":"release","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T17:12:36.1650335+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:12:41.8198155+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:12:41.8321999+02:00","action":"release","task_id":577,"detail":"reviewer"}
+{"timestamp":"2026-04-03T17:21:08.1731841+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T17:21:37.0838254+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T17:21:47.2851155+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T17:21:47.2980731+02:00","action":"release","task_id":574,"detail":"architect"}
+{"timestamp":"2026-04-03T17:25:44.46152+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:25:44.4734856+02:00","action":"claim","task_id":577,"detail":"writer"}
+{"timestamp":"2026-04-03T17:25:45.6795369+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T17:25:45.6915022+02:00","action":"claim","task_id":531,"detail":"architect"}
+{"timestamp":"2026-04-03T17:26:15.9227094+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:26:15.9353217+02:00","action":"claim","task_id":529,"detail":"auditor"}
+{"timestamp":"2026-04-03T17:28:17.5142954+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:28:29.1300508+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:28:50.0993839+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:29:01.487556+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T17:29:01.5010657+02:00","action":"release","task_id":577,"detail":"writer"}
+{"timestamp":"2026-04-03T17:38:34.5648281+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:39:00.7546145+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:39:15.8583379+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:39:42.4734781+02:00","action":"move","task_id":529,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T17:39:55.532494+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:39:55.5462108+02:00","action":"release","task_id":529,"detail":"auditor"}
+{"timestamp":"2026-04-03T17:40:33.9781253+02:00","action":"edit","task_id":529,"detail":"Add set_approval_state MCP tool to memory-mcp"}
+{"timestamp":"2026-04-03T17:54:27.0490193+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T17:54:42.3496359+02:00","action":"create","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T17:54:52.4049628+02:00","action":"create","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T17:55:02.7804859+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T17:55:47.7500799+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T17:55:52.7683849+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-03T17:55:52.7800303+02:00","action":"release","task_id":531,"detail":"architect"}
+{"timestamp":"2026-04-03T17:56:29.156356+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:56:29.1672597+02:00","action":"claim","task_id":526,"detail":"stem-quill"}
+{"timestamp":"2026-04-03T17:56:29.4588371+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T17:56:29.4715045+02:00","action":"claim","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:56:30.236047+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T17:56:30.249892+02:00","action":"claim","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:56:30.4291578+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T17:56:30.4606109+02:00","action":"claim","task_id":574,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:56:46.9437483+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T17:56:51.5497568+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:56:55.2294439+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T17:56:55.2452893+02:00","action":"release","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:56:58.9159627+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T17:56:58.9264167+02:00","action":"claim","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:56:59.4360215+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T17:56:59.4493452+02:00","action":"release","task_id":530,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:57:01.5786834+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:57:07.7350612+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:57:11.737809+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:57:19.7181934+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:57:27.4011915+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T17:57:31.0885449+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T17:57:31.1012653+02:00","action":"release","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T17:57:45.4942858+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T17:57:45.5054776+02:00","action":"release","task_id":526,"detail":"stem-quill"}
+{"timestamp":"2026-04-03T18:01:58.1094297+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:01:58.1215598+02:00","action":"release","task_id":574,"detail":"test-writer"}
+{"timestamp":"2026-04-03T18:02:05.8093754+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:04:29.8839169+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T18:04:29.8964448+02:00","action":"claim","task_id":585,"detail":"architect"}
+{"timestamp":"2026-04-03T18:04:30.6502276+02:00","action":"edit","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:04:30.6642001+02:00","action":"claim","task_id":586,"detail":"architect"}
+{"timestamp":"2026-04-03T18:05:03.394821+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T18:05:03.4057941+02:00","action":"claim","task_id":577,"detail":"fawn-flux"}
+{"timestamp":"2026-04-03T18:05:59.6505955+02:00","action":"create","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:06:10.3779721+02:00","action":"move","task_id":587,"detail":"ideation -\u003e todo"}
+{"timestamp":"2026-04-03T18:06:16.3689852+02:00","action":"edit","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:06:26.5343078+02:00","action":"edit","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:09:10.4995721+02:00","action":"edit","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:09:25.2569539+02:00","action":"edit","task_id":586,"detail":"Fix: add row_factory to mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:09:25.2724595+02:00","action":"release","task_id":586,"detail":"architect"}
+{"timestamp":"2026-04-03T18:18:34.1733782+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T18:18:57.9452777+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T18:19:09.6846634+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T18:19:09.697726+02:00","action":"release","task_id":585,"detail":"architect"}
+{"timestamp":"2026-04-03T18:32:34.4990779+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T18:32:41.9433174+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T18:33:03.5198735+02:00","action":"move","task_id":577,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T18:33:26.7464403+02:00","action":"edit","task_id":577,"detail":"Register owlbear-project server in .vscode/mcp.json"}
+{"timestamp":"2026-04-03T18:33:26.7570499+02:00","action":"release","task_id":577,"detail":"fawn-flux"}
+{"timestamp":"2026-04-03T18:34:01.4800489+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:34:01.4938354+02:00","action":"claim","task_id":526,"detail":"builder"}
+{"timestamp":"2026-04-03T18:34:03.2651653+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T18:34:03.277022+02:00","action":"claim","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-04-03T18:42:01.5069186+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:42:04.8961533+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:42:04.9071684+02:00","action":"release","task_id":526,"detail":"builder"}
+{"timestamp":"2026-04-03T18:43:27.715726+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T18:43:27.7284411+02:00","action":"release","task_id":555,"detail":"reviewer"}
+{"timestamp":"2026-04-03T18:46:10.3563866+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:46:10.3683454+02:00","action":"claim","task_id":574,"detail":"builder"}
+{"timestamp":"2026-04-03T18:46:11.3324219+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:46:11.3433878+02:00","action":"claim","task_id":526,"detail":"reviewer"}
+{"timestamp":"2026-04-03T18:46:13.4541386+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:46:13.4671688+02:00","action":"claim","task_id":587,"detail":"test-writer"}
+{"timestamp":"2026-04-03T18:46:26.8794305+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T18:46:26.8920401+02:00","action":"claim","task_id":555,"detail":"writer"}
+{"timestamp":"2026-04-03T18:48:05.5936033+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T18:48:12.3377561+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T18:48:12.3502611+02:00","action":"release","task_id":555,"detail":"writer"}
+{"timestamp":"2026-04-03T18:48:43.8337255+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:48:58.4872335+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:49:05.729762+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T18:49:05.7438283+02:00","action":"release","task_id":574,"detail":"builder"}
+{"timestamp":"2026-04-03T18:50:34.2025275+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:50:49.3897875+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T18:50:49.4022371+02:00","action":"release","task_id":526,"detail":"reviewer"}
+{"timestamp":"2026-04-03T18:51:27.8898063+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:51:27.9028815+02:00","action":"release","task_id":587,"detail":"test-writer"}
+{"timestamp":"2026-04-03T18:51:37.4511399+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T18:52:26.9573662+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T18:52:26.9684095+02:00","action":"claim","task_id":483,"detail":"builder"}
+{"timestamp":"2026-04-03T18:52:27.8341317+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T18:52:27.844527+02:00","action":"claim","task_id":585,"detail":"test-writer"}
+{"timestamp":"2026-04-03T18:53:20.3524642+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T18:53:32.6933434+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T18:53:33.173432+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T18:53:33.1843784+02:00","action":"release","task_id":483,"detail":"builder"}
+{"timestamp":"2026-04-03T19:00:58.9609124+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T19:01:02.9128403+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T19:01:02.9229015+02:00","action":"release","task_id":585,"detail":"test-writer"}
+{"timestamp":"2026-04-03T19:02:42.2298822+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:02:42.2437142+02:00","action":"claim","task_id":526,"detail":"writer"}
+{"timestamp":"2026-04-03T19:02:43.6229329+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T19:02:43.6367699+02:00","action":"claim","task_id":555,"detail":"auditor"}
+{"timestamp":"2026-04-03T19:04:17.2627187+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:04:37.6476077+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:04:37.6592507+02:00","action":"release","task_id":526,"detail":"writer"}
+{"timestamp":"2026-04-03T19:12:22.2337771+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T19:12:31.4879677+02:00","action":"move","task_id":555,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T19:12:31.9943002+02:00","action":"edit","task_id":555,"detail":"Extract refresh orchestrator"}
+{"timestamp":"2026-04-03T19:12:32.0041966+02:00","action":"release","task_id":555,"detail":"auditor"}
+{"timestamp":"2026-04-03T19:13:36.4284529+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:13:36.4448183+02:00","action":"claim","task_id":587,"detail":"builder"}
+{"timestamp":"2026-04-03T19:13:37.8455416+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T19:13:37.857862+02:00","action":"claim","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:13:39.094464+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:13:39.1049773+02:00","action":"claim","task_id":574,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:15:00.8233672+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:15:07.9628987+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:15:11.9422951+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:15:11.9571923+02:00","action":"release","task_id":587,"detail":"builder"}
+{"timestamp":"2026-04-03T19:16:32.0838634+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T19:16:49.2630919+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T19:16:49.2752284+02:00","action":"release","task_id":483,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:17:02.2777486+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:17:02.2914166+02:00","action":"release","task_id":574,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:19:59.5570844+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:19:59.5685506+02:00","action":"claim","task_id":574,"detail":"writer"}
+{"timestamp":"2026-04-03T19:20:04.8392048+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:20:04.8491815+02:00","action":"claim","task_id":526,"detail":"auditor"}
+{"timestamp":"2026-04-03T19:20:41.5937664+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:20:41.6082757+02:00","action":"release","task_id":574,"detail":"writer"}
+{"timestamp":"2026-04-03T19:20:45.707473+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:38:17.9039321+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:38:24.4253865+02:00","action":"move","task_id":526,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-03T19:38:24.9883166+02:00","action":"edit","task_id":526,"detail":"Update agent-common for memory-mcp integration"}
+{"timestamp":"2026-04-03T19:38:25.003324+02:00","action":"release","task_id":526,"detail":"auditor"}
+{"timestamp":"2026-04-03T19:38:46.8030514+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:38:46.8154974+02:00","action":"claim","task_id":430,"detail":"test-writer"}
+{"timestamp":"2026-04-03T19:38:49.4418131+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T19:38:49.4569437+02:00","action":"claim","task_id":210,"detail":"lark-prism"}
+{"timestamp":"2026-04-03T19:38:49.8717368+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:38:49.8844281+02:00","action":"claim","task_id":264,"detail":"delta-keen"}
+{"timestamp":"2026-04-03T19:38:50.2430834+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:38:50.254461+02:00","action":"claim","task_id":587,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:40:56.7412262+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:41:42.6450704+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:41:42.6597578+02:00","action":"release","task_id":587,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:46:52.158039+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:46:52.1719927+02:00","action":"release","task_id":430,"detail":"test-writer"}
+{"timestamp":"2026-04-03T19:47:04.9048936+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:47:49.6699908+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:48:03.5585709+02:00","action":"move","task_id":264,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-04-03T19:48:12.0484641+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-03T19:48:12.0629558+02:00","action":"release","task_id":264,"detail":"delta-keen"}
+{"timestamp":"2026-04-03T19:48:14.146324+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T19:48:23.5154464+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T19:48:29.8322717+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T19:48:29.8442353+02:00","action":"release","task_id":210,"detail":"lark-prism"}
+{"timestamp":"2026-04-03T19:51:53.8587411+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T19:51:53.8730463+02:00","action":"claim","task_id":530,"detail":"builder"}
+{"timestamp":"2026-04-03T19:51:56.2442538+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:51:56.2618761+02:00","action":"claim","task_id":587,"detail":"writer"}
+{"timestamp":"2026-04-03T19:51:57.5021566+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T19:51:57.5194983+02:00","action":"claim","task_id":210,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:51:58.5190012+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:51:58.5343615+02:00","action":"claim","task_id":574,"detail":"reviewer"}
+{"timestamp":"2026-04-03T19:52:53.0901961+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:52:58.5272057+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T19:52:58.5443279+02:00","action":"release","task_id":587,"detail":"writer"}
+{"timestamp":"2026-04-03T19:54:13.0648395+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T19:54:28.7735802+02:00","action":"move","task_id":530,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-04-03T19:54:48.2105479+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
+{"timestamp":"2026-04-03T19:54:48.2252428+02:00","action":"release","task_id":530,"detail":"builder"}
+{"timestamp":"2026-04-03T19:55:57.3273628+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:56:14.6212361+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T19:56:14.6339997+02:00","action":"release","task_id":574,"detail":"reviewer"}
+{"timestamp":"2026-04-03T20:00:25.9912357+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T20:00:43.5879135+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T20:00:43.5992576+02:00","action":"release","task_id":210,"detail":"reviewer"}
+{"timestamp":"2026-04-03T20:01:30.2241165+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T20:01:30.237822+02:00","action":"claim","task_id":576,"detail":"test-writer"}
+{"timestamp":"2026-04-03T20:01:30.7026813+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T20:01:30.7156858+02:00","action":"claim","task_id":585,"detail":"cider-lark"}
+{"timestamp":"2026-04-03T20:01:30.8903927+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T20:01:30.9047188+02:00","action":"claim","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T20:01:51.45714+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T20:02:03.1377205+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-03T20:02:03.152157+02:00","action":"release","task_id":576,"detail":"test-writer"}
+{"timestamp":"2026-04-03T20:02:05.7844171+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T20:02:10.4026656+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-03T20:02:10.4177721+02:00","action":"release","task_id":483,"detail":"test-writer"}
+{"timestamp":"2026-04-03T20:19:00.0075222+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
+{"timestamp":"2026-04-03T20:19:00.019977+02:00","action":"release","task_id":585,"detail":"cider-lark"}
+{"timestamp":"2026-04-03T20:22:05.1253153+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-03T20:22:05.1377443+02:00","action":"claim","task_id":210,"detail":"writer"}
+{"timestamp":"2026-04-03T20:22:05.354874+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-03T20:22:05.3905259+02:00","action":"claim","task_id":574,"detail":"writer"}
+{"timestamp":"2026-04-03T20:22:13.9102582+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-03T20:22:13.9248517+02:00","action":"claim","task_id":587,"detail":"auditor"}
+{"timestamp":"2026-04-04T02:48:51.5021458+02:00","action":"edit","task_id":587,"detail":"Test: Fix row-factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T02:48:51.5159763+02:00","action":"claim","task_id":587,"detail":"wheat-gust"}
+{"timestamp":"2026-04-04T02:49:06.4471908+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T02:49:06.4586268+02:00","action":"claim","task_id":574,"detail":"doc-writer"}
+{"timestamp":"2026-04-04T02:49:55.1164141+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-04T02:49:55.1293421+02:00","action":"claim","task_id":210,"detail":"doc-writer"}
+{"timestamp":"2026-04-04T02:50:53.4246562+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-04T02:50:53.9592484+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
+{"timestamp":"2026-04-04T02:50:53.9702842+02:00","action":"release","task_id":210,"detail":"doc-writer"}
+{"timestamp":"2026-04-04T02:53:23.7529698+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
+{"timestamp":"2026-04-04T02:53:23.7669644+02:00","action":"release","task_id":574,"detail":"doc-writer"}
+{"timestamp":"2026-04-04T03:01:12.8742227+02:00","action":"move","task_id":587,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T03:01:22.3331808+02:00","action":"edit","task_id":587,"detail":"Test: Fix row-factory in mcp-memory app_lifespan"}
+{"timestamp":"2026-04-04T03:01:22.3452003+02:00","action":"release","task_id":587,"detail":"wheat-gust"}
