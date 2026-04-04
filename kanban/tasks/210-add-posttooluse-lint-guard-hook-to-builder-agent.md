@@ -1,10 +1,12 @@
 ---
 id: 210
 title: Add postToolUse lint guard hook to builder agent (Phase 2)
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-03-30T08:52:17.140436+02:00
-updated: 2026-04-04T02:50:53.9579795+02:00
+updated: 2026-04-04T06:38:13.4871015+02:00
+started: 2026-04-04T06:38:09.1176735+02:00
+completed: 2026-04-04T06:38:09.1176735+02:00
 tags:
     - phase-1
     - scope:agents
@@ -188,3 +190,39 @@ Minor defensive paths not explicitly tested: malformed JSON input, empty filePat
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/210-* files found)
+
+[[2026-04-04]] Sat 06:37
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| PostToolUse hook in builder.agent.md | builder.agent.md L11-14: hooks PostToolUse type:command lint-changed.ps1 | PASS |
+| Create scripts/hooks/lint-changed.ps1 | File exists (78 lines), reads stdin JSON | PASS |
+| Filter on 3 edit tool_names | lint-changed.ps1 L15-19: edit_tools array with 3 names | PASS |
+| systemMessage with ruff output, never exit 2 | lint-changed.ps1 L72-75: systemMessage path; L78: exit 0 always | PASS |
+| Non-edit/clean returns {} | Multiple {} return paths verified in script | PASS |
+| All output valid JSON | Every path outputs {} or ConvertTo-Json | PASS |
+| useCustomAgentHooks present | .vscode/settings.json L60 confirmed | PASS |
+| No duplicate keys, valid YAML | Frontmatter clean; AC9/AC10 tests pass | PASS |
+
+### Test Results
+- pytest (task): 22 passed, 0 failed
+- pytest (full suite): 2790 passed, 315 failed, 8 skipped. Zero failures in task scope. All 315 failures are pre-existing from other tasks.
+- ruff: All checks passed (scripts/hooks/ + test file)
+
+### Architect Quality: 4/5
+AC lines were specific, testable, and well-scoped. Architect cleaned up stale references, tightened criteria, and incorporated challenger feedback. Minor builder discoveries (Test-Path guard, INP001 ignore) are reasonable implementation details, not AC failures. Dependency chain with #546/#547 is clean.
+
+### Reviewer Evidence
+Present, thorough, PASS verdict (.97). Full AC coverage table, security review, test integrity, and process quality. Noted commit attribution gap (deliverables in 522d3c4 labeled #264). Trusted for code-level findings.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 8 verified) = no deduction
+- Lint violations: 0 = no deduction
+- AC quality score 4 (> 3) = no deduction
+- Reviewer evidence section: present and detailed = no deduction
+- Full-suite task-scope failures: 0 = no deduction
+- Note: commit attribution gap (builder deliverables in #264 commit) is process note, not in rubric
+
+### Confidence: 1.00
+### Action: archive
