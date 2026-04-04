@@ -424,10 +424,11 @@ class TestFromAC_Shutdown:  # noqa: N801
     async def test_phase3_waits_with_shutdown_timeout(self) -> None:
         proc = _make_proc()
         wait_mock = AsyncMock(return_value=0)
-        with _patch_spawn(proc), patch(f"{_MODULE}.asyncio.wait_for", new=wait_mock):
+        with _patch_spawn(proc):
             manager = VoiceProcessManager(_COMMAND, shutdown_timeout=3.0)
             await manager.__aenter__()
-            await manager.shutdown()
+            with patch(f"{_MODULE}.asyncio.wait_for", new=wait_mock):
+                await manager.shutdown()
 
         timeouts = [call.kwargs.get("timeout") for call in wait_mock.call_args_list]
         assert 3.0 in timeouts  # shutdown_timeout used in phase 3
@@ -435,11 +436,11 @@ class TestFromAC_Shutdown:  # noqa: N801
     @pytest.mark.asyncio(loop_scope="function")
     async def test_phase4_terminates_process(self) -> None:
         proc = _make_proc()
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError
-        ):
-            async with VoiceProcessManager(_COMMAND):
-                pass
+        with _patch_spawn(proc):
+            manager = VoiceProcessManager(_COMMAND)
+            await manager.__aenter__()
+            with patch(f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError):
+                await manager.shutdown()
         proc.terminate.assert_called()
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -454,41 +455,43 @@ class TestFromAC_Shutdown:  # noqa: N801
                 raise TimeoutError  # phase 3 → triggers phase 4
             return await coro  # phase 5 succeeds
 
-        with _patch_spawn(proc), patch(f"{_MODULE}.asyncio.wait_for", side_effect=fake_wait_for):
-            async with VoiceProcessManager(_COMMAND, shutdown_timeout=3.0, kill_timeout=1.0):
-                pass
+        with _patch_spawn(proc):
+            manager = VoiceProcessManager(_COMMAND, shutdown_timeout=3.0, kill_timeout=1.0)
+            await manager.__aenter__()
+            with patch(f"{_MODULE}.asyncio.wait_for", side_effect=fake_wait_for):
+                await manager.shutdown()
 
         assert 1.0 in wait_calls  # kill_timeout used in phase 5
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_phase6_kills_process_when_phase5_times_out(self) -> None:
         proc = _make_proc()
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError
-        ):
-            async with VoiceProcessManager(_COMMAND):
-                pass
+        with _patch_spawn(proc):
+            manager = VoiceProcessManager(_COMMAND)
+            await manager.__aenter__()
+            with patch(f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError):
+                await manager.shutdown()
         proc.kill.assert_called()
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_suppresses_process_lookup_error_on_terminate(self) -> None:
         proc = _make_proc()
         proc.terminate.side_effect = ProcessLookupError
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError
-        ):
-            async with VoiceProcessManager(_COMMAND):
-                pass  # must not propagate ProcessLookupError
+        with _patch_spawn(proc):
+            manager = VoiceProcessManager(_COMMAND)
+            await manager.__aenter__()
+            with patch(f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError):
+                await manager.shutdown()  # must not propagate ProcessLookupError
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_suppresses_process_lookup_error_on_kill(self) -> None:
         proc = _make_proc()
         proc.kill.side_effect = ProcessLookupError
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError
-        ):
-            async with VoiceProcessManager(_COMMAND):
-                pass  # must not propagate ProcessLookupError
+        with _patch_spawn(proc):
+            manager = VoiceProcessManager(_COMMAND)
+            await manager.__aenter__()
+            with patch(f"{_MODULE}.asyncio.wait_for", side_effect=TimeoutError):
+                await manager.shutdown()  # must not propagate ProcessLookupError
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_phase1_broken_pipe_skips_gracefully_to_phase2(self) -> None:
