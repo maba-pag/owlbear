@@ -8,20 +8,34 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
+from pydantic import BeforeValidator, ValidationError
 
 from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+
+def _coerce_to_str(v: str | int) -> str:
+    """Accept int values for str parameters (Pydantic v2 refuses int→str).
+
+    MCP clients may send JSON numbers for parameters that were recently
+    widened from int to str, because VS Code caches tool schemas per chat
+    session and only refreshes on a fresh session start.
+    """
+    return str(v) if isinstance(v, int) else v
+
+
+StrId = Annotated[str, BeforeValidator(_coerce_to_str)]
+
 __all__ = [
     "AppContext",
+    "StrId",
     "_apply_tool_exclusions",
     "_run_kanban",
     "app_lifespan",
@@ -235,7 +249,7 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: str) -> KanbanTask:
+async def show_task(ctx: Context, task_id: StrId) -> KanbanTask:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
@@ -255,7 +269,7 @@ async def create_task(  # noqa: PLR0913
     *,
     title: str,
     body: str = "",
-    depends_on: str = "",
+    depends_on: StrId = "",
     parent: int = 0,
     priority: str = "",
     status: str = "",
@@ -284,7 +298,7 @@ async def create_task(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
-async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
+async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     if status == "archived":
@@ -312,7 +326,7 @@ async def move_task(ctx: Context, task_id: str, status: str) -> KanbanTask:
 async def edit_task(  # noqa: PLR0913, C901
     ctx: Context,
     *,
-    task_id: str,
+    task_id: StrId,
     body: str = "",
     block: str = "",
     unblock: bool = False,
@@ -321,12 +335,16 @@ async def edit_task(  # noqa: PLR0913, C901
     append_body: str = "",
     status: str = "",
     timestamp: bool = False,
-    add_dep: int = 0,
-    remove_dep: int = 0,
+    add_dep: StrId = "",
+    remove_dep: StrId = "",
     parent: int = 0,
     title: str = "",
+    depends_on: StrId = "",
 ) -> KanbanTask:
     """Edit task fields."""
+    if depends_on:
+        msg = "edit_task does not accept 'depends_on'. Use 'add_dep' or 'remove_dep' instead."
+        raise ToolError(msg)
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["edit", task_id]
     str_flags: list[tuple[str, str]] = [
@@ -346,10 +364,10 @@ async def edit_task(  # noqa: PLR0913, C901
         args.append("--unblock")
     if timestamp:
         args.append("--timestamp")
-    if add_dep > 0:
-        args += ["--add-dep", str(add_dep)]
-    if remove_dep > 0:
-        args += ["--remove-dep", str(remove_dep)]
+    if add_dep:
+        args += ["--add-dep", add_dep]
+    if remove_dep:
+        args += ["--remove-dep", remove_dep]
     if parent > 0:
         args += ["--parent", str(parent)]
     args.append("--json")
@@ -365,7 +383,7 @@ async def edit_task(  # noqa: PLR0913, C901
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def start_work(ctx: Context, task_id: str) -> str:
+async def start_work(ctx: Context, task_id: StrId) -> str:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
 
@@ -391,7 +409,7 @@ async def start_work(ctx: Context, task_id: str) -> str:
 async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
     ctx: Context,
     *,
-    task_id: str,
+    task_id: StrId,
     note: str,
     outcome: Literal["success", "fail", "block", "reject"] = "success",
     block_reason: str = "",
@@ -518,9 +536,10 @@ _patch_params("edit_task", {
     "append_body": {"description": "Append to body (preserves existing content)"},
     "status": {"enum": _STATUSES},
     "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-    "add_dep": {"description": "Add dependency on this task ID"},
-    "remove_dep": {"description": "Remove dependency on this task ID"},
+    "add_dep": {"description": "Add dependency task IDs (comma-separated, e.g. '601,602')"},
+    "remove_dep": {"description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"},
     "parent": {"description": "Parent task ID for subtask hierarchy"},
+    "depends_on": {"description": "Not supported on edit. Use add_dep / remove_dep instead."},
 })
 
 _patch_params("end_work", {

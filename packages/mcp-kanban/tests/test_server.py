@@ -348,6 +348,99 @@ class TestFromAC_Tools:
         args_used: tuple[Any, ...] = mock_run.call_args[0]
         assert "--unblock" not in args_used
 
+    # ------------------------------------------------------------------ edit_task add_dep / remove_dep
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_add_dep_single(self) -> None:
+        """edit_task passes --add-dep with a single ID string."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", add_dep="99")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--add-dep" in args_used
+        assert "99" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_add_dep_comma_separated(self) -> None:
+        """edit_task passes --add-dep with comma-separated IDs."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", add_dep="601,602,603")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--add-dep" in args_used
+        assert "601,602,603" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_remove_dep(self) -> None:
+        """edit_task passes --remove-dep with a single ID string."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", remove_dep="99")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--remove-dep" in args_used
+        assert "99" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_passes_remove_dep_comma_separated(self) -> None:
+        """edit_task passes --remove-dep with comma-separated IDs."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", remove_dep="5,6")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--remove-dep" in args_used
+        assert "5,6" in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_omits_add_dep_when_empty(self) -> None:
+        """edit_task does NOT pass --add-dep when add_dep is empty."""
+        mcp_ctx = _make_mcp_ctx()
+        with self._patch_run(stdout=_FAKE_TASK_JSON) as mock_run:
+            await edit_task(mcp_ctx, task_id="42", add_dep="")
+
+        args_used: tuple[Any, ...] = mock_run.call_args[0]
+        assert "--add-dep" not in args_used
+
+    @pytest.mark.asyncio
+    async def test_edit_task_rejects_depends_on_param(self) -> None:
+        """edit_task raises ToolError when depends_on is passed (wrong parameter name)."""
+        mcp_ctx = _make_mcp_ctx()
+        with pytest.raises(ToolError, match="Use 'add_dep' or 'remove_dep'"):
+            await edit_task(mcp_ctx, task_id="42", depends_on="99")
+
+    # ------------------------------------------------------------------ StrId: int→str coercion
+    @pytest.mark.asyncio
+    async def test_edit_task_coerces_int_task_id(self) -> None:
+        """StrId coerces int task_id to str at the Pydantic validation layer."""
+        from owlbear_mcp_kanban.server import mcp as _mcp  # noqa: PLC0415
+
+        tool = next(t for t in _mcp._tool_manager._tools.values() if t.name == "edit_task")
+        model = tool.fn_metadata.arg_model
+        m = model.model_validate({"task_id": 610, "body": "test"})
+        assert m.task_id == "610"
+
+    @pytest.mark.asyncio
+    async def test_edit_task_coerces_int_add_dep(self) -> None:
+        """StrId coerces int add_dep to str at the Pydantic validation layer."""
+        from owlbear_mcp_kanban.server import mcp as _mcp  # noqa: PLC0415
+
+        tool = next(t for t in _mcp._tool_manager._tools.values() if t.name == "edit_task")
+        model = tool.fn_metadata.arg_model
+        m = model.model_validate({"task_id": "42", "add_dep": 615})
+        assert m.add_dep == "615"
+
+    @pytest.mark.asyncio
+    async def test_show_task_coerces_int_task_id(self) -> None:
+        """StrId coerces int task_id for show_task at the Pydantic validation layer."""
+        from owlbear_mcp_kanban.server import mcp as _mcp  # noqa: PLC0415
+
+        tool = next(t for t in _mcp._tool_manager._tools.values() if t.name == "show_task")
+        model = tool.fn_metadata.arg_model
+        m = model.model_validate({"task_id": 42})
+        assert m.task_id == "42"
+
     # ------------------------------------------------------------------ list_tasks search/sort/unclaimed (retry: LAX coverage from cycle 1+2)
     @pytest.mark.asyncio
     async def test_list_tasks_passes_search_flag(self) -> None:
