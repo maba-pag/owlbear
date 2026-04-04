@@ -1,16 +1,17 @@
 ---
 id: 547
 title: Add model-facing lint feedback via additionalContext to builder PostToolUse hook
-status: todo
+status: in-progress
 priority: important
 created: 2026-04-02T14:52:03.1922694+02:00
-updated: 2026-04-02T16:36:08.7877861+02:00
+updated: 2026-04-04T07:00:00.0000000+02:00
 tags:
     - scope:agents
     - hooks
     - type:build
 depends_on:
     - 210
+
 class: standard
 ---
 
@@ -84,3 +85,19 @@ Depends on #210 (lint-changed.ps1 must exist first).
   - C5 ACCEPTED: Refined AC written to task body before approval
   - C6 NOTED: N=1 is documented risk (.75 confidence in research). VS Code docs are unambiguous. Not blocking
 - Confidence in original (revised): .80 -- all critical structural defects fixed in this cycle
+
+[[2026-04-04]] Fri
+## Test-Writer Notes
+- Test file: tests/test_lint_feedback_547.py
+- Classes: TestFromAC_LintFeedbackStructure
+- Tests per category: happy 3 (hookSpecificOutput key present for all 3 edit tools), edge 1 (hookEventName == PostToolUse), error 1 (additionalContext non-empty), boundary 2 (systemMessage == additionalContext; both keys present together)
+- Total: 7 tests, all FAIL
+- ruff: clean
+- AC coverage:
+  | AC | Test(s) |
+  |----|---------|
+  | Errors → hookSpecificOutput key present (all 3 edit tools) | test_create/replace/multi_replace_lint_errors_returns_hook_specific_output |
+  | hookSpecificOutput.hookEventName == PostToolUse | test_hook_specific_output_event_name_is_post_tool_use |
+  | hookSpecificOutput.additionalContext non-empty ruff output | test_hook_specific_output_additional_context_is_nonempty |
+  | Same text for systemMessage and additionalContext | test_system_message_and_additional_context_are_identical |
+  | systemMessage preserved alongside hookSpecificOutput | test_lint_errors_output_has_both_system_message_and_hook_specific_output |
