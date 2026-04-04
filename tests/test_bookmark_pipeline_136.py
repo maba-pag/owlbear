@@ -740,14 +740,14 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
     @pytest.mark.asyncio
     async def test_bookmark_source_calls_pipeline_process(self) -> None:
         from owlbear_knowledge.bookmark_pipeline import BookmarkResult  # noqa: PLC0415
-        from owlbear_mcp_knowledge.server import AppContext, bookmark_source  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
         pipeline_mock.process = AsyncMock(
             return_value=BookmarkResult(url="https://example.com", skipped_reason="dup")
         )
-        ctx = AppContext(
-            query_service=None,
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=pipeline_mock,
             bookmark_store=MagicMock(),
         )
@@ -758,29 +758,29 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
     @pytest.mark.asyncio
     async def test_bookmark_source_reason_is_optional(self) -> None:
         from owlbear_knowledge.bookmark_pipeline import BookmarkResult  # noqa: PLC0415
-        from owlbear_mcp_knowledge.server import AppContext, bookmark_source  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
         pipeline_mock.process = AsyncMock(
             return_value=BookmarkResult(url="https://x.com")
         )
-        ctx = AppContext(
-            query_service=None,
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=pipeline_mock,
             bookmark_store=MagicMock(),
         )
-        # Should not raise — reason has no default but is optional per AC
+        # Should not raise — reason=None is the default per AC
         await bookmark_source(ctx, "https://x.com")
         pipeline_mock.process.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_list_bookmarks_calls_store_list(self) -> None:
-        from owlbear_mcp_knowledge.server import AppContext, list_bookmarks  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import list_bookmarks  # noqa: PLC0415
 
         store_mock = MagicMock()
         store_mock.list.return_value = []
-        ctx = AppContext(
-            query_service=None,
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=MagicMock(),
             bookmark_store=store_mock,
         )
@@ -789,12 +789,12 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
 
     @pytest.mark.asyncio
     async def test_list_bookmarks_tag_and_min_score_optional(self) -> None:
-        from owlbear_mcp_knowledge.server import AppContext, list_bookmarks  # noqa: PLC0415
+        from owlbear_mcp_knowledge.server import list_bookmarks  # noqa: PLC0415
 
         store_mock = MagicMock()
         store_mock.list.return_value = []
-        ctx = AppContext(
-            query_service=None,
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=MagicMock(),
             bookmark_store=store_mock,
         )
