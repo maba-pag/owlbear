@@ -4,7 +4,7 @@ title: Add postToolUse lint guard hook to builder agent (Phase 2)
 status: archived
 priority: nice-to-have
 created: 2026-03-30T08:52:17.140436+02:00
-updated: 2026-04-04T06:38:13.4871015+02:00
+updated: 2026-04-04T06:38:56.7861473+02:00
 started: 2026-04-04T06:38:09.1176735+02:00
 completed: 2026-04-04T06:38:09.1176735+02:00
 tags:
@@ -226,3 +226,9 @@ Present, thorough, PASS verdict (.97). Full AC coverage table, security review, 
 
 ### Confidence: 1.00
 ### Action: archive
+
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4df8594 | chore | kanban/activity.jsonl, kanban/tasks/210-*.md | #210 |
