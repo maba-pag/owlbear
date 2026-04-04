@@ -1,10 +1,10 @@
 ---
 id: 264
 title: Wire Quality-Runner into pipeline agents
-status: todo
+status: in-progress
 priority: needed
 created: 2026-03-30T19:31:12.4867876+02:00
-updated: 2026-03-30T21:25:20.0315131+02:00
+updated: 2026-04-03T19:48:12.0467058+02:00
 tags:
     - scope:agents
     - phase-2
@@ -77,3 +77,10 @@ Wire Quality-Runner subagent into the 4 pipeline agents that run pytest/ruff dir
 - Verified: #263 (Create Quality-Runner) in backlog, blocked by decision 228-esub-utility-subagents
 - Created: #430 (Test: Wire Quality-Runner) in todo, depends_on: [263]
 - Chain: decision 228 unblocks #263 unblocks #430 unblocks #264
+
+[[2026-04-03]] Fri 19:47
+## Test-Writer Notes
+- Test files: tests/test_quality_runner-wiring.py, tests/test_quality_runner-wiring_264.py
+- Total: 54 tests, 51 FAIL, 3 pass (correct)
+- ruff: clean
+- Fixed false-positive: tdd-red fallback test now guards on quality-runner

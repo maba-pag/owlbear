@@ -1,0 +1,19 @@
+---
+id: 575
+title: 'P2-04: Update pipeline agent files with MCP tool references alongside CLI'
+status: ideation
+priority: needed
+created: 2026-04-03T11:15:13.4411362+02:00
+updated: 2026-04-03T11:15:13.4411362+02:00
+tags:
+    - phase-2
+    - ' scope:agent-config'
+    - ' type:build'
+parent: 483
+depends_on:
+    - 572
+    - 574
+class: standard
+---
+
+## Acceptance Criteria\n\n- [ ] All 11 pipeline agent files updated with MCP tool alternatives alongside CLI examples\n- [ ] Agents: architect, auditor, builder, curator, kanban-planner, planner, researcher, reviewer, scribe, test-writer, writer\n- [ ] Each agent's inline CLI command examples show MCP equivalent (e.g., start_work/end_work for claim+show/advance+release)\n- [ ] Compound tools (start_work, end_work) documented as preferred pattern for task lifecycle\n- [ ] No existing CLI references removed (fallback preserved)\n- [ ] Must pass agent file checks in #572\n\n## Files\n\nagents/architect.agent.md, agents/auditor.agent.md, agents/builder.agent.md, agents/curator.agent.md, agents/kanban-planner.agent.md, agents/planner.agent.md, agents/researcher.agent.md, agents/reviewer.agent.md, agents/scribe.agent.md, agents/test-writer.agent.md, agents/writer.agent.md\n\n## Dependencies\n\nDepends on #574 (instructions update) so agents reference consistent MCP patterns from agent-common.

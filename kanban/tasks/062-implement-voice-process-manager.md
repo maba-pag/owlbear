@@ -1,16 +1,18 @@
 ---
 id: 62
 title: Implement voice process manager
-status: review
+status: todo
 priority: nice-to-have
 created: 2026-03-26T19:33:42.8168161+01:00
-updated: 2026-04-03T06:59:31.1422574+02:00
+updated: 2026-04-03T08:38:37.4963473+02:00
 tags:
     - phase-3
     - scope:voice
 depends_on:
     - 61
     - 141
+blocked: true
+block_reason: 'test_default_init_timeout_enforced_via_wait_for conflicts with test_phase5_waits_with-kill_timeout: any init wait_for call shifts fake_wait_for call indices so phase-3 timeout never fires. Fix: update test_phase5 to call __aenter__ before patching (like test_explicit_shutdown_also_calls_terminate does)'
 class: standard
 ---
 
@@ -141,3 +143,18 @@ See docs/scratch/62-reviewer.md for full evidence.
 - Tests: 39 passed (was 38 passed + 1 failed), 96% coverage on voice/process.py
 - Lint: ruff clean
 - Evidence: 39 passed in 0.87s
+
+[[2026-04-03]] Fri 07:32
+## Review Evidence (cycle 2)
+See docs/scratch/62-reviewer.md for full evidence.
+
+-t
+
+[[2026-04-03]] Fri 07:49
+## Test-Writer Notes (retry)
+- Retry reason: reviewer cited LAX test for default init_timeout (primary) and L241-243 untested (secondary)
+- Added: 1 new test: TestFromAC_InitHandshake::test_default_init_timeout_enforced_via_wait_for
+- Fails on current HEAD: sentinel maps 30.0 to None internally so wait_for is never called for init handshake
+- Secondary L241-243: code already handles malformed JSON during handshake correctly — no failing RED test possible
+- Preserved: 39 tests (all PASS); New: 1 test (FAIL)
+- ruff: clean

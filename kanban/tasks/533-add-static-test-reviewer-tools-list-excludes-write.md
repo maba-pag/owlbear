@@ -19,14 +19,14 @@ See docs/research/pretooluse-read-only-guard-feasibility.md S3.2 and S4.
 Challenger alternative A1: static validation catches tools-list misconfiguration at commit time with zero runtime overhead and no preview API dependency.
 
 ## Acceptance Criteria
-- [ ] New test file `tests/test_reviewer_write_tools_533.py` parses `agents/reviewer.agent.md` YAML frontmatter
+- [ ] New test file `tests/test_reviewer-write_tools_533.py` parses `agents/reviewer.agent.md` YAML frontmatter
 - [ ] Assert no tool in the tools list starts with `edit/` (covers edit/createFile, edit/editFiles, edit/createDirectory, edit/rename, and future additions)
-- [ ] Test runs in existing test suite (`uv run pytest tests/test_reviewer_write_tools_533.py`)
-- [ ] Follow existing pattern from test_challenger_agent_467.py / test_code_reader_agent_307.py: _extract_frontmatter + _extract_tools_from_frontmatter helpers
+- [ ] Test runs in existing test suite (`uv run pytest tests/test_reviewer-write_tools_533.py`)
+- [ ] Follow existing pattern from test_challenger-agent_467.py / test_code_reader-agent_307.py: _extract_frontmatter + _extract_tools_from_frontmatter helpers
 
 ## Research
 Gate: trivial test addition. Parent research: docs/research/pretooluse-read-only-guard-feasibility.md.
-Checklist: all 6 items satisfied. Prior art: test_challenger_agent_467.py and test_code_reader_agent_307.py use identical pattern.
+Checklist: all 6 items satisfied. Prior art: test_challenger-agent_467.py and test_code_reader-agent_307.py use identical pattern.
 Tier: T1 (autonomous). No DR needed.
 
 ## Implementation Notes
@@ -45,7 +45,7 @@ AC3 (runs in pytest): Verifiable. Kept.
 AC4 (follow existing helper pattern): Clear, references prior art. Added.
 
 ### Architecture Notes
-Prefix-based exclusion (edit/*) matches established pattern in test_challenger_agent_467.py and test_code_reader_agent_307.py. Original AC used snake_case names (create_file, etc.) that never appear in frontmatter, making the test vacuously true. Refined to check startswith('edit/') which catches all current and future write tools.
+Prefix-based exclusion (edit/*) matches established pattern in test_challenger-agent_467.py and test_code_reader-agent_307.py. Original AC used snake_case names (create_file, etc.) that never appear in frontmatter, making the test vacuously true. Refined to check startswith('edit/') which catches all current and future write tools.
 Tags include test and type:test for test-writer pass-through.
 No dependencies needed. Single-domain (test).
 
@@ -64,14 +64,14 @@ No dependencies needed. Single-domain (test).
 
 [[2026-04-01]] Wed 22:50
 ## Test-Writer Notes
-- Test file: tests/test_reviewer_write_tools_533.py
+- Test file: tests/test_reviewer-write_tools_533.py
 - Classes: TestFromAC_ReviewerWriteToolsExcluded
 - Tests per category: happy 3, edge 0, error 0, boundary 6
 - Total: 9 tests, all PASS (regression guard by design — reviewer.agent.md already has no edit/* tools)
 - ruff: clean
 - Note: type:test tag would normally be pass-through; user explicitly requested test authoring. Regression guard per AC Implementation Notes.
 - AC coverage:
-  AC1 (parse frontmatter): test_reviewer_agent_file_exists, test_reviewer_has_valid_yaml_frontmatter, test_reviewer_has_tools_key_in_frontmatter
+  AC1 (parse frontmatter): test_reviewer-agent_file_exists, test_reviewer-has_valid_yaml_frontmatter, test_reviewer-has_tools_key_in_frontmatter
   AC2 (no edit/ prefix): test_no_edit_prefix_tools, test_edit_create_file_excluded, test_edit_edit_files_excluded, test_edit_create_directory_excluded, test_edit_rename_excluded, test_no_edit_prefix_future_additions
   AC3 (runs in pytest): verified, 9 passed 0.08s
   AC4 (follows prior art helpers): _extract_frontmatter + _extract_tools_from_frontmatter used

@@ -4,7 +4,7 @@ title: Implement memory-mcp tools
 status: archived
 priority: needed
 created: 2026-04-01T16:11:21.612432+02:00
-updated: 2026-04-03T10:14:32.6730902+02:00
+updated: 2026-04-03T10:18:15.5135971+02:00
 started: 2026-04-02T07:38:31.230978+02:00
 completed: 2026-04-03T10:14:32.2145092+02:00
 tags:
@@ -38,7 +38,7 @@ class: standard
 - [ ] Returns list[dict] filtered by provided params; excludes deleted entries unless include_deleted=True
 - [ ] ToolAnnotations: readOnlyHint=True, idempotentHint=True, destructiveHint=False
 
-### mark_for_deletion
+### mark_for-deletion
 - [ ] Params: entry_id (str)
 - [ ] If entry already deleted (approval_state='deleted'), return success without updating (true idempotent)
 - [ ] Otherwise sets approval_state='deleted', deleted_at and updated_at to UTC ISO timestamp
@@ -67,7 +67,7 @@ class: standard
 |---------|------------|--------|
 | get_knowledge sort | Missing approval_state ordering per design doc 3F | Refined: added approved-before-pending tier |
 | record_learning scope_project | Could inject into other projects | Refined: defaults to AppContext.project_name |
-| mark_for_deletion idempotency | Annotation says idempotent but re-timestamps | Refined: skip if already deleted (true idempotent) |
+| mark_for-deletion idempotency | Annotation says idempotent but re-timestamps | Refined: skip if already deleted (true idempotent) |
 | check_same_thread | Missing from scaffold, fatal with asyncio.to_thread | Added to cross-cutting AC |
 | limit default | No default means unbounded token injection | Refined: default 50 |
 | All other AC lines | Clear, verifiable, matches design doc 3E | Kept with minor formatting |
@@ -80,7 +80,7 @@ Follows established MCP server patterns from mcp-kanban and mcp-knowledge. Scaff
 - Added check_same_thread=False, asyncio.to_thread, parameterized queries, _apply_tool_exclusions to cross-cutting AC
 - Added approval_state to get_knowledge sort order (approved before pending per design doc 3F)
 - Added scope_project default to AppContext.project_name for record_learning
-- Specified mark_for_deletion as truly idempotent (skip if already deleted)
+- Specified mark_for-deletion as truly idempotent (skip if already deleted)
 - Added limit default 50 for get_knowledge
 - Created test task #556 (Test: Implement memory-mcp tools)
 - Added depends_on: [524, 556] to ensure TDD compliance
@@ -103,7 +103,7 @@ Follows established MCP server patterns from mcp-kanban and mcp-knowledge. Scaff
 - Coverage: tools.py 99% (line 273 = empty string early-return in _apply_tool_exclusions), server.py 56% (lifespan not exercised by unit tests)
 - Lint: ruff clean
 - AC-CC1: added check_same_thread=False to sqlite3.connect() in server.py
-- AC-CC2: wrapped all SQLite calls in asyncio.to_thread in get_knowledge, record_learning, list_entries, mark_for_deletion
+- AC-CC2: wrapped all SQLite calls in asyncio.to_thread in get_knowledge, record_learning, list_entries, mark_for-deletion
 - AC-CC3: _apply_tool_exclusions(mcp) called at module level at bottom of tools.py
 - AC-CC4: server.py __all__ updated with all 4 tool functions + _apply_tool_exclusions (noqa: F822 added since names are defined in tools.py, preventing circular import)
 - AC-ERR1: confidence error message updated to include got {value} suffix
@@ -115,22 +115,22 @@ Follows established MCP server patterns from mcp-kanban and mcp-knowledge. Scaff
 See docs/scratch/525-reviewer.md for full evidence.
 
 Verdict: FAIL -- confidence .82
-Critical finding: mark_for_deletion ToolAnnotations missing idempotentHint=True (tools.py line 191 uses ToolAnnotations(destructiveHint=True) only; idempotentHint defaults to None not True).
+Critical finding: mark_for-deletion ToolAnnotations missing idempotentHint=True (tools.py line 191 uses ToolAnnotations(destructiveHint=True) only; idempotentHint defaults to None not True).
 AC requires: readOnlyHint=False, idempotentHint=True, destructiveHint=True
-Fix: add idempotentHint=True to @mcp.tool annotation for mark_for_deletion
-Test gap: TestFromAC_ToolAnnotations only asserts destructiveHint is True -- no test for idempotentHint is True on mark_for_deletion. No TestBuilderDiscovered compensating test.
+Fix: add idempotentHint=True to @mcp.tool annotation for mark_for-deletion
+Test gap: TestFromAC_ToolAnnotations only asserts destructiveHint is True -- no test for idempotentHint is True on mark_for-deletion. No TestBuilderDiscovered compensating test.
 
 [[2026-04-03]] Fri 08:42
 ## Test-Writer Notes (retry)
-- Retry reason: reviewer FAIL cited missing test for idempotentHint=True on mark_for_deletion
-- Added: 1 new failing test test_mark_for_deletion_is_idempotent in TestFromAC_ToolAnnotations (tests/test_memory_tools_556.py)
+- Retry reason: reviewer FAIL cited missing test for idempotentHint=True on mark_for-deletion
+- Added: 1 new failing test test_mark_for-deletion_is_idempotent in TestFromAC_ToolAnnotations (tests/test_memory_tools_556.py)
 - Preserved: 10 existing TestFromAC_ToolAnnotations tests (all PASS)
 - New test fails: idempotentHint is None (not True) as expected
 - ruff: clean
 
 [[2026-04-03]] Fri 09:12
 ## Builder Notes (retry)
-- Fix: added idempotentHint=True to mark_for_deletion ToolAnnotations in tools.py line 221
+- Fix: added idempotentHint=True to mark_for-deletion ToolAnnotations in tools.py line 221
 - Was: ToolAnnotations(destructiveHint=True) — idempotentHint defaulted to None
 - Now: ToolAnnotations(idempotentHint=True, destructiveHint=True)
 - Tests: 62 passed (8 from test_memory_tools_525.py + 54 from test_memory_tools_556.py)
@@ -143,7 +143,7 @@ See docs/scratch/525-reviewer.md for full evidence.
 
 Verdict: PASS -- confidence .92
 All 62 tests passed (8 from test_memory_tools_525.py + 54 from test_memory_tools_556.py). Ruff clean. tools.py 99% coverage.
-idempotentHint=True on mark_for_deletion confirmed via TestFromAC_ToolAnnotations::test_mark_for_deletion_is_idempotent.
+idempotentHint=True on mark_for-deletion confirmed via TestFromAC_ToolAnnotations::test_mark_for-deletion_is_idempotent.
 Minor LAX: record_learning ToolAnnotations only sets destructiveHint=False; readOnlyHint+idempotentHint default to None (not explicit False per AC). Functionally equivalent. Non-blocking.
 
 [[2026-04-03]] Fri 09:46
@@ -174,7 +174,7 @@ Minor LAX: record_learning ToolAnnotations only sets destructiveHint=False; read
 | record_learning params/errors/defaults | tools.py L121-167: soft errors with got-value and Valid-prefix, uuid4, scope_project default | PASS |
 | record_learning ToolAnnotations | tools.py L121: destructiveHint=False | PASS |
 | list_entries params/filters | tools.py L170-216: AND filters, include_deleted, readOnlyHint=True, idempotentHint=True | PASS |
-| mark_for_deletion idempotent/ToolError | tools.py L220-257: skip if deleted, ToolError if not found, idempotentHint=True, destructiveHint=True | PASS |
+| mark_for-deletion idempotent/ToolError | tools.py L220-257: skip if deleted, ToolError if not found, idempotentHint=True, destructiveHint=True | PASS |
 | CC1 check_same_thread | server.py L77: check_same_thread=False | PASS |
 | CC2 asyncio.to_thread | tools.py: 5 to_thread calls across all 4 tools | PASS |
 | CC3 _apply_tool_exclusions | tools.py L284: called at module level | PASS |
@@ -183,18 +183,18 @@ Minor LAX: record_learning ToolAnnotations only sets destructiveHint=False; read
 
 ### Test Results
 - pytest (task-scope): 62 passed, 0 failed (test_memory_tools_525.py + test_memory_tools_556.py)
-- pytest (full suite): 264 failed, 2727 passed -- all failures in unrelated test files (test_mcp_tool_references_483, test_necessity_check_196, test_quality_runner_wiring, test_voice_*)
+- pytest (full suite): 264 failed, 2727 passed -- all failures in unrelated test files (test_mcp_tool_references_483, test_necessity_check_196, test_quality_runner-wiring, test_voice_*)
 - ruff: clean (packages/mcp-memory + test files)
 
 ### Reviewer Evidence
-- Cycle 1 FAIL (.82): caught missing idempotentHint=True on mark_for_deletion
+- Cycle 1 FAIL (.82): caught missing idempotentHint=True on mark_for-deletion
 - Cycle 2 PASS (.92): all 62 tests pass, idempotentHint confirmed, minor LAX on record_learning annotations (functionally equivalent)
 
 ### AC Quality Score: 4/5
-AC was thorough (per-tool params, return types, error messages, ToolAnnotations). Challenger caught 3 real issues (check_same_thread, approval_state sort, scope injection) incorporated into AC. Only gap: mark_for_deletion idempotentHint should have been fully specified in original AC pass (required 1 retry cycle).
+AC was thorough (per-tool params, return types, error messages, ToolAnnotations). Challenger caught 3 real issues (check_same_thread, approval_state sort, scope injection) incorporated into AC. Only gap: mark_for-deletion idempotentHint should have been fully specified in original AC pass (required 1 retry cycle).
 
 ### Upstream Gap
-test_memory_tools_556.py has 18 uncommitted lines (test_mark_for_deletion_is_idempotent from retry test-writer). Builder retry commit a94877a only staged tools.py. Non-blocking -- test passes and source is committed.
+test_memory_tools_556.py has 18 uncommitted lines (test_mark_for-deletion_is_idempotent from retry test-writer). Builder retry commit a94877a only staged tools.py. Non-blocking -- test passes and source is committed.
 
 ### Deduction breakdown
 - No AC lines without evidence: -.00
@@ -204,3 +204,10 @@ test_memory_tools_556.py has 18 uncommitted lines (test_mark_for_deletion_is_ide
 - No full-suite failures in task scope: -.00
 ### Confidence: 1.00
 ### Action: archive
+
+[[2026-04-03]] Fri 10:18
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 1338b6a | test | test_memory_tools_525.py, test_memory_tools_556.py | #525 |
+| b85f2a5 | chore | board state | #525 |

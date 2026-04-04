@@ -4,7 +4,7 @@ title: Add owlbear-memory tool access to all pipeline agents
 status: archived
 priority: needed
 created: 2026-04-03T10:40:51.4467226+02:00
-updated: 2026-04-03T17:06:31.1584237+02:00
+updated: 2026-04-03T17:09:29.0429526+02:00
 started: 2026-04-03T17:06:30.6360382+02:00
 completed: 2026-04-03T17:06:30.6360382+02:00
 tags:
@@ -45,7 +45,7 @@ All 14 agents missing owlbear-memory/* in tools. validate_agents.py accepts /* p
 | No other frontmatter changes | Verifiable, good surgical constraint | Keep |
 
 ### Architecture Notes
-Established codebase invariant: challenger, code-reader, orchestrator have deliberately minimal toolsets with no MCP server wildcards. owlbear-memory/* grants both read (get_knowledge, list_entries) and write (record_learning, mark_for_deletion) access. VS Code MCP patterns are server-level only; no per-tool granularity. Excluding these 3 agents preserves least-privilege. They receive institutional knowledge via caller dispatch prompts.
+Established codebase invariant: challenger, code-reader, orchestrator have deliberately minimal toolsets with no MCP server wildcards. owlbear-memory/* grants both read (get_knowledge, list_entries) and write (record_learning, mark_for-deletion) access. VS Code MCP patterns are server-level only; no per-tool granularity. Excluding these 3 agents preserves least-privilege. They receive institutional knowledge via caller dispatch prompts.
 
 Pattern to follow: append 'owlbear-memory/*' after 'owlbear-kanban/*' in the tools array of each target agent.
 
@@ -124,3 +124,10 @@ No deductions. All AC lines have specific evidence, lint clean, AC quality 4, re
 
 ### Process Note
 test_memory_tool_access_568.py has uncommitted retry changes (11 surgical-edit tests added by test-writer retry). Builder second commit (32f05fb) only included agent fix. Upstream commit gap.
+
+[[2026-04-03]] Fri 17:09
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2e2aa43 | test | tests/test_memory_tool_access_568.py | #568 |
+| dbe8125 | chore | kanban/tasks/568-*.md | #568 |

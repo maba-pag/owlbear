@@ -19,6 +19,7 @@ members = [
     "owlbear-knowledge",
     "owlbear-mcp-kanban",
     "owlbear-mcp-knowledge",
+    "owlbear-mcp-memory",
     "owlbear-mcp-project",
     "owlbear-voice",
 ]
@@ -2121,6 +2122,21 @@ dependencies = [
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.26" },
     { name = "owlbear-knowledge", editable = "packages/knowledge" },
+]
+
+[[package]]
+name = "owlbear-mcp-memory"
+version = "0.1.0"
+source = { editable = "packages/mcp-memory" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=1.26" },
+    { name = "pydantic", specifier = ">=2.0" },
 ]
 
 [[package]]
