@@ -9,7 +9,7 @@ Covers all AC items from #475:
   - Unit: --parent 42 in args when parent=42; no --parent when parent=0; --json always present
   - Integration: create with status override + show roundtrip confirms correct status
   - Integration: create with parent + show roundtrip confirms parent field
-  - skills/mcp-kanban/SKILL.md create_task row updated to include status and parent
+  - .github/skills/h-mcp-kanban/SKILL.md create_task row updated to include status and parent
 
 All tests FAIL in RED phase — the current implementation does not have status/parent params,
 does not append --json, and does not return raw JSON.
@@ -34,7 +34,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SKILL_MD = Path(__file__).parent.parent / "skills" / "mcp-kanban" / "SKILL.md"
+_SKILL_MD = Path(__file__).parent.parent / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 _SAMPLE_TASK_JSON = json.dumps({
     "id": "99",
@@ -295,11 +295,11 @@ class TestFromAC_CreateTaskStatusIntegration:
 
 
 class TestFromAC_CreateTaskSkillDoc:
-    """Tests that skills/mcp-kanban/SKILL.md create_task row is updated."""
+    """Tests that .github/skills/h-mcp-kanban/SKILL.md create_task row is updated."""
 
-    # AC: skills/mcp-kanban/SKILL.md create_task row updated to include status parameter
+    # AC: .github/skills/h-mcp-kanban/SKILL.md create_task row updated to include status parameter
     def test_skill_md_create_task_row_includes_status(self) -> None:
-        """skills/mcp-kanban/SKILL.md must mention `status` in the create_task row."""
+        """.github/skills/h-mcp-kanban/SKILL.md must mention `status` in the create_task row."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         lines = content.splitlines()
         create_task_lines = [ln for ln in lines if "create_task" in ln and "|" in ln]
@@ -309,9 +309,9 @@ class TestFromAC_CreateTaskSkillDoc:
             "SKILL.md create_task row must list `status` as an accepted parameter"
         )
 
-    # AC: skills/mcp-kanban/SKILL.md create_task row updated to include parent parameter
+    # AC: .github/skills/h-mcp-kanban/SKILL.md create_task row updated to include parent parameter
     def test_skill_md_create_task_row_includes_parent(self) -> None:
-        """skills/mcp-kanban/SKILL.md must mention `parent` in the create_task row."""
+        """.github/skills/h-mcp-kanban/SKILL.md must mention `parent` in the create_task row."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         lines = content.splitlines()
         create_task_lines = [ln for ln in lines if "create_task" in ln and "|" in ln]

@@ -51,7 +51,7 @@ import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "lint-changed.ps1"
-_BUILDER_AGENT = _REPO_ROOT / "agents" / "builder.agent.md"
+_BUILDER_AGENT = _REPO_ROOT / ".github" / "agents" / "builder.agent.md"
 
 # A Python source that reliably generates an F401 unused-import ruff error.
 _LINT_ERROR_CONTENT = "import os\n"

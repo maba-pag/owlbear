@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / "agents"
+AGENTS_DIR = ROOT / ".github" / "agents"
 
 # The 9 leaf agents — no sub-agents of their own
 LEAF_AGENTS = [
@@ -22,7 +22,7 @@ LEAF_AGENTS = [
     "auditor",
     "builder",
     "curator",
-    "kanban-planner",
+    "planner",
     "planner",
     "reviewer",
     "test-writer",
@@ -35,7 +35,7 @@ ALL_AGENT_NAMES = [
     "auditor",
     "builder",
     "curator",
-    "kanban-planner",
+    "planner",
     "orchestrator",
     "planner",
     "researcher",
@@ -95,7 +95,7 @@ class TestFromAC_AgentFilesExist:
         assert (AGENTS_DIR / "test-writer.agent.md").is_file()
 
     def test_writer_exists(self) -> None:
-        assert (AGENTS_DIR / "writer.agent.md").is_file()
+        assert (AGENTS_DIR / "doc-writer.agent.md").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ class TestFromAC_AgentToolsTodos:
         self._assert_todos_not_todo("curator")
 
     def test_kanban_planner_todos(self) -> None:
-        self._assert_todos_not_todo("kanban-planner")
+        self._assert_todos_not_todo("planner")
 
     def test_orchestrator_todos(self) -> None:
         self._assert_todos_not_todo("orchestrator")
@@ -287,7 +287,7 @@ class TestFromAC_LeafAgentsEmptyList:
         self._assert_agents_empty("curator")
 
     def test_kanban_planner_agents_empty(self) -> None:
-        self._assert_agents_empty("kanban-planner")
+        self._assert_agents_empty("planner")
 
     def test_planner_agents_empty(self) -> None:
         self._assert_agents_empty("planner")

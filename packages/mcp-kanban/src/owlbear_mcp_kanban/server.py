@@ -184,7 +184,7 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
         args.append("--not-blocked")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip()}"
+        return f"error: {stderr.strip() or stdout.strip()}"
     _strip = {"body", "file", "created", "updated"}
     try:
         tasks = json.loads(stdout)
@@ -273,7 +273,7 @@ async def create_task(  # noqa: PLR0913
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        return f"error: {stderr.strip()}"
+        return f"error: {stderr.strip() or stdout.strip()}"
     return stdout
 
 
@@ -450,7 +450,7 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
     if outcome == "success" or not claim_to_use:
         stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
         if rc != 0:
-            return f"error: {stderr.strip()}"
+            return f"error: show failed: {stderr.strip() or stdout.strip()}"
         task_data: dict = json.loads(stdout)
         current_status = task_data.get("status", "")
         if not claim_to_use:
@@ -470,11 +470,11 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
         edit_args.append("--json")
         stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
         if rc != 0:
-            return f"error: {stderr.strip()}"
+            return f"error: edit failed: {stderr.strip() or stdout.strip()}"
         if is_last:
             arc_out, arc_err, arc_rc = await _run_kanban(app_ctx, "archive", task_id)
             if arc_rc != 0:
-                return f"error: {arc_err.strip()}"
+                return f"error: archive failed: {arc_err.strip() or arc_out.strip()}"
             return arc_out
         return stdout
 
@@ -482,7 +482,7 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
         edit_args.append("--json")
         stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
         if rc != 0:
-            return f"error: {stderr.strip()}"
+            return f"error: edit failed: {stderr.strip() or stdout.strip()}"
         return stdout
 
     if outcome == "block":
@@ -490,7 +490,7 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
         edit_args.append("--json")
         stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
         if rc != 0:
-            return f"error: {stderr.strip()}"
+            return f"error: edit failed: {stderr.strip() or stdout.strip()}"
         return stdout
 
     if outcome == "reject":
@@ -498,7 +498,7 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
         edit_args.append("--json")
         stdout, stderr, rc = await _run_kanban(app_ctx, *edit_args)
         if rc != 0:
-            return f"error: {stderr.strip()}"
+            return f"error: edit failed: {stderr.strip() or stdout.strip()}"
         return stdout
 
     return f"error: unknown outcome {outcome!r}"

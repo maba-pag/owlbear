@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-SKILLS_DIR = ROOT / "skills"
+SKILLS_DIR = ROOT / ".github" / "skills"
 
 # AC 1: 11 pipeline-only skills — must have user-invocable: false
 PIPELINE_ONLY_SKILLS = [

@@ -21,7 +21,7 @@ import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENT_FILE = _REPO_ROOT / "agents" / "reviewer.agent.md"
+_AGENT_FILE = _REPO_ROOT / ".github" / "agents" / "reviewer.agent.md"
 
 
 def _read_agent(path: Path) -> str:

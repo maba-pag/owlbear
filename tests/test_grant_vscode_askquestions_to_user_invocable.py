@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / "agents"
+AGENTS_DIR = ROOT / ".github" / "agents"
 
 TOOL_NAME = "vscode/askQuestions"
 

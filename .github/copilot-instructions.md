@@ -1,235 +1,73 @@
 # OwlBear — Copilot Workspace Instructions
 
-## Project purpose
+## 1. Project Identity
 
-OwlBear is an on-demand, laptop-resident AI development system built around Copilot CLI. It receives user intent, extracts intent, plans work, executes it through agent workflows, and delivers results through shared workspace artifacts (code, kanban board, sessions). VS Code remains the user's IDE for interactive work; OwlBear and VS Code share the filesystem as the integration point.
+OwlBear is a laptop-resident AI development system built around Copilot CLI. It plans work via kanban, executes through agent workflows, and delivers through shared workspace artifacts. VS Code is the IDE; the filesystem is the integration point.
 
-## Principles
+## 2. Decision Heuristics
 
-### Core values
+- **Quality over speed.** Concise, actionable, immediately usable. Applies equally to foundations and features.
+- **Research before implementation.** Find how others solved it. Validate assumptions. No exceptions.
+- **KISS / YAGNI / DRY.** No over-engineering, no hypothetical-future work, single source of truth.
+- **No legacy, no backwards compatibility.** Break things to improve them.
+- **Think before coding.** Articulate what changes, expected behavior, and risks before editing.
+- **Simplicity first.** Simplest code that works. Avoid abstractions until the third repetition. Split functions > 50 lines.
+- **Surgical changes.** Smallest diff for the goal. One logical change per commit.
+- **Goal-driven.** Every action traces to a kanban task. If you can't name it, check the board first.
 
-- **Quality over speed, always.** The output must be excellent — but quality means concise, actionable, and immediately usable. Not voluminous. **This applies equally to foundations.** Never rush scaffolding, configuration, or bootstrap work. A polished foundation makes everything built on top of it better. Treat P1 tasks with the same care as P2 tasks.
-- **Research before implementation, always.** Nothing we build is new or unique. Before implementing anything, find how others have solved it. Every task must go through the research phase — there are no exceptions. Even when you think you know the answer, you don't. Look it up, validate your assumptions, and learn from prior art.
-- **KISS** — Keep it simple, stupid. Don't over-engineer.
-- **YAGNI** — You aren't gonna need it. Don't build for hypothetical future requirements.
-- **DRY** — Don't repeat yourself. Single source of truth for every piece of knowledge.
-- **No legacy code, no backwards compatibility.** It is okay to break things in order to improve them.
+## 3. System Awareness
 
-### Coding discipline (adapted from Karpathy's principles)
+### Tech Stack
 
-- **Think before coding.** Before writing any code, articulate the approach: what will change, what the expected behavior is, and what could go wrong. Plan the change, then execute it. Never jump straight into editing.
-- **Simplicity first.** Write the simplest code that solves the problem. Avoid abstractions until the third repetition. Flat is better than nested. If a function exceeds ~50 lines, split it.
-- **Surgical changes.** Make the smallest diff that achieves the goal. Resist the urge to refactor unrelated code in the same change. One logical change per commit.
-- **Goal-driven execution.** Every action should trace back to a concrete task on the kanban board. If you can't name the task you're working on, stop and check the board first.
+| Component | Technology | Notes |
+|-----------|-----------|-------|
+| Language | Python 3.12+ | `uv` package manager, never bare `pip` |
+| Agents | VS Code / Copilot custom agents | `.agent.md` files, subagent delegation |
+| MCP servers | 5 (4 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-project, mcp-memory, github |
+| Task board | kanban-md v0.33 (via MCP) | `kanban/config.yml`, `kanban/tasks/*.md` |
+| Safety | Git safety net + audit log | Review/revert as operational safety |
+| Distribution | Clone = install | `scripts/setup.py` wires workspace config |
 
-### Process habits
-
-- **TDD by default.** Write the test first, watch it fail, then implement. Target ≥ 90 % coverage per phase gate.
-- **State confidence at decision points.** When deriving a decision from source material, state confidence as a score (0.0–1.0). When multiple valid approaches exist, present them with trade-offs using `(bp:)` for best-practice options and `(rec:)` for your recommendation, per the decision-requests skill convention. Never assume — surface the choice.
-- **Agent-specific verdict thresholds** (reviewer ≥ .90, auditor ≥ .95) are defined in `agent-common.instructions.md` and remain the authority for pipeline gate decisions.
-- **Deliverables are kanban tasks and working code, not documents.** Research documents are _supporting artifacts_ — they have value, but writing a doc is never the end goal. After completing a research or analysis task, always create the follow-up kanban tasks that the research recommends. A research task is not done until its findings are actionable items on the board. Link the kanban task body to the research doc (e.g., `See docs/research/{slug}.md for details`).
-- **Verify subagent output, never trust self-reports.** After a subagent reports completion, verify the deliverables exist and match the acceptance criteria. Run tests yourself. Check that promised kanban tasks were actually created.
-
-## Command Surface Selection
-
-| Surface      | Choose this when                                                                                                                                | OwlBear example                     |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `.prompt.md` | You are defining a user-facing one-shot command that should run only when explicitly invoked.                                                   | `prompts/orchestrate.prompt.md`     |
-| `SKILL.md`   | You are defining reusable domain knowledge that should auto-load by relevance, or you need co-located resources (scripts, templates, examples). | `skills/research-workflow/SKILL.md` |
-| `.agent.md`  | You are defining a long-lived role/persona with persistent behavior such as tool restrictions, model preferences, handoff boundaries, or behavioral hooks (e.g., PreToolUse guards). | `agents/reviewer.agent.md`          |
-
-Default rule: user-facing one-shot commands use `.prompt.md` unless they need auto-loading or co-located resources.
-
-Pipeline-only skills (owned by orchestrator pipeline agents — researcher, architect, test-writer, builder, reviewer, writer, auditor) must add `user-invocable: false` to their SKILL.md frontmatter so they are hidden from the `/` slash-command menu but remain auto-loadable by agents. See `docs/research/user-invocable-skills.md` for the full 11/10 categorization.
-
-## Formatting rules for writing files
-
-- **No backtick wrappers around `.agent.md` or `.instructions.md` content.** When the `read_file` tool returns agent/instruction files, it wraps them in ` ```chatagent ` or ` ```instructions ` fencing. These fences are **added by the tool, not part of the file**. Never write them back when creating or editing these files. The file must start directly with `---` (YAML frontmatter).
-- **Empty lines around enumerations.** Always add a blank line before and after bullet lists (`-`) and numbered lists (`1.`). This is especially important before closing XML tags (e.g., `</self_critique>`, `</boundaries>`). Without the blank line, linters interpret the next line as a continuation of the list and add unwanted indentation.
-
-## Tech stack
-
-| Component    | Technology                                  | Notes                                                                                                                                                                                         |
-| ------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language     | Python 3.12+                                | `uv` package manager, never bare `pip`                                                                                                                                                        |
-| Runtime      | On-demand Copilot CLI sessions              | No background process; work is executed when invoked through CLI commands and agent workflows.                                                                                                |
-| Agents       | VS Code / Copilot custom agents             | Agents are defined via `.agent.md` files and can delegate to nested subagents.                                                                                                                |
-| LLM provider | GitHub Copilot (flat-rate)                  | Copilot is the primary model/runtime for orchestration and implementation tasks.                                                                                                              |
-| Orchestrator | ACP over NDJSON                             | Orchestrator launches `copilot --acp --stdio` and exchanges NDJSON messages over stdin/stdout.                                                                                                |
-| MCP servers  | 5 servers (4 custom stdio + 1 GitHub remote) | Core: `mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory` (stdio) + `github` remote (`api.githubcopilot.com/mcp/`) — all scaffolded by `setup.py`.                                    |
-| Knowledge    | Graph + vector knowledge package            | Knowledge services live under `packages/knowledge/` and are exposed through MCP.                                                                                                              |
-| Projects     | `owlbear-project.json` + MCP project server | Project metadata and operations are handled through project files and the project MCP server.                                                                                                 |
-| Safety       | Git safety net + audit log                  | Use git review/revert as operational safety; keep an audit log for retrospective self-improvement.                                                                                            |
-| Distribution | Clone = install                             | Run `scripts/setup.py` from a new project dir to wire `.vscode/settings.json`, `.vscode/mcp.json`, `kanban/`, `owlbear-project.json`, and `.github/copilot-instructions.md` to the shared `../owlbear/` installation. |
-| Diagrams     | Kroki HTTP API                              | Kroki supports mermaid, plantuml, graphviz, d2, c4plantuml, and excalidraw outputs.                                                                                                           |
-| Task board   | kanban-md (via MCP abstraction)             | `kanban-md` remains the board engine with MCP as the long-term integration boundary.                                                                                                          |
-
-## MCP Server Conventions
-
-All four custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) follow these conventions:
-
-- **Error prefix:** Tool execution errors return a string starting with `error: ` (e.g., `f"error: {stderr.strip()}"`). Empty-result messages (e.g., "No sources found.") are informational — no prefix.
-  - `ToolError` exception (`isError=true`): use when the return type is a pure model (TypedDict, BaseModel, or list thereof) and an error string cannot be embedded in the typed return.
-  - `error: ` string prefix (`isError=false`): use for `str`-return and union-return tools (`TypedDict | str`).
-  - Both approaches are MCP-spec-valid; the spec distinguishes protocol errors from tool execution errors.
-- **Tool annotations:** Every tool declares `readOnlyHint`, `idempotentHint`, and `destructiveHint` in its `ToolAnnotations`. See `mcp-kanban` for the reference implementation.
-- **Return types:** Use `TypedDict` or `list[TypedDict]` for structured queryable data (lists, metadata) — preferred for field-level outputSchema auto-generation. Use `BaseModel` subclasses for complex entities with validation. Use `str` for content bodies, messages, and errors.
-- **Lifespan pattern:** Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan function passed to `FastMCP`.
-- **Tool exclusion:** Each server reads a `*_TOOLS_EXCLUDE` env var (`KANBAN_TOOLS_EXCLUDE`, `KNOWLEDGE_TOOLS_EXCLUDE`, `PROJECT_TOOLS_EXCLUDE`) at startup. Comma-separated tool names are removed via `server.remove_tool()`; unknown names are silently ignored. Default (unset) = all tools registered.
-- **Module exports:** Every `server.py` defines `__all__` listing its public symbols.
-
-GitHub-hosted Copilot Memory is explicitly disabled in workspace settings to preserve OwlBear's local-first operating model and reduce cloud memory retention risk for project context. This guardrail is intentional because Copilot Memory defaults changed to ON for Pro and Pro+ in March 2026.
-
-## Memory governance
-
-OwlBear uses a four-tier memory model:
-
-| Tier | Store | Scope | What goes here |
-|------|-------|-------|----------------|
-| 1 | `/memories/` (user) | Cross-workspace, persistent | User tool patterns, CLI flag recipes, process pitfalls |
-| 2 | `/memories/session/` (session) | Current conversation only | Task-specific context, in-progress notes |
-| 3 | `/memories/repo/inbox/` (legacy inbox) | Repo-scoped, dual-write during migration | Agent lessons-learned written by pipeline agents |
-| 4 | mcp-memory `owlbearMemory` (canonical) | Agent + project scoped, queryable | Agent institutional knowledge — patterns, problems, workarounds |
-
-**User memory** (`/memories/`) — store:
-
-- Tool usage patterns and CLI flag recipes (e.g., "use bare `--cov` for scoped pytest")
-- Agent behavior observations (what worked, what failed, effective workflows)
-- Process pitfalls to avoid (e.g., "PS 5.1 here-strings split in ArgumentList")
-
-**User memory** — do NOT store:
-
-- Architecture decisions (use `docs/decisions/`)
-- Research findings (use `docs/research/`)
-- Domain knowledge or project conventions (use project KB via MCP)
-- Code snippets or implementation details
-- Task-specific context (use session memory — auto-cleared)
-
-**mcp-memory** (`owlbearMemory`) is the canonical store for agent institutional knowledge. Agents query it at task start via `get_knowledge` and write to it during post-task reflection via `record_learning`. See `agent-common.instructions.md` → **Institutional knowledge pre-flight** and **Post-task reflection**. See the `mcp-memory` skill for tool reference.
-
-Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge.
-
-**Repo memory inbox** (`/memories/repo/inbox/`) receives dual-write during migration. Not yet deprecated — the curator agent migrates entries from inbox to memory.db.
-
-**Management:** Run `Chat: Show Memory Files` to view stored memories. Delete stale entries with the `memory delete` command. GitHub-hosted Copilot Memory stays disabled — see the paragraph above.
-
-To migrate existing `/memories/repo/` files from a previous session into memory.db, run: `uv run --project packages/mcp-memory python -m owlbear_mcp_memory.migrate --source-dir <path>`. Use `--dry-run` to preview entries before writing. See README.md § Memory Migration for full usage.
-
-## kanban-md usage
-
-The project uses [kanban-md](https://github.com/antopolskiy/kanban-md) (v0.33.0) for file-based task management. The binary lives at `kanban/kanban-md.exe` (gitignored); run `kanban/setup.ps1` to download it.
-
-For CLI commands, workflows, and cheatsheets, see the `kanban-md` skill. The sections below cover only **OwlBear-specific** conventions that override or extend the defaults.
-
-### Board structure
-
-- **Config:** `kanban/config.yml` — statuses: ideation → backlog → todo → in-progress → review → docs → done
-- **Priorities:** `someday` < `nice-to-have` < `important` (default) < `needed` < `critical`
-- **Tasks:** `kanban/tasks/*.md` — YAML frontmatter (id, title, status, priority, tags, depends_on) + body with acceptance criteria
-
-### Priority scheme
-
-| Priority       | Meaning                                          | When to use                             |
-| -------------- | ------------------------------------------------ | --------------------------------------- |
-| `someday`      | Future vision, no commitment                     | Ideas we might never build              |
-| `nice-to-have` | Useful improvement, no urgency                   | Build when everything important is done |
-| `important`    | Clear value, scheduled for a phase **(default)** | Most feature work lands here            |
-| `needed`       | Core capability, do soon                         | Required for the next milestone         |
-| `critical`     | Can't function without it                        | Current blocker — do immediately        |
-
-### Task lifecycle
-
-Full pipeline with agent ownership:
+### Pipeline
 
 ```
-ideation → (researcher) → backlog → (architect) → todo → (test-writer RED) → in-progress → (builder GREEN) → review → (reviewer) → docs → (writer) → done → (auditor) → archived
+ideation → (researcher) → backlog → (architect) → todo → (test-writer) → in-progress → (builder) → review → (reviewer) → docs → (doc-writer) → done → (auditor) → archived
 ```
 
-Each agent's `.agent.md` defines its gate ownership, exit criteria, and rejection paths.
-Pipeline-only agents (planner, researcher, architect, test-writer, builder, reviewer, writer, auditor) use `disable-model-invocation: true` in their frontmatter to prevent unintended invocation by arbitrary callers; the orchestrator's explicit `agents` array overrides this flag.
-See `agent-common.instructions.md` → **Task coordination** for claiming and handoff workflow.
+### Directory Structure
 
-Research gate (ideation → backlog): see researcher agent for the full checklist.
+| Directory | Purpose |
+|-----------|---------|
+| `packages/` | Python workspace packages (orchestrator, knowledge, MCP servers, voice) |
+| `.github/agents/` | Agent definitions (`.agent.md`) |
+| `.github/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
+| `.github/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
+| `.github/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
+| `docs/` | Research, decisions, sources, scratch |
+| `kanban/` | Board data and tooling |
+| `scripts/` | Setup, validation, hooks |
 
-**Blocked tasks:** Use `kanban-md edit ID --block "reason"` on any task in any status. Filter with `kanban-md list --blocked`. Do not use a separate status for blocked state.
+For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
 
-**Blocking convention:** Routine gate rejections (reviewer FAIL, writer reject, auditor reject-to-review) use simple status movement without `--block` — the task auto-redispatches. Reserve `--block` for fundamental rejections (auditor → backlog), architect gates, handoff, and decision requests. See `agent-common.instructions.md` → **Blocking convention**.
+## 4. Memory Governance
 
-### Dependency tracking
+| Tier | Store | What goes here |
+|------|-------|----------------|
+| User | `/memories/` | Tool patterns, CLI recipes, process pitfalls |
+| Session | `/memories/session/` | Task-specific context (auto-cleared) |
+| Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
+| Canonical | mcp-memory `owlbearMemory` | Agent institutional knowledge (queryable) |
 
-Use `depends_on` in task frontmatter + kanban-md flags (`--blocked`, `--not-blocked`) to track blocked tasks. Do **not** use status columns to encode dependency state.
+Do NOT store in user memory: architecture decisions (`docs/decisions/`), research findings (`docs/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
-### Tag taxonomy
+Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
-Tags are free-form (no config file — just `--tags` on create/edit). Use these conventions:
+GitHub-hosted Copilot Memory is disabled to preserve local-first operation.
 
-| Category     | Tags                                                        | Purpose                                     |
-| ------------ | ----------------------------------------------------------- | ------------------------------------------- |
-| Phase        | `phase-1` … `phase-12`                                      | Group tasks by project phase                |
-| Category     | `config`, `tooling`, `docs`, `test`, `cli`, `auth`, `agent` | What area the task touches                  |
-| Specialty    | `hooks`, `model`, `rename`, `research`                      | Specific concern                            |
-| Type prefix  | `type:build`, `type:test`, `type:docs`, `type:deploy`       | Task nature (what kind of work)             |
-| Block prefix | `blocked:user-decision`, `blocked:external`                 | Why a task is blocked                       |
-| Scope prefix | `scope:copilot`, `scope:core`, `scope:cli`                  | Which part of the codebase                  |
-| Rigor prefix | `rigor:lean`, `rigor:standard`, `rigor:thorough`            | Quality-vs-speed profile for task execution |
+## 5. Operational Fundamentals
 
-Filter examples: `kanban-md list --tag research`, `kanban-md list --tag phase-3,auth`.
-
-### Research tasks
-
-Tag research tasks with `research`. Follow the research-docs instruction (`docs/research/*.md`). The research lifecycle is: complete checklist → write doc → **execute kanban-md create commands** to create follow-up tasks at `ideation` → move to `backlog`. If a finding requires a user decision, use the **scribe** agent to check/create a decision request instead (see the `decision-requests` skill).
-It is encouraged to clone repos that are the subject of research into `docs/scratch/research/` (gitignored) for analysis, over fetching single files or relying on web access. This keeps all research artifacts in one place and avoids polluting the project root. The cloned repos should be deleted when the research is complete.
-
-## Directory structure
-
-| Directory                 | Purpose                                                |
-| ------------------------- | ------------------------------------------------------ | --- | ---------- | ------------------------------------------------------------------------- | --- | ----- | ---------------------------------- |
-| `packages/orchestrator/`  | ACP client, dispatch planning, wave-based dispatch loop (wave assembly + ACP dispatch), `owlbear` CLI entry point (`dispatch`, `run`, `status` commands), audit analysis (pattern detectors) |
-| `packages/knowledge/`     | Knowledge engine (graph + vector)                      |
-| `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
-| `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
-| `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
-| `packages/mcp-memory/`    | MCP server for persistent agent memory (SQLite-backed) |
-| `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
-| `agents/`                 | Agent definitions (`.agent.md`)                        |
-| `skills/`                 | Agent skills (`SKILL.md`, agentskills.io style)        |
-| `instructions/`           | Shared instruction files (`*.instructions.md`)         |
-| `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | kanban board data and tooling                          |     | `scripts/` | Project tooling scripts (`setup.py`, `validate_skills.py`, `validate_agents.py`, `e2e_smoke.py`, `skills_ref/`, `hooks/`) |     | `v1/` | Archived v1 codebase for reference |
-
-### Package dependency rules
-
-Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `ALLOWED_IMPORTS` constant in that file maps each package namespace to its permitted owlbear-namespace imports. When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise. Full dependency rules and the TYPE_CHECKING import policy are documented in the test module docstring.
-
-## File placement rules
-
-Keep the project root clean. Every file created during a task must go to the right location:
-
-| File type                | Location                  | Naming                                | Tracked?        |
-| ------------------------ | ------------------------- | ------------------------------------- | --------------- |
-| Temp/debug output        | `docs/scratch/`           | `{task-id}-{desc}.{ext}`              | No (gitignored) |
-| Research documents       | `docs/research/`          | `{slug}.md` with task ref in content  | Yes             |
-| Cloned external repos    | `docs/scratch/research/`  | `{repo-name}/`                        | No (gitignored) |
-| Benchmark / eval scripts | `tests/benchmarks/`       | descriptive `.py` name                | Yes             |
-| Source code              | `packages/*/src/`         | follow package-local module structure | Yes             |
-| Tests                    | `tests/`                  | `test_{module}.py`                    | Yes             |
-| Agents                   | `agents/`                 | `{role}.agent.md`                     | Yes             |
-| Skills                   | `skills/`                 | `{skill}/SKILL.md`                    | Yes             |
-| Instructions             | `instructions/`           | `{name}.instructions.md`              | Yes             |
-| Decision requests        | `docs/decisions/pending/` | `{task-id}-{slug}.md`                 | Yes             |
-
-Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task. See `docs/scratch/.instructions.md` for details.
-
-## Attribution
-
-All code and patterns taken from external sources must be logged in `docs/sources/overview.md`.
-
-| Column     | Description                                               |
-| ---------- | --------------------------------------------------------- |
-| Source     | Project or article name                                   |
-| URL        | Link to the repo, article, or doc                         |
-| What       | What was taken (pattern, code snippet, architecture idea) |
-| Where Used | Where it appears in OwlBear (file path or module)         |
-| Date       | When it was adopted                                       |
-
-Update `docs/sources/overview.md` whenever adopting external patterns. This ensures proper credit and traceability.
+- **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
+- **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.
+- **Loop detection.** Tier 1: same call twice — change approach. Tier 2: two different approaches failed — consider skipping. Tier 3: 3+ attempts — stop, write what failed, hand off.
+- **Terminal.** `uv run` for all Python tools. Chain with `;` (never `&&` — PowerShell 5.1).
+- **Commits.** Follow `r-project-standards` for format, types, and git discipline.

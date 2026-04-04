@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-AGENT_COMMON = ROOT / "instructions" / "agent-common.instructions.md"
+AGENT_COMMON = ROOT / ".github" / "instructions" / "agents-and-skills.instructions.md"
 
 
 # ---- Helpers (mirrors test_mcp_tool_references_483.py) ----
@@ -159,7 +159,7 @@ class TestFromAC_AgentCommonSectionMcpNotes:
         section = _get_section_content(body, section_pattern)
         assert section is not None, (
             f"Section matching '{section_pattern}' not found in "
-            f"instructions/agent-common.instructions.md"
+            f".github/instructions/agents-and-skills.instructions.md"
         )
         assert expected_tool in section, (
             f"[{label}] Section matching '{section_pattern}' must contain MCP tool "

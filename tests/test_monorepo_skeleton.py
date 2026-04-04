@@ -131,19 +131,19 @@ class TestFromAC_DirectoryStructure:
 
     def test_agents_dir_has_readme(self) -> None:
         """agents/ at repo root must contain a README.md placeholder."""
-        assert (ROOT / "agents" / "README.md").exists(), (
+        assert (ROOT / ".github" / "agents" / "README.md").exists(), (
             "ROOT/agents/README.md not found"
         )
 
     def test_skills_dir_has_readme(self) -> None:
         """skills/ at repo root must contain a README.md placeholder."""
-        assert (ROOT / "skills" / "README.md").exists(), (
+        assert (ROOT / ".github" / "skills" / "README.md").exists(), (
             "ROOT/skills/README.md not found"
         )
 
     def test_instructions_dir_has_readme(self) -> None:
         """instructions/ at repo root must contain a README.md placeholder."""
-        assert (ROOT / "instructions" / "README.md").exists(), (
+        assert (ROOT / ".github" / "instructions" / "README.md").exists(), (
             "ROOT/instructions/README.md not found"
         )
 
@@ -253,37 +253,23 @@ class TestFromAC_ConfigUpdates:
             (ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8")
         )
 
-    def test_vscode_settings_agent_files_locations_root_agents(self) -> None:
-        """chat.agentFilesLocations must include the root agents/ path."""
+    def test_vscode_settings_no_custom_agent_locations(self) -> None:
+        """chat.agentFilesLocations must not exist — .github/ is the default discovery path."""
         settings = self._read_vscode_settings()
-        locations = settings.get("chat.agentFilesLocations", [])
-        normalised = [str(loc).replace("\\", "/").rstrip("/") for loc in locations]
-        assert "agents" in normalised, (
-            "root 'agents/' not listed in chat.agentFilesLocations"
+        assert "chat.agentFilesLocations" not in settings, (
+            "chat.agentFilesLocations should be removed — .github/agents/ is default"
         )
 
-    def test_vscode_settings_agent_skills_locations_root_skills(self) -> None:
-        """chat.agentSkillsLocations must include the root skills/ path."""
+    def test_vscode_settings_no_custom_skills_locations(self) -> None:
+        """chat.agentSkillsLocations must not exist — .github/ is the default discovery path."""
         settings = self._read_vscode_settings()
-        locations = settings.get("chat.agentSkillsLocations", [])
-        normalised = [str(loc).replace("\\", "/").rstrip("/") for loc in locations]
-        assert "skills" in normalised, (
-            "root 'skills/' not listed in chat.agentSkillsLocations"
+        assert "chat.agentSkillsLocations" not in settings, (
+            "chat.agentSkillsLocations should be removed — .github/skills/ is default"
         )
 
-    def test_vscode_settings_instructions_files_locations_github(self) -> None:
-        """chat.instructionsFilesLocations must NOT include .github/instructions after migration."""
+    def test_vscode_settings_no_custom_instructions_locations(self) -> None:
+        """chat.instructionsFilesLocations must not exist — .github/ is the default discovery path."""
         settings = self._read_vscode_settings()
-        locations = settings.get("chat.instructionsFilesLocations", {})
-        assert not any(".github/instructions" in str(loc) for loc in locations), (
-            ".github/instructions must be removed from chat.instructionsFilesLocations"
-        )
-
-    def test_vscode_settings_instructions_files_locations_root(self) -> None:
-        """chat.instructionsFilesLocations must include the root instructions/ path."""
-        settings = self._read_vscode_settings()
-        locations = settings.get("chat.instructionsFilesLocations", [])
-        normalised = [str(loc).replace("\\", "/").rstrip("/") for loc in locations]
-        assert "instructions" in normalised, (
-            "root 'instructions/' not listed in chat.instructionsFilesLocations"
+        assert "chat.instructionsFilesLocations" not in settings, (
+            "chat.instructionsFilesLocations should be removed — .github/instructions/ is default"
         )

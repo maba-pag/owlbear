@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / "agents"
+AGENTS_DIR = ROOT / ".github" / "agents"
 
 # All 11 agent files in agents/ — full list per AC
 AGENT_MD_FILES: list[str] = [
@@ -29,7 +29,7 @@ AGENT_MD_FILES: list[str] = [
     "researcher.agent.md",
     "reviewer.agent.md",
     "test-writer.agent.md",
-    "writer.agent.md",
+    "doc-writer.agent.md",
 ]
 
 

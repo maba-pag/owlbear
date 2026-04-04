@@ -25,7 +25,7 @@ class TestFromAC_StaleAgentsPathFixes:
     def test_rename_todo_agents_dir_uses_root_agents(self) -> None:
         """test_rename_todo_to_todos.py AGENTS_DIR must point to ROOT/agents, not ROOT/.github/agents.
 
-        AC1: AGENTS_DIR = ROOT / ".github" / "agents" must become AGENTS_DIR = ROOT / "agents".
+        AC1: AGENTS_DIR = ROOT / ".github" / "agents" must become AGENTS_DIR = ROOT / ".github" / "agents".
         Fails until the AGENTS_DIR assignment and any surrounding comments referencing
         .github/agents/ (L3, L20, L59) are updated.
         """

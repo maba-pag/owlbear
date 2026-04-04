@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-INSTRUCTIONS_DIR = ROOT / "instructions"
+INSTRUCTIONS_DIR = ROOT / ".github" / "instructions"
 
 EXPECTED_FILES = [
     "python.instructions.md",

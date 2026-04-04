@@ -127,6 +127,6 @@ class TestFromAC_DecisionsReadmeUpdated:
         content = self._readme_text()
         assert ".github/skills" not in content, (
             "docs/decisions/README.md still references .github/skills/ "
-            "(line 49: See `.github/skills/decision-requests/SKILL.md`) "
-            "— must be updated to reference skills/decision-requests/SKILL.md"
+            "(line 49: See `.github/skills/w-decision-routing/SKILL.md`) "
+            "— must be updated to reference .github/skills/w-decision-routing/SKILL.md"
         )

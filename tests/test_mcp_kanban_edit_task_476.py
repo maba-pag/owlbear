@@ -30,7 +30,7 @@ from owlbear_mcp_kanban.server import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SKILL_MD = Path(__file__).parent.parent / "skills" / "mcp-kanban" / "SKILL.md"
+_SKILL_MD = Path(__file__).parent.parent / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 _VALID_TASK_JSON = json.dumps(
     {

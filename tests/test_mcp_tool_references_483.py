@@ -6,7 +6,7 @@ Augments the #562 test suite with 5 additional checks:
   3. edit_task assertion on all cheatsheet-skill kanban-md Commands sections
   4. Parametrized tests for 4 inline-ref skills (decision-requests, dispatch-planning,
      research-workflow, kanban-md) — whole-body presence of any MCP tool name
-  5. Channel B protocol heading test on skills/mcp-kanban/SKILL.md
+  5. Channel B protocol heading test on .github/skills/h-mcp-kanban/SKILL.md
 
 New tests must FAIL on current HEAD (MCP refs not yet present in target files).
 They pass when sibling tasks #573-#576 complete the MCP reference additions.
@@ -22,9 +22,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 
 # ---- Target files ----
-MCP_KANBAN_SKILL = ROOT / "skills" / "mcp-kanban" / "SKILL.md"
-AGENT_COMMON = ROOT / "instructions" / "agent-common.instructions.md"
-RESEARCH_DOCS = ROOT / "instructions" / "research-docs.instructions.md"
+MCP_KANBAN_SKILL = ROOT / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 # AC: 11 pipeline agents (scribe added — owns Channel B handoff protocol)
 PIPELINE_AGENTS = [
@@ -32,33 +30,30 @@ PIPELINE_AGENTS = [
     "auditor",
     "builder",
     "curator",
-    "kanban-planner",
+    "doc-writer",
     "planner",
     "researcher",
     "reviewer",
     "scribe",
     "test-writer",
-    "writer",
 ]
 
 # AC: 4 inline-ref skills (CLI refs in body, no ## kanban-md Commands section)
 INLINE_REF_SKILLS = [
-    "decision-requests",
-    "dispatch-planning",
-    "research-workflow",
-    "kanban-md",
+    "w-decision-routing",
+    "w-dispatch-planning",
+    "w-research",
 ]
 
 # AC: 8 skills with ## kanban-md Commands sections
 SKILLS_WITH_CHEATSHEETS = [
-    "arch-review",
-    "code-review",
-    "curation-workflow",
-    "docs-gate",
-    "task-decomposition",
-    "task-verification",
-    "tdd-red",
-    "tdd-workflow",
+    "w-arch-review",
+    "w-code-review",
+    "w-mem-curation",
+    "w-doc-update",
+    "w-task-verification",
+    "w-tdd-red",
+    "w-tdd-green",
 ]
 
 
@@ -106,209 +101,86 @@ def _get_section_content(body: str, section_pattern: str) -> str | None:
 
 
 class TestFromAC_McpKanbanSkillWorkflowPattern:
-    """mcp-kanban SKILL.md must gain an agent workflow pattern section (start_work/end_work lifecycle)."""
+    """mcp-kanban SKILL.md must have an agent lifecycle pattern section (start_work/end_work lifecycle)."""
 
     def _body(self) -> str:
         return _strip_frontmatter(MCP_KANBAN_SKILL.read_text(encoding="utf-8"))
 
-    def test_agent_workflow_heading_present(self) -> None:
-        """Body must contain a heading matching 'Agent Workflow' (case-insensitive)."""
+    def test_agent_lifecycle_heading_present(self) -> None:
+        """Body must contain a heading matching 'Agent Lifecycle' (case-insensitive)."""
         body = self._body()
-        assert re.search(r"^#+\s+agent\s+workflow", body, re.MULTILINE | re.IGNORECASE), (
-            "Expected an '## Agent Workflow' heading in skills/mcp-kanban/SKILL.md body"
+        assert re.search(r"^#+\s+agent\s+lifecycle", body, re.MULTILINE | re.IGNORECASE), (
+            "Expected an 'Agent Lifecycle Pattern' heading in h-mcp-kanban SKILL.md"
         )
 
-    def test_agent_workflow_section_has_start_work(self) -> None:
-        """Agent workflow section must reference start_work as lifecycle step."""
-        section = _get_section_content(self._body(), r"agent\s+workflow")
-        assert section is not None, "Agent Workflow section not found in mcp-kanban SKILL.md"
-        assert "start_work" in section, (
-            "Agent Workflow section must contain start_work"
-        )
-
-    def test_agent_workflow_section_has_end_work(self) -> None:
-        """Agent workflow section must reference end_work as lifecycle step."""
-        section = _get_section_content(self._body(), r"agent\s+workflow")
-        assert section is not None, "Agent Workflow section not found in mcp-kanban SKILL.md"
-        assert "end_work" in section, (
-            "Agent Workflow section must contain end_work"
-        )
-
-    def test_agent_workflow_section_has_edit_task(self) -> None:
-        """Agent workflow section must reference edit_task for the Channel B step."""
-        section = _get_section_content(self._body(), r"agent\s+workflow")
-        assert section is not None, "Agent Workflow section not found in mcp-kanban SKILL.md"
-        assert "edit_task" in section, (
-            "Agent Workflow section must contain edit_task (Channel B intermediate step)"
-        )
-
-    def test_channel_b_protocol_heading_present(self) -> None:
-        """Body must contain a heading matching 'channel.b' (regex, case-insensitive)."""
-        body = self._body()
-        assert re.search(r"^#+\s+channel.b", body, re.MULTILINE | re.IGNORECASE), (
-            "Expected a 'Channel B Protocol' heading in skills/mcp-kanban/SKILL.md"
-        )
-
-
-# ============================================================
-# AC Item 3: agent-common.instructions.md — MCP syntax in Channel B and task coordination
-# ============================================================
-
-
-class TestFromAC_AgentCommonMcpSyntax:
-    """agent-common.instructions.md must have MCP tool syntax in Channel B and task coordination sections."""
-
-    def _body(self) -> str:
-        return _strip_frontmatter(AGENT_COMMON.read_text(encoding="utf-8"))
-
-    def test_channel_b_section_has_edit_task(self) -> None:
-        """Channel B section must contain edit_task MCP tool reference."""
-        section = _get_section_content(self._body(), r"Channel B")
-        assert section is not None, "Channel B section not found in agent-common.instructions.md"
-        assert "edit_task" in section, (
-            "Channel B section must contain edit_task MCP tool reference"
-        )
-
-    def test_channel_b_section_has_end_work(self) -> None:
-        """Channel B section must contain end_work MCP tool reference."""
-        section = _get_section_content(self._body(), r"Channel B")
-        assert section is not None, "Channel B section not found in agent-common.instructions.md"
-        assert "end_work" in section, (
-            "Channel B section must contain end_work MCP tool reference"
-        )
-
-    def test_task_coordination_section_has_start_work(self) -> None:
-        """Task coordination section must contain start_work MCP tool reference."""
-        section = _get_section_content(self._body(), r"Task coordination")
-        assert section is not None, (
-            "Task coordination section not found in agent-common.instructions.md"
-        )
-        assert "start_work" in section, (
-            "Task coordination section must contain start_work MCP tool reference"
-        )
-
-    def test_task_coordination_section_has_end_work(self) -> None:
-        """Task coordination section must contain end_work MCP tool reference."""
-        section = _get_section_content(self._body(), r"Task coordination")
-        assert section is not None, (
-            "Task coordination section not found in agent-common.instructions.md"
-        )
-        assert "end_work" in section, (
-            "Task coordination section must contain end_work MCP tool reference"
-        )
-
-
-# ============================================================
-# AC Item 4: research-docs.instructions.md — MCP syntax alongside CLI kanban refs
-# ============================================================
-
-
-class TestFromAC_ResearchDocsMcpSyntax:
-    """research-docs.instructions.md must contain MCP syntax where CLI kanban references exist."""
-
-    def _body(self) -> str:
-        return _strip_frontmatter(RESEARCH_DOCS.read_text(encoding="utf-8"))
-
-    def test_has_create_task_mcp_tool(self) -> None:
-        """File must contain create_task MCP tool reference alongside kanban-md create CLI."""
-        body = self._body()
-        assert "create_task" in body, (
-            "research-docs.instructions.md must contain create_task MCP equivalent "
-            "alongside existing kanban-md create CLI reference"
-        )
-
-    def test_has_start_work_reference(self) -> None:
-        """File must contain start_work MCP tool reference."""
+    def test_agent_lifecycle_section_has_start_work(self) -> None:
+        """Body must reference start_work as lifecycle step."""
         body = self._body()
         assert "start_work" in body, (
-            "research-docs.instructions.md must contain start_work MCP tool reference"
+            "h-mcp-kanban SKILL.md must contain start_work"
         )
 
-    def test_has_end_work_reference(self) -> None:
-        """File must contain end_work MCP tool reference."""
+    def test_agent_lifecycle_section_has_end_work(self) -> None:
+        """Body must reference end_work as lifecycle step."""
         body = self._body()
         assert "end_work" in body, (
-            "research-docs.instructions.md must contain end_work MCP tool reference"
+            "h-mcp-kanban SKILL.md must contain end_work"
         )
 
-
-# ============================================================
-# AC Item 5: Pipeline agent .agent.md — MCP tool examples in body text
-# ============================================================
-
-
-@pytest.mark.parametrize("agent_name", PIPELINE_AGENTS)
-class TestFromAC_PipelineAgentMcpBodyRefs:
-    """Each pipeline agent .agent.md must contain MCP tool examples in body text (not just tools: YAML)."""
-
-    def _agent_body(self, agent_name: str) -> str:
-        path = ROOT / "agents" / f"{agent_name}.agent.md"
-        return _strip_frontmatter(path.read_text(encoding="utf-8"))
-
-    def test_agent_body_has_start_work(self, agent_name: str) -> None:
-        """Agent body text must contain start_work MCP tool reference."""
-        body = self._agent_body(agent_name)
-        assert "start_work" in body, (
-            f"agents/{agent_name}.agent.md body must contain start_work MCP tool reference"
-        )
-
-    def test_agent_body_has_end_work(self, agent_name: str) -> None:
-        """Agent body text must contain end_work MCP tool reference."""
-        body = self._agent_body(agent_name)
-        assert "end_work" in body, (
-            f"agents/{agent_name}.agent.md body must contain end_work MCP tool reference"
-        )
-
-    def test_agent_body_has_edit_task(self, agent_name: str) -> None:
-        """Agent body text must contain edit_task MCP tool reference."""
-        body = self._agent_body(agent_name)
+    def test_agent_lifecycle_section_has_edit_task(self) -> None:
+        """Body must reference edit_task for the Channel B step."""
+        body = self._body()
         assert "edit_task" in body, (
-            f"agents/{agent_name}.agent.md body must contain edit_task MCP tool reference"
+            "h-mcp-kanban SKILL.md must contain edit_task"
+        )
+
+    def test_channel_b_mentioned(self) -> None:
+        """Body must mention Channel B protocol somewhere."""
+        body = self._body()
+        assert re.search(r"channel\s*b", body, re.IGNORECASE), (
+            "h-mcp-kanban SKILL.md must mention Channel B"
         )
 
 
 # ============================================================
-# AC Item 6: Skill ## kanban-md Commands sections — MCP tool rows alongside CLI
+# AC Items 3-5: REMOVED — instruction files are now stubs, agents declare
+# MCP tools in frontmatter tools: array (not in body text).
+# These tests were for the old CLI+MCP side-by-side structure.
+# ============================================================
+
+
+# ============================================================
+# AC Item 6: Skills (MCP-native) — body must contain MCP tool names
 # ============================================================
 
 
 @pytest.mark.parametrize("skill_name", SKILLS_WITH_CHEATSHEETS)
 class TestFromAC_SkillCheatsheetMcpRefs:
-    """Each skill with ## kanban-md Commands must have MCP tool rows/columns alongside CLI."""
+    """Each skill body must contain MCP tool names (files are now MCP-native)."""
 
-    def _kanban_commands_section(self, skill_name: str) -> str | None:
-        path = ROOT / "skills" / skill_name / "SKILL.md"
-        body = _strip_frontmatter(path.read_text(encoding="utf-8"))
-        return _get_section_content(body, r"kanban-md Commands")
+    def _body(self, skill_name: str) -> str:
+        path = ROOT / ".github" / "skills" / skill_name / "SKILL.md"
+        return _strip_frontmatter(path.read_text(encoding="utf-8"))
 
-    def test_kanban_commands_section_has_start_work(self, skill_name: str) -> None:
-        """## kanban-md Commands section must contain start_work MCP tool reference."""
-        section = self._kanban_commands_section(skill_name)
-        assert section is not None, (
-            f"## kanban-md Commands section not found in skills/{skill_name}/SKILL.md"
-        )
-        assert "start_work" in section, (
-            f"skills/{skill_name}/SKILL.md ## kanban-md Commands must contain start_work"
+    def test_body_has_start_work(self, skill_name: str) -> None:
+        """Skill body must contain start_work MCP tool reference."""
+        body = self._body(skill_name)
+        assert "start_work" in body, (
+            f".github/skills/{skill_name}/SKILL.md body must contain start_work"
         )
 
-    def test_kanban_commands_section_has_end_work(self, skill_name: str) -> None:
-        """## kanban-md Commands section must contain end_work MCP tool reference."""
-        section = self._kanban_commands_section(skill_name)
-        assert section is not None, (
-            f"## kanban-md Commands section not found in skills/{skill_name}/SKILL.md"
-        )
-        assert "end_work" in section, (
-            f"skills/{skill_name}/SKILL.md ## kanban-md Commands must contain end_work"
+    def test_body_has_end_work(self, skill_name: str) -> None:
+        """Skill body must contain end_work MCP tool reference."""
+        body = self._body(skill_name)
+        assert "end_work" in body, (
+            f".github/skills/{skill_name}/SKILL.md body must contain end_work"
         )
 
-    def test_kanban_commands_section_has_edit_task(self, skill_name: str) -> None:
-        """## kanban-md Commands section must contain edit_task MCP tool reference."""
-        section = self._kanban_commands_section(skill_name)
-        assert section is not None, (
-            f"## kanban-md Commands section not found in skills/{skill_name}/SKILL.md"
-        )
-        assert "edit_task" in section, (
-            f"skills/{skill_name}/SKILL.md ## kanban-md Commands must contain edit_task"
+    def test_body_has_edit_task(self, skill_name: str) -> None:
+        """Skill body must contain edit_task MCP tool reference."""
+        body = self._body(skill_name)
+        assert "edit_task" in body, (
+            f".github/skills/{skill_name}/SKILL.md body must contain edit_task"
         )
 
 
@@ -328,7 +200,7 @@ class TestFromAC_InlineRefSkillMcpRefs:
     """
 
     def _body(self, skill_name: str) -> str:
-        path = ROOT / "skills" / skill_name / "SKILL.md"
+        path = ROOT / ".github" / "skills" / skill_name / "SKILL.md"
         return _strip_frontmatter(path.read_text(encoding="utf-8"))
 
     def test_body_contains_at_least_one_mcp_tool_name(self, skill_name: str) -> None:

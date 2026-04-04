@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENTS_DIR = _REPO_ROOT / "agents"
+_AGENTS_DIR = _REPO_ROOT / ".github" / "agents"
 
 # --- AC1: these 11 agents MUST include 'owlbear-memory/*' ---
 AGENTS_REQUIRING_MEMORY: tuple[str, ...] = (
@@ -31,7 +31,7 @@ AGENTS_REQUIRING_MEMORY: tuple[str, ...] = (
     "auditor",
     "builder",
     "curator",
-    "kanban-planner",
+    "planner",
     "planner",
     "researcher",
     "reviewer",
@@ -133,8 +133,8 @@ class TestFromAC_MemoryToolPresent:
         )
 
     def test_kanban_planner_has_memory_tool(self) -> None:
-        assert _has_memory_tool(_read_agent("kanban-planner")), (
-            "agents/kanban-planner.agent.md missing 'owlbear-memory/*' in tools:"
+        assert _has_memory_tool(_read_agent("planner")), (
+            ".github/agents/planner.agent.md missing 'owlbear-memory/*' in tools:"
         )
 
     def test_planner_has_memory_tool(self) -> None:
@@ -164,7 +164,7 @@ class TestFromAC_MemoryToolPresent:
 
     def test_writer_has_memory_tool(self) -> None:
         assert _has_memory_tool(_read_agent("writer")), (
-            "agents/writer.agent.md missing 'owlbear-memory/*' in tools:"
+            ".github/agents/doc-writer.agent.md missing 'owlbear-memory/*' in tools:"
         )
 
 
@@ -268,7 +268,7 @@ class TestFromAC_SurgicalEditOnly:
         _assert_only_memory_tool_added("curator")
 
     def test_kanban_planner_surgical_edit_only(self) -> None:
-        _assert_only_memory_tool_added("kanban-planner")
+        _assert_only_memory_tool_added("planner")
 
     def test_planner_surgical_edit_only(self) -> None:
         _assert_only_memory_tool_added("planner")
