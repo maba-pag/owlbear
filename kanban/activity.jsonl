@@ -1,28 +1,3 @@
-{"timestamp":"2026-03-29T23:58:41.0746594+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T23:58:54.8726911+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T23:58:59.0456948+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T23:58:59.0494906+02:00","action":"release","task_id":165,"detail":"writer"}
-{"timestamp":"2026-03-29T23:59:19.8551401+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T23:59:22.9503361+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-29T23:59:22.9528581+02:00","action":"release","task_id":89,"detail":"test-writer"}
-{"timestamp":"2026-03-30T00:01:16.0336049+02:00","action":"edit","task_id":18,"detail":"Configure MCP server registry"}
-{"timestamp":"2026-03-30T00:01:16.0362012+02:00","action":"release","task_id":18,"detail":"reviewer"}
-{"timestamp":"2026-03-30T00:04:00.9137314+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T00:04:00.9168787+02:00","action":"claim","task_id":196,"detail":"architect"}
-{"timestamp":"2026-03-30T00:04:01.6500237+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T00:04:01.6552673+02:00","action":"claim","task_id":193,"detail":"architect"}
-{"timestamp":"2026-03-30T00:04:05.1120922+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T00:04:05.1149406+02:00","action":"claim","task_id":195,"detail":"architect"}
-{"timestamp":"2026-03-30T00:04:09.2150816+02:00","action":"edit","task_id":59,"detail":"Implement AcpClient wrapper with timeouts and error classification"}
-{"timestamp":"2026-03-30T00:04:09.2178689+02:00","action":"claim","task_id":59,"detail":"auditor"}
-{"timestamp":"2026-03-30T00:05:48.4921483+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T00:06:08.9882645+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T00:06:21.8216599+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T00:06:21.824697+02:00","action":"release","task_id":196,"detail":"architect"}
-{"timestamp":"2026-03-30T00:06:37.26909+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T00:06:54.8124717+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T00:07:01.1446949+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
-{"timestamp":"2026-03-30T00:07:01.736333+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
 {"timestamp":"2026-03-30T00:07:01.7389201+02:00","action":"release","task_id":195,"detail":"architect"}
 {"timestamp":"2026-03-30T00:07:06.3423469+02:00","action":"edit","task_id":193,"detail":"Fix stale VS Code tool names in validation scripts and agent files"}
 {"timestamp":"2026-03-30T00:07:06.3458494+02:00","action":"block","task_id":193,"detail":"Research (.95) invalidated premise: todos IS correct, todo was old v1 name. No stale references to fix. User decision needed: close as won't-fix or redefine scope."}
@@ -9998,3 +9973,28 @@
 {"timestamp":"2026-04-04T18:17:37.5307236+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
 {"timestamp":"2026-04-04T18:17:37.5428818+02:00","action":"release","task_id":588,"detail":"lava-wick"}
 {"timestamp":"2026-04-04T18:17:38.0498305+02:00","action":"move","task_id":588,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-04T18:18:36.8763458+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-04T18:18:36.8892923+02:00","action":"claim","task_id":576,"detail":"heath-edge"}
+{"timestamp":"2026-04-04T18:18:40.892163+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-04T18:18:40.903341+02:00","action":"claim","task_id":590,"detail":"shell-river"}
+{"timestamp":"2026-04-04T18:18:53.8123794+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T18:18:53.8302179+02:00","action":"claim","task_id":318,"detail":"robin-grove"}
+{"timestamp":"2026-04-04T18:20:43.5857159+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T18:20:43.5966677+02:00","action":"release","task_id":318,"detail":"robin-grove"}
+{"timestamp":"2026-04-04T18:26:47.9955864+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-04T18:26:48.0074794+02:00","action":"release","task_id":590,"detail":"shell-river"}
+{"timestamp":"2026-04-04T18:32:33.7425885+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-04T18:32:33.753929+02:00","action":"release","task_id":576,"detail":"heath-edge"}
+{"timestamp":"2026-04-04T18:34:57.4907928+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-04T18:34:57.5024042+02:00","action":"claim","task_id":264,"detail":"tide-blade"}
+{"timestamp":"2026-04-04T18:35:22.2990327+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T18:35:22.3176008+02:00","action":"claim","task_id":263,"detail":"mink-lark"}
+{"timestamp":"2026-04-04T18:35:23.0319513+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T18:35:23.0429736+02:00","action":"claim","task_id":318,"detail":"iron-zeal"}
+{"timestamp":"2026-04-04T18:35:46.8374401+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-04T18:35:46.8489889+02:00","action":"claim","task_id":484,"detail":"oaken-slate"}
+{"timestamp":"2026-04-04T18:37:06.8598706+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
+{"timestamp":"2026-04-04T18:37:06.8715636+02:00","action":"release","task_id":318,"detail":"iron-zeal"}
+{"timestamp":"2026-04-04T18:43:23.52437+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
+{"timestamp":"2026-04-04T18:43:23.5352281+02:00","action":"release","task_id":263,"detail":"mink-lark"}
+{"timestamp":"2026-04-04T18:43:24.0637209+02:00","action":"move","task_id":263,"detail":"done -\u003e archived"}
