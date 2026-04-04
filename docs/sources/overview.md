@@ -132,6 +132,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | VS Code Hooks docs (4/2/2026) | code.visualstudio.com/docs/copilot/customization/hooks | PostToolUse I/O schema (additionalContext, systemMessage, exit codes), subagent routing behavior — additionalContext confirmed model-facing, exit code 2 NOT model-facing via -Command | docs/research/posttooluse-subagent-output-routing.md | 2026-04-02 |
 
+## Exit Code 2 via -File Invocation Routing (Task #548)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MS PS 5.1 about_PowerShell_exe | learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe | -File vs -Command exit code propagation semantics; -File preserves numeric script exit codes, -Command converts non-0/1 to 1; used to predict BlockingError for exit 2 via -File (prediction disproven empirically) | docs/research/exit-code-2-file-mode-routing.md | 2026-04-02 |
+
 ## Switch move/pick to JSON, Remove board_context (Task #477)
 
 | Source | URL | What | Where Used | Date |
