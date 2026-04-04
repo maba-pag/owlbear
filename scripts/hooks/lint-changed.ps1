@@ -15,7 +15,8 @@ $tool_name = $payload.tool_name
 $edit_tools = @(
     'create_file',
     'replace_string_in_file',
-    'multi_replace_string_in_file'
+    'multi_replace_string_in_file',
+    'apply_patch'
 )
 
 if (-not ($tool_name -and ($edit_tools -contains $tool_name))) {
