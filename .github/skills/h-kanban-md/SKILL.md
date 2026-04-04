@@ -1,16 +1,15 @@
 ---
 name: h-kanban-md
-description: "Handbook: kanban-md CLI command reference, recipes, and troubleshooting"
+description: "Handbook (DEPRECATED): kanban-md CLI reference — use h-mcp-kanban instead"
 user-invocable: false
 ---
 
-# kanban-md CLI Reference
+# kanban-md CLI Reference (Deprecated)
+
+> **Deprecated.** Use MCP tools via `h-mcp-kanban` for all board operations. This skill is retained as a fallback reference for direct CLI troubleshooting only. If MCP tools fail, consult this for CLI equivalents, then record the MCP failure in repo memory.
 
 Command synopsis, flag reference, and recipes for `kanban\kanban-md.exe`.
 Each task is a `.md` file in `kanban/tasks/`.
-
-For MCP tool equivalents, see the `h-mcp-kanban` skill.
-For claiming protocol and pipeline conventions, see `r-pipeline-protocol`.
 
 ## Command Synopsis
 
