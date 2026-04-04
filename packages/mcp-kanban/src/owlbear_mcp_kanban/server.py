@@ -31,7 +31,6 @@ __all__ = [
     "list_tasks",
     "mcp",
     "move_task",
-    "pick_task",
     "show_task",
     "start_work",
 ]
@@ -157,7 +156,7 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
     reverse: bool = False,
     blocked: bool | None = None,
 ) -> list[dict]:
-    """List kanban tasks with optional filters. Returns lean task array."""
+    """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["list", "--json"]
     if status:
@@ -186,13 +185,23 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
     if rc != 0:
         msg = stderr.strip() or stdout.strip()
         raise ToolError(msg)
-    _strip = {"body", "file", "created", "updated"}
+    _strip = {
+        "body", "file", "created", "updated",
+        "class", "started", "completed", "assignee", "claimed_by", "claimed_at",
+        "due", "estimate",
+    }
     try:
         tasks = json.loads(stdout)
-        return [{k: v for k, v in task.items() if k not in _strip} for task in tasks]
+        lean = []
+        for task in tasks:
+            row = {k: v for k, v in task.items() if k not in _strip}
+            row["claimed"] = task.get("claimed_by") is not None
+            lean.append(row)
     except (json.JSONDecodeError, AttributeError) as exc:
         msg = f"Invalid task JSON: {stdout[:200]}"
         raise ToolError(msg) from exc
+    else:
+        return lean
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -211,17 +220,10 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {
                     "title": {"type": "string"},
                     "status": {"type": "string"},
                     "priority": {"type": "string"},
-                    "class": {"type": "string"},
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "blocked": {"type": "boolean"},
                     "block_reason": {"type": ["string", "null"]},
-                    "claimed_by": {"type": ["string", "null"]},
-                    "claimed_at": {"type": ["string", "null"]},
-                    "started": {"type": ["string", "null"]},
-                    "completed": {"type": ["string", "null"]},
-                    "assignee": {"type": ["string", "null"]},
-                    "due": {"type": ["string", "null"]},
-                    "estimate": {"type": ["string", "null"]},
+                    "claimed": {"type": "boolean"},
                     "parent": {"type": ["integer", "null"]},
                     "depends_on": {"type": "array", "items": {"type": "integer"}},
                 },
@@ -253,14 +255,13 @@ async def create_task(  # noqa: PLR0913
     *,
     title: str,
     body: str = "",
-    claim: str = "",
     depends_on: str = "",
     parent: int = 0,
     priority: str = "",
     status: str = "",
     tags: str = "",
 ) -> str:
-    """Create a new kanban task with the given title and optional metadata."""
+    """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["create", title]
     if priority:
@@ -271,8 +272,6 @@ async def create_task(  # noqa: PLR0913
         args += ["--body", body]
     if depends_on:
         args += ["--depends-on", depends_on]
-    if claim:
-        args += ["--claim", claim]
     if status:
         args += ["--status", status]
     if parent > 0:
@@ -310,8 +309,6 @@ async def edit_task(  # noqa: PLR0913, C901
     tags: str = "",
     priority: str = "",
     append_body: str = "",
-    claim: str = "",
-    release: bool = False,
     status: str = "",
     timestamp: bool = False,
     add_dep: int = 0,
@@ -319,7 +316,7 @@ async def edit_task(  # noqa: PLR0913, C901
     parent: int = 0,
     title: str = "",
 ) -> KanbanTask:
-    """Edit task fields: status, priority, body, claim, block state, deps, parent, and title."""
+    """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["edit", task_id]
     str_flags: list[tuple[str, str]] = [
@@ -327,7 +324,6 @@ async def edit_task(  # noqa: PLR0913, C901
         ("--block", block),
         ("--tags", tags),
         ("--priority", priority),
-        ("--claim", claim),
         ("--status", status),
         ("--title", title),
     ]
@@ -338,8 +334,6 @@ async def edit_task(  # noqa: PLR0913, C901
         args += ["-a", append_body]
     if unblock:
         args.append("--unblock")
-    if release:
-        args.append("--release")
     if timestamp:
         args.append("--timestamp")
     if add_dep > 0:
@@ -351,7 +345,7 @@ async def edit_task(  # noqa: PLR0913, C901
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        msg = stderr.strip()
+        msg = stderr.strip() or stdout.strip()
         raise ToolError(msg)
     try:
         return KanbanTask.model_validate_json(stdout)
@@ -361,69 +355,26 @@ async def edit_task(  # noqa: PLR0913, C901
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def pick_task(
-    ctx: Context,
-    status: str = "",
-    claim: str = "",
-    move: str = "",
-    tags: str = "",
-) -> KanbanTask:
-    """Pick the next available unclaimed task matching the given filters."""
+async def start_work(ctx: Context, task_id: str) -> str:
+    """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    args: list[str] = ["pick"]
-    if status:
-        args += ["--status", status]
-    if claim:
-        args += ["--claim", claim]
-    if move:
-        args += ["--move", move]
-    if tags:
-        args += ["--tags", tags]
-    args.append("--json")
-    stdout, stderr, rc = await _run_kanban(app_ctx, *args)
+
+    # Step 1: auto-generate claim name
+    stdout, stderr, rc = await _run_kanban(app_ctx, "agent-name")
     if rc != 0:
-        msg = stderr.strip()
-        raise ToolError(msg)
-    try:
-        return KanbanTask.model_validate_json(stdout)
-    except ValidationError as exc:
-        msg = f"Invalid task JSON: {exc}"
-        raise ToolError(msg) from exc
+        return f"error: {stderr.strip() or stdout.strip()}"
+    claim_name = stdout.strip()
 
-
-@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def start_work(ctx: Context, task_id: str, claim: str = "") -> str:
-    """Claim a task and return its full details as JSON with injected claim_name.
-
-    Compound operation: replaces separate claim + show_task calls with a single call.
-    If no claim is provided, auto-generates one via kanban-md agent-name.
-    The task remains at its current status — no status change is made.
-    """
-    app_ctx: AppContext = ctx.request_context.lifespan_context
-
-    # Step 1: resolve claim name
-    if claim:
-        claim_name = claim
-    else:
-        stdout, stderr, rc = await _run_kanban(app_ctx, "agent-name")
-        if rc != 0:
-            return f"error: {stderr.strip() or stdout.strip()}"
-        claim_name = stdout.strip()
-
-    # Step 2: claim the task (no --status: stays at current status)
+    # Step 2: claim the task
     stdout, stderr, rc = await _run_kanban(app_ctx, "edit", task_id, "--claim", claim_name)
     if rc != 0:
         return f"error: {stderr.strip() or stdout.strip()}"
 
-    # Step 3: fetch task details
+    # Step 3: return task details
     stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
     if rc != 0:
         return f"error: {stderr.strip() or stdout.strip()}"
-
-    # Step 4: inject claim_name and return merged JSON
-    data: dict = json.loads(stdout)
-    data["claim_name"] = claim_name
-    return json.dumps(data)
+    return stdout
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -435,37 +386,24 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
     outcome: Literal["success", "fail", "block", "reject"] = "success",
     block_reason: str = "",
     move_to: str = "ideation",
-    claim: str = "",
 ) -> str:
-    """Compound operation: append note, optionally advance status, release claim.
-
-    Outcomes:
-    - success: advance to next status (or archive if already at last status)
-    - fail: keep current status, release claim
-    - block: mark blocked with block_reason, release claim
-    - reject: move to move_to status (default: ideation), release claim
-    """
+    """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
 
     if outcome == "block" and not block_reason:
         return "error: block_reason is required when outcome=block"
 
-    claim_to_use = claim
     current_status = ""
 
-    # show is needed for success (to derive next status) or when claim not provided
-    if outcome == "success" or not claim_to_use:
+    # show is needed for success to derive next status
+    if outcome == "success":
         stdout, stderr, rc = await _run_kanban(app_ctx, "show", task_id, "--json")
         if rc != 0:
             return f"error: show failed: {stderr.strip() or stdout.strip()}"
         task_data: dict = json.loads(stdout)
         current_status = task_data.get("status", "")
-        if not claim_to_use:
-            claim_to_use = task_data.get("claimed_by", "")
 
     edit_args: list[str] = ["edit", task_id, "-a", note, "--timestamp", "--release"]
-    if claim_to_use:
-        edit_args += ["--claim", claim_to_use]
 
     if outcome == "success":
         statuses = app_ctx.statuses
@@ -511,12 +449,10 @@ async def end_work(  # noqa: PLR0911, PLR0912, PLR0913, C901
     return f"error: unknown outcome {outcome!r}"
 
 
-# Set outputSchema for show_task, move_task, pick_task to KanbanTask with alias keys
-# (field name `class_` maps to alias `class`; must use by_alias=True to match MCP spec).
-# This overrides FastMCP's auto-generated schema (which uses Python field names) before
-# tool.output_schema cached_property is first accessed.
-_kanbantask_schema = KanbanTask.model_json_schema(by_alias=True)
-for _tool_name in ("show_task", "move_task", "pick_task", "edit_task"):
+# Override outputSchema for tools that return KanbanTask. This ensures the
+# advertised schema matches what structuredContent actually contains.
+_kanbantask_schema = KanbanTask.model_json_schema()
+for _tool_name in ("show_task", "move_task", "edit_task"):
     _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
     _tool_obj.fn_metadata.output_schema = _kanbantask_schema
 
@@ -525,92 +461,63 @@ for _tool_name in ("show_task", "move_task", "pick_task", "edit_task"):
 # Patch input parameter descriptions for better agent discoverability.
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
-def _patch_param_descriptions(
+_STATUSES = ["ideation", "backlog", "todo", "in-progress", "review", "docs", "done"]
+_PRIORITIES = ["someday", "nice-to-have", "important", "needed", "critical"]
+_SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
+
+
+def _patch_params(
     tool_name: str,
-    descriptions: dict[str, str],
+    patches: dict[str, dict[str, object]],
 ) -> None:
+    """Patch description and/or enum for tool input parameters."""
     tool = next(t for t in mcp._tool_manager._tools.values() if t.name == tool_name)  # noqa: SLF001
     props = tool.parameters.get("properties", {})
-    for param, desc in descriptions.items():
+    for param, meta in patches.items():
         if param in props:
-            props[param]["description"] = desc
+            props[param].update(meta)
 
 
-_patch_param_descriptions("list_tasks", {
-    "status": "Status column: ideation, backlog, todo, in-progress, review, docs, done",
-    "tag": "Filter by tag (e.g. 'phase-2', 'scope:agents')",
-    "priority": "Priority: someday, nice-to-have, important, needed, critical",
-    "search": "Full-text search across task titles and bodies",
-    "sort": "Sort field: priority, updated, id, title, status, created",
-    "unclaimed": "Only show tasks not claimed by any agent",
-    "archived": "Include archived tasks in results",
-    "limit": "Max number of tasks to return (0 = no limit)",
-    "reverse": "Reverse the sort order",
-    "blocked": "True = only blocked, False = only unblocked, null = all",
+_patch_params("list_tasks", {
+    "status": {"enum": _STATUSES},
+    "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
+    "priority": {"enum": _PRIORITIES},
+    "search": {"description": "Full-text search in titles and bodies"},
+    "sort": {"enum": _SORT_FIELDS},
+    "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
 })
 
-_patch_param_descriptions("show_task", {
-    "task_id": "Numeric task ID",
+_patch_params("create_task", {
+    "body": {"description": "Markdown body (objectives, AC, context)"},
+    "depends_on": {"description": "Comma-separated dependency task IDs"},
+    "parent": {"description": "Parent task ID for subtask hierarchy"},
+    "priority": {"enum": _PRIORITIES},
+    "status": {"enum": _STATUSES},
+    "tags": {"description": "Comma-separated tags"},
 })
 
-_patch_param_descriptions("create_task", {
-    "title": "Task title (short, descriptive)",
-    "body": "Task body in markdown (objectives, AC, context)",
-    "claim": "Agent name to claim this task",
-    "depends_on": "Comma-separated task IDs this depends on (e.g. '42,43')",
-    "parent": "Parent task ID for subtask hierarchy (0 = none)",
-    "priority": "Priority: someday, nice-to-have, important, needed, critical",
-    "status": "Initial status: ideation, backlog, todo, in-progress, review, docs, done",
-    "tags": "Comma-separated tags (e.g. 'phase-2,scope:agents')",
+_patch_params("move_task", {
+    "status": {"enum": _STATUSES},
 })
 
-_patch_param_descriptions("move_task", {
-    "task_id": "Numeric task ID",
-    "status": "Target status: ideation, backlog, todo, in-progress, review, docs, done",
+_patch_params("edit_task", {
+    "body": {"description": "Replace the entire task body"},
+    "block": {"description": "Block reason (empty = no change)"},
+    "tags": {"description": "Replace all tags (comma-separated)"},
+    "priority": {"enum": _PRIORITIES},
+    "append_body": {"description": "Append to body (preserves existing content)"},
+    "status": {"enum": _STATUSES},
+    "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
+    "add_dep": {"description": "Add dependency on this task ID"},
+    "remove_dep": {"description": "Remove dependency on this task ID"},
+    "parent": {"description": "Parent task ID for subtask hierarchy"},
 })
 
-_patch_param_descriptions("edit_task", {
-    "task_id": "Numeric task ID",
-    "body": "Replace the entire task body with this markdown text",
-    "block": "Mark task as blocked with this reason string (empty = no change)",
-    "unblock": "Clear the blocked state",
-    "tags": "Set tags (comma-separated, replaces all existing tags)",
-    "priority": "Set priority: someday, nice-to-have, important, needed, critical",
-    "append_body": "Append text to end of task body (preserves existing content)",
-    "claim": "Claim the task for this agent name",
-    "release": "Release the current claim on this task",
-    "status": "Move to status: ideation, backlog, todo, in-progress, review, docs, done",
-    "timestamp": "Add a [[date]] timestamp before appended body",
-    "add_dep": "Add a dependency on this task ID (0 = no change)",
-    "remove_dep": "Remove dependency on this task ID (0 = no change)",
-    "parent": "Set parent task ID for subtask hierarchy (0 = no change)",
-    "title": "Change the task title (empty = no change)",
-})
-
-_patch_param_descriptions("pick_task", {
-    "status": "Pick from status: ideation, backlog, todo, in-progress, review, docs, done",
-    "claim": "Agent name to claim the picked task",
-    "move": "Move picked task to status: ideation, backlog, todo, in-progress, review, docs, done",
-    "tags": "Filter by tags when picking (comma-separated)",
-})
-
-_patch_param_descriptions("start_work", {
-    "task_id": "Numeric task ID",
-    "claim": "Agent name to claim (auto-generated if empty)",
-})
-
-_patch_param_descriptions("end_work", {
-    "task_id": "Numeric task ID",
-    "note": "Summary note appended to the task body (required)",
-    "outcome": (
-        "Work result: success (advance status), fail (stay + release),"
-        " block (mark blocked + release), reject (move to move_to + release)"
-    ),
-    "block_reason": "Required when outcome='block': the reason string",
-    "move_to": (
-        "Target status when outcome='reject':"
-        " ideation, backlog, todo, in-progress, review, docs, done"
-        " (default: ideation)"
-    ),
-    "claim": "Agent name for the claim (auto-detected from task if empty)",
+_patch_params("end_work", {
+    "note": {"description": "Summary note appended to task body"},
+    "outcome": {
+        "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
+    },
+    "block_reason": {"description": "Required when outcome=block"},
+    "move_to": {"enum": _STATUSES, "description": "Target status when outcome=reject"},
 })
