@@ -208,7 +208,7 @@ class TestFromAC_SelectTasks:
         )
         result = select_tasks([task])
         assert len(result.entries) == 1
-        assert result.entries[0].agent == "kanban-planner"
+        assert result.entries[0].agent == "planner"
 
     def test_unknown_priority_uses_fallback_rank_sorts_to_end(self) -> None:
         """Task with unknown priority is not excluded — sorts after known priorities."""

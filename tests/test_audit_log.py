@@ -405,7 +405,7 @@ class TestFromAC_LogCompletion:  # noqa: N801
             CompletionEvent(
                 timestamp="2026-03-29T10:01:00Z",
                 task_id=21,
-                agent="writer",
+                agent="doc-writer",
                 outcome="failure",
                 duration_ms=300,
                 files_changed=[],

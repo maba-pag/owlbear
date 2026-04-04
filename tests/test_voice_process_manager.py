@@ -360,6 +360,39 @@ class TestFromAC_InitHandshake:  # noqa: N801
             f"during _spawn_and_handshake; recorded timeouts: {captured_timeouts}"
         )
 
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_default_init_timeout_enforced_via_wait_for(self) -> None:
+        """Default init_timeout (30.0) must bound the handshake via asyncio.wait_for.
+
+        AC: 'wait for StatusMsg(state=ready) within init_timeout'. The default of 30.0
+        must be enforced — bare readline() with no wait_for is an unbounded wait that
+        violates the AC contract for the common no-args call VoiceProcessManager(cmd).
+
+        Fails on current HEAD: _DEFAULT_INIT_TIMEOUT sentinel maps 30.0 to None
+        internally, so asyncio.wait_for is never called during the handshake when
+        the caller omits init_timeout. Only shutdown timeouts (5.0, 2.0) appear.
+        """
+        proc = _make_proc(lines=[READY_LINE])
+        recorded_timeouts: list[float] = []
+
+        _original_wait_for = asyncio.wait_for  # capture real impl before patching
+
+        async def _recording_wait_for(coro: Any, *, timeout: float, **kw: Any) -> Any:  # noqa: ASYNC109
+            recorded_timeouts.append(timeout)
+            return await _original_wait_for(coro, timeout=timeout, **kw)
+
+        with _patch_spawn(proc), patch(f"{_MODULE}.asyncio.wait_for", new=_recording_wait_for):
+            async with VoiceProcessManager(_COMMAND):  # default init_timeout=30.0
+                pass
+
+        # 30.0 must appear among wait_for calls made during the handshake phase.
+        # On current HEAD the sentinel maps 30.0 to None so only shutdown_timeout (5.0)
+        # appears — the assertion below fails, proving the default is not enforced.
+        assert 30.0 in recorded_timeouts, (
+            f"asyncio.wait_for must be called with timeout=30.0 for the default "
+            f"init_timeout; recorded timeouts (shutdown only): {recorded_timeouts}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Shutdown — 6-phase (TestFromAC_Shutdown)

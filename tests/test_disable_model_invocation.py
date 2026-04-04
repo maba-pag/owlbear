@@ -31,7 +31,7 @@ PIPELINE_AGENTS = [
 # The 3 agents that MUST NOT have disable-model-invocation
 NON_PIPELINE_AGENTS = [
     "orchestrator",
-    "kanban-planner",
+    "planner",
     "curator",
 ]
 
@@ -112,7 +112,7 @@ class TestFromAC_NonPipelineAgentsNoFlag:
 
     def test_kanban_planner_does_not_have_flag(self) -> None:
         """kanban-planner.agent.md frontmatter must NOT contain disable-model-invocation."""
-        fm = _get_frontmatter(_agent_path("kanban-planner"))
+        fm = _get_frontmatter(_agent_path("planner"))
         assert "disable-model-invocation" not in fm
 
     def test_curator_does_not_have_flag(self) -> None:
@@ -205,7 +205,7 @@ class TestFromAC_NoExtraChanges:
         assert "user-invocable: true" in fm
 
     def test_kanban_planner_preserves_user_invocable_true(self) -> None:
-        fm = _get_frontmatter(_agent_path("kanban-planner"))
+        fm = _get_frontmatter(_agent_path("planner"))
         assert "user-invocable: true" in fm
 
     def test_curator_preserves_user_invocable_true(self) -> None:
@@ -248,7 +248,7 @@ class TestFromAC_OrchestratorAgentsArrayUnchanged:
     """AC4: Orchestrator agents array must still list all 10 subagents, unchanged."""
 
     _EXPECTED_SUBAGENTS = frozenset({
-        "kanban-planner",
+        "planner",
         "planner",
         "researcher",
         "architect",

@@ -95,7 +95,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         entries = [
             _entry(10, "auditor"),
             _entry(20, "researcher"),
-            _entry(30, "writer"),
+            _entry(30, "doc-writer"),
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         assert len(waves) == 1
@@ -123,7 +123,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         """Builder wave fills light-flex slots first, then heavy-flex."""
         entries = [
             _entry(1, "builder"),
-            _entry(2, "writer"),      # light flex
+            _entry(2, "doc-writer"),      # light flex
             _entry(3, "reviewer"),    # heavy flex
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
@@ -149,7 +149,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         entries = [
             _entry(1, "auditor"),
             _entry(2, "builder"),
-            _entry(3, "writer"),  # light flex — fills auditor wave
+            _entry(3, "doc-writer"),  # light flex — fills auditor wave
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         for wave in waves:
@@ -161,7 +161,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
     def test_overflow_flex_agents_chunked_into_wave_size_waves(self) -> None:
         """Remaining flex agents after builder/auditor fill go into overflow waves."""
         # 6 light-flex writers → need 2 waves (4 + 2, but solo wave of 2 is not solo)
-        entries = [_entry(i, "writer") for i in range(1, 7)]
+        entries = [_entry(i, "doc-writer") for i in range(1, 7)]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         for wave in waves:
             assert len(wave.entries) <= 4
@@ -174,7 +174,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         entries = [
             _entry(1, "auditor"),
             _entry(2, "researcher"),
-            _entry(3, "writer"),
+            _entry(3, "doc-writer"),
             # wave_size=4 → 1 free slot in the only wave
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=5)
@@ -186,7 +186,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         entries = [
             _entry(1, "auditor"),
             _entry(2, "researcher"),
-            _entry(3, "writer"),
+            _entry(3, "doc-writer"),
             _entry(4, "architect"),
             # wave_size=4 → exactly full, no slot available
         ]
@@ -210,7 +210,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         entries = [
             _entry(1, "auditor"),
             _entry(2, "researcher"),
-            _entry(3, "writer"),
+            _entry(3, "doc-writer"),
             _entry(4, "architect"),  # fills auditor wave to capacity
             _entry(5, "builder"),    # solo builder wave → drop
         ]
@@ -243,9 +243,9 @@ class TestFromAC_WaveAssembly:  # noqa: N801
             _entry(920, "test-writer"),
             _entry(947, "researcher"),
             _entry(910, "auditor"),
-            _entry(788, "writer"),
-            _entry(781, "writer"),
-            _entry(728, "writer"),
+            _entry(788, "doc-writer"),
+            _entry(781, "doc-writer"),
+            _entry(728, "doc-writer"),
             _entry(853, "builder"),
             _entry(934, "builder"),
             _entry(521, "builder"),
@@ -307,13 +307,13 @@ class TestFromAC_FormatPrompt:  # noqa: N801
         """AGENT_PROMPT_PREFIX covers exactly the 9 defined agent types."""
         expected = {
             "architect", "builder", "reviewer", "test-writer",
-            "researcher", "writer", "auditor", "kanban-planner", "curator",
+            "researcher", "doc-writer", "auditor", "planner", "curator",
         }
         assert set(AGENT_PROMPT_PREFIX.keys()) == expected
 
     @pytest.mark.parametrize("agent", [
         "architect", "builder", "reviewer", "test-writer",
-        "researcher", "writer", "auditor", "kanban-planner",
+        "researcher", "doc-writer", "auditor", "planner",
     ])
     def test_non_curator_agent_includes_task_id_in_prompt(self, agent: str) -> None:
         """Each non-curator agent prompt contains '#{task_id}'."""
@@ -431,7 +431,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
         """sequential_remaining=0: all wave entries are dispatched (parallel gather mode)."""
         client = _make_client()
         state = LoopState(sequential_remaining=0)
-        wave = self._make_wave("researcher", "writer", "architect")
+        wave = self._make_wave("researcher", "doc-writer", "architect")
         result = await dispatch_wave(wave, client, state)
         assert client.new_session.call_count == 3
         assert isinstance(result, CycleResult)

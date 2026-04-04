@@ -420,7 +420,7 @@ class TestFromAC_TaskSelector:
         )
         result = select_tasks([task])
         assert len(result.entries) == 1
-        assert result.entries[0].agent == "kanban-planner"
+        assert result.entries[0].agent == "planner"
 
     def test_decomp_override_applies_for_backlog_status(self) -> None:
         task = _make_task(
@@ -430,7 +430,7 @@ class TestFromAC_TaskSelector:
         )
         result = select_tasks([task])
         if result.entries:
-            assert result.entries[0].agent == "kanban-planner"
+            assert result.entries[0].agent == "planner"
 
     def test_decomp_override_applies_for_in_progress_status(self) -> None:
         task = _make_task(
@@ -440,7 +440,7 @@ class TestFromAC_TaskSelector:
         )
         result = select_tasks([task])
         if result.entries:
-            assert result.entries[0].agent == "kanban-planner"
+            assert result.entries[0].agent == "planner"
 
     def test_decomp_override_does_not_affect_other_tasks(self) -> None:
         """DECOMP override must not bleed into non-DECOMP tasks in the same batch."""
@@ -454,7 +454,7 @@ class TestFromAC_TaskSelector:
             if entry.task_id == 1:
                 assert entry.agent == "test-writer"
             elif entry.task_id == 2:
-                assert entry.agent == "kanban-planner"
+                assert entry.agent == "planner"
 
     # -- select_tasks unknown priority/status fallback ---------------------
 

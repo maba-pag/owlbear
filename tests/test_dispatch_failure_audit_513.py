@@ -496,7 +496,7 @@ class TestFromAC_DispatchFailureDetectorIntegration:  # noqa: N801
     def test_high_error_rate_detector_below_min_dispatches_no_proposal(self) -> None:
         """high_error_rate_detector must NOT fire when fewer than MIN_DISPATCHES (3) events."""
         # Only 2 events — below the minimum threshold
-        events = [self._make_failure_event(task_id=i, agent="writer") for i in range(2)]
+        events = [self._make_failure_event(task_id=i, agent="doc-writer") for i in range(2)]
 
         proposals = high_error_rate_detector(events)
 
