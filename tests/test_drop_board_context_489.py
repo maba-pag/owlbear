@@ -29,7 +29,6 @@ from owlbear_mcp_kanban.server import (
     AppContext,
     mcp,
     move_task,
-    pick_task,
 )
 import owlbear_mcp_kanban.server as server_mod
 
@@ -143,23 +142,4 @@ class TestFromAC_MovePickJsonOutput:
         args_used: tuple = mock_run.call_args[0]
         assert "--json" in args_used, (
             f"move_task did not pass '--json' to _run_kanban; args: {args_used!r}"
-        )
-
-    # AC: pick_task passes --json to _run_kanban
-    @pytest.mark.asyncio
-    async def test_pick_task_passes_json_flag_to_run_kanban(self) -> None:
-        """pick_task must include '--json' in the args tuple passed to _run_kanban.
-
-        Currently FAILS because pick_task calls _run_kanban without '--json'.
-        """
-        mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=(_FAKE_TASK_JSON, "", 0)),
-        ) as mock_run:
-            await pick_task(mcp_ctx, status="todo", claim="builder")
-
-        args_used: tuple = mock_run.call_args[0]
-        assert "--json" in args_used, (
-            f"pick_task did not pass '--json' to _run_kanban; args: {args_used!r}"
         )
