@@ -150,7 +150,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
       "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"],
       "env": {
         "KANBAN_BIN": "/path/to/custom/kanban-md",
-        "KANBAN_TOOLS_EXCLUDE": "create_task,move_task,edit_task,pick_task"
+        "KANBAN_TOOLS_EXCLUDE": "create_task,move_task,edit_task"
       }
     }
   }
