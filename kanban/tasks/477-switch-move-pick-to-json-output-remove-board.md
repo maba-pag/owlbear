@@ -1,17 +1,15 @@
 ---
 id: 477
 title: Switch move/pick to JSON output, remove board_context tool
-status: done
+status: backlog
 priority: needed
 created: 2026-03-31T06:06:24.5978486+02:00
-updated: 2026-04-03T07:08:01.4661009+02:00
+updated: 2026-04-04T16:38:05.6302941+02:00
 tags:
     - scope:mcp
     - type:build
     - phase-2
     - quality
-claimed_by: auditor
-claimed_at: 2026-04-03T07:08:01.4661009+02:00
 class: standard
 ---
 
@@ -158,3 +156,36 @@ Fix: Replace the mock return in both failing tests with a full _FAKE_TASK_JSON p
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/477-* files found)
+
+[[2026-04-04]] Fri
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Switch move_task to --json | server.py L301 passes '--json', returns KanbanTask; test_server.py 51/51 pass | PASS |
+| Switch pick_task to --json | pick_task removed from server.py by external refactor (commit d6b6f35, no task ref). Function absent. | FAIL |
+| Remove board_context entirely | Not in server.py, not in __all__. TestFromAC_DropBoardContext 3/3 pass. | PASS |
+| Tests cover move/pick JSON + board_context removal | test_drop_board_context_489.py ImportError on pick_task blocks collection (2/5 tests). test_server.py 51/51 pass. | FAIL |
+| Update mcp-kanban SKILL.md | 7 tools listed, no board_context, move_task docs present | PASS |
+
+### Test Results
+- pytest full suite (excl broken file): 2772 passed, 332 failed (pre-existing), 8 skipped
+- pytest task-scoped test_drop_board_context_489.py: ImportError at collection
+- pytest package test_server.py: 51 passed
+- ruff: All checks passed
+
+### Architect Quality: 3/5
+Original AC reasonable. AC item 2 became invalid when pick_task was removed by d6b6f35. Nobody updated umbrella AC.
+
+### Deduction Breakdown
+- AC2 no evidence (function removed): -.02
+- AC4 partial (2/5 tests uncollectable): -.02
+- Full-suite test failure in task scope: -.05
+- Total: -.09
+
+### Confidence: .91
+### Action: reject-to-backlog
+Root cause: commit d6b6f35 removed pick_task from server.py without updating test_drop_board_context_489.py, breaking AC items 2 and 4.
+
+[[2026-04-04]] Sat 16:38
+Audit reject: confidence .91. External commit d6b6f35 removed pick_task from server.py, breaking test_drop_board_context_489.py (ImportError). AC items 2 and 4 unverifiable. Fix: update test file to remove pick_task references or re-add pick_task.
