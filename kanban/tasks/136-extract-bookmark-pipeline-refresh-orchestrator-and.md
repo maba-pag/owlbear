@@ -4,7 +4,7 @@ title: Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools
 status: todo
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-03T03:49:41.4074656+02:00
+updated: 2026-04-04T07:31:44.9857664+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,8 +13,6 @@ depends_on:
     - 33
     - 135
     - 223
-blocked: true
-block_reason: 'TestFromAC conflict: task-136 requires refresh_all to call list_enabled; task-554 TestFromAC_RefreshAll::test_calls_list_all_not_list_enabled requires list_all and asserts list_enabled MUST NOT be called. Architect must retire or update task-554 tests.'
 class: standard
 ---
 

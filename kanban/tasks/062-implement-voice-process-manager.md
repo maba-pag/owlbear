@@ -4,15 +4,13 @@ title: Implement voice process manager
 status: todo
 priority: nice-to-have
 created: 2026-03-26T19:33:42.8168161+01:00
-updated: 2026-04-03T08:38:37.4963473+02:00
+updated: 2026-04-04T07:30:42.4993672+02:00
 tags:
     - phase-3
     - scope:voice
 depends_on:
     - 61
     - 141
-blocked: true
-block_reason: 'test_default_init_timeout_enforced_via_wait_for conflicts with test_phase5_waits_with-kill_timeout: any init wait_for call shifts fake_wait_for call indices so phase-3 timeout never fires. Fix: update test_phase5 to call __aenter__ before patching (like test_explicit_shutdown_also_calls_terminate does)'
 class: standard
 ---
 

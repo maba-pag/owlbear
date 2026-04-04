@@ -1,16 +1,16 @@
 ---
 id: 499
 title: Incorporate deer-flow memory patterns into memory-mcp design (#387)
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-31T13:40:21.3701938+02:00
-updated: 2026-04-01T01:54:32.1201659+02:00
+updated: 2026-04-04T07:30:43.1374705+02:00
+started: 2026-04-04T07:30:33.23583+02:00
+completed: 2026-04-04T07:30:33.23583+02:00
 tags:
     - research
     - scope:agents
     - phase-2
-blocked: true
-block_reason: 'Dependency deadlock (#499 depends_on #387 in ideation depends_on #428 blocked) and redundant with #387 AC scope. Merge into #387 or reverse dependency.'
 class: standard
 ---
 

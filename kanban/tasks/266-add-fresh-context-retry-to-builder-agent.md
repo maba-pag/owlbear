@@ -1,15 +1,15 @@
 ---
 id: 266
 title: Add fresh-context retry to builder agent
-status: ideation
+status: archived
 priority: important
 created: 2026-03-30T19:31:28.6357734+02:00
-updated: 2026-03-30T21:45:31.8670871+02:00
+updated: 2026-04-04T07:24:33.6531169+02:00
+started: 2026-04-04T07:24:33.6531169+02:00
+completed: 2026-04-04T07:24:33.6531169+02:00
 tags:
     - scope:agents
     - phase-2
-blocked: true
-block_reason: 'Pending decision 228-fresh-context-retry.md (approved:false). Task decomposed into #318, #319, #320 -- no atomic AC for builder pipeline.'
 class: standard
 ---
 

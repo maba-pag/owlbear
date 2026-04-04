@@ -1,10 +1,12 @@
 ---
 id: 44
 title: Add skills-ref validation to CI
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-26T18:55:53.1789806+01:00
-updated: 2026-03-30T21:55:21.2484451+02:00
+updated: 2026-04-04T07:30:31.295705+02:00
+started: 2026-04-04T07:30:31.295705+02:00
+completed: 2026-04-04T07:30:31.295705+02:00
 tags:
     - phase-1
     - scope:skills
@@ -12,8 +14,6 @@ tags:
     - type:build
 depends_on:
     - 84
-blocked: true
-block_reason: 'TestFromAC conflict: test_validate_skills.py::TestFromAC_ExitCode::test_exit_code_one_no_arguments asserts exit 1 for no-args, contradicts task-44 TestFromAC_ScriptAutoDiscovery requiring exit 0. Test-writer must delete/update the #84 test before builder can proceed.'
 class: standard
 ---
 

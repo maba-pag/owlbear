@@ -1,25 +1,3 @@
-{"timestamp":"2026-03-29T22:04:07.5553068+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T22:04:07.5574012+02:00","action":"claim","task_id":186,"detail":"builder"}
-{"timestamp":"2026-03-29T22:06:03.941803+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T22:06:11.5684749+02:00","action":"edit","task_id":186,"detail":"Test: Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-29T22:06:11.5705816+02:00","action":"release","task_id":186,"detail":"builder"}
-{"timestamp":"2026-03-29T22:06:36.2419325+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T22:06:36.2434692+02:00","action":"claim","task_id":169,"detail":"builder"}
-{"timestamp":"2026-03-29T22:09:20.0712027+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T22:09:24.3539744+02:00","action":"edit","task_id":169,"detail":"Document multi-project setup experience and sharing guide"}
-{"timestamp":"2026-03-29T22:09:24.3572072+02:00","action":"release","task_id":169,"detail":"builder"}
-{"timestamp":"2026-03-29T22:09:48.8710982+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T22:09:48.8737149+02:00","action":"claim","task_id":165,"detail":"builder"}
-{"timestamp":"2026-03-29T22:11:57.6113185+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T22:12:05.5388607+02:00","action":"edit","task_id":165,"detail":"Fix broken skill paths in frontend prompts"}
-{"timestamp":"2026-03-29T22:12:05.5434122+02:00","action":"release","task_id":165,"detail":"builder"}
-{"timestamp":"2026-03-29T22:12:24.3999807+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T22:12:24.4022217+02:00","action":"claim","task_id":187,"detail":"builder"}
-{"timestamp":"2026-03-29T22:13:24.0549242+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T22:13:27.9924468+02:00","action":"edit","task_id":187,"detail":"Fix stale .github/agents/ refs in skill and instruction files"}
-{"timestamp":"2026-03-29T22:13:27.9964628+02:00","action":"release","task_id":187,"detail":"builder"}
-{"timestamp":"2026-03-29T22:14:06.8393511+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
-{"timestamp":"2026-03-29T22:14:06.8416526+02:00","action":"claim","task_id":188,"detail":"builder"}
 {"timestamp":"2026-03-29T22:16:04.5091864+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
 {"timestamp":"2026-03-29T22:16:08.5452529+02:00","action":"edit","task_id":188,"detail":"Fix stale .github/agents/ paths in v1-era test files"}
 {"timestamp":"2026-03-29T22:16:08.5489077+02:00","action":"release","task_id":188,"detail":"builder"}
@@ -9998,3 +9976,25 @@
 {"timestamp":"2026-04-04T07:10:37.324297+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
 {"timestamp":"2026-04-04T07:10:39.0875805+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
 {"timestamp":"2026-04-04T07:10:40.9030556+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
+{"timestamp":"2026-04-04T07:24:32.8980321+02:00","action":"edit","task_id":266,"detail":"Add fresh-context retry to builder agent"}
+{"timestamp":"2026-04-04T07:24:32.9106089+02:00","action":"unblock","task_id":266,"detail":"Add fresh-context retry to builder agent"}
+{"timestamp":"2026-04-04T07:24:33.6551154+02:00","action":"move","task_id":266,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:24:34.3331049+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-04T07:24:34.3452166+02:00","action":"unblock","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
+{"timestamp":"2026-04-04T07:24:34.9608581+02:00","action":"move","task_id":483,"detail":"in-progress -\u003e archived"}
+{"timestamp":"2026-04-04T07:25:23.5257657+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T07:25:23.5406882+02:00","action":"unblock","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-04T07:30:30.5223777+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-04-04T07:30:30.5383413+02:00","action":"unblock","task_id":44,"detail":"Add skills-ref validation to CI"}
+{"timestamp":"2026-04-04T07:30:31.2967753+02:00","action":"move","task_id":44,"detail":"todo -\u003e archived"}
+{"timestamp":"2026-04-04T07:30:31.9157347+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-04T07:30:31.9280772+02:00","action":"unblock","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-04T07:30:32.5799627+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
+{"timestamp":"2026-04-04T07:30:32.5973373+02:00","action":"unblock","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
+{"timestamp":"2026-04-04T07:30:33.2381908+02:00","action":"move","task_id":499,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-04T07:30:42.5009633+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-04T07:30:43.1390715+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
+{"timestamp":"2026-04-04T07:31:44.9872975+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-04T07:31:44.9997701+02:00","action":"unblock","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-04T07:32:46.6833454+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
+{"timestamp":"2026-04-04T07:32:46.6994536+02:00","action":"unblock","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}

@@ -1,10 +1,12 @@
 ---
 id: 483
 title: 'Phase A: Add MCP tool references alongside CLI in all agents and skills'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-03-31T06:20:39.2789758+02:00
-updated: 2026-04-04T03:10:46.7682665+02:00
+updated: 2026-04-04T07:24:34.9598176+02:00
+started: 2026-04-04T07:24:34.9598176+02:00
+completed: 2026-04-04T07:24:34.9598176+02:00
 tags:
     - scope:mcp
     - ' scope:agents'
@@ -19,8 +21,6 @@ depends_on:
     - 475
     - 476
     - 477
-blocked: true
-block_reason: Uncommitted workspace reorganization broke 73+ TestFromAC tests. Files at agents/ skills/ instructions/ deleted and untracked .github/ copies created. TestFromAC constraint blocks builder from updating paths.
 class: standard
 ---
 

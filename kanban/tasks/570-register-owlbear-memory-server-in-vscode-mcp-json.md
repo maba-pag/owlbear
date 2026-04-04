@@ -85,7 +85,7 @@ Implementing the AC (removing `--project` flag per `TestFromAC_McpServerNames::t
 | `test_mcp_server_args_have_no_project_flag` | `TestFromAC_McpServerNames` (#570) | NO `--project` flag in args |
 | `test_mcp_server_args_reference_relative_path_to_owlbear` | `TestFromAC_McpConfig` (older task) | At least one arg with `..` |
 
-**Old args**: `["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"]` — `../owlbear` has `..` → old test passes  
+**Old args**: `["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"]` — `../owlbear` has `..` → old test passes
 **New args**: `["run", "python", "-m", "owlbear_mcp_kanban"]` — no `..` → old test fails
 
 ### Required fix (test-writer)
