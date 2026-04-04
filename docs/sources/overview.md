@@ -16,6 +16,14 @@ External repos and resources studied during OwlBear development.
 | MS Teams Incoming Webhooks docs | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook> | Teams webhook HTTP POST pattern, Adaptive Card payload format, channel-scoped config | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
 | MS Teams connector deprecation notice | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using> | M365 Connectors nearing deprecation; migration to Power Automate Workflows with webhook trigger | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
 
+## Power Automate Workflows for Teams Notifications (Task #592)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MS O365 connector retirement blog | <https://devblogs.microsoft.com/microsoft365dev/retirement-of-office-365-connectors-within-microsoft-teams/> | O365 Connectors retire Apr 30 2026; Power Automate Workflows is migration path; MessageCard support added Feb 2026 | docs/research/power-automate-workflows-teams-notifications.md | 2026-04-04 |
+| Teams webhook connector reference | <https://learn.microsoft.com/en-us/connectors/teams/#microsoft-teams-webhook> | TeamsIncomingWebhookTrigger API: HTTP POST, Adaptive Card schema, auth types, throttling limits | docs/research/power-automate-workflows-teams-notifications.md | 2026-04-04 |
+| Create incoming webhooks with Workflows | <https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498> | Step-by-step template/scratch setup, URL copy, auth options, channel selection | docs/research/power-automate-workflows-teams-notifications.md | 2026-04-04 |
+
 ## Agent-Scoped Hooks Research (Task #37)
 
 | Source | URL | What | Where Used | Date |
