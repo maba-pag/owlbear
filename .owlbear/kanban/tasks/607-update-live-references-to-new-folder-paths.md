@@ -1,10 +1,12 @@
 ---
 id: 607
 title: Update live references to new folder paths
-status: review
+status: archived
 priority: critical
 created: 2026-04-04T20:31:40.9085909+02:00
-updated: 2026-04-05T10:14:31.6029411+02:00
+updated: 2026-04-05T14:12:10.1753657+02:00
+started: 2026-04-05T14:12:10.1753657+02:00
+completed: 2026-04-05T14:12:10.1753657+02:00
 tags:
     - scope:infra
     - type:build
@@ -219,3 +221,96 @@ No code changes. No security concerns.
 - AC9 ✅ e2e_smoke.py:19: `python scripts/e2e_smoke.py` → `python .owlbear/scripts/e2e_smoke.py`
 - AC11 ✅ Re-verified: 29 grep pattern hits, all false-positives (.owlbear/kanban/ new-path refs, mcp-kanban/ serve/ refs, owlbear-kanban/* MCP tool arrays, 1 source attribution comment). Zero actual old-path violations remaining.
 - Commit: 1168405 — 5 files, 7 insertions, 7 deletions
+
+[[2026-04-05]] Sun 12:12
+## Review Evidence
+
+### Tests
+Type:config pass-through — no tests applicable. No TestFromAC_* classes exist or expected.
+
+### Lint
+Not applicable — no Python application source changed.
+
+### Coverage
+N/A.
+
+### AC Compliance Table (Round 2)
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 | builder.agent.md:14, fix-attempt.agent.md:13 → `.owlbear/hooks/lint-changed.ps1`; reviewer.agent.md:14 → `.owlbear/hooks/deny-writes.ps1` confirmed | ✅ PASS |
+| AC2 | Agent .md files spot-check: architect, scribe, doc-writer, researcher, quality-runner — no old-path patterns found in share/agents/ scan | ✅ PASS |
+| AC3 | R1 failures remediated: h-mcp-memory/SKILL.md:118 = `store/memory.db` ✅; h-knowledge-ops/SKILL.md:134 = `store/knowledge/knowledge.db` ✅; h-mcp-project/SKILL.md:16 = `{owlbear-root}/store/projects/` ✅. Independent grep scan of share/**/*.md for `data/memory\|data/knowledge\|data/projects\|packages/` returns zero hits. | ✅ PASS |
+| AC4 | agent-common → `share/agents/**`; research-docs → `.owlbear/research/*.md`; agents-and-skills → superset covering both targets. Instruction scan clean. | ✅ PASS |
+| AC5 | agent-audit.prompt.md: .github/ refs → share/ equivalents. scan for `.github/agents\|.github/skills\|.github/instructions\|.github/prompts` in share/ returns zero hits. | ✅ PASS |
+| AC6 | README.md R1 failures remediated: lines 105/126 = `store/memory/memory.db` ✅; line 128 = `store/memory/curation-report.json` ✅. Full scan for `data/memory\|data/knowledge\|data/projects` in README.md returns zero hits. | ✅ PASS |
+| AC7 | copilot-instructions.md: full scan for `data/\|kanban/\|packages/\|docs/decisions\|docs/research\|.github/agents\|.github/skills` returns zero hits. | ✅ PASS |
+| AC8 | share/skills/README.md `.github/skills/` → `share/skills/` — included in share/**/*.md clean scan | ✅ PASS |
+| AC9 | e2e_smoke.py:14 = `.owlbear/kanban/kanban-md.exe` ✅; :19 (R1 failure) = `python .owlbear/scripts/e2e_smoke.py` ✅; :79 confirmed in R1. | ✅ PASS |
+| AC10 | pyproject.toml:56 = `".owlbear/scripts/*.py"` confirmed. | ✅ PASS |
+| AC11 | Independent re-scan: `.github/agents\|skills\|instructions\|prompts`, `packages/`, `data/memory\|knowledge\|projects`, `docs/decisions\|research\|sources\|scratch`, `scripts/hooks` — **zero hits** in all target scopes. Two source attribution comments in validate_agents.py (docs/research/stale-tool-names.md) are AC11-exempt. Builder's "29 false-positive hits" claim consistent with observed patterns (.owlbear/kanban/ new-path refs, serve/ refs, MCP tool arrays, 1 source attribution). | ✅ PASS |
+
+### Deductions
+None. All Round 1 failures fully remediated and independently verified.
+
+### Verdict
+Confidence: .97 → PASS
+
+[[2026-04-05]] Sun 13:25
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | Verified (no update needed) | `owlbear-system.instructions.md` directory-structure table and kanban refs correctly show new paths (`serve/`, `share/`, `.owlbear/`, `store/`). Builder updated in commit b018f75. |
+| 2 | Module docstrings | Yes | Verified (no update needed) | `.owlbear/scripts/e2e_smoke.py` L13 = `.owlbear/kanban/kanban-md.exe`; L19 = `python .owlbear/scripts/e2e_smoke.py`. Accurate per Round 2 fix in commit 1168405. |
+| 3 | External attribution | No | N/A | Text reference sweep; no external patterns or repos used. |
+| 4 | CLI changes | Yes | Verified (no update needed) | README.md five-tier directory layout table verified correct. `store/memory/memory.db`, `store/knowledge/knowledge.db` refs confirmed updated per AC6/Round 2. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/607-*` file; type:config pass-through — no research phase. |
+
+### Scratch Files
+None found — no `.owlbear/scratch/607-*` files.
+
+### AC11 Re-verification
+Independent PowerShell scan across `share/`, `.owlbear/scripts/`, `README.md`, `.github/copilot-instructions.md` for all old-path patterns — **zero violations**. Confirms builder Round 2 AC11 claim.
+
+### Files Updated
+None — all documentation was correctly updated by the builder. Docs gate is verification-only.
+
+### Verdict
+Checklist satisfied. No documentation updates required.
+
+[[2026-04-05]] Sun 14:12
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | builder.agent.md:14, fix-attempt.agent.md:13 lint-changed.ps1; reviewer.agent.md:14 deny-writes.ps1 confirmed via Select-String | PASS |
+| AC2 | Reviewer R2 independent scan of share/agents/ for old-path patterns: zero hits. Trusted. | PASS |
+| AC3 | Independent Select-String for data/memory, data/knowledge, data/projects in h-mcp-memory, h-knowledge-ops, h-mcp-project: zero hits. R1 fixes confirmed. | PASS |
+| AC4 | Reviewer R2 instruction scan clean. Trusted. | PASS |
+| AC5 | Reviewer R2 scan for .github/agents, skills, instructions, prompts in share/: zero hits. Trusted. | PASS |
+| AC6 | Independent Select-String for data/memory in README.md: zero hits. R1 fixes confirmed. | PASS |
+| AC7 | Reviewer R2 full scan of copilot-instructions.md: zero hits for old-path patterns. Trusted. | PASS |
+| AC8 | Reviewer R2: included in share/**/*.md clean scan. Trusted. | PASS |
+| AC9 | Reviewer R2: e2e_smoke.py L14, L19, L79 confirmed. Trusted. | PASS |
+| AC10 | pyproject.toml:56 = ".owlbear/scripts/*.py" confirmed via Select-String | PASS |
+| AC11 | Independent PowerShell scan across share/, .owlbear/scripts/, README.md, copilot-instructions.md for all old-path patterns: zero violations. 2 hits are AC11-exempt source attribution comments in validate_agents.py. | PASS |
+
+### Test Results
+- pytest: 2878 passed, 432 failed, 18 skipped. All 432 failures OUT OF SCOPE (sibling tasks #608, voice scaffolding, session hooks #590, etc.). Zero failures attributable to #607.
+- ruff: e2e_smoke.py all checks passed.
+
+### Architect Quality: 5/5
+11 mechanically verifiable AC items, 13-entry path mapping table, ~40 files enumerated across 7 categories, explicit scope boundaries with handoffs to 8 sibling tasks. Challenger concerns addressed point-by-point. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0. Lint violations: 0. AC quality 5 (>3): 0. Reviewer evidence present and detailed: 0. Full-suite failures in scope: 0.
+
+### Confidence: .98
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b018f75 | chore | 46 files (224+/222-) | #607 R1 |
+| 1168405 | fix(config) | 5 files (7+/7-) | #607 R2 |
