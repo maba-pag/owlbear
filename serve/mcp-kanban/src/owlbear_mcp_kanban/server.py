@@ -554,7 +554,10 @@ def _check_pick_gates(task: dict) -> bool:
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
-    """Pick dispatchable tasks: gate-filtered, sorted by priority/status, capped at limit."""
+    """Pick dispatchable tasks: gate-filtered, sorted by priority/status, capped at limit.
+
+    Optional tag pre-filters candidates before gating (e.g. 'phase-2').
+    """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["list", "--json", "--unblocked", "--not-blocked", "--unclaimed"]
     if tag:
