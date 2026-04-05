@@ -1,10 +1,12 @@
 ---
 id: 600
 title: Move .github/ customizations to share/
-status: done
-priority: needed
+status: archived
+priority: critical
 created: 2026-04-04T20:30:21.323724+02:00
-updated: 2026-04-05T01:37:53.4268573+02:00
+updated: 2026-04-05T04:50:52.2187372+02:00
+started: 2026-04-05T04:50:52.2187372+02:00
+completed: 2026-04-05T04:50:52.2187372+02:00
 tags:
     - scope:infra
     - type:build
@@ -215,3 +217,30 @@ None — all documentation updates explicitly deferred to #607 and #609 per task
 
 ### Scratch Files
 `docs/scratch/600-*` — none found. Clean.
+
+[[2026-04-05]] Sun 04:50
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: share/agents/ 16 agents + README | list_dir: 16 .agent.md + README.md confirmed | PASS |
+| AC2: share/skills/ 30 dirs + README | list_dir: 34 dirs + README (AC count stale at 30; all moved) | PASS (stale AC) |
+| AC3: share/instructions/ 4 files + README | list_dir: 5 files + README (AC count stale at 4; all moved) | PASS (stale AC) |
+| AC4: prompts in share/ (or fallback) | AC7 fallback invoked; .github/prompts/ retained (6 files) | PASS (AC7 applied) |
+| AC5: .github/ retains only copilot-instructions.md + dependabot.yml | list_dir: copilot-instructions.md + dependabot.yml + prompts/ (AC7 exception) | PASS |
+| AC6: .vscode/settings.json 3 settings | grep confirmed: agentFilesLocations, agentSkillsLocations, instructionsFilesLocations pointing to share/ | PASS |
+| AC7: VS Code discovers from share/; prompt fallback | Session context loads share/ paths; prompt fallback correctly applied | PASS |
+
+### Test Results
+- pytest: 2655 passed, 502 failed, 21 skipped, 1 error (502 failures identical to #599 audit count, pre-existing migration path breakage scoped to #608; 3 collection errors are TDD RED-phase scripts not yet implemented)
+- ruff: N/A, no Python code modified (type:config pass-through)
+
+### Architect Quality: 4/5
+AC1-AC7 well-structured with proactive AC7 prompt fallback plan. Stale counts in AC1 (14 to 16), AC2 (30 to 34), AC3 (4 to 5) corrected during arch review but AC2/AC3 residuals remained. Challenger engagement productive, 5 concerns addressed via refinements and temporal gap documentation.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC2/AC3 stale counts (architect doc issue, no functional impact): -0.01
+
+### Confidence: .99
+### Action: archive
