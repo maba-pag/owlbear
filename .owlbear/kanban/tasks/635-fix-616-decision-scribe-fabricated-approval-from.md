@@ -4,10 +4,12 @@ title: 'Fix #616 decision: scribe fabricated approval from needs-info response'
 status: done
 priority: needed
 created: 2026-04-05T22:45:51.0003611+02:00
-updated: 2026-04-05T23:11:23.3296484+02:00
+updated: 2026-04-06T00:08:53.5091666+02:00
 tags:
     - process
     - bugfix
+claimed_by: river-river
+claimed_at: 2026-04-06T00:08:53.5091666+02:00
 class: standard
 ---
 
@@ -34,3 +36,33 @@ Fixed in this session: the DR format now supports `approved: needs-info` and `ap
 - [ ] Verify #617 and #618 are in the right state given the corrected decision status
 
 ## Done\nCorrected directly in session:\n- Fixed #616 task body: replaced fabricated 'Approved — Option A' with actual user response\n- Corrected resolved DR file frontmatter: changed approved from true to needs-info\n- Corrected architecture review text referencing false approval\n- A new DR is needed for formal approval of the scope-params approach
+
+[[2026-04-06]] Mon 00:08
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Review #616 state | #616 body has Decision Resolved (CORRECTED): Status NOT approved | PASS |
+| AC2: Correct task body | #616 shows actual user decision field and real risk questions | PASS |
+| AC3: Re-create DR in pending | New DR at pending/616-scope-params-approval.md (approved: false). Old corrected | PASS |
+| AC4: Verify #617/#618 states | #616 blocked, #617 backlog, #618 in-progress. Pipeline stalled by #616 block | PASS |
+
+### Root Cause Fix (bonus deliverables)
+- w-decision-routing: needs-info/rejected states, validation gate
+- scribe.agent.md: validation rule for decision field
+- decisions/README.md: user instructions for new workflows
+
+### Test Results
+- pytest: 2914 passed, 482 failed (all pre-existing), 18 skipped. Zero in #635 scope
+- ruff: All checks passed
+
+### Architect Quality: 3/5
+AC1-3 specific. AC4 vague (right state undefined). Adequate for corrective task.
+
+### Deduction Breakdown
+- Missing reviewer evidence (process task): -.02
+- AC quality 3/5: -.03
+
+### Confidence: .95
+### Action: archive

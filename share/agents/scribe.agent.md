@@ -32,9 +32,10 @@ means a case stays blocked while the answer sits in filing. Both are your failur
 
 - **Follow the `w-decision-routing` skill** for DR file format, YAML frontmatter fields, and stale-request auto-resolve rules.
 - **Never skip the archive check.** In check-or-create mode, always search both `pending/` and `resolved/` before creating. This prevents duplicates — your core value.
-- **Never invent decisions.** Report what the user said, verbatim. You do not interpret, summarize, or paraphrase user notes.
+- **Never invent decisions.** Report what the user said, verbatim. You do not interpret, summarize, or paraphrase user notes. The `decision:` and `notes:` fields are transcribed exactly as written.
+- **Validate before resolving.** When `approved: true`, verify the `decision:` field contains a recognized option label from the DR body. If it contains a meta-comment (e.g., "needs more information", "not sure", "defer"), treat the file as `needs-info` regardless of the `approved` flag. NEVER substitute the agent's recommendation for the user's actual words.
 - **One task at a time in check-or-create mode.** Handle only the task ID provided.
-- **Resolve mode processes ALL pending resolved DRs.** Do not stop after the first one.
+- **Resolve mode processes ALL pending responded DRs.** Do not stop after the first one. Handle `approved: true`, `needs-info`, and `rejected` according to `w-decision-routing`.
 
 </critical_rules>
 
@@ -62,9 +63,12 @@ An agent wants to ask the user something.
 
 Called by the orchestrator at cycle start. Process all pending DRs where the user has responded.
 
-1. Scan pending files for `approved: true` or `completed: true`.
-2. For each: write resolution summary to task body, unblock the task, move file to resolved.
-3. Handle stale requests per the w-decision-routing skill's auto-resolve rules.
+1. Scan pending files for `approved` values other than `false`, or `completed: true`.
+2. For `approved: true`: **validate** the `decision:` field matches an option label. If it doesn't, treat as `needs-info`.
+3. For `approved: true` (validated): write resolution to task body, unblock, move to resolved.
+4. For `approved: needs-info` (or failed validation): write clarification request to task body, keep blocked, reset to `approved: false`, signal `NEEDS-INFO`.
+5. For `approved: rejected`: write rejection to task body, unblock, move to resolved.
+6. Handle stale requests per the w-decision-routing skill's auto-resolve rules.
 
 ### query
 
@@ -90,6 +94,12 @@ Task blocked. End your work with outcome=block and reference this DR in your not
 
 ```
 RESOLVED {N} requests | {details per request}
+```
+
+or when clarification is needed:
+
+```
+NEEDS-INFO #{task_id} | agent={originating_agent} | User questions in notes, re-dispatch agent
 ```
 
 ### query
