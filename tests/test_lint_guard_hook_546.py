@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "lint-changed.ps1"
+_SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "lint-changed.ps1"
 
 # A Python source that reliably generates an F401 unused-import ruff error.
 _LINT_ERROR_CONTENT = "import os\n"
