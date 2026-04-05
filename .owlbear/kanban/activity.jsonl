@@ -1,10 +1,3 @@
-{"timestamp":"2026-03-30T18:02:54.4175051+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T18:02:54.4222917+02:00","action":"claim","task_id":158,"detail":"builder"}
-{"timestamp":"2026-03-30T18:06:38.5106332+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T18:06:43.9263096+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T18:06:43.9323907+02:00","action":"release","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T18:06:48.5116777+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T18:06:48.5161297+02:00","action":"release","task_id":158,"detail":"builder"}
 {"timestamp":"2026-03-30T18:07:05.2273711+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
 {"timestamp":"2026-03-30T18:07:35.6044791+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
 {"timestamp":"2026-03-30T18:07:35.60863+02:00","action":"claim","task_id":222,"detail":"test-writer"}
@@ -9998,3 +9991,10 @@
 {"timestamp":"2026-04-06T00:09:35.7631738+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
 {"timestamp":"2026-04-06T00:09:35.7745329+02:00","action":"release","task_id":635,"detail":"river-river"}
 {"timestamp":"2026-04-06T00:09:36.3069545+02:00","action":"move","task_id":635,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T00:10:09.1351195+02:00","action":"edit","task_id":636,"detail":"DUPLICATE of #635 — delete"}
+{"timestamp":"2026-04-06T00:10:09.1482241+02:00","action":"claim","task_id":636,"detail":"ivory-snow"}
+{"timestamp":"2026-04-06T00:11:23.9700775+02:00","action":"edit","task_id":636,"detail":"DUPLICATE of #635 — delete"}
+{"timestamp":"2026-04-06T00:11:31.7933312+02:00","action":"edit","task_id":636,"detail":"DUPLICATE of #635 — delete"}
+{"timestamp":"2026-04-06T00:12:01.041523+02:00","action":"edit","task_id":636,"detail":"DUPLICATE of #635 — delete"}
+{"timestamp":"2026-04-06T00:12:01.0543995+02:00","action":"release","task_id":636,"detail":"ivory-snow"}
+{"timestamp":"2026-04-06T00:12:01.6587858+02:00","action":"move","task_id":636,"detail":"done -\u003e archived"}
