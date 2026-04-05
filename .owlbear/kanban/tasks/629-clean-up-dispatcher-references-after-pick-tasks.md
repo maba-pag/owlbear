@@ -1,10 +1,12 @@
 ---
 id: 629
 title: Clean up dispatcher references after pick_tasks migration
-status: done
+status: archived
 priority: important
 created: 2026-04-05T10:42:19.8702275+02:00
-updated: 2026-04-05T22:02:00.1641444+02:00
+updated: 2026-04-05T23:29:47.7272256+02:00
+started: 2026-04-05T23:29:47.7272256+02:00
+completed: 2026-04-05T23:29:47.7272256+02:00
 tags:
     - scope:agents
     - phase-2
@@ -12,6 +14,8 @@ tags:
 parent: 619
 depends_on:
     - 622
+claimed_by: forge-ivory
+claimed_at: 2026-04-05T23:29:38.1061324+02:00
 class: standard
 ---
 
@@ -154,3 +158,33 @@ None. All AC items independently verified against file content.
 **Scratch files cleaned:** None found for `629-*`.
 
 **Verdict:** All checklist items evaluated with evidence. No documentation files require updating. Docs gate passed.
+
+[[2026-04-05]] Sun 23:29
+## Audit
+### AC Verification
+| AC | Evidence | Status |
+|----|----------|--------|
+| 1 | grep dispatcher agent-common.instructions.md = 0 matches; diff: row removed | PASS |
+| 2 | grep dispatcher r-pipeline-protocol/SKILL.md = 0; diff L97: orchestrator will route | PASS |
+| 3 | diff L186: blocked for triage by orchestrator | PASS |
+| 4 | diff: T1 row = orchestrator only; count 14->15 | PASS |
+| 5 | grep dispatcher h-agent-structure/SKILL.md = 0; diff: T1 row = orchestrator | PASS |
+| 6 | grep Deprecated dispatcher.agent.md L13: deprecation header from 623 | PASS |
+| 7 | grep dispatcher w-task-decomposition/SKILL.md = 0; diff L19: orchestrator-dispatched | PASS |
+
+### Test Results
+- pytest: 2952 passed, 406 failed, 8 skipped -- 0 failures in task scope
+- ruff: All checks passed
+
+### Architect Quality: 5/5
+
+### Deduction Breakdown
+- AC lines without evidence: 0
+- Lint violations: 0
+- AC quality: 5/5 (no deduction)
+- Reviewer section: present, detailed, .97 PASS
+- Full-suite failures in scope: 0
+- Note: builder left deliverables uncommitted; committed during audit
+
+### Confidence: 1.00
+### Action: archive

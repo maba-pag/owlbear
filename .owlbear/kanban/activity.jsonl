@@ -1,10 +1,3 @@
-{"timestamp":"2026-03-30T17:47:05.8154285+02:00","action":"claim","task_id":224,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:47:24.2904734+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-30T17:47:24.2946795+02:00","action":"claim","task_id":144,"detail":"writer"}
-{"timestamp":"2026-03-30T17:48:06.0047164+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T17:48:13.7100818+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T17:48:13.7143202+02:00","action":"release","task_id":32,"detail":"builder"}
-{"timestamp":"2026-03-30T17:48:34.2582345+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
 {"timestamp":"2026-03-30T17:48:34.2609458+02:00","action":"claim","task_id":54,"detail":"architect"}
 {"timestamp":"2026-03-30T17:50:01.0979578+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
 {"timestamp":"2026-03-30T17:50:13.8095971+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
@@ -9998,3 +9991,10 @@
 {"timestamp":"2026-04-05T23:02:20.6419894+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
 {"timestamp":"2026-04-05T23:02:20.6529384+02:00","action":"release","task_id":623,"detail":"zeal-fable"}
 {"timestamp":"2026-04-05T23:02:21.1290327+02:00","action":"move","task_id":623,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T23:03:05.2865778+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T23:03:05.2966735+02:00","action":"claim","task_id":629,"detail":"forge-ivory"}
+{"timestamp":"2026-04-05T23:11:23.3310839+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-05T23:11:59.951772+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T23:11:59.9658748+02:00","action":"block","task_id":616,"detail":"DR pending: 616-scope-params-approval.md (re-created after scribe error)"}
+{"timestamp":"2026-04-05T23:29:38.109287+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T23:29:47.7282875+02:00","action":"move","task_id":629,"detail":"done -\u003e archived"}

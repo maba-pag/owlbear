@@ -1,10 +1,10 @@
 ---
 id: 635
 title: 'Fix #616 decision: scribe fabricated approval from needs-info response'
-status: todo
+status: done
 priority: needed
 created: 2026-04-05T22:45:51.0003611+02:00
-updated: 2026-04-05T22:45:51.0003611+02:00
+updated: 2026-04-05T23:11:23.3296484+02:00
 tags:
     - process
     - bugfix
@@ -32,3 +32,5 @@ Fixed in this session: the DR format now supports `approved: needs-info` and `ap
 - [ ] Correct the task body: replace fabricated "Approved — Option A" with actual user response
 - [ ] Re-create the DR in pending if you want to properly approve the scope-params approach, OR manually write the correct approval to the task body if the risk-depth research (already done) answered your questions
 - [ ] Verify #617 and #618 are in the right state given the corrected decision status
+
+## Done\nCorrected directly in session:\n- Fixed #616 task body: replaced fabricated 'Approved — Option A' with actual user response\n- Corrected resolved DR file frontmatter: changed approved from true to needs-info\n- Corrected architecture review text referencing false approval\n- A new DR is needed for formal approval of the scope-params approach
