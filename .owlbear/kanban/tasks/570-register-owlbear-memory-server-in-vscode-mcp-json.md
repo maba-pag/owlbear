@@ -1,10 +1,12 @@
 ---
 id: 570
 title: Register owlbear-memory server in .vscode/mcp.json
-status: done
+status: archived
 priority: needed
 created: 2026-04-03T11:04:47.5649332+02:00
-updated: 2026-04-05T01:37:42.005409+02:00
+updated: 2026-04-05T04:18:26.5956173+02:00
+started: 2026-04-05T04:18:26.5956173+02:00
+completed: 2026-04-05T04:18:26.5956173+02:00
 tags:
     - scope:config
     - phase-2
@@ -209,3 +211,32 @@ Confidence: .94 → **PASS**
 
 ### Scratch Files Cleaned
 - None (`docs/scratch/570-*` — no files found)
+
+[[2026-04-05]] Sun 04:18
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `.vscode/mcp.json` has `owlbear-memory` entry (stdio, uv, no `--project`) | `Get-Content .vscode/mcp.json` confirms entry; `test_create_mcp_config_owlbear_memory_entry_shape` PASS | PASS |
+| `setup.py` kebab-case keys: `owlbear-kanban`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-project` | grep confirms 4 keys at L67/72/77/82; `test_mcp_server_names_are_kebab_case` PASS | PASS |
+| All affected tests updated (McpServerNames x6, GitHubMcpServer x1, SetupMcp x6) | 18/18 AC-scoped tests PASS | PASS |
+| Tool pattern resolution (`owlbear-kanban/*` resolves) | mcp.json keys are kebab-case; `test_mcp_server_names_are_kebab_case` exact-set match PASS | PASS |
+
+### Test Results
+- pytest (AC-scoped): 18 passed, 0 failed
+- pytest (full suite): 2655 passed, 502 failed — all failures pre-existing (voice, v2 infra, session hooks, skill frontmatter). Zero task-scope failures.
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC specific and verifiable. Challenger review improved test surface. Minor cosmetic typo in AC line 2 (underscore vs kebab). Builder reject/re-route handled cleanly.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 → -.00
+- Lint violations: 0 → -.00
+- AC quality <= 3: no (4/5) → -.00
+- Missing reviewer evidence: no → -.00
+- Full-suite task-scope failures: 0 → -.00
+- Reviewer listed no deductions but scored .94 → -.02
+
+### Confidence: .98
+### Action: archive
