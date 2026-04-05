@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Deny-Code-Writes AC Validation (Task #637)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Agent Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse input schema: `editFiles` tool_name with `files[]` array, `permissionDecision` output | .owlbear/research/deny-code-writes-ac-validation-637.md | 2026-04-06 |
+
 ## Blocked-Task Scan for Decision-Request Notifications (Task #348)
 
 | Source | URL | What | Where Used | Date |
@@ -22,6 +28,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | MS Teams Incoming Webhooks docs | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook> | Teams webhook HTTP POST pattern, Adaptive Card payload format, channel-scoped config | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
 | MS Teams connector deprecation notice | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using> | M365 Connectors nearing deprecation; migration to Power Automate Workflows with webhook trigger | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
+
+## Revisit Blocked-Task DR Scan (Task #631)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| (validation pass — no new external sources) | — | All sources from #348 and #592 research; codebase-only validation | .owlbear/research/revisit-blocked-task-dr-scan-notification.md | 2026-04-05 |
 
 ## Import/Export Knowledge Snapshots (Task #618)
 
