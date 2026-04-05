@@ -91,7 +91,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: ["tests/test_{module}.py"]
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 All tests must pass (`failed: []`), zero failures.
@@ -137,7 +137,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
@@ -149,7 +149,7 @@ If `quality-runner` is not in the calling agent's `agents:` array or subagent di
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
-uv run ruff check packages/ tests/
+uv run ruff check serve/ tests/
 ```
 
 See `h-pytest-and-linting` for exact flags and known pitfalls.
@@ -188,7 +188,7 @@ agentName: fix-attempt
 prompt: |
   task_id: {id}
   test_file: tests/test_{module}.py
-  source_files: packages/{package}/src/{namespace}/{module}.py
+  source_files: serve/{package}/src/{namespace}/{module}.py
   retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
 ```
@@ -207,7 +207,7 @@ Append builder notes to task body via `edit_task` (with `append_body` and `times
 Commit per `r-project-standards` → Commit Discipline:
 
 ```powershell
-git add packages/{package}/src/{namespace}/{module}.py tests/test_{module}.py
+git add serve/{package}/src/{namespace}/{module}.py tests/test_{module}.py
 git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 

@@ -29,7 +29,7 @@ Before a task can leave `ideation`, complete this checklist. Items 1–6 are **m
 5. **Architecture fit** — Integrates with existing OwlBear components? Interfaces?
 6. **Implementation approach** — Patterns, idioms, data structures to adopt.
 7. **Testing strategy** _(recommended)_ — How to test? Unit, integration, mocks? Coverage?
-8. **Findings documented** _(recommended)_ — Notes in task body or linked `docs/research/{slug}.md`.
+8. **Findings documented** _(recommended)_ — Notes in task body or linked `.owlbear/research/{slug}.md`.
 
 For trivial tasks (rename, typo, config tweak): items 1–4 get a one-liner `N/A — trivial change, rationale: X`.
 
@@ -46,8 +46,8 @@ If the task has scoped content but needs clarification:
 
 Before gathering sources:
 
-1. Search `docs/research/` for the task ID and topic keywords. If a doc references this task, read it first.
-2. Check task body for `See docs/research/` links.
+1. Search `.owlbear/research/` for the task ID and topic keywords. If a doc references this task, read it first.
+2. Check task body for `See .owlbear/research/` links.
 3. If a complete, recent doc exists: do a validation pass instead of full research — confirm the doc is current, verify codebase state, skip to Step 5 if findings hold.
 
 > Skipping this check is the most common research time-sink.
@@ -58,7 +58,7 @@ Find 2+ authoritative sources per claim:
 
 - **Codebase:** search tools for related existing code.
 - **Web:** `fetch-webpage` for docs, articles, GitHub repos.
-- **Clone for deep analysis:** `docs/scratch/research/{repo-name}/` — analyze, then delete when done.
+- **Clone for deep analysis:** `.owlbear/scratch/research/{repo-name}/` — analyze, then delete when done.
 
 Track: name, URL, what was taken, relevance score (0.0–1.0).
 
@@ -85,7 +85,7 @@ Before writing the research doc, challenge your recommendation using the **chall
 
 ## Step 4 — Write Research Document
 
-Create `docs/research/{slug}.md`:
+Create `.owlbear/research/{slug}.md`:
 
 ```markdown
 # {Title}
@@ -124,8 +124,8 @@ Generate follow-up tasks at `ideation` status via `create_task`. For findings re
 
 ## Step 6 — Deliverables
 
-1. Add rows to `docs/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
-2. Delete any cloned repos from `docs/scratch/research/`.
+1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
+2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
 Commit per `r-project-standards` → Commit Discipline (if research doc or sources were created).
 
@@ -143,7 +143,7 @@ Append to task body before advancing:
 
 ```
 ## Research
-- Research doc: docs/research/{slug}.md
+- Research doc: .owlbear/research/{slug}.md
 - Sources: {N} studied, {M} high-relevance
 - Recommendation: {brief} (confidence: {.XX})
 - Follow-up tasks created: {list of IDs at ideation}
@@ -163,16 +163,16 @@ Append to task body before advancing:
 - [ ] Research doc 200 lines or fewer
 - [ ] Follow-up kanban tasks are concrete and actionable (created at `ideation`)
 - [ ] Did NOT create/edit source code
-- [ ] External sources logged in `docs/sources/overview.md`
-- [ ] Cloned repos deleted from `docs/scratch/research/`
+- [ ] External sources logged in `.owlbear/sources/overview.md`
+- [ ] Cloned repos deleted from `.owlbear/scratch/research/`
 - [ ] Challenger invoked for recommendation (or fallback noted)
 - [ ] Tier classification applied to every finding (T1/T2/T3)
 - [ ] Task advanced to `backlog` and claim released
 
 ## Known Pitfalls
 
-- **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `docs/research/` first.
+- **Skipping pre-flight check:** Multiple research cycles have been wasted because existing docs were missed. Always check `.owlbear/research/` first.
 - **Follow-up tasks without AC:** Every follow-up task needs concrete acceptance criteria. "Improve X" without measurable conditions is not actionable.
-- **Forgetting to delete cloned repos:** `docs/scratch/research/` repos accumulate if not cleaned. Delete after analysis.
+- **Forgetting to delete cloned repos:** `.owlbear/scratch/research/` repos accumulate if not cleaned. Delete after analysis.
 - **T3 without DR:** New capabilities and architecture changes MUST go through the scribe for a blocking DR. Proceeding without approval risks reversal.
 - **Over-long research docs:** 200-line cap exists to force conciseness. If you need more, the analysis is not focused enough.

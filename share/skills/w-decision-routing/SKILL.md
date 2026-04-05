@@ -6,7 +6,7 @@ user-invocable: false
 
 # Decision Routing
 
-Create, check, and resolve decision and action requests. The scribe is the exclusive handler of `docs/decisions/` — all agents interact with DRs through this workflow.
+Create, check, and resolve decision and action requests. The scribe is the exclusive handler of `.owlbear/decisions/` — all agents interact with DRs through this workflow.
 
 ## Step 0 — Setup
 
@@ -20,18 +20,18 @@ This skill does NOT claim a task — the scribe operates on behalf of the callin
 
 ### Mode 1: check-or-create
 
-1. Search `docs/decisions/pending/` and `docs/decisions/resolved/` for files matching the task ID.
+1. Search `.owlbear/decisions/pending/` and `.owlbear/decisions/resolved/` for files matching the task ID.
 2. **If a resolved DR covers the same concern:** return the user's answer verbatim (decision + notes).
 3. **If a pending DR covers the same concern:** return "already pending."
 4. **If no match:** create the DR with proper frontmatter and block the task.
 
 ### Mode 2: resolve
 
-Scan `docs/decisions/pending/` for files where `approved: true` (decisions) or `completed: true` (action requests). For each resolved file, perform three steps in order:
+Scan `.owlbear/decisions/pending/` for files where `approved: true` (decisions) or `completed: true` (action requests). For each resolved file, perform three steps in order:
 
 1. **Write summary to task body** — extract `decision:`/`notes:` (decisions) or `notes:` (actions) and append `## Decision Resolved` or `## Action Completed` to the task body via `edit_task` (with `append_body`).
 2. **Unblock the task** — via `edit_task` (with `unblock=True`).
-3. **Move the pending file** to `docs/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
+3. **Move the pending file** to `.owlbear/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
 
 **Auto-resolution (5-day timeout):** `impact_tier: 2` decisions (or missing `impact_tier`) staying `approved: false` for 5+ days get auto-resolved with the agent's pre-filled recommendation. Update with `approved: auto` and unblock.
 
@@ -67,7 +67,7 @@ Create when the user must **do something** (not decide):
 
 ## Decision Request File Format
 
-**Location:** `docs/decisions/pending/{task-id}-{slug}.md`
+**Location:** `.owlbear/decisions/pending/{task-id}-{slug}.md`
 
 ### Frontmatter
 

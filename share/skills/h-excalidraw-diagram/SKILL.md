@@ -71,7 +71,7 @@ Vertical or horizontal timeline with events. Use for API call sequences, deploym
 
 ## Delivery
 
-1. **Write** — `create_file` to `docs/scratch/{name}.excalidraw`
+1. **Write** — `create_file` to `.owlbear/scratch/{name}.excalidraw`
 2. **Render** — If Kroki is available, POST JSON to Kroki HTTP API with `diagram_type=excalidraw` and `output_format=svg`
 
 ## Reference Files

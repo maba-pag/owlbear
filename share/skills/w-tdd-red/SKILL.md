@@ -59,7 +59,7 @@ Find interfaces, types, and existing patterns referenced in the AC:
 
 Run this only if Step 2 found no testable interfaces:
 
-1. **Scan AC for Python implementation intent** — keywords: `implement`, `function`, `method`, `class`, `module`, `src/`, `packages/`, `.py`, `import`, `endpoint`, `API`.
+1. **Scan AC for Python implementation intent** — keywords: `implement`, `function`, `method`, `class`, `module`, `src/`, `serve/`, `.py`, `import`, `endpoint`, `API`.
 2. **If implementation intent found:** proceed to Step 3 (new-module RED phase, ImportError tests expected).
 3. **If NO intent AND AC references only non-Python files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.yml`, `.yaml`, `.json`, `.md`, `.prompt.md`): heuristic pass-through. Append note via `edit_task`, advance via `end_work`, return signal, and stop.
 4. **If ambiguous:** default to pass-through with strong warning. Escalate to decision request via scribe only when AC is too ambiguous to determine builder intent.

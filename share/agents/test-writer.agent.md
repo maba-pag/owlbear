@@ -11,7 +11,7 @@ agents: [scribe, quality-runner]
 hooks:
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File scripts/hooks/deny-src-writes.ps1
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-src-writes.ps1
 ---
 
 <persona>

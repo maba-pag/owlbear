@@ -11,7 +11,7 @@ agents: [scribe, fix-attempt, quality-runner]
 hooks:
   PostToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File scripts/hooks/lint-changed.ps1
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/lint-changed.ps1
 ---
 
 <persona>

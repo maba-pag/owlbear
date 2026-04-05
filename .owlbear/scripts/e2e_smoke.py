@@ -11,7 +11,7 @@ Prerequisites
 -------------
 1. ``gh`` CLI on PATH (GitHub CLI)
 2. ``gh copilot --help`` exits 0 — Copilot extension installed
-3. ``kanban/kanban-md.exe`` exists — kanban-md binary available
+3. ``.owlbear/kanban/kanban-md.exe`` exists — kanban-md binary available
 4. ``owlbear`` on PATH — owlbear CLI installed in environment
 
 Invocation
@@ -48,7 +48,7 @@ import uuid
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).parent.parent
-_KANBAN_BIN = _PROJECT_ROOT / "kanban" / "kanban-md.exe"
+_KANBAN_BIN = _PROJECT_ROOT / ".owlbear" / "kanban" / "kanban-md.exe"
 _DEFAULT_TIMEOUT = 300
 
 
@@ -76,7 +76,7 @@ def _check_prerequisites() -> None:
 
     if not _KANBAN_BIN.exists():
         _print_err(f"PREREQUISITE FAILED: kanban-md binary not found at {_KANBAN_BIN}")
-        _print_err("  Run kanban/setup.ps1 to download it.")
+        _print_err("  Run .owlbear/kanban/setup.ps1 to download it.")
         sys.exit(2)
 
     if shutil.which("owlbear") is None:

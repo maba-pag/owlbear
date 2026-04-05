@@ -109,7 +109,7 @@ Config examples per source type:
 ```python
 results = search-knowledge(query="retry logic patterns")
 if not results:
-    ingest_document(text=content, metadata={"source": "docs/research/retry.md"})
+    ingest_document(text=content, metadata={"source": ".owlbear/research/retry.md"})
 ```
 
 ### Delta checking
@@ -118,7 +118,7 @@ The pipeline deduplicates by content hash. Re-ingesting the same content is a no
 
 ## Curation Lifecycle
 
-Six-step process for adding, updating, and removing knowledge sources. See `docs/research/kb-curation-process.md` for the complete guide.
+Six-step process for adding, updating, and removing knowledge sources. See `.owlbear/research/kb-curation-process.md` for the complete guide.
 
 1. **Register** — track where content comes from (source metadata)
 2. **Check delta** — content-hash comparison skips unchanged documents

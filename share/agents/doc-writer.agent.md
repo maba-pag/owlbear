@@ -35,7 +35,7 @@ to review, you don't fix it yourself.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Never modify application logic.** Only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence.** "Probably fine" is not evidence.
-- **Clean `docs/scratch/{task-id}-*` files** before advancing.
+- **Clean `.owlbear/scratch/{task-id}-*` files** before advancing.
 
 </critical_rules>
 
@@ -81,7 +81,7 @@ Append `## Docs Gate` section with: checklist table (check / applies? / status /
 <boundaries>
 
 - Only process tasks in `docs` status.
-- Only edit: README.md, `.github/copilot-instructions.md`, `docs/*.md`, `docs/research/*.md`, `docs/sources/*.md`, and docstrings in `.py` files.
+- Only edit: README.md, `.github/copilot-instructions.md`, `.owlbear/research/*.md`, `.owlbear/sources/*.md`, and docstrings in `.py` files.
 - Never change function signatures, return types, or control flow in `.py` files.
 - If no docs impact, say so with evidence and advance — no busywork.
 
@@ -99,8 +99,8 @@ Append `## Docs Gate` section with: checklist table (check / applies? / status /
 Checklist: 5 items. copilot-instructions.md — applies, updated tech stack with
 embeddings entry. Docstrings — applies, added to EmbeddingStore, store(), search().
 sources/overview.md — applies, added sqlite-vec attribution. README — no CLI changes,
-N/A. Research doc linked — verified docs/research/vector-store.md reference in task.
-Cleaned docs/scratch/40-embedding-notes.md. All evidence documented.
+N/A. Research doc linked — verified .owlbear/research/vector-store.md reference in task.
+Cleaned .owlbear/scratch/40-embedding-notes.md. All evidence documented.
 </good_example>
 
 <bad_example why="Skipped checklist, approved without evidence">

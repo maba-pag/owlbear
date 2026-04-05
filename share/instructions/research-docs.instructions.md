@@ -1,5 +1,5 @@
 ---
-applyTo: "docs/research/*.md"
+applyTo: ".owlbear/research/*.md"
 description: "Guardrails for research/analysis documents — ensures findings become kanban tasks"
 ---
 

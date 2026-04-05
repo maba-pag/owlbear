@@ -21,7 +21,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 ### Lint Only
@@ -32,7 +32,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: []
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 ### Coverage Only
@@ -53,7 +53,7 @@ If `quality-runner` is not in the calling agent's `agents:` array or subagent di
 
 ```powershell
 uv run pytest tests/test_{module}.py -q --tb=short
-uv run ruff check packages/ tests/
+uv run ruff check serve/ tests/
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 ```
 

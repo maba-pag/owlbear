@@ -8,8 +8,8 @@ user-invocable: false
 
 > **Deprecated.** Use MCP tools via `h-mcp-kanban` for all board operations. This skill is retained as a fallback reference for direct CLI troubleshooting only. If MCP tools fail, consult this for CLI equivalents, then record the MCP failure in repo memory.
 
-Command synopsis, flag reference, and recipes for `kanban\kanban-md.exe`.
-Each task is a `.md` file in `kanban/tasks/`.
+Command synopsis, flag reference, and recipes for `.owlbear\.owlbear\kanban\kanban-md.exe`.
+Each task is a `.md` file in `.owlbear/kanban/tasks/`.
 
 ## Command Synopsis
 
@@ -31,9 +31,9 @@ Use `--compact` on `list`, `board`, `metrics`, `log`. Use `--json` only when pip
 ## Claiming Commands
 
 ```powershell
-kanban\kanban-md.exe edit {id} --claim <agent>                         # Phase 1: claim
-kanban\kanban-md.exe edit {id} -a "..." -t --claim <agent>             # Phase 2: maintain
-kanban\kanban-md.exe edit {id} --status <next> --release               # Phase 3: advance
+.owlbear\.owlbear\kanban\kanban-md.exe edit {id} --claim <agent>                         # Phase 1: claim
+.owlbear\.owlbear\kanban\kanban-md.exe edit {id} -a "..." -t --claim <agent>             # Phase 2: maintain
+.owlbear\.owlbear\kanban\kanban-md.exe edit {id} --status <next> --release               # Phase 3: advance
 ```
 
 **MCP migration:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern` for Phase 1–3 equivalents.
@@ -84,7 +84,7 @@ kanban\kanban-md.exe edit {id} --status <next> --release               # Phase 3
 
 ## Board Configuration
 
-- **Config:** `kanban/config.yml`
+- **Config:** `.owlbear/kanban/config.yml`
 - **Statuses:** ideation, backlog, todo, in-progress, review, docs, done
 - **Priorities:** `someday` < `nice-to-have` < `important` (default) < `needed` < `critical`
 
@@ -93,31 +93,31 @@ kanban\kanban-md.exe edit {id} --status <next> --release               # Phase 3
 ### Read a task
 
 ```powershell
-kanban\kanban-md.exe show 480
+.owlbear\.owlbear\kanban\kanban-md.exe show 480
 ```
 
 ### Create a follow-up task at backlog
 
 ```powershell
-kanban\kanban-md.exe create "Implement retry logic" --status backlog --priority important --tags "scope:core" --depends-on 479
+.owlbear\.owlbear\kanban\kanban-md.exe create "Implement retry logic" --status backlog --priority important --tags "scope:core" --depends-on 479
 ```
 
 ### Append Channel B notes mid-task
 
 ```powershell
-kanban\kanban-md.exe edit 480 -a "## Builder Notes`nFiles changed: src/retry.py" -t --claim cedar-cloud
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "## Builder Notes`nFiles changed: src/retry.py" -t --claim cedar-cloud
 ```
 
 ### Handoff with block
 
 ```powershell
-kanban\kanban-md.exe handoff 480 --claim cedar-cloud --block "Waiting on user: credential setup" --note "## Handoff`n- Current state: tests pass`n- Open questions: need API key" -t --release
+.owlbear\.owlbear\kanban\kanban-md.exe handoff 480 --claim cedar-cloud --block "Waiting on user: credential setup" --note "## Handoff`n- Current state: tests pass`n- Open questions: need API key" -t --release
 ```
 
 ### Full board overview
 
 ```powershell
-kanban\kanban-md.exe board --compact
+.owlbear\.owlbear\kanban\kanban-md.exe board --compact
 ```
 
 ## PowerShell Escaping Gotchas
@@ -130,10 +130,10 @@ Pipe (`|`) in markdown tables embedded in body text must be backtick-escaped in 
 
 ```powershell
 # WRONG — PS interprets | as pipeline
-kanban\kanban-md.exe edit 480 -a "| Col1 | Col2 |"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "| Col1 | Col2 |"
 
 # CORRECT — backtick-escape pipes
-kanban\kanban-md.exe edit 480 -a "| Col1 `| Col2 `|"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "| Col1 `| Col2 `|"
 ```
 
 ### `->` arrows parsed as CLI flag fragments
@@ -142,10 +142,10 @@ Body text containing `->` is parsed by kanban-md as shorthand flag fragments. Re
 
 ```powershell
 # WRONG — kanban-md misparses
-kanban\kanban-md.exe edit 480 -a "builder -> reviewer"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "builder -> reviewer"
 
 # CORRECT — use prose
-kanban\kanban-md.exe edit 480 -a "builder hands off to reviewer"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "builder hands off to reviewer"
 ```
 
 ### `--token` patterns parsed as flags
@@ -154,10 +154,10 @@ CLI output or text containing double-dash patterns (`--cov`, `--tb`) are interpr
 
 ```powershell
 # WRONG — --tb interpreted as a flag
-kanban\kanban-md.exe edit 480 -a "Ran pytest --tb=short"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "Ran pytest --tb=short"
 
 # CORRECT — describe in prose
-kanban\kanban-md.exe edit 480 -a "Ran pytest with short traceback output"
+.owlbear\.owlbear\kanban\kanban-md.exe edit 480 -a "Ran pytest with short traceback output"
 ```
 
 ### PS 5.1 here-strings split in ArgumentList
@@ -170,10 +170,10 @@ $body = @"
 - Tests: 12/12 passed
 - Coverage: 95%
 "@
-[IO.File]::WriteAllText("docs/scratch/$id-notes.tmp", $body, [Text.UTF8Encoding]::new($false))
-$content = Get-Content "docs/scratch/$id-notes.tmp" -Raw
-kanban\kanban-md.exe edit $id -a $content -t
-Remove-Item "docs/scratch/$id-notes.tmp"
+[IO.File]::WriteAllText(".owlbear/scratch/$id-notes.tmp", $body, [Text.UTF8Encoding]::new($false))
+$content = Get-Content ".owlbear/scratch/$id-notes.tmp" -Raw
+.owlbear\.owlbear\.owlbear\kanban\kanban-md.exe edit $id -a $content -t
+Remove-Item ".owlbear/scratch/$id-notes.tmp"
 ```
 
 ### Body-append with `--body` writes literal `\n`
@@ -183,7 +183,7 @@ Remove-Item "docs/scratch/$id-notes.tmp"
 ## Known Gotchas
 
 - **`--unblocked` and `--not-blocked` are orthogonal.** `--unblocked` = all deps at terminal status (done/archived). `--not-blocked` = no explicit block flag. They do NOT imply each other.
-- **`--unclaimed` respects `claim_timeout`** from `kanban/config.yml`. Never manually inspect `claimed_by`/`claimed_at` — the flag handles expiry server-side.
+- **`--unclaimed` respects `claim_timeout`** from `.owlbear/kanban/config.yml`. Never manually inspect `claimed_by`/`claimed_at` — the flag handles expiry server-side.
 - **`--depends-on` is create-only.** Use `--add-dep`/`--remove-dep` on `edit`. `--depends-on` on `edit` silently fails.
 - **Always `--yes` on delete.** Without it, the command hangs waiting for stdin.
 - **`--claim` and `--release` must be separate calls.** Combining them in one `edit` command errors or silently ignores one flag. Always issue a separate `edit --release` call after the status-move.

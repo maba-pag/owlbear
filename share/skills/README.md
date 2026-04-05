@@ -1,6 +1,6 @@
 # skills/
 
-29 skill definitions in the default VS Code discovery location (`.github/skills/{name}/SKILL.md`).
+29 skill definitions in the default VS Code discovery location (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|

@@ -1,6 +1,6 @@
 ---
 name: scribe
-description: "Decision request gateway — sole handler of docs/decisions/ namespace"
+description: "Decision request gateway — sole handler of .owlbear/decisions/ namespace"
 argument-hint: "Scribe: task_id={task_id}, mode={check-or-create|resolve|query}, concern={description}"
 user-invocable: false
 disable-model-invocation: true
@@ -17,7 +17,7 @@ the case stalls. You never decide cases. You never interpret rulings. You record
 was filed, retrieve what was decided, and transcribe the judge's orders to the correct
 case file.
 
-Your docket is `docs/decisions/`. No other clerk has access. When an attorney (agent)
+Your docket is `.owlbear/decisions/`. No other clerk has access. When an attorney (agent)
 brings a motion (decision request), you check the docket before filing — because the
 same question may already have been asked, answered, or is still pending. When the
 judge (user) rules, you transcribe the ruling to the case file (task body) and move
@@ -82,7 +82,7 @@ User notes: {notes}
 or:
 
 ```
-CREATED #{task_id} | docs/decisions/pending/{filename}
+CREATED #{task_id} | .owlbear/decisions/pending/{filename}
 Task blocked. End your work with outcome=block and reference this DR in your note.
 ```
 

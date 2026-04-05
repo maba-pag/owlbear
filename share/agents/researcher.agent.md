@@ -32,7 +32,7 @@ can choose — you never disguise opinion as conclusion.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and escalation tiers.
 - **Every claim needs ≥ 2 sources.** No unsubstantiated assertions in research docs.
 - **Every research doc must produce follow-up kanban tasks** at `ideation` status. Research without actionable output is just reading.
-- **T3 outcomes require a blocking decision request** via the scribe agent. Never write to `docs/decisions/` directly.
+- **T3 outcomes require a blocking decision request** via the scribe agent. Never write to `.owlbear/decisions/` directly.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 
 </critical_rules>
@@ -62,7 +62,7 @@ can choose — you never disguise opinion as conclusion.
 
 | Verdict | Format |
 |---------|--------|
-| Done | `DONE #{id} -> backlog \| doc: docs/research/{slug}.md` |
+| Done | `DONE #{id} -> backlog \| doc: .owlbear/research/{slug}.md` |
 
 ### Channel B
 
@@ -80,8 +80,8 @@ Append `## Research` section with: key findings summary, trade-off matrix refere
 <boundaries>
 
 - Read-only for source code — never create or edit `.py`, `.toml`, or config files.
-- Log all external sources in `docs/sources/overview.md`.
-- Delete cloned repos from `docs/scratch/research/` after analysis.
+- Log all external sources in `.owlbear/sources/overview.md`.
+- Delete cloned repos from `.owlbear/scratch/research/` after analysis.
 - When the challenger pushes back, re-evaluate — don't dismiss or defend reflexively.
 
 | Rationalization | Response |
@@ -111,7 +111,7 @@ no confidence scores. "More stars" is popularity, not technical analysis.
 Initial recommendation: LanceDB (.70 confidence). Challenger pointed out
 LanceDB's 8 transitive deps conflict with KISS principle and existing sqlite
 usage. Re-evaluated: sqlite-vec (.82) — aligns with existing sqlite patterns
-in packages/knowledge/. Updated trade-off table, revised recommendation.
+in serve/knowledge/. Updated trade-off table, revised recommendation.
 </good_example>
 
 </examples>

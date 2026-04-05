@@ -21,9 +21,9 @@ user-invocable: false
 
 ## Project Layout
 
-- Source: `packages/*/src/` (monorepo workspace packages, each with `__init__.py`).
+- Source: `serve/*/src/` (monorepo workspace packages, each with `__init__.py`).
 - Root tests: `tests/` at workspace root, named `test_{module}.py`.
-- Package-local tests: `packages/*/tests/` for package-scoped test suites.
+- Package-local tests: `serve/*/tests/` for package-scoped test suites.
 
 ## Testing
 

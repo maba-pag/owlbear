@@ -45,7 +45,7 @@ Before starting work, check whether the task was previously blocked by a decisio
 1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
 2. If no summary in the body, call the **scribe** agent in query mode to check for existing DRs.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
-4. Never write to `docs/decisions/` directly — always use the **scribe** agent.
+4. Never write to `.owlbear/decisions/` directly — always use the **scribe** agent.
 
 ### Entry-Gate Agents
 
@@ -118,11 +118,11 @@ See `agent-common.instructions.md` for the authoritative section-header-to-agent
 
 ### Body Size Rule
 
-If a single agent section exceeds ~1500 tokens, write it to `docs/scratch/{task-id}-{agent}.md` and reference it from the body section:
+If a single agent section exceeds ~1500 tokens, write it to `.owlbear/scratch/{task-id}-{agent}.md` and reference it from the body section:
 
 ```
 ## Review Evidence
-See docs/scratch/480-reviewer.md for full evidence.
+See .owlbear/scratch/480-reviewer.md for full evidence.
 ```
 
 ### Reading Rules
@@ -188,7 +188,7 @@ The kanban `block` action is reserved for:
 | T2 — Advisory | Trade-offs, no T3 triggers | Advisory DR via scribe (5-day auto-resolve) |
 | T3 — Mandatory | New capability, arch/security/breaking change | Blocking DR via scribe (no auto-resolve) |
 
-All DR/AR creation goes through the **scribe** agent. Never write to `docs/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
+All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
 
 ### Handoff
 

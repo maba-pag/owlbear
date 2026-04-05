@@ -27,7 +27,7 @@ If `quality-runner` is not in the calling agent's `agents:` array or subagent di
 
 ```powershell
 uv run pytest tests/ -m "not api" -q --tb=short
-uv run ruff check packages/ tests/
+uv run ruff check serve/ tests/
 ```
 
 See `h-pytest-and-linting` for flags and known pitfalls.

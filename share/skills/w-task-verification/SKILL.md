@@ -41,19 +41,19 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   ```powershell
   uv run pytest tests/ -m "not api" -q --tb=short
-  uv run ruff check packages/ tests/
+  uv run ruff check serve/ tests/
   ```
 
   See `h-pytest-and-linting` for flags and known pitfalls.
 
-- **Lint:** Included in Quality-Runner `mode=full` report. If running fallback, use `uv run ruff check packages/ tests/`.
+- **Lint:** Included in Quality-Runner `mode=full` report. If running fallback, use `uv run ruff check serve/ tests/`.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.
 
 ## Step 1a — Research task verification
 
 For tasks tagged `research`:
 
-1. Research doc exists at `docs/research/{slug}.md`
+1. Research doc exists at `.owlbear/research/{slug}.md`
 2. Follow-up tasks created at `ideation` or higher, OR doc states "no action needed" with justification, OR a decision request exists
 3. Follow-up tasks reference the research doc
 4. If none of the above, reject to backlog — follow-up creation was missed
@@ -137,7 +137,7 @@ Append to task body before returning:
 ### Action: {archive/reject-to-backlog}
 ```
 
-If the audit section exceeds ~1500 tokens, write to `docs/scratch/{id}-auditor.md` and reference it.
+If the audit section exceeds ~1500 tokens, write to `.owlbear/scratch/{id}-auditor.md` and reference it.
 
 After committing, append commit log:
 

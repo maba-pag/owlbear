@@ -15,7 +15,7 @@ Invoke via `runSubagent` with a structured prompt:
 ```
 agentName: quality-runner
 prompt: |
-  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["packages/my-package/", "tests/test_my_module.py"]
+  Run: mode=scoped, task_id=263, test_paths=["tests/test_my_module.py"], coverage_modules=["my_module"], lint_paths=["serve/my-package/", "tests/test_my_module.py"]
 ```
 
 Full-suite example:
@@ -37,11 +37,11 @@ agents: [quality-runner]
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ packages/ -m "not api"` |
+| `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs `tests/ serve/ -m "not api"` |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files, e.g. `["tests/test_foo.py", "tests/test_bar.py"]` |
-| `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `docs/scratch/` |
+| `task_id` | string | Yes | Kanban task ID — isolates file-capture fallback output in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Module names for focused coverage display; bare `--cov` always runs against all packages |
-| `lint_paths` | string[] | No | Paths to lint; defaults to `packages/ tests/` if omitted |
+| `lint_paths` | string[] | No | Paths to lint; defaults to `serve/ tests/` if omitted |
 
 ## Output Format
 
@@ -55,7 +55,7 @@ skipped: 2
 
 ## Lint
 clean: false
-violations: [{file: "packages/foo/src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
+violations: [{file: "serve/foo/src/foo/bar.py", line: 12, code: "F401", msg: "'os' imported but unused"}]
 
 ## Coverage
 overall_pct: 94
@@ -87,11 +87,11 @@ If Quality-Runner is unavailable (not listed in the calling agent's `agents:` ar
 ```powershell
 # Scoped
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
-uv run ruff check packages/ tests/
+uv run ruff check serve/ tests/
 
 # Full suite (use isBackground=true)
-uv run pytest tests/ packages/ -m "not api" -q --tb=short
-uv run ruff check packages/ tests/
+uv run pytest tests/ serve/ -m "not api" -q --tb=short
+uv run ruff check serve/ tests/
 ```
 
 Parse terminal output manually and apply the pitfall mitigations from `h-pytest-and-linting` directly.

@@ -100,14 +100,14 @@ Append `## Architecture Review` section with: verdict, AC assessment table (AC l
 
 <good_example why="AC refinement with codebase evidence">
 AC line "support retries" — searched codebase, found existing RetryPolicy in
-packages/orchestrator/src/owlbear/retry.py. Rewrote AC: "Use existing RetryPolicy
+serve/orchestrator/src/owlbear/retry.py. Rewrote AC: "Use existing RetryPolicy
 with max_attempts=3, exponential backoff base=1s." Checked 2 dependent modules.
 Challenger verified: proceed. Confidence in AC clarity: .92 → approve.
 </good_example>
 
 <bad_example why="Rubber-stamp without codebase check">
 Task #40: "Add vector store." AC looks reasonable. Approved without searching
-the codebase. Missed that packages/knowledge/ already has an embedding abstraction.
+the codebase. Missed that serve/knowledge/ already has an embedding abstraction.
 No AC assessment table, no dependency check, no challenger invocation.
 </bad_example>
 

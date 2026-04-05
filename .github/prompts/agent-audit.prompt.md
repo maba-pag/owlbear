@@ -13,9 +13,9 @@ project-wide copilot-instructions that form an autonomous kanban-driven developm
 Read ALL of these files before forming conclusions:
 
 - `.github/copilot-instructions.md`
-- `.github/instructions/*.instructions.md`
-- `.github/agents/*.agent.md`
-- `.github/skills/*/SKILL.md`
+- `share/instructions/*.instructions.md`
+- `share/agents/*.agent.md`
+- `share/skills/*/SKILL.md`
 
 Use `file_search` to discover the current set. Do not assume a fixed count.
 

@@ -29,17 +29,19 @@ Run `.owlbear\kanban\setup.ps1` to download the kanban-md binary, then open VS C
 
 | Directory                 | Purpose                                                |
 |---------------------------|--------------------------------------------------------|
-| `packages/orchestrator/`  | ACP client, dispatch planning, orchestration CLI hooks |
-| `packages/knowledge/`     | Knowledge engine (graph + vector)                      |
-| `packages/mcp-kanban/`    | MCP server wrapping kanban operations                  |
-| `packages/mcp-knowledge/` | MCP server exposing knowledge operations               |
-| `packages/mcp-project/`   | MCP server for project metadata and lifecycle          |
-| `packages/mcp-memory/`    | MCP server for persistent agent memory (SQLite-backed) |
-| `packages/voice/`         | Voice addon (speech recognition + TTS)                 |
-| `.github/agents/`        | Agent definitions (`.agent.md`)                        |
-| `.github/skills/`         | Agent skills (`SKILL.md`, agentskills.io style)        |
-| `.github/instructions/`   | Shared instruction files (`*.instructions.md`)         |
-| `.owlbear/`               | Project ops data: kanban board, decisions, research, sources, scripts, hooks |
+| `serve/orchestrator/`     | ACP client, dispatch planning, orchestration CLI hooks |
+| `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
+| `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
+| `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
+| `serve/mcp-project/`      | MCP server for project metadata and lifecycle          |
+| `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
+| `serve/voice/`            | Voice addon (speech recognition + TTS)                 |
+| `share/agents/`           | Agent definitions (`.agent.md`)                        |
+| `share/skills/`           | Agent skills (`SKILL.md`, agentskills.io style)        |
+| `share/instructions/`     | Shared instruction files (`*.instructions.md`)         |
+| `share/prompts/`          | User-facing one-shot prompt files (`*.prompt.md`)      |
+| `.owlbear/`               | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
+| `store/`                  | Knowledge and memory data                              |
 | `seed/`                   | Template files copied to new projects by `setup/init.py` |
 | `setup/`                  | Workspace initialiser (`init.py`), setup guide, sharing guide |
 | `scripts/`                | Legacy setup script and pre-commit hooks (see `setup/init.py`) |
@@ -47,10 +49,10 @@ Run `.owlbear\kanban\setup.ps1` to download the kanban-md binary, then open VS C
 
 ## How It Works
 
-**Agents** in `.github/agents/` appear in VS Code's agent picker, each owning a pipeline
+**Agents** in `share/agents/` appear in VS Code's agent picker, each owning a pipeline
 stage (research → architect → test-writer → builder → reviewer → writer → auditor).
 
-**Skills** in `.github/skills/` auto-load by relevance, carrying domain knowledge and
+**Skills** in `share/skills/` auto-load by relevance, carrying domain knowledge and
 reusable workflows for each agent role.
 
 **MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) expose the kanban
@@ -84,10 +86,10 @@ All commands require the Copilot CLI (`gh extension install github/gh-copilot`).
 Populate the knowledge base from a sources manifest:
 
 ```bash
-uv run python -m owlbear_knowledge.loader --manifest data/knowledge/general/sources.yaml --root .
+uv run python -m owlbear_knowledge.loader --manifest store/knowledge/general/sources.yaml --root .
 ```
 
-The manifest at `data/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_KB_PATH` to override the default `data/knowledge/knowledge.db` location.
+The manifest at `store/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_KB_PATH` to override the default `store/knowledge/knowledge.db` location.
 
 ## Memory Migration
 
@@ -140,8 +142,8 @@ uv run ruff check serve/ tests/
 
 Two local hooks guard agent and skill file quality:
 
-- **`validate-skills`** — runs on every commit, validates all `.github/skills/*/SKILL.md` frontmatter.
-- **`validate-agents`** — runs when any `.github/agents/*.agent.md` file is staged, checking for:
+- **`validate-skills`** — runs on every commit, validates all `share/skills/*/SKILL.md` frontmatter.
+- **`validate-agents`** — runs when any `share/agents/*.agent.md` file is staged, checking for:
   - Bare `todo` (instead of `todos`) in the `tools:` list
   - Stale `resolveMemoryFileUri` tool references anywhere in the file
 
@@ -149,7 +151,7 @@ Two local hooks guard agent and skill file quality:
 
 VS Code silently re-serializes and re-stages `.agent.md` files when it detects new
 tool capabilities (e.g. `execute/runTask`, `execute/testFailure`). This can revert
-manual edits before commit. Always run `git diff --cached agents/` before committing
+manual edits before commit. Always run `git diff --cached share/agents/` before committing
 and unstage any auto-generated reverts with `git reset HEAD <file>`.
 
 ## License

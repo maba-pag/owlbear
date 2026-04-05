@@ -1,5 +1,5 @@
 ---
-applyTo: ".github/agents/**,.github/skills/**"
+applyTo: ".owlbear/agents/**,.owlbear/skills/**,share/agents/**,share/skills/**"
 description: "Structural conventions for agent and skill files"
 ---
 

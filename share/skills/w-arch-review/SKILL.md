@@ -16,7 +16,7 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
-Verify the task is in `backlog` status. If the task references a research doc (`docs/research/{slug}.md`), read it.
+Verify the task is in `backlog` status. If the task references a research doc (`.owlbear/research/{slug}.md`), read it.
 
 **Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
 
@@ -47,7 +47,7 @@ Assess the task against `r-architecture-standards` and general architectural pri
     | CODEPATH | FAILURE MODE | EXCEPTION | HANDLED? | USER IMPACT |
     |----------|--------------|-----------|----------|-------------|
 
-12. **Decision-request verification** — if the task references `docs/research/*.md` or is tagged `research`, query the scribe to check for an approved DR. No approved DR for T3 research = use the REJECT path.
+12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, query the scribe to check for an approved DR. No approved DR for T3 research = use the REJECT path.
 
 ## Step 2.5 — Challenge Proposed Verdict
 

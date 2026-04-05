@@ -33,7 +33,7 @@ Before planning, call the **scribe** agent to process any resolved decision/acti
 runSubagent("scribe", "Scribe: task_id=all, mode=resolve, agent=orchestrator", "Resolve pending DRs")
 ```
 
-The scribe scans `docs/decisions/pending/`, processes files where `approved: true` or `completed: true`, writes summaries to task bodies, unblocks tasks, moves files to resolved, and handles 5-day auto-resolution.
+The scribe scans `.owlbear/decisions/pending/`, processes files where `approved: true` or `completed: true`, writes summaries to task bodies, unblocks tasks, moves files to resolved, and handles 5-day auto-resolution.
 
 If the scribe reports errors, note them but proceed. If zero resolved, proceed.
 

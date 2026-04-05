@@ -42,7 +42,7 @@ Response shape:
 
 ## project_list Details
 
-Scans `{owlbear-root}/data/projects/` for `.json` files. Each file is a project pointer written by `scripts/setup.py` during project registration.
+Scans `{owlbear-root}/store/projects/` for `.json` files. Each file is a project pointer written by `setup/init.py` during project registration.
 
 Response shape:
 

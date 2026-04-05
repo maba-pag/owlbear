@@ -22,9 +22,9 @@ description: "OwlBear system instructions — decision heuristics, system awaren
 | Language | Python 3.12+ | `uv` package manager, never bare `pip` |
 | Agents | VS Code / Copilot custom agents | `.agent.md` files, subagent delegation |
 | MCP servers | 5 (4 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-project, mcp-memory, github |
-| Task board | kanban-md v0.33 (via MCP) | `kanban/config.yml`, `kanban/tasks/*.md` |
+| Task board | kanban-md v0.33 (via MCP) | `.owlbear/kanban/config.yml`, `.owlbear/kanban/tasks/*.md` |
 | Safety | Git safety net + audit log | Review/revert as operational safety |
-| Distribution | Clone = install | `scripts/setup.py` wires workspace config |
+| Distribution | Clone = install | `setup/init.py` wires workspace config |
 
 ### Pipeline
 
@@ -37,12 +37,12 @@ ideation → (researcher) → backlog → (architect) → todo → (test-writer)
 | Directory | Purpose |
 |-----------|---------|
 | `serve/` | Python workspace packages (orchestrator, knowledge, MCP servers, voice) |
-| `.github/agents/` | Agent definitions (`.agent.md`) |
-| `.github/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
-| `.github/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `agent-common.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
-| `.github/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
-| `docs/` | Research, decisions, sources, scratch |
-| `kanban/` | Board data and tooling |
+| `share/agents/` | Agent definitions (`.agent.md`) |
+| `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
+| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `agent-common.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
+| `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
+| `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
+| `store/` | Knowledge and memory data |
 | `scripts/` | Setup, validation, hooks |
 
 For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
@@ -56,7 +56,7 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 | Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
 | Canonical | mcp-memory `owlbearMemory` | Agent institutional knowledge (queryable) |
 
-Do NOT store in user memory: architecture decisions (`docs/decisions/`), research findings (`docs/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
+Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 

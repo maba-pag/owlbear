@@ -62,7 +62,7 @@ prompt: |
   task_id: {id}
   test_paths: ["tests/test_{module}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 ```
@@ -86,7 +86,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: []
-  lint_paths: ["packages/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
 ```
 
 Record: `clean: true/false` and any `violations` from the `## Lint` section.
@@ -96,7 +96,7 @@ Record: `clean: true/false` and any `violations` from the `## Lint` section.
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
 ```powershell
-uv run ruff check packages/ tests/
+uv run ruff check serve/ tests/
 ```
 
 See `h-pytest-and-linting` for flags and known pitfalls.

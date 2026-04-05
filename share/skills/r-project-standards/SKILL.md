@@ -28,7 +28,7 @@ type: description (#task-id, context)
 
 ### VS Code Auto-Staging Trap
 
-VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities. Always run `git diff --cached .github/agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>`.
+VS Code silently re-serializes and stages `.agent.md` files when it detects new tool capabilities. Always run `git diff --cached share/agents/` before committing and unstage any auto-generated reverts with `git reset HEAD <file>`.
 
 ## 2. File Placement
 
@@ -36,23 +36,23 @@ Keep the project root clean. Every file created during a task goes to its design
 
 | File type | Location | Naming | Tracked? |
 |-----------|----------|--------|----------|
-| Temp/debug output | `docs/scratch/` | `{task-id}-{desc}.{ext}` | No (gitignored) |
-| Research documents | `docs/research/` | `{slug}.md` with task ref in content | Yes |
-| Cloned external repos | `docs/scratch/research/` | `{repo-name}/` | No (gitignored) |
+| Temp/debug output | `.owlbear/scratch/` | `{task-id}-{desc}.{ext}` | No (gitignored) |
+| Research documents | `.owlbear/research/` | `{slug}.md` with task ref in content | Yes |
+| Cloned external repos | `.owlbear/scratch/research/` | `{repo-name}/` | No (gitignored) |
 | Benchmark / eval scripts | `tests/benchmarks/` | descriptive `.py` name | Yes |
-| Source code | `packages/*/src/` | Package-local module structure | Yes |
+| Source code | `serve/*/src/` | Package-local module structure | Yes |
 | Tests | `tests/` | `test_{module}.py` | Yes |
-| Agents | `.github/agents/` | `{role}.agent.md` | Yes |
-| Skills | `.github/skills/{prefix}-{name}/` | `SKILL.md` | Yes |
-| Instructions | `.github/instructions/` | `{name}.instructions.md` | Yes |
-| Prompts | `.github/prompts/` | `{name}.prompt.md` | Yes |
-| Decision requests | `docs/decisions/pending/` | `{task-id}-{slug}.md` | Yes |
+| Agents | `share/agents/` | `{role}.agent.md` | Yes |
+| Skills | `share/skills/{prefix}-{name}/` | `SKILL.md` | Yes |
+| Instructions | `share/instructions/` | `{name}.instructions.md` | Yes |
+| Prompts | `share/prompts/` | `{name}.prompt.md` | Yes |
+| Decision requests | `.owlbear/decisions/pending/` | `{task-id}-{slug}.md` | Yes |
 
-Before marking a task `done`, delete all `docs/scratch/{task-id}-*` files created for that task.
+Before marking a task `done`, delete all `.owlbear/scratch/{task-id}-*` files created for that task.
 
 ## 3. Attribution
 
-External code and patterns must be logged in `docs/sources/overview.md`:
+External code and patterns must be logged in `.owlbear/sources/overview.md`:
 
 | Column | Description |
 |--------|-------------|

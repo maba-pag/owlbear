@@ -90,7 +90,7 @@ All tools raise `ToolError` (MCP `isError: true`) on failure.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KANBAN_BIN` | `kanban/kanban-md.exe` | Path to the `kanban-md` binary |
+| `KANBAN_BIN` | `.owlbear/kanban/kanban-md.exe` | Path to the `kanban-md` binary |
 | `KANBAN_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
 ## Body Content Gotchas
@@ -103,4 +103,4 @@ These affect both MCP `append_body`/`body` parameters and CLI `-a` arguments, be
 
 ## Known Gotchas
 
-- **Binary discovery:** The server resolves `kanban-md.exe` via `KANBAN_BIN` env var, then falls back to `kanban/kanban-md.exe`. If not found, server fails to start with `FileNotFoundError`.
+- **Binary discovery:** The server resolves `kanban-md.exe` via `KANBAN_BIN` env var, then falls back to `.owlbear/kanban/kanban-md.exe`. If not found, server fails to start with `FileNotFoundError`.

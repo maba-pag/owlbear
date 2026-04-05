@@ -41,10 +41,10 @@ The dispatcher assigns agents based on task status:
 
 The **orchestrator** calls the scribe in resolve mode before invoking the dispatcher (see `w-orchestration` Step 0). By the time the dispatcher runs, all resolved DRs have been written to task bodies and tasks unblocked.
 
-Scan `docs/decisions/pending/` (excluding `.gitkeep`) to compute the `pending` output field:
+Scan `.owlbear/decisions/pending/` (excluding `.gitkeep`) to compute the `pending` output field:
 
 ```powershell
-Get-ChildItem docs/decisions/pending/*.md -EA SilentlyContinue | Where-Object { $_.Name -ne '.gitkeep' }
+Get-ChildItem .owlbear/decisions/pending/*.md -EA SilentlyContinue | Where-Object { $_.Name -ne '.gitkeep' }
 ```
 
 For each pending file, read frontmatter to classify: T2 (`impact_tier` 2 or absent — auto-resolvable after 5 days), T3 (`impact_tier: 3` — require explicit approval, never auto-resolve), or action request. Count by type for the `pending` output field.

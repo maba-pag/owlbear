@@ -10,19 +10,19 @@ Conventions that are **not obvious best practices**. If it's standard Python or 
 
 ## v2 Architecture Overview
 
-OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files dispatched by the orchestrator via ACP (Copilot CLI). Tools are provided by MCP servers (`packages/mcp-*`) or VS Code built-in tools.
+OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files dispatched by the orchestrator via ACP (Copilot CLI). Tools are provided by MCP servers (`serve/mcp-*`) or VS Code built-in tools.
 
 ```
-packages/orchestrator/       (ACP client, dispatch planning, CLI entry point)
+serve/orchestrator/       (ACP client, dispatch planning, CLI entry point)
     dispatches via ACP to
 agents/*.agent.md            (agent definitions — pure markdown, no Python)
     use tools from
-packages/mcp-kanban/         (MCP server: kanban board operations)
-packages/mcp-knowledge/      (MCP server: knowledge base operations)
-packages/mcp-project/        (MCP server: project metadata)
-packages/mcp-memory/         (MCP server: persistent agent memory)
+serve/mcp-kanban/         (MCP server: kanban board operations)
+serve/mcp-knowledge/      (MCP server: knowledge base operations)
+serve/mcp-project/        (MCP server: project metadata)
+serve/mcp-memory/         (MCP server: persistent agent memory)
     import from
-packages/knowledge/          (core library: graph, vector, ingest, query)
+serve/knowledge/          (core library: graph, vector, ingest, query)
 ```
 
 Each MCP server is a standalone FastMCP application. Core libraries live in separate packages. Cross-package imports are enforced by `tests/test_package_boundary.py`.
@@ -115,13 +115,13 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 
 | Domain | Scope |
 |--------|-------|
-| orchestrator | `packages/orchestrator/` (ACP client, dispatch, CLI, analysis) |
-| knowledge | `packages/knowledge/` (graph, vector, ingest, query, embeddings) |
-| mcp-kanban | `packages/mcp-kanban/` |
-| mcp-knowledge | `packages/mcp-knowledge/` |
-| mcp-project | `packages/mcp-project/` |
-| mcp-memory | `packages/mcp-memory/` |
-| voice | `packages/voice/` |
+| orchestrator | `serve/orchestrator/` (ACP client, dispatch, CLI, analysis) |
+| knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
+| mcp-kanban | `serve/mcp-kanban/` |
+| mcp-knowledge | `serve/mcp-knowledge/` |
+| mcp-project | `serve/mcp-project/` |
+| mcp-memory | `serve/mcp-memory/` |
+| voice | `serve/voice/` |
 | agent-config | `agents/`, `skills/`, `instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
 | docs | `docs/`, `README.md`, `SECURITY.md` |

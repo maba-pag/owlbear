@@ -165,7 +165,7 @@ Agent files must NOT contain:
 
 ## Skill File Structure (SKILL.md)
 
-Skills define **procedures, protocol, or domain knowledge**. They live in `.github/skills/{prefix}-{name}/SKILL.md`.
+Skills define **procedures, protocol, or domain knowledge**. They live in `share/skills/{prefix}-{name}/SKILL.md`.
 
 ### Frontmatter (YAML)
 
@@ -263,8 +263,8 @@ Current stubs:
 |------|---------|-----------|
 | `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
-| `research-docs.instructions.md` | `"docs/research/*.md"` | `w-research` |
-| `agents-and-skills.instructions.md` | `".github/agents/**,.github/skills/**"` | `h-agent-structure` |
+| `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
+| `agents-and-skills.instructions.md` | `"share/agents/**,share/skills/**"` | `h-agent-structure` |
 
 ## Formatting Rules
 

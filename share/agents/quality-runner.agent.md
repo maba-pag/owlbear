@@ -42,15 +42,15 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
 
 1. **Never pipe `uv run` output through PowerShell cmdlets.** The terminal tool captures stdout + stderr automatically. Every pipe combination (`Out-File`, `Out-String`, `Select-String`, `Tee-Object`, `ForEach-Object`, `2>&1`, `[IO.File]` with pipeline subexpressions) corrupts, truncates, or drops output. Run the command plain.
 
-2. **Use bare `--cov` only (no `--cov=module.path`).** `--cov=dotted.module.name` causes a pydantic MRO crash. `--cov=packages/path/` reports 0% due to src-layout issues. Only `--cov` (bare) reads `[tool.coverage.run] source_pkgs` from `pyproject.toml` and covers all installed packages correctly.
+2. **Use bare `--cov` only (no `--cov=module.path`).** `--cov=dotted.module.name` causes a pydantic MRO crash. `--cov=serve/path/` reports 0% due to src-layout issues. Only `--cov` (bare) reads `[tool.coverage.run] source_pkgs` from `pyproject.toml` and covers all installed packages correctly.
 
 3. **Use `isBackground=true` for full-suite runs.** Long-lived VS Code terminal sessions corrupt output from blocking commands. Always run full suite as a background terminal, then collect output with `execute/getTerminalOutput`.
 
 4. **File-capture fallback for truncated output.** If terminal output is truncated (60 KB limit), use:
    ```powershell
-   uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','packages/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('docs/scratch/pytest-output-{task_id}.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
+   uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output-{task_id}.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
    ```
-   Then `read/readFile` on `docs/scratch/pytest-output-{task_id}.txt`. Delete after reading.
+   Then `read/readFile` on `.owlbear/scratch/pytest-output-{task_id}.txt`. Delete after reading.
 
 5. **WMI hang mitigation (Windows).** If pytest hangs, kill zombie processes:
    ```powershell
@@ -66,9 +66,9 @@ All fields are provided in the caller's `runSubagent` prompt.
 |-------|------|----------|-------------|
 | `mode` | `scoped` \| `full` | Yes | `scoped` runs only `test_paths`; `full` runs all tests |
 | `test_paths` | string[] | If `mode=scoped` | Paths to test files (e.g., `["tests/test_foo.py"]`) |
-| `task_id` | string | Yes | Kanban task ID — used to isolate coverage output files in `docs/scratch/` |
+| `task_id` | string | Yes | Kanban task ID — used to isolate coverage output files in `.owlbear/scratch/` |
 | `coverage_modules` | string[] | No | Specific module names for focused coverage reporting |
-| `lint_paths` | string[] | No | Paths to lint (default: `packages/ tests/`) |
+| `lint_paths` | string[] | No | Paths to lint (default: `serve/ tests/`) |
 
 ## Execution Protocol
 
@@ -76,7 +76,7 @@ All fields are provided in the caller's `runSubagent` prompt.
 
 ```powershell
 uv run pytest {test_paths} --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
-uv run ruff check {lint_paths|packages/ tests/}
+uv run ruff check {lint_paths|serve/ tests/}
 ```
 
 Timeout: 2 minutes per command. If exceeded, kill terminal and report timeout error.
@@ -85,8 +85,8 @@ Timeout: 2 minutes per command. If exceeded, kill terminal and report timeout er
 
 ```powershell
 # Use isBackground=true
-uv run pytest tests/ packages/ -m "not api" -q --tb=short --cov --cov-report=term-missing --cov-fail-under=0
-uv run ruff check packages/ tests/
+uv run pytest tests/ serve/ -m "not api" -q --tb=short --cov --cov-report=term-missing --cov-fail-under=0
+uv run ruff check serve/ tests/
 ```
 
 Timeout: 5 minutes for pytest, 1 minute for ruff. If exceeded, kill terminal and report timeout error.
@@ -126,7 +126,7 @@ ruff: {N}
 
 <boundaries>
 
-- **Read-only except for `docs/scratch/` cleanup.** Do not edit source files, test files, or configuration.
+- **Read-only except for `.owlbear/scratch/` cleanup.** Do not edit source files, test files, or configuration.
 - **No kanban interactions.** You have no kanban tools. The caller interprets results and updates the board.
 - **No subagent delegation.** `agents: []` — you do not spawn sub-agents.
 - **No web access.** All operations are local.

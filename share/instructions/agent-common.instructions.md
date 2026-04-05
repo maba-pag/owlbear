@@ -1,5 +1,5 @@
 ---
-applyTo: ".github/agents/**"
+applyTo: "share/agents/**"
 description: "Common kanban and Channel B conventions for all pipeline agents"
 ---
 

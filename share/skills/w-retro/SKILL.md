@@ -110,14 +110,14 @@ Read the kanban activity log:
 
 ```powershell
 $sinceDate = Get-Date $since
-Get-Content kanban/activity.jsonl |
+Get-Content .owlbear/kanban/activity.jsonl |
     ConvertFrom-Json |
     Where-Object { $_.action -match "moved|status" -and $_.timestamp -ge $sinceDate }
 ```
 
 Count: tasks completed (to done), tasks reviewed (to review), tasks created, most active task.
 
-> Skip this step if `kanban/activity.jsonl` does not exist.
+> Skip this step if `.owlbear/kanban/activity.jsonl` does not exist.
 
 ## Step 7 — Output Report
 

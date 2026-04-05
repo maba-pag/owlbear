@@ -49,7 +49,7 @@ For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
 
 For styled HTML pages, tables, CSS Grid layouts, Mermaid-embedded diagrams:
 
-1. **Write** — `create_file` to `docs/scratch/{name}.html` (self-contained, inline CSS)
+1. **Write** — `create_file` to `.owlbear/scratch/{name}.html` (self-contained, inline CSS)
 2. **Open** — `open_browser-page` to preview
 
 ### Path B: Kroki (quick diagrams)

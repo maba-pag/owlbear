@@ -43,7 +43,7 @@ Identify what changed: files created/modified, behavior added. Then evaluate eac
 ### Item 3: External Attribution
 
 - Did the task use patterns from external repos, articles, or docs?
-- If yes: add a row to `docs/sources/overview.md` (see `r-project-standards` → Attribution).
+- If yes: add a row to `.owlbear/sources/overview.md` (see `r-project-standards` → Attribution).
 
 ### Item 4: CLI Changes
 
@@ -52,7 +52,7 @@ Identify what changed: files created/modified, behavior added. Then evaluate eac
 
 ### Item 5: Research Doc
 
-- Did the research phase produce a `docs/research/{slug}.md`?
+- Did the research phase produce a `.owlbear/research/{slug}.md`?
 - If yes: verify it exists and is linked from the task body. Verify follow-up tasks were created.
 
 ### Item 6: No Impact
@@ -61,7 +61,7 @@ Identify what changed: files created/modified, behavior added. Then evaluate eac
 
 ## Step 2 — Clean Scratch Files
 
-Look for `docs/scratch/{task-id}-*` files and delete any that exist.
+Look for `.owlbear/scratch/{task-id}-*` files and delete any that exist.
 
 ## Step 3 — Deliverables
 
@@ -114,14 +114,14 @@ Append to task body before advancing:
 - [ ] For N/A items, explained why they don't apply
 - [ ] For updated items, actually made the edits
 - [ ] Did NOT change application logic — only docstrings and documentation
-- [ ] Scratch files cleaned (`docs/scratch/{task-id}-*`)
+- [ ] Scratch files cleaned (`.owlbear/scratch/{task-id}-*`)
 - [ ] Docstrings verified on all public API in new/changed modules
-- [ ] `docs/sources/overview.md` updated if external inspiration was used
+- [ ] `.owlbear/sources/overview.md` updated if external inspiration was used
 - [ ] Documentation changes committed before advancing
 
 ## Known Pitfalls
 
 - **Missing Review Evidence upstream:** This is the most common rejection reason at the docs gate. Check for it first to avoid wasted work.
 - **Editing application logic:** The doc-writer must ONLY edit docstrings and documentation files. Any logic change is out of scope.
-- **Forgetting scratch cleanup:** Orphaned scratch files accumulate as noise. Always check and clean `docs/scratch/{task-id}-*`.
+- **Forgetting scratch cleanup:** Orphaned scratch files accumulate as noise. Always check and clean `.owlbear/scratch/{task-id}-*`.
 - **Stale docstrings:** When verifying docstrings, read the actual code behavior. A docstring that matches the old behavior before the builder's change is stale.
