@@ -1,0 +1,141 @@
+---
+id: 607
+title: Update live references to new folder paths
+status: todo
+priority: needed
+created: 2026-04-04T20:31:40.9085909+02:00
+updated: 2026-04-05T00:20:35.8356378+02:00
+tags:
+    - scope:infra
+    - type:build
+    - phase-2
+    - type:config
+parent: 598
+depends_on:
+    - 600
+    - 601
+    - 602
+    - 603
+class: standard
+---
+
+## Summary
+
+Update all live (non-historical) text references to old folder paths across agent files, skill files, instruction files, prompt files, README.md, copilot-instructions.md, and moved scripts. This is a text-level reference sweep — no Python application source code or test files.
+
+## Path Mapping Reference
+
+| Old Path | New Path | Physical Move By |
+|----------|----------|------------------|
+| `.github/agents/` | `share/agents/` | #600 |
+| `.github/skills/` | `share/skills/` | #600 |
+| `.github/instructions/` | `share/instructions/` | #600 |
+| `.github/prompts/` | `share/prompts/` | #600 |
+| `packages/` | `serve/` | #601 |
+| `data/` | `store/` | #602 |
+| `kanban/` | `.owlbear/kanban/` | #603 |
+| `docs/decisions/` | `.owlbear/decisions/` | #603 |
+| `docs/research/` | `.owlbear/research/` | #603 |
+| `docs/sources/` | `.owlbear/sources/` | #603 |
+| `docs/scratch/` | `.owlbear/scratch/` | #603 |
+| `scripts/hooks/` | `.owlbear/hooks/` | #603 |
+| `scripts/` (validation) | `.owlbear/scripts/` | #603 |
+
+## Acceptance Criteria
+
+- [ ] AC1: Agent hook command paths updated: builder.agent.md and fix-attempt.agent.md to .owlbear/hooks/lint-changed.ps1; reviewer.agent.md to .owlbear/hooks/deny-writes.ps1
+- [ ] AC2: All agent .md files: old path references replaced per mapping table (includes operational paths in scribe, doc-writer, researcher, quality-runner command templates, architect example blocks)
+- [ ] AC3: All skill SKILL.md files: old path references replaced per mapping table (affects ~25 skills, see Files Affected)
+- [ ] AC4: Instruction files: applyTo patterns updated (agents-and-skills to share/agents/**,share/skills/**; agent-common to share/agents/**; research-docs to .owlbear/research/*.md); instructions/README.md updated
+- [ ] AC5: Prompt files: agent-audit.prompt.md references to .github/instructions/, .github/agents/, .github/skills/ updated to share/ equivalents
+- [ ] AC6: README.md: directory layout table updated to five-tier structure; all command examples updated (packages/ to serve/, data/ to store/, kanban/ to .owlbear/kanban/, .github/ to share/)
+- [ ] AC7: copilot-instructions.md: directory structure table updated; kanban reference updated; memory governance paths updated
+- [ ] AC8: share/skills/README.md discovery location reference updated
+- [ ] AC9: .owlbear/scripts/e2e_smoke.py: kanban/kanban-md.exe updated to .owlbear/kanban/kanban-md.exe (docstring L14, error message L79)
+- [ ] AC10: pyproject.toml [tool.ruff.lint.per-file-ignores] key "scripts/*.py" updated to ".owlbear/scripts/*.py"
+- [ ] AC11: Verification gate: grep -rn across share/, .owlbear/scripts/, .owlbear/hooks/, README.md, .github/copilot-instructions.md finds zero matches for any old-path pattern in mapping table. Exclusions: .owlbear/kanban/tasks/ (historical task content), .owlbear/decisions/ (historical decisions), .owlbear/research/ (historical research), source attribution comments
+
+## Files Affected
+
+Agent files (~10): builder, fix-attempt, reviewer (hook paths); scribe (docs/decisions/); doc-writer (docs/research/, .github/ refs); researcher (docs/decisions/, docs/research/, packages/); quality-runner (packages/ in pytest/ruff commands, docs/scratch/); architect (packages/ in examples)
+
+Skill files (~25): r-project-standards, r-architecture-standards, h-agent-structure, h-python-conventions, h-pytest-and-linting, h-kanban-md, h-mcp-kanban, h-mcp-memory, h-mcp-project, h-knowledge-ops, w-research, w-decision-routing, w-dispatch-planning, w-orchestration, w-code-review, w-retro, w-arch-review, w-tdd-red, w-task-verification, w-doc-update, code-review, quality-runner, tdd-workflow, task-verification, skills/README.md
+
+Instruction files (4): agents-and-skills (applyTo + content), agent-common (applyTo), research-docs (applyTo), instructions/README.md
+
+Prompt files (1): agent-audit.prompt.md
+
+Docs (2): README.md, .github/copilot-instructions.md
+
+Scripts (1): .owlbear/scripts/e2e_smoke.py
+
+Config (1): pyproject.toml (ruff per-file-ignores key only)
+
+## Scope Boundaries
+
+In scope: Non-source-code, non-test files that reference old paths after #600-#603 physical moves.
+
+Out of scope (handled by other tasks):
+- Python source code default path constants: #602 (data/ to store/) and #606 (MCP path resolution)
+- pyproject.toml workspace members, ruff src, testpaths, packages/ per-file-ignores: #601
+- .vscode/settings.json chat.*Locations: #600; files.exclude kanban/ refs: #609
+- .gitignore, .editorconfig, .pre-commit-config.yaml: #601, #602, #609
+- Test files: #608
+- setup/init.py, docs/setup-guide.md, docs/sharing-guide.md: #604 (moves to setup/) and #609 (cleanup)
+- Historical docs: kanban task files, resolved decisions, archived research
+
+## Notes
+
+Do NOT update historical docs (archived tasks, old research, resolved decisions). They document historical state.
+
+Agent persona examples (illustrative file paths in good_example/bad_example blocks) SHOULD be updated since they guide agent behavior.
+
+Scan command: grep -rn '.github/agents\|.github/skills\|.github/instructions\|.github/prompts\|packages/\|data/\|kanban/\|docs/decisions\|docs/research\|docs/sources\|docs/scratch\|scripts/hooks\|scripts/' --include='*.md' --include='*.py' share/ .owlbear/scripts/ README.md .github/copilot-instructions.md
+
+[[2026-04-05]] Sun 00:20
+## Architecture Review
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One logical operation: text reference sweep across non-source files |
+| Interface clarity | PASS (refined) | Original AC4-6 too narrow; expanded to 11 verifiable items with path mapping table |
+| Dependency correctness | PASS | Depends on #600-#603 (all in-progress). No missing deps. setup-guide/sharing-guide deferred to #604/#609 |
+| Module layering | N/A | Text reference updates only, no code modules |
+| TDD compliance | PASS | Tagged type:config (pass-through). No testable Python code produced |
+| KISS/YAGNI | PASS | Minimal scope: find-and-replace per mapping table |
+| Premise challenge | PASS | Reference sweep mechanically required after #600-#603 physical moves |
+| Pattern consistency | PASS | Follows task pattern from #600 Known Temporal Gaps |
+| Security surface | N/A | No new system boundaries. Text edits only |
+| Single domain | PASS | scope:infra only |
+
+### Challenge Results
+- Challenger: RECONSIDER (confidence: 0.68)
+- Key concerns: (1) deps status, (2) quality-runner templates, (3) sharing-guide gap, (4) pyproject scope, (5) e2e_smoke lines, (6) .vscode/settings
+- Architect response: Override with partial acceptance
+  - C1: REBUTTED. Deps are in-progress (challenger said backlog, factually wrong). Pipeline always routes to todo.
+  - C2: ACCEPTED. quality-runner command templates noted in AC2 and Files Affected.
+  - C3: DEFERRED. setup-guide/sharing-guide (17 old-path refs) move to setup/ by #604. Content updates to #604/#609.
+  - C4: REBUTTED. pyproject members/src/testpaths/packages-per-file-ignores all #601 AC2-5. Only scripts/ key is #607 (AC10).
+  - C5: ACCEPTED. Line refs (L14, L79) added to AC9.
+  - C6: DEFERRED. .vscode/settings.json files.exclude kanban/ deferred to #609.
+
+### Refinements Applied
+1. Added 13-entry path mapping table
+2. Expanded AC from 10 (3 precise + 7 vague) to 11 (all mechanically verifiable)
+3. Original AC4-6 covered one path type per file category; new AC2-5 cover ALL path types
+4. Added missing AC for prompt files (agent-audit.prompt.md)
+5. Added AC8 for share/skills/README.md
+6. Added AC9 for .owlbear/scripts/e2e_smoke.py with line refs
+7. Refined AC10 to exact key change (scripts/*.py to .owlbear/scripts/*.py)
+8. Added AC11 verification gate with exclusions
+9. Added Files Affected section (~40 files across 7 categories)
+10. Added Scope Boundaries section (handoffs to 8 sibling tasks)
+11. Added type:config pass-through tag
+
+### Verdict: APPROVE
+### Action Taken: Rewrote body with path mapping, expanded AC, added scope boundaries, added type:config. Advanced to todo.
+
+[[2026-04-05]] Sun 00:20
+APPROVED #607 to todo. Rewrote body: added 13-entry path mapping table, expanded AC from 10 vague to 11 precise items covering ~40 files across 7 categories, added Files Affected and Scope Boundaries sections, added type:config pass-through tag. Challenger overridden (0.68): deps factually in-progress not backlog; sharing-guide/settings deferred to #604/#609; pyproject scope already handled by #601.

@@ -1,0 +1,105 @@
+---
+id: 546
+title: 'Add apply_patch to #210 lint guard tool_name filter'
+status: todo
+priority: needed
+created: 2026-04-02T14:51:56.2992239+02:00
+updated: 2026-04-05T02:27:07.6961547+02:00
+tags:
+    - scope:agents
+    - hooks
+    - type:build
+depends_on:
+    - 210
+claimed_by: root-valve
+claimed_at: 2026-04-05T02:27:07.6915649+02:00
+class: standard
+---
+
+## Context
+Empirical verification (#532, docs/research/posttooluse-subagent-output-routing.md s3.6) discovered that the builder uses tool_name 'apply_patch' for file edits. Task #210's AC currently filters on create_file|replace_string_in_file|multi_replace_string_in_file only, missing apply_patch.
+
+## Acceptance Criteria
+- [ ] #210 lint guard script matches apply_patch in addition to existing tool_names
+- [ ] Verified via hook log that apply_patch triggers lint check
+
+[[2026-04-02]] Thu 15:50
+## Research
+See docs/research/apply-patch-lint-guard-filter.md for full findings.
+
+Key findings:
+- apply_patch confirmed as builder edit tool_name (#532 empirical, VS Code hooks docs)
+- tool_input format unknown: likely tool_input.filePath or tool_input.patch with diff headers
+- T1 classification: filter extension, no new capability or arch change
+- depends_on #210 added: script must exist before modification
+
+Refined AC guidance:
+- Add apply_patch to tool_name regex in lint-changed.ps1
+- For path extraction: try tool_input.filePath first, fall back to diff header parsing
+- Add test cases parallel to existing AC3a-AC3f for apply_patch tool_name
+- Builder should log actual apply_patch tool_input JSON to confirm format
+
+[[2026-04-02]] Thu 15:50
+## Research
+See docs/research/apply-patch-lint-guard-filter.md for full findings.
+
+Key findings:
+- apply_patch confirmed as builder edit tool_name (#532 empirical, VS Code hooks docs)
+- tool_input format unknown: likely tool_input.filePath or tool_input.patch with diff headers
+- T1 classification: filter extension, no new capability or arch change
+- depends_on #210 added: script must exist before modification
+
+Refined AC guidance:
+- Add apply_patch to tool_name regex in lint-changed.ps1
+- For path extraction: try tool_input.filePath first, fall back to diff header parsing
+- Add test cases parallel to existing AC3a-AC3f for apply_patch tool_name
+- Builder should log actual apply_patch tool_input JSON to confirm format
+
+[[2026-04-05]] Sun 00:00
+## Architecture Review
+
+### AC Refinement
+Original AC was vague ("Verified via hook log" is untestable). Replaced with precise, testable criteria parallel to existing #210 test patterns:
+
+**Refined Acceptance Criteria (supersedes original):**
+- [ ] AC1: `edit_tools` array in `scripts/hooks/lint-changed.ps1` includes `'apply_patch'`
+- [ ] AC2: `apply_patch` with `tool_input.filePath` pointing to a ruff-clean `.py` file returns `{}`
+- [ ] AC3: `apply_patch` with `tool_input.filePath` pointing to a file with lint errors returns JSON with non-empty `systemMessage` containing ruff output and `hookSpecificOutput.additionalContext`
+- [ ] AC4: `apply_patch` with nonexistent `tool_input.filePath` returns `{}` (graceful degradation, same as AC5 pattern in #210)
+- [ ] AC5: `apply_patch` with missing/null `tool_input.filePath` returns `{}` (graceful degradation)
+- [ ] AC6: Script exit code is never 2 for any `apply_patch` invocation (non-blocking design)
+- [ ] AC7: All script stdout for `apply_patch` tool_name is valid JSON
+
+**Path extraction note:** apply_patch uses the `else` branch in lint-changed.ps1 (same as create_file/replace_string_in_file), reading `tool_input.filePath`. Graceful degradation to `{}` if field absent. No diff-header parsing needed for this scope.
+
+**Test pattern:** Tests parallel existing AC3a-f/AC5/AC6 in `tests/test_lint_guard_hook_210.py` using `_run_hook()` helper with `tool_name: "apply_patch"`.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One thing: add apply_patch to lint guard filter |
+| Interface clarity | PASS (after refinement) | 7 precise AC lines, all testable via subprocess |
+| Dependency correctness | PASS | #210 archived; dependency satisfied |
+| Module layering | N/A | PowerShell hook script, no Python module layering |
+| TDD compliance | PASS | Test-writer will create tests from refined AC |
+| KISS/YAGNI | PASS | Minimal scope: one tool_name addition to existing array |
+| Premise challenge | PASS | apply_patch confirmed empirically (#532 s3.6) |
+| Pattern consistency | PASS | deny-writes.ps1 already includes apply_patch; follows existing edit_tools pattern |
+| Security surface | PASS | No new system boundaries; same trusted VS Code hook context |
+| Single domain | PASS | Hooks domain only |
+
+### Failure Mode Map
+| Codepath | Failure Mode | Exception | Handled? | User Impact |
+|----------|-------------|-----------|----------|-------------|
+| apply_patch with filePath | ruff fails on file | catch block | Yes, returns {} | None (graceful) |
+| apply_patch without filePath | $fp is $null | filePath check | Yes, returns {} | None (graceful) |
+
+### Process Note
+Commit 68c6a55 ("feat: add apply_patch...#546, builder") exists before architecture review. Pipeline violation: builder ran before arch review + test-writing. Existing implementation should be validated against refined AC by test-writer. Duplicate research section in body should be cleaned up.
+
+### Challenge Results
+- Challenger: FALLBACK (subagent returned no output)
+- Architect response: Proceeded with review; low-risk T1 filter extension
+
+### Verdict: APPROVE (after refinement)
+### Action: Advance to todo. Test-writer should use refined AC above (7 criteria) instead of original 2-line AC.
