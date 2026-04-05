@@ -1,10 +1,12 @@
 ---
 id: 430
 title: 'Test: Wire Quality-Runner into pipeline agents'
-status: done
+status: archived
 priority: needed
 created: 2026-03-30T21:24:44.6433602+02:00
-updated: 2026-04-05T00:44:33.6912355+02:00
+updated: 2026-04-05T04:01:58.1952021+02:00
+started: 2026-04-05T04:01:58.1952021+02:00
+completed: 2026-04-05T04:01:58.1952021+02:00
 tags:
     - scope:agents
     - phase-2
@@ -134,3 +136,29 @@ None. All AC covered, tests pass, lint clean, commit verified, TestFromAC intact
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/430-* files found)
+
+[[2026-04-05]] Sun 04:01
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: 4 agents have quality-runner | 5 tests pass (TestFromAC_AgentsArrayHasQualityRunner) | PASS |
+| AC2: agents array not empty | 4 tests pass (TestFromAC_AgentsArrayNotEmpty) | PASS |
+| AC3: 4 skills contain QR invocation | 5 tests pass (TestFromAC_SkillsContainQualityRunnerInvocation) | PASS |
+| AC4: skills retain fallback with uv run | 4 tests pass (TestFromAC_SkillsRetainFallbackSection) | PASS |
+| AC5: no execute/* tools removed | 4 tests pass (TestFromAC_ExecuteToolsPreservedWithQualityRunner) | PASS |
+| AC6: RED phase verified | Builder notes: "34 failed before implementation"; commit 7b2aed2 is test-writer commit | PASS |
+
+### Test Results
+- pytest (task-scoped): 22 passed, 0 failed (0.13s)
+- pytest (full suite): pre-existing RED failures in unrelated tests; zero failures in #430 scope
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+Specific, testable AC lines. Clear file targets and pattern reference.
+
+### Deduction Breakdown
+No deductions. All AC evidenced, lint clean, reviewer detailed, no task-scope failures.
+
+### Confidence: .98
+### Action: archive

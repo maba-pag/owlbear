@@ -1,37 +1,3 @@
-{"timestamp":"2026-03-30T04:23:10.8462742+02:00","action":"release","task_id":193,"detail":"test-writer"}
-{"timestamp":"2026-03-30T04:23:34.6663482+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T04:23:34.6700611+02:00","action":"claim","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T04:23:38.3369249+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T04:23:38.3397051+02:00","action":"claim","task_id":166,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:23:39.6934701+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T04:23:39.696664+02:00","action":"release","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T04:23:40.6506781+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T04:23:40.6548751+02:00","action":"claim","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:23:46.7264055+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T04:23:46.729561+02:00","action":"claim","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T04:23:48.9920476+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T04:23:48.9957202+02:00","action":"claim","task_id":177,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:23:50.6372972+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T04:23:50.6405105+02:00","action":"release","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T04:24:59.7714509+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T04:24:59.7745137+02:00","action":"release","task_id":177,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:25:35.9713568+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T04:25:40.3707201+02:00","action":"move","task_id":185,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T04:25:45.0320168+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T04:25:45.035565+02:00","action":"release","task_id":185,"detail":"auditor"}
-{"timestamp":"2026-03-30T04:26:28.479001+02:00","action":"edit","task_id":185,"detail":"Test: audit log module (DispatchEvent + CompletionEvent)"}
-{"timestamp":"2026-03-30T04:26:37.0925282+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T04:26:37.0951352+02:00","action":"release","task_id":11,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:26:57.3047987+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T04:26:57.3074611+02:00","action":"claim","task_id":195,"detail":"auditor"}
-{"timestamp":"2026-03-30T04:27:09.6556358+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T04:27:47.9090243+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
-{"timestamp":"2026-03-30T04:27:47.9120662+02:00","action":"release","task_id":166,"detail":"reviewer"}
-{"timestamp":"2026-03-30T04:28:42.750199+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T04:28:48.2707856+02:00","action":"move","task_id":195,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T04:28:53.2529999+02:00","action":"edit","task_id":195,"detail":"Add premise challenge step to arch-review skill"}
-{"timestamp":"2026-03-30T04:28:53.2551985+02:00","action":"release","task_id":195,"detail":"auditor"}
-{"timestamp":"2026-03-30T04:29:18.5682448+02:00","action":"edit","task_id":95,"detail":"Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)"}
 {"timestamp":"2026-03-30T04:29:18.571894+02:00","action":"claim","task_id":95,"detail":"auditor"}
 {"timestamp":"2026-03-30T04:30:40.448092+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
 {"timestamp":"2026-03-30T04:30:40.4512143+02:00","action":"claim","task_id":166,"detail":"writer"}
@@ -9998,3 +9964,37 @@
 {"timestamp":"2026-04-05T02:31:11.3642113+02:00","action":"release","task_id":603,"detail":"vault-edge"}
 {"timestamp":"2026-04-05T02:32:48.1247636+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
 {"timestamp":"2026-04-05T02:32:48.1405077+02:00","action":"release","task_id":601,"detail":"curl-mill"}
+{"timestamp":"2026-04-05T03:19:21.0376622+02:00","action":"move","task_id":576,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-04-05T03:19:22.5892415+02:00","action":"move","task_id":576,"detail":"todo -\u003e in-progress"}
+{"timestamp":"2026-04-05T03:19:23.4764458+02:00","action":"move","task_id":576,"detail":"in-progress -\u003e review"}
+{"timestamp":"2026-04-05T03:19:24.3605775+02:00","action":"move","task_id":576,"detail":"review -\u003e docs"}
+{"timestamp":"2026-04-05T03:19:31.6462998+02:00","action":"move","task_id":576,"detail":"docs -\u003e review"}
+{"timestamp":"2026-04-05T03:19:32.6493593+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T03:50:04.9824243+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T03:50:04.9995069+02:00","action":"claim","task_id":430,"detail":"keen-stone"}
+{"timestamp":"2026-04-05T03:50:16.398479+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-05T03:50:16.4126566+02:00","action":"claim","task_id":531,"detail":"kelp-rose"}
+{"timestamp":"2026-04-05T03:50:38.4075641+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-05T03:50:38.4194403+02:00","action":"claim","task_id":601,"detail":"rose-pine"}
+{"timestamp":"2026-04-05T03:51:57.2811383+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
+{"timestamp":"2026-04-05T03:51:57.2951725+02:00","action":"release","task_id":601,"detail":"rose-pine"}
+{"timestamp":"2026-04-05T03:52:59.6594564+02:00","action":"priority","task_id":608,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:53:20.2004307+02:00","action":"priority","task_id":605,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:53:20.9515181+02:00","action":"priority","task_id":605,"detail":"critical -\u003e needed"}
+{"timestamp":"2026-04-05T03:53:48.3941287+02:00","action":"priority","task_id":609,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:54:17.3872871+02:00","action":"priority","task_id":607,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:55:00.1737853+02:00","action":"delete","task_id":545,"detail":"Decision-request Slack notifications"}
+{"timestamp":"2026-04-05T03:55:10.4675476+02:00","action":"delete","task_id":344,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
+{"timestamp":"2026-04-05T03:55:18.3708407+02:00","action":"delete","task_id":347,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
+{"timestamp":"2026-04-05T03:56:20.4425269+02:00","action":"priority","task_id":602,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:56:31.0530265+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
+{"timestamp":"2026-04-05T03:56:31.0802034+02:00","action":"release","task_id":531,"detail":"kelp-rose"}
+{"timestamp":"2026-04-05T03:56:31.8939081+02:00","action":"priority","task_id":598,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:56:48.0013802+02:00","action":"priority","task_id":606,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:56:56.9913341+02:00","action":"priority","task_id":603,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:57:12.222312+02:00","action":"priority","task_id":600,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:57:14.6721714+02:00","action":"priority","task_id":601,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T03:57:17.0743557+02:00","action":"priority","task_id":599,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-05T04:01:57.6144647+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T04:01:57.6266698+02:00","action":"release","task_id":430,"detail":"keen-stone"}
+{"timestamp":"2026-04-05T04:01:58.1952021+02:00","action":"move","task_id":430,"detail":"done -\u003e archived"}
