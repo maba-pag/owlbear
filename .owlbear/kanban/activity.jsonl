@@ -1,62 +1,3 @@
-{"timestamp":"2026-03-30T14:23:11.4446429+02:00","action":"claim","task_id":55,"detail":"auditor"}
-{"timestamp":"2026-03-30T14:26:20.9085432+02:00","action":"priority","task_id":143,"detail":"nice-to-have -\u003e someday"}
-{"timestamp":"2026-03-30T14:31:05.726172+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T14:31:05.7308337+02:00","action":"claim","task_id":181,"detail":"builder"}
-{"timestamp":"2026-03-30T14:33:23.191734+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T14:33:44.0808199+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T14:33:57.338507+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T14:33:57.3416896+02:00","action":"release","task_id":181,"detail":"builder"}
-{"timestamp":"2026-03-30T14:34:35.921998+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T14:34:35.9251818+02:00","action":"claim","task_id":196,"detail":"builder"}
-{"timestamp":"2026-03-30T14:34:39.3621471+02:00","action":"move","task_id":55,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T14:34:46.4599452+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T14:34:46.4625414+02:00","action":"release","task_id":55,"detail":"auditor"}
-{"timestamp":"2026-03-30T14:35:59.4907691+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T14:35:59.4939017+02:00","action":"release","task_id":196,"detail":"builder"}
-{"timestamp":"2026-03-30T14:36:01.0331483+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:36:01.0400076+02:00","action":"claim","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T14:36:07.5516396+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T14:36:17.3791297+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T14:36:17.3828483+02:00","action":"claim","task_id":212,"detail":"reviewer"}
-{"timestamp":"2026-03-30T14:36:52.198273+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T14:36:52.2024941+02:00","action":"claim","task_id":151,"detail":"builder"}
-{"timestamp":"2026-03-30T14:37:56.5116049+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T14:38:05.5670698+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T14:38:05.5716759+02:00","action":"claim","task_id":158,"detail":"test-writer"}
-{"timestamp":"2026-03-30T14:38:06.6516966+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T14:38:06.656903+02:00","action":"release","task_id":151,"detail":"builder"}
-{"timestamp":"2026-03-30T14:38:55.5018956+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T14:38:59.6086533+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T14:39:05.3312617+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T14:39:05.3349102+02:00","action":"release","task_id":212,"detail":"reviewer"}
-{"timestamp":"2026-03-30T14:39:07.4711337+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T14:39:07.4769977+02:00","action":"claim","task_id":153,"detail":"builder"}
-{"timestamp":"2026-03-30T14:40:04.2103699+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T14:40:04.2139994+02:00","action":"release","task_id":153,"detail":"builder"}
-{"timestamp":"2026-03-30T14:40:12.8693019+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T14:40:12.8740126+02:00","action":"claim","task_id":153,"detail":"builder"}
-{"timestamp":"2026-03-30T14:40:13.331158+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T14:40:13.3342858+02:00","action":"release","task_id":153,"detail":"builder"}
-{"timestamp":"2026-03-30T14:41:19.8676057+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:41:19.872876+02:00","action":"release","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T14:46:48.389508+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T14:46:52.9524409+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T14:46:52.957231+02:00","action":"release","task_id":158,"detail":"test-writer"}
-{"timestamp":"2026-03-30T14:49:31.784138+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:49:31.7894128+02:00","action":"claim","task_id":152,"detail":"writer"}
-{"timestamp":"2026-03-30T14:49:34.4378217+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T14:49:34.4431575+02:00","action":"claim","task_id":215,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:49:34.7157005+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T14:49:34.7199399+02:00","action":"claim","task_id":214,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:49:56.4437373+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T14:49:56.4480392+02:00","action":"claim","task_id":158,"detail":"builder"}
-{"timestamp":"2026-03-30T14:51:00.8115032+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:51:00.8156619+02:00","action":"release","task_id":152,"detail":"writer"}
-{"timestamp":"2026-03-30T14:51:52.7354526+02:00","action":"create","task_id":217,"detail":"Implement Gate 3 architect-bypass in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T14:52:14.8186046+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T14:52:20.1991957+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T14:52:20.2023416+02:00","action":"release","task_id":214,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:54:54.3134449+02:00","action":"create","task_id":218,"detail":"Sync non-impl tag list cross-references across skill files"}
 {"timestamp":"2026-03-30T14:55:03.975066+02:00","action":"edit","task_id":218,"detail":"Sync non-impl tag list cross-references across skill files"}
 {"timestamp":"2026-03-30T14:55:22.0453279+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
 {"timestamp":"2026-03-30T14:55:39.5409797+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
@@ -9998,3 +9939,62 @@
 {"timestamp":"2026-04-05T16:07:41.8173587+02:00","action":"claim","task_id":598,"detail":"cedar-swift"}
 {"timestamp":"2026-04-05T16:09:10.8898283+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
 {"timestamp":"2026-04-05T16:09:10.9030644+02:00","action":"release","task_id":624,"detail":"sage-peak"}
+{"timestamp":"2026-04-05T16:13:23.1675244+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T16:13:23.1781113+02:00","action":"release","task_id":608,"detail":"bolt-river"}
+{"timestamp":"2026-04-05T16:16:52.9199775+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T16:17:44.1188256+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T16:17:51.2611824+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T16:17:51.2706823+02:00","action":"release","task_id":598,"detail":"cedar-swift"}
+{"timestamp":"2026-04-05T16:18:25.4804042+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T16:18:25.4916168+02:00","action":"claim","task_id":622,"detail":"cloud-path"}
+{"timestamp":"2026-04-05T16:18:44.2290318+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T16:18:44.2423627+02:00","action":"claim","task_id":621,"detail":"lark-aspen"}
+{"timestamp":"2026-04-05T16:18:44.9797023+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T16:18:44.9903586+02:00","action":"claim","task_id":167,"detail":"hazel-lark"}
+{"timestamp":"2026-04-05T16:19:25.1390861+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T16:19:25.1529809+02:00","action":"claim","task_id":542,"detail":"mill-haven"}
+{"timestamp":"2026-04-05T16:19:52.0307134+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T16:19:52.0468737+02:00","action":"release","task_id":622,"detail":"cloud-path"}
+{"timestamp":"2026-04-05T16:21:10.6542839+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T16:21:10.6655885+02:00","action":"release","task_id":167,"detail":"hazel-lark"}
+{"timestamp":"2026-04-05T16:21:37.2687513+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T16:21:37.279643+02:00","action":"release","task_id":621,"detail":"lark-aspen"}
+{"timestamp":"2026-04-05T16:22:03.8293667+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T16:22:03.8405314+02:00","action":"release","task_id":542,"detail":"mill-haven"}
+{"timestamp":"2026-04-05T16:26:08.1279949+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T16:26:08.1402032+02:00","action":"claim","task_id":628,"detail":"deep-veil"}
+{"timestamp":"2026-04-05T16:26:52.855114+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T16:26:52.8676986+02:00","action":"claim","task_id":167,"detail":"dove-sand"}
+{"timestamp":"2026-04-05T16:26:54.1918596+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T16:26:54.2048207+02:00","action":"claim","task_id":609,"detail":"shell-forge"}
+{"timestamp":"2026-04-05T16:26:58.0949719+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T16:26:58.1074135+02:00","action":"claim","task_id":621,"detail":"gale-shore"}
+{"timestamp":"2026-04-05T16:27:58.6548771+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T16:27:58.667201+02:00","action":"release","task_id":167,"detail":"dove-sand"}
+{"timestamp":"2026-04-05T16:28:30.0476365+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T16:28:30.0595567+02:00","action":"release","task_id":621,"detail":"gale-shore"}
+{"timestamp":"2026-04-05T16:31:10.4308206+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T16:31:10.4430239+02:00","action":"release","task_id":628,"detail":"deep-veil"}
+{"timestamp":"2026-04-05T16:42:00.0611097+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T16:42:06.7417767+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T16:42:06.7524744+02:00","action":"release","task_id":609,"detail":"shell-forge"}
+{"timestamp":"2026-04-05T16:42:07.1846601+02:00","action":"move","task_id":609,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T16:42:48.2649016+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T16:42:48.2771235+02:00","action":"claim","task_id":319,"detail":"eagle-curl"}
+{"timestamp":"2026-04-05T16:42:49.0718888+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T16:42:49.0833388+02:00","action":"claim","task_id":629,"detail":"root-dune"}
+{"timestamp":"2026-04-05T16:44:59.3255945+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T16:44:59.3374944+02:00","action":"claim","task_id":542,"detail":"blaze-quiet"}
+{"timestamp":"2026-04-05T16:45:52.0170443+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T16:45:52.0275795+02:00","action":"release","task_id":542,"detail":"blaze-quiet"}
+{"timestamp":"2026-04-05T16:45:57.2049208+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T16:45:57.2167065+02:00","action":"claim","task_id":624,"detail":"wolf-fire"}
+{"timestamp":"2026-04-05T16:46:34.0639554+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T16:46:39.1672452+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T16:46:58.9883611+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T16:47:15.8517238+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T16:47:15.8664023+02:00","action":"release","task_id":629,"detail":"root-dune"}
+{"timestamp":"2026-04-05T16:55:16.2608556+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T16:55:20.4292447+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T16:55:20.4409196+02:00","action":"release","task_id":624,"detail":"wolf-fire"}
+{"timestamp":"2026-04-05T16:56:52.3640827+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
