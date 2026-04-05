@@ -1,9 +1,3 @@
-{"timestamp":"2026-03-30T14:55:39.5445772+02:00","action":"release","task_id":215,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:07:00.8940933+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T15:07:06.8000428+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T15:07:06.8052382+02:00","action":"release","task_id":158,"detail":"builder"}
-{"timestamp":"2026-03-30T15:07:37.115277+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T15:07:37.1190579+02:00","action":"claim","task_id":153,"detail":"reviewer"}
 {"timestamp":"2026-03-30T15:07:42.2930324+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
 {"timestamp":"2026-03-30T15:07:42.2978313+02:00","action":"claim","task_id":196,"detail":"reviewer"}
 {"timestamp":"2026-03-30T15:07:44.6302054+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
@@ -9998,3 +9992,9 @@
 {"timestamp":"2026-04-05T16:57:16.2184582+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
 {"timestamp":"2026-04-05T16:57:16.2327393+02:00","action":"release","task_id":319,"detail":"eagle-curl"}
 {"timestamp":"2026-04-05T16:57:16.666794+02:00","action":"move","task_id":319,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T16:58:17.7173673+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T16:58:17.7289315+02:00","action":"claim","task_id":567,"detail":"eagle-dale"}
+{"timestamp":"2026-04-05T17:05:20.8194365+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T17:05:26.5500615+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T17:05:26.5602975+02:00","action":"release","task_id":567,"detail":"eagle-dale"}
+{"timestamp":"2026-04-05T17:05:27.0014073+02:00","action":"move","task_id":567,"detail":"done -\u003e archived"}

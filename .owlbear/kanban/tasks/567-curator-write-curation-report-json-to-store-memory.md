@@ -1,10 +1,12 @@
 ---
 id: 567
 title: 'Curator: write curation-report.json to store/memory/'
-status: done
+status: archived
 priority: important
 created: 2026-04-03T10:25:09.2481537+02:00
-updated: 2026-04-05T15:53:20.6694848+02:00
+updated: 2026-04-05T17:05:26.9999628+02:00
+started: 2026-04-05T17:05:26.9999628+02:00
+completed: 2026-04-05T17:05:26.9999628+02:00
 tags:
     - scope:agents
     - phase-2
@@ -148,3 +150,33 @@ None. `content_preview` in the JSON is not consumed by approve.py's UI (it reads
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/567-* files found)
+
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Step 5 updated, JSON written before task body | Diff: Step 5a added with overwrite semantics, 5b retains original append | PASS |
+| AC2: Top-level array with entry_id, content_preview, recommendation, reason | SKILL.md schema matches; approve.py L101 confirms array + entry_id key consumer | PASS |
+| AC3: Overwrite each cycle, latest only | Step 5a: overwrite each cycle explicit | PASS |
+| AC4: approve.py reads store/memory/curation-report.json, no code changes | approve.py L88: db_path.parent / curation-report.json; L101 handles array; no approve.py changes | PASS |
+
+### Test Results
+- pytest: 2878 passed, 432 failed (pre-existing systemic; 0 in task scope, markdown-only change), 18 skipped
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+Specific, verifiable AC. AC4 names exact function and path. Minor gap: no dir-creation guidance, benign for skill instruction.
+
+### Deduction Breakdown
+- AC lines without evidence: 0
+- Lint violations: 0
+- AC quality: 4/5 (no deduction)
+- Reviewer evidence: present, detailed, PASS at .95
+- Full-suite failures in task scope: 0
+- Note: builder left deliverable uncommitted; committed by auditor (59ec3c0)
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-05]] Sun 17:05
+4/4 AC verified with evidence. Full suite: 2878 passed, 432 pre-existing failures (0 in scope). Ruff clean. Architect quality 4/5. Confidence .98. Committed uncommitted deliverable (59ec3c0).
