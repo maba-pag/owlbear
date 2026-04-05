@@ -68,13 +68,7 @@ class VoiceProcessManager:
         max_restarts: int = 3,
     ) -> None:
         self._command = command
-        # The default value maps to None internally so that callers who omit
-        # init_timeout (and tests that mock asyncio.wait_for globally for shutdown
-        # phase testing) don't have the init handshake intercepted.
-        # Explicit non-default values enforce the timeout via asyncio.wait_for.
-        self._init_timeout: float | None = (
-            None if init_timeout == _DEFAULT_INIT_TIMEOUT else init_timeout
-        )
+        self._init_timeout: float = init_timeout
         self._shutdown_timeout = shutdown_timeout
         self._kill_timeout = kill_timeout
         self._max_restarts = max_restarts
@@ -223,17 +217,16 @@ class VoiceProcessManager:
 
         # Read lines until ready or EOF
         while True:
-            if self._init_timeout is not None:
-                try:
-                    line = await asyncio.wait_for(
-                        proc.stdout.readline(), timeout=self._init_timeout
-                    )
-                except TimeoutError as exc:
-                    timeout_msg = f"Voice addon did not send ready within {self._init_timeout}s"
-                    raise VoiceInitTimeout(timeout_msg) from exc
-            else:
-                line = await proc.stdout.readline()
+            try:
+                line = await asyncio.wait_for(
+                    proc.stdout.readline(), timeout=self._init_timeout
+                )
+            except TimeoutError as exc:
+                proc.kill()
+                timeout_msg = f"Voice addon did not send ready within {self._init_timeout}s"
+                raise VoiceInitTimeout(timeout_msg) from exc
             if not line:
+                proc.kill()
                 timeout_msg = "Voice addon did not send ready (EOF received)"
                 raise VoiceInitTimeout(timeout_msg)
             try:
