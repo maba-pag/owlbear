@@ -28,7 +28,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Import target — will raise ModuleNotFoundError until script exists (RED)
 # ---------------------------------------------------------------------------
-_SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).parent.parent / ".owlbear" / "scripts"
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from validate_agents import validate_agent  # noqa: E402  # type: ignore[import]

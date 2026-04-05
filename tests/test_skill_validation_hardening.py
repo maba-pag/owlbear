@@ -26,7 +26,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path setup — import from scripts/ directory
 # ---------------------------------------------------------------------------
-_SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).parent.parent / ".owlbear" / "scripts"
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from skills_ref.validator import validate_metadata  # noqa: E402

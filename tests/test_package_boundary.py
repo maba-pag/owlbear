@@ -31,8 +31,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-# packages/ directory relative to this test file (tests/test_package_boundary.py)
-_PACKAGES_DIR = Path(__file__).parent.parent / "packages"
+# serve/ directory relative to this test file (tests/test_package_boundary.py)
+_PACKAGES_DIR = Path(__file__).parent.parent / "serve"
 
 # Allowed cross-namespace imports per owlbear package namespace.
 # Self-imports (a namespace importing from itself) are always allowed and are

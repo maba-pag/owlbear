@@ -130,8 +130,9 @@ Exit codes: 0 on full success, 1 if any operation failed.
 
 ```bash
 uv sync --all-extras
-uv run pytest tests/ packages/ -m "not api" -q --tb=short
-uv run ruff check packages/ tests/
+uv run pytest tests/ serve/ -m "not api" -q --tb=short
+uv run pytest tests/ serve/ -m "not api" -q --tb=short --cov --cov-report=term-missing
+uv run ruff check serve/ tests/
 ```
 
 ## Pre-commit Hooks

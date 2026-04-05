@@ -86,11 +86,11 @@ def _coverage_run() -> dict:
 class TestFromAC_PytestIniOptions:
     """AC1: testpaths must include 'packages'; addopts must include --import-mode=importlib."""
 
-    def test_testpaths_includes_packages(self) -> None:
-        """testpaths must list 'packages' alongside 'tests'."""
+    def test_testpaths_includes_serve(self) -> None:
+        """testpaths must list 'serve' alongside 'tests' (renamed from packages/ in five-tier restructure)."""
         opts = _pytest_ini_options()
         testpaths = opts.get("testpaths", [])
-        assert "packages" in testpaths, f"'packages' missing from testpaths; got {testpaths!r}"
+        assert "serve" in testpaths, f"'serve' missing from testpaths; got {testpaths!r}"
 
     def test_addopts_has_import_mode_importlib(self) -> None:
         """addopts must include --import-mode=importlib."""
@@ -148,36 +148,36 @@ class TestFromAC_RootConftest:
 
 
 class TestFromAC_PerPackageTestDirs:
-    """AC3: orchestrator, knowledge, mcp-kanban must gain tests/ directories with __init__.py."""
+    """AC3: orchestrator, knowledge, mcp-kanban must have tests/ directories with __init__.py (under serve/)."""
 
     def test_orchestrator_tests_dir_exists(self) -> None:
-        assert (ROOT / "packages" / "orchestrator" / "tests").is_dir(), (
-            "packages/orchestrator/tests/ directory missing"
+        assert (ROOT / "serve" / "orchestrator" / "tests").is_dir(), (
+            "serve/orchestrator/tests/ directory missing"
         )
 
     def test_orchestrator_tests_init_exists(self) -> None:
-        assert (ROOT / "packages" / "orchestrator" / "tests" / "__init__.py").exists(), (
-            "packages/orchestrator/tests/__init__.py missing"
+        assert (ROOT / "serve" / "orchestrator" / "tests" / "__init__.py").exists(), (
+            "serve/orchestrator/tests/__init__.py missing"
         )
 
     def test_knowledge_tests_dir_exists(self) -> None:
-        assert (ROOT / "packages" / "knowledge" / "tests").is_dir(), (
-            "packages/knowledge/tests/ directory missing"
+        assert (ROOT / "serve" / "knowledge" / "tests").is_dir(), (
+            "serve/knowledge/tests/ directory missing"
         )
 
     def test_knowledge_tests_init_exists(self) -> None:
-        assert (ROOT / "packages" / "knowledge" / "tests" / "__init__.py").exists(), (
-            "packages/knowledge/tests/__init__.py missing"
+        assert (ROOT / "serve" / "knowledge" / "tests" / "__init__.py").exists(), (
+            "serve/knowledge/tests/__init__.py missing"
         )
 
     def test_mcp_kanban_tests_dir_exists(self) -> None:
-        assert (ROOT / "packages" / "mcp-kanban" / "tests").is_dir(), (
-            "packages/mcp-kanban/tests/ directory missing"
+        assert (ROOT / "serve" / "mcp-kanban" / "tests").is_dir(), (
+            "serve/mcp-kanban/tests/ directory missing"
         )
 
     def test_mcp_kanban_tests_init_exists(self) -> None:
-        assert (ROOT / "packages" / "mcp-kanban" / "tests" / "__init__.py").exists(), (
-            "packages/mcp-kanban/tests/__init__.py missing"
+        assert (ROOT / "serve" / "mcp-kanban" / "tests" / "__init__.py").exists(), (
+            "serve/mcp-kanban/tests/__init__.py missing"
         )
 
 
@@ -241,12 +241,12 @@ class TestFromAC_RuffConfig:
                 f"Required ignore prefix '{prefix}' missing from ruff ignore={ignore!r}"
             )
 
-    def test_ruff_src_references_packages(self) -> None:
-        """[tool.ruff] src must reference packages/ for first-party import detection."""
+    def test_ruff_src_references_serve(self) -> None:
+        """[tool.ruff] src must reference serve/ for first-party import detection (renamed from packages/)."""
         src = _ruff().get("src", [])
         assert src, "[tool.ruff] src not set; needed for first-party import detection"
         src_str = " ".join(str(s) for s in src)
-        assert "packages" in src_str, f"[tool.ruff] src must reference packages/; got src={src!r}"
+        assert "serve" in src_str, f"[tool.ruff] src must reference serve/; got src={src!r}"
 
     def test_ruff_per_file_ignores_covers_tests(self) -> None:
         """per-file-ignores must include a pattern for tests/**/*.py."""
@@ -257,14 +257,14 @@ class TestFromAC_RuffConfig:
             f"per-file-ignores must have a 'tests/**' pattern; keys found: {list(pfi)!r}"
         )
 
-    def test_ruff_per_file_ignores_covers_package_tests(self) -> None:
-        """per-file-ignores must include a pattern matching packages/*/tests/."""
+    def test_ruff_per_file_ignores_covers_serve_tests(self) -> None:
+        """per-file-ignores must include a pattern matching serve/*/tests/ (renamed from packages/)."""
         pfi = _ruff_lint().get("per-file-ignores", {})
         assert pfi, "[tool.ruff.lint] per-file-ignores not configured"
-        # Accept any key mentioning both "packages" and "tests"
-        has_pkg_tests = any("packages" in k and "tests" in k for k in pfi)
-        assert has_pkg_tests, (
-            f"per-file-ignores must cover packages/*/tests/**; keys found: {list(pfi)!r}"
+        # Accept any key mentioning both "serve" and "tests"
+        has_serve_tests = any("serve" in k and "tests" in k for k in pfi)
+        assert has_serve_tests, (
+            f"per-file-ignores must cover serve/*/tests/**; keys found: {list(pfi)!r}"
         )
 
 
@@ -320,12 +320,12 @@ class TestFromAC_CoverageConfig:
 
 
 class TestFromAC_PytestDiscovery:
-    """AC8: pytest must collect from both tests/ and packages/*/tests/ with exit 0."""
+    """AC8: pytest must collect from both tests/ and serve/*/tests/ with exit 0."""
 
     def test_pytest_collection_exits_zero(self) -> None:
-        """pytest --co across tests/ and packages/ must exit 0."""
+        """pytest --co across tests/ and serve/ must exit 0."""
         result = subprocess.run(
-            ["uv", "run", "pytest", "tests/", "packages/", "--co", "-q", "--tb=short"],
+            ["uv", "run", "pytest", "tests/", "serve/", "--co", "-q", "--tb=short"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -337,9 +337,9 @@ class TestFromAC_PytestDiscovery:
         )
 
     def test_pytest_collection_includes_all_five_packages(self) -> None:
-        """pytest collection output must reference tests from all 5 packages/*/tests/ dirs."""
+        """pytest collection output must reference tests from all 5 serve/*/tests/ dirs."""
         result = subprocess.run(
-            ["uv", "run", "pytest", "tests/", "packages/", "--co", "-q"],
+            ["uv", "run", "pytest", "tests/", "serve/", "--co", "-q"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -347,8 +347,8 @@ class TestFromAC_PytestDiscovery:
         )
         combined = (result.stdout + result.stderr).replace("\\", "/")
         for pkg in ["orchestrator", "knowledge", "mcp-kanban", "mcp-knowledge", "mcp-project"]:
-            assert f"packages/{pkg}" in combined, (
-                f"pytest did not collect any tests from packages/{pkg}/tests/.\n"
+            assert f"serve/{pkg}" in combined, (
+                f"pytest did not collect any tests from serve/{pkg}/tests/.\n"
                 f"Collection output:\n{result.stdout}"
             )
 
@@ -359,7 +359,7 @@ class TestFromAC_PytestDiscovery:
 
 
 class TestFromAC_RuffLinting:
-    """AC9: uv run ruff check packages/ tests/ must exit 0."""
+    """AC9: uv run ruff check serve/ tests/ must exit 0."""
 
     def test_ruff_check_clean(self) -> None:
         """ruff check must exit 0 when fully configured (select=ALL + ignores in place)."""
@@ -369,7 +369,7 @@ class TestFromAC_RuffLinting:
             "[tool.ruff.lint] select=ALL must be configured before ruff clean-check can pass"
         )
         result = subprocess.run(
-            ["uv", "run", "ruff", "check", "packages/", "tests/"],
+            ["uv", "run", "ruff", "check", "serve/", "tests/"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -394,7 +394,7 @@ class TestFromAC_TrivialPassingTests:
                 "uv",
                 "run",
                 "pytest",
-                f"packages/{pkg_dir}/tests/",
+                f"serve/{pkg_dir}/tests/",
                 "--tb=no",
                 "-q",
                 "--no-header",
@@ -405,7 +405,7 @@ class TestFromAC_TrivialPassingTests:
             timeout=60,
         )
         assert "passed" in result.stdout, (
-            f"No passing tests found in packages/{pkg_dir}/tests/.\n"
+            f"No passing tests found in serve/{pkg_dir}/tests/.\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
 
@@ -433,15 +433,15 @@ class TestFromAC_CIDocumentation:
     def _readme(self) -> str:
         return (ROOT / "README.md").read_text(encoding="utf-8")
 
-    def test_readme_pytest_command_covers_packages(self) -> None:
-        """README must document a pytest command that covers packages/."""
+    def test_readme_pytest_command_covers_serve(self) -> None:
+        """README must document a pytest command that covers serve/ (renamed from packages/)."""
         readme = self._readme()
         pytest_lines = [
             line for line in readme.splitlines() if "pytest" in line and "uv run" in line
         ]
-        has_packages = any("packages" in line for line in pytest_lines)
-        assert has_packages, (
-            "README.md must document 'uv run pytest ... packages' command.\n"
+        has_serve = any("serve" in line for line in pytest_lines)
+        assert has_serve, (
+            "README.md must document 'uv run pytest ... serve' command.\n"
             f"Existing pytest lines: {pytest_lines}"
         )
 
@@ -453,11 +453,11 @@ class TestFromAC_CIDocumentation:
             "README.md must document a coverage command (e.g., uv run pytest --cov or coverage run)"
         )
 
-    def test_readme_ruff_check_covers_packages(self) -> None:
-        """README must document a ruff check command covering packages/."""
+    def test_readme_ruff_check_covers_serve(self) -> None:
+        """README must document a ruff check command covering serve/ (renamed from packages/)."""
         readme = self._readme()
         ruff_lines = [line for line in readme.splitlines() if "ruff check" in line]
         assert ruff_lines, "README.md must document a 'ruff check' command"
-        # The command must cover packages/ (not just src/)
-        has_packages = any("packages" in line for line in ruff_lines)
-        assert has_packages, f"ruff check command must cover packages/; found: {ruff_lines}"
+        # The command must cover serve/ (not just src/)
+        has_serve = any("serve" in line for line in ruff_lines)
+        assert has_serve, f"ruff check command must cover serve/; found: {ruff_lines}"

@@ -1,7 +1,7 @@
 # Decision: Five-Tier Folder Restructure (.owlbear/ migration)
 
 **Date:** 2026-04-04
-**Status:** Pending
+**Status:** Resolved
 **Participants:** User + Copilot planning session
 
 ## Context

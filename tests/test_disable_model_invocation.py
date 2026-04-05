@@ -249,7 +249,6 @@ class TestFromAC_OrchestratorAgentsArrayUnchanged:
 
     _EXPECTED_SUBAGENTS = frozenset({
         "planner",
-        "planner",
         "researcher",
         "architect",
         "test-writer",

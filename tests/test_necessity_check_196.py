@@ -171,7 +171,10 @@ class TestFromAC_NecessityCheckQuestions:
         """Section 6.6 must ask whether existing project tooling already solves this."""
         section_text = _get_section_66_text(_read(CODE_REVIEW_SKILL))
         text_lower = section_text.lower()
-        assert "tooling" in text_lower and "already" in text_lower, (
+        assert "tooling" in text_lower, (
+            "Section 6.6 must ask whether existing project tooling already solves this need"
+        )
+        assert "already" in text_lower, (
             "Section 6.6 must ask whether existing project tooling already solves this need"
         )
 
@@ -242,7 +245,11 @@ class TestFromAC_ReviewerRedFlag:
         the environment already provides it' must be in reviewer.agent.md."""
         content = _read(REVIEWER_AGENT)
         # Test the key phrases that make this entry unique
-        assert "feature addition" in content.lower() and "environment" in content.lower(), (
+        assert "feature addition" in content.lower(), (
+            "Expected a red-flag entry about PASS-ing a feature addition without "
+            "checking if the environment already provides it"
+        )
+        assert "environment" in content.lower(), (
             "Expected a red-flag entry about PASS-ing a feature addition without "
             "checking if the environment already provides it"
         )

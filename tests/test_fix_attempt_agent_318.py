@@ -32,7 +32,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).parent.parent
 _AGENT_FILE = _REPO_ROOT / "share" / "agents" / "fix-attempt.agent.md"
 _BUILDER_FILE = _REPO_ROOT / "share" / "agents" / "builder.agent.md"
-_VALIDATE_SCRIPT = _REPO_ROOT / "scripts" / "validate_agents.py"
+_VALIDATE_SCRIPT = _REPO_ROOT / ".owlbear" / "scripts" / "validate_agents.py"
 
 _EXPECTED_TOOLS: frozenset[str] = frozenset(
     {
