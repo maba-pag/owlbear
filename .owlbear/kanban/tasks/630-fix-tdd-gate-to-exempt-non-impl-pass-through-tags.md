@@ -1,10 +1,12 @@
 ---
 id: 630
 title: Fix TDD gate to exempt non-impl pass-through tags
-status: review
+status: archived
 priority: important
 created: 2026-04-05T12:02:40.4394245+02:00
-updated: 2026-04-05T22:34:03.627511+02:00
+updated: 2026-04-06T01:00:13.3953837+02:00
+started: 2026-04-06T01:00:13.3953837+02:00
+completed: 2026-04-06T01:00:13.3953837+02:00
 tags:
     - scope:mcp
     - scope:orchestrator
@@ -127,3 +129,103 @@ AC refined (test coverage explicit for both gates.py and server.py), architectur
 
 [[2026-04-05]] Sun 22:34
 ## Docs Gate\n\nREJECTED — Missing `## Review Evidence` section. Reviewer advanced task to docs without appending mandatory review evidence (AC pass/fail verdicts, test results at time of review, reviewer identity). Docs gate cannot proceed without this section.\n\nAction required: reviewer re-claims, appends `## Review Evidence` with AC verdict table and test evidence, then re-advances to docs.
+
+[[2026-04-05]] Sun 23:52
+## Review Evidence
+
+Reviewer: reviewer-agent | Cycle: re-review (docs gate rejected prior evidence-free pass)
+
+### Test Results
+- pytest: 67 passed, 0 failed
+  - TestFromAC_CheckTDD_NonImplTagExemption: 9/9 PASSED
+  - TestFromAC_PickTasksNonImplTDDExemption: 6/6 PASSED
+  - Regression test_planner_gates.py: 19/19 PASSED
+  - Regression test_pick_tasks_620.py: 33/33 PASSED
+
+### Lint: clean
+- ruff check gates.py, server.py, test_tdd_gate_non_impl_630.py — All checks passed!
+
+### Coverage: N/A (pure-function gate logic — mutation-resistant tests cover all code paths)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| check_tdd() returns True for in-progress + non-impl tag, no TW notes | TestFromAC_CheckTDD_NonImplTagExemption (9 tests — one per tag + mixed) | Yes — `assert check_tdd(task) is True` directly fails if check_tdd returns False | COVERED |
+| _check_pick_gates(): same exemption in server.py | TestFromAC_PickTasksNonImplTDDExemption (6 tests) | Yes — `assert 901/902/.../906 in ids` fails if task excluded from dispatch | COVERED |
+| w-dispatch-planning spec alignment (no code) | No tests needed (doc verification only) | N/A | COVERED |
+
+#### Security Review
+- No new system boundaries. Tags sourced from kanban metadata (internal JSON), not user input.
+- `frozenset.intersection()` is a pure immutable operation — no injection surface.
+- No hardcoded secrets, no subprocess calls, no file paths affected.
+- No issues.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC_CheckTDD_NonImplTagExemption (9 tests) | New file — no prior version | N/A (new) |
+| TestFromAC_PickTasksNonImplTDDExemption (6 tests) | New file — no prior version | N/A (new) |
+| test_pick_tasks_628.py::test_tag_parameter_annotation_is_str | Changed from `inspect.signature` to `typing.get_type_hints` (handles `from __future__ import annotations`) | STRENGTHENED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | `assert check_tdd(task) is True` — boolean exact match; `assert 901 in ids` — task_id presence check |
+| Negative/error-path | ADEQUATE | Existing test_planner_gates.py covers TDD fail path; test_pick_tasks_620.py covers TDD exclusion |
+| Mutation resistance | STRONG | Removing `_NON_IMPL_TAGS.intersection()` block causes all 15 new tests to fail immediately |
+| Test independence | STRONG | Each test constructs its own task/mock; no shared mutable state |
+| Descriptive names | STRONG | `test_quality_tag_in_progress_no_tdd_notes_passes` clearly names intent |
+
+#### Data Safety
+- No issues. frozenset is immutable; no shared state between tests or gate calls.
+
+#### Implementation-Aware Gaps
+- gates.py: `_NON_IMPL_TAGS.intersection(task.tags)` — empty tags returns empty frozenset (falsy) → falls through to TW notes check. Covered by test_planner_gates.py::test_in_progress_without_tdd_notes_returns_false.
+- server.py: `tags = task.get("tags") or []` — correctly handles None tags. Covered by test_pick_tasks_620.py TDD gate tests.
+- No untested paths.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | N/A — second section re-verifies after claim, same correct approach |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- Module docstring in test_tdd_gate_non_impl_630.py still says "All tests FAIL in RED phase" — stale comment from test-writer phase. No functional impact.
+- Builder modified test_pick_tasks_628.py (out-of-AC-scope) to fix forward-ref annotation test. Change is STRENGTHENED. No concern.
+- Test file deviation: AC specified test_planner_gates.py and test_pick_tasks_620.py as targets; tests placed in test_tdd_gate_non_impl_630.py due to path guard on existing files. Full AC coverage maintained.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| check_tdd() returns True for in-progress + non-impl tag, no TW notes | gates.py L37-48: `_NON_IMPL_TAGS.intersection(task.tags)` early-return True | TestFromAC_CheckTDD_NonImplTagExemption 9/9 | PASS |
+| _check_pick_gates() updated with same tag-based TDD exemption | server.py L516-551: `_PICK_NON_IMPL_TAGS` frozenset + intersection check before TW notes test | TestFromAC_PickTasksNonImplTDDExemption 6/6 | PASS |
+| w-dispatch-planning SKILL.md spec alignment, no doc changes | SKILL.md L25/116/160 document the exemption; no SKILL.md changes in diff; code matches spec | N/A (doc verification) | PASS |
+| test_tdd_gate_non_impl_630.py covers check_tdd() non-impl exemption | 9 tests: one per tag + mixed intersection; all 9 pass | TestFromAC_CheckTDD_NonImplTagExemption | PASS |
+| test_tdd_gate_non_impl_630.py covers _check_pick_gates() exemption | 6 tests: quality, research, agent, type:test, docs, mixed; all 6 pass | TestFromAC_PickTasksNonImplTDDExemption | PASS |
+
+### Confidence: .96
+### Verdict: PASS
+
+[[2026-04-06]] Mon 00:01
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | Updated | `check_tdd()` and `_check_pick_gates()` behavior changed — added non-impl tag exemption. Module docstring in `gates.py` described Gate 4 as "in-progress tasks must have Test-Writer Notes" — inaccurate after the fix. Updated to "in-progress tasks without a non-impl tag must have Test-Writer Notes; non-impl pass-through tasks are exempt." Commit `28effc7`. `copilot-instructions.md` has no gates/planner content — N/A. |
+| 2 | Module docstrings | Yes | Verified | `check_tdd()` docstring accurate: "Non-implementation pass-through tasks (tagged with a non-impl tag) are exempt." `_check_pick_gates()` docstring accurate: "Return True if task passes atomicity, TDD, and clarity gates." Module-level docstring corrected (Item 1). |
+| 3 | External attribution | No | N/A | All 8 sources internal codebase (Research doc §2). |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/fix-tdd-gate-non-impl-exemption.md` exists, linked from task body. Follow-up: none needed per §5. |
+
+### Files Updated
+- `serve/orchestrator/src/owlbear/planner/gates.py` — module docstring corrected (commit `28effc7`)
+
+### Scratch Files
+- None found.
+
+[[2026-04-06]] Mon 01:00
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| check_tdd() returns True for in-progress + non-impl tag | gates.py L37-48: _NON_IMPL_TAGS.intersection(task.tags); 9/9 tests pass | PASS |\n| _check_pick_gates() updated with same exemption | server.py L517-551: _PICK_NON_IMPL_TAGS + intersection; 6/6 tests pass | PASS |\n| w-dispatch-planning spec alignment | SKILL.md L67/116/160 document same 8-tag set; code matches spec | PASS |\n| test for check_tdd() exemption | test_tdd_gate_non_impl_630.py: 9/9 pass | PASS |\n| test for _check_pick_gates() exemption | test_tdd_gate_non_impl_630.py: 6/6 pass | PASS |\n\n### Test Results\n- pytest (task-scoped): 67 passed, 0 failed\n- pytest (full suite): 2952 passed, 468 failed (all pre-existing, zero in task scope)\n- ruff: clean\n\n### Architect Quality: 4/5\n### Deduction Breakdown\nNo deductions applied. All 5 AC lines have evidence, lint clean, review section detailed, no task-scope failures.\n### Confidence: .98\n### Action: archive
