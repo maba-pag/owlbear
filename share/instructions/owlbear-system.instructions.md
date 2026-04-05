@@ -43,7 +43,9 @@ ideation → (researcher) → backlog → (architect) → todo → (test-writer)
 | `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
 | `store/` | Knowledge and memory data |
-| `scripts/` | Setup, validation, hooks |
+| `seed/` | Template files copied to new projects by `setup/init.py` |
+| `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
+| `scripts/` | Legacy setup script and pre-commit hooks (see `setup/init.py`) |
 
 For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
 
