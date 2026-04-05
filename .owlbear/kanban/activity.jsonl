@@ -1,153 +1,3 @@
-{"timestamp":"2026-03-30T15:18:57.6667718+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T15:18:57.6852966+02:00","action":"unblock","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T15:18:57.7083145+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-30T15:18:57.7518696+02:00","action":"unblock","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-30T15:19:22.6118878+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T15:19:50.5271311+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T15:19:50.531403+02:00","action":"release","task_id":191,"detail":"test-writer"}
-{"timestamp":"2026-03-30T15:23:44.065658+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T15:23:44.0693282+02:00","action":"claim","task_id":153,"detail":"writer"}
-{"timestamp":"2026-03-30T15:23:49.7282333+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T15:23:49.7323467+02:00","action":"claim","task_id":151,"detail":"writer"}
-{"timestamp":"2026-03-30T15:23:50.2398413+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T15:23:50.2441208+02:00","action":"claim","task_id":155,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:23:54.4980861+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:23:54.5024396+02:00","action":"claim","task_id":196,"detail":"writer"}
-{"timestamp":"2026-03-30T15:24:31.1792838+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T15:24:31.1837586+02:00","action":"release","task_id":151,"detail":"writer"}
-{"timestamp":"2026-03-30T15:24:48.5444207+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T15:24:48.547939+02:00","action":"release","task_id":153,"detail":"writer"}
-{"timestamp":"2026-03-30T15:25:29.4760682+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:25:48.1258063+02:00","action":"move","task_id":196,"detail":"docs -\u003e done"}
-{"timestamp":"2026-03-30T15:25:51.7369366+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:26:00.2995767+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:26:00.3027338+02:00","action":"release","task_id":196,"detail":"writer"}
-{"timestamp":"2026-03-30T15:28:58.693752+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T15:29:04.9123661+02:00","action":"move","task_id":155,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T15:29:05.3096217+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T15:29:05.3133297+02:00","action":"release","task_id":155,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:29:40.6481579+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T15:30:26.9316354+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T15:30:26.9347574+02:00","action":"claim","task_id":214,"detail":"architect"}
-{"timestamp":"2026-03-30T15:30:32.0027822+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:30:32.0063577+02:00","action":"claim","task_id":181,"detail":"writer"}
-{"timestamp":"2026-03-30T15:30:32.0917351+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T15:30:32.095379+02:00","action":"claim","task_id":215,"detail":"architect"}
-{"timestamp":"2026-03-30T15:30:32.2397211+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T15:30:32.2434237+02:00","action":"claim","task_id":152,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:31:30.8405624+02:00","action":"move","task_id":49,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:31:33.7814925+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:31:37.4265012+02:00","action":"edit","task_id":37,"detail":"Evaluate agent-scoped hooks for pipeline enforcement"}
-{"timestamp":"2026-03-30T15:31:37.4306589+02:00","action":"unblock","task_id":37,"detail":"Evaluate agent-scoped hooks for pipeline enforcement"}
-{"timestamp":"2026-03-30T15:31:37.4883472+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T15:31:37.5355784+02:00","action":"unblock","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T15:31:37.5868108+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T15:31:37.5904986+02:00","action":"unblock","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T15:31:38.1534202+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:31:38.1581332+02:00","action":"release","task_id":181,"detail":"writer"}
-{"timestamp":"2026-03-30T15:32:02.3420217+02:00","action":"create","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T15:32:19.4318578+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
-{"timestamp":"2026-03-30T15:32:19.4384349+02:00","action":"unblock","task_id":9,"detail":"Port skills to agentskills.io format"}
-{"timestamp":"2026-03-30T15:32:19.5084707+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T15:32:19.5128814+02:00","action":"unblock","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T15:32:19.6513724+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T15:32:19.6557351+02:00","action":"unblock","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T15:32:19.6868301+02:00","action":"edit","task_id":49,"detail":"Implement voice addon stdio protocol"}
-{"timestamp":"2026-03-30T15:32:19.708358+02:00","action":"unblock","task_id":49,"detail":"Implement voice addon stdio protocol"}
-{"timestamp":"2026-03-30T15:32:19.809788+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-30T15:32:19.8148687+02:00","action":"unblock","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-30T15:32:19.8407661+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
-{"timestamp":"2026-03-30T15:32:19.8923338+02:00","action":"unblock","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
-{"timestamp":"2026-03-30T15:32:19.9639289+02:00","action":"edit","task_id":137,"detail":"Implement memory boundary instruction file"}
-{"timestamp":"2026-03-30T15:32:19.9688061+02:00","action":"unblock","task_id":137,"detail":"Implement memory boundary instruction file"}
-{"timestamp":"2026-03-30T15:32:19.9747755+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-30T15:32:20.00425+02:00","action":"unblock","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-30T15:32:20.0730576+02:00","action":"edit","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T15:32:20.0773452+02:00","action":"unblock","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T15:32:43.1448572+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T15:32:48.0922532+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T15:32:48.0959281+02:00","action":"release","task_id":215,"detail":"architect"}
-{"timestamp":"2026-03-30T15:32:59.6590845+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T15:33:04.8680132+02:00","action":"edit","task_id":214,"detail":"Fix Gate 3 atomicity heuristic to respect architect approval"}
-{"timestamp":"2026-03-30T15:33:04.8721792+02:00","action":"release","task_id":214,"detail":"architect"}
-{"timestamp":"2026-03-30T15:33:10.119229+02:00","action":"delete","task_id":217,"detail":"Implement Gate 3 architect-bypass in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T15:35:58.7529659+02:00","action":"edit","task_id":9,"detail":"Port skills to agentskills.io format"}
-{"timestamp":"2026-03-30T15:35:59.1593085+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T15:35:59.5706578+02:00","action":"edit","task_id":25,"detail":"Multi-project setup test"}
-{"timestamp":"2026-03-30T15:35:59.9697777+02:00","action":"edit","task_id":49,"detail":"Implement voice addon stdio protocol"}
-{"timestamp":"2026-03-30T15:36:00.4226046+02:00","action":"edit","task_id":81,"detail":"Set disable-model-invocation: true on 8 pipeline agents"}
-{"timestamp":"2026-03-30T15:36:00.853932+02:00","action":"edit","task_id":97,"detail":"Test: Knowledge engine foundation layer"}
-{"timestamp":"2026-03-30T15:36:01.2633141+02:00","action":"edit","task_id":137,"detail":"Implement memory boundary instruction file"}
-{"timestamp":"2026-03-30T15:36:01.652277+02:00","action":"edit","task_id":149,"detail":"Add GraphStore.get_counts() method"}
-{"timestamp":"2026-03-30T15:36:02.0826964+02:00","action":"edit","task_id":170,"detail":"Update stale agent path in agent-audit prompt"}
-{"timestamp":"2026-03-30T15:38:33.9287247+02:00","action":"move","task_id":152,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T15:38:41.337804+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T15:38:41.3425541+02:00","action":"release","task_id":152,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:39:18.2872974+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T15:39:51.6086742+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T15:39:51.6139728+02:00","action":"claim","task_id":179,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:39:58.3499803+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:39:58.3552229+02:00","action":"claim","task_id":212,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:40:00.1979836+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T15:40:00.2022239+02:00","action":"claim","task_id":219,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:42:23.0876006+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T15:42:32.9953625+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T15:42:33.0001729+02:00","action":"release","task_id":219,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:46:01.7881512+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T15:46:01.8007555+02:00","action":"release","task_id":179,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:48:40.3485251+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:48:52.8561212+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:48:52.8610278+02:00","action":"release","task_id":212,"detail":"auditor"}
-{"timestamp":"2026-03-30T15:49:44.7059508+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T15:49:44.7098017+02:00","action":"claim","task_id":191,"detail":"builder"}
-{"timestamp":"2026-03-30T15:49:47.2011138+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:49:47.2046553+02:00","action":"claim","task_id":216,"detail":"architect"}
-{"timestamp":"2026-03-30T15:49:47.5549939+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-03-30T15:49:47.5586452+02:00","action":"claim","task_id":29,"detail":"architect"}
-{"timestamp":"2026-03-30T15:49:48.699293+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-03-30T15:49:48.7029672+02:00","action":"claim","task_id":31,"detail":"architect"}
-{"timestamp":"2026-03-30T15:52:01.4658144+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-03-30T15:52:06.9951907+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:52:14.4513202+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-03-30T15:52:14.4555219+02:00","action":"block","task_id":29,"detail":"Superseded: all v1 .github/ content already cleaned up by #8, #9, #10, #117. Prompts are v2 in standard VS Code location. No actionable work remains."}
-{"timestamp":"2026-03-30T15:52:14.4584184+02:00","action":"release","task_id":29,"detail":"architect"}
-{"timestamp":"2026-03-30T15:52:32.701289+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:53:03.3550047+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:53:03.3592408+02:00","action":"release","task_id":216,"detail":"architect"}
-{"timestamp":"2026-03-30T15:53:03.814035+02:00","action":"delete","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:53:48.1882985+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-03-30T15:53:54.9429416+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-03-30T15:53:54.9471704+02:00","action":"block","task_id":31,"detail":"Stale parent: all AC decomposed into #179 + #180. Recommend archival."}
-{"timestamp":"2026-03-30T15:53:54.9502772+02:00","action":"release","task_id":31,"detail":"architect"}
-{"timestamp":"2026-03-30T15:59:12.1308776+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T15:59:12.1350267+02:00","action":"claim","task_id":158,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:59:39.450968+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T15:59:39.4569117+02:00","action":"claim","task_id":193,"detail":"test-writer"}
-{"timestamp":"2026-03-30T16:00:06.8203368+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T16:00:06.8235192+02:00","action":"claim","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-30T16:05:28.0683255+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T16:05:28.0716717+02:00","action":"release","task_id":193,"detail":"test-writer"}
-{"timestamp":"2026-03-30T16:06:03.1461947+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T16:08:46.1876141+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T16:08:56.146386+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T16:09:00.9043608+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T16:09:00.9085596+02:00","action":"release","task_id":158,"detail":"reviewer"}
-{"timestamp":"2026-03-30T16:15:16.1176974+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T16:15:32.8105351+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T16:15:32.8141946+02:00","action":"release","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-30T16:27:45.6513909+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-30T16:27:45.6560856+02:00","action":"claim","task_id":141,"detail":"builder"}
-{"timestamp":"2026-03-30T16:40:03.2595108+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T16:40:03.264057+02:00","action":"claim","task_id":219,"detail":"architect"}
-{"timestamp":"2026-03-30T16:40:06.5302388+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T16:40:06.5346072+02:00","action":"claim","task_id":179,"detail":"architect"}
-{"timestamp":"2026-03-30T16:40:21.3945368+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:40:21.3987382+02:00","action":"claim","task_id":196,"detail":"auditor"}
-{"timestamp":"2026-03-30T16:42:42.1542198+02:00","action":"create","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T16:42:46.8556346+02:00","action":"move","task_id":222,"detail":"ideation -\u003e todo"}
-{"timestamp":"2026-03-30T16:43:14.0401926+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T16:43:14.0444576+02:00","action":"release","task_id":219,"detail":"architect"}
-{"timestamp":"2026-03-30T16:43:14.6888876+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
 {"timestamp":"2026-03-30T16:43:14.6930884+02:00","action":"claim","task_id":54,"detail":"researcher"}
 {"timestamp":"2026-03-30T16:43:55.8782762+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
 {"timestamp":"2026-03-30T16:44:19.8767336+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
@@ -9998,3 +9848,153 @@
 {"timestamp":"2026-04-05T19:04:50.7925409+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
 {"timestamp":"2026-04-05T19:04:50.8042273+02:00","action":"release","task_id":589,"detail":"timber-gust"}
 {"timestamp":"2026-04-05T19:04:51.3820564+02:00","action":"move","task_id":589,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T19:05:43.636682+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T19:05:43.6511828+02:00","action":"claim","task_id":624,"detail":"crypt-gust"}
+{"timestamp":"2026-04-05T19:05:45.7115911+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T19:05:45.7294047+02:00","action":"claim","task_id":598,"detail":"wild-maple"}
+{"timestamp":"2026-04-05T19:05:50.0436357+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T19:05:50.0582482+02:00","action":"claim","task_id":622,"detail":"willow-palm"}
+{"timestamp":"2026-04-05T19:06:13.7225393+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
+{"timestamp":"2026-04-05T19:06:13.7360733+02:00","action":"release","task_id":624,"detail":"crypt-gust"}
+{"timestamp":"2026-04-05T19:06:35.2448642+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T19:06:35.2616531+02:00","action":"claim","task_id":628,"detail":"fire-arch"}
+{"timestamp":"2026-04-05T19:08:43.0039236+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T19:08:43.0167533+02:00","action":"release","task_id":622,"detail":"willow-palm"}
+{"timestamp":"2026-04-05T19:11:50.3803024+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T19:11:50.3935357+02:00","action":"release","task_id":628,"detail":"fire-arch"}
+{"timestamp":"2026-04-05T19:30:59.7302366+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T19:31:51.0116933+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T19:31:51.0264465+02:00","action":"release","task_id":598,"detail":"wild-maple"}
+{"timestamp":"2026-04-05T19:32:43.5530201+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T19:32:43.5724789+02:00","action":"claim","task_id":62,"detail":"wave-lime"}
+{"timestamp":"2026-04-05T19:33:46.5678186+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-05T19:33:46.5826022+02:00","action":"claim","task_id":136,"detail":"blaze-wild"}
+{"timestamp":"2026-04-05T19:34:06.0535393+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-05T19:34:06.0669675+02:00","action":"claim","task_id":63,"detail":"foam-cove"}
+{"timestamp":"2026-04-05T19:35:06.146066+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-05T19:35:06.1623297+02:00","action":"release","task_id":63,"detail":"foam-cove"}
+{"timestamp":"2026-04-05T19:36:45.8584508+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T19:36:45.8724316+02:00","action":"release","task_id":62,"detail":"wave-lime"}
+{"timestamp":"2026-04-05T19:40:52.4139975+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-05T19:40:52.4274564+02:00","action":"release","task_id":136,"detail":"blaze-wild"}
+{"timestamp":"2026-04-05T19:41:55.5616355+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T19:41:55.5745898+02:00","action":"unblock","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T19:44:30.3762969+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T19:44:30.3881625+02:00","action":"claim","task_id":598,"detail":"nectar-steam"}
+{"timestamp":"2026-04-05T19:44:47.721889+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T19:44:47.7356484+02:00","action":"claim","task_id":62,"detail":"dove-isle"}
+{"timestamp":"2026-04-05T19:44:48.4442708+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T19:44:48.4580237+02:00","action":"claim","task_id":622,"detail":"snow-mist"}
+{"timestamp":"2026-04-05T19:45:18.7742762+02:00","action":"edit","task_id":348,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-05T19:45:18.7873956+02:00","action":"claim","task_id":348,"detail":"leaf-thorn"}
+{"timestamp":"2026-04-05T19:46:37.8139269+02:00","action":"edit","task_id":348,"detail":"Add blocked-task scan for decision-request notifications"}
+{"timestamp":"2026-04-05T19:46:37.8287251+02:00","action":"release","task_id":348,"detail":"leaf-thorn"}
+{"timestamp":"2026-04-05T19:46:46.3361828+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T19:46:46.3512438+02:00","action":"release","task_id":622,"detail":"snow-mist"}
+{"timestamp":"2026-04-05T19:49:07.3235341+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T19:49:07.3370344+02:00","action":"release","task_id":62,"detail":"dove-isle"}
+{"timestamp":"2026-04-05T20:20:33.1032383+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T20:20:33.1170626+02:00","action":"release","task_id":598,"detail":"nectar-steam"}
+{"timestamp":"2026-04-05T20:21:07.0139095+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T20:21:07.0280715+02:00","action":"claim","task_id":619,"detail":"torch-oaken"}
+{"timestamp":"2026-04-05T20:21:21.7856583+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T20:21:21.7987539+02:00","action":"claim","task_id":610,"detail":"rain-glen"}
+{"timestamp":"2026-04-05T20:21:48.5329497+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T20:21:48.5459658+02:00","action":"release","task_id":619,"detail":"torch-oaken"}
+{"timestamp":"2026-04-05T20:22:24.1991299+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T20:22:24.2135988+02:00","action":"claim","task_id":597,"detail":"pulse-palm"}
+{"timestamp":"2026-04-05T20:22:29.5496098+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-05T20:22:29.5650408+02:00","action":"claim","task_id":613,"detail":"holly-forge"}
+{"timestamp":"2026-04-05T20:23:25.3981884+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T20:23:25.41301+02:00","action":"release","task_id":597,"detail":"pulse-palm"}
+{"timestamp":"2026-04-05T20:23:40.0655101+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T20:25:40.9293455+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T20:25:40.9418414+02:00","action":"release","task_id":610,"detail":"rain-glen"}
+{"timestamp":"2026-04-05T20:25:52.6877393+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T20:25:59.0299302+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T20:25:59.0434692+02:00","action":"claim","task_id":610,"detail":"root-echo"}
+{"timestamp":"2026-04-05T20:26:40.552463+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T20:26:40.5675165+02:00","action":"release","task_id":610,"detail":"root-echo"}
+{"timestamp":"2026-04-05T20:27:37.5627547+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-05T20:29:03.4686492+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-05T20:29:03.4833017+02:00","action":"release","task_id":613,"detail":"holly-forge"}
+{"timestamp":"2026-04-05T20:29:31.5169059+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T20:29:31.5352821+02:00","action":"claim","task_id":628,"detail":"holly-maple"}
+{"timestamp":"2026-04-05T20:29:47.8803857+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T20:29:47.8985763+02:00","action":"claim","task_id":629,"detail":"storm-larch"}
+{"timestamp":"2026-04-05T20:29:56.3568483+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T20:29:56.3701831+02:00","action":"release","task_id":629,"detail":"storm-larch"}
+{"timestamp":"2026-04-05T20:30:01.5941937+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T20:30:01.6066473+02:00","action":"claim","task_id":608,"detail":"north-brave"}
+{"timestamp":"2026-04-05T20:33:09.4308267+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T20:33:09.4452078+02:00","action":"release","task_id":628,"detail":"holly-maple"}
+{"timestamp":"2026-04-05T20:34:36.3284036+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T20:34:36.3412713+02:00","action":"release","task_id":608,"detail":"north-brave"}
+{"timestamp":"2026-04-05T20:37:44.5216333+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T20:37:44.5338659+02:00","action":"claim","task_id":634,"detail":"vivid-quartz"}
+{"timestamp":"2026-04-05T20:38:01.2288813+02:00","action":"edit","task_id":627,"detail":"Update parent #483 completion criteria to reflect #576 closure as superseded"}
+{"timestamp":"2026-04-05T20:38:01.2416526+02:00","action":"claim","task_id":627,"detail":"spire-wick"}
+{"timestamp":"2026-04-05T20:38:02.3912596+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T20:38:02.4035329+02:00","action":"claim","task_id":616,"detail":"wheat-star"}
+{"timestamp":"2026-04-05T20:39:22.2635398+02:00","action":"edit","task_id":627,"detail":"Update parent #483 completion criteria to reflect #576 closure as superseded"}
+{"timestamp":"2026-04-05T20:39:22.2759198+02:00","action":"release","task_id":627,"detail":"spire-wick"}
+{"timestamp":"2026-04-05T20:39:26.962449+02:00","action":"edit","task_id":618,"detail":"Build import/export tools for project-local knowledge snapshots"}
+{"timestamp":"2026-04-05T20:39:26.9769983+02:00","action":"claim","task_id":618,"detail":"mist-lotus"}
+{"timestamp":"2026-04-05T20:42:18.4153148+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T20:42:18.4322055+02:00","action":"release","task_id":616,"detail":"wheat-star"}
+{"timestamp":"2026-04-05T20:43:15.2664894+02:00","action":"edit","task_id":618,"detail":"Build import/export tools for project-local knowledge snapshots"}
+{"timestamp":"2026-04-05T20:43:15.2800666+02:00","action":"release","task_id":618,"detail":"mist-lotus"}
+{"timestamp":"2026-04-05T20:47:08.1185061+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T20:47:08.1333302+02:00","action":"release","task_id":634,"detail":"vivid-quartz"}
+{"timestamp":"2026-04-05T20:47:29.6012508+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T20:47:29.6150984+02:00","action":"claim","task_id":623,"detail":"cliff-lark"}
+{"timestamp":"2026-04-05T20:47:35.8194853+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-05T20:47:35.83245+02:00","action":"claim","task_id":633,"detail":"spark-mink"}
+{"timestamp":"2026-04-05T20:47:36.1209408+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim and archive as resolved-by-architecture"}
+{"timestamp":"2026-04-05T20:47:36.1383223+02:00","action":"claim","task_id":632,"detail":"blaze-quiet"}
+{"timestamp":"2026-04-05T20:47:37.21788+02:00","action":"edit","task_id":631,"detail":"Revisit blocked-task DR scan when notification channel is enabled"}
+{"timestamp":"2026-04-05T20:47:37.2364522+02:00","action":"claim","task_id":631,"detail":"keen-sage"}
+{"timestamp":"2026-04-05T20:48:08.865865+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T20:48:08.8808604+02:00","action":"release","task_id":623,"detail":"cliff-lark"}
+{"timestamp":"2026-04-05T20:50:08.5309828+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim and archive as resolved-by-architecture"}
+{"timestamp":"2026-04-05T20:50:08.5442238+02:00","action":"release","task_id":632,"detail":"blaze-quiet"}
+{"timestamp":"2026-04-05T20:50:33.056644+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-05T20:50:33.0701097+02:00","action":"release","task_id":633,"detail":"spark-mink"}
+{"timestamp":"2026-04-05T20:51:28.9801652+02:00","action":"move","task_id":348,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-05T20:51:49.9724314+02:00","action":"edit","task_id":631,"detail":"Revisit blocked-task DR scan when notification channel is enabled"}
+{"timestamp":"2026-04-05T20:51:49.9861688+02:00","action":"release","task_id":631,"detail":"keen-sage"}
+{"timestamp":"2026-04-05T20:52:17.3914368+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T20:52:17.4130421+02:00","action":"claim","task_id":629,"detail":"zinc-zinc"}
+{"timestamp":"2026-04-05T20:52:19.7601492+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T20:52:19.7748443+02:00","action":"claim","task_id":628,"detail":"zone-trout"}
+{"timestamp":"2026-04-05T20:52:31.0725663+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T20:52:31.0922092+02:00","action":"claim","task_id":597,"detail":"warp-cloud"}
+{"timestamp":"2026-04-05T20:52:40.7551702+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-05T20:52:40.7678541+02:00","action":"release","task_id":597,"detail":"warp-cloud"}
+{"timestamp":"2026-04-05T20:53:25.3964101+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T20:53:25.4098254+02:00","action":"release","task_id":629,"detail":"zinc-zinc"}
+{"timestamp":"2026-04-05T21:00:17.6950394+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T21:00:17.710617+02:00","action":"release","task_id":628,"detail":"zone-trout"}
+{"timestamp":"2026-04-05T21:02:37.7392672+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T21:02:37.7536522+02:00","action":"claim","task_id":608,"detail":"wing-spark"}
+{"timestamp":"2026-04-05T21:02:40.6932399+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T21:02:40.7092568+02:00","action":"claim","task_id":622,"detail":"pulse-delta"}
+{"timestamp":"2026-04-05T21:03:05.69569+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T21:03:05.7084959+02:00","action":"claim","task_id":616,"detail":"ivory-warp"}
+{"timestamp":"2026-04-05T21:05:27.9803274+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T21:05:27.9937232+02:00","action":"release","task_id":608,"detail":"wing-spark"}
+{"timestamp":"2026-04-05T21:07:16.4791144+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T21:07:16.4941848+02:00","action":"release","task_id":616,"detail":"ivory-warp"}
+{"timestamp":"2026-04-05T21:25:56.8030097+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T21:26:07.175233+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T21:26:13.7384433+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T21:26:13.7524541+02:00","action":"release","task_id":622,"detail":"pulse-delta"}
+{"timestamp":"2026-04-05T21:26:14.3050091+02:00","action":"move","task_id":622,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T21:27:05.0471571+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T21:27:05.0627031+02:00","action":"claim","task_id":62,"detail":"spire-horn"}
+{"timestamp":"2026-04-05T21:35:29.7850764+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T21:35:38.588728+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T21:35:46.0101159+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T21:35:52.3211911+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T21:35:52.3356923+02:00","action":"release","task_id":62,"detail":"spire-horn"}
+{"timestamp":"2026-04-05T21:35:52.9221965+02:00","action":"move","task_id":62,"detail":"done -\u003e archived"}
