@@ -1,7 +1,3 @@
-{"timestamp":"2026-03-30T05:25:28.7866255+02:00","action":"claim","task_id":193,"detail":"builder"}
-{"timestamp":"2026-03-30T05:25:29.9667039+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T05:25:29.969501+02:00","action":"claim","task_id":79,"detail":"reviewer"}
-{"timestamp":"2026-03-30T05:25:36.9564003+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
 {"timestamp":"2026-03-30T05:25:38.0091984+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
 {"timestamp":"2026-03-30T05:25:41.4495767+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
 {"timestamp":"2026-03-30T05:25:42.9326589+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
@@ -9998,3 +9994,7 @@
 {"timestamp":"2026-04-05T08:19:11.1476574+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
 {"timestamp":"2026-04-05T08:19:11.1594296+02:00","action":"release","task_id":477,"detail":"fable-lunar"}
 {"timestamp":"2026-04-05T08:19:11.6891927+02:00","action":"move","task_id":477,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T08:19:59.9506052+02:00","action":"edit","task_id":603,"detail":"Move project ops data to .owlbear/"}
+{"timestamp":"2026-04-05T08:19:59.9674437+02:00","action":"claim","task_id":603,"detail":"flare-heath"}
+{"timestamp":"2026-04-05T08:34:12.8384715+02:00","action":"edit","task_id":603,"detail":"Move project ops data to .owlbear/"}
+{"timestamp":"2026-04-05T08:34:57.7603177+02:00","action":"move","task_id":603,"detail":"done -\u003e archived"}

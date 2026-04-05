@@ -1,10 +1,12 @@
 ---
 id: 603
 title: Move project ops data to .owlbear/
-status: done
+status: archived
 priority: critical
 created: 2026-04-04T20:30:51.9919622+02:00
-updated: 2026-04-05T07:00:53.2078159+02:00
+updated: 2026-04-05T08:34:57.7597478+02:00
+started: 2026-04-05T08:34:57.7597478+02:00
+completed: 2026-04-05T08:34:57.7597478+02:00
 tags:
     - scope:infra
     - type:build
@@ -13,6 +15,8 @@ tags:
 parent: 598
 depends_on:
     - 599
+claimed_by: flare-heath
+claimed_at: 2026-04-05T08:34:12.835362+02:00
 class: standard
 ---
 
@@ -190,3 +194,6 @@ Commit blocked by pre-existing pre-commit failures: `test_agent_port_v2` (agent 
 
 ### Scratch Files Cleaned
 - None found
+
+[[2026-04-05]] Sun 08:34
+## Audit - see scratch
