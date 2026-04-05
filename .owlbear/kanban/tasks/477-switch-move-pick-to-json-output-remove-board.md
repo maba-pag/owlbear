@@ -1,10 +1,12 @@
 ---
 id: 477
 title: Switch move/pick to JSON output, remove board_context tool
-status: done
+status: archived
 priority: needed
 created: 2026-03-31T06:06:24.5978486+02:00
-updated: 2026-04-05T06:57:52.4315221+02:00
+updated: 2026-04-05T08:19:11.6876054+02:00
+started: 2026-04-05T08:19:11.6876054+02:00
+completed: 2026-04-05T08:19:11.6876054+02:00
 tags:
     - scope:mcp
     - type:build
@@ -277,3 +279,6 @@ All 5 binding AC items verified. All TestFromAC tests preserved or removed under
 
 ### Scratch Files Cleaned
 - None (no docs/scratch/477-* files found)
+
+[[2026-04-05]] Sun 08:19
+Audit (Final): All 5 AC items verified. AC1 PASS (server.py L327 --json). AC2 N/A (superseded by architect, pick_task removed d6b6f35). AC3 PASS (zero board_context refs in server.py). AC4 PASS (68 passed, 0 failed). AC5 PASS (SKILL.md clean). Full suite: 2860 passed, 431 failed (pre-existing, zero task-scope overlap). Ruff clean. Reviewer evidence detailed, PASS .96. Architect quality 4/5. No deductions. Confidence 1.0. ARCHIVE.
