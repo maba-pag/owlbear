@@ -1,10 +1,12 @@
 ---
 id: 620
 title: 'Test: pick_tasks MCP tool gate logic and output format'
-status: done
+status: archived
 priority: needed
 created: 2026-04-05T01:30:52.3984607+02:00
-updated: 2026-04-05T15:19:24.7409633+02:00
+updated: 2026-04-05T17:25:20.3856593+02:00
+started: 2026-04-05T17:25:20.3856593+02:00
+completed: 2026-04-05T17:25:20.3856593+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -172,3 +174,48 @@ Confidence: .97 → PASS
 
 [[2026-04-05]] Sun 15:19
 Docs gate passed. Updated h-mcp-kanban SKILL.md: pick_tasks added to tool table, count 7→8. Docstrings verified accurate. Research doc exists and linked. No scratch files. Commit: 9baff38.
+
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Tests cover pick_tasks MCP tool | 7 TestFromAC_* classes in test_pick_tasks_620.py, 33 tests | PASS |
+| Basic pick: task_id and status | TestFromAC_PickTasksBasicPick (5 tests) | PASS |
+| Gate filtering: atomicity/TDD/clarity excluded | TestFromAC_PickTasksGateFiltering (8 tests) | PASS |
+| limit=5 caps output | test_limit_5_returns_exactly_5_when_available | PASS |
+| Default limit is 25 | test_default_limit_is_25 + test_default_limit_caps_at_25 | PASS |
+| Sort order: critical+done before someday+ideation | TestFromAC_PickTasksSortOrder (3 tests) | PASS |
+| Empty board: empty dispatch list | test_empty_board_returns_empty_dispatch | PASS |
+| Archived tasks excluded | test_does_not_pass_archived_flag | PASS |
+| Blocked/claimed excluded | test_passes_unblocked_flag, _not_blocked_flag, _unclaimed_flag | PASS |
+| Test patterns: mock _run_kanban | All tests use patch(owlbear_mcp_kanban.server._run_kanban) | PASS |
+| Test file: tests/test_pick_tasks_620.py | File exists, 484 lines | PASS |
+
+### Test Results
+- pytest (task-scoped): 33 passed, 0 failed
+- pytest (full suite): 2878 passed, 432 failed (pre-existing systemic), 18 skipped - 0 failures in task scope
+- ruff: All checks passed (server.py + test_pick_tasks_620.py)
+
+### Architect Quality: 5/5
+AC enumerates 8 test scenarios with concrete values (limit=5, default=25, sort order). Research doc supplements with mock pattern, JSON structure, and gate logic sources. Clean implementation path, no improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 11 PASS)
+- Lint violations: 0
+- AC quality: 5/5 (no deduction)
+- Reviewer evidence: present, detailed, .97 PASS
+- Full-suite failures in task scope: 0
+- Note: test-writer + builder left deliverables uncommitted; committed by auditor (bf789e3, 3fcb62c)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| bf789e3 | test | tests/test_pick_tasks_620.py | #620 |
+| 3fcb62c | feat | serve/mcp-kanban/src/owlbear_mcp_kanban/server.py | #620 |
+| 9baff38 | docs | share/skills/h-mcp-kanban/SKILL.md | #620 |
+
+[[2026-04-05]] Sun 17:25
+Audited: all 11 AC lines verified with PASS, 33/33 tests pass, full suite clean in task scope, ruff clean, AC quality 5/5. Committed test-writer (bf789e3) and builder (3fcb62c) leftovers.

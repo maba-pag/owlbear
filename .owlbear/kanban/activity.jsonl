@@ -1,9 +1,3 @@
-{"timestamp":"2026-03-30T15:07:42.2930324+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:07:42.2978313+02:00","action":"claim","task_id":196,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:07:44.6302054+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:07:44.6344346+02:00","action":"claim","task_id":181,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:07:47.7574496+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T15:07:47.7616309+02:00","action":"claim","task_id":151,"detail":"reviewer"}
 {"timestamp":"2026-03-30T15:10:09.8674784+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
 {"timestamp":"2026-03-30T15:10:09.8717465+02:00","action":"unblock","task_id":141,"detail":"Test: Voice process manager"}
 {"timestamp":"2026-03-30T15:10:09.9207022+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
@@ -9998,3 +9992,9 @@
 {"timestamp":"2026-04-05T17:05:26.5500615+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
 {"timestamp":"2026-04-05T17:05:26.5602975+02:00","action":"release","task_id":567,"detail":"eagle-dale"}
 {"timestamp":"2026-04-05T17:05:27.0014073+02:00","action":"move","task_id":567,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T17:06:06.4670741+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T17:06:06.4786421+02:00","action":"claim","task_id":620,"detail":"moth-reef"}
+{"timestamp":"2026-04-05T17:25:13.2228079+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T17:25:19.9310819+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T17:25:19.9409652+02:00","action":"release","task_id":620,"detail":"moth-reef"}
+{"timestamp":"2026-04-05T17:25:20.3866601+02:00","action":"move","task_id":620,"detail":"done -\u003e archived"}
