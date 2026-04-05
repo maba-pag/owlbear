@@ -1,10 +1,12 @@
 ---
 id: 599
 title: 'Research: Verify kanban-md works from .owlbear/kanban/'
-status: done
-priority: needed
+status: archived
+priority: critical
 created: 2026-04-04T20:30:11.3710718+02:00
-updated: 2026-04-05T01:37:04.5766449+02:00
+updated: 2026-04-05T04:32:35.7902463+02:00
+started: 2026-04-05T04:32:35.7902463+02:00
+completed: 2026-04-05T04:32:35.7902463+02:00
 tags:
     - scope:infra
     - type:research
@@ -186,3 +188,37 @@ All AC substance is delivered. Integration test evidence corroborates CLI findin
 
 ### Scratch Files
 - No `docs/scratch/599-*` files found — nothing to clean
+
+[[2026-04-05]] Sun 04:32
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1a: create (relative path) | Decision doc op table: exit 0, PASS. Corroborated by test_dispatch_integration.py:L99-102 | PASS |
+| AC1b: list --json (absolute path) | Decision doc op table: exit 0, JSON parseable | PASS |
+| AC1c: show --json (relative path) | Decision doc op table: exit 0, task details returned | PASS |
+| AC1d: move (relative path) | Decision doc op table: exit 0, status changed | PASS |
+| AC1e: edit -a (relative path) | Decision doc op table: exit 0, body confirmed via show | PASS |
+| AC2: path assumptions/limitations | Decision doc "Path Assumptions and Limitations": 5 findings (naming, cwd, separators, missing dir, config.yml) | PASS |
+| AC3: hardcoding assessment | Decision doc "Hardcoding Assessment": no binary hardcoding, MCP scoped to #606 | PASS |
+| AC4: add Kanban Path Verification to decision doc | Section present in .owlbear/decisions/resolved/owlbear-folder-restructure.md (committed faa92a5, relocated by 55a4d8c #602 migration) | PASS |
+
+### Test Results
+- pytest: 2655 passed, 502 failed, 21 skipped, 1 error (502 failures are pre-existing migration path breakage — packages/ → serve/, .github/skills/ → share/skills/ — none in #599 scope)
+- ruff: N/A — no Python code changed
+
+### Research Task Protocol
+- Deliverable exists: .owlbear/decisions/resolved/owlbear-folder-restructure.md → "Kanban Path Verification" section
+- Follow-up tasks: findings unblock parent #598 subtask chain (#600-#609); no separate follow-ups needed (research found no blockers)
+- Reviewer evidence: detailed, .91 PASS — trusted code-level findings
+
+### Architect Quality: 4/5
+AC1 expanded into 5 explicit CRUD scenarios with exit-code criteria — specific and verifiable. AC2/AC3 well-scoped. Minor gap: AC4 referenced stale path (docs/decisions/pending/) when file lived in resolved/. Challenger engagement resulted in meaningful AC refinement.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC4 path deviation (stale path in AC spec): -0.02
+- Non-independent CLI re-execution (test board cleaned up, integration tests corroborate): -0.02
+
+### Confidence: .96
+### Action: archive
