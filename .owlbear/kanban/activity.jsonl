@@ -1,37 +1,3 @@
-{"timestamp":"2026-03-30T15:11:51.2503782+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T15:12:01.2486383+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T15:12:01.2543642+02:00","action":"release","task_id":153,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:12:04.1435606+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T15:12:04.1467228+02:00","action":"release","task_id":151,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:12:06.1060414+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:12:16.9858757+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:12:18.3410548+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:12:21.6906982+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T15:12:21.6938432+02:00","action":"release","task_id":181,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:12:25.139533+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T15:12:25.1432527+02:00","action":"release","task_id":196,"detail":"reviewer"}
-{"timestamp":"2026-03-30T15:12:26.4863971+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
-{"timestamp":"2026-03-30T15:12:54.8747553+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:12:54.878903+02:00","action":"claim","task_id":212,"detail":"writer"}
-{"timestamp":"2026-03-30T15:13:05.0403671+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:13:05.0440943+02:00","action":"claim","task_id":213,"detail":"architect"}
-{"timestamp":"2026-03-30T15:13:05.5541954+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:13:05.5592208+02:00","action":"claim","task_id":216,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:13:45.9022822+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:13:53.3986815+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T15:13:53.4023345+02:00","action":"release","task_id":212,"detail":"writer"}
-{"timestamp":"2026-03-30T15:13:58.1932155+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T15:13:58.1964045+02:00","action":"claim","task_id":191,"detail":"test-writer"}
-{"timestamp":"2026-03-30T15:14:11.4143067+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:14:16.4713949+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:14:21.8054202+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:14:31.0032536+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:14:35.7947354+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:14:59.9982081+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:15:05.5158932+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:15:20.6713852+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:15:27.2128525+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T15:15:27.2170764+02:00","action":"release","task_id":213,"detail":"architect"}
 {"timestamp":"2026-03-30T15:16:54.6230963+02:00","action":"create","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
 {"timestamp":"2026-03-30T15:17:02.0064292+02:00","action":"create","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
 {"timestamp":"2026-03-30T15:18:39.8761172+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
@@ -9998,3 +9964,37 @@
 {"timestamp":"2026-04-05T17:38:55.9193114+02:00","action":"edit","task_id":625,"detail":"Restore #574 pipeline protocol MCP callouts — 8 failing tests"}
 {"timestamp":"2026-04-05T17:38:55.9305328+02:00","action":"release","task_id":625,"detail":"blaze-glen"}
 {"timestamp":"2026-04-05T17:38:56.4415018+02:00","action":"move","task_id":625,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T17:39:29.0628006+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T17:39:29.0755125+02:00","action":"claim","task_id":622,"detail":"rust-eagle"}
+{"timestamp":"2026-04-05T17:40:42.0606284+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T17:40:42.0761017+02:00","action":"claim","task_id":634,"detail":"mold-iron"}
+{"timestamp":"2026-04-05T17:40:48.5409259+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T17:40:48.5585165+02:00","action":"claim","task_id":598,"detail":"cape-mold"}
+{"timestamp":"2026-04-05T17:40:59.6678456+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T17:40:59.6829781+02:00","action":"release","task_id":634,"detail":"mold-iron"}
+{"timestamp":"2026-04-05T17:41:27.0558876+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T17:41:27.0665656+02:00","action":"claim","task_id":619,"detail":"palm-arch"}
+{"timestamp":"2026-04-05T17:41:32.9742572+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T17:41:32.9848931+02:00","action":"release","task_id":598,"detail":"cape-mold"}
+{"timestamp":"2026-04-05T17:41:47.1236393+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T17:41:47.1363053+02:00","action":"release","task_id":619,"detail":"palm-arch"}
+{"timestamp":"2026-04-05T17:43:53.3216708+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T17:43:53.3326784+02:00","action":"release","task_id":622,"detail":"rust-eagle"}
+{"timestamp":"2026-04-05T17:44:34.6191389+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T17:44:34.6308062+02:00","action":"claim","task_id":630,"detail":"mesa-steam"}
+{"timestamp":"2026-04-05T17:44:36.2258783+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T17:44:36.2369705+02:00","action":"claim","task_id":623,"detail":"jade-hail"}
+{"timestamp":"2026-04-05T17:45:03.1531803+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T17:45:03.1740403+02:00","action":"claim","task_id":62,"detail":"trail-ghost"}
+{"timestamp":"2026-04-05T17:45:19.64815+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T17:45:19.6606561+02:00","action":"release","task_id":623,"detail":"jade-hail"}
+{"timestamp":"2026-04-05T17:49:18.9440457+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T17:49:18.9557891+02:00","action":"release","task_id":62,"detail":"trail-ghost"}
+{"timestamp":"2026-04-05T17:51:00.8522527+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T17:51:00.862831+02:00","action":"release","task_id":630,"detail":"mesa-steam"}
+{"timestamp":"2026-04-05T17:54:01.991051+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T17:54:02.0045053+02:00","action":"claim","task_id":621,"detail":"creek-dart"}
+{"timestamp":"2026-04-05T17:55:34.6523021+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T17:55:34.6639376+02:00","action":"claim","task_id":629,"detail":"gale-lark"}
+{"timestamp":"2026-04-05T17:58:25.6726419+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T17:58:25.6865363+02:00","action":"release","task_id":629,"detail":"gale-lark"}

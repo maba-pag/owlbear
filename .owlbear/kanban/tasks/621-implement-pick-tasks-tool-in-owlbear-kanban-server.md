@@ -4,7 +4,7 @@ title: Implement pick_tasks tool in owlbear-kanban server
 status: done
 priority: needed
 created: 2026-04-05T01:31:03.9704718+02:00
-updated: 2026-04-05T16:28:30.0476365+02:00
+updated: 2026-04-05T17:54:01.9900461+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -12,6 +12,8 @@ tags:
 parent: 619
 depends_on:
     - 620
+claimed_by: creek-dart
+claimed_at: 2026-04-05T17:54:01.9874476+02:00
 class: standard
 ---
 
