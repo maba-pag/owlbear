@@ -51,7 +51,7 @@ __all__ = [
     "start_work",
 ]
 
-_DEFAULT_KANBAN_DIR = Path("kanban")
+_DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
 _DEFAULT_KANBAN_BIN = _DEFAULT_KANBAN_DIR / "kanban-md.exe"
 
 
@@ -116,7 +116,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     if not kanban_bin.exists():  # noqa: ASYNC240
         msg = (
             f"kanban-md binary not found: {kanban_bin!r}. "
-            "Set KANBAN_BIN or place binary at kanban/kanban-md.exe."
+            "Set KANBAN_BIN or place binary at .owlbear/kanban/kanban-md.exe."
         )
         raise FileNotFoundError(msg)
     _apply_tool_exclusions(_server)
