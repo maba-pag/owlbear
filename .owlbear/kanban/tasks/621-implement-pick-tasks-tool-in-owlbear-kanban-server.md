@@ -1,10 +1,12 @@
 ---
 id: 621
 title: Implement pick_tasks tool in owlbear-kanban server
-status: done
+status: archived
 priority: needed
 created: 2026-04-05T01:31:03.9704718+02:00
-updated: 2026-04-05T17:54:01.9900461+02:00
+updated: 2026-04-05T18:14:16.2703649+02:00
+started: 2026-04-05T18:14:16.2703649+02:00
+completed: 2026-04-05T18:14:16.2703649+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -12,8 +14,6 @@ tags:
 parent: 619
 depends_on:
     - 620
-claimed_by: creek-dart
-claimed_at: 2026-04-05T17:54:01.9874476+02:00
 class: standard
 ---
 
@@ -201,3 +201,42 @@ None — all items verified as accurate or not applicable.
 
 ### Scratch Files
 None found matching `.owlbear/scratch/621-*`.
+
+[[2026-04-05]] Sun 18:14
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| pick_tasks registered in server.py | server.py L51 __all__, 39 tests import it | PASS |
+| Signature pick_tasks(limit:int=25)->dict | test_has_limit_parameter, test_default_limit_is_25 | PASS |
+| Gate: check_atomicity (word-boundary "and") | test_atomicity_gate_excludes_and_in_title | PASS |
+| Gate: check_tdd (in-progress + Test-Writer Notes) | test_tdd_gate_excludes_in_progress_without_test_writer_notes | PASS |
+| Gate: check_clarity (bullet/numbered AC) | test_clarity_gate_excludes_todo_without_bullet_ac | PASS |
+| Sort: (PRIORITY_RANK, STATUS_RANK), cap at limit | TestFromAC_PickTasksSortOrder (3), TestFromAC_PickTasksLimit (4) | PASS |
+| Board: --unblocked --not-blocked --unclaimed | test_passes_unblocked_flag, test_passes_not_blocked_flag, test_passes_unclaimed_flag | PASS |
+| Return format: {dispatch: [{task_id, status}]} | test_dispatch_entries_have_task_id_and_status | PASS |
+| ToolError on rc!=0 / JSON parse failure | test_nonzero_rc_raises_tool_error, test_malformed_json_raises_tool_error | PASS |
+| Tool in __all__ | server.py L51 confirmed | PASS |
+| All #620 tests pass | 33/33 pass (independently verified) | PASS |
+| Null-body safety: task.get("body") or "" | TestFromAC_PickTasksNullBodySafety (6/6 pass), server.py L541 | PASS |
+
+### Test Results
+- pytest (task-scoped): 39 passed, 0 failed
+- pytest (full suite): 2881 passed, 444 failed, 18 skipped — 0 failures in #621 scope; all 444 from other tasks
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+Specific AC with exact tool name, signature, gates, sort keys, board flags, return format, error handling. Key Findings proactively identified null-body edge case.
+
+### Deduction Breakdown
+None. All 12 AC lines have evidence. Lint clean. Reviewer section present and detailed. No task-scope test failures.
+Note: test_pick_tasks_621.py was uncommitted by test-writer; committed by auditor as leftover (a377cee).
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3fcb62c | feat | server.py (pick_tasks + gates) | #620 |
+| a377cee | test+chore | test_pick_tasks_621.py, kanban board | #621 |

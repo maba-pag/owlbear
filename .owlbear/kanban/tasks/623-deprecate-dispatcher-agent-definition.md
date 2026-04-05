@@ -1,10 +1,10 @@
 ---
 id: 623
 title: Deprecate dispatcher agent definition
-status: todo
+status: in-progress
 priority: important
 created: 2026-04-05T01:31:22.2282042+02:00
-updated: 2026-04-05T15:56:27.4253589+02:00
+updated: 2026-04-05T17:45:19.647046+02:00
 tags:
     - scope:agents
     - phase-2
@@ -87,3 +87,10 @@ class: standard
 
 [[2026-04-05]] Sun 15:56
 Architecture review complete. AC refined: removed speculative YAML key, narrowed scope boundary with #629, confirmed copilot-instructions.md N/A. All 10 criteria PASS. Confidence .92.
+
+[[2026-04-05]] Sun 17:45
+## Test-Writer Notes
+- Non-implementation task (tagged `agent`) — no tests applicable.
+- AC scope: edits to `share/agents/dispatcher.agent.md` and `share/agents/orchestrator.agent.md` only.
+- No Python interfaces created or modified; no testable contract exists.
+- Passing through to builder.

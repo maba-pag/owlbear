@@ -1,10 +1,10 @@
 ---
 id: 62
 title: Implement voice process manager
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-03-26T19:33:42.8168161+01:00
-updated: 2026-04-05T11:32:40.3638146+02:00
+updated: 2026-04-05T17:49:18.9421371+02:00
 tags:
     - phase-3
     - scope:voice
@@ -171,3 +171,6 @@ See docs/scratch/62-reviewer.md for full evidence.
 - Total: 39 passed, 3 failed
 - ruff: clean on tests/test_voice_process_manager_kill_62.py
 - Evidence: 3 failed, 39 passed in 0.78s
+
+[[2026-04-05]] Sun 17:49
+## Builder Notes\n- Files changed: serve/orchestrator/src/owlbear/voice/process.py (1 file, ~12 lines net)\n- Root cause (3 failing tests):\n  1. `test_default_init_timeout_enforced_via_wait_for` — sentinel mapping `30.0 → None` meant `asyncio.wait_for` was never called for the default init_timeout, leaving the handshake unbounded\n  2. `test_init_timeout_kills_process_before_raising` — `proc.kill()` missing before `VoiceInitTimeout` on `wait_for` timeout path\n  3. `test_init_eof_kills_process_before_raising` — `proc.kill()` missing before `VoiceInitTimeout` on EOF path\n- Fix: Removed the sentinel trick entirely (`_init_timeout` now stores `init_timeout` directly as `float`). Simplified `_spawn_and_handshake` to always wrap `readline()` in `asyncio.wait_for`. Added `proc.kill()` in both `VoiceInitTimeout` raise paths (timeout and EOF).\n- Sentinel risk was mitigated: all shutdown tests that mock `asyncio.wait_for` do so AFTER calling `await manager.__aenter__()`, so the real `wait_for` is used during init and mock readline completes immediately.\n- Tests: 42 passed (was 39 passed + 3 failed), ruff clean, 96% coverage on voice/process.py\n- Evidence: 42 passed in 0.82s, exit code 0

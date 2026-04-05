@@ -1,10 +1,10 @@
 ---
 id: 622
 title: Wire pick_tasks into orchestrator workflow
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-05T01:31:13.8750468+02:00
-updated: 2026-04-05T16:19:52.0297205+02:00
+updated: 2026-04-05T17:43:53.3206402+02:00
 tags:
     - scope:agents
     - scope:orchestrator
@@ -151,3 +151,6 @@ Non-implementation pass-through. Task tagged `agent`; all AC changes are .md fil
 - All AC changes are to .md files: w-orchestration/SKILL.md, orchestrator.agent.md, w-dispatch-planning/SKILL.md.
 - Does NOT modify Python code or test files (explicit scope boundary in AC).
 - Passing through to builder.
+
+[[2026-04-05]] Sun 17:43
+## Builder Notes\n- Non-implementation task — all changes are .md file edits only.\n- Files changed: 3\n  - `share/skills/w-orchestration/SKILL.md`: replaced all 13 dispatcher references with pick_tasks; added status-to-agent mapping table, DECOMP post-filter, crash failure exclusion, stale detection with last_dispatched; removed gate_warned from Context Budget, Output Format, Verification Checklist, and Known Pitfalls\n  - `share/agents/orchestrator.agent.md`: removed dispatcher from agents frontmatter; updated persona, subagents table (removed dispatcher row), output_format, boundaries (2 locations), and examples (2 locations) — all 9 references across 7 sections\n  - `share/skills/w-dispatch-planning/SKILL.md`: updated frontmatter description to ARCHIVED; added ARCHIVED callout below frontmatter\n- Tests: n/a (non-impl pass-through)\n- Lint: n/a (.md files only)\n- Coverage: n/a\n- No Python files modified. Scope boundary respected.

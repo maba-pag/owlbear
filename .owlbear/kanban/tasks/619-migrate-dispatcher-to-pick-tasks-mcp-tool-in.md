@@ -1,10 +1,10 @@
 ---
 id: 619
 title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
-status: review
+status: in-progress
 priority: needed
 created: 2026-04-05T01:30:40.2393944+02:00
-updated: 2026-04-05T16:06:47.4550641+02:00
+updated: 2026-04-05T17:41:47.1226169+02:00
 started: 2026-04-05T11:14:35.6735559+02:00
 tags:
     - scope:mcp
@@ -144,3 +144,39 @@ Challenger: SKIP. Re-review of previously challenged task; only dep graph correc
 
 [[2026-04-05]] Sun 16:06
 Non-implementation task — no code changes needed. Passing through to review.
+
+[[2026-04-05]] Sun 17:41
+## Review Evidence
+
+**Task type:** Parent coordination task (tagged `quality`). No implementation, no tests — pass-through from test-writer and builder.
+
+### Subtask Status Audit
+
+| Subtask | Title | Status | AC-1 Met? |
+|---------|-------|--------|-----------|
+| #620 | Test: pick_tasks gate logic and output format | archived | ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done | ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | in-progress | ✗ |
+| #623 | Deprecate dispatcher agent definition | todo | ✗ |
+| #624 | Evaluate and clean up orchestrator planner/ package | todo | ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | todo | ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | backlog | ✗ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | todo | ✗ |
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All subtasks (#620–#630) complete or archived | 6 of 8 subtasks NOT done/archived (#622 in-progress, #623/#624/#628/#630 todo, #629 backlog) | FAIL |
+| pick_tasks MCP tool registered and functional | #621 done — tool exists | PARTIAL |
+| Orchestrator calls pick_tasks directly | #622 in-progress — not wired yet | PENDING |
+| Dispatcher agent marked deprecated | #623 todo — not done yet | PENDING |
+| planner/ package disposition documented | #624 todo — not done yet | PENDING |
+
+### Verdict
+
+AC line 1 is unambiguously unmet. The builder correctly noted no code changes were needed (coordination task), but a pass-through to review is premature when the coordination task's own AC requires all subtasks to reach done/archived. The task should re-enter review only after #622, #623, #624, #628, #629, and #630 are all resolved.
+
+Deductions: -1.0 (AC-1 not met: 6/8 subtasks incomplete). Confidence: 0.00 → FAIL.
+
+**Action:** Reject to in-progress. Do not re-submit to review until all subtasks are done or archived.

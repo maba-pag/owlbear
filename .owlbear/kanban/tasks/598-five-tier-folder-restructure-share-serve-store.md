@@ -1,10 +1,10 @@
 ---
 id: 598
 title: Five-tier folder restructure (share/serve/store/seed/.owlbear)
-status: todo
+status: in-progress
 priority: critical
 created: 2026-04-04T20:30:01.0914716+02:00
-updated: 2026-04-05T16:17:51.2601266+02:00
+updated: 2026-04-05T17:41:32.9732208+02:00
 tags:
     - scope:infra
     - type:restructure
@@ -519,3 +519,10 @@ The unblocked gate reads point-in-time board state. #609 was likely dispatched w
 
 [[2026-04-05]] Sun 16:17
 APPROVED #598 -> todo | Refined AC3 (scoped RED-phase exclusion — ~430 pre-existing failures excluded), AC8 (functional refs only — frozen docstrings in RED tests excluded). Added #608 to depends_on as defense-in-depth against dep chain violation. 10/11 subtasks complete; #608 is sole blocker. Challenger reconsider (0.55) — 3 concerns accepted, 1 partially accepted, 1 dismissed.
+
+[[2026-04-05]] Sun 17:41
+## Test-Writer Notes (round 5 — retry)
+- Retry cycle: reviewer FAILed on AC2 (subtasks not complete), not missing tests.
+- Architect refined AC3 (scoped RED-phase exclusion) and AC8 (functional refs only), added #608 to depends_on. No new testable Python interfaces introduced.
+- Task remains tagged type:config + type:restructure — non-implementation umbrella, no tests applicable.
+- Passing through to builder.

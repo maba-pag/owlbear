@@ -1,10 +1,10 @@
 ---
 id: 634
 title: Update test_validate_skills_ci.py DevDependency tests for validation group
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-05T14:28:59.7832139+02:00
-updated: 2026-04-05T15:36:21.4189046+02:00
+updated: 2026-04-05T17:40:59.6667605+02:00
 tags:
     - scope:infra
     - type:test
@@ -63,3 +63,11 @@ Task #614 moved `skills-ref==0.1.1` from the `dev` dependency group to the `vali
 ### Action Taken
 
 Refined AC from 4 to 6 lines: added AC3 (rename class/method/helper/docstrings/error messages from dev to validation), AC4 (update module docstring), renumbered pass/regression checks to AC5-AC6. Advancing to todo.
+
+[[2026-04-05]] Sun 17:40
+## Test-Writer Notes
+- Non-implementation task (tagged type:test) — no tests applicable.
+- Passing through to builder.
+- Task is a mechanical rename of an existing test class: `TestFromAC_DevDependency` → `TestFromAC_ValidationDependency`, helper `_dev_deps` → `_validation_deps`, group lookup `dev` → `validation`, plus docstring/error-message updates.
+- No new testable interfaces introduced; all AC lines address the test file itself.
+- Builder should update `tests/test_validate_skills_ci.py` and verify AC5 (`pytest tests/test_validate_skills_ci.py::TestFromAC_ValidationDependency -v` passes) and AC6 (no regressions).

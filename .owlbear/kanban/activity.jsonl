@@ -1,6 +1,3 @@
-{"timestamp":"2026-03-30T15:16:54.6230963+02:00","action":"create","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T15:17:02.0064292+02:00","action":"create","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T15:18:39.8761172+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
 {"timestamp":"2026-03-30T15:18:45.9938312+02:00","action":"move","task_id":9,"detail":"ideation -\u003e done"}
 {"timestamp":"2026-03-30T15:18:46.5266991+02:00","action":"move","task_id":21,"detail":"ideation -\u003e done"}
 {"timestamp":"2026-03-30T15:18:47.0217232+02:00","action":"move","task_id":25,"detail":"ideation -\u003e done"}
@@ -9998,3 +9995,6 @@
 {"timestamp":"2026-04-05T17:55:34.6639376+02:00","action":"claim","task_id":629,"detail":"gale-lark"}
 {"timestamp":"2026-04-05T17:58:25.6726419+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
 {"timestamp":"2026-04-05T17:58:25.6865363+02:00","action":"release","task_id":629,"detail":"gale-lark"}
+{"timestamp":"2026-04-05T18:14:15.7972806+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T18:14:15.8074473+02:00","action":"release","task_id":621,"detail":"creek-dart"}
+{"timestamp":"2026-04-05T18:14:16.2713859+02:00","action":"move","task_id":621,"detail":"done -\u003e archived"}

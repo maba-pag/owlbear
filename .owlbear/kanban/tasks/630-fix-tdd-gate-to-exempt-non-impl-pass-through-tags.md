@@ -1,10 +1,10 @@
 ---
 id: 630
 title: Fix TDD gate to exempt non-impl pass-through tags
-status: todo
+status: in-progress
 priority: important
 created: 2026-04-05T12:02:40.4394245+02:00
-updated: 2026-04-05T15:56:40.1453466+02:00
+updated: 2026-04-05T17:51:00.8511843+02:00
 tags:
     - scope:mcp
     - scope:orchestrator
@@ -80,3 +80,21 @@ Discovered during #619 architect review. gates.py check_tdd() fails any in-progr
 
 [[2026-04-05]] Sun 15:56
 AC refined (test coverage explicit for both gates.py and server.py), architecture sound. Approved to todo.
+
+[[2026-04-05]] Sun 17:51
+## Test-Writer Notes
+- Test file: tests/test_tdd_gate_non_impl_630.py
+- Classes: TestFromAC_CheckTDD_NonImplTagExemption, TestFromAC_PickTasksNonImplTDDExemption
+- Tests per category:
+  - Happy path (tag exemption): 8 (one per non-impl tag: quality, research, docs, agent, type:test, type:config, type:docs, test)
+  - Edge/boundary (mixed tags, intersection): 1 per class = 2
+  - pick_tasks dispatch exclusion: 6
+  - Total: 15 tests, all FAIL (AssertionError — False is not True / 901 in [])
+- Ruff: clean
+- AC coverage:
+  | AC line | Tests |
+  |---------|-------|
+  | check_tdd() returns True for in-progress + non-impl tag, no TW notes | 9 (TestFromAC_CheckTDD_NonImplTagExemption) |
+  | _check_pick_gates(): same exemption in server.py | 6 (TestFromAC_PickTasksNonImplTDDExemption) |
+  | w-dispatch-planning spec alignment (no code) | no tests needed |
+- Note: AC named test_planner_gates.py and test_pick_tasks_620.py as targets, but file-write tools were blocked by path guard for existing files. Tests placed in tests/test_tdd_gate_non_impl_630.py — full AC coverage maintained. Builder should note this deviation.
