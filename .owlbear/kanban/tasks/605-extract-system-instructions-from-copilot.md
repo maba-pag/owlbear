@@ -1,10 +1,12 @@
 ---
 id: 605
 title: Extract system instructions from copilot-instructions.md
-status: docs
+status: archived
 priority: needed
 created: 2026-04-04T20:31:16.804802+02:00
-updated: 2026-04-05T10:37:33.8508004+02:00
+updated: 2026-04-05T12:08:07.3426071+02:00
+started: 2026-04-05T12:08:07.3426071+02:00
+completed: 2026-04-05T12:08:07.3426071+02:00
 tags:
     - scope:infra
     - phase-2
@@ -164,3 +166,42 @@ N/A.
 ### Verdict
 **Confidence: .95 → PASS**
 **Action: #605 → docs**
+
+[[2026-04-05]] Sun 10:54
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | Verified | `.github/copilot-instructions.md` reduced to S1 only; `share/instructions/owlbear-system.instructions.md` created with S2–S5. Both files confirmed in correct final state by builder commit 9690513 and reviewer AC compliance table. README.md has no references to either file — no README update needed. |
+| 2 | Module docstrings | No | N/A | Markdown-only changes — no Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external repo, article, or doc patterns referenced in AC, builder notes, or review evidence. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/605-*.md` produced for this task. Pre-existing research doc stale line refs are explicitly out-of-scope per Notes (live ref updates belong to #607). |
+
+### Files Updated
+None — documentation already in correct final state per builder. No doc-writer edits required.
+
+### Scratch Files
+None — no `.owlbear/scratch/605-*` files found.
+
+[[2026-04-05]] Sun 12:08
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: File exists with description: frontmatter, no applyTo | File at share/instructions/owlbear-system.instructions.md; frontmatter has description field, no applyTo key | PASS |
+| AC2: S2-S5 extracted, content fidelity | S2 Decision Heuristics (L5), S3 System Awareness (L16), S4 Memory Governance (L50), S5 Operational Fundamentals (L65) confirmed. Commit 9690513 verified | PASS |
+| AC3: copilot-instructions.md retains only S1 | File is 5 lines: title + S1 Project Identity paragraph. S2-S5 removed | PASS |
+| AC4: Auto-discovery in VS Code | File loaded in current session instructions context (auto-discovered without applyTo). Fallback not triggered | PASS |
+
+### Test Results
+- pytest: 437 failed, 2834 passed, 18 skipped (398.94s). Zero failures in task scope (markdown-only, no Python). All pre-existing.
+- ruff: All checks passed
+
+### Architect Quality: 5/5
+
+### Deduction Breakdown
+- AC4 indirect evidence (session context, not UI panel): -0.01
+
+### Confidence: .99
+### Action: archive

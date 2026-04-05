@@ -1,106 +1,3 @@
-{"timestamp":"2026-03-30T07:41:54.3485774+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
-{"timestamp":"2026-03-30T07:41:54.3512272+02:00","action":"claim","task_id":142,"detail":"builder"}
-{"timestamp":"2026-03-30T07:46:37.87302+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
-{"timestamp":"2026-03-30T07:46:37.8772098+02:00","action":"release","task_id":142,"detail":"builder"}
-{"timestamp":"2026-03-30T07:48:35.4696467+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:48:35.4728059+02:00","action":"claim","task_id":113,"detail":"writer"}
-{"timestamp":"2026-03-30T07:48:40.0519235+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:48:40.0551392+02:00","action":"claim","task_id":22,"detail":"architect"}
-{"timestamp":"2026-03-30T07:49:14.7188535+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-30T07:49:14.7220857+02:00","action":"claim","task_id":144,"detail":"builder"}
-{"timestamp":"2026-03-30T07:49:39.7206952+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T07:49:39.7238448+02:00","action":"claim","task_id":20,"detail":"architect"}
-{"timestamp":"2026-03-30T07:49:43.9492943+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:49:43.9530089+02:00","action":"release","task_id":113,"detail":"writer"}
-{"timestamp":"2026-03-30T07:49:57.9741855+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:50:35.2763708+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T07:50:35.2795167+02:00","action":"release","task_id":20,"detail":"architect"}
-{"timestamp":"2026-03-30T07:53:10.0136974+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-30T07:53:10.0162955+02:00","action":"release","task_id":144,"detail":"builder"}
-{"timestamp":"2026-03-30T07:54:24.5879172+02:00","action":"create","task_id":202,"detail":"Test: CLI trigger commands"}
-{"timestamp":"2026-03-30T07:54:31.4628296+02:00","action":"move","task_id":202,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-03-30T07:55:03.3426685+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:55:08.4022212+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:55:28.4690946+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:56:04.1428603+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:56:31.3144129+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:56:41.848776+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T07:56:41.8509606+02:00","action":"release","task_id":22,"detail":"architect"}
-{"timestamp":"2026-03-30T07:57:21.6911584+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T07:57:21.6938102+02:00","action":"claim","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-30T07:58:26.1916422+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T07:58:26.1942451+02:00","action":"claim","task_id":147,"detail":"builder"}
-{"timestamp":"2026-03-30T07:58:42.3977045+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T07:58:47.0011686+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T07:58:47.0049249+02:00","action":"release","task_id":32,"detail":"architect"}
-{"timestamp":"2026-03-30T08:01:13.7620617+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T08:01:13.7676689+02:00","action":"claim","task_id":23,"detail":"architect"}
-{"timestamp":"2026-03-30T08:01:23.2937202+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T08:01:40.2467053+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T08:01:48.6720223+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T08:01:48.6746274+02:00","action":"release","task_id":147,"detail":"builder"}
-{"timestamp":"2026-03-30T08:01:50.758892+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T08:02:21.6773013+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T08:02:21.6798998+02:00","action":"claim","task_id":16,"detail":"architect"}
-{"timestamp":"2026-03-30T08:02:26.6252749+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T08:02:48.3840327+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T08:02:48.3866411+02:00","action":"release","task_id":23,"detail":"architect"}
-{"timestamp":"2026-03-30T08:06:23.0913878+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T08:06:23.0940385+02:00","action":"release","task_id":16,"detail":"architect"}
-{"timestamp":"2026-03-30T08:07:12.8855558+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T08:07:12.8881684+02:00","action":"claim","task_id":158,"detail":"architect"}
-{"timestamp":"2026-03-30T08:07:14.0075045+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:07:14.0116924+02:00","action":"claim","task_id":164,"detail":"architect"}
-{"timestamp":"2026-03-30T08:07:15.9656924+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T08:07:15.968299+02:00","action":"claim","task_id":33,"detail":"architect"}
-{"timestamp":"2026-03-30T08:07:34.7562463+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T08:07:34.7593383+02:00","action":"claim","task_id":34,"detail":"architect"}
-{"timestamp":"2026-03-30T08:11:19.8884748+02:00","action":"create","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T08:11:23.260855+02:00","action":"create","task_id":204,"detail":"Test: Wire audit log into dispatch loop"}
-{"timestamp":"2026-03-30T08:11:24.6717481+02:00","action":"move","task_id":203,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-03-30T08:11:47.832129+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:11:49.7037983+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T08:12:18.5282427+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:12:23.0855628+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:12:30.890054+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T08:12:39.7289678+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:12:39.7317572+02:00","action":"release","task_id":164,"detail":"architect"}
-{"timestamp":"2026-03-30T08:12:44.9478178+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:12:44.951071+02:00","action":"claim","task_id":164,"detail":"architect"}
-{"timestamp":"2026-03-30T08:12:49.5605896+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T08:12:59.4371335+02:00","action":"edit","task_id":164,"detail":"Wire audit log into orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:12:59.4403244+02:00","action":"release","task_id":164,"detail":"architect"}
-{"timestamp":"2026-03-30T08:13:51.2267185+02:00","action":"create","task_id":205,"detail":"Test: Knowledge package hybrid search + retrieval"}
-{"timestamp":"2026-03-30T08:14:01.588865+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T08:14:01.5914353+02:00","action":"release","task_id":33,"detail":"architect"}
-{"timestamp":"2026-03-30T08:14:16.5709871+02:00","action":"edit","task_id":205,"detail":"Test: Knowledge package hybrid search + retrieval"}
-{"timestamp":"2026-03-30T08:14:52.473258+02:00","action":"create","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
-{"timestamp":"2026-03-30T08:14:57.9903723+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
-{"timestamp":"2026-03-30T08:15:01.2185811+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T08:15:18.6302387+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T08:15:29.3332957+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T08:15:34.0935726+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T08:15:34.0965692+02:00","action":"release","task_id":34,"detail":"architect"}
-{"timestamp":"2026-03-30T08:15:37.2016649+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T08:15:48.5680488+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T08:16:39.6283679+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T08:16:46.5441322+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T08:16:46.5468131+02:00","action":"release","task_id":158,"detail":"architect"}
-{"timestamp":"2026-03-30T08:17:38.1520472+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:17:38.1552735+02:00","action":"claim","task_id":155,"detail":"researcher"}
-{"timestamp":"2026-03-30T08:17:39.6521049+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-30T08:17:39.6558141+02:00","action":"claim","task_id":156,"detail":"researcher"}
-{"timestamp":"2026-03-30T08:17:40.8181545+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-30T08:17:40.8218035+02:00","action":"claim","task_id":145,"detail":"architect"}
-{"timestamp":"2026-03-30T08:17:58.6387031+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T08:17:58.6418331+02:00","action":"claim","task_id":146,"detail":"architect"}
-{"timestamp":"2026-03-30T08:22:01.9985494+02:00","action":"create","task_id":207,"detail":"Test: planner gate checker and task selector"}
-{"timestamp":"2026-03-30T08:22:09.50934+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:22:19.2392611+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:22:24.3648709+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:22:58.9593819+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:23:05.0020656+02:00","action":"edit","task_id":155,"detail":"Build mock ACP agent for E2E testing"}
-{"timestamp":"2026-03-30T08:23:05.0057577+02:00","action":"release","task_id":155,"detail":"researcher"}
 {"timestamp":"2026-03-30T08:23:27.6018832+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
 {"timestamp":"2026-03-30T08:23:41.8333044+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
 {"timestamp":"2026-03-30T08:23:42.1803782+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
@@ -9998,3 +9895,106 @@
 {"timestamp":"2026-04-05T11:02:59.9412139+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
 {"timestamp":"2026-04-05T11:02:59.9568197+02:00","action":"release","task_id":612,"detail":"sand-otter"}
 {"timestamp":"2026-04-05T11:03:00.4060747+02:00","action":"move","task_id":612,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T11:03:43.4631776+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T11:03:43.4752287+02:00","action":"claim","task_id":37,"detail":"heath-port"}
+{"timestamp":"2026-04-05T11:03:56.4246565+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T11:03:56.4374758+02:00","action":"claim","task_id":620,"detail":"quake-orbit"}
+{"timestamp":"2026-04-05T11:04:00.7652187+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T11:04:00.7771758+02:00","action":"release","task_id":37,"detail":"heath-port"}
+{"timestamp":"2026-04-05T11:04:07.6429422+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T11:04:07.657206+02:00","action":"claim","task_id":319,"detail":"zeal-pond"}
+{"timestamp":"2026-04-05T11:04:13.613796+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T11:04:13.6266013+02:00","action":"claim","task_id":484,"detail":"mist-wind"}
+{"timestamp":"2026-04-05T11:06:10.1246552+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T11:06:10.137284+02:00","action":"release","task_id":484,"detail":"mist-wind"}
+{"timestamp":"2026-04-05T11:07:38.3984663+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T11:07:38.4120679+02:00","action":"release","task_id":620,"detail":"quake-orbit"}
+{"timestamp":"2026-04-05T11:08:13.5506778+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T11:08:13.564721+02:00","action":"release","task_id":319,"detail":"zeal-pond"}
+{"timestamp":"2026-04-05T11:08:19.0670432+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T11:08:45.8224074+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T11:08:45.8333252+02:00","action":"claim","task_id":167,"detail":"ghost-hull"}
+{"timestamp":"2026-04-05T11:09:02.6413122+02:00","action":"edit","task_id":625,"detail":"Restore #574 pipeline protocol MCP callouts — 8 failing tests"}
+{"timestamp":"2026-04-05T11:09:02.6521964+02:00","action":"claim","task_id":625,"detail":"flux-dale"}
+{"timestamp":"2026-04-05T11:09:05.5632309+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T11:09:05.576657+02:00","action":"claim","task_id":619,"detail":"lake-path"}
+{"timestamp":"2026-04-05T11:09:14.8379132+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T11:09:14.8485972+02:00","action":"claim","task_id":265,"detail":"iron-port"}
+{"timestamp":"2026-04-05T11:09:40.1877133+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T11:09:40.1980623+02:00","action":"release","task_id":167,"detail":"ghost-hull"}
+{"timestamp":"2026-04-05T11:10:27.9049368+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T11:10:27.9144223+02:00","action":"release","task_id":265,"detail":"iron-port"}
+{"timestamp":"2026-04-05T11:11:05.8001725+02:00","action":"edit","task_id":625,"detail":"Restore #574 pipeline protocol MCP callouts — 8 failing tests"}
+{"timestamp":"2026-04-05T11:11:05.8118615+02:00","action":"release","task_id":625,"detail":"flux-dale"}
+{"timestamp":"2026-04-05T11:14:15.5670698+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T11:14:35.6741234+02:00","action":"move","task_id":619,"detail":"ideation -\u003e backlog"}
+{"timestamp":"2026-04-05T11:14:48.4340866+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T11:14:48.44493+02:00","action":"release","task_id":619,"detail":"lake-path"}
+{"timestamp":"2026-04-05T11:15:23.0332652+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T11:15:23.045743+02:00","action":"claim","task_id":542,"detail":"river-forge"}
+{"timestamp":"2026-04-05T11:15:47.3001003+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T11:15:47.3130337+02:00","action":"claim","task_id":582,"detail":"vale-jade"}
+{"timestamp":"2026-04-05T11:15:48.7482847+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T11:15:48.7589652+02:00","action":"claim","task_id":614,"detail":"dock-rapid"}
+{"timestamp":"2026-04-05T11:16:15.90025+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T11:16:15.9102292+02:00","action":"release","task_id":582,"detail":"vale-jade"}
+{"timestamp":"2026-04-05T11:18:01.4073754+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T11:18:01.419872+02:00","action":"release","task_id":614,"detail":"dock-rapid"}
+{"timestamp":"2026-04-05T11:19:33.7009847+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T11:19:33.7113649+02:00","action":"claim","task_id":546,"detail":"flint-smoke"}
+{"timestamp":"2026-04-05T11:19:36.8070967+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T11:19:36.8192259+02:00","action":"release","task_id":542,"detail":"river-forge"}
+{"timestamp":"2026-04-05T11:20:04.225677+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T11:20:04.2361348+02:00","action":"release","task_id":546,"detail":"flint-smoke"}
+{"timestamp":"2026-04-05T11:20:31.6644161+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T11:20:31.6768849+02:00","action":"claim","task_id":589,"detail":"gust-heath"}
+{"timestamp":"2026-04-05T11:21:09.7300022+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T11:21:09.7411017+02:00","action":"claim","task_id":437,"detail":"root-solar"}
+{"timestamp":"2026-04-05T11:21:17.2849484+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T11:21:17.2980697+02:00","action":"claim","task_id":62,"detail":"lunar-gorge"}
+{"timestamp":"2026-04-05T11:21:21.548128+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T11:21:21.5591868+02:00","action":"claim","task_id":567,"detail":"rift-cedar"}
+{"timestamp":"2026-04-05T11:21:43.4386388+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T11:21:43.4506488+02:00","action":"release","task_id":567,"detail":"rift-cedar"}
+{"timestamp":"2026-04-05T11:24:33.8421674+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T11:24:33.8534444+02:00","action":"release","task_id":589,"detail":"gust-heath"}
+{"timestamp":"2026-04-05T11:25:18.0883552+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T11:25:18.0991816+02:00","action":"release","task_id":437,"detail":"root-solar"}
+{"timestamp":"2026-04-05T11:32:40.3648119+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
+{"timestamp":"2026-04-05T11:32:40.37484+02:00","action":"release","task_id":62,"detail":"lunar-gorge"}
+{"timestamp":"2026-04-05T11:36:36.479984+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T11:36:36.4916536+02:00","action":"claim","task_id":264,"detail":"wind-larch"}
+{"timestamp":"2026-04-05T11:36:41.5505208+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T11:36:41.5613651+02:00","action":"claim","task_id":546,"detail":"lime-dove"}
+{"timestamp":"2026-04-05T11:36:42.750607+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T11:36:42.7627096+02:00","action":"claim","task_id":614,"detail":"cedar-kelp"}
+{"timestamp":"2026-04-05T11:36:51.8056804+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T11:36:51.8182101+02:00","action":"claim","task_id":576,"detail":"leaf-brew"}
+{"timestamp":"2026-04-05T11:37:44.2640955+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T11:37:44.2752214+02:00","action":"release","task_id":576,"detail":"leaf-brew"}
+{"timestamp":"2026-04-05T11:37:52.992219+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T11:37:53.0043869+02:00","action":"release","task_id":614,"detail":"cedar-kelp"}
+{"timestamp":"2026-04-05T11:39:13.6775566+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T11:39:13.6902017+02:00","action":"release","task_id":546,"detail":"lime-dove"}
+{"timestamp":"2026-04-05T11:52:25.2539457+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T11:52:25.2640331+02:00","action":"release","task_id":264,"detail":"wind-larch"}
+{"timestamp":"2026-04-05T11:52:25.7484556+02:00","action":"move","task_id":264,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T11:53:19.0545165+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T11:53:19.0671787+02:00","action":"claim","task_id":619,"detail":"raven-linen"}
+{"timestamp":"2026-04-05T11:53:20.4385373+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T11:53:20.4509383+02:00","action":"claim","task_id":621,"detail":"ivory-spoke"}
+{"timestamp":"2026-04-05T11:53:32.6831224+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T11:53:32.6938368+02:00","action":"claim","task_id":605,"detail":"nova-willow"}
+{"timestamp":"2026-04-05T11:53:53.6344166+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T11:53:53.6466405+02:00","action":"claim","task_id":484,"detail":"cold-timber"}
+{"timestamp":"2026-04-05T11:54:38.8702643+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T11:54:38.8818784+02:00","action":"release","task_id":484,"detail":"cold-timber"}
+{"timestamp":"2026-04-05T11:56:46.9882966+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T11:56:46.9991392+02:00","action":"release","task_id":621,"detail":"ivory-spoke"}
+{"timestamp":"2026-04-05T12:02:40.4430696+02:00","action":"create","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T12:04:22.8103766+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T12:04:22.8235867+02:00","action":"release","task_id":619,"detail":"raven-linen"}
+{"timestamp":"2026-04-05T12:04:28.1224721+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T12:08:06.8450777+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T12:08:06.8568805+02:00","action":"release","task_id":605,"detail":"nova-willow"}
+{"timestamp":"2026-04-05T12:08:07.3436784+02:00","action":"move","task_id":605,"detail":"done -\u003e archived"}
