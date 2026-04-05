@@ -1,10 +1,10 @@
 ---
 id: 265
 title: Enable parallel fan-out in reviewer agent
-status: review
+status: docs
 priority: important
 created: 2026-03-30T19:31:23.5606586+02:00
-updated: 2026-04-04T23:03:55.9828805+02:00
+updated: 2026-04-05T10:02:58.7348542+02:00
 tags:
     - scope:agents
     - phase-2
@@ -86,3 +86,65 @@ Code-review SKILL.md changes (Step 2.5, Step 8) are same-domain (agent-config) a
 
 ### Commit
 e3871be feat: wire quality-runner and code-reader parallel fan-out in reviewer (#265, builder)
+
+[[2026-04-05]] Sun 10:02
+## Review Evidence
+
+### Test Results
+- pytest test_reviewer_parallel_fan_out_265.py: **14 passed, 0 failed**
+- pytest test_reviewer_parallel_fan_out_437.py (preconditions): **5 passed, 0 failed**
+
+### Lint: clean (ruff)
+
+### Coverage: N/A — markdown/YAML config changes only
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC 1: agents: frontmatter has quality-runner | test_437::test_reviewer_agents_contains_quality_runner | Yes | COVERED |
+| AC 2: runSubagent dispatch for QR + CR | test_step_2_5_*_uses_runsubagent_format | Yes | COVERED |
+| AC 3: QR 5-field contract | test_step_2_5_quality_runner_input_contract_has_all_five_fields | Yes | COVERED |
+| AC 4: CR 4-field contract | test_step_2_5_code_reader_dispatch_full_contract_in_runsubagent_format | Yes | COVERED |
+| AC 5: Step 8 unified AC compliance table + cross-walk | test_step_8_synthesis_references_* | Yes | COVERED |
+| AC 6: FAIL triggers (MISSING/WEAK, QR failure, security) | test_step_2_5_or_step_8_documents_* (2 tests) | Yes for MISSING/WEAK + QR; "security finding" compensated by pre-existing Step 5.1 | LAX |
+| AC 7: Fallback triggers on execution error | test_step_2_5_fallback_triggers_on_execution_error | Yes | COVERED |
+| AC 8: Channel B fallback note format | test_step_2_5_fallback_channel_b_note_format | Yes | COVERED |
+| AC 9: SKILL.md Step 2.5 + Step 8 updated | All Step 2.5 + Step 8 tests | Yes | COVERED |
+| AC 10: tools: list unchanged | test_437::test_reviewer_tools_* | Yes | COVERED |
+
+No MISSING. One LAX (AC 6: "security finding" trigger not directly tested; compensated by pre-existing SKILL.md Step 5.1).
+
+#### Security Review: No issues — markdown/YAML config files only
+
+#### Test Integrity
+Chore commit 46a8f1d updated path constants from .github/ → share/ after repo reorganization. All 14 assertions PRESERVED. Builder commit e3871be did not touch test file.
+
+#### Test Quality: STRONG — specific string assertions, mutation-robust, independent, descriptive names
+
+#### Data Safety: No issues
+
+#### Implementation-Aware Gaps: None — all significant paths tested
+
+#### Builder Process Quality: 1 builder notes section. CLEAN.
+
+### Pass 2 — INFORMATIONAL
+Builder reported old .github/ paths; live deliverables are in share/ (post-reorganization). No functional impact.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC 1 | share/agents/reviewer.agent.md line 8: agents: [code-reader, scribe, quality-runner] | PASS |
+| AC 2 | SKILL.md Step 2.5: agentName: quality-runner + agentName: code-reader blocks | PASS |
+| AC 3 | Step 2.5: mode, task_id, test_paths, coverage_modules, lint_paths | PASS |
+| AC 4 | Step 2.5: task_id, ac_lines, changed_files, test_files | PASS |
+| AC 5 | Step 8: "unified AC compliance table by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail" | PASS |
+| AC 6 | Step 8: "Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader" | PASS |
+| AC 7 | Step 2.5: "execution error (crash, timeout, exception — not a FAIL verdict)" | PASS |
+| AC 8 | Step 2.5: "Parallel fan-out failed: {reason}. Fell back to sequential." | PASS |
+| AC 9 | Step 2.5 heading + Step 8 enriched — verified above | PASS |
+| AC 10 | reviewer.agent.md 16-entry tools list preserved | PASS |
+
+### Confidence: .95
+### Verdict: PASS

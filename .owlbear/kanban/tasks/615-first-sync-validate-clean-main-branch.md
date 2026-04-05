@@ -1,10 +1,10 @@
 ---
 id: 615
 title: 'First sync: validate clean main branch'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-04T21:55:56.253579+02:00
-updated: 2026-04-05T07:19:41.5936864+02:00
+updated: 2026-04-05T10:35:51.1479224+02:00
 tags:
     - scope:infra
     - type:build
@@ -14,6 +14,8 @@ parent: 610
 depends_on:
     - 613
     - 614
+blocked: true
+block_reason: 'Dependency #613 (Create GitHub Actions sync workflow) is in backlog — not started. sync-to-main.yml does not exist. main branch still contains dev-only files (tests/, v1/, .owlbear/, conftest.py, store/, etc.). AC1–AC3 cannot be satisfied until after #613 is built and the first sync is run. Unblocks when #613 reaches done.'
 class: standard
 ---
 
@@ -84,3 +86,26 @@ AC2 allow-list must match #613's sync include-list. If they diverge, AC2 correct
 
 [[2026-04-05]] Sun 07:19
 APPROVED #615 -> todo | Refined 7 vague ACs into 6 precise, verifiable ACs with explicit commands. Added test pass-through tag. Challenger RECONSIDER (0.68) on AC2 drift and AC6 import-only -- both integrated as clarifying notes.
+
+[[2026-04-05]] Sun 10:09
+## Test-Writer Notes
+- Non-implementation task (tagged `test`) — no tests applicable.
+- ACs describe infrastructure validation: GitHub workflow dispatch (AC1), git branch tree inspection (AC2–AC3), repo clone + uv sync (AC4), setup/init.py file creation (AC5), and MCP module import checks (AC6). These are operational integration checks, not Python unit test targets.
+- Architect explicitly added `test` pass-through tag: "Task IS a test."
+- Passing through to builder.
+
+[[2026-04-05]] Sun 10:35
+## Builder Notes
+
+### Validation Attempt
+- AC1: BLOCKED — `.github/workflows/sync-to-main.yml` does not exist; #613 is in backlog.
+- AC2: FAIL — `git ls-tree --name-only main` shows dev-only files present: `.owlbear`, `store`, `tests`, `v1`, `conftest.py`, `Owlbear.code-profile`, etc.
+- AC3: FAIL — dev-only paths exist on main (same evidence as AC2).
+- AC4–AC6: Not attempted — pre-conditions unmet (no clean main to clone from).
+
+### Root Cause
+- Dependency #613 is in `backlog` status (not started, not done).
+- This task was dispatched with an unmet dependency.
+
+### Resolution
+- Complete #613 (sync workflow), run the first sync, then re-dispatch #615.

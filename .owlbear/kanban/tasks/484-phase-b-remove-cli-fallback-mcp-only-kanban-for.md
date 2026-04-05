@@ -1,10 +1,10 @@
 ---
 id: 484
 title: 'Phase B: Remove CLI fallback, MCP-only kanban for all agents'
-status: backlog
+status: ideation
 priority: needed
 created: 2026-03-31T06:20:55.32467+02:00
-updated: 2026-04-05T07:32:16.5858988+02:00
+updated: 2026-04-05T10:15:15.3697932+02:00
 tags:
     - scope:mcp
     - ' scope:agents'
@@ -74,3 +74,52 @@ Subtask status: #580, #581, #583, #584 archived (cancelled, zero scope). #582 at
 - Challenge: SKIPPED — confirming completed work, no new recommendation
 - Follow-up tasks: none (subtasks #580-#584 already cancelled/archived except #582 which should be archived)
 - T1 classification — no decisions needed
+
+[[2026-04-05]] Sun 10:15
+## Architecture Review (2nd pass)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | N/A | Parent umbrella with no independent deliverable |
+| Interface clarity | N/A | — |
+| Dependency correctness | PASS | #483 archived |
+| Module layering | N/A | — |
+| TDD compliance | N/A | — |
+| KISS/YAGNI | N/A | — |
+| Premise challenge | **FAIL** | Nearly all scope already delivered; residual covered by #582 |
+| Pattern consistency | N/A | — |
+| Security surface | N/A | — |
+| Single domain | N/A | — |
+
+### Independent Verification
+
+Grep kanban-md across current workspace (share/):
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: refs removed from agent files | share/agents/ = 0 matches | DONE |
+| AC2: refs removed from skill cheatsheets | Active skills = 0. Deprecated h-kanban-md has 16+ refs | MOSTLY DONE |
+| AC3: agent-common Channel B MCP-only | L6-8: edit_task with append_body, references h-mcp-kanban | DONE |
+| AC4: PS escaping removed | Section does not exist in current file | DONE |
+| AC5: research-docs MCP-only | share/instructions/ = 0 matches | DONE |
+| AC6: 0 grep matches in agents/ and skills/ | agents/ = 0; skills/ has h-kanban-md (16, deprecated), h-mcp-kanban (5, server internals), h-pytest-and-linting (1, test marker) | NOT MET (strictly) |
+| AC7: Pipeline agents function MCP-only | Current operational state | DONE |
+
+### Correction to Prior Reviews
+
+The 2026-04-04 architect and 2026-04-05 researcher both classified h-kanban-md as "out of scope." Incorrect: AC6 specifies "0 matches in skills/" which includes h-kanban-md. However, subtask #582 was created for this residual scope and has its own AC targeting h-kanban-md. Prior recommendations to archive #582 as "zero scope" were wrong per #582's own research (2026-04-05 07:48) confirming 16 CLI refs remain.
+
+### Disposition
+
+#484 is a parent umbrella. Its only unsatisfied AC (item 6) is fully covered by subtask #582, which has independent, well-researched AC. No deliverable that #484 can produce beyond what #582 will deliver.
+
+Dependency issue: #582 depends_on [484] creates a circular reference (subtask depending on parent). Must be removed so #582 can proceed after #484 is archived.
+
+### Challenge Results
+- Challenge: SKIPPED (REJECT verdict, not required per w-arch-review Step 2.5)
+
+### Verdict: REJECT
+### Action Taken
+Rejected to ideation. Recommend: (1) Archive #484, (2) Remove #582 dep on #484, (3) Review #582 independently — it has real scope.

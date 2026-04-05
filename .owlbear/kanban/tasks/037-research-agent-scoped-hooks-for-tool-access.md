@@ -1,10 +1,10 @@
 ---
 id: 37
 title: Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement
-status: todo
+status: in-progress
 priority: important
 created: 2026-03-26T18:45:09.795589+01:00
-updated: 2026-04-05T01:02:29.4458365+02:00
+updated: 2026-04-05T10:09:58.3121256+02:00
 tags:
     - research
     - phase-1
@@ -84,3 +84,10 @@ Research validated (.85). Complete doc at docs/research/agent-scoped-hooks.md. A
 
 ### Verdict: APPROVE
 ### Action Taken: Advanced to todo. All 6 AC verified with specific evidence. Research doc complete and current. 3 follow-up tasks exist with appropriate scoping.
+
+[[2026-04-05]] Sun 10:09
+## Test-Writer Notes
+- Non-implementation task (tagged `research`) — no tests applicable.
+- All 6 AC lines describe research deliverables and document production; no Python interfaces to test.
+- Arch review confirmed: "Non-implementation; research pass-through tag present."
+- Passing through to builder.

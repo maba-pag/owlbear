@@ -1,18 +1,17 @@
 ---
 id: 582
 title: 'P2-B3: Update inline-ref skills to MCP-only'
-status: backlog
+status: todo
 priority: needed
 created: 2026-04-03T16:42:36.5956013+02:00
-updated: 2026-04-05T07:48:03.4596898+02:00
+updated: 2026-04-05T10:20:02.7524845+02:00
 tags:
     - scope:skills
     - ' scope:mcp'
     - ' phase-2'
     - ' type:build'
+    - docs
 parent: 484
-depends_on:
-    - 484
 class: standard
 ---
 
@@ -60,3 +59,45 @@ T1 classification. Pre-approved documentation migration.
 
 Follow-up tasks: none (this task IS the implementation)
 Decision requests: none (T1)
+
+[[2026-04-05]] Sun 10:19
+Releasing claim for AC refinement and architecture review append.
+
+[[2026-04-05]] Sun 10:19
+## Architecture Review
+
+### Refined AC (binding, supersedes original)
+- [ ] AC1: w-dispatch-planning, w-decision-routing, w-orchestration, w-research contain 0 kanban-md.exe refs (pre-verified done, no action needed)
+- [ ] AC2: h-kanban-md/SKILL.md reduced to thin redirect (~20 lines): YAML frontmatter (keep deprecated description) + title + deprecation notice + Board Configuration section (statuses/priorities from current L126-L130) + cross-refs to h-mcp-kanban (tool params, lifecycle) and r-pipeline-protocol (claiming conventions)
+- [ ] AC3: h-kanban-md/SKILL.md contains 0 kanban-md.exe references (strip L11, L34-36, L96-175 — all CLI command/recipe/escaping content)
+- [ ] AC4: grep verification: 0 matches for kanban-md.exe across share/skills/{w-dispatch-planning,w-decision-routing,w-orchestration,w-research,h-kanban-md}/
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: strip CLI content from h-kanban-md, replace with thin redirect |
+| Interface clarity | PASS (after refinement) | Original AC2 ambiguous ("uses MCP tool syntax" vs remove-and-redirect); refined AC specifies exact end-state |
+| Dependency correctness | PASS | No dependencies; 4/5 files pre-verified clean |
+| Module layering | N/A | Documentation-only task |
+| TDD compliance | N/A | No Python code; docs pass-through tag added |
+| KISS/YAGNI | PASS | Thin redirect is minimal approach; no content duplication with h-mcp-kanban |
+| Premise challenge | PASS | h-kanban-md has 16 CLI refs and 0 active consumers — cleanup justified |
+| Pattern consistency | PASS | Deprecation notice pattern already in place (L7-9) |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | Documentation migration only |
+
+### Codebase Evidence
+- h-kanban-md has 0 references from active agents/skills/instructions (grep verified)
+- h-mcp-kanban covers: lifecycle (Agent Lifecycle Pattern), body gotchas, compound tools, tool params
+- h-mcp-kanban does NOT cover board config (statuses/priorities) — retained in h-kanban-md
+- 16 CLI refs all in h-kanban-md: L11, L34-36, L96, L102, L108, L114, L120, L133, L136, L145, L148, L157, L160, L175
+- config.yml at .owlbear/kanban/config.yml is source of truth for board config
+
+### Challenge Results
+- Challenger: PROCEED (0.85)
+- Key findings: zero active consumers confirmed; board config retention justified (not in h-mcp-kanban); PS escaping section obsolete with MCP
+- Architect response: accepted
+
+### Verdict: APPROVE (via REFINE)
+### Action Taken: Refined AC2 from ambiguous "uses MCP tool syntax" to specific thin-redirect spec. Added docs pass-through tag. Advanced to todo.

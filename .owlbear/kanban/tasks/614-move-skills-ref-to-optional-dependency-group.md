@@ -1,10 +1,10 @@
 ---
 id: 614
 title: Move skills-ref to optional dependency group
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-04T21:55:37.0586851+02:00
-updated: 2026-04-05T05:52:34.8093084+02:00
+updated: 2026-04-05T10:32:07.4819495+02:00
 tags:
     - scope:infra
     - type:build
@@ -89,3 +89,24 @@ APPROVED #614 -> todo | Refined AC: corrected false premise (uv sync doesn't fai
 - Non-implementation task (tagged type:config, type:build) — no tests applicable.
 - AC1–AC5 are all pyproject.toml edits, uv.lock regeneration, and shell-command verifications. No Python interfaces exist to test.
 - Passing through to builder.
+
+[[2026-04-05]] Sun 10:32
+## Builder Notes
+
+### Files Changed
+- `pyproject.toml`: removed `skills-ref==0.1.1` from `dev` group; added new `[dependency-groups] validation = ["skills-ref==0.1.1"]`
+- `uv.lock`: regenerated to reflect group change
+
+### AC Evidence
+- **AC1**: `pyproject.toml` now has `[dependency-groups] validation = ["skills-ref==0.1.1"]` ✓
+- **AC2**: `skills-ref` removed from `dev` group ✓
+- **AC3**: `uv sync` exited 0; `skills-ref==0.1.1` appears in uninstall list (removed from default sync) ✓
+- **AC4**: `python .owlbear/scripts/validate_skills.py share/skills/h-mcp-kanban` exited 0 — local `scripts/skills_ref/` imports unaffected ✓  
+  (`pre-commit` binary not present in venv; hook script confirmed working directly)
+- **AC5**: `uv lock` exited 0; `uv.lock` regenerated ✓
+
+### Lint
+- No Python code changed; ruff not applicable.
+
+### Commit
+- `f91e417` — build: move skills-ref to optional validation group in pyproject.toml (#614)

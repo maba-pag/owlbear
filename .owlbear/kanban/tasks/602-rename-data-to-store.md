@@ -1,10 +1,10 @@
 ---
 id: 602
 title: Rename data/ to store/
-status: review
+status: todo
 priority: critical
 created: 2026-04-04T20:30:39.4451838+02:00
-updated: 2026-04-05T05:46:27.254196+02:00
+updated: 2026-04-05T10:19:00.6729492+02:00
 tags:
     - scope:infra
     - type:build
@@ -187,3 +187,50 @@ ruff check serve/ scripts/ — All checks passed.
 ### Evidence
 - Verified all committed: 477d033, 43cc162, bba06d1, 1225877
 - NotE: store/memory/*.db is not in .gitignore (pre-existing gap — never covered under data/memory/ either). Outside #602 scope.
+
+[[2026-04-05]] Sun 10:19
+## Review Evidence
+
+### Tests
+
+```
+uv run pytest tests/test_rename_data_to_store_602.py -v --tb=short
+25 passed, 3 FAILED
+```
+
+Failing tests (all in `TestFromAC_SetupKnowledgeDir`):
+- `test_setup_create_knowledge_dir_docstring_uses_store` — FileNotFoundError: `scripts/setup.py`
+- `test_setup_create_knowledge_dir_code_uses_store` — FileNotFoundError: `scripts/setup.py`
+- `test_setup_function_creates_store_segment` — FileNotFoundError: `scripts/setup.py`
+
+**Root cause:** Commit `bbba9e5` (task #609, "post-migration cleanup", `Sun Apr 5 07:37:54`) deleted `scripts/setup.py` **after** builder's commit `1225877` (AC7, `Sun Apr 5 05:46:00`). Builder's self-report of "28/28 pass" was accurate at submission time but is invalid at current HEAD.
+
+### Lint
+
+`uv run ruff check tests/test_rename_data_to_store_602.py serve/mcp-memory/src/ serve/mcp-knowledge/src/ serve/knowledge/src/ serve/mcp-project/src/ serve/orchestrator/src/owlbear_orchestrator/analysis/` — All checks passed.
+
+### AC Compliance
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: git mv data/ → store/ | 3/3 tests pass; store/memory/ + store/knowledge/ confirmed on disk | PASS |
+| AC2: _DEFAULT_DB_PATH = store/memory/memory.db (server, migrate, approve + docstring) | 5/5 tests pass; import-verified: all 3 modules return `store/memory/memory.db` | PASS |
+| AC3: _DEFAULT_KB_PATH = store/knowledge/knowledge.db | 2/2 tests pass; import-verified: `store/knowledge/knowledge.db` | PASS |
+| AC4: loader.py default = store/knowledge/knowledge.db | 2/2 tests pass | PASS |
+| AC5: project_list reads store/projects/ | 3/3 tests pass | PASS |
+| AC6: _DEFAULT_AUDIT_DIR = Path('store/audit/') + help text | 4/4 tests pass; import-verified: `store\audit` | PASS |
+| AC7: scripts/setup.py creates store/knowledge/ | 0/3 tests pass — FileNotFoundError | FAIL |
+| AC8: .gitignore data/ → store/ patterns | 4/4 tests pass | PASS |
+| AC9: .editorconfig [data/**] → [store/**] | 2/2 tests pass | PASS |
+
+### Deductions
+
+- **AC7 test failure (-0.33):** `scripts/setup.py` deleted by #609 post-builder-commit. AC7 implementation was correct (confirmed: git diff 1225877 shows docstring `Create data/knowledge/ → Create store/knowledge/` and code `"data" / "knowledge" → "store" / "knowledge"`). Tests now stale.
+
+### Verdict
+
+Confidence: **0.67 → FAIL**
+
+### Test-Writer Action Required
+
+`TestFromAC_SetupKnowledgeDir` tests reference `scripts/setup.py` which no longer exists (deleted by #609 — migrated to `setup/init.py`). Update the 3 tests to verify the equivalent `create_knowledge_dir` function in `setup/init.py` uses `store/knowledge/`, or if no equivalent exists, replace with a test asserting the old file path is gone and the new path is established via a different mechanism. The 3 path variable occurrences are the `setup_path = WORKSPACE / "scripts" / "setup.py"` lines at test lines ~254, ~263, and ~276 — update to `WORKSPACE / "setup" / "init.py"`.

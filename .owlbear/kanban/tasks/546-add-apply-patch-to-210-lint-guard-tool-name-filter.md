@@ -1,10 +1,10 @@
 ---
 id: 546
 title: 'Add apply_patch to #210 lint guard tool_name filter'
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-02T14:51:56.2992239+02:00
-updated: 2026-04-05T02:27:07.6961547+02:00
+updated: 2026-04-05T10:24:22.4569655+02:00
 tags:
     - scope:agents
     - hooks
@@ -124,3 +124,27 @@ meets all 7 refined AC criteria. Tests serve as regression guards going forward.
 | AC5: missing/null filePath -> {} | test_apply_patch_missing_filepath_returns_empty_json, test_apply_patch_null_filepath_returns_empty_json |
 | AC6: exit code never 2 | test_apply_patch_exit_code_never_2_clean_file, _lint_errors, _missing_filepath |
 | AC7: stdout always valid JSON | test_apply_patch_stdout_is_valid_json_for_lint_errors, _for_clean_file |
+
+[[2026-04-05]] Sun 10:24
+## Builder Notes
+
+**Files changed:**
+- `.owlbear/hooks/lint-changed.ps1` — `apply_patch` added to `edit_tools` array (committed pre-pipeline in 68c6a55; validated here)
+- `tests/test_lint_guard_hook_546.py` — 12 tests written by test-writer (4c7caea)
+
+**Test results:** 12 passed, 0 failed
+
+**Lint status:** ruff clean (`tests/test_lint_guard_hook_546.py`)
+
+**AC evidence:**
+| AC | Status | Evidence |
+|----|--------|---------|
+| AC1: `apply_patch` in `edit_tools` array | PASS | lint-changed.ps1 line 19 |
+| AC2: clean file → `{}` | PASS | test_apply_patch_clean_file_returns_empty_json |
+| AC3: lint errors → systemMessage + additionalContext | PASS | test_apply_patch_lint_errors_returns_system_message + _additional_context |
+| AC4: nonexistent filePath → `{}` | PASS | test_apply_patch_nonexistent_filepath_returns_empty_json |
+| AC5: missing/null filePath → `{}` | PASS | test_apply_patch_missing/null_filepath_returns_empty_json |
+| AC6: exit code never 2 | PASS | 3 tests covering clean/lint-errors/missing-filepath |
+| AC7: stdout always valid JSON | PASS | test_apply_patch_stdout_is_valid_json_for_lint_errors + _clean_file |
+
+**Pipeline note:** Implementation existed pre-pipeline (commit 68c6a55). Tests were written post-hoc by test-writer and all 12 pass — serves as regression guard going forward.

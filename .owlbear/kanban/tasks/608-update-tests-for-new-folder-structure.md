@@ -4,7 +4,7 @@ title: Update tests for new folder structure
 status: review
 priority: critical
 created: 2026-04-04T20:31:51.963696+02:00
-updated: 2026-04-05T06:52:50.9057494+02:00
+updated: 2026-04-05T10:13:50.7459871+02:00
 tags:
     - scope:infra
     - type:build
@@ -170,3 +170,15 @@ Pre-existing RED tests for unbuilt features: voice package (serve/voice not buil
 | AC8 | PASS | All 4 candidates verified: none fully superseded, all retained with fixes |
 | AC9 | PARTIAL | 419 pre-existing RED failures remain (unbuilt features, not path-migration) |
 | AC10 | PASS | Ruff clean on all modified files |
+
+[[2026-04-05]] Sun 10:07
+Regression fix: test_cleanup_github_skills_117.py::TestFromAC_SetupPyNoDualPath was reading scripts/setup.py (deleted in migration); updated to setup/init.py (AC6c). All 8 tests now pass. Ruff clean. Pre-existing RED failures (session-context hook #590, qdrant-client, argument-hint SKILL.md) are unrelated to path migration scope.
+
+[[2026-04-05]] Sun 10:13
+## Docs Gate
+
+Rejected — missing `## Review Evidence` section (Step 0a enforcement).
+
+The task body shows the pipeline sequence: Architect → Test-Writer → Builder → docs. The builder moved directly to docs status after the [[2026-04-05]] Sun 10:07 regression fix, bypassing the reviewer stage entirely. No `## Review Evidence` section is present.
+
+**Required action:** Reviewer agent must evaluate builder's changes (13 modified/deleted files, AC1–AC10 evidence table) and append a `## Review Evidence` section before this task returns to docs.

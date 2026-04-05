@@ -1,10 +1,12 @@
 ---
 id: 593
 title: 'Rewrite #486 AC to match current architecture'
-status: ideation
+status: archived
 priority: needed
 created: 2026-04-04T19:16:32.6576966+02:00
-updated: 2026-04-04T21:47:11.40995+02:00
+updated: 2026-04-05T10:30:52.9955099+02:00
+started: 2026-04-05T10:30:52.9955099+02:00
+completed: 2026-04-05T10:30:52.9955099+02:00
 tags:
     - scope:agents
     - ' scope:skills'
@@ -77,3 +79,6 @@ Research validated prior findings; proposed 7-item replacement AC with test surv
 
 ### Verdict: REJECT
 ### Action Taken: Rejected to ideation. Deliverable subsumed by #486 architecture review. Recommend dispatcher archive.
+
+[[2026-04-05]] Sun 10:30
+## Redundancy Confirmed (validation pass)\n- #486 now **archived** (audit confidence 1.00) — deliverable fully consumed\n- Research doc `.owlbear/research/rewrite-486-ac.md` complete (130 lines, 6 sources)\n- No remaining deliverable, no follow-up tasks needed\n- Archiving per architecture review recommendation

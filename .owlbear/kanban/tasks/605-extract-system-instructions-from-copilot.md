@@ -1,10 +1,10 @@
 ---
 id: 605
 title: Extract system instructions from copilot-instructions.md
-status: review
+status: docs
 priority: needed
 created: 2026-04-04T20:31:16.804802+02:00
-updated: 2026-04-05T05:51:35.8868694+02:00
+updated: 2026-04-05T10:37:33.8508004+02:00
 tags:
     - scope:infra
     - phase-2
@@ -107,3 +107,60 @@ APPROVED #605 to todo. Refined AC: 6 lines reduced to 4 (file existence, content
 - AC4 ⚠️ MANUAL VERIFICATION REQUIRED — open VS Code Chat Customizations panel, confirm `owlbear-system.instructions.md` appears and is auto-enabled. If not auto-enabled, add `applyTo: "**"` to the frontmatter.
 
 **Commit:** 9690513
+
+[[2026-04-05]] Sun 10:37
+## Review Evidence
+
+**Task type:** type:config (pass-through) — no Python tests, no lint applicable.
+
+**Commit under review:** 9690513 — 2 files changed (71 insertions, 68 deletions).
+
+---
+
+### Tests
+N/A — type:config pass-through. No testable Python interfaces.
+
+### Lint
+N/A — markdown-only changes.
+
+### Coverage
+N/A — no code modules touched.
+
+### Commit Scope Verification
+Commit stat: `.github/copilot-instructions.md` (68 deletions), `share/instructions/owlbear-system.instructions.md` (71 insertions). Exactly 2 files as claimed by builder. No extra scope.
+
+Note: `share/instructions/owlbear-system.instructions.md` has a subsequent commit `b018f75` from #607 that updated path references to reflect the current folder structure. This is outside #605 scope and does not affect the AC evaluation.
+
+---
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: File exists with `description:` frontmatter, no `applyTo` | File present at `share/instructions/owlbear-system.instructions.md`; frontmatter confirmed: `description: "OwlBear system instructions…"`, no `applyTo` key at commit 9690513 or in current state; `Select-String` returns no `applyTo` match | **PASS** |
+| AC2: S2–S5 extracted with content fidelity, no material omissions/additions | Git diff of commit 9690513 shows new file content is byte-for-byte identical to removed content in copilot-instructions.md for all 4 sections (S2 Decision Heuristics — 8 bullets ✅, S3 System Awareness — Tech Stack, Pipeline, Directory Structure ✅, S4 Memory Governance ✅, S5 Operational Fundamentals — 5 bullets ✅). Builder notes claim "verbatim" — confirmed accurate against diff | **PASS** |
+| AC3: copilot-instructions.md retains only S1 (title + paragraph) | Git diff and current file read both confirm: file contains only `# OwlBear — Copilot Workspace Instructions`, `## 1. Project Identity`, and the single paragraph. S2–S5 fully removed | **PASS** |
+| AC4: File appears in VS Code Chat Customizations panel and auto-enabled | Cannot inspect VS Code UI programmatically. Indirect evidence: file IS loaded in current session (appears in `<instructions>` context without `applyTo`, meaning it was auto-discovered via settings). Builder correctly flagged as manual-verification-required per task AC language. AC fallback (add `applyTo: "**"`) not triggered — expected, since file IS loading | **PASS (indirect)** |
+
+---
+
+### Security Review (OWASP Top 10 scan)
+Markdown files only, no code paths, no new system boundaries, no user input surfaces, no credentials or secrets. No concerns.
+
+### TestFromAC Classes
+None — type:config pass-through. Step 5.0 and 5.2 skipped.
+
+### Test Quality
+N/A.
+
+---
+
+### Deductions
+- **-0.03**: AC4 formal UI panel verification deferred to manual check. Indirect evidence (file appears in current instructions context) is strong but not a panel screenshot. Acknowledged in AC language as a verification step.
+- No other deductions.
+
+---
+
+### Verdict
+**Confidence: .95 → PASS**
+**Action: #605 → docs**

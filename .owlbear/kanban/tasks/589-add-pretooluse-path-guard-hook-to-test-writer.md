@@ -1,10 +1,10 @@
 ---
 id: 589
 title: Add PreToolUse path guard hook to test-writer agent (Phase 3)
-status: review
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T07:55:54.2806738+02:00
-updated: 2026-04-05T01:26:02.3859802+02:00
+updated: 2026-04-05T09:59:28.2238624+02:00
 tags:
     - scope:agents
     - hooks
@@ -135,3 +135,78 @@ Tests reference `.github/agents/test-writer.agent.md` (written before task #600 
 ### Commit
 `e136832` — feat(agents): add deny-src-writes.ps1 path guard hook to test-writer (#589)
 Note: commit incidentally included two pre-staged data/→store/ renames (from migration queue); unrelated to #589 functionality.
+
+[[2026-04-05]] Sun 09:59
+## Review Evidence
+
+### Test Results
+- pytest: 35 passed, 0 failed
+
+### Lint
+ruff: clean (tests/test_deny_src_writes_hook_589.py)
+
+### Coverage
+N/A — PowerShell script; coverage tooling not applicable
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1a (backslash normalization) | test_create_file_backslash_tests_path_is_allowed, test_create_file_backslash_packages_path_is_denied | Yes | COVERED |
+| AC1b/c (create_file routing) | test_create_file_tests_path_is_allowed, test_create_file_packages_path_is_denied, test_create_file_src_path_is_denied | Yes | COVERED |
+| AC1d/e (replace_string_in_file) | test_replace_string_in_file_tests_path_is_allowed, test_replace_string_in_file_packages_path_is_denied | Yes | COVERED |
+| AC1f/g (multi_replace array) | test_multi_replace_all_tests_paths_is_allowed, test_multi_replace_any_non_tests_path_is_denied | Yes | COVERED |
+| AC1h/i (create_directory dirPath) | test_create_directory_tests_dirpath_is_allowed, test_create_directory_packages_dirpath_is_denied | Yes | COVERED |
+| AC2 (write-tool gate) | test_apply_patch_is_not_gated_and_returns_empty_json, test_run_in_terminal_returns_empty_json, test_read_file_returns_empty_json, test_unknown_tool_name_returns_empty_json | Yes | COVERED |
+| AC3a-d (agent hooks frontmatter) | test_frontmatter_has_hooks_section, test_frontmatter_has_pretooluse_entry, test_pretooluse_hook_type_is_command, test_pretooluse_hook_command_references_deny_src_writes | Yes | COVERED |
+| AC4 (edit/rename removed) | test_tools_list_does_not_contain_edit_rename | Yes | COVERED |
+| AC5a-e (error safety) | test_malformed_stdin_json_returns_empty_json, test_empty_tool_name_returns_empty_json, test_missing_tool_name_key_returns_empty_json, test_write_tool_with_no_paths_returns_empty_json, test_write_tool_with_empty_string_filepath_returns_empty_json | Yes | COVERED |
+| AC6 (valid YAML) | test_frontmatter_is_parseable_yaml_with_pretooluse_hook, test_frontmatter_no_duplicate_keys | Yes | COVERED |
+
+#### Security Review — VIOLATION FOUND (OWASP A01: Broken Access Control)
+
+**File:** `.owlbear/hooks/deny-src-writes.ps1`, allow-list check line:
+```powershell
+$isInTests = $normalized.StartsWith('tests/') -or ($normalized -match '/tests/')
+```
+
+The `-or ($normalized -match '/tests/')` OR clause creates a bypass in the security guard it is meant to enforce. Any path with `/tests/` appearing as a non-root segment passes as "allowed":
+- `packages/tests/evil.py` → matches `/tests/` → **incorrectly allowed** — guard defeated
+- `src/lib/tests/backdoor.py` → matches `/tests/` → **incorrectly allowed**
+
+AC1 states: "denies when ANY extracted path does not start with `tests/`". The second OR clause directly contradicts this requirement. The correct check is `$normalized.StartsWith('tests/')` exclusively.
+
+No test exercises this bypass path. `test_path_starting_with_tests_not_tests_slash_is_denied` tests `testscripts/foo.py` (no `/tests/` component) — does not catch this.
+
+#### Test Integrity — TestFromAC Comparison
+All TestFromAC_* classes preserved. No tests weakened or removed. PASS.
+
+#### Test Quality
+- Assertion specificity: STRONG — precise equality (`== {}`) for allow; `_is_denied()` checks exact `hookSpecificOutput.permissionDecision == "deny"` for deny.
+- Negative/error-path coverage: STRONG — 8 edge + 5 error cases.
+- Mutation sensitivity: STRONG for existing tests. **GAP:** no test for `packages/tests/evil.py` pattern — mutating the `/tests/` OR clause would not be caught.
+- Test independence: STRONG.
+- Naming: STRONG.
+
+#### Data Safety
+No shared state, no async, no LLM output. PASS.
+
+#### Implementation-Aware Test Gap
+One untested code path in the allow-list logic: the `-or ($normalized -match '/tests/')` branch is only reachable by paths that do NOT start with `tests/` but do contain `/tests/`. No test exercises this branch. The gap is consequential — it is the exact security bypass.
+
+### Deductions
+- Security: broken access control (allow-list bypass via `/tests/` OR clause): −0.20
+
+**Confidence: 0.80 → FAIL**
+
+### Fix Instructions for Builder
+In `.owlbear/hooks/deny-src-writes.ps1`, replace the allow-list check:
+```powershell
+# WRONG — second clause bypasses the allow-list
+$isInTests = $normalized.StartsWith('tests/') -or ($normalized -match '/tests/')
+
+# CORRECT — allow-list requires prefix only
+$isInTests = $normalized.StartsWith('tests/')
+```
+Remove the `-or ($normalized -match '/tests/')` clause entirely. After fixing, verify that `packages/tests/evil.py` is correctly denied.

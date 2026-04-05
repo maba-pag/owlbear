@@ -1,10 +1,10 @@
 ---
 id: 576
 title: 'P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI'
-status: ideation
+status: backlog
 priority: critical
 created: 2026-04-03T11:15:13.7738172+02:00
-updated: 2026-04-05T07:15:05.2586939+02:00
+updated: 2026-04-05T10:25:48.4161631+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -153,3 +153,15 @@ Reviewer (2nd review) documented that prior review evidence was stripped from th
 
 ### Verdict: REJECT
 ### Action Taken: Rejected to ideation as superseded by #486. Recommend archival. Sibling #575 (ideation) likely also superseded — same root cause. Parent #483 completion criteria should be updated to reflect #576 closure as superseded.
+
+[[2026-04-05]] Sun 10:25
+## Research (Validation Pass)
+- Research doc: .owlbear/research/576-skill-cheatsheet-mcp-superseded.md
+- Sources: 5 studied, 3 high-relevance (all codebase/kanban)
+- Recommendation: Archive as superseded by #486 (confidence: .92). Zero CLI invocations remain in target skills, zero normalization targets exist, all skills MCP-native with h-mcp-kanban pointer.
+- Follow-up tasks created: #627 at ideation (update parent #483 completion criteria)
+- Decision requests: none (T1)
+
+## Challenge Results
+- Challenger: SKIP — confirming completed architectural work
+- Confidence in original: .92

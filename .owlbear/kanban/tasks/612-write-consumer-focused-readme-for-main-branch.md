@@ -1,10 +1,10 @@
 ---
 id: 612
 title: Write consumer-focused README for main branch
-status: in-progress
+status: done
 priority: needed
 created: 2026-04-04T21:55:11.0661506+02:00
-updated: 2026-04-05T05:50:07.7802716+02:00
+updated: 2026-04-05T10:13:30.5142078+02:00
 tags:
     - scope:infra
     - type:docs
@@ -79,3 +79,85 @@ APPROVED #612 -> todo | Refined: removed AC6 (sync workflow owned by #613), adde
 - AC describes only a markdown file (README-consumer.md) with no testable Python interfaces.
 - Architect confirmed pass-through: "type:docs tag -- pass-through, no tests needed."
 - Passing through to builder.
+
+[[2026-04-05]] Sun 10:00
+## Review Evidence
+
+### Test Results
+- pytest: N/A — type:docs pass-through; no tests applicable (architect confirmed, test-writer confirmed)
+
+### Lint: N/A — static markdown file, no Python source
+
+### Coverage: N/A
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+No TestFromAC_* classes exist. Conditional skipped per step 5.0.
+
+#### Security Review
+Static markdown file. No code, no system boundaries, no secrets, no external calls. No issues.
+
+#### Test Integrity
+No TestFromAC_* classes exist. Conditional skipped per step 5.2.
+
+#### Test Quality
+Not applicable (no tests).
+
+#### Data Safety
+Not applicable (static documentation).
+
+#### Implementation-Aware Gaps
+Not applicable (no code paths).
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 0 |
+| Approach variation | N/A |
+| Assessment | MISSING — builder released claim without adding notes or advancing to `review`; deliverable exists and is complete |
+
+No loop detected. One-time process omission.
+
+### Pass 2 — INFORMATIONAL
+
+- **Directory Layout granularity:** AC2 specifies "describe share/, serve/, seed/, setup/" — implementation breaks down subdirectories (e.g., share/agents/, share/skills/, serve/mcp-kanban/). Enhancement, not a violation.
+- **Missing Builder Notes:** Builder completed the deliverable but did not add `## Builder Notes` or advance to `review`. Informational only — content meets all AC.
+
+### AC Compliance
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | README-consumer.md confirmed at repo root | N/A | ✅ PASS |
+| AC2: Overview | L5 `## Overview` — 2 paragraphs present | N/A | ✅ PASS |
+| AC2: Prerequisites | L12 table — `Requirement / Why / How to get it` headers; Python 3.12+, uv, VS Code, GitHub Copilot extension, Git all present; columns match setup/setup-guide.md L10 exactly | N/A | ✅ PASS |
+| AC2: Quick Start | L24–L44 — git clone + mkdir + `python ..\owlbear\setup\init.py [--name] [--type]`; matches setup/init.py docstring interface | N/A | ✅ PASS |
+| AC2: Directory Layout | L57 table — only share/, serve/, seed/, setup/ trees listed | N/A | ✅ PASS |
+| AC2: Verification | L62 — 4-row table: agents, skills, instructions, MCP servers | N/A | ✅ PASS |
+| AC3: No dev-only content | grep tests/, kanban/, .owlbear/, store/, v1/, orchestrator, knowledge loader, docs/research → 0 true hits; serve/mcp-kanban/ is MCP server directory, not dev board | N/A | ✅ PASS |
+| AC4: Updates section | L90 `## Updates` — git pull command with explanation | N/A | ✅ PASS |
+| AC5: setup-guide link | L55 [setup/setup-guide.md](setup/setup-guide.md) — file exists at setup/setup-guide.md | N/A | ✅ PASS |
+| AC5: sharing-guide link | L106 [setup/sharing-guide.md](setup/sharing-guide.md) — file exists at setup/sharing-guide.md | N/A | ✅ PASS |
+
+### Confidence: .98
+### Verdict: PASS
+
+[[2026-04-05]] Sun 10:00
+PASS #612 -> docs | confidence .98 | All 5 AC lines verified against README-consumer.md. type:docs pass-through — no tests, no lint applicable. Minor: builder omitted notes section.
+
+[[2026-04-05]] Sun 10:13
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | type:docs pass-through — only README-consumer.md created; no code, no API, no agent conventions changed. copilot-instructions.md is a minimal project identity stub with no README inventory — no update needed. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external patterns, articles, or repos cited. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | No | N/A | No .owlbear/research/ doc produced for this task. |
+
+### Files Updated
+- None — deliverable (README-consumer.md) is itself the documentation artifact; content verified by reviewer at .98 confidence. Read README-consumer.md directly and confirmed all 5 AC sections present and accurate.
+
+### Scratch Files Cleaned
+- None — no .owlbear/scratch/612-* files found.
