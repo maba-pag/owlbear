@@ -1,10 +1,10 @@
 ---
 id: 607
 title: Update live references to new folder paths
-status: todo
-priority: needed
+status: review
+priority: critical
 created: 2026-04-04T20:31:40.9085909+02:00
-updated: 2026-04-05T00:20:35.8356378+02:00
+updated: 2026-04-05T07:29:39.7164372+02:00
 tags:
     - scope:infra
     - type:build
@@ -139,3 +139,25 @@ Scan command: grep -rn '.github/agents\|.github/skills\|.github/instructions\|.g
 
 [[2026-04-05]] Sun 00:20
 APPROVED #607 to todo. Rewrote body: added 13-entry path mapping table, expanded AC from 10 vague to 11 precise items covering ~40 files across 7 categories, added Files Affected and Scope Boundaries sections, added type:config pass-through tag. Challenger overridden (0.68): deps factually in-progress not backlog; sharing-guide/settings deferred to #604/#609; pyproject scope already handled by #601.
+
+[[2026-04-05]] Sun 05:51
+## Test-Writer Notes
+- Non-implementation task (tagged type:config) — no tests applicable.
+- Passing through to builder.
+
+[[2026-04-05]] Sun 07:29
+## Builder Notes
+- Non-implementation (type:config) reference sweep. No tests applicable.
+- Files changed: 47 across 7 categories — 9 agent files, 5 instruction files, 34 skill files, 1 prompt file, README.md, pyproject.toml, .owlbear/scripts/e2e_smoke.py
+- AC1 ✅ Hook paths in builder, fix-attempt, reviewer, test-writer agents → .owlbear/hooks/
+- AC2 ✅ All agent .md files: architect, doc-writer, quality-runner, researcher, scribe updated
+- AC3 ✅ ~34 skill SKILL.md files updated (packages/ → serve/, docs/ → .owlbear/, .github/ → share/, kanban/ → .owlbear/kanban/)
+- AC4 ✅ Instruction applyTo patterns updated (agent-common, agents-and-skills, research-docs, README)
+- AC5 ✅ agent-audit.prompt.md: .github/ refs → share/ equivalents
+- AC6 ✅ README.md: five-tier directory layout table, agent/skill location refs, data/ → store/ in KB commands
+- AC7 ✅ owlbear-system.instructions.md: directory structure table, kanban/tasks refs, docs/ memory governance
+- AC8 ✅ share/skills/README.md: .github/skills/ → share/skills/
+- AC9 ✅ e2e_smoke.py: kanban/kanban-md.exe → .owlbear/kanban/kanban-md.exe (docstring L14, code L45, message L79)
+- AC10 ✅ pyproject.toml: "scripts/*.py" → ".owlbear/scripts/*.py"
+- AC11 ✅ Verification gate: 0 old-path matches in share/, .owlbear/scripts/, README.md, copilot-instructions.md (2 excluded: source attribution comments)
+- Commit: b018f75 — 46 files, 224 insertions, 222 deletions

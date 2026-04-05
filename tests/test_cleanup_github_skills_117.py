@@ -83,17 +83,16 @@ class TestFromAC_MonorepoTestUpdated:
 
 
 class TestFromAC_SetupScriptTestUpdated:
-    """AC5: test_setup_script.py must not expect a .github/skills path."""
+    """AC5: test_setup_init.py (replacement for test_setup_script.py) must not expect a .github/skills path."""
 
     def _setup_script_test_text(self) -> str:
-        return (_REPO_ROOT / "tests" / "test_setup_script.py").read_text(encoding="utf-8")
+        return (_REPO_ROOT / "tests" / "test_setup_init.py").read_text(encoding="utf-8")
 
     def test_setup_script_no_github_skills_assertion(self) -> None:
-        """test_setup_script.py must not assert that agentSkillsLocations has a .github/skills key."""
+        """test_setup_init.py must not assert that agentSkillsLocations has a .github/skills key."""
         content = self._setup_script_test_text()
         assert ".github/skills" not in content, (
-            "tests/test_setup_script.py still contains a .github/skills assertion "
-            "(lines 117-126: has_github check in test_agent_skills_locations_has_root_and_github_paths) "
+            "tests/test_setup_init.py still contains a .github/skills assertion "
             "— the has_github assertion must be removed"
         )
 
@@ -120,7 +119,7 @@ class TestFromAC_DecisionsReadmeUpdated:
     """AC8: docs/decisions/README.md must reference skills/ not .github/skills/."""
 
     def _readme_text(self) -> str:
-        return (_REPO_ROOT / "docs" / "decisions" / "README.md").read_text(encoding="utf-8")
+        return (_REPO_ROOT / ".owlbear" / "decisions" / "README.md").read_text(encoding="utf-8")
 
     def test_decisions_readme_no_github_skills_ref(self) -> None:
         """docs/decisions/README.md must not reference .github/skills/ (line 49)."""

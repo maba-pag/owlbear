@@ -1,10 +1,10 @@
 ---
 id: 605
 title: Extract system instructions from copilot-instructions.md
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-04T20:31:16.804802+02:00
-updated: 2026-04-05T00:36:02.7324249+02:00
+updated: 2026-04-05T05:51:35.8868694+02:00
 tags:
     - scope:infra
     - phase-2
@@ -88,3 +88,22 @@ APPROVED #605 to todo. Refined AC: 6 lines reduced to 4 (file existence, content
 
 [[2026-04-05]] Sun 00:36
 ## Test-Writer Notes\n- Non-implementation task (tagged type:config) — no tests applicable.\n- AC1–AC4 describe file creation, markdown content extraction, and VS Code UI verification — no testable Python interfaces exist.\n- Passing through to builder.
+
+[[2026-04-05]] Sun 05:51
+## Builder Notes
+
+**Files changed (2):**
+- `share/instructions/owlbear-system.instructions.md` — created (S2–S5 extracted content, YAML frontmatter: `description:` only, no `applyTo` key per AC1)
+- `.github/copilot-instructions.md` — reduced to S1 Project Identity only (title + paragraph)
+
+**Test results:** N/A — type:config pass-through, no Python tests applicable.
+
+**Lint status:** N/A — markdown-only changes.
+
+**AC evidence:**
+- AC1 ✅ File exists with `description:` frontmatter, no `applyTo` key
+- AC2 ✅ S2 Decision Heuristics, S3 System Awareness (Tech Stack + Pipeline + Directory Structure), S4 Memory Governance, S5 Operational Fundamentals — content extracted verbatim, no omissions or additions
+- AC3 ✅ `.github/copilot-instructions.md` retains only S1: document title + project description paragraph
+- AC4 ⚠️ MANUAL VERIFICATION REQUIRED — open VS Code Chat Customizations panel, confirm `owlbear-system.instructions.md` appears and is auto-enabled. If not auto-enabled, add `applyTo: "**"` to the frontmatter.
+
+**Commit:** 9690513

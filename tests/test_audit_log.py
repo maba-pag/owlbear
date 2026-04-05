@@ -588,7 +588,7 @@ class TestFromAC_GitIgnore:  # noqa: N801
         gitignore = project_root / ".gitignore"
         assert gitignore.exists(), ".gitignore not found at project root"
         content = gitignore.read_text(encoding="utf-8")
-        assert "data/audit" in content, "data/audit/ missing from .gitignore"
+        assert "store/audit" in content, "store/audit/ missing from .gitignore"
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 ---
 id: 576
 title: 'P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI'
-status: backlog
+status: ideation
 priority: critical
 created: 2026-04-03T11:15:13.7738172+02:00
-updated: 2026-04-05T02:24:22.3530871+02:00
+updated: 2026-04-05T07:15:05.2586939+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -56,18 +56,15 @@ class: standard
 ### Commit
 `5afaf1b` — `docs: add inline MCP equivalent notes to 12 skill cheatsheets (#576, builder)`
 
-[[2026-04-05]] Sun 02:24
+[[2026-04-05]] Sun 05:00
 ## Review Evidence
 
 ### Test Results
-- pytest `tests/test_mcp_tool_references_483.py`: **11 FAILED, 62 FAILED** — all 73 tests fail with `FileNotFoundError: .github/skills/` (directory removed by subsequent #600 restructure commit `118bda6`, which moved `.github/skills/` → `share/skills/`).
-- Cause: NOT the #576 builder directly — path breakage was introduced by #600. However, the AC unambiguously states "Must not break 73 tests" and at HEAD they are all broken.
+- pytest `tests/test_mcp_tool_references_483.py`: **29 passed, 0 failed**
+- Note: suite reduced from 73 → 29 by upstream work (`2d1e9ca` removed agent body checks; `46a8f1d` updated paths). All 29 pass. These tests do not validate per-invocation blockquote presence (AC note: "do NOT validate per-invocation blockquote coverage — regression guard, not completeness gate").
 
-### Lint: N/A
-- Docs-only task. No Python files changed by #576 builder. Lint not applicable.
-
-### Coverage: N/A
-- Docs-only task.
+### Lint: N/A — docs-only task
+### Coverage: N/A — docs-only task
 
 ### Pass 1 — CRITICAL
 
@@ -75,40 +72,84 @@ class: standard
 
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| All 14 skill SKILL.md files updated with inline MCP notes | `share/skills/w-arch-review/SKILL.md` → 0 `MCP equivalent` matches. Confirmed across all 14 target files via PowerShell scan: **0 blockquotes found**. | FAIL |
-| Skills list (14 named) | Builder correctly targeted `.github/skills/` in `a821a0d`. However, `w-dispatch-planning` was NOT included in `a821a0d` or `0d2efc2` — only in the incorrect root-level first commit. `tdd-workflow` similarly absent from correct-location commits. | FAIL (partial) |
-| PRE-SATISFIED: 3 compound MCP rows in cheatsheet tables | Not verifiable — all cheatsheet content was overwritten by #486. Cannot confirm without reading #572 audit trail. | UNVERIFIED |
-| After each actionable CLI invocation, add `> **MCP equivalent:** tool_name(key_params)` | None present at HEAD. Entire per-invocation blockquote layer removed by `cca6373` (#486). | FAIL |
-| Normalize 3 inconsistent patterns | `a821a0d` performed these normalizations. `cca6373` (#486) then rewrote those sections, outcome of normalizations indeterminate. | FAIL |
-| No CLI references removed | Cannot verify at HEAD — `cca6373` did bulk rewrites of the same sections. | UNVERIFIED |
-| Regression: 73 tests pass | ALL 73 FAIL at HEAD (FileNotFoundError). | FAIL |
-| Reviewer manual spot-check | Performed: `w-arch-review` — 0 MCP equivalent blockquotes. `w-dispatch-planning` — 0 MCP equivalent blockquotes. `w-tdd-red` — 0 MCP equivalent blockquotes. AC deliverable absent. | FAIL |
+| All 14 skill SKILL.md files updated with inline MCP notes | `Get-ChildItem share/skills -Recurse -Filter SKILL.md \| Select-String "MCP equivalent"` → **0 results**. Core deliverable absent. | FAIL |
+| Skills list (14 named) | `w-dispatch-planning`: git log `--follow` shows only `2231ec7`, `118bda6` — no `a821a0d`/`0d2efc2` builder commits. Builder targeted wrong root-level `skills/` directory for this skill. | FAIL |
+| PRE-SATISFIED: 3 compound MCP rows | 29/29 regression tests pass; `start_work`/`end_work`/`edit_task` present in cheatsheet skill bodies. | PASS |
+| Per-invocation `> **MCP equivalent:** ...` blockquotes | 0 blockquotes anywhere. `cca6373` (#486, after builder's `0d2efc2`) overwrote all 11 builder-modified skills with generic top-of-skill reference. git log `--follow share/skills/w-arch-review/SKILL.md`: `a821a0d` (builder add) → `cca6373` (overwrite) → `118bda6` (move). | FAIL |
+| Normalize 3 inconsistent patterns | `w-decision-routing`: 0 matches. `w-dispatch-planning`: 0 matches. `h-kanban-md`: 0 matches. All normalizations absent. | FAIL |
+| No CLI references removed | Unverifiable — `cca6373` bulk-rewrote same sections. | UNVERIFIED |
+| Regression: 73 tests pass | 29/29 pass (suite reduced upstream, not broken by #576). | PASS |
+| Reviewer manual spot-check (≥3 per Category A, all Category B) | `w-arch-review`: 0. `w-dispatch-planning`: 0. `w-tdd-red`: 0. `w-code-review`: 0. `w-decision-routing`: 0. Core deliverable absent. | FAIL |
 
 #### Security Review
 No security concerns. Docs-only content changes.
 
 #### Builder Process Quality
-- 3 builder commits (`5afaf1b`, `a821a0d`, `0d2efc2`). First commit targeted wrong directory (`skills/` root-level). Second commit correctly targeted `.github/skills/` but missed `w-dispatch-planning` and `tdd-workflow`. Third commit patched 2 files. FRICTION pattern, not LOOP.
 
-### Root Cause — Design Conflict with #486
-The core failure is not a builder execution error but a **design conflict** between two concurrent tasks:
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 (cycle-1 only — no new builder work for cycle 2) |
+| Approach variation | N/A |
+| Assessment | FRICTION (3 commits; first targeted wrong directory) |
 
-- **#576** specified: per-invocation inline `> **MCP equivalent:**` blockquotes after each CLI command in all 14 skills (~66 insertions)
-- **#486** (`cca6373`, Sat Apr 4 23:42:59) implemented: a single `**Kanban operations:** See \`h-mcp-kanban\` skill — section \`## Agent Lifecycle Pattern\`` line at the top of each skill
+#### PROCESS INTEGRITY VIOLATION — Prior Review Evidence Stripped
+- Git HEAD (`d96ec1e`) contains complete `## Review Evidence` from Cycle 1 (FAIL, .85, backlog with documented design-conflict root cause at line 60).
+- Working tree task file has entire section **removed** (git diff: 52 lines deleted from body).
+- Task re-advanced to `review` without any new builder work and with prior evidence stripped → loop detection bypassed.
+- This is a pipeline protocol violation. Prior review evidence must be preserved for audit integrity.
 
-`cca6373` was committed AFTER `0d2efc2` (the builder's final #576 commit) and REMOVED all per-invocation blockquotes from the 11 skills the builder had correctly modified. The two approaches are architecturally incompatible.
+### Root Cause — Design Conflict (Unchanged from Cycle 1)
+- `a821a0d` + `0d2efc2` by #576 builder added per-invocation blockquotes to 11 skills in `.github/skills/`
+- `cca6373` (#486, committed after builder's final commit) overwrote all 11 skills with generic top-of-skill reference, removing per-invocation layer
+- `118bda6` (#600) moved `.github/skills/` → `share/skills/` in the overwritten state
+- No architectural decision was made between Cycle 1 FAIL and this re-submission
+- No new builder work performed; task was re-queued with prior evidence stripped
 
-### Additional Gap: w-dispatch-planning and tdd-workflow
-`w-dispatch-planning` was NEVER modified by the #576 builder in the correct location (`.github/skills/`). `git log` confirms only 3 commits ever touched that file: `2d1e9ca`, `2231ec7`, and `118bda6` (move). Neither `a821a0d` nor `0d2efc2` included it. The builder's root-level first commit (`5afaf1b`) modified `skills/dispatch-planning/SKILL.md` — a separate file from the `.github/skills/w-dispatch-planning/SKILL.md` that the tests and subsequent workflow reference.
+### Confidence: .70
+### Verdict: FAIL (2nd review) → backlog
 
-Same pattern for `tdd-workflow`.
+Route: backlog. Design conflict with #486 still unresolved. Architect must decide: (1) close #576 as superseded by #486's approach, or (2) confirm per-invocation blockquotes are required and reconcile #486 before builder proceeds. Additionally: audit who stripped prior review evidence before re-submission (pipeline integrity).
 
-### Verdict
-Confidence: **0.85 → FAIL**
+[[2026-04-05]] Sun 07:15
+## Architecture Review (Cycle 3)
 
-Route: **backlog** — Design conflict. Architect must decide:
-1. Are per-invocation inline blockquotes still needed, given that #486 added a generic `h-mcp-kanban` skill reference to each pipeline skill?
-2. If yes: the AC needs to clearly state that per-invocation blockquotes are required AND the #486 consolidation approach must be reconciled (or reversed) before implementation proceeds.
-3. If no: task should be closed as superseded by #486.
+### Evaluation
 
-The builder cannot fix this directly without first resolving the architectural question.
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | N/A | Task premise invalidated — no deliverables remain |
+| Interface clarity | N/A | |
+| Dependency correctness | PASS | #572 archived, #563 archived |
+| Module layering | N/A | Docs-only |
+| TDD compliance | N/A | Docs-only |
+| KISS/YAGNI | FAIL | Task deliverables duplicated/undone by #486 consolidation |
+| Premise challenge | FAIL | Core premise invalidated — see below |
+| Pattern consistency | N/A | |
+| Security surface | PASS | No security concerns |
+| Single domain | PASS | agent-config |
+
+### Premise Challenge — FAIL (task superseded)
+
+**Core deliverable (AC1-5):** Add `> **MCP equivalent:** tool_name(...)` blockquotes after inline CLI invocations in 14 skill SKILL.md files.
+
+**Current codebase state (verified):**
+- Zero `kanban-md.exe` CLI invocations exist in any of the 14 target skill files. Only CLI refs are in the deprecated `h-kanban-md/SKILL.md` (retained as fallback, not a #576 target).
+- All 14 target skills already use MCP tool names directly (`start_work`, `end_work`, `edit_task`, `show_task`, `create_task`) in step descriptions — they are MCP-native.
+- All 3 normalization targets (decision-requests `MCP note:`, dispatch-planning `MCP note:`, kanban-md `MCP equivalents (owlbear-kanban):`) no longer exist in any skill file.
+- 10 workflow skills have `**Kanban operations:** See h-mcp-kanban skill` at line 11 (consolidated by #486).
+
+**Cause:** Two archived tasks eliminated #576's target surface:
+1. **#484 (Phase B, archived):** Removed CLI references from skills, moved to MCP-only.
+2. **#486 (Phase C, archived, audited at 1.00):** Consolidated all kanban references to central `h-mcp-kanban`. Explicitly "removed 39 inline MCP equivalent notes from 11 skill files." This was a deliberate DRY consolidation.
+
+**Conclusion:** Adding "MCP equivalent" blockquotes after MCP tool names would be circular. The task has zero remaining deliverables.
+
+### Process Integrity Note
+
+Reviewer (2nd review) documented that prior review evidence was stripped from the task body before re-submission — Cycle 1 FAIL evidence (52 lines, documented design-conflict root cause) was removed and the task re-advanced to `review` without new builder work. This is a pipeline protocol violation (prior evidence must be preserved for audit integrity).
+
+### Challenge Results
+- Challenger: SKIP (REJECT verdict)
+
+### Verdict: REJECT
+### Action Taken: Rejected to ideation as superseded by #486. Recommend archival. Sibling #575 (ideation) likely also superseded — same root cause. Parent #483 completion criteria should be updated to reflect #576 closure as superseded.

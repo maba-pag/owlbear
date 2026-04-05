@@ -1,7 +1,7 @@
 {
     "ignores": [
-        "docs/research/**",
-        "docs/scratch/**",
+        ".owlbear/research/**",
+        ".owlbear/scratch/**",
         ".github/**",
         ".venv/**",
         "node_modules/**"

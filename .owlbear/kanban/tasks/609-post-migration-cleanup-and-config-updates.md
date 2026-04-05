@@ -1,10 +1,10 @@
 ---
 id: 609
 title: Post-migration cleanup and config updates
-status: todo
-priority: needed
+status: in-progress
+priority: critical
 created: 2026-04-04T20:32:03.4328653+02:00
-updated: 2026-04-05T00:34:58.8137273+02:00
+updated: 2026-04-05T07:30:00.8722134+02:00
 tags:
     - scope:infra
     - type:config
@@ -16,6 +16,8 @@ depends_on:
     - 606
     - 607
     - 608
+claimed_by: cloud-path
+claimed_at: 2026-04-05T07:30:00.863715+02:00
 class: standard
 ---
 
@@ -126,3 +128,10 @@ Out of scope (handled by other tasks):
 
 [[2026-04-05]] Sun 00:34
 APPROVED #609 to todo. Rewrote 10 vague AC to 11 precise AC: added kanban-md.exe files.exclude update (AC1), markdown linter configs (AC5), scripts/setup.py deletion (AC7), verification gate (AC11). Removed README overlap with #607. Fixed decision doc path error. Replaced type:build with type:config. Challenger block overridden (0.25): 4 concerns accepted as AC additions, 5 dismissed (scope belongs to sibling tasks or already addressed).
+
+[[2026-04-05]] Sun 05:50
+## Test-Writer Notes
+- Non-implementation task (tagged type:config) — no tests applicable.
+- AC1–AC11 are all config file edits, directory deletions, and file-system verification: .vscode/settings.json, .gitignore, .pre-commit-config.yaml, .markdownlint-cli2.jsonc, .markdownlintignore, docs/ deletion, scripts/setup.py deletion, decision doc status update, .gitkeep verification.
+- No Python interfaces, modules, or functions to test.
+- Passing through to builder.

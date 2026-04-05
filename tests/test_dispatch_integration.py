@@ -80,7 +80,7 @@ def real_kanban_bin() -> Path:
             return p
 
     repo_root = Path(__file__).resolve().parent.parent
-    convention = repo_root / "kanban" / "kanban-md.exe"
+    convention = repo_root / ".owlbear" / "kanban" / "kanban-md.exe"
     if convention.exists():
         return convention
 

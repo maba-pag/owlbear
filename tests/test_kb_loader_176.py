@@ -425,7 +425,7 @@ sources:
 class TestFromAC_InitialSourcesYaml:
     """data/knowledge/general/sources.yaml must exist and contain required globs."""
 
-    _MANIFEST_PATH = PROJECT_ROOT / "data" / "knowledge" / "general" / "sources.yaml"
+    _MANIFEST_PATH = PROJECT_ROOT / "store" / "knowledge" / "general" / "sources.yaml"
 
     def test_initial_sources_yaml_exists(self) -> None:
         """data/knowledge/general/sources.yaml must exist in the repository."""

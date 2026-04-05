@@ -1,10 +1,12 @@
 ---
 id: 545
 title: Decision-request Slack notifications
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-04-02T10:28:27.8274013+02:00
-updated: 2026-04-02T10:28:27.8274013+02:00
+updated: 2026-04-05T03:55:00.1727394+02:00
+started: 2026-04-05T03:55:00.1727394+02:00
+completed: 2026-04-05T03:55:00.1727394+02:00
 tags:
     - phase-3
     - ' scope:notifications'

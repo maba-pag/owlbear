@@ -42,7 +42,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "deny-writes.ps1"
+_SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.ps1"
 _REVIEWER_AGENT = _REPO_ROOT / "share" / "agents" / "reviewer.agent.md"
 
 # Write tools that the hook must deny (AC2)

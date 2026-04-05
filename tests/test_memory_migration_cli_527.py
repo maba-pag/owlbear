@@ -32,7 +32,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_PACKAGE_DIR = _REPO_ROOT / "packages" / "mcp-memory"
+_PACKAGE_DIR = _REPO_ROOT / "serve" / "mcp-memory"
 _MIGRATE_PY = _PACKAGE_DIR / "src" / "owlbear_mcp_memory" / "migrate.py"
 _PYTHON = sys.executable
 
@@ -122,11 +122,11 @@ class TestFromAC_CLIInterface:
         assert custom_db.exists(), "DB should have been created at OWLBEAR_MEMORY_DB_PATH"
 
     def test_db_path_fallback_to_data_memory_db(self, source_dir: Path, tmp_path: Path) -> None:
-        """Without env var or --db-path, DB is created at data/memory/memory.db relative to cwd."""
+        """Without env var or --db-path, DB is created at store/memory/memory.db relative to cwd."""
         env = {k: v for k, v in os.environ.items() if k != "OWLBEAR_MEMORY_DB_PATH"}
         result = _run_migrate("--source-dir", str(source_dir), env=env, cwd=str(tmp_path))
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
-        assert (tmp_path / "data" / "memory" / "memory.db").exists()
+        assert (tmp_path / "store" / "memory" / "memory.db").exists()
 
     def test_unknown_argument_rejected_with_specific_error(
         self, source_dir: Path, db_path: Path
@@ -772,7 +772,7 @@ class TestBuilderDiscovered:
 
         monkeypatch.delenv("OWLBEAR_MEMORY_DB_PATH", raising=False)
         result = _resolve_db_path(None)
-        assert result == Path("data/memory/memory.db")
+        assert result == Path("store/memory/memory.db")
 
     # --- _slugify ---
 

@@ -63,7 +63,7 @@ from time import monotonic
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "session-context.ps1"
+_SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "session-context.ps1"
 _BUILDER_AGENT = _REPO_ROOT / "share" / "agents" / "builder.agent.md"
 _TEST_WRITER_AGENT = _REPO_ROOT / "share" / "agents" / "test-writer.agent.md"
 _DOC_WRITER_AGENT = _REPO_ROOT / "share" / "agents" / "doc-writer.agent.md"

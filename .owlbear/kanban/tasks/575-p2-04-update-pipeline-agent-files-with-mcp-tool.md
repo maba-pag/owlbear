@@ -4,7 +4,7 @@ title: 'P2-04: Update pipeline agent files with MCP tool references alongside CL
 status: ideation
 priority: needed
 created: 2026-04-03T11:15:13.4411362+02:00
-updated: 2026-04-03T11:15:13.4411362+02:00
+updated: 2026-04-05T07:30:10.8668696+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -13,6 +13,8 @@ parent: 483
 depends_on:
     - 572
     - 574
+claimed_by: fork-solar
+claimed_at: 2026-04-05T07:30:10.8641816+02:00
 class: standard
 ---
 

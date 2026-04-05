@@ -1,10 +1,10 @@
 ---
 id: 614
 title: Move skills-ref to optional dependency group
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-04T21:55:37.0586851+02:00
-updated: 2026-04-05T01:08:46.0477344+02:00
+updated: 2026-04-05T05:52:34.8093084+02:00
 tags:
     - scope:infra
     - type:build
@@ -83,3 +83,9 @@ Move `skills-ref` from the `dev` dependency group to a separate optional group s
 
 [[2026-04-05]] Sun 01:08
 APPROVED #614 -> todo | Refined AC: corrected false premise (uv sync doesn't fail), fixed paths, added type:config tag. PyPI skills-ref is shadowed by local scripts/skills_ref/ reimplementation. Challenger: proceed (0.98).
+
+[[2026-04-05]] Sun 05:52
+## Test-Writer Notes
+- Non-implementation task (tagged type:config, type:build) — no tests applicable.
+- AC1–AC5 are all pyproject.toml edits, uv.lock regeneration, and shell-command verifications. No Python interfaces exist to test.
+- Passing through to builder.

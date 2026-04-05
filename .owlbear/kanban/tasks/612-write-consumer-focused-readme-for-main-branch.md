@@ -1,10 +1,10 @@
 ---
 id: 612
 title: Write consumer-focused README for main branch
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-04T21:55:11.0661506+02:00
-updated: 2026-04-05T01:04:17.9747753+02:00
+updated: 2026-04-05T05:50:07.7802716+02:00
 tags:
     - scope:infra
     - type:docs
@@ -72,3 +72,10 @@ Write a consumer-focused README (README-consumer.md) on the dev branch. The sync
 
 [[2026-04-05]] Sun 01:04
 APPROVED #612 -> todo | Refined: removed AC6 (sync workflow owned by #613), added depends_on [604] (setup/ paths), rewrote AC2 with 5 named sections + content scope. Challenger confirmed all 3 issues (0.88-0.92). type:docs pass-through tag present.
+
+[[2026-04-05]] Sun 05:50
+## Test-Writer Notes
+- Non-implementation task (tagged type:docs) — no tests applicable.
+- AC describes only a markdown file (README-consumer.md) with no testable Python interfaces.
+- Architect confirmed pass-through: "type:docs tag -- pass-through, no tests needed."
+- Passing through to builder.

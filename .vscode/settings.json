@@ -59,7 +59,7 @@
   },
   "chat.tools.terminal.autoApprove": {
     "ForEach-Object": true,
-    "kanban\\kanban-md.exe": true,
+    ".owlbear\\kanban\\kanban-md.exe": true,
     "Out-File": true,
     "Tee-Object": true,
     "Test-Path": true,
@@ -90,7 +90,7 @@
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
     "**/*.egg-info": true,
-    "docs/scratch": true,
+    ".owlbear/scratch": true,
     "v1/.venv": true
   },
   "github.copilot.chat.agent.autoFix": false,
@@ -140,9 +140,9 @@
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
     "**/*.egg-info": true,
-    "docs/scratch/**": true,
-    "kanban/activity.jsonl": true,
-    "kanban/v1-archive/**": true,
+    ".owlbear/scratch/**": true,
+    ".owlbear/kanban/activity.jsonl": true,
+    ".owlbear/kanban/v1-archive/**": true,
     "v1/.venv": true,
     "v1/**": true
   },

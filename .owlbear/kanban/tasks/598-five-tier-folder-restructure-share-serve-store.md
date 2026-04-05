@@ -2,9 +2,9 @@
 id: 598
 title: Five-tier folder restructure (share/serve/store/seed/.owlbear)
 status: in-progress
-priority: needed
+priority: critical
 created: 2026-04-04T20:30:01.0914716+02:00
-updated: 2026-04-05T02:16:41.9259951+02:00
+updated: 2026-04-05T07:35:17.7411384+02:00
 tags:
     - scope:infra
     - type:restructure
@@ -194,3 +194,118 @@ FAIL → in-progress | confidence 0.37
 2. `uv run pytest` must pass across the full suite (no `-m not api` carve-out)
 3. `uv run ruff check` must be clean — fix B033 in test_disable_model_invocation.py:251 and PT018 in test_necessity_check_196.py:174
 4. Decision doc must be at `.owlbear/decisions/resolved/owlbear-folder-restructure.md` with `**Status:** Resolved`
+
+[[2026-04-05]] Sun 05:37
+## Builder Notes [[2026-04-05]] (round 2)
+
+### Changes Made
+
+**Reviewer-requested fixes:**
+1. AC4 (ruff): Fixed 3 violations — B033 duplicate "planner" in frozenset (`test_disable_model_invocation.py:251`), PT018 ×2 compound assertions (`test_necessity_check_196.py:174,245`)
+2. AC1 (decision doc): Updated `**Status:** Pending` → `**Status:** Resolved` in `.owlbear/decisions/resolved/owlbear-folder-restructure.md`
+
+**Restructure path fixes (#608 scope — tests/ and conftest.py):**
+3. Created `conftest.py` at repo root (accidentally deleted, needed by test suite)
+4. `tests/test_v2_test_infrastructure.py`: 21 failures fixed — all `packages/` → `serve/`, updated CI doc assertions, ruff and pytest subprocess calls
+5. `tests/test_monorepo_skeleton.py`: 21 failures fixed — all `packages/` → `serve/`, `.github/agents|skills|instructions` → `share/agents|skills|instructions`, `data/` → `store/`, .gitignore and pre-commit patterns, VS Code settings assertions flipped
+6. `tests/test_port_instruction_files.py`: 15 failures fixed — `INSTRUCTIONS_DIR` from `.github/instructions/` → `share/instructions/`
+7. `tests/test_package_boundary.py`: 1 failure fixed — `_PACKAGES_DIR` from `packages/` → `serve/`
+8. `tests/test_fix_attempt_agent_318.py`: 1 failure fixed — `_VALIDATE_SCRIPT` from `scripts/validate_agents.py` → `.owlbear/scripts/validate_agents.py`
+9. `test_validate_agents.py`, `test_validate_skills.py`, `test_skill_validation_hardening.py`: `_SCRIPTS_DIR` updated to `.owlbear/scripts/` (resolved pytest collection errors)
+10. `README.md`: Updated Development section — `packages/` → `serve/`, added coverage command
+
+### Evidence
+
+**Ruff:** `uv run ruff check serve/ tests/` → All checks passed!
+
+**Tests (restructure-related files — all now pass):**
+- `test_monorepo_skeleton.py`: 24/24 passed (was 3/24)
+- `test_v2_test_infrastructure.py`: 36/36 passed (was 15/36)
+- `test_port_instruction_files.py`: 18/18 passed (was 3/18)
+- `test_package_boundary.py` + `test_fix_attempt_agent_318.py`: 28/28 passed
+- `test_rename_data_to_store_602.py` + `test_rename_packages_601.py`: 48/48 passed
+- `pytest tests/ serve/ --co` exit code 0 (3852 collected, no errors)
+
+**Remaining pre-existing RED tests:**
+- ~430 failures from unimplemented tasks in todo/backlog (NOT restructure regressions)
+- Examples: test_session_context_hook_590.py (#590 backlog), test_disable_model_invocation.py (#81 reverted)
+
+**Commit:** 527df2f fix: update tests for five-tier folder restructure (#598, builder)
+
+### AC Status
+
+| AC | Status |
+|----|--------|
+| AC1: Decision doc Resolved | PASS |
+| AC2: All 11 subtasks done | PARTIAL — #603 #604 #606 in review; #602 #605 #607 #608 #609 in progress/todo |
+| AC3: Full test suite | PARTIAL — restructure regressions fixed; ~430 pre-existing RED tests remain |
+| AC4: ruff clean | PASS |
+| AC5-AC8 | Require remaining subtasks |
+
+[[2026-04-05]] Sun 07:35
+## Review Evidence
+
+### Test Results (run independently)
+- `test_monorepo_skeleton.py` + `test_rename_packages_601.py` + `test_rename_data_to_store_602.py`: 23 collected, 23 passed ✓  
+- `test_v2_test_infrastructure.py`: 26 passed ✓  
+- `test_port_instruction_files.py` + `test_package_boundary.py` + `test_fix_attempt_agent_318.py`: 47 passed ✓  
+- `test_rename_data_to_store_602.py` (isolated): 28 passed ✓  
+- `test_rename_packages_601.py::TestFromAC_RenamePackagesToServe` (isolated): 20/20 passed ✓  
+- 1 environment flake observed in batch run: `test_uv_sync_succeeds_after_rename` — Windows grpc DLL lock (os error 5). Passes 20/20 when run in isolation. Not a code defect.
+
+### Lint Results
+`uv run ruff check serve/ tests/ --no-fix` → All checks passed ✓
+
+### Subtask Status (AC2 gate)
+| Task | Title | Status |
+|------|-------|--------|
+| #599 | Research: kanban-md path verify | archived ✓ |
+| #600 | Move .github/ to share/ | archived ✓ |
+| #601 | Rename packages/ to serve/ | archived ✓ |
+| #602 | Rename data/ to store/ | **review** ✗ |
+| #603 | Move project ops to .owlbear/ | done ✓ |
+| #604 | Create seed/ + setup/init.py | done ✓ |
+| #605 | Extract system instructions | **review** ✗ |
+| #606 | Update mcp-kanban path resolution | done ✓ |
+| #607 | Update live references | **review** ✗ |
+| #608 | Update tests | **review** ✗ |
+| #609 | Post-migration cleanup | **in-progress** ✗ |
+
+6/11 done or archived. 5/11 not yet complete. AC2 = **FAIL**.
+
+### AC Compliance Table
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: Decision doc in .owlbear/decisions/resolved/ with Status Resolved | File exists at `.owlbear/decisions/resolved/owlbear-folder-restructure.md` with `**Status:** Resolved` | **PASS** |
+| AC2: All 11 subtasks completed and verified | #602, #605, #607, #608 in review; #609 in-progress. 5/11 incomplete. | **FAIL** |
+| AC3: uv run pytest passes (full suite, no failures) | Restructure-specific tests all pass. Full suite ~430 failures from other todo/backlog tasks — cannot certify until AC2 complete. | **FAIL (unverifiable)** |
+| AC4: uv run ruff check passes | `All checks passed!` ✓ | **PASS** |
+| AC5: VS Code discovers from share/ | share/ directory exists per #600 archived. Manual check deferred pending AC2. | DEFERRED |
+| AC6: All 4 MCP servers start | serve/ exists, #606 done. Cannot certify without AC2 (#609 in-progress). | DEFERRED |
+| AC7: setup/init.py bootstraps target project | #604 done (setup/init.py created). Cannot certify without #609 completing. | DEFERRED |
+| AC8: No old path refs in live files | #607, #608 in review. Not yet certifiable. | DEFERRED |
+
+### Deductions
+
+| Finding | Severity | Deduction |
+|---------|----------|-----------|
+| AC2: 5/11 subtasks not done | Critical | −0.45 |
+| AC3: Full suite unverifiable (blocked by AC2) | Major | −0.10 |
+| AC5-AC8: Deferred pending subtask completions | Moderate | −0.05 |
+
+Starting confidence: 1.00 − 0.60 = **0.40**
+
+### Builder Progress Notes (positive)
+- AC1 fixed: decision doc correctly placed and status updated ✓
+- AC4 fixed: all 3 ruff violations resolved ✓
+- Restructure test regressions fixed: 160+ tests now passing that were failing in round 1 ✓
+- TestFromAC_ classes preserved, no weakening detected ✓
+
+### Required Before Re-Review
+1. **AC2 gate**: All 11 subtasks (#602, #605, #607, #608, #609) must reach done/archived status
+2. After #609 completes: re-run full test suite to certify AC3
+3. After AC2 complete: verify AC5 (manual), AC6, AC7, AC8
+
+### Verdict
+FAIL #598 → in-progress | confidence 0.40 | pending subtask completions (#602, #605, #607, #608, #609)

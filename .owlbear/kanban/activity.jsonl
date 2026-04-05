@@ -1,35 +1,3 @@
-{"timestamp":"2026-03-30T04:57:07.5746069+02:00","action":"claim","task_id":197,"detail":"writer"}
-{"timestamp":"2026-03-30T04:57:12.8635328+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T04:57:12.866146+02:00","action":"claim","task_id":198,"detail":"architect"}
-{"timestamp":"2026-03-30T04:57:14.7808199+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T04:57:14.7839548+02:00","action":"claim","task_id":11,"detail":"auditor"}
-{"timestamp":"2026-03-30T04:58:29.3122981+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T04:58:29.3143792+02:00","action":"release","task_id":197,"detail":"writer"}
-{"timestamp":"2026-03-30T04:59:00.7232925+02:00","action":"edit","task_id":197,"detail":"Calibrate auditor confidence scoring with deduction rubric"}
-{"timestamp":"2026-03-30T05:00:29.3814316+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T05:00:33.8432517+02:00","action":"move","task_id":194,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T05:00:38.5372286+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T05:00:38.5399582+02:00","action":"release","task_id":194,"detail":"auditor"}
-{"timestamp":"2026-03-30T05:00:59.5561845+02:00","action":"edit","task_id":194,"detail":"Add environment audit step to research-workflow skill"}
-{"timestamp":"2026-03-30T05:01:22.8324005+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:01:27.0422243+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:01:31.6697627+02:00","action":"move","task_id":11,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T05:01:36.1110122+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:01:36.1154716+02:00","action":"release","task_id":11,"detail":"auditor"}
-{"timestamp":"2026-03-30T05:01:57.7563622+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T05:01:58.1872452+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:02:11.3605137+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T05:02:16.2405011+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T05:02:21.9015433+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T05:02:21.903615+02:00","action":"release","task_id":198,"detail":"architect"}
-{"timestamp":"2026-03-30T05:03:46.212489+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T05:03:46.2161913+02:00","action":"claim","task_id":177,"detail":"auditor"}
-{"timestamp":"2026-03-30T05:05:39.6886199+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:05:44.6191917+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:06:04.0513002+02:00","action":"edit","task_id":11,"detail":"Write Copilot Memory boundary instructions"}
-{"timestamp":"2026-03-30T05:06:04.3628939+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
-{"timestamp":"2026-03-30T05:06:09.694658+02:00","action":"move","task_id":177,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T05:06:16.1612902+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
 {"timestamp":"2026-03-30T05:06:16.1639198+02:00","action":"release","task_id":177,"detail":"auditor"}
 {"timestamp":"2026-03-30T05:06:44.2405788+02:00","action":"edit","task_id":177,"detail":"Document KB curation process"}
 {"timestamp":"2026-03-30T05:06:57.2793396+02:00","action":"edit","task_id":166,"detail":"Delete empty .github/agents/ and clean stale settings"}
@@ -9998,3 +9966,35 @@
 {"timestamp":"2026-04-05T07:09:38.2532695+02:00","action":"edit","task_id":601,"detail":"Rename packages/ to serve/"}
 {"timestamp":"2026-04-05T07:09:38.2634618+02:00","action":"release","task_id":601,"detail":"quail-dart"}
 {"timestamp":"2026-04-05T07:09:38.686085+02:00","action":"move","task_id":601,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T07:10:24.3204201+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T07:10:24.3316777+02:00","action":"claim","task_id":607,"detail":"field-oxide"}
+{"timestamp":"2026-04-05T07:10:39.8855028+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:10:39.8978344+02:00","action":"claim","task_id":615,"detail":"stem-steam"}
+{"timestamp":"2026-04-05T07:11:14.6654647+02:00","action":"edit","task_id":604,"detail":"Create seed/ templates and setup/init.py"}
+{"timestamp":"2026-04-05T07:11:14.6772523+02:00","action":"claim","task_id":604,"detail":"grove-wolf"}
+{"timestamp":"2026-04-05T07:11:15.8509797+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T07:11:15.8622097+02:00","action":"claim","task_id":576,"detail":"rust-atlas"}
+{"timestamp":"2026-04-05T07:14:49.2549786+02:00","action":"edit","task_id":604,"detail":"Create seed/ templates and setup/init.py"}
+{"timestamp":"2026-04-05T07:14:49.2658661+02:00","action":"release","task_id":604,"detail":"grove-wolf"}
+{"timestamp":"2026-04-05T07:15:05.2597484+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T07:15:05.270621+02:00","action":"release","task_id":576,"detail":"rust-atlas"}
+{"timestamp":"2026-04-05T07:16:36.3544289+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:16:58.4478264+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:19:16.4638684+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:19:35.4151327+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:19:41.5952672+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T07:19:41.6048104+02:00","action":"release","task_id":615,"detail":"stem-steam"}
+{"timestamp":"2026-04-05T07:29:39.7180856+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T07:29:39.7282089+02:00","action":"release","task_id":607,"detail":"field-oxide"}
+{"timestamp":"2026-04-05T07:30:00.8732802+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T07:30:00.8857094+02:00","action":"claim","task_id":609,"detail":"cloud-path"}
+{"timestamp":"2026-04-05T07:30:06.0845124+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T07:30:06.0965873+02:00","action":"claim","task_id":484,"detail":"glen-zinc"}
+{"timestamp":"2026-04-05T07:30:10.8679+02:00","action":"edit","task_id":575,"detail":"P2-04: Update pipeline agent files with MCP tool references alongside CLI"}
+{"timestamp":"2026-04-05T07:30:10.8790829+02:00","action":"claim","task_id":575,"detail":"fork-solar"}
+{"timestamp":"2026-04-05T07:30:22.4437042+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T07:30:22.4541344+02:00","action":"claim","task_id":598,"detail":"flint-linen"}
+{"timestamp":"2026-04-05T07:32:16.587475+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T07:32:16.6013935+02:00","action":"release","task_id":484,"detail":"glen-zinc"}
+{"timestamp":"2026-04-05T07:35:17.7416669+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T07:35:17.7536967+02:00","action":"release","task_id":598,"detail":"flint-linen"}

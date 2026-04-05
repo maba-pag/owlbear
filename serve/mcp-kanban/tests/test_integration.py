@@ -75,9 +75,9 @@ def real_kanban_bin() -> Path:
         if p.exists():
             return p
 
-    # Traverse from this file up to repo root: tests/ → mcp-kanban/ → packages/ → root
+    # Traverse from this file up to repo root: tests/ → mcp-kanban/ → serve/ → root
     repo_root = Path(__file__).resolve().parents[3]
-    convention = repo_root / "kanban" / "kanban-md.exe"
+    convention = repo_root / ".owlbear" / "kanban" / "kanban-md.exe"
     if convention.exists():
         return convention
 

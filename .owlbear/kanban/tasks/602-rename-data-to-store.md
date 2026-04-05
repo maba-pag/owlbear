@@ -1,10 +1,10 @@
 ---
 id: 602
 title: Rename data/ to store/
-status: in-progress
-priority: needed
+status: review
+priority: critical
 created: 2026-04-04T20:30:39.4451838+02:00
-updated: 2026-04-05T02:29:58.3900145+02:00
+updated: 2026-04-05T05:46:27.254196+02:00
 tags:
     - scope:infra
     - type:build
@@ -149,3 +149,41 @@ The implementation changes (all 11 files above) are **correct and present on dis
 | AC7 (setup.py) | 3 | PASS |
 | AC8 (.gitignore) | 4 | PASS |
 | AC9 (.editorconfig) | 2 | PASS |
+
+[[2026-04-05]] Sun 05:46
+## Builder Notes
+
+### Files Changed
+- `store/` — `git mv data/ store/` via commits `bba06d1`, `43cc162` (AC1)
+- `serve/mcp-memory/src/owlbear_mcp_memory/server.py` — `_DEFAULT_DB_PATH`, docstring 477d033 (AC2)
+- `serve/mcp-memory/src/owlbear_mcp_memory/migrate.py` — `_DEFAULT_DB_PATH` 477d033 (AC2)
+- `serve/mcp-memory/src/owlbear_mcp_memory/approve.py` — `_DEFAULT_DB_PATH` 477d033 (AC2)
+- `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — `_DEFAULT_KB_PATH` 477d033 (AC3)
+- `serve/knowledge/src/owlbear_knowledge/loader.py` — env fallback (AC4)
+- `serve/mcp-project/src/owlbear_mcp_project/server.py` — `project_list` path (AC5)
+- `serve/orchestrator/src/owlbear_orchestrator/analysis/_cli.py` — `_DEFAULT_AUDIT_DIR`, help text 477d033 (AC6)
+- `scripts/setup.py` — `create_knowledge_dir` + `create_vscode_settings` 1225877 (AC7)
+- `.gitignore` — `data/` → `store/` patterns 43cc162 (AC8)
+- `.editorconfig` — `[data/**]` → `[store/**]` 43cc162 (AC9)
+
+### Test Results
+28/28 passed, 0 failed. ruff clean.
+
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 (store/ dir) | 3 | PASS |
+| AC2 (mcp-memory paths) | 5 | PASS |
+| AC3 (mcp-knowledge path) | 2 | PASS |
+| AC4 (loader default) | 2 | PASS |
+| AC5 (project_list path) | 3 | PASS |
+| AC6 (audit dir) | 4 | PASS |
+| AC7 (setup.py) | 3 | PASS |
+| AC8 (.gitignore) | 4 | PASS |
+| AC9 (.editorconfig) | 2 | PASS |
+
+### Lint
+ruff check serve/ scripts/ — All checks passed.
+
+### Evidence
+- Verified all committed: 477d033, 43cc162, bba06d1, 1225877
+- NotE: store/memory/*.db is not in .gitignore (pre-existing gap — never covered under data/memory/ either). Outside #602 scope.

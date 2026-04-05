@@ -1,10 +1,10 @@
 ---
 id: 264
 title: Wire Quality-Runner into pipeline agents
-status: todo
+status: in-progress
 priority: needed
 created: 2026-03-30T19:31:12.4867876+02:00
-updated: 2026-04-05T02:10:45.1608888+02:00
+updated: 2026-04-05T05:43:03.363045+02:00
 tags:
     - scope:agents
     - phase-2
@@ -197,3 +197,11 @@ AGENTS_DIR = ROOT / "share" / "agents"
 SKILLS_DIR = ROOT / "share" / "skills"
 ```
 After fix, rerun both files — all 54 tests should pass given implementation is correct.
+
+[[2026-04-05]] Sun 05:43
+## Test-Writer Notes (retry)
+- Retry cycle: reviewer cited TEST PATH DEFECT — `AGENTS_DIR`/`SKILLS_DIR` used `.github` instead of `share`
+- Defect resolved by commit `46a8f1d` (chore: update path after move in tests) — paths now correct in both test files
+- Verified: `tests/test_quality_runner_wiring.py` (32 tests) + `tests/test_quality_runner_wiring_264.py` (22 tests) = **54 tests, all PASS**
+- ruff: clean on both files
+- No new tests required — implementation is correct, paths are correct, AC coverage intact

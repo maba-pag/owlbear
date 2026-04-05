@@ -1,10 +1,10 @@
 ---
 id: 531
 title: Build approve_memory CLI wrapper for set_approval_state
-status: docs
+status: done
 priority: important
 created: 2026-04-01T19:13:11.4079479+02:00
-updated: 2026-04-04T23:24:54.7547958+02:00
+updated: 2026-04-05T03:56:30.9453544+02:00
 tags:
     - scope:agents
     - phase-2
@@ -185,3 +185,20 @@ No MISSING or LAX findings. All TestFromAC_ methods preserved without weakening.
 
 ### Confidence: .94
 ### Verdict: PASS → docs
+
+[[2026-04-05]] Sun 03:56
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | New CLI entry point only; no change to MCP tool API or agent-facing behavior; copilot-instructions.md unchanged |
+| 2 | Module docstrings | Yes | Verified | All 9 functions in approve.py have accurate docstrings: module docstring, _resolve_db_path, _build_server, _load_curation_report, _parse_list_result, _print_table, _async_run_interactive, _async_run_batch, _async_main, main |
+| 3 | External attribution | Yes | Verified | .owlbear/sources/overview.md has "approve_memory CLI Wrapper (Task #531)" section with MCP Python SDK README and MCP quickstart client entries |
+| 4 | CLI changes | Yes | Updated | README.md Memory Approval section verified. Fixed packages/mcp-memory -> serve/mcp-memory (path warns "does not exist" in uv). Also fixed same pre-existing error in Memory Migration section. Committed: 72f6df4 |
+| 5 | Research doc | Yes | Verified | .owlbear/research/approve-memory-cli-wrapper.md exists and is referenced in task body |
+
+### Files Updated
+- README.md — fixed packages/mcp-memory -> serve/mcp-memory in Memory Migration and Memory Approval sections
+
+### Scratch Files
+- .owlbear/scratch/531-* — none found; already cleaned prior to this stage

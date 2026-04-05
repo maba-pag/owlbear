@@ -27,7 +27,7 @@ from unittest.mock import MagicMock
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_PACKAGE_DIR = _REPO_ROOT / "packages" / "mcp-memory"
+_PACKAGE_DIR = _REPO_ROOT / "serve" / "mcp-memory"
 _SRC_DIR = _PACKAGE_DIR / "src" / "owlbear_mcp_memory"
 
 # setup.py is not a package; insert scripts/ onto sys.path (same as test_setup_script.py)
@@ -421,15 +421,15 @@ class TestFromAC_Lifespan:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Step (a): Default DB path is data/memory/memory.db relative to CWD."""
+        """Step (a): Default DB path is store/memory/memory.db relative to CWD."""
         monkeypatch.delenv("OWLBEAR_MEMORY_DB_PATH", raising=False)
         monkeypatch.chdir(tmp_path)
         from owlbear_mcp_memory.server import app_lifespan
 
         async with app_lifespan(MagicMock()):
             pass
-        assert (tmp_path / "data" / "memory" / "memory.db").exists(), (
-            "Default DB must be created at data/memory/memory.db relative to CWD"
+        assert (tmp_path / "store" / "memory" / "memory.db").exists(), (
+            "Default DB must be created at store/memory/memory.db relative to CWD"
         )
 
     @pytest.mark.asyncio
@@ -838,11 +838,11 @@ class TestFromAC_PackageBoundary:
 
 
 class TestFromAC_RuffSrcArray:
-    """Root pyproject.toml has packages/mcp-memory/src in tool.ruff.src."""
+    """Root pyproject.toml has serve/mcp-memory/src in tool.ruff.src."""
 
     def test_ruff_src_includes_mcp_memory(self) -> None:
         data = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         ruff_src = data["tool"]["ruff"]["src"]
-        assert "packages/mcp-memory/src" in ruff_src, (
-            f"'packages/mcp-memory/src' missing from tool.ruff.src, got: {ruff_src}"
+        assert "serve/mcp-memory/src" in ruff_src, (
+            f"'serve/mcp-memory/src' missing from tool.ruff.src, got: {ruff_src}"
         )

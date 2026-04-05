@@ -122,7 +122,7 @@ class TestFromAC_AnalysisCLI:
         with patch(f"{_CLI}.analyze", return_value=[]) as mock_analyze:
             main([])
         audit_dir = _call_arg(mock_analyze, "audit_dir", 0)
-        assert audit_dir == Path("data/audit/")
+        assert audit_dir == Path("store/audit/")
 
     # AC: test_exit_code_1_on_error — analyze() raises → main() returns 1
     def test_exit_code_1_on_error(self) -> None:

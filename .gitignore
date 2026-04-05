@@ -52,7 +52,7 @@ megalinter-reports/
 # Logs
 *.log
 
-# Scratch / ad-hoc workspace (under docs/)
+# Scratch / ad-hoc workspace (under .owlbear/)
 .owlbear/scratch/*
 !.owlbear/scratch/.gitkeep
 !.owlbear/scratch/.instructions.md
@@ -71,7 +71,7 @@ megalinter-reports/
 /builder-notes-*.md
 
 # Portable tools (downloaded binaries)
-kanban/*.exe
+.owlbear/kanban*.exe
 
 # v1 build artifacts and caches (v1 code lives in v1/ subfolder)
 v1/.venv/

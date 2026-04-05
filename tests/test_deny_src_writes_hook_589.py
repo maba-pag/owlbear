@@ -63,7 +63,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "deny-src-writes.ps1"
+_SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "deny-src-writes.ps1"
 _AGENT_PATH = _REPO_ROOT / "share" / "agents" / "test-writer.agent.md"
 
 # Write tools that the hook must gate (AC2); apply_patch is explicitly excluded

@@ -1,10 +1,10 @@
 ---
 id: 484
 title: 'Phase B: Remove CLI fallback, MCP-only kanban for all agents'
-status: ideation
+status: backlog
 priority: needed
 created: 2026-03-31T06:20:55.32467+02:00
-updated: 2026-04-04T23:55:40.1162575+02:00
+updated: 2026-04-05T07:32:16.5858988+02:00
 tags:
     - scope:mcp
     - ' scope:agents'
@@ -62,3 +62,15 @@ Subtask status: #580, #581, #583, #584 archived (cancelled, zero scope). #582 at
 
 ### Verdict: REJECT
 ### Action Taken: Rejected to ideation. All AC items already satisfied by workspace reorganization. No deliverable possible. Recommend archiving parent #484 and remaining subtask #582.
+
+[[2026-04-05]] Sun 07:32
+## Research (Validation Pass)
+- Validation of architect's REJECT finding (2026-04-04): **CONFIRMED**
+- git grep kanban-md across share/ and .github/: 0 matches in agents, 0 in active skills, 0 in instructions (AC scope)
+- Remaining refs: h-kanban-md (deprecated skill, 23), h-mcp-kanban (server internals, 5), owlbear-system (tech stack table, 1), h-pytest-and-linting (test marker, 1) — all out of scope
+- All 7 AC items satisfied by workspace reorganization (agents/ → share/agents/, etc.)
+- Recommendation: archive #484 and #582 — zero remaining scope
+- Confidence: .95 (verified by independent grep, no ambiguity)
+- Challenge: SKIPPED — confirming completed work, no new recommendation
+- Follow-up tasks: none (subtasks #580-#584 already cancelled/archived except #582 which should be archived)
+- T1 classification — no decisions needed

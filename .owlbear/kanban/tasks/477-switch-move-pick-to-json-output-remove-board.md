@@ -1,10 +1,10 @@
 ---
 id: 477
 title: Switch move/pick to JSON output, remove board_context tool
-status: review
+status: done
 priority: needed
 created: 2026-03-31T06:06:24.5978486+02:00
-updated: 2026-04-05T02:09:16.1138908+02:00
+updated: 2026-04-05T06:57:52.4315221+02:00
 tags:
     - scope:mcp
     - type:build
@@ -214,3 +214,66 @@ Retry cycle fix: removed pick_task import + test_pick_task_passes_json_flag_to_r
 
 ### Lint Results
 - ruff check serve/mcp-kanban/ tests/test_drop_board_context_489.py: All checks passed!
+
+[[2026-04-05]] Sun 04:56
+## Review Evidence (Final Cycle)
+
+**Reviewer:** reviewer | **Date:** 2026-04-05
+
+### Test Results
+Run: `uv run pytest tests/test_drop_board_context_489.py serve/mcp-kanban/tests/test_server.py -q --tb=short`
+- **68 passed, 0 failed**
+
+### Lint Results
+Run: `uv run ruff check serve/mcp-kanban/ tests/test_drop_board_context_489.py`
+- All checks passed!
+
+### TestFromAC Integrity Check
+
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| TestFromAC_DropBoardContext::test_board_context_not_registered_as_mcp_tool | No change | PRESERVED |
+| TestFromAC_DropBoardContext::test_board_context_not_in_server_all | No change | PRESERVED |
+| TestFromAC_DropBoardContext::test_board_context_not_defined_on_server_module | No change | PRESERVED |
+| TestFromAC_MovePickJsonOutput::test_move_task_passes_json_flag_to_run_kanban | No change | PRESERVED |
+| TestFromAC_MovePickJsonOutput::test_pick_task_passes_json_flag_to_run_kanban | REMOVED — architect directive (pick_task absent from server.py; ImportError otherwise) | ARCHITECT-DIRECTED, not builder-weakened |
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---|---|---|
+| Switch move_task to --json | server.py L327: `_run_kanban(..., "move", task_id, status, "--json")`; archive path L322 also uses `--json`; test_server.py::test_move_task_success_passes_args asserts `"--json" in args_used` AND `isinstance(result, KanbanTask)` | PASS |
+| Switch pick_task to --json | Superseded by architect — pick_task removed from server.py by external commit d6b6f35; AC formally revised | N/A |
+| Remove board_context entirely | Absent from server.py and `__all__` (lines 36–53); TestFromAC_DropBoardContext 3/3 PASS | PASS |
+| Tests cover move/pick JSON + board_context removal | 68 tests pass; architect revised AC4 (remove pick_task test/import); 4 tests in test_drop_board_context_489.py + 64 in test_server.py | PASS |
+| Update mcp-kanban SKILL.md | `board_context` absent; `move_task` documented; tool count = 7 (matches frontmatter description) | PASS |
+
+### Security Review
+`_run_kanban` uses `asyncio.create_subprocess_exec` (no `shell=True`) — no injection risk. No hardcoded credentials, no eval/exec, no user-controlled path traversal. No new dependencies.
+
+### Builder Process (5.7)
+4 builder notes across 3 cycles and 1 retry arc — each with distinct approach (pass-through → re-dispatch → test cleanup → lint fix). FRICTION, not LOOP.
+
+### Deductions
+None. All AC items verified with specific line/test evidence.
+
+### Verdict: PASS (confidence .96)
+
+All 5 binding AC items verified. All TestFromAC tests preserved or removed under explicit architect directive. 68 tests pass, ruff clean.
+
+[[2026-04-05]] Sun 06:57
+## Docs Gate (Final Cycle)
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | grep of .github/copilot-instructions.md: no mention of move_task, pick_task, or board_context — MCP Server Conventions section does not enumerate individual tool behaviors |
+| 2 | Module docstrings | Yes | Pass | move_task docstring (server.py L317): "Move a task to the specified status column, or archive it when status is \"archived\"." — accurate. pick_task absent from server.py per architect directive (d6b6f35 + AC formally revised) — no docstring to verify |
+| 3 | External attribution → docs/sources/overview.md | No | N/A | Pattern mirrors existing show_task --json (internal); no external source used |
+| 4 | CLI changes → README.md | No | N/A | Changes are MCP tool surface only, not CLI commands |
+| 5 | Research doc | No | N/A | docs/research/ directory does not exist on disk; research findings captured directly in task body; research doc was not an AC deliverable |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no docs/scratch/477-* files found)

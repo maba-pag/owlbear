@@ -1,4 +1,4 @@
-﻿---
+---
 id: 546
 title: 'Add apply_patch to #210 lint guard tool_name filter'
 status: in-progress
