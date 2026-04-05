@@ -71,7 +71,7 @@ megalinter-reports/
 /builder-notes-*.md
 
 # Portable tools (downloaded binaries)
-.owlbear/kanban*.exe
+.owlbear/kanban/*.exe
 
 # v1 build artifacts and caches (v1 code lives in v1/ subfolder)
 v1/.venv/

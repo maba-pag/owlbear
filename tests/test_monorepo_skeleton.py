@@ -147,10 +147,10 @@ class TestFromAC_DirectoryStructure:
             "ROOT/share/instructions/README.md not found"
         )
 
-    def test_scripts_setup_placeholder_exists(self) -> None:
-        """scripts/setup.py placeholder must exist."""
-        assert (ROOT / "scripts" / "setup.py").exists(), (
-            "ROOT/scripts/setup.py not found"
+    def test_setup_init_exists(self) -> None:
+        """setup/init.py must exist (scripts/setup.py was deleted in #609 AC7)."""
+        assert (ROOT / "setup" / "init.py").exists(), (
+            "ROOT/setup/init.py not found"
         )
 
     def test_data_knowledge_general_gitkeep_exists(self) -> None:
