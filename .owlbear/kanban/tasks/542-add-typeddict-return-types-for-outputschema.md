@@ -1,10 +1,12 @@
 ---
 id: 542
 title: Add TypedDict return types for outputSchema specificity on mcp-project
-status: done
+status: archived
 priority: important
 created: 2026-04-02T06:16:23.9009603+02:00
-updated: 2026-04-05T16:45:52.01529+02:00
+updated: 2026-04-05T18:41:48.5400931+02:00
+started: 2026-04-05T18:41:48.5400931+02:00
+completed: 2026-04-05T18:41:48.5400931+02:00
 tags:
     - scope:mcp
     - type:build
@@ -306,3 +308,39 @@ TestFromAC_ProjectListTool (test_server.py lines 338–410): all 6 fixtures conf
 
 [[2026-04-05]] Sun 16:45
 Docs gate passed. 5-item checklist evaluated with evidence. No documentation files required updating: copilot-instructions.md has no MCP convention content (5-line file); server.py docstrings verified accurate for all public symbols; no external sources used in research; no CLI changes; research doc confirmed present at .owlbear/research/mcp-project-typeddict-outputschema.md. No scratch files found. Advancing to done.
+
+[[2026-04-05]] Sun 18:41
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| ProjectInfoResult TypedDict, module scope, 5 str fields | server.py L35-44: class at module level, all 5 fields str | PASS |
+| ProjectListItem TypedDict, module scope, 2 str fields | server.py L46-52: class at module level, name+path str | PASS |
+| project_info return is ProjectInfoResult (no union) | server.py L124: -> ProjectInfoResult | PASS |
+| project_info raises ToolError when config absent | server.py L127-128: raise ToolError(msg) | PASS |
+| project_list return is list[ProjectListItem] | server.py L134: -> list[ProjectListItem] | PASS |
+| project_readme/structure unchanged (return str) | server.py: both return str, no TypedDict changes | PASS |
+| TypedDicts NOT under TYPE_CHECKING | server.py: defined at module scope before tool fns | PASS |
+| __all__ includes both TypedDicts | server.py L22-33: both symbols present | PASS |
+| 4 existing error-path tests updated to ToolError | Reviewer verified all 4 via git diff of 9156065 | PASS |
+| Schema-pinning project_info 5 field properties | TestFromAC_ProjectInfoOutputSchema (6 tests), 78/78 pass | PASS |
+| Schema-pinning project_list items name+path | TestFromAC_ProjectListOutputSchema (5 tests), direct array override | PASS |
+
+### Test Results
+- pytest (task scope): 78 passed, 0 failed
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+11 AC lines, specific and verifiable. Challenger-refined. Minor gap: project_list schema AC said "inside FastMCP result wrapper" but builder used direct array override. TypedDict convention distinction well-documented.
+
+### Deduction Breakdown
+- Commit 9156065 attributed to "#543, builder" but contains #542 implementation. (-.01)
+- Uncommitted test fixture fix (data/ to store/) found in working tree. Committed as leftover. (-.01)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 0481b7b | fix(test) | serve/mcp-project/tests/test_server.py | #542 |

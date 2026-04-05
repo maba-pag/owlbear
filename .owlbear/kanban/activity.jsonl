@@ -1,8 +1,3 @@
-{"timestamp":"2026-03-30T15:18:49.0530458+02:00","action":"move","task_id":149,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:49.5340011+02:00","action":"move","task_id":170,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:51.2383816+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
-{"timestamp":"2026-03-30T15:18:51.2423718+02:00","action":"release","task_id":216,"detail":"researcher"}
-{"timestamp":"2026-03-30T15:18:57.4642138+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
 {"timestamp":"2026-03-30T15:18:57.4700328+02:00","action":"unblock","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
 {"timestamp":"2026-03-30T15:18:57.5523909+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
 {"timestamp":"2026-03-30T15:18:57.5571907+02:00","action":"unblock","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
@@ -9998,3 +9993,8 @@
 {"timestamp":"2026-04-05T18:24:05.7459688+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
 {"timestamp":"2026-04-05T18:24:05.759628+02:00","action":"release","task_id":167,"detail":"isle-wild"}
 {"timestamp":"2026-04-05T18:24:06.3069563+02:00","action":"move","task_id":167,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T18:25:02.3676553+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T18:25:02.3807582+02:00","action":"claim","task_id":542,"detail":"flare-pulse"}
+{"timestamp":"2026-04-05T18:41:47.8509756+02:00","action":"edit","task_id":542,"detail":"Add TypedDict return types for outputSchema specificity on mcp-project"}
+{"timestamp":"2026-04-05T18:41:47.8653617+02:00","action":"release","task_id":542,"detail":"flare-pulse"}
+{"timestamp":"2026-04-05T18:41:48.5416715+02:00","action":"move","task_id":542,"detail":"done -\u003e archived"}
