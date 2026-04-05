@@ -1,10 +1,12 @@
 ---
 id: 625
 title: 'Restore #574 pipeline protocol MCP callouts — 8 failing tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-05T07:41:30.2992757+02:00
-updated: 2026-04-05T15:32:27.7279846+02:00
+updated: 2026-04-05T17:38:56.4404678+02:00
+started: 2026-04-05T17:38:56.4404678+02:00
+completed: 2026-04-05T17:38:56.4404678+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -208,3 +210,37 @@ None — no documentation file changes required.
 
 ### Scratch Files
 None — no `.owlbear/scratch/625-*` files found.
+
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All 8 tests in test_mcp_tool_references_574.py pass | 8 passed, 0 failed (0.09s) - verified independently | PASS |
+| Channel B: append_body + timestamp parameter names | SKILL.md L114: edit_task(append_body=..., timestamp=True) inline | PASS |
+| Resolved decision pre-flight: show_task | SKILL.md L47: show_task(task_id={id}) inline | PASS |
+| Follow-up task quality: create_task | SKILL.md L96: create_task(title=..., status=backlog, ...) inline | PASS |
+| Blocking convention: unblock | SKILL.md L186: edit_task(task_id={id}, unblock=True) inline | PASS |
+| Handoff: edit_task with append_body | SKILL.md last line: edit_task(task_id={id}, append_body=...) inline | PASS |
+| Reading rules: show_task | SKILL.md L135: show_task(task_id={id}) inline | PASS |
+| Inline format (not blockquotes) | Zero blockquote patterns; all 6 are sentence-level inline refs | PASS |
+
+### Test Results
+- pytest (task-scoped): 8 passed, 0 failed
+- pytest (full suite): 2878 passed, 432 failed (pre-existing systemic), 18 skipped, 0 in task scope
+- ruff: All checks passed
+
+### Architect Quality: 5/5
+AC specific and verifiable. Format constraint refined mid-process. Zero builder improvisation.
+
+### Deduction Breakdown
+- AC lines without evidence: 0
+- Lint violations: 0
+- AC quality: 5/5 (no deduction)
+- Reviewer evidence: present, detailed, PASS at .95
+- Full-suite failures in task scope: 0
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-05]] Sun 17:38
+8/8 tests pass, full suite 0 failures in scope, ruff clean, AC quality 5/5, confidence .98
