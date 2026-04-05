@@ -93,7 +93,7 @@ The manifest at `data/knowledge/general/sources.yaml` includes all research docs
 To bulk-import existing `/memories/repo/` files into memory.db:
 
 ```bash
-uv run --project packages/mcp-memory python -m owlbear_mcp_memory.migrate \
+uv run --project serve/mcp-memory python -m owlbear_mcp_memory.migrate \
   --source-dir <path-to-GitHub.copilot-chat/memory-tool/memories/repo/>
 ```
 
@@ -108,14 +108,14 @@ To review pending memory entries (approve, reject, or skip):
 
 ```bash
 # List pending entries as a numbered table
-uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve
+uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve
 
 # Batch approve or reject by entry ID (first 8 chars or full UUID)
-uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --approve <id1> <id2>
-uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --reject <id1> <id2>
+uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --approve <id1> <id2>
+uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --reject <id1> <id2>
 
 # Interactive mode: approve (a), reject (r), skip (s) per entry
-uv run --project packages/mcp-memory python -m owlbear_mcp_memory.approve --interactive
+uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --interactive
 ```
 
 Optional flags:
