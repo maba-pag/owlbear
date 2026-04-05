@@ -1,7 +1,7 @@
----
+﻿---
 id: 546
 title: 'Add apply_patch to #210 lint guard tool_name filter'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-04-02T14:51:56.2992239+02:00
 updated: 2026-04-05T02:27:07.6961547+02:00
@@ -11,8 +11,6 @@ tags:
     - type:build
 depends_on:
     - 210
-claimed_by: root-valve
-claimed_at: 2026-04-05T02:27:07.6915649+02:00
 class: standard
 ---
 
@@ -103,3 +101,26 @@ Commit 68c6a55 ("feat: add apply_patch...#546, builder") exists before architect
 
 ### Verdict: APPROVE (after refinement)
 ### Action: Advance to todo. Test-writer should use refined AC above (7 criteria) instead of original 2-line AC.
+[[2026-04-05]] Sun 02:27
+## Test-Writer Notes
+- Test file: tests/test_lint_guard_hook_546.py
+- Classes: TestFromAC_ApplyPatchFilter, TestFromAC_ApplyPatchBehavior
+- Tests per category: happy 4, edge 2, error 1, boundary 5
+- Total: 12 tests
+- ruff: clean
+- Commit: 4c7caea
+
+**Pipeline violation note:** Commit 68c6a55 (builder) added apply_patch before test-writing.
+Per architect's process note, test-writer validates post-hoc. All 12 tests PASS — implementation
+meets all 7 refined AC criteria. Tests serve as regression guards going forward.
+
+**AC coverage:**
+| AC | Test(s) |
+|----|---------|
+| AC1: 'apply_patch' in edit_tools array | test_apply_patch_in_edit_tools_array |
+| AC2: clean file -> {} | test_apply_patch_clean_file_returns_empty_json |
+| AC3: lint errors -> systemMessage + hookSpecificOutput.additionalContext | test_apply_patch_lint_errors_returns_system_message, test_apply_patch_lint_errors_returns_hook_specific_additional_context |
+| AC4: nonexistent filePath -> {} | test_apply_patch_nonexistent_filepath_returns_empty_json |
+| AC5: missing/null filePath -> {} | test_apply_patch_missing_filepath_returns_empty_json, test_apply_patch_null_filepath_returns_empty_json |
+| AC6: exit code never 2 | test_apply_patch_exit_code_never_2_clean_file, _lint_errors, _missing_filepath |
+| AC7: stdout always valid JSON | test_apply_patch_stdout_is_valid_json_for_lint_errors, _for_clean_file |
