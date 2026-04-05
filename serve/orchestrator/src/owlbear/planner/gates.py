@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 _AND_PATTERN = re.compile(r"\band\b", re.IGNORECASE)
 _AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
+_NON_IMPL_TAGS = frozenset(
+    {"research", "docs", "type:config", "type:docs", "test", "type:test", "agent", "quality"}
+)
 
 
 def check_atomicity(task: Task) -> bool:
@@ -35,9 +38,13 @@ def check_tdd(task: Task) -> bool:
 
     An in-progress task signals that the builder must implement; it must have
     the Test-Writer Notes marker confirming the RED phase is complete.
+    Non-implementation pass-through tasks (tagged with a non-impl tag) are
+    exempt — they pass through without Test-Writer Notes.
     All other statuses pass this gate unconditionally.
     """
     if task.status == "in-progress":
+        if _NON_IMPL_TAGS.intersection(task.tags):
+            return True
         return "## Test-Writer Notes" in task.body
     return True
 

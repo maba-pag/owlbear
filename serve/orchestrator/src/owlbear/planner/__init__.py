@@ -1,4 +1,15 @@
-"""OwlBear planner subpackage — board reader, gate checks, and dispatch planning."""
+"""OwlBear planner subpackage — board reader, gate checks, and dispatch planning.
+
+Dual-path architecture (#619):
+
+- In-process path: loop.py and cli.py import directly from this package for
+  headless ACP dispatch (no MCP server required).
+- MCP path: VS Code agents call the ``pick_tasks`` tool in the owlbear-kanban
+  MCP server (serve/mcp-kanban), which replicates the gate/sort logic inline.
+
+Both paths stay in sync manually — gate logic changes must be applied to both
+gates.py here *and* the inline copy in owlbear_mcp_kanban/server.py.
+"""
 
 from __future__ import annotations
 

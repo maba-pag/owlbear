@@ -513,6 +513,9 @@ async def end_work(  # noqa: PLR0912, PLR0913, C901
 _PICK_AND_PATTERN = re.compile(r"\band\b", re.IGNORECASE)
 _PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
+_PICK_NON_IMPL_TAGS = frozenset(
+    {"research", "docs", "type:config", "type:docs", "test", "type:test", "agent", "quality"}
+)
 
 _PICK_PRIORITY_RANK: dict[str, int] = {
     "critical": 0,
@@ -543,17 +546,20 @@ def _check_pick_gates(task: dict) -> bool:
     if _PICK_AND_PATTERN.search(title):
         return False
     if status == "in-progress" and "## Test-Writer Notes" not in body:
-        return False
+        tags: list[str] = task.get("tags") or []
+        if not _PICK_NON_IMPL_TAGS.intersection(tags):
+            return False
     return not (status in _PICK_CLARITY_STATUSES and not _PICK_AC_PATTERN.search(body))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def pick_tasks(ctx: Context, *, limit: int = 25) -> dict:
+async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
     """Pick dispatchable tasks: gate-filtered, sorted by priority/status, capped at limit."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    stdout, stderr, rc = await _run_kanban(
-        app_ctx, "list", "--json", "--unblocked", "--not-blocked", "--unclaimed"
-    )
+    args: list[str] = ["list", "--json", "--unblocked", "--not-blocked", "--unclaimed"]
+    if tag:
+        args += ["--tag", tag]
+    stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
         msg = stderr.strip() or stdout.strip()
         raise ToolError(msg)
