@@ -3648,3 +3648,10 @@ External repos and resources studied during OwlBear development.
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
 | MCP Spec — Tools (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | MIT | readOnlyHint, outputSchema, ToolAnnotations for computed tools, error handling conventions | `.owlbear/research/migrate-dispatcher-to-pick-tasks.md` | 2026-04-05 |
+
+## Implement Voice Process Manager (Task #62)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Python SDK stdio client | <https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/stdio.py> | MIT | Background asyncio.Task read loop + asyncio.Queue message buffer pattern (MemoryObjectReceiveStream equivalent); subprocess spawn and NDJSON read/write architecture | `.owlbear/research/voice-process-manager.md` | 2026-03-27 |
+| ACP Python SDK `spawn_stdio_transport` | `v1/.venv/Lib/site-packages/acp/transports.py` | Apache-2.0 | asyncio subprocess lifecycle, graceful terminate+kill shutdown pattern | `.owlbear/research/voice-process-manager.md` | 2026-03-27 |
