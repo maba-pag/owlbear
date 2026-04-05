@@ -572,3 +572,40 @@ class TestFromAC_TestWriterAgentHooks:
         assert not duplicates, (
             f"Duplicate YAML keys found in test-writer.agent.md frontmatter: {duplicates}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests — security fix (review pass #1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell hook requires Windows")
+class TestBuilderDiscovered:
+    """Reviewer-identified security bypass: path with /tests/ sub-segment must be denied.
+
+    Before fix: $isInTests used `-or ($normalized -match '/tests/')` which allowed
+    paths like `packages/tests/evil.py` to bypass the allow-list guard.
+    After fix: only `$normalized.StartsWith('tests/')` is used.
+    """
+
+    def test_packages_tests_subdir_path_is_denied(self) -> None:
+        """packages/tests/evil.py must be denied — /tests/ sub-segment bypass removed."""
+        _, output = _run_hook({
+            "tool_name": "create_file",
+            "tool_input": {"filePath": "packages/tests/evil.py"},
+        })
+        assert _is_denied(output), (
+            f"packages/tests/evil.py must be denied (allow-list: prefix 'tests/' only). "
+            f"Got: {output!r}"
+        )
+
+    def test_src_lib_tests_subdir_path_is_denied(self) -> None:
+        """src/lib/tests/backdoor.py must also be denied — /tests/ sub-segment bypass removed."""
+        _, output = _run_hook({
+            "tool_name": "create_file",
+            "tool_input": {"filePath": "src/lib/tests/backdoor.py"},
+        })
+        assert _is_denied(output), (
+            f"src/lib/tests/backdoor.py must be denied (allow-list: prefix 'tests/' only). "
+            f"Got: {output!r}"
+        )
