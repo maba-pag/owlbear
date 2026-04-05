@@ -23,7 +23,7 @@ cd owlbear
 uv sync
 ```
 
-Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with `code .`.
+Run `.owlbear\kanban\setup.ps1` to download the kanban-md binary, then open VS Code with `code .`.
 
 ## Directory Layout
 
@@ -39,9 +39,10 @@ Run `kanban\setup.ps1` to download the kanban-md binary, then open VS Code with 
 | `.github/agents/`        | Agent definitions (`.agent.md`)                        |
 | `.github/skills/`         | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `.github/instructions/`   | Shared instruction files (`*.instructions.md`)         |
-| `docs/`                   | Research, decisions, sources, and supporting docs      |
-| `kanban/`                 | Kanban board data and tooling                          |
-| `scripts/`                | Project tooling scripts (setup, skill validation, e2e smoke testing) |
+| `.owlbear/`               | Project ops data: kanban board, decisions, research, sources, scripts, hooks |
+| `seed/`                   | Template files copied to new projects by `setup/init.py` |
+| `setup/`                  | Workspace initialiser (`init.py`), setup guide, sharing guide |
+| `scripts/`                | Legacy setup script and pre-commit hooks (see `setup/init.py`) |
 | `v1/`                     | Archived v1 codebase for reference                     |
 
 ## How It Works
@@ -56,7 +57,7 @@ reusable workflows for each agent role.
 board, knowledge base, project metadata, and persistent agent memory as tools inside VS Code.
 
 **Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
-through a shared kanban board in `kanban/`.
+through a shared kanban board in `.owlbear/kanban/`.
 
 ## Orchestrator CLI
 
