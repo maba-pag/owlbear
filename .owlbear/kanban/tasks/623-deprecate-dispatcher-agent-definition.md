@@ -1,10 +1,10 @@
 ---
 id: 623
 title: Deprecate dispatcher agent definition
-status: in-progress
+status: done
 priority: important
 created: 2026-04-05T01:31:22.2282042+02:00
-updated: 2026-04-05T17:45:19.647046+02:00
+updated: 2026-04-05T22:02:23.9184579+02:00
 tags:
     - scope:agents
     - phase-2
@@ -94,3 +94,33 @@ Architecture review complete. AC refined: removed speculative YAML key, narrowed
 - AC scope: edits to `share/agents/dispatcher.agent.md` and `share/agents/orchestrator.agent.md` only.
 - No Python interfaces created or modified; no testable contract exists.
 - Passing through to builder.
+
+[[2026-04-05]] Sun 20:48
+## Builder Notes
+- Files changed: `share/agents/dispatcher.agent.md` (2 edits)
+- Changes: description prefixed with "(DEPRECATED)"; deprecation callout added to body
+- Orchestrator `agents:` list: no `dispatcher` entry found — AC item 3 pre-satisfied (no change needed)
+- copilot-instructions.md: zero refs confirmed by architecture review — N/A
+- No tests applicable (non-impl task, tagged `agent`)
+- No Python code modified; ruff N/A
+- Confidence: 1.0 — all binding AC items satisfied
+
+[[2026-04-05]] Sun 21:37
+## Review Evidence\n- Tests: N/A (non-impl task, tagged `agent`; test-writer correctly passed through)\n- Lint: N/A (no Python code modified)\n- Coverage: N/A\n- Changed files in scope: `share/agents/dispatcher.agent.md` only\n\n### AC Compliance\n| Binding AC | Evidence | Status |\n|---|---|---|\n| 1. description prefixed \"(DEPRECATED)\" | git diff confirmed exact change | PASS |\n| 2. body deprecation callout (exact text) | git diff confirmed exact text added | PASS |\n| 3. dispatcher removed from orchestrator agents: list | Not present in orchestrator.agent.md; file not in changed set (pre-satisfied) | PASS |\n| 4. File NOT deleted | File exists; 2-line edit only | PASS |\n\n- TestFromAC modifications: None (no test files for this task)\n- Security: No new system boundaries or code paths\n- Deductions: 0\n- Confidence: .97 → PASS
+
+[[2026-04-05]] Sun 22:02
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Agent file edit only; `disable-model-invocation: true` (already inert); zero refs in `copilot-instructions.md` confirmed by S4 + grep |
+| 2 | Module docstrings | No | N/A | No Python files created or modified |
+| 3 | External attribution | No | N/A | All 7 high-relevance sources codebase-internal (research doc S1–S7) |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/deprecate-dispatcher-agent.md` exists, linked in task body Research section |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (`623-*` glob: no results)

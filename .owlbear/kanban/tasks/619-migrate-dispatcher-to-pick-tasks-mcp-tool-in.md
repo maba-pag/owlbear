@@ -4,7 +4,7 @@ title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
 status: in-progress
 priority: needed
 created: 2026-04-05T01:30:40.2393944+02:00
-updated: 2026-04-05T17:41:47.1226169+02:00
+updated: 2026-04-05T21:58:08.6424337+02:00
 started: 2026-04-05T11:14:35.6735559+02:00
 tags:
     - scope:mcp
@@ -180,3 +180,49 @@ AC line 1 is unambiguously unmet. The builder correctly noted no code changes we
 Deductions: -1.0 (AC-1 not met: 6/8 subtasks incomplete). Confidence: 0.00 → FAIL.
 
 **Action:** Reject to in-progress. Do not re-submit to review until all subtasks are done or archived.
+
+[[2026-04-05]] Sun 20:21
+## Builder Notes
+
+**Task type:** Parent coordination task (tagged `quality`). Non-implementation pass-through.
+
+**Assessment (2026-04-05):** AC-1 still unmet. Reviewer explicitly rejected previous pass-through and stated: *"Do not re-submit to review until all subtasks are done or archived."*
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | in-progress ✗ |
+| #624 | Evaluate and clean up orchestrator planner/ package | in-progress ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | in-progress ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | todo ✗ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | in-progress ✗ |
+
+**Progress since last review:** #622 moved from in-progress → done (net +1).
+
+**Action:** Staying in-progress. Re-try after #623, #624, #628, #629, #630 all reach done or archived.
+
+[[2026-04-05]] Sun 21:58
+## Builder Notes
+
+**Assessment (2026-04-05, second retry):** AC-1 still unmet. Reviewer directive stands: *"Do not re-submit to review until all subtasks are done or archived."*
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | docs ✗ |
+| #624 | Evaluate and clean up orchestrator planner/ package | in-progress ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | in-progress ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | review ✗ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | in-progress ✗ |
+
+**Progress since last assessment:** No new subtasks reached done/archived (+0).
+
+**Action:** Staying in-progress. Pending: #623 (docs→done), #624 (build→done), #628 (build→done), #629 (review→done), #630 (build→done).

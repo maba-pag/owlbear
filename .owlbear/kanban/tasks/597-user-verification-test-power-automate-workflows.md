@@ -1,14 +1,15 @@
 ---
 id: 597
 title: 'User verification: test Power Automate Workflows webhook in corp Teams'
-status: backlog
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T20:14:08.5441141+02:00
-updated: 2026-04-05T01:18:35.0793334+02:00
+updated: 2026-04-05T20:52:40.7535764+02:00
 tags:
     - phase-3
     - scope:notifications
     - scope:orchestrator
+    - type:test
 class: standard
 ---
 
@@ -54,3 +55,43 @@ O365 Connectors retirement is April 30, 2026. After that date, Power Automate Wo
 ## Challenge Results
 - Challenger: SKIPPED (validation pass on existing research, no new recommendation produced)
 - Confidence in existing research: .75 (unchanged from #592)
+
+[[2026-04-05]] Sun 20:23
+## Architecture Review
+
+### Refinement Applied
+- Research doc path corrected: actual location is .owlbear/research/power-automate-workflows-teams-notifications.md (task body references docs/research/... which does not exist)
+- Added pass-through tag type:test (non-implementation task: manual user verification)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Single concern: manual verification of Teams Workflows corp availability |
+| Interface clarity | N/A | Manual user task; no code interfaces |
+| Dependency correctness | PASS | No depends_on listed; correct — #592 research is upstream context, not a blocking dep |
+| Module layering | N/A | No code changes |
+| TDD compliance | N/A | Non-impl task; type:test pass-through tag added |
+| KISS/YAGNI | PASS | Minimal scope: test one thing, report result |
+| Premise challenge | PASS | Valid: #592 research identified this manual step as the only way to resolve corp availability unknown |
+| Pattern consistency | PASS | Follows established verification pattern; conditional outcomes mirror research recommendation |
+| Security surface | PASS | Webhook URL created by user in Teams GUI, used only in local PowerShell test. No secrets stored in code |
+| Single domain | PASS | Notifications domain only |
+
+### Failure Mode Map
+N/A — no code changes; manual user task.
+
+### Challenge Results
+- Challenger: FALLBACK — no challenger agent available in session
+- Architect response: accepted fallback; pure manual-verification task with no code architecture decisions to challenge
+
+### Notes
+- Research doc (.owlbear/research/power-automate-workflows-teams-notifications.md) is thorough and well-sourced. Procedure in section 3.3 maps directly to AC.
+- Time-sensitive: O365 Connectors retire April 30, 2026 (25 days). Task should be prioritized for user action.
+- #514 decision resolved as "Defer / do nothing" — conditional DR in AC line 5 would reopen this if Workflows proves available.
+- AC line 5 relies on user knowing how to trigger a T3 DR (via scribe agent or direct request). Acceptable for pipeline-aware user.
+
+### Verdict: APPROVE
+### Action: Pass-through tag type:test added. Advanced to todo.
+
+[[2026-04-05]] Sun 20:52
+## Test-Writer Notes\n- Non-implementation task (tagged type:test) — no tests applicable.\n- AC describes manual user verification steps in Teams GUI; no Python interfaces exist.\n- Passing through to builder.

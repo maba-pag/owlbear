@@ -1,45 +1,3 @@
-{"timestamp":"2026-03-30T16:43:14.6930884+02:00","action":"claim","task_id":54,"detail":"researcher"}
-{"timestamp":"2026-03-30T16:43:55.8782762+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T16:44:19.8767336+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T16:44:37.4400844+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T16:44:37.4432413+02:00","action":"release","task_id":179,"detail":"architect"}
-{"timestamp":"2026-03-30T16:48:43.7661863+02:00","action":"create","task_id":223,"detail":"Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge"}
-{"timestamp":"2026-03-30T16:49:06.791265+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T16:49:17.2061704+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T16:49:23.226323+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T16:49:23.2304974+02:00","action":"release","task_id":54,"detail":"researcher"}
-{"timestamp":"2026-03-30T16:51:10.8310971+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:51:17.8656978+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:52:05.0270864+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:52:35.0364391+02:00","action":"move","task_id":196,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T16:52:35.4508691+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:52:35.4540653+02:00","action":"release","task_id":196,"detail":"auditor"}
-{"timestamp":"2026-03-30T16:52:55.8121642+02:00","action":"edit","task_id":196,"detail":"Add necessity check to code-review skill critical checks"}
-{"timestamp":"2026-03-30T16:53:26.5248391+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T16:53:26.5296419+02:00","action":"claim","task_id":221,"detail":"researcher"}
-{"timestamp":"2026-03-30T16:53:58.3481331+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T16:53:58.3534992+02:00","action":"claim","task_id":181,"detail":"auditor"}
-{"timestamp":"2026-03-30T16:57:14.0426482+02:00","action":"create","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T16:57:19.0939263+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T16:57:22.0411819+02:00","action":"create","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T16:57:28.5667477+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T16:57:32.072619+02:00","action":"create","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-30T16:57:40.2277051+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-30T16:57:45.528766+02:00","action":"create","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-30T16:57:52.9894066+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-30T16:58:06.8830663+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-30T16:58:07.4329245+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-30T16:58:40.3881036+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T16:58:40.3928438+02:00","action":"release","task_id":221,"detail":"researcher"}
-{"timestamp":"2026-03-30T16:58:48.4619096+02:00","action":"move","task_id":181,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T16:58:48.9149998+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T16:58:48.9190432+02:00","action":"release","task_id":181,"detail":"auditor"}
-{"timestamp":"2026-03-30T16:59:07.7062503+02:00","action":"edit","task_id":181,"detail":"Test: AcpClient wrapper forwards required SDK parameters"}
-{"timestamp":"2026-03-30T16:59:33.1640856+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T16:59:33.1677166+02:00","action":"claim","task_id":153,"detail":"auditor"}
-{"timestamp":"2026-03-30T17:02:03.7676084+02:00","action":"move","task_id":153,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T17:02:04.2380781+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
-{"timestamp":"2026-03-30T17:02:04.2427506+02:00","action":"release","task_id":153,"detail":"auditor"}
 {"timestamp":"2026-03-30T17:02:25.1570001+02:00","action":"edit","task_id":153,"detail":"Test: planner data models and board reader"}
 {"timestamp":"2026-03-30T17:02:52.588119+02:00","action":"edit","task_id":151,"detail":"Test: Vector store and embedding pipeline"}
 {"timestamp":"2026-03-30T17:02:52.5923342+02:00","action":"claim","task_id":151,"detail":"auditor"}
@@ -9998,3 +9956,45 @@
 {"timestamp":"2026-04-05T21:35:52.3211911+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
 {"timestamp":"2026-04-05T21:35:52.3356923+02:00","action":"release","task_id":62,"detail":"spire-horn"}
 {"timestamp":"2026-04-05T21:35:52.9221965+02:00","action":"move","task_id":62,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T21:36:26.5208615+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T21:36:26.54038+02:00","action":"claim","task_id":598,"detail":"basin-rose"}
+{"timestamp":"2026-04-05T21:36:37.9543122+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T21:36:37.9696776+02:00","action":"claim","task_id":623,"detail":"lunar-cliff"}
+{"timestamp":"2026-04-05T21:36:41.7662154+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T21:36:41.7814747+02:00","action":"claim","task_id":610,"detail":"bone-dock"}
+{"timestamp":"2026-04-05T21:36:45.7988482+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T21:36:45.8172605+02:00","action":"claim","task_id":634,"detail":"prism-rose"}
+{"timestamp":"2026-04-05T21:37:02.7445074+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-05T21:37:02.7594698+02:00","action":"release","task_id":610,"detail":"bone-dock"}
+{"timestamp":"2026-04-05T21:37:46.3404907+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T21:37:46.3526093+02:00","action":"release","task_id":634,"detail":"prism-rose"}
+{"timestamp":"2026-04-05T21:37:53.2547762+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T21:37:53.2689033+02:00","action":"release","task_id":623,"detail":"lunar-cliff"}
+{"timestamp":"2026-04-05T21:55:49.9278218+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T21:55:49.9432589+02:00","action":"release","task_id":598,"detail":"basin-rose"}
+{"timestamp":"2026-04-05T21:56:18.1129207+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T21:56:18.135434+02:00","action":"claim","task_id":619,"detail":"storm-field"}
+{"timestamp":"2026-04-05T21:56:29.682143+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T21:56:29.696751+02:00","action":"claim","task_id":629,"detail":"orbit-hawk"}
+{"timestamp":"2026-04-05T21:56:37.3384556+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-05T21:56:37.3529521+02:00","action":"claim","task_id":613,"detail":"lunar-ember"}
+{"timestamp":"2026-04-05T21:56:56.8648151+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-05T21:56:56.8794383+02:00","action":"release","task_id":613,"detail":"lunar-ember"}
+{"timestamp":"2026-04-05T21:57:36.8180204+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T21:57:36.8316837+02:00","action":"release","task_id":629,"detail":"orbit-hawk"}
+{"timestamp":"2026-04-05T21:58:08.6445539+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T21:58:08.6577934+02:00","action":"release","task_id":619,"detail":"storm-field"}
+{"timestamp":"2026-04-05T22:01:16.6554545+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T22:01:16.6698062+02:00","action":"claim","task_id":634,"detail":"cliff-quake"}
+{"timestamp":"2026-04-05T22:01:25.1686125+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T22:01:25.1804022+02:00","action":"claim","task_id":623,"detail":"timber-fern"}
+{"timestamp":"2026-04-05T22:01:30.3599568+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T22:01:30.374945+02:00","action":"claim","task_id":629,"detail":"warp-aspen"}
+{"timestamp":"2026-04-05T22:01:33.5577849+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T22:01:33.5708463+02:00","action":"claim","task_id":608,"detail":"crisp-vapor"}
+{"timestamp":"2026-04-05T22:01:49.8676661+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T22:01:49.8812293+02:00","action":"release","task_id":634,"detail":"cliff-quake"}
+{"timestamp":"2026-04-05T22:02:00.1657074+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T22:02:00.1806273+02:00","action":"release","task_id":629,"detail":"warp-aspen"}
+{"timestamp":"2026-04-05T22:02:23.919499+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T22:02:23.9326966+02:00","action":"release","task_id":623,"detail":"timber-fern"}

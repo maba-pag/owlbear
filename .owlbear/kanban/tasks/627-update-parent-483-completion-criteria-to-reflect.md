@@ -1,10 +1,10 @@
 ---
 id: 627
 title: 'Update parent #483 completion criteria to reflect #576 closure as superseded'
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-04-05T10:25:19.9880362+02:00
-updated: 2026-04-05T14:00:30.3127344+02:00
+updated: 2026-04-05T20:39:22.261558+02:00
 tags:
     - phase-2
     - ' scope:kanban'
@@ -83,3 +83,16 @@ Staleness: Research and implementation notes reference #576 at "backlog" but it 
 
 ### Verdict: REJECT
 ### Action Taken: Rejected to ideation. Subsumed by #632 (AC3 covers #483 body update). #483 already archived, #576 already archived with full supersession record. Recommend archiving #627 as redundant.
+
+[[2026-04-05]] Sun 20:39
+## Research (Validation Pass)
+- Existing doc: .owlbear/research/627-parent-483-completion-criteria.md (stale detail: #576 now archived, not backlog)
+- Independent verification: all 4 architect rejection claims confirmed
+  - #483: archived. #576: archived. #632 AC3 subsumes #627 scope. #575: only unresolved subtask.
+- AC1: cosmetic on archived task, subsumed by #632 AC3
+- AC2: moot — #483 already archived
+- Recommendation: archive #627 as redundant (confidence: .95)
+- Tier: T1 — redundant bookkeeping, no deliverables
+- Follow-up tasks: none (existing #632 covers remaining scope)
+- Decision requests: none
+- Challenge: SKIP — task redundant, nothing to challenge

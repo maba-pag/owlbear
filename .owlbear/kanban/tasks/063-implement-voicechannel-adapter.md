@@ -1,10 +1,10 @@
 ---
 id: 63
 title: Implement VoiceChannel adapter
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-03-26T19:33:48.9743371+01:00
-updated: 2026-03-29T16:05:00.1853837+02:00
+updated: 2026-04-05T19:35:06.1444494+02:00
 tags:
     - phase-3
     - scope:voice
@@ -113,3 +113,11 @@ Key findings:
 - Verified: #61 (voice protocol models) in-progress, provides SpeakMsg/TranscriptMsg types
 - Verified: #62 (voice process manager) todo, provides VoiceProcessManager/VoiceProcessError
 - Created: #142 (test task) at todo, added as dependency (TDD ordering)
+
+[[2026-04-05]] Sun 19:35
+## Test-Writer Notes
+- RED phase already completed via companion task #142 (archived): tests/test_voice_channel.py, 22 tests
+- Current state: all 22 tests PASS (implementation live at serve/orchestrator/src/owlbear/voice/channel.py)
+- AC module location specifies packages/orchestrator/src/owlbear/voice/channel.py — actual location is serve/orchestrator; builder to reconcile
+- No new failing tests written: contract fully covered by #142; writing duplicates would not add value
+- Passing through to builder pre-existing-impl pattern

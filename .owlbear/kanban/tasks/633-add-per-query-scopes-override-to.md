@@ -1,10 +1,10 @@
 ---
 id: 633
 title: Add per-query scopes override to KnowledgeQueryService.query()
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-04-05T12:59:29.4655727+02:00
-updated: 2026-04-05T12:59:29.4655727+02:00
+updated: 2026-04-05T20:50:33.0497177+02:00
 tags:
     - scope:knowledge
     - phase-2
@@ -38,3 +38,12 @@ See: .owlbear/research/expose-scope-mcp-knowledge-tools.md
 
 - ~5 LOC change. Fully backwards-compatible.
 - This is a prerequisite for #617 (expose scope params in MCP tools).
+
+[[2026-04-05]] Sun 20:50
+## Research
+- Research doc: .owlbear/research/per-query-scopes-override.md
+- Sources: 6 studied, 4 high-relevance
+- Recommendation: Proceed as specified — add `scopes` param to `query()` and `_search_chunks()` using established `effective = scopes if scopes is not None else self._scopes` idiom (confidence: .95)
+- Follow-up tasks created: none (task is already a follow-up from #617 research)
+- Decision requests: none
+- Note: `query_for_context()` also calls `_search_chunks()` but is out of scope for this task

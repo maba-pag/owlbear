@@ -1,10 +1,10 @@
 ---
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-04T07:31:44.9857664+02:00
+updated: 2026-04-05T19:40:52.412945+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -100,3 +100,14 @@ Split from #130 (Group B â€” depends on #33 IngestPipeline). See docs/resea
 - Blocked: Conflict between task #136 AC (refresh_all must call list_enabled) and task #554 TestFromAC (refresh_all must call list_all, list_enabled MUST NOT be called)
 - Non-conflicting deliverables committed: commit f315d26
 - AC suggestion: Architect must retire or update task #554 TestFromAC_RefreshAll::test_calls_list_all_not_list_enabled to allow list_enabled
+
+[[2026-04-05]] Sun 19:40
+## Test-Writer Notes (Retry)
+- Test file: tests/test_bookmark_pipeline_136.py
+- Stale test removed: `test_refresh_all_calls_list_enabled_with_scope` — superseded by #554 arch decision (refresh_all uses list_all; list_enabled tested separately in TestFromAC_ListEnabled)
+- Commit: 343ecc9
+- Total: 53 tests (44 PASS regression, 9 FAIL red-phase)
+- ruff: clean
+- Failing tests for builder:
+  1. `TestFromAC_BookmarkPipelineConstructor::test_constructor_without_web_read_fn_raises_type_error` — AC: web_read_fn REQUIRED; current impl has `None` default (bookmark_pipeline.py line 64)
+  2. `TestFromAC_MCPBookmarkTools` (8 tests) — bookmark_source + list_bookmarks not in server.py; AppContext missing bookmark_pipeline and bookmark_store fields

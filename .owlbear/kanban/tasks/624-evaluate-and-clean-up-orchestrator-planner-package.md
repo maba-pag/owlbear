@@ -1,10 +1,10 @@
 ---
 id: 624
 title: Evaluate and clean up orchestrator planner/ package
-status: todo
+status: in-progress
 priority: important
 created: 2026-04-05T01:31:32.2092633+02:00
-updated: 2026-04-05T16:55:20.4280878+02:00
+updated: 2026-04-05T19:06:13.7203802+02:00
 tags:
     - scope:orchestrator
     - phase-2
@@ -80,3 +80,10 @@ N/A — no failure-mode codepaths introduced or modified.
 
 ### Verdict: APPROVE
 ### Action: AC refined, docs tag added, backlog to todo
+
+[[2026-04-05]] Sun 19:06
+## Test-Writer Notes
+- Non-implementation task (tagged `docs`) — no tests applicable.
+- Deliverable is a module-level docstring in `planner/__init__.py`; no testable Python interfaces introduced.
+- Arch review explicitly confirmed: "Non-impl task (docs tag); deliverable is a docstring, not testable code."
+- Passing through to builder.

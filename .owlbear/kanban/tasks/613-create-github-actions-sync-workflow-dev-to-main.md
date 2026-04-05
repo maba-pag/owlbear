@@ -1,14 +1,15 @@
 ---
 id: 613
 title: Create GitHub Actions sync workflow (dev to main)
-status: backlog
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T21:55:26.1899523+02:00
-updated: 2026-04-05T00:35:43.7550941+02:00
+updated: 2026-04-05T21:56:56.8619322+02:00
 tags:
     - scope:infra
     - type:build
     - phase-2
+    - type:config
 parent: 610
 depends_on:
     - 611
@@ -25,34 +26,74 @@ Create a GitHub Actions workflow (.github/workflows/sync-to-main.yml) on the dev
 1. Trigger: workflow_dispatch (manual run from GitHub UI or gh CLI)
 2. Checkout dev branch
 3. Create a clean temporary directory
-4. Copy ONLY these files/dirs into temp:
-   - share/
-   - serve/
-   - seed/
-   - setup/
-   - pyproject.toml (with skills-ref dependency removed or moved to optional group)
-   - uv.lock
-   - .python-version
-   - .gitignore (consumer version, may need adjustment)
-   - README-consumer.md (renamed to README.md)
-   - SECURITY.md
-5. Force-push temp contents to main branch (orphan commit or amend)
-6. Commit message: "sync: update from dev (workflow dispatch)"
+4. Validate all include-list paths exist on dev (exit non-zero if any missing)
+5. Copy ONLY these files/dirs into temp:
+   - Directories: share/, serve/, seed/, setup/
+   - Files: pyproject.toml, uv.lock, .python-version, .gitignore, SECURITY.md
+   - README-consumer.md (placed as README.md in temp)
+6. Create orphan commit from temp contents (no dev branch history)
+7. Force-push orphan commit to main branch
+8. Commit message: "sync: update from dev (workflow dispatch)"
 
 ## Acceptance Criteria
 
 - [ ] AC1: .github/workflows/sync-to-main.yml exists on dev branch
-- [ ] AC2: Workflow trigger is workflow_dispatch only
-- [ ] AC3: Only approved product files are synced (see include list above)
-- [ ] AC4: No dev-only files leak to main (.owlbear/, store/, tests/, v1/, etc.)
-- [ ] AC5: README-consumer.md renamed to README.md on main
-- [ ] AC6: pyproject.toml skills-ref dependency handled (removed or made optional)
-- [ ] AC7: Dry-run mode available (optional: workflow input to preview without pushing)
-- [ ] AC8: Workflow completes successfully on manual dispatch
-- [ ] AC9: Consumer can clone main, run uv sync, and use owlbear
+- [ ] AC2: Workflow trigger is workflow_dispatch only (no push, schedule, or PR triggers)
+- [ ] AC3: Workflow syncs ONLY these paths from dev to main: directories share/, serve/, seed/, setup/; files pyproject.toml, uv.lock, .python-version, .gitignore, SECURITY.md, and README-consumer.md (placed as README.md on main). No other files.
+- [ ] AC4: Workflow validates all AC3 include-list paths exist on dev before committing. Exits with non-zero status if any are missing.
+- [ ] AC5: Workflow creates an orphan commit on main (no dev branch history) and force-pushes. Commit message: "sync: update from dev (workflow dispatch)"
+- [ ] AC6: .gitignore from dev is copied as-is (extra exclusions for dev-only dirs are inert on main)
+- [ ] AC7: Workflow uses GITHUB_TOKEN with contents:write permission. Assumes no branch protection rules on main. If branch protection is added later, file follow-up task for auth changes.
 
 ## Notes
 
-The workflow needs write access to the main branch. If branch protection is enabled, use a deploy key or PAT with bypass.
+- pyproject.toml skills-ref is already in optional validation group (#614 archived). Workflow copies pyproject.toml as-is; uv sync on main will not install it.
+- Consumer .gitignore: dev .gitignore is copied as-is. Extra exclusion lines for .owlbear/, store/, tests/, etc. are harmless on main since those dirs dont exist there.
+- Dry-run mode (workflow input to preview without pushing) is a future enhancement, not in-scope.
+- If branch protection is later enabled on main (require reviews, require checks, deny force-push), the workflow must use a PAT or deploy key with bypass permissions. File as separate follow-up task.
+- #615 (First sync: validate clean main branch) is the end-to-end validation task. The sync workflow (#613) produces the mechanism; #615 validates the output.
 
-Consumer .gitignore may differ from dev .gitignore (e.g., no .owlbear/ exclusions needed on main since that dir doesnt exist there).
+## Architecture Review
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One deliverable: sync workflow YAML file |
+| Interface clarity | PASS (refined) | Original 9 ACs reduced to 7 precise, verifiable lines. Removed duplicative/stale/optional ACs. |
+| Dependency correctness | PASS | #611 (dev branch, in-progress) and #612 (consumer README, archived). Both correct. |
+| Module layering | N/A | Infrastructure task, no Python modules |
+| TDD compliance | PASS | Added type:config pass-through tag for test-writer |
+| KISS/YAGNI | PASS (refined) | Removed dry-run (optional/future), removed consumer validation (belongs to #615) |
+| Premise challenge | PASS | Orphan+force-push is correct strategy for auto-generated consumer branch. Alternatives evaluated: git subtree split (overkill), manual copy (history pollution), API tree upload (over-complex). |
+| Pattern consistency | N/A | First workflow in repo, no existing patterns to follow |
+| Security surface | PASS | Include-list approach prevents dev file leaks. GITHUB_TOKEN scoped to repo. Manual trigger only. No secrets embedded. |
+| Single domain | PASS | scope:infra only |
+
+### Refinements Applied
+
+1. Removed AC4 ("no dev-only files leak... etc.") -- vague exclusion list with "etc." Redundant with include-list approach (AC3).
+2. Removed AC6 ("pyproject.toml skills-ref handled") -- stale. #614 already moved skills-ref to optional validation group. pyproject.toml copied as-is.
+3. Removed AC7 ("dry-run mode, optional") -- optional ACs create builder/reviewer ambiguity. Moved to Notes as future enhancement.
+4. Removed AC8 ("workflow completes successfully") -- duplicates #615 AC1 (end-to-end validation).
+5. Removed AC9 ("consumer can clone and use") -- duplicates #615 AC4-AC6 (consumer validation scope).
+6. Added AC4 (validation checkpoint): workflow exits non-zero if include-list paths missing on dev. Prevents silent partial syncs.
+7. Rewrote AC7: explicit GITHUB_TOKEN usage with documented branch-protection assumption.
+8. Rewrote AC3: self-contained include list (was "see include list above").
+9. Clarified .gitignore approach in AC6 and Notes (copy as-is, KISS).
+10. Added type:config pass-through tag (type:build not in non-impl pass-through list, per #611 precedent).
+
+### Challenge Results
+
+- Challenger: RECONSIDER (confidence: 0.75)
+- Concerns: (1) AC7 contradicted original Notes on branch protection -- resolved by documenting assumption and follow-up path. (2) Missing validation checkpoint for include-list paths -- added as AC4. (3) AC3 phrasing ambiguity -- rewrote as self-contained list.
+- Architect response: accepted all three. Integrated into refinements 6, 7, and 8.
+
+### Verdict: APPROVE (after refinement)
+### Action Taken: Rewrote 9 ACs into 7 precise, verifiable lines. Removed stale/duplicative/optional ACs. Added validation checkpoint (AC4), type:config tag. Documented branch-protection assumption. Advanced to todo.
+
+[[2026-04-05]] Sun 20:29
+Refined 9 ACs into 7 precise, verifiable lines. Removed stale AC6 (#614 resolved), duplicative AC8/AC9 (#615 scope), optional AC7 (dry-run future enhancement), vague AC4 ("etc."). Added validation checkpoint (AC4), self-contained include-list (AC3), explicit GITHUB_TOKEN assumption (AC7). type:config pass-through tag added. Challenger RECONSIDER (0.75) on branch-protection and validation checkpoint -- both integrated.
+
+[[2026-04-05]] Sun 21:56
+Non-implementation task (tagged type:config) — no tests applicable. Deliverable is .github/workflows/sync-to-main.yml (YAML file). No testable Python interfaces exist. All 7 ACs describe YAML workflow structure, shell script behavior, and GitHub Actions semantics — not Python code. Passing through to builder.

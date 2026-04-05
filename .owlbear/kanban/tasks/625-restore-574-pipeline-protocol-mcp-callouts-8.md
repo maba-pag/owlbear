@@ -182,7 +182,7 @@ Pure documentation task (single Markdown file). No Python modules changed; cover
 No `TestFromAC_*` tests modified by the builder. All 8 tests preserved exactly as written by test-writer. PRESERVED.
 
 ### Test Quality
-ADEQUATE. String-presence assertions within section-scoped extraction are appropriate for documentation tasks. Section isolation prevents false positives from tool names appearing elsewhere. Parametrized IDs are descriptive (`resolved-decision->show_task`, etc.). Would catch misplacement (wrong section) and absence. 
+ADEQUATE. String-presence assertions within section-scoped extraction are appropriate for documentation tasks. Section isolation prevents false positives from tool names appearing elsewhere. Parametrized IDs are descriptive (`resolved-decision->show_task`, etc.). Would catch misplacement (wrong section) and absence.
 **Note:** Tests don't verify format constraint (inline vs. blockquote). A negative assertion like `assert "> **MCP equivalent:**" not in section` would further harden AC 3 — noted for future test writers, not a failing defect since implementation is correct and verified by diff.
 
 ### Security

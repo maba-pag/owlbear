@@ -1,10 +1,10 @@
 ---
 id: 629
 title: Clean up dispatcher references after pick_tasks migration
-status: todo
+status: done
 priority: important
 created: 2026-04-05T10:42:19.8702275+02:00
-updated: 2026-04-05T17:58:25.6715818+02:00
+updated: 2026-04-05T22:02:00.1641444+02:00
 tags:
     - scope:agents
     - phase-2
@@ -100,3 +100,57 @@ Research complete. Doc at .owlbear/research/cleanup-dispatcher-refs.md. All 6 AC
 
 [[2026-04-05]] Sun 17:58
 Architecture review complete. AC refined: item 6 narrowed to verification (overlap with #623), item 7 added (w-task-decomposition L19), agent count correction. All 10 criteria PASS. Confidence .92.
+
+[[2026-04-05]] Sun 20:29
+## Test-Writer Notes\n- Non-implementation task (tagged type:docs) — no tests applicable.\n- All 7 AC items are `.md` file text substitutions in share/ (instructions, skills, agents). No testable Python interfaces exist.\n- Passing through to builder.
+
+[[2026-04-05]] Sun 20:53
+## Builder Notes\n- Non-implementation task — all changes are `.md` text substitutions in `share/`.\n- AC item 6 (dispatcher.agent.md): verified deprecation header present from #623 — no edit made.\n- AC item 1: removed `dispatcher` row from Per-Agent Section Mapping table in `agent-common.instructions.md`.\n- AC item 2: replaced \"the dispatcher will dispatch the planner\" → \"the orchestrator will route the task to the planner\" in `r-pipeline-protocol/SKILL.md`.\n- AC item 3: replaced \"blocked for triage by dispatcher\" → \"blocked for triage by orchestrator\" in `r-pipeline-protocol/SKILL.md`.\n- AC item 4: removed `dispatcher` from T1 tier row; updated agent count 14 → 15 in `share/agents/README.md`.\n- AC item 5: removed `dispatcher` from T1 tier row in `h-agent-structure/SKILL.md`.\n- AC item 7: replaced \"dispatcher-dispatched\" → \"orchestrator-dispatched\" in `w-task-decomposition/SKILL.md`.\n- 5 files changed, 0 tests (type:docs pass-through), no ruff applicable.
+
+[[2026-04-05]] Sun 21:57
+## Review Evidence
+
+**Type:** type:docs pass-through — no tests applicable, no ruff applicable.
+
+### AC Compliance Table
+
+| AC # | File | Evidence | Status |
+|------|------|----------|--------|
+| 1 | `agent-common.instructions.md` | Per-Agent Section Mapping table has 9 rows (researcher→curator); no dispatcher row present | ✅ PASS |
+| 2 | `r-pipeline-protocol/SKILL.md` ~L97 | Text reads: "the orchestrator will route the task to the planner" — confirmed | ✅ PASS |
+| 3 | `r-pipeline-protocol/SKILL.md` ~L186 | Text reads: "Stale tasks — blocked for triage by orchestrator" — confirmed | ✅ PASS |
+| 4 | `share/agents/README.md` | Header: "15 agent definitions"; T1 tier row: "orchestrator" only — no dispatcher | ✅ PASS |
+| 5 | `h-agent-structure/SKILL.md` | T1 tier row: "orchestrator" only — no dispatcher | ✅ PASS |
+| 6 | `dispatcher.agent.md` (verify only) | Deprecation header present: "> **Deprecated.** Replaced by pick_tasks MCP tool (#621). See #619 migration plan." — no edit made | ✅ PASS |
+| 7 | `w-task-decomposition/SKILL.md` L19 | Text reads: "When **orchestrator-dispatched** (parent task ID provided)" — no dispatcher reference | ✅ PASS |
+
+### Residual Reference Sweep
+
+Grepped "dispatcher" in all 5 changed files: **0 matches** in each. No stale references leaked.
+
+### Security
+
+Docs-only changes. No code paths, no system boundaries, no security surface. N/A.
+
+### Deductions
+
+None. All AC items independently verified against file content.
+
+**Confidence: .97 → PASS**
+
+[[2026-04-05]] Sun 22:02
+## Docs Gate
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API — copilot-instructions.md | No | ✅ N/A | Grepped `.github/copilot-instructions.md` for "dispatcher": 0 matches. No tables/sections reference dispatcher. |
+| 2 | Module Docstrings | No | ✅ N/A | All 5 changed files are `.md` in `share/`. No Python modules created or modified. |
+| 3 | External Attribution | No | ✅ N/A | Research note states all 7 sources are codebase-internal. No external patterns used. |
+| 4 | CLI Changes | No | ✅ N/A | No CLI commands added or modified. |
+| 5 | Research Doc | Yes | ✅ PASS | `.owlbear/research/cleanup-dispatcher-refs.md` exists. Linked in task body. |
+
+**Files updated:** None — existing share/ docs were the subject of the task; copilot-instructions.md requires no change.
+
+**Scratch files cleaned:** None found for `629-*`.
+
+**Verdict:** All checklist items evaluated with evidence. No documentation files require updating. Docs gate passed.
