@@ -1,10 +1,12 @@
 ---
 id: 167
 title: Validate multi-project setup in VS Code (manual)
-status: done
+status: archived
 priority: important
 created: 2026-03-29T19:49:30.9245641+02:00
-updated: 2026-04-05T16:27:58.6532912+02:00
+updated: 2026-04-05T18:24:06.3014128+02:00
+started: 2026-04-05T18:24:06.3014128+02:00
+completed: 2026-04-05T18:24:06.3014128+02:00
 tags:
     - phase-2
     - scope:build
@@ -312,3 +314,33 @@ N/A — no automatable test surface. Test-writer confirmed pass-through 3 times.
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/167-*` files found)
+
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Create test-project/, run setup.py | Builder sessions 1-5: setup.py output logged | PASS |
+| AC2: Agents appear in agent picker | Decision doc completed:true, user attestation | PASS |
+| AC3: Skills appear via /skills | Binding user attestation | PASS |
+| AC4: Instructions load in Diagnostics | Binding user attestation | PASS |
+| AC5: Invoke owlbear-kanban list_tasks | Programmatic across sessions 1-4 | PASS |
+| AC6: copilot-instructions.md in References | Binding user attestation | PASS |
+| AC7: Test agent, appears in picker | Builder created file + user verified | PASS |
+| AC8: No agent shadowing | Binding user attestation | PASS |
+| AC9: Clean up test-project/ | Auditor verify: Test-Path False | PASS |
+
+### Test Results
+- pytest: N/A (zero code changes). Full suite 2881 passed, 444 failed (pre-existing), 18 skipped.
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+All 9 AC items are specific pass/fail manual checks. Research validated each. rigor:lean appropriate.
+
+### Deduction Breakdown
+No deductions. All 9 AC have programmatic or user-attested evidence. Lint clean. Reviewer present (3 cycles, PASS .92).
+
+### Confidence: .98
+### Action: archive
+
+[[2026-04-05]] Sun 18:24
+9/9 AC verified. Confidence .98. Archived.

@@ -1,9 +1,3 @@
-{"timestamp":"2026-03-30T15:18:45.9938312+02:00","action":"move","task_id":9,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:46.5266991+02:00","action":"move","task_id":21,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:47.0217232+02:00","action":"move","task_id":25,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:47.5112296+02:00","action":"move","task_id":81,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:48.0454773+02:00","action":"move","task_id":97,"detail":"ideation -\u003e done"}
-{"timestamp":"2026-03-30T15:18:48.5423713+02:00","action":"move","task_id":137,"detail":"ideation -\u003e done"}
 {"timestamp":"2026-03-30T15:18:49.0530458+02:00","action":"move","task_id":149,"detail":"ideation -\u003e done"}
 {"timestamp":"2026-03-30T15:18:49.5340011+02:00","action":"move","task_id":170,"detail":"ideation -\u003e done"}
 {"timestamp":"2026-03-30T15:18:51.2383816+02:00","action":"edit","task_id":216,"detail":"Add remediation process for gate-blocked tasks in dispatch-planning"}
@@ -9998,3 +9992,9 @@
 {"timestamp":"2026-04-05T18:14:15.7972806+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
 {"timestamp":"2026-04-05T18:14:15.8074473+02:00","action":"release","task_id":621,"detail":"creek-dart"}
 {"timestamp":"2026-04-05T18:14:16.2713859+02:00","action":"move","task_id":621,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T18:15:11.7021208+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T18:15:11.7131121+02:00","action":"claim","task_id":167,"detail":"isle-wild"}
+{"timestamp":"2026-04-05T18:23:59.5397077+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T18:24:05.7459688+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
+{"timestamp":"2026-04-05T18:24:05.759628+02:00","action":"release","task_id":167,"detail":"isle-wild"}
+{"timestamp":"2026-04-05T18:24:06.3069563+02:00","action":"move","task_id":167,"detail":"done -\u003e archived"}
