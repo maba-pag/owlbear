@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Blocked-Task Scan for Decision-Request Notifications (Task #348)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Azure DevOps approval checks | <https://learn.microsoft.com/en-us/azure/devops/pipelines/process/approvals> | Pipeline approval gates: stages pause for checks, timeout marks skipped, UI + email notification | docs/research/blocked-task-scan-decision-notifications.md | 2026-04-05 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required reviewers gate deployments, configurable wait timer, GitHub UI notification | docs/research/blocked-task-scan-decision-notifications.md | 2026-04-05 |
+
 ## Fix-Attempt Delegation Flow Testing Strategy (Task #320)
 
 | Source | URL | What | Where Used | Date |
@@ -15,6 +22,14 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | MS Teams Incoming Webhooks docs | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook> | Teams webhook HTTP POST pattern, Adaptive Card payload format, channel-scoped config | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
 | MS Teams connector deprecation notice | <https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using> | M365 Connectors nearing deprecation; migration to Power Automate Workflows with webhook trigger | docs/research/notifier-protocol-344-duplicate-assessment.md | 2026-04-04 |
+
+## Import/Export Knowledge Snapshots (Task #618)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Python sqlite3 docs — Connection.backup | <https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.backup> | Python backup API, read-only URI mode (`?mode=ro`), transaction context manager | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
+| SQLite ATTACH DATABASE | <https://sqlite.org/lang_attach.html> | Cross-DB queries via qualified table names — evaluated as alternative approach (rejected: less dedup control) | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
+| SQLite Online Backup API | <https://sqlite.org/backup.html> | Online backup API for live DB snapshots — evaluated, not needed (row-level approach preferred) | .owlbear/research/import-export-knowledge-snapshots.md | 2026-04-05 |
 
 ## Power Automate Workflows for Teams Notifications (Task #592)
 
@@ -87,7 +102,8 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MCP Spec 2025-06-18 — Tools | modelcontextprotocol.io/specification/2025-06-18/server/tools | outputSchema, ToolAnnotations spec definitions (readOnlyHint, idempotentHint, destructiveHint, openWorldHint) | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
+| MCP Spec 2025-11-25 — Tools | modelcontextprotocol.io/specification/2025-11-25/server/tools | outputSchema, ToolAnnotations spec definitions (readOnlyHint, idempotentHint, destructiveHint, openWorldHint) | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
+| MCP Spec 2025-11-25 — Schema | modelcontextprotocol.io/specification/2025-11-25/schema | ToolAnnotations interface: title, readOnlyHint, destructiveHint, idempotentHint, openWorldHint fields | docs/research/knowledge-project-outputschema-annotations.md | 2026-04-02 |
 | FastMCP docs — Output Schemas | gofastmcp.com/servers/tools#output-schemas | Auto-generation from return types, output_schema decorator param, manual schema control | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 internals | Installed: `.venv/.../mcp/server/fastmcp/` | Tool.output_schema cached_property, FuncMetadata auto-generation, FastMCP.list_tools() protocol mapping | docs/research/knowledge-project-outputschema-annotations.md | 2026-03-31 |
 
@@ -3626,3 +3642,9 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | VS Code Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | CC-BY-4.0 | PreToolUse I/O schema, permissionDecision deny/allow/ask, hookSpecificOutput format, priority rules | `docs/research/pretooluse-read-only-guard-feasibility.md` | 2026-04-01 |
 | VS Code Custom Agents docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Agent-scoped hooks `hooks:` YAML key, subagent behavior note | `docs/research/pretooluse-read-only-guard-feasibility.md` | 2026-04-01 |
+
+## Migrate Dispatcher to pick_tasks MCP Tool (Task #619)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Spec — Tools (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | MIT | readOnlyHint, outputSchema, ToolAnnotations for computed tools, error handling conventions | `.owlbear/research/migrate-dispatcher-to-pick-tasks.md` | 2026-04-05 |
