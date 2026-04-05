@@ -1,15 +1,15 @@
 ---
 id: 635
 title: 'Fix #616 decision: scribe fabricated approval from needs-info response'
-status: done
+status: archived
 priority: needed
 created: 2026-04-05T22:45:51.0003611+02:00
-updated: 2026-04-06T00:08:53.5091666+02:00
+updated: 2026-04-06T00:09:36.3059286+02:00
+started: 2026-04-06T00:09:36.3059286+02:00
+completed: 2026-04-06T00:09:36.3059286+02:00
 tags:
     - process
     - bugfix
-claimed_by: river-river
-claimed_at: 2026-04-06T00:08:53.5091666+02:00
 class: standard
 ---
 
@@ -66,3 +66,6 @@ AC1-3 specific. AC4 vague (right state undefined). Adequate for corrective task.
 
 ### Confidence: .95
 ### Action: archive
+
+[[2026-04-06]] Mon 00:09
+4 AC lines verified, all PASS. Root cause fix solid (needs-info/rejected DR states, scribe validation gate). Full suite: no #635-scope failures. Confidence .95.

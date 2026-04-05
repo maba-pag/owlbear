@@ -1,57 +1,3 @@
-{"timestamp":"2026-03-30T17:48:34.2609458+02:00","action":"claim","task_id":54,"detail":"architect"}
-{"timestamp":"2026-03-30T17:50:01.0979578+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:50:13.8095971+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T17:50:18.1332202+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:50:22.1148674+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:50:25.78979+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T17:50:27.7308182+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:50:29.3013916+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T17:50:29.305599+02:00","action":"release","task_id":224,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:50:58.4940008+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-30T17:51:00.9822676+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:51:05.7019053+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T17:51:05.7070662+02:00","action":"release","task_id":54,"detail":"architect"}
-{"timestamp":"2026-03-30T17:51:06.6059134+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
-{"timestamp":"2026-03-30T17:51:06.6106072+02:00","action":"release","task_id":144,"detail":"writer"}
-{"timestamp":"2026-03-30T17:51:30.6035852+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T17:51:30.6077275+02:00","action":"claim","task_id":221,"detail":"architect"}
-{"timestamp":"2026-03-30T17:51:34.9900169+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T17:51:34.9931958+02:00","action":"claim","task_id":215,"detail":"builder"}
-{"timestamp":"2026-03-30T17:51:39.2803061+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T17:51:39.2839121+02:00","action":"claim","task_id":225,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:51:40.2634672+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T17:51:40.2672173+02:00","action":"claim","task_id":193,"detail":"reviewer"}
-{"timestamp":"2026-03-30T17:53:45.5646298+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T17:53:51.1372121+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T17:53:51.1424352+02:00","action":"release","task_id":215,"detail":"builder"}
-{"timestamp":"2026-03-30T17:54:08.8742137+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T17:54:08.878991+02:00","action":"release","task_id":225,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:54:12.9702298+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T17:54:12.9749248+02:00","action":"claim","task_id":225,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:54:21.9460394+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T17:54:21.9493963+02:00","action":"release","task_id":225,"detail":"researcher"}
-{"timestamp":"2026-03-30T17:54:26.2748973+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T17:54:54.1275284+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T17:55:08.1285382+02:00","action":"move","task_id":221,"detail":"backlog -\u003e todo"}
-{"timestamp":"2026-03-30T17:55:11.2703507+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T17:55:11.2745448+02:00","action":"release","task_id":221,"detail":"architect"}
-{"timestamp":"2026-03-30T17:59:33.8086421+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T17:59:39.721906+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T17:59:39.7264296+02:00","action":"release","task_id":193,"detail":"reviewer"}
-{"timestamp":"2026-03-30T18:00:28.951388+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T18:00:28.9571311+02:00","action":"claim","task_id":219,"detail":"test-writer"}
-{"timestamp":"2026-03-30T18:00:29.1562318+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-30T18:00:35.2339716+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-30T18:00:38.0017246+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T18:00:41.7860738+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T18:00:41.7897349+02:00","action":"release","task_id":219,"detail":"test-writer"}
-{"timestamp":"2026-03-30T18:00:43.2447866+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T18:00:43.2490397+02:00","action":"claim","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T18:01:45.2960576+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T18:01:45.2992059+02:00","action":"claim","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-30T18:02:23.2468113+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T18:02:27.813339+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T18:02:27.8170168+02:00","action":"release","task_id":147,"detail":"test-writer"}
 {"timestamp":"2026-03-30T18:02:54.4175051+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
 {"timestamp":"2026-03-30T18:02:54.4222917+02:00","action":"claim","task_id":158,"detail":"builder"}
 {"timestamp":"2026-03-30T18:06:38.5106332+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
@@ -9998,3 +9944,57 @@
 {"timestamp":"2026-04-05T23:11:59.9658748+02:00","action":"block","task_id":616,"detail":"DR pending: 616-scope-params-approval.md (re-created after scribe error)"}
 {"timestamp":"2026-04-05T23:29:38.109287+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
 {"timestamp":"2026-04-05T23:29:47.7282875+02:00","action":"move","task_id":629,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T23:30:17.6178285+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T23:30:17.6374614+02:00","action":"claim","task_id":619,"detail":"drift-river"}
+{"timestamp":"2026-04-05T23:30:19.452294+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-05T23:30:19.4651839+02:00","action":"claim","task_id":633,"detail":"deep-oaken"}
+{"timestamp":"2026-04-05T23:30:29.0059705+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim and archive as resolved-by-architecture"}
+{"timestamp":"2026-04-05T23:30:29.0188217+02:00","action":"claim","task_id":632,"detail":"brisk-fawn"}
+{"timestamp":"2026-04-05T23:31:00.1594888+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim and archive as resolved-by-architecture"}
+{"timestamp":"2026-04-05T23:31:00.1716205+02:00","action":"release","task_id":632,"detail":"brisk-fawn"}
+{"timestamp":"2026-04-05T23:31:21.2010514+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T23:31:21.2130615+02:00","action":"release","task_id":619,"detail":"drift-river"}
+{"timestamp":"2026-04-05T23:31:38.3470755+02:00","action":"edit","task_id":618,"detail":"Build import/export tools for project-local knowledge snapshots"}
+{"timestamp":"2026-04-05T23:31:38.3641373+02:00","action":"claim","task_id":618,"detail":"brave-calm"}
+{"timestamp":"2026-04-05T23:44:36.6152229+02:00","action":"edit","task_id":618,"detail":"Build import/export tools for project-local knowledge snapshots"}
+{"timestamp":"2026-04-05T23:44:36.6294441+02:00","action":"release","task_id":618,"detail":"brave-calm"}
+{"timestamp":"2026-04-05T23:45:27.523553+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-05T23:45:27.5349922+02:00","action":"release","task_id":633,"detail":"deep-oaken"}
+{"timestamp":"2026-04-05T23:46:21.7410841+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-05T23:49:06.7769308+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T23:49:06.7916739+02:00","action":"claim","task_id":619,"detail":"twig-maple"}
+{"timestamp":"2026-04-05T23:49:22.91241+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T23:49:22.9286258+02:00","action":"claim","task_id":630,"detail":"flare-opal"}
+{"timestamp":"2026-04-05T23:49:34.9774135+02:00","action":"edit","task_id":631,"detail":"Revisit blocked-task DR scan when notification channel is enabled"}
+{"timestamp":"2026-04-05T23:49:34.9882838+02:00","action":"claim","task_id":631,"detail":"thyme-bloom"}
+{"timestamp":"2026-04-05T23:49:47.3972585+02:00","action":"edit","task_id":631,"detail":"Revisit blocked-task DR scan when notification channel is enabled"}
+{"timestamp":"2026-04-05T23:49:47.4082933+02:00","action":"release","task_id":631,"detail":"thyme-bloom"}
+{"timestamp":"2026-04-05T23:49:51.5381296+02:00","action":"move","task_id":631,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-05T23:49:54.0825077+02:00","action":"edit","task_id":627,"detail":"Update parent #483 completion criteria to reflect #576 closure as superseded"}
+{"timestamp":"2026-04-05T23:49:54.09393+02:00","action":"claim","task_id":627,"detail":"lake-hive"}
+{"timestamp":"2026-04-05T23:49:55.587822+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-05T23:49:55.6005134+02:00","action":"release","task_id":619,"detail":"twig-maple"}
+{"timestamp":"2026-04-05T23:50:28.8311907+02:00","action":"edit","task_id":627,"detail":"Update parent #483 completion criteria to reflect #576 closure as superseded"}
+{"timestamp":"2026-04-05T23:50:28.8417903+02:00","action":"release","task_id":627,"detail":"lake-hive"}
+{"timestamp":"2026-04-05T23:50:33.0394172+02:00","action":"move","task_id":627,"detail":"ideation -\u003e archived"}
+{"timestamp":"2026-04-05T23:52:55.6914496+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T23:52:55.7029737+02:00","action":"release","task_id":630,"detail":"flare-opal"}
+{"timestamp":"2026-04-05T23:57:28.67157+02:00","action":"edit","task_id":457,"detail":"Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-05T23:57:28.6831245+02:00","action":"claim","task_id":457,"detail":"light-pearl"}
+{"timestamp":"2026-04-05T23:57:34.4417481+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-05T23:57:34.4579642+02:00","action":"claim","task_id":635,"detail":"river-river"}
+{"timestamp":"2026-04-05T23:57:36.8887899+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-05T23:57:36.9017367+02:00","action":"claim","task_id":617,"detail":"moss-tiger"}
+{"timestamp":"2026-04-05T23:57:40.542863+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T23:57:40.5562386+02:00","action":"claim","task_id":630,"detail":"opal-dawn"}
+{"timestamp":"2026-04-06T00:01:52.8632259+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-06T00:01:52.8751555+02:00","action":"release","task_id":630,"detail":"opal-dawn"}
+{"timestamp":"2026-04-06T00:03:34.807794+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T00:03:34.8223473+02:00","action":"release","task_id":617,"detail":"moss-tiger"}
+{"timestamp":"2026-04-06T00:04:01.4350167+02:00","action":"edit","task_id":457,"detail":"Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T00:04:01.4503725+02:00","action":"release","task_id":457,"detail":"light-pearl"}
+{"timestamp":"2026-04-06T00:08:45.0858542+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-06T00:08:53.511113+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-06T00:09:35.7631738+02:00","action":"edit","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-06T00:09:35.7745329+02:00","action":"release","task_id":635,"detail":"river-river"}
+{"timestamp":"2026-04-06T00:09:36.3069545+02:00","action":"move","task_id":635,"detail":"done -\u003e archived"}
