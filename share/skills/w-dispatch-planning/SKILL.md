@@ -1,8 +1,10 @@
 ---
 name: w-dispatch-planning
-description: "Workflow: Dispatch planning — read board, build DAG, gate checks, produce dispatch plan"
+description: "Workflow (ARCHIVED): Dispatch planning — reference design doc for NON_IMPL_TAGS and agent mapping"
 user-invocable: false
 ---
+
+> **ARCHIVED** — Superseded by pick_tasks MCP tool (#621) and w-orchestration direct integration (#622). Retained as design reference for NON_IMPL_TAGS authoritative list.
 
 # Dispatch Planning
 

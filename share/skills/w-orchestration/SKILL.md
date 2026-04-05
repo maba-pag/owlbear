@@ -12,16 +12,16 @@ Plan-dispatch-loop cycle for the orchestrator. The orchestrator maintains minima
 
 The orchestrator maintains constant-size context:
 
-- **No board state.** The dispatcher reads the board each cycle.
+- **No board state.** `pick_tasks` reads the board each cycle via MCP tool call; no board state held in context between cycles.
 - **No signal interpretation.** Subagents return a Channel A diagnostic line. Only check: did the agent return normally or crash?
-- **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `gate_warned` (task ID to count), `sequential_remaining` (rate-limit sequential counter).
+- **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `last_dispatched` (dict[int, str] — task_id → status from previous pick_tasks result, max 20 entries), `sequential_remaining` (rate-limit sequential counter).
 - **Prior cycle results discarded.** Each cycle starts fresh with scope filter, crash IDs, and `stale_retried`.
 
 ## Signal Contracts
 
 See `r-pipeline-protocol` → Communication for Channel A/B spec.
 
-**Dispatcher output:** JSON with `dispatch` array (extract `(id, agent)` tuples, priority-sorted). Empty `dispatch` = nothing dispatchable, stop.
+**pick_tasks output:** Array of task objects (id, status, priority, title, tags). Empty array = nothing dispatchable, stop.
 
 **Subagent output:** Channel A diagnostic line. Do NOT parse for routing. Only check: normal return vs crash.
 
@@ -39,31 +39,51 @@ If the scribe reports errors, note them but proceed. If zero resolved, proceed.
 
 ## Step 1 — Plan
 
-Dispatch the dispatcher with the user's scope filter and any failure context:
+Call `pick_tasks` with the user's scope tag and a limit of 25:
 
 ```
-runSubagent("dispatcher", "Plan: {scope_filter}", "Plan dispatch")
+pick_tasks(limit=25, tag="{scope_tag}")
 ```
 
-With failure context:
+Where `{scope_tag}` is the tag from the user's scope filter (e.g., `"phase-2"` from `"Orchestrate: tag:phase-2"`). Pass `tag=None` when scope is `"all"` or omitted.
 
-```
-runSubagent("dispatcher", "Plan: {scope_filter}\n\nPrevious cycle: #{id} crashed twice; #{id2} stale, retried with hint", "Plan dispatch")
-```
+If `pick_tasks` returns an empty array, report to user and stop.
 
-Failure context categories:
+**Crash failure exclusion:** Apply a set-difference filter — exclude any task_ids present in the current cycle's `crash_failures` set from the pick_tasks result.
 
-- **Crash failures:** `#{id} crashed twice`
-- **Stale-retried IDs:** `#{id} stale, retried with hint`
+**Status-to-agent mapping:**
 
-Track `stale_retried`: add task IDs when dispatcher includes `retry_hint`; clear when dispatcher dispatches the task without `retry_hint` (task has moved).
+| Task status   | Dispatch agent |
+| ------------- | -------------- |
+| `ideation`    | researcher     |
+| `backlog`     | architect      |
+| `todo`        | test-writer    |
+| `in-progress` | builder        |
+| `review`      | reviewer       |
+| `docs`        | doc-writer     |
+| `done`        | auditor        |
 
-If `dispatch` is empty, report to user and stop.
+**Non-Status-Triggered Agents:**
 
-After receiving the plan, process `gate_warnings`:
+| Agent   | Trigger condition |
+| ------- | ----------------- |
+| planner | DECOMP post-filter (see below) |
+| curator | Every 5th cycle (handled in Step 2) |
 
-1. Increment count in `gate_warned` for each ID in `gate_warnings`.
-2. Remove IDs no longer in `gate_warnings`.
+**DECOMP post-filter:** For each task at `backlog` status in the pick_tasks result (0–3 per cycle), call `show_task(task_id)`. If the body contains `"Needs decomposition:"`, remap the agent to `planner` instead of `architect`.
+
+**Stale detection:** Compare each pick_tasks result task against `last_dispatched`. If a task appears at the same status as its last_dispatched entry and is NOT in `stale_retried`:
+
+1. Call `show_task(task_id)` to read the task body.
+2. Extract a single-line retry_hint (120 chars max) from the last agent note section.
+3. Include the `retry_hint` in the dispatch prompt for this task.
+4. Add the task ID to `stale_retried`.
+
+After processing, update `last_dispatched` with the current cycle's pick_tasks result (max 20 entries; evict oldest if over limit).
+
+Track `stale_retried`: add task IDs when dispatched with `retry_hint`; clear an ID when the task appears at a *different* status in the next cycle's pick_tasks result (task has moved).
+
+If the processed dispatch list is empty, report to user and stop.
 
 ## Configuration
 
@@ -138,22 +158,19 @@ When a rate-limit crash occurs:
 After all dispatches:
 
 1. **Failures exist?** Note as failure context for next cycle.
-2. **Re-plan:** Go to Step 1. The dispatcher reads fresh board state.
+2. **Re-plan:** Go to Step 1. `pick_tasks` reads fresh board state.
 
-Loop continues until the dispatcher returns empty `dispatch`. **Do not stop for any other reason.**
+Loop continues until `pick_tasks` returns an empty list. **Do not stop for any other reason.**
 
 ## Output Format
 
 During execution:
 
 ```
-Cycle 1 (Plan): Dispatching dispatcher with scope '{filter}'...
+Cycle 1 (Plan): Running pick_tasks with tag='{scope_tag}'...
 Cycle 1 (Wave 1/3): #101 (architect), #103 (builder), #105 (reviewer)
 Cycle 1 (Done): 4/5 succeeded, 1 crashed (#112)
-Cycle 1 (Gate Warning): #205 stuck at review gate for 2 cycles
 ```
-
-Gate warning lines appear only when a task in `gate_warned` has count >= 2.
 
 At end of session:
 
@@ -166,20 +183,19 @@ Session complete:
 
 ## Verification Checklist
 
-- [ ] Dispatcher was dispatched with the user's scope filter (not hardcoded)
-- [ ] Every task in `dispatch` was dispatched (none silently dropped)
+- [ ] `pick_tasks` called with the user's scope tag (not hardcoded)
+- [ ] Every task in the dispatch list was dispatched (none silently dropped)
 - [ ] Waves respect wave-size limit (unless in sequential mode)
 - [ ] Wave assembly uses agent-type compatibility rules
-- [ ] Failure context passed to dispatcher on next cycle
-- [ ] `gate_warned` counts updated each cycle; IDs cleared when task exits gate_warnings
-- [ ] Gate warnings logged when any task count >= 2
-- [ ] Loop not stopped early — only empty plan ends the session
+- [ ] Crash failures excluded from dispatch list (set-difference applied)
+- [ ] `last_dispatched` updated with current cycle's pick_tasks result
+- [ ] Loop not stopped early — only empty dispatch list ends the session
 
 ## Known Pitfalls
 
 - **Parsing subagent signals:** The orchestrator does NOT parse Channel A for routing. Only check: normal return vs crash.
-- **Stale_retried tracking:** Clear an ID when the dispatcher dispatches it without `retry_hint`. Forgetting to clear causes permanent stale marking.
-- **Gate_warned accumulation:** Clear IDs no longer in `gate_warnings`. Otherwise counts grow indefinitely for resolved issues.
+- **Stale_retried tracking:** Clear an ID when the task appears at a *different* status in the next cycle's pick_tasks result (task has moved). Forgetting to clear causes permanent stale marking.
+- **last_dispatched cap:** Maintain max 20 entries; evict oldest when over limit to prevent context growth.
 - **Wave consolidation:** Currently DEACTIVATED. Do not attempt to merge solo waves of the same restricted type.
 - **Rate-limit cascade:** After entering sequential mode, complete 3 sequential dispatches before resuming parallel. Premature resumption triggers repeated rate limits.
-- **Stopping the loop early:** The orchestrator's ONLY stop condition is an empty dispatch plan. Subagent errors, partial completions, and gate warnings do NOT stop the loop.
+- **Stopping the loop early:** The orchestrator's ONLY stop condition is an empty dispatch list. Subagent errors and partial completions do NOT stop the loop.
