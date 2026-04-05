@@ -1,8 +1,3 @@
-{"timestamp":"2026-03-30T13:15:29.7558933+02:00","action":"release","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T13:16:20.0941885+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T13:16:20.0974389+02:00","action":"claim","task_id":212,"detail":"test-writer"}
-{"timestamp":"2026-03-30T13:16:23.4901723+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T13:16:23.493854+02:00","action":"claim","task_id":209,"detail":"reviewer"}
 {"timestamp":"2026-03-30T13:16:58.9666855+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
 {"timestamp":"2026-03-30T13:16:58.9721496+02:00","action":"claim","task_id":206,"detail":"river-zeal"}
 {"timestamp":"2026-03-30T13:17:20.4949333+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
@@ -9998,3 +9993,8 @@
 {"timestamp":"2026-04-05T14:37:03.5784042+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
 {"timestamp":"2026-04-05T14:37:03.5907194+02:00","action":"release","task_id":546,"detail":"jade-gust"}
 {"timestamp":"2026-04-05T14:37:04.1481411+02:00","action":"move","task_id":546,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T14:38:01.0175139+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T14:38:01.0342612+02:00","action":"claim","task_id":37,"detail":"south-falcon"}
+{"timestamp":"2026-04-05T14:45:35.5767135+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T14:45:35.5872184+02:00","action":"release","task_id":37,"detail":"south-falcon"}
+{"timestamp":"2026-04-05T14:45:36.0070993+02:00","action":"move","task_id":37,"detail":"done -\u003e archived"}
