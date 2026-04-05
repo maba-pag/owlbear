@@ -81,6 +81,29 @@ Cross-pollinated entries re-enter the pending queue and are evaluated in the nex
 
 ## Step 5 — Deliverables
 
+### 5a — Write curation-report.json
+
+Write a machine-readable report to `store/memory/curation-report.json` (overwrite each cycle — latest report only).
+
+Format: top-level JSON array, one object per processed entry:
+
+```json
+[
+  {
+    "entry_id": "<MCP entry ID or inbox filename>",
+    "content_preview": "<first ~80 chars of entry content>",
+    "recommendation": "approve | keep | reject",
+    "reason": "<one-line human-readable rationale>"
+  }
+]
+```
+
+This file is consumed by `approve.py _load_curation_report()` to annotate the interactive approval UI with curator recommendations. Include every entry processed in this cycle (HIGH/MEDIUM = `approve`, LOW/NOISE = `reject`, MEDIUM held for next cycle = `keep`).
+
+Write this file **before** appending to the task body.
+
+### 5b — Append to task body
+
 If dispatched with a task ID, append curation report to task body via `edit_task` (with `append_body` and `timestamp=True`).
 
 ## Step 6 — Advance
