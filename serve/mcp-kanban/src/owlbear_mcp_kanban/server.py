@@ -323,7 +323,7 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
-async def edit_task(  # noqa: PLR0913, C901
+async def edit_task(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
     task_id: StrId,
