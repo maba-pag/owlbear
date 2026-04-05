@@ -1,160 +1,3 @@
-{"timestamp":"2026-03-30T06:33:11.834998+02:00","action":"move","task_id":51,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T06:33:16.492254+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-30T06:33:16.5009425+02:00","action":"release","task_id":51,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:33:38.94359+02:00","action":"edit","task_id":51,"detail":"Implement voice addon TTS with Kokoro and pyttsx3 fallback"}
-{"timestamp":"2026-03-30T06:34:04.4455123+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T06:34:04.4475573+02:00","action":"claim","task_id":79,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:37:08.6868454+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T06:37:13.5353927+02:00","action":"move","task_id":79,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T06:37:13.8686988+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T06:37:13.8713929+02:00","action":"release","task_id":79,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:37:31.7411248+02:00","action":"edit","task_id":79,"detail":"Add argument-hint to remaining user-invoked skills"}
-{"timestamp":"2026-03-30T06:37:53.8456523+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T06:37:53.8488037+02:00","action":"claim","task_id":139,"detail":"builder"}
-{"timestamp":"2026-03-30T06:37:55.0328987+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:37:55.0360628+02:00","action":"claim","task_id":190,"detail":"reviewer"}
-{"timestamp":"2026-03-30T06:38:21.4909938+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:38:21.4940934+02:00","action":"claim","task_id":184,"detail":"reviewer"}
-{"timestamp":"2026-03-30T06:38:51.1938771+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T06:38:51.1943978+02:00","action":"claim","task_id":55,"detail":"test-writer"}
-{"timestamp":"2026-03-30T06:40:35.7959524+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T06:40:43.4440311+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T06:40:45.2767459+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:40:48.3783737+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T06:40:48.3810641+02:00","action":"release","task_id":55,"detail":"test-writer"}
-{"timestamp":"2026-03-30T06:40:50.1653379+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:40:50.1679187+02:00","action":"release","task_id":190,"detail":"reviewer"}
-{"timestamp":"2026-03-30T06:42:14.7029013+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:42:21.3621165+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:42:25.6610474+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T06:42:32.3696983+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T06:42:32.373269+02:00","action":"release","task_id":139,"detail":"builder"}
-{"timestamp":"2026-03-30T06:42:40.3919947+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:42:48.8017384+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:42:59.9195099+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T06:42:59.920061+02:00","action":"release","task_id":184,"detail":"reviewer"}
-{"timestamp":"2026-03-30T06:43:48.4621795+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T06:43:48.4653027+02:00","action":"claim","task_id":90,"detail":"builder"}
-{"timestamp":"2026-03-30T06:43:50.5609511+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T06:43:50.5641187+02:00","action":"claim","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T06:44:06.4591636+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T06:44:17.4605724+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T06:44:24.3974237+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T06:44:24.4005034+02:00","action":"release","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T06:44:26.3029168+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T06:44:29.8898818+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T06:44:29.8929804+02:00","action":"release","task_id":90,"detail":"builder"}
-{"timestamp":"2026-03-30T06:47:03.3838773+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T06:47:03.3875443+02:00","action":"claim","task_id":21,"detail":"architect"}
-{"timestamp":"2026-03-30T06:47:03.9803533+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:47:03.9829634+02:00","action":"claim","task_id":190,"detail":"writer"}
-{"timestamp":"2026-03-30T06:47:08.9507943+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T06:47:08.9534063+02:00","action":"claim","task_id":19,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:49:07.3031604+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:49:29.9052404+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:49:30.3121736+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:49:30.315481+02:00","action":"release","task_id":190,"detail":"writer"}
-{"timestamp":"2026-03-30T06:49:35.251423+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T06:49:37.538099+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T06:49:41.4839499+02:00","action":"edit","task_id":21,"detail":"Build audit log"}
-{"timestamp":"2026-03-30T06:49:41.4870463+02:00","action":"block","task_id":21,"detail":"Stale parent task: all AC already implemented via #163 (archived) and #185 (archived). Recommend direct archival."}
-{"timestamp":"2026-03-30T06:49:41.4905277+02:00","action":"release","task_id":21,"detail":"architect"}
-{"timestamp":"2026-03-30T06:52:24.5855068+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T06:52:44.4174388+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T06:52:49.2346356+02:00","action":"move","task_id":19,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T06:52:54.2681235+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T06:52:54.2707479+02:00","action":"release","task_id":19,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:53:27.3011257+02:00","action":"edit","task_id":19,"detail":"Build ACP client library"}
-{"timestamp":"2026-03-30T06:54:04.1577428+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T06:54:04.1614541+02:00","action":"claim","task_id":89,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:58:44.9664355+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T06:58:49.6953409+02:00","action":"move","task_id":89,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T06:58:50.0332269+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T06:58:50.0364059+02:00","action":"release","task_id":89,"detail":"auditor"}
-{"timestamp":"2026-03-30T06:59:35.4838507+02:00","action":"edit","task_id":89,"detail":"Test: mcp-kanban full tool set"}
-{"timestamp":"2026-03-30T07:00:01.6855131+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:00:01.6886494+02:00","action":"claim","task_id":90,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:00:05.8488783+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:00:05.8515035+02:00","action":"claim","task_id":139,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:00:40.0631613+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:00:40.065769+02:00","action":"claim","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T07:00:40.7224514+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T07:00:40.7250621+02:00","action":"claim","task_id":184,"detail":"test-writer"}
-{"timestamp":"2026-03-30T07:01:00.3945655+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:01:00.3986629+02:00","action":"release","task_id":90,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:02:34.4819724+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T07:02:38.3595333+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T07:02:38.3633171+02:00","action":"release","task_id":184,"detail":"test-writer"}
-{"timestamp":"2026-03-30T07:03:27.577025+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:03:27.5797012+02:00","action":"release","task_id":139,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:04:31.0524855+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:04:48.656295+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:06:04.9580397+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:07:24.0835676+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:07:24.0862361+02:00","action":"release","task_id":167,"detail":"builder"}
-{"timestamp":"2026-03-30T07:09:11.508791+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T07:09:11.5114934+02:00","action":"claim","task_id":190,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:09:12.2438905+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:09:12.2475997+02:00","action":"claim","task_id":90,"detail":"writer"}
-{"timestamp":"2026-03-30T07:09:14.1463814+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:09:14.1490652+02:00","action":"claim","task_id":139,"detail":"writer"}
-{"timestamp":"2026-03-30T07:10:04.4199545+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:10:40.647419+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:10:46.6599334+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:10:46.663139+02:00","action":"release","task_id":139,"detail":"writer"}
-{"timestamp":"2026-03-30T07:10:51.2119042+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:10:51.2150308+02:00","action":"release","task_id":90,"detail":"writer"}
-{"timestamp":"2026-03-30T07:11:05.2875654+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:12:12.4191408+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T07:12:21.408152+02:00","action":"move","task_id":190,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T07:12:25.4956699+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T07:12:25.499361+02:00","action":"release","task_id":190,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:12:41.8343444+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T07:13:10.5589374+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:13:10.5613642+02:00","action":"claim","task_id":55,"detail":"builder"}
-{"timestamp":"2026-03-30T07:13:55.097245+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:13:55.1004277+02:00","action":"claim","task_id":167,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:15:22.6779027+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:15:26.4847226+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:15:26.4887727+02:00","action":"release","task_id":55,"detail":"builder"}
-{"timestamp":"2026-03-30T07:15:59.2031497+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:15:59.2062641+02:00","action":"release","task_id":167,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:16:50.7165879+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-30T07:16:50.7203611+02:00","action":"block","task_id":141,"detail":"STALE — retried with hint, still unchanged (length limit crash on body update)"}
-{"timestamp":"2026-03-30T07:17:30.5652964+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:17:30.5673622+02:00","action":"claim","task_id":90,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:22:19.1051034+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:22:23.8841509+02:00","action":"move","task_id":90,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T07:22:24.2001436+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:22:24.2027105+02:00","action":"release","task_id":90,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:23:06.6540022+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
-{"timestamp":"2026-03-30T07:23:34.3917674+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:23:34.3943516+02:00","action":"claim","task_id":139,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:30:17.4255995+02:00","action":"move","task_id":139,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T07:30:35.9665256+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:30:35.970274+02:00","action":"release","task_id":139,"detail":"auditor"}
-{"timestamp":"2026-03-30T07:31:05.3227055+02:00","action":"edit","task_id":139,"detail":"Extract consolidation + evaluator stubs"}
-{"timestamp":"2026-03-30T07:31:36.5839887+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:31:36.5870492+02:00","action":"claim","task_id":55,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:31:37.4903625+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T07:31:37.4929523+02:00","action":"claim","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T07:31:44.8416412+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:31:44.8447454+02:00","action":"claim","task_id":113,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:31:54.276217+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:31:54.2796611+02:00","action":"claim","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T07:32:07.33804+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:32:15.9420037+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:32:20.8052266+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:32:28.3104704+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-30T07:32:28.3132203+02:00","action":"release","task_id":167,"detail":"test-writer"}
-{"timestamp":"2026-03-30T07:33:04.1571998+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:33:09.1135578+02:00","action":"edit","task_id":113,"detail":"Update pytest-and-linting skill content for v2 monorepo paths"}
-{"timestamp":"2026-03-30T07:33:09.1167654+02:00","action":"release","task_id":113,"detail":"reviewer"}
-{"timestamp":"2026-03-30T07:33:16.9679383+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T07:33:16.9711361+02:00","action":"release","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T07:40:20.9260766+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:40:31.2607685+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T07:40:31.263924+02:00","action":"release","task_id":55,"detail":"reviewer"}
 {"timestamp":"2026-03-30T07:41:54.3485774+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
 {"timestamp":"2026-03-30T07:41:54.3512272+02:00","action":"claim","task_id":142,"detail":"builder"}
 {"timestamp":"2026-03-30T07:46:37.87302+02:00","action":"edit","task_id":142,"detail":"Test: VoiceChannel adapter"}
@@ -9998,3 +9841,160 @@
 {"timestamp":"2026-04-05T09:32:59.0264624+02:00","action":"edit","task_id":531,"detail":"Build approve_memory CLI wrapper for set_approval_state"}
 {"timestamp":"2026-04-05T09:32:59.0532767+02:00","action":"release","task_id":531,"detail":"mesa-twig"}
 {"timestamp":"2026-04-05T09:32:59.490863+02:00","action":"move","task_id":531,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T09:33:31.8948918+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T09:33:31.9110159+02:00","action":"claim","task_id":598,"detail":"dawn-twig"}
+{"timestamp":"2026-04-05T09:33:49.4233749+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T09:33:49.4350853+02:00","action":"claim","task_id":607,"detail":"fort-hazel"}
+{"timestamp":"2026-04-05T09:33:52.8835824+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T09:33:52.8970254+02:00","action":"claim","task_id":546,"detail":"wheat-ledge"}
+{"timestamp":"2026-04-05T09:38:35.4514143+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T09:38:35.4631477+02:00","action":"release","task_id":546,"detail":"wheat-ledge"}
+{"timestamp":"2026-04-05T09:40:03.5773944+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T09:40:03.5902926+02:00","action":"release","task_id":607,"detail":"fort-hazel"}
+{"timestamp":"2026-04-05T09:53:16.8115933+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T09:53:16.8426422+02:00","action":"release","task_id":598,"detail":"dawn-twig"}
+{"timestamp":"2026-04-05T09:55:24.8171287+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T09:55:24.8278009+02:00","action":"claim","task_id":609,"detail":"peak-wild"}
+{"timestamp":"2026-04-05T09:55:50.2620899+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T09:55:50.2728565+02:00","action":"release","task_id":609,"detail":"peak-wild"}
+{"timestamp":"2026-04-05T09:56:19.0385588+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T09:56:19.0596225+02:00","action":"claim","task_id":608,"detail":"torch-crane"}
+{"timestamp":"2026-04-05T09:56:44.2699046+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T09:56:44.2816738+02:00","action":"claim","task_id":589,"detail":"gust-prism"}
+{"timestamp":"2026-04-05T09:58:35.3428626+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T09:58:35.3561846+02:00","action":"claim","task_id":612,"detail":"calm-hazel"}
+{"timestamp":"2026-04-05T09:59:28.2248619+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T09:59:28.237753+02:00","action":"release","task_id":589,"detail":"gust-prism"}
+{"timestamp":"2026-04-05T10:00:18.5415168+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:00:18.5539399+02:00","action":"release","task_id":612,"detail":"calm-hazel"}
+{"timestamp":"2026-04-05T10:00:27.4524964+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:00:27.4689267+02:00","action":"claim","task_id":612,"detail":"vale-mint"}
+{"timestamp":"2026-04-05T10:00:35.2703885+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:00:35.2822434+02:00","action":"release","task_id":612,"detail":"vale-mint"}
+{"timestamp":"2026-04-05T10:01:59.6040921+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T10:01:59.6164322+02:00","action":"claim","task_id":265,"detail":"lava-flux"}
+{"timestamp":"2026-04-05T10:02:58.736053+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T10:02:58.7503365+02:00","action":"release","task_id":265,"detail":"lava-flux"}
+{"timestamp":"2026-04-05T10:07:52.4602147+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T10:07:52.4719957+02:00","action":"release","task_id":608,"detail":"torch-crane"}
+{"timestamp":"2026-04-05T10:08:12.9329697+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T10:08:12.9469236+02:00","action":"claim","task_id":615,"detail":"elder-rain"}
+{"timestamp":"2026-04-05T10:08:26.9870507+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:08:26.9970969+02:00","action":"claim","task_id":264,"detail":"light-orbit"}
+{"timestamp":"2026-04-05T10:08:30.3781994+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T10:08:30.3930519+02:00","action":"claim","task_id":37,"detail":"holt-silk"}
+{"timestamp":"2026-04-05T10:08:51.5209679+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:08:51.5316632+02:00","action":"release","task_id":264,"detail":"light-orbit"}
+{"timestamp":"2026-04-05T10:09:47.1597055+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T10:09:47.1701174+02:00","action":"release","task_id":615,"detail":"elder-rain"}
+{"timestamp":"2026-04-05T10:09:58.3130554+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
+{"timestamp":"2026-04-05T10:09:58.3235126+02:00","action":"release","task_id":37,"detail":"holt-silk"}
+{"timestamp":"2026-04-05T10:12:30.1777319+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T10:12:30.190386+02:00","action":"claim","task_id":607,"detail":"solar-root"}
+{"timestamp":"2026-04-05T10:12:39.8471584+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:12:39.8578916+02:00","action":"claim","task_id":612,"detail":"spoke-aspen"}
+{"timestamp":"2026-04-05T10:13:01.4024386+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T10:13:01.4146013+02:00","action":"claim","task_id":608,"detail":"staff-rift"}
+{"timestamp":"2026-04-05T10:13:30.5152054+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:13:30.5278308+02:00","action":"release","task_id":612,"detail":"spoke-aspen"}
+{"timestamp":"2026-04-05T10:13:50.7469874+02:00","action":"edit","task_id":608,"detail":"Update tests for new folder structure"}
+{"timestamp":"2026-04-05T10:13:50.7589741+02:00","action":"release","task_id":608,"detail":"staff-rift"}
+{"timestamp":"2026-04-05T10:14:18.8054528+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T10:14:18.8155319+02:00","action":"claim","task_id":484,"detail":"dove-warp"}
+{"timestamp":"2026-04-05T10:14:31.6040043+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
+{"timestamp":"2026-04-05T10:14:31.6164836+02:00","action":"release","task_id":607,"detail":"solar-root"}
+{"timestamp":"2026-04-05T10:15:15.3708414+02:00","action":"edit","task_id":484,"detail":"Phase B: Remove CLI fallback, MCP-only kanban for all agents"}
+{"timestamp":"2026-04-05T10:15:15.3805052+02:00","action":"release","task_id":484,"detail":"dove-warp"}
+{"timestamp":"2026-04-05T10:15:24.0571933+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T10:15:47.928829+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T10:15:47.942976+02:00","action":"claim","task_id":609,"detail":"basin-spray"}
+{"timestamp":"2026-04-05T10:16:05.6089921+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T10:16:05.6192725+02:00","action":"claim","task_id":582,"detail":"south-hull"}
+{"timestamp":"2026-04-05T10:16:08.4986544+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-05T10:16:08.5112535+02:00","action":"claim","task_id":602,"detail":"rift-thorn"}
+{"timestamp":"2026-04-05T10:17:40.1380393+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to data/memory/"}
+{"timestamp":"2026-04-05T10:17:40.150044+02:00","action":"claim","task_id":567,"detail":"creek-fork"}
+{"timestamp":"2026-04-05T10:18:16.0778786+02:00","action":"edit","task_id":609,"detail":"Post-migration cleanup and config updates"}
+{"timestamp":"2026-04-05T10:18:16.0896428+02:00","action":"release","task_id":609,"detail":"basin-spray"}
+{"timestamp":"2026-04-05T10:19:00.6739732+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
+{"timestamp":"2026-04-05T10:19:00.6859188+02:00","action":"release","task_id":602,"detail":"rift-thorn"}
+{"timestamp":"2026-04-05T10:19:17.7621345+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T10:19:17.7728139+02:00","action":"release","task_id":582,"detail":"south-hull"}
+{"timestamp":"2026-04-05T10:19:32.4005715+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T10:19:58.2113181+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T10:20:02.7534893+02:00","action":"move","task_id":582,"detail":"backlog -\u003e todo"}
+{"timestamp":"2026-04-05T10:21:15.5035024+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T10:21:36.5102408+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T10:22:29.5292425+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T10:22:35.9832243+02:00","action":"edit","task_id":567,"detail":"Curator: write curation-report.json to store/memory/"}
+{"timestamp":"2026-04-05T10:22:35.993676+02:00","action":"release","task_id":567,"detail":"creek-fork"}
+{"timestamp":"2026-04-05T10:23:10.880631+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T10:23:10.892803+02:00","action":"claim","task_id":546,"detail":"wave-snow"}
+{"timestamp":"2026-04-05T10:23:15.8649814+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T10:23:15.8765593+02:00","action":"claim","task_id":319,"detail":"mast-glen"}
+{"timestamp":"2026-04-05T10:23:27.0742038+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T10:23:27.0858895+02:00","action":"claim","task_id":576,"detail":"shade-pulse"}
+{"timestamp":"2026-04-05T10:23:35.7469236+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T10:23:35.7573161+02:00","action":"claim","task_id":598,"detail":"atlas-lily"}
+{"timestamp":"2026-04-05T10:24:22.4574788+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T10:24:22.4692341+02:00","action":"release","task_id":546,"detail":"wave-snow"}
+{"timestamp":"2026-04-05T10:25:19.9914792+02:00","action":"create","task_id":627,"detail":"Update parent #483 completion criteria to reflect #576 closure as superseded"}
+{"timestamp":"2026-04-05T10:25:48.417489+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T10:25:48.4286484+02:00","action":"release","task_id":576,"detail":"shade-pulse"}
+{"timestamp":"2026-04-05T10:27:38.1401713+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T10:27:38.1523186+02:00","action":"release","task_id":319,"detail":"mast-glen"}
+{"timestamp":"2026-04-05T10:29:22.9825703+02:00","action":"edit","task_id":598,"detail":"Five-tier folder restructure (share/serve/store/seed/.owlbear)"}
+{"timestamp":"2026-04-05T10:29:22.9942003+02:00","action":"release","task_id":598,"detail":"atlas-lily"}
+{"timestamp":"2026-04-05T10:29:57.6187487+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T10:29:57.6289419+02:00","action":"claim","task_id":620,"detail":"rose-spray"}
+{"timestamp":"2026-04-05T10:30:01.9849563+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T10:30:01.9969454+02:00","action":"claim","task_id":614,"detail":"slate-glen"}
+{"timestamp":"2026-04-05T10:30:13.4263173+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:30:13.4375283+02:00","action":"claim","task_id":264,"detail":"deep-oaken"}
+{"timestamp":"2026-04-05T10:30:42.8563805+02:00","action":"edit","task_id":593,"detail":"Rewrite #486 AC to match current architecture"}
+{"timestamp":"2026-04-05T10:30:42.8685163+02:00","action":"claim","task_id":593,"detail":"cider-larch"}
+{"timestamp":"2026-04-05T10:30:49.0287711+02:00","action":"edit","task_id":593,"detail":"Rewrite #486 AC to match current architecture"}
+{"timestamp":"2026-04-05T10:30:49.0441914+02:00","action":"release","task_id":593,"detail":"cider-larch"}
+{"timestamp":"2026-04-05T10:30:52.997072+02:00","action":"move","task_id":593,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-05T10:32:07.482984+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T10:32:07.4951935+02:00","action":"release","task_id":614,"detail":"slate-glen"}
+{"timestamp":"2026-04-05T10:32:44.7514809+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:32:44.7659209+02:00","action":"release","task_id":264,"detail":"deep-oaken"}
+{"timestamp":"2026-04-05T10:33:45.3795937+02:00","action":"edit","task_id":620,"detail":"Test: pick_tasks MCP tool gate logic and output format"}
+{"timestamp":"2026-04-05T10:33:45.3919948+02:00","action":"release","task_id":620,"detail":"rose-spray"}
+{"timestamp":"2026-04-05T10:34:15.9395308+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T10:34:15.9532846+02:00","action":"claim","task_id":615,"detail":"orbit-vivid"}
+{"timestamp":"2026-04-05T10:34:23.3332188+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T10:34:23.3443385+02:00","action":"claim","task_id":621,"detail":"quake-grain"}
+{"timestamp":"2026-04-05T10:34:25.5769068+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T10:34:25.5869118+02:00","action":"claim","task_id":605,"detail":"cove-gate"}
+{"timestamp":"2026-04-05T10:34:27.395518+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T10:34:27.404946+02:00","action":"claim","task_id":622,"detail":"cove-plume"}
+{"timestamp":"2026-04-05T10:35:51.148981+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-05T10:35:51.159708+02:00","action":"block","task_id":615,"detail":"Dependency #613 (Create GitHub Actions sync workflow) is in backlog — not started. sync-to-main.yml does not exist. main branch still contains dev-only files (tests/, v1/, .owlbear/, conftest.py, store/, etc.). AC1–AC3 cannot be satisfied until after #613 is built and the first sync is run. Unblocks when #613 reaches done."}
+{"timestamp":"2026-04-05T10:35:51.1696794+02:00","action":"release","task_id":615,"detail":"orbit-vivid"}
+{"timestamp":"2026-04-05T10:37:33.8518372+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T10:37:33.8623622+02:00","action":"release","task_id":605,"detail":"cove-gate"}
+{"timestamp":"2026-04-05T10:39:37.0269884+02:00","action":"edit","task_id":621,"detail":"Implement pick_tasks tool in owlbear-kanban server"}
+{"timestamp":"2026-04-05T10:39:37.0375886+02:00","action":"release","task_id":621,"detail":"quake-grain"}
+{"timestamp":"2026-04-05T10:41:53.2333131+02:00","action":"create","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T10:42:19.8735828+02:00","action":"create","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T10:43:38.1327923+02:00","action":"edit","task_id":622,"detail":"Wire pick_tasks into orchestrator workflow"}
+{"timestamp":"2026-04-05T10:43:38.1507045+02:00","action":"release","task_id":622,"detail":"cove-plume"}
+{"timestamp":"2026-04-05T10:54:00.2160088+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T10:54:00.2280896+02:00","action":"claim","task_id":605,"detail":"lily-blade"}
+{"timestamp":"2026-04-05T10:54:00.2840168+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T10:54:00.3154055+02:00","action":"claim","task_id":612,"detail":"sand-otter"}
+{"timestamp":"2026-04-05T10:54:02.9888263+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:54:03.0001537+02:00","action":"claim","task_id":264,"detail":"stem-gust"}
+{"timestamp":"2026-04-05T10:54:54.008043+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T10:54:54.0212597+02:00","action":"claim","task_id":576,"detail":"calm-lark"}
+{"timestamp":"2026-04-05T10:54:56.8173785+02:00","action":"edit","task_id":605,"detail":"Extract system instructions from copilot-instructions.md"}
+{"timestamp":"2026-04-05T10:54:56.8289424+02:00","action":"release","task_id":605,"detail":"lily-blade"}
+{"timestamp":"2026-04-05T10:55:35.1186892+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
+{"timestamp":"2026-04-05T10:55:35.130128+02:00","action":"release","task_id":576,"detail":"calm-lark"}
+{"timestamp":"2026-04-05T10:56:03.6565887+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
+{"timestamp":"2026-04-05T10:56:03.6676615+02:00","action":"release","task_id":264,"detail":"stem-gust"}
+{"timestamp":"2026-04-05T11:02:59.9412139+02:00","action":"edit","task_id":612,"detail":"Write consumer-focused README for main branch"}
+{"timestamp":"2026-04-05T11:02:59.9568197+02:00","action":"release","task_id":612,"detail":"sand-otter"}
+{"timestamp":"2026-04-05T11:03:00.4060747+02:00","action":"move","task_id":612,"detail":"done -\u003e archived"}

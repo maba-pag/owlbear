@@ -1,4 +1,4 @@
-﻿version: 10
+version: 10
 board:
     name: OwlBear
 tasks_dir: tasks
@@ -24,4 +24,4 @@ claim_timeout: 1h
 tui:
     title_lines: 2
     hide_empty_columns: true
-next_id: 627
+next_id: 630

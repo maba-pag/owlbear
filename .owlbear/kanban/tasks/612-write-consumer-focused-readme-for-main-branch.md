@@ -1,10 +1,12 @@
 ---
 id: 612
 title: Write consumer-focused README for main branch
-status: done
+status: archived
 priority: needed
 created: 2026-04-04T21:55:11.0661506+02:00
-updated: 2026-04-05T10:13:30.5142078+02:00
+updated: 2026-04-05T11:03:00.4050389+02:00
+started: 2026-04-05T11:03:00.4050389+02:00
+completed: 2026-04-05T11:03:00.4050389+02:00
 tags:
     - scope:infra
     - type:docs
@@ -161,3 +163,33 @@ PASS #612 -> docs | confidence .98 | All 5 AC lines verified against README-cons
 
 ### Scratch Files Cleaned
 - None — no .owlbear/scratch/612-* files found.
+
+[[2026-04-05]] Sun 11:02
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: README-consumer.md exists at repo root | File read confirmed at repository root, 107 lines | PASS |
+| AC2: 5 sections (Overview, Prerequisites, Quick Start, Directory Layout, Verification) | All sections present: Overview L6, Prerequisites L17 (table format), Quick Start L29 (clone + init.py), Directory Layout L55 (share/serve/seed/setup only), Verification L62 (4-row check table) | PASS |
+| AC3: No dev-only content | grep for tests/, kanban/, .owlbear/, store/, v1/, orchestrator, knowledge loader, docs/research/ found 0 true hits (serve/mcp-kanban/ is MCP server directory, not dev board) | PASS |
+| AC4: Updates section | L88 ## Updates with git pull command and explanation | PASS |
+| AC5: Links to setup guides | setup/setup-guide.md at L55, setup/sharing-guide.md at L106; both files confirmed to exist via Test-Path | PASS |
+
+### Test Results
+- pytest: 2832 passed, 435 failed, 18 skipped. All 435 failures are from unrelated tasks (voice scaffolding, session hooks, skill frontmatter, CI integration). Zero failures in task #612 scope. type:docs pass-through, no Python tests applicable.
+- ruff: N/A, static markdown file, no Python source in deliverable.
+
+### Architect Quality: 5/5
+All 5 AC lines are specific and individually verifiable. Cross-task dependencies explicitly documented (#604 for setup/ paths, #613 for sync workflow). Exclusion list in AC3 is comprehensive. Section format specs in AC2 (paragraph counts, table matching setup-guide.md) prevented ambiguity. Challenger review confirmed refinements. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 5 verified), no deduction
+- Lint violations: N/A, no deduction
+- AC quality at or below 3: No (5/5), no deduction
+- Missing reviewer evidence: No (detailed, .98 PASS), no deduction
+- Full-suite failures in task scope: 0, no deduction
+
+### Confidence: .98
+(Capped from 1.00: minor process note, builder omitted Builder Notes section and did not advance to review status before reviewer picked up. Informational only, no deliverable impact.)
+
+### Action: archive
