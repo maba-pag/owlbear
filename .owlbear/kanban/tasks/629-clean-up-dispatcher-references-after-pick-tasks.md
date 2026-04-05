@@ -4,7 +4,7 @@ title: Clean up dispatcher references after pick_tasks migration
 status: ideation
 priority: important
 created: 2026-04-05T10:42:19.8702275+02:00
-updated: 2026-04-05T10:42:19.8702275+02:00
+updated: 2026-04-05T14:17:33.4665257+02:00
 tags:
     - scope:agents
     - phase-2
@@ -27,3 +27,9 @@ class: standard
 ## Context
 
 After #622 wires pick_tasks into the orchestrator, these cross-cutting references to the dispatcher agent become stale. See .owlbear/research/wire-pick-tasks-orchestrator.md.
+
+[[2026-04-05]] Sun 14:17
+
+
+## Research Note from #623
+- GAP: `share/skills/w-task-decomposition/SKILL.md` L19 references "dispatcher-dispatched" — add to cleanup scope
