@@ -309,7 +309,7 @@ class TestFromAC_ProjectInfoTool:
 
 
 class TestFromAC_ProjectListTool:
-    """AC: project_list scans {owlbear_root}/data/projects/ and returns [{name, path}]."""
+    """AC: project_list scans {owlbear_root}/store/projects/ and returns [{name, path}]."""
 
     @pytest.mark.asyncio
     async def test_returns_list(self, tmp_path: Path) -> None:
@@ -320,23 +320,23 @@ class TestFromAC_ProjectListTool:
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_projects_dir_missing(self, tmp_path: Path) -> None:
-        """project_list returns [] when {owlbear_root}/data/projects/ directory is absent."""
+        """project_list returns [] when {owlbear_root}/store/projects/ directory is absent."""
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
         result = await project_list(ctx)
         assert result == []
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_dir_contains_no_json(self, tmp_path: Path) -> None:
-        """project_list returns [] when data/projects/ exists but has no .json files."""
-        (tmp_path / "data" / "projects").mkdir(parents=True)
+        """project_list returns [] when store/projects/ exists but has no .json files."""
+        (tmp_path / "store" / "projects").mkdir(parents=True)
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
         result = await project_list(ctx)
         assert result == []
 
     @pytest.mark.asyncio
     async def test_returns_one_entry_per_json_file(self, tmp_path: Path) -> None:
-        """project_list returns exactly one entry per .json file in data/projects/."""
-        projects_dir = tmp_path / "data" / "projects"
+        """project_list returns exactly one entry per .json file in store/projects/."""
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "alpha.json").write_text(json.dumps({"path": "/work/alpha"}))
         (projects_dir / "beta.json").write_text(json.dumps({"path": "/work/beta"}))
@@ -347,7 +347,7 @@ class TestFromAC_ProjectListTool:
     @pytest.mark.asyncio
     async def test_entries_have_name_and_path_keys(self, tmp_path: Path) -> None:
         """Each project_list entry is a dict with 'name' and 'path' keys."""
-        projects_dir = tmp_path / "data" / "projects"
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "myproject.json").write_text(json.dumps({"path": "/work/myproject"}))
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
@@ -360,7 +360,7 @@ class TestFromAC_ProjectListTool:
     @pytest.mark.asyncio
     async def test_entry_name_is_stem_of_json_filename(self, tmp_path: Path) -> None:
         """project_list entry 'name' is the filename stem (no .json extension)."""
-        projects_dir = tmp_path / "data" / "projects"
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "coolproject.json").write_text(json.dumps({"path": "/work/cool"}))
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
@@ -370,7 +370,7 @@ class TestFromAC_ProjectListTool:
     @pytest.mark.asyncio
     async def test_entry_path_comes_from_json_path_key(self, tmp_path: Path) -> None:
         """project_list entry 'path' is the value of the 'path' key inside the .json file."""
-        projects_dir = tmp_path / "data" / "projects"
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "proj.json").write_text(json.dumps({"path": "/specific/registered/path"}))
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
@@ -379,8 +379,8 @@ class TestFromAC_ProjectListTool:
 
     @pytest.mark.asyncio
     async def test_ignores_non_json_files_in_projects_dir(self, tmp_path: Path) -> None:
-        """project_list ignores non-.json files in data/projects/."""
-        projects_dir = tmp_path / "data" / "projects"
+        """project_list ignores non-.json files in store/projects/."""
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "readme.txt").write_text("ignore me")
         (projects_dir / "valid.json").write_text(json.dumps({"path": "/work/valid"}))
@@ -391,7 +391,7 @@ class TestFromAC_ProjectListTool:
     @pytest.mark.asyncio
     async def test_silently_skips_malformed_json_no_exception(self, tmp_path: Path) -> None:
         """project_list does not raise when a .json file contains invalid JSON."""
-        projects_dir = tmp_path / "data" / "projects"
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "broken.json").write_text("not valid json {{{{")
         ctx = _make_mcp_ctx(_make_app_context(owlbear_root=tmp_path))
@@ -402,7 +402,7 @@ class TestFromAC_ProjectListTool:
     @pytest.mark.asyncio
     async def test_malformed_json_skipped_valid_entries_returned(self, tmp_path: Path) -> None:
         """project_list returns only valid entries when mixed with malformed .json files."""
-        projects_dir = tmp_path / "data" / "projects"
+        projects_dir = tmp_path / "store" / "projects"
         projects_dir.mkdir(parents=True)
         (projects_dir / "bad.json").write_text("{{invalid}}")
         (projects_dir / "good.json").write_text(json.dumps({"path": "/work/good"}))
