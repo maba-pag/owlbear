@@ -1,10 +1,12 @@
 ---
 id: 531
 title: Build approve_memory CLI wrapper for set_approval_state
-status: done
+status: archived
 priority: important
 created: 2026-04-01T19:13:11.4079479+02:00
-updated: 2026-04-05T03:56:30.9453544+02:00
+updated: 2026-04-05T09:32:59.4897691+02:00
+started: 2026-04-05T09:32:59.4897691+02:00
+completed: 2026-04-05T09:32:59.4897691+02:00
 tags:
     - scope:agents
     - phase-2
@@ -202,3 +204,6 @@ No MISSING or LAX findings. All TestFromAC_ methods preserved without weakening.
 
 ### Scratch Files
 - .owlbear/scratch/531-* — none found; already cleaned prior to this stage
+
+[[2026-04-05]] Sun 09:32
+Audit complete. All 8 AC groups verified. 56/60 task tests pass (4 path-stale from #601). Full suite clean for task scope. Lint clean. Architect quality 5/5. Confidence 1.00.
