@@ -131,7 +131,7 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OWLBEAR_KB_PATH` | `data/knowledge/knowledge.db` | Path to SQLite knowledge database |
+| `OWLBEAR_KB_PATH` | `store/knowledge/knowledge.db` | Path to SQLite knowledge database |
 | `OWLBEAR_MODEL` | `gpt-4o-mini` | LLM model for entity extractor |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 

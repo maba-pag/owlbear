@@ -115,6 +115,6 @@ Returns: success message string. Raises `ToolError` if entry not found.
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `MEMORY_TOOLS_EXCLUDE` | (unset) | Comma-separated tool names to remove at startup; unknown names silently ignored |
-| `OWLBEAR_MEMORY_DB_PATH` | `data/memory.db` | Path to the SQLite database file |
+| `OWLBEAR_MEMORY_DB_PATH` | `store/memory.db` | Path to the SQLite database file |
 
 **Tool exclusion example:** Set `MEMORY_TOOLS_EXCLUDE=mark_for-deletion,set_approval_state` to restrict agents to read-only + record operations.

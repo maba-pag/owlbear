@@ -102,7 +102,7 @@ uv run --project serve/mcp-memory python -m owlbear_mcp_memory.migrate \
 
 Optional flags:
 
-- `--db-path PATH` — override the default `data/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
+- `--db-path PATH` — override the default `store/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
 - `--dry-run` — print entries that would be imported without writing to the DB
 
 ## Memory Approval
@@ -123,9 +123,9 @@ uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --interac
 
 Optional flags:
 
-- `--db-path PATH` — override the default `data/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
+- `--db-path PATH` — override the default `store/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
 
-If `data/memory/curation-report.json` is present, a recommendation column is shown in the listing table.
+If `store/memory/curation-report.json` is present, a recommendation column is shown in the listing table.
 
 Exit codes: 0 on full success, 1 if any operation failed.
 

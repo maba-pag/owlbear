@@ -13,7 +13,7 @@ The `owlbear-project` MCP server exposes project metadata and file-system contex
 | Tool | Description | Returns |
 |------|-------------|---------|
 | `project_info` | Return metadata from `owlbear-project.json` | `dict` with `name`, `type`, `project_path`, `owlbear-path`, `created_at`; or error string |
-| `project_list` | List all registered projects from `{owlbear-root}/data/projects/` | `list[{name, path}]`; empty list when directory missing |
+| `project_list` | List all registered projects from `{owlbear-root}/store/projects/` | `list[{name, path}]`; empty list when directory missing |
 | `project_readme` | Return `README.md` content from project root | UTF-8 string; `"error: No README.md found in project root."` when absent |
 | `project_structure` | Return indented directory tree (max depth 3) | Indented text tree; excludes `.git`, `__pycache__`, `node_modules`, `.venv`, `.mypy_cache` |
 

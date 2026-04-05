@@ -16,7 +16,7 @@ Prerequisites
 
 Invocation
 ----------
-    python scripts/e2e_smoke.py [timeout_seconds]
+    python .owlbear/scripts/e2e_smoke.py [timeout_seconds]
 
 Timeout defaults to 300 seconds but can be overridden via the ``E2E_TIMEOUT``
 environment variable (takes precedence) or a positional argument.
