@@ -31,13 +31,13 @@ def create_vscode_settings(project_dir: Path, owlbear_dir: Path) -> None:
 
     owlbear_keys: dict = {
         "chat.agentFilesLocations": {
-            f"{rel}/.github/agents": True,
+            f"{rel}/share/agents": True,
         },
         "chat.agentSkillsLocations": {
-            f"{rel}/.github/skills": True,
+            f"{rel}/share/skills": True,
         },
         "chat.instructionsFilesLocations": {
-            f"{rel}/.github/instructions": True,
+            f"{rel}/share/instructions": True,
         },
     }
 
@@ -110,8 +110,8 @@ def create_kanban_dir(project_dir: Path, owlbear_dir: Path) -> None:
 
 
 def create_knowledge_dir(project_dir: Path) -> None:
-    """Create data/knowledge/ directory."""
-    (project_dir / "data" / "knowledge").mkdir(parents=True, exist_ok=True)
+    """Create store/knowledge/ directory."""
+    (project_dir / "store" / "knowledge").mkdir(parents=True, exist_ok=True)
 
 
 def create_project_json(
