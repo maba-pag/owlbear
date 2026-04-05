@@ -1,22 +1,3 @@
-{"timestamp":"2026-03-30T10:18:16.7205279+02:00","action":"release","task_id":209,"detail":"test-writer"}
-{"timestamp":"2026-03-30T10:19:30.8733156+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T10:19:30.8770898+02:00","action":"claim","task_id":184,"detail":"builder"}
-{"timestamp":"2026-03-30T10:20:38.5884275+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T10:20:43.7654703+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T10:20:44.0979844+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T10:20:44.1016322+02:00","action":"block","task_id":184,"detail":"TestFromAC interface contradiction: cannot satisfy both TestFromAC_ErrorJournalLog (positional log(entry) must work) and TestFromAC_ErrorJournalLogV2 (positional log(entry) must raise TypeError) simultaneously. Test-writer must reconcile."}
-{"timestamp":"2026-03-30T10:20:48.4327869+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T10:20:48.4359332+02:00","action":"release","task_id":184,"detail":"builder"}
-{"timestamp":"2026-03-30T12:47:54.7311979+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
-{"timestamp":"2026-03-30T12:47:54.7342764+02:00","action":"claim","task_id":206,"detail":"builder"}
-{"timestamp":"2026-03-30T12:52:46.4531545+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
-{"timestamp":"2026-03-30T12:52:46.457302+02:00","action":"release","task_id":206,"detail":"builder"}
-{"timestamp":"2026-03-30T12:53:18.9273002+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T12:53:18.932999+02:00","action":"claim","task_id":209,"detail":"builder"}
-{"timestamp":"2026-03-30T12:56:03.2105402+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T12:56:08.9710914+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T12:56:08.976208+02:00","action":"release","task_id":209,"detail":"builder"}
-{"timestamp":"2026-03-30T13:10:18.0938102+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
 {"timestamp":"2026-03-30T13:10:18.0969502+02:00","action":"claim","task_id":152,"detail":"reviewer"}
 {"timestamp":"2026-03-30T13:12:24.7272736+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
 {"timestamp":"2026-03-30T13:12:24.7304084+02:00","action":"block","task_id":143,"detail":"Stale: failed 2 consecutive cycles with infrastructure error 'Cannot read properties of undefined (reading length)'. Infrastructure issue must be resolved before retry."}
@@ -9998,3 +9979,22 @@
 {"timestamp":"2026-04-05T14:12:09.7208716+02:00","action":"edit","task_id":607,"detail":"Update live references to new folder paths"}
 {"timestamp":"2026-04-05T14:12:09.7314395+02:00","action":"release","task_id":607,"detail":"glow-lily"}
 {"timestamp":"2026-04-05T14:12:10.1768256+02:00","action":"move","task_id":607,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T14:13:05.8423135+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T14:13:05.8532208+02:00","action":"claim","task_id":630,"detail":"dawn-horn"}
+{"timestamp":"2026-04-05T14:13:39.4678794+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T14:13:39.4817155+02:00","action":"claim","task_id":614,"detail":"light-basin"}
+{"timestamp":"2026-04-05T14:13:41.691209+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T14:13:41.7028165+02:00","action":"claim","task_id":437,"detail":"heath-mesa"}
+{"timestamp":"2026-04-05T14:13:58.1715036+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T14:13:58.1838309+02:00","action":"claim","task_id":623,"detail":"pearl-void"}
+{"timestamp":"2026-04-05T14:14:39.2321676+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T14:14:39.2440234+02:00","action":"release","task_id":437,"detail":"heath-mesa"}
+{"timestamp":"2026-04-05T14:17:33.4680454+02:00","action":"edit","task_id":629,"detail":"Clean up dispatcher references after pick_tasks migration"}
+{"timestamp":"2026-04-05T14:18:11.1679223+02:00","action":"edit","task_id":630,"detail":"Fix TDD gate to exempt non-impl pass-through tags"}
+{"timestamp":"2026-04-05T14:18:11.1798457+02:00","action":"release","task_id":630,"detail":"dawn-horn"}
+{"timestamp":"2026-04-05T14:18:12.9686414+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T14:18:12.9828167+02:00","action":"release","task_id":623,"detail":"pearl-void"}
+{"timestamp":"2026-04-05T14:28:59.7853607+02:00","action":"create","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T14:29:29.2817689+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
+{"timestamp":"2026-04-05T14:29:29.2918193+02:00","action":"release","task_id":614,"detail":"light-basin"}
+{"timestamp":"2026-04-05T14:29:29.7262389+02:00","action":"move","task_id":614,"detail":"done -\u003e archived"}
