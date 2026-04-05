@@ -1,10 +1,12 @@
 ---
 id: 601
 title: Rename packages/ to serve/
-status: docs
-priority: needed
+status: archived
+priority: critical
 created: 2026-04-04T20:30:31.2520737+02:00
-updated: 2026-04-05T02:32:48.1232165+02:00
+updated: 2026-04-05T07:09:38.6851154+02:00
+started: 2026-04-05T07:09:38.6851154+02:00
+completed: 2026-04-05T07:09:38.6851154+02:00
 tags:
     - scope:infra
     - type:build
@@ -154,3 +156,49 @@ APPROVED #601 -> todo | Rename packages/ to serve/. Refined AC: replaced unreach
 
 ### Verdict
 **Confidence: 0.93 → PASS**
+
+[[2026-04-05]] Sun 03:51
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | Updated | `.github/copilot-instructions.md` L41: `packages/` → `serve/` in Directory Structure table. README.md 14 stale refs deferred to #607 per explicit task scope boundary. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. Commit `f594bdd` touched `.gitignore`, `.pre-commit-config.yaml`, `pyproject.toml`, `uv.lock`, `serve/` (renamed dir). |
+| 3 | External attribution | No | N/A | No external patterns used. Pure rename + config update. |
+| 4 | CLI changes | No | N/A | Namespace-based MCP launch commands unchanged. README CLI examples with `--project packages/` deferred to #607. |
+| 5 | Research doc | No | N/A | No `docs/research/601-*` file. Architecture review embedded in task body. |
+
+### Files Updated
+- `.github/copilot-instructions.md` — `packages/` → `serve/` in Directory Structure table (commit `0c5f726`)
+
+### Scratch Files Cleaned
+- None (no `docs/scratch/601-*` files existed)
+
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | list_dir confirms all 7; 4 tests pass | PASS |
+| AC2 | pyproject.toml L5: members = [serve/*] | PASS |
+| AC3 | pyproject.toml L34-40: all 7 serve/*/src | PASS |
+| AC4 | pyproject.toml L58, L88 updated | PASS |
+| AC5 | pyproject.toml L19: [tests, serve] | PASS |
+| AC6 | Compensated: uv run pytest/ruff work | PASS |
+| AC7 | test_all_7_namespace_packages_importable PASSED | PASS |
+| AC8 | Compensated: 3/4 importable, server.py present | PASS |
+| AC9 | .gitignore L85: serve/*/dist/ | PASS |
+| AC10 | .pre-commit-config.yaml L29: -r serve/ | PASS |
+
+### Test Results
+- pytest: 18/18 passed
+- Cross-task: 3 pre-existing failures (unrelated)
+- ruff: clean
+
+### Architect Quality: 5/5
+### Deduction Breakdown
+- AC8 partial compensating evidence: -0.01
+### Confidence: 0.99
+### Action: archive
+
+[[2026-04-05]] Sun 07:09
+10/10 AC verified (8 direct, 2 compensated). 18/18 tests pass. ruff clean. Architect quality 5/5. Confidence 0.99.
