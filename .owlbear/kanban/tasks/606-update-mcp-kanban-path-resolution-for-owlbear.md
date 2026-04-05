@@ -1,10 +1,12 @@
 ---
 id: 606
 title: Update mcp-kanban path resolution for .owlbear/kanban/
-status: done
+status: archived
 priority: critical
 created: 2026-04-04T20:31:28.5105181+02:00
-updated: 2026-04-05T06:57:30.9575625+02:00
+updated: 2026-04-05T09:00:24.4583378+02:00
+started: 2026-04-05T09:00:24.4583378+02:00
+completed: 2026-04-05T09:00:24.4583378+02:00
 tags:
     - scope:mcp
     - type:build
@@ -224,3 +226,30 @@ All 5 binding AC items verified with evidence against commit `e189439`. 6/6 doma
 
 ### Scratch Files Cleaned
 - None (no `docs/scratch/606-*` files found)
+
+[[2026-04-05]] Sun 09:00
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban") | server.py L54 confirmed; tests test_default_kanban_dir_is_owlbear_dotdir, test_default_kanban_bin_reflects_new_dir, test_default_kanban_bin_not_bare_kanban_prefix PASS | PASS |
+| AC1 (bin auto-derives): _DEFAULT_KANBAN_BIN | server.py L55 unchanged, test_lifespan_yields_ctx_with_new_kanban_dir PASS | PASS |
+| AC2: Error message updated | server.py L117-119 confirmed ".owlbear/kanban/kanban-md.exe"; test_lifespan_error_message_names_new_path, test_lifespan_error_message_not_old_bare_kanban_path PASS | PASS |
+| AC3: .vscode/mcp.json no change needed | Verified: owlbear-kanban entry uses "uv run python -m owlbear_mcp_kanban" with no KANBAN_BIN env | PASS |
+| AC4: Manual server start | Pass-through (builder-reported, non-testable) | PASS-THROUGH |
+| AC5: Existing mcp-kanban tests pass | 6/6 task tests pass; pre-existing failures in test_mcp_kanban_server.py (#601 path remnant) and test_mcp_kanban_start_work_470.py (#470 RED) not caused by #606 (absent from commit e189439) | PASS |
+
+### Test Results
+- pytest (task): 6 passed, 0 failed
+- pytest (full suite): 2822 passed, 446 failed, 18 skipped. All failures pre-existing. No #606-scope regressions.
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC items precise with file paths, line numbers, and expected values. Scope boundaries well-documented. Overlap analysis thorough.
+
+### Deduction Breakdown
+- TDD RED commit absent (test + impl in single commit e189439): -0.02
+- AC4 manual verification, no test evidence: -0.01
+
+### Confidence: 0.97
+### Action: archive

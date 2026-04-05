@@ -1,8 +1,3 @@
-{"timestamp":"2026-03-30T05:25:38.0091984+02:00","action":"edit","task_id":193,"detail":"Ban manage_todo_list/todos tool from agents and validator"}
-{"timestamp":"2026-03-30T05:25:41.4495767+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
-{"timestamp":"2026-03-30T05:25:42.9326589+02:00","action":"edit","task_id":190,"detail":"Implement mcp-project server infrastructure + tools (server.py part 1)"}
-{"timestamp":"2026-03-30T05:25:42.9363287+02:00","action":"claim","task_id":190,"detail":"test-writer"}
-{"timestamp":"2026-03-30T05:25:45.9482106+02:00","action":"edit","task_id":90,"detail":"Update pytest-and-linting skill for v2 paths"}
 {"timestamp":"2026-03-30T05:25:45.9513578+02:00","action":"release","task_id":90,"detail":"test-writer"}
 {"timestamp":"2026-03-30T05:25:46.7962386+02:00","action":"edit","task_id":86,"detail":"Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)"}
 {"timestamp":"2026-03-30T05:25:46.7990607+02:00","action":"release","task_id":86,"detail":"test-writer"}
@@ -9998,3 +9993,8 @@
 {"timestamp":"2026-04-05T08:19:59.9674437+02:00","action":"claim","task_id":603,"detail":"flare-heath"}
 {"timestamp":"2026-04-05T08:34:12.8384715+02:00","action":"edit","task_id":603,"detail":"Move project ops data to .owlbear/"}
 {"timestamp":"2026-04-05T08:34:57.7603177+02:00","action":"move","task_id":603,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T08:35:32.7245171+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T08:35:32.736782+02:00","action":"claim","task_id":606,"detail":"trail-wind"}
+{"timestamp":"2026-04-05T09:00:23.993473+02:00","action":"edit","task_id":606,"detail":"Update mcp-kanban path resolution for .owlbear/kanban/"}
+{"timestamp":"2026-04-05T09:00:24.0189631+02:00","action":"release","task_id":606,"detail":"trail-wind"}
+{"timestamp":"2026-04-05T09:00:24.4583378+02:00","action":"move","task_id":606,"detail":"done -\u003e archived"}
