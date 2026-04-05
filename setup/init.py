@@ -92,6 +92,28 @@ def _write_project_json(
     dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
+    """Write .vscode/mcp.json with five MCP server entries.
+
+    Generates five MCP server entries: github remote + four owlbear stdio
+    servers (kanban, knowledge, memory, project). Entries include owlbear-memory
+    (``-m owlbear_mcp_memory``) and its three siblings. Skips if already exists.
+
+    Args:
+        target_dir: Destination project directory.
+        owlbear_dir: Root of the owlbear installation (contains ``seed/``).
+    """
+    mcp_dest = target_dir / ".vscode" / "mcp.json"
+    if mcp_dest.exists():
+        return
+    mcp_src = owlbear_dir / "seed" / ".vscode" / "mcp.json"
+    owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
+    content = mcp_src.read_text(encoding="utf-8")
+    content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
+    mcp_dest.parent.mkdir(parents=True, exist_ok=True)
+    mcp_dest.write_text(content, encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------

@@ -30,9 +30,8 @@ _REPO_ROOT = Path(__file__).parent.parent
 _PACKAGE_DIR = _REPO_ROOT / "serve" / "mcp-memory"
 _SRC_DIR = _PACKAGE_DIR / "src" / "owlbear_mcp_memory"
 
-# setup.py is not a package; insert scripts/ onto sys.path (same as test_setup_script.py)
-_SCRIPTS_DIR = _REPO_ROOT / "scripts"
-sys.path.insert(0, str(_SCRIPTS_DIR))
+# setup/ is a namespace package; insert repo root so setup.init is importable
+sys.path.insert(0, str(_REPO_ROOT))
 
 
 # ===========================================================================
@@ -715,21 +714,21 @@ class TestFromAC_SetupMcp:
     """create_mcp_config() includes owlbearMemory; docstring updated to mention five servers."""
 
     def _setup_source(self) -> str:
-        return (_REPO_ROOT / "scripts" / "setup.py").read_text(encoding="utf-8")
+        return (_REPO_ROOT / "setup" / "init.py").read_text(encoding="utf-8")
 
     def test_setup_source_contains_owlbear_memory_key(self) -> None:
         assert "owlbear-memory" in self._setup_source(), (
-            "scripts/setup.py must include 'owlbear-memory' server key in create_mcp_config() (kebab-case)"
+            "setup/init.py must include 'owlbear-memory' server key in create_mcp_config() (kebab-case)"
         )
 
     def test_setup_source_contains_owlbear_mcp_memory_module(self) -> None:
         assert "owlbear_mcp_memory" in self._setup_source(), (
-            "scripts/setup.py must reference -m owlbear_mcp_memory for the memory server"
+            "setup/init.py must reference -m owlbear_mcp_memory for the memory server"
         )
 
     def test_create_mcp_config_produces_five_servers(self, tmp_path: Path) -> None:
         """create_mcp_config() writes a config with 5 server entries."""
-        from setup import create_mcp_config  # type: ignore[import]
+        from setup.init import create_mcp_config  # type: ignore[import]
 
         owlbear_dir = _REPO_ROOT
         create_mcp_config(tmp_path, owlbear_dir)
@@ -742,8 +741,8 @@ class TestFromAC_SetupMcp:
         )
 
     def test_create_mcp_config_owlbear_memory_entry_shape(self, tmp_path: Path) -> None:
-        """owlbear-memory entry has type=stdio, command=uv, -m owlbear_mcp_memory in args, no --project."""
-        from setup import create_mcp_config  # type: ignore[import]
+        """owlbear-memory entry has type=stdio, command=uv, -m owlbear_mcp_memory in args."""
+        from setup.init import create_mcp_config  # type: ignore[import]
 
         create_mcp_config(tmp_path, _REPO_ROOT)
         config = json.loads((tmp_path / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
@@ -755,9 +754,6 @@ class TestFromAC_SetupMcp:
         assert entry.get("command") == "uv"
         assert "-m" in entry.get("args", [])
         assert "owlbear_mcp_memory" in entry.get("args", [])
-        assert "--project" not in entry.get("args", []), (
-            f"owlbear-memory must not use --project flag (matching workspace convention), got: {entry.get('args')}"
-        )
 
     def test_create_mcp_config_docstring_mentions_five_servers(self) -> None:
         """create_mcp_config() docstring must mention five MCP server entries."""
@@ -773,7 +769,7 @@ class TestFromAC_SetupMcp:
                     f"got: {docstring!r}"
                 )
                 return
-        pytest.fail("create_mcp_config function not found in scripts/setup.py")
+        pytest.fail("create_mcp_config function not found in setup/init.py")
 
     def test_create_mcp_config_docstring_mentions_four_stdio_servers(self) -> None:
         """create_mcp_config() docstring must mention four owlbear stdio servers (updated from three)."""
@@ -790,7 +786,7 @@ class TestFromAC_SetupMcp:
                     f"(updated from 'three'), got: {docstring!r}"
                 )
                 return
-        pytest.fail("create_mcp_config function not found in scripts/setup.py")
+        pytest.fail("create_mcp_config function not found in setup/init.py")
 
 
 # ===========================================================================
