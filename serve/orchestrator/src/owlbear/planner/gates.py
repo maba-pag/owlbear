@@ -3,7 +3,8 @@
 Gates 1 (status), 2 (dependency), and 6 (claim) are handled upstream by CLI
 flags passed to read_board(). The three predicates here cover:
   - Gate 3: atomicity (single-concern title heuristic)
-  - Gate 4: TDD readiness (in-progress tasks must have Test-Writer Notes)
+  - Gate 4: TDD readiness (in-progress tasks without a non-impl tag must have
+    Test-Writer Notes; non-impl pass-through tasks are exempt)
   - Gate 5: clarity (active tasks must have bullet or numbered AC)
 """
 
