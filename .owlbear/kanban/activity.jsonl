@@ -1,8 +1,3 @@
-{"timestamp":"2026-03-30T13:16:58.9666855+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
-{"timestamp":"2026-03-30T13:16:58.9721496+02:00","action":"claim","task_id":206,"detail":"river-zeal"}
-{"timestamp":"2026-03-30T13:17:20.4949333+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T13:17:25.6830984+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T13:17:25.6857278+02:00","action":"claim","task_id":55,"detail":"reviewer"}
 {"timestamp":"2026-03-30T13:17:27.3897287+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
 {"timestamp":"2026-03-30T13:17:41.6341556+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
 {"timestamp":"2026-03-30T13:17:41.637815+02:00","action":"release","task_id":212,"detail":"test-writer"}
@@ -9998,3 +9993,8 @@
 {"timestamp":"2026-04-05T14:45:35.5767135+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
 {"timestamp":"2026-04-05T14:45:35.5872184+02:00","action":"release","task_id":37,"detail":"south-falcon"}
 {"timestamp":"2026-04-05T14:45:36.0070993+02:00","action":"move","task_id":37,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T14:46:36.3311266+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T14:46:36.3418372+02:00","action":"claim","task_id":265,"detail":"mill-ghost"}
+{"timestamp":"2026-04-05T15:04:46.8762378+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
+{"timestamp":"2026-04-05T15:04:46.8866748+02:00","action":"release","task_id":265,"detail":"mill-ghost"}
+{"timestamp":"2026-04-05T15:04:47.3154613+02:00","action":"move","task_id":265,"detail":"done -\u003e archived"}

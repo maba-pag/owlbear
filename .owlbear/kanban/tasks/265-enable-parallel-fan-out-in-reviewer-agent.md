@@ -1,10 +1,12 @@
 ---
 id: 265
 title: Enable parallel fan-out in reviewer agent
-status: docs
+status: archived
 priority: important
 created: 2026-03-30T19:31:23.5606586+02:00
-updated: 2026-04-05T10:02:58.7348542+02:00
+updated: 2026-04-05T15:04:47.3139546+02:00
+started: 2026-04-05T15:04:47.3139546+02:00
+completed: 2026-04-05T15:04:47.3139546+02:00
 tags:
     - scope:agents
     - phase-2
@@ -148,3 +150,45 @@ Builder reported old .github/ paths; live deliverables are in share/ (post-reorg
 
 ### Confidence: .95
 ### Verdict: PASS
+
+[[2026-04-05]] Sun 11:10
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `.github/copilot-instructions.md` is 3 lines (project identity only) — no reviewer or workflow section exists to update |
+| 2 | Module docstrings | No | N/A | No Python modules changed — deliverables are `share/agents/reviewer.agent.md` and `share/skills/w-code-review/SKILL.md` (markdown/YAML only) |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` § "Reviewer Parallel Fan-Out (Task #265)" (lines 343–349) already contains all 3 VS Code sources (Agents Concepts, Subagents Guide, Custom Agents docs) from research doc — no update needed |
+| 4 | CLI changes | No | N/A | No CLI commands added or changed |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/reviewer-parallel-fan-out.md` exists; follow-up tasks #307 (Code-Reader) and #437 (test task) created by architecture review |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found for task 265
+
+[[2026-04-05]] Sun 15:04
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC 1: agents: has quality-runner, code-reader | reviewer.agent.md L9: agents: [code-reader, scribe, quality-runner] | PASS |
+| AC 2: parallel runSubagent dispatch | SKILL.md L56-76: agentName blocks for both agents | PASS |
+| AC 3: QR 5-field contract | Step 2.5: mode, task_id, test_paths, coverage_modules, lint_paths | PASS |
+| AC 4: CR 4-field contract | Step 2.5: task_id, ac_lines, changed_files, test_files | PASS |
+| AC 5: Unified AC table + cross-walk | SKILL.md L263: cross-walk description | PASS |
+| AC 6: FAIL triggers | SKILL.md L263: MISSING/WEAK, QR failure, security (LAX on security, compensated by Step 5.1) | PASS |
+| AC 7: Fallback on execution error | Step 2.5 L74: crash/timeout/exception | PASS |
+| AC 8: Channel B fallback note | Step 2.5 L76: exact format | PASS |
+| AC 9: SKILL.md Step 2.5 + Step 8 | L52 heading + L263 synthesis | PASS |
+| AC 10: tools: unchanged | 16-entry tools list preserved | PASS |
+
+### Test Results
+- pytest (task-scoped): 19/19 passed
+- pytest (full suite): 2878 passed, 432 failed, 18 skipped (0 in task scope; all pre-existing)
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+### Confidence: .98
+### Action: archive

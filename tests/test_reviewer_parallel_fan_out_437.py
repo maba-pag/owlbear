@@ -1,7 +1,7 @@
-"""Tests for task #437: Parallel fan-out in reviewer agent.
+﻿"""Tests for task #437: Parallel fan-out in reviewer agent.
 
 AC contract under test:
-1. reviewer.agent.md frontmatter agents: field contains quality-runner
+1. reviewer.agent.md frontmatter agents: field contains both quality-runner and code-reader
    (change-detecting — FAIL before #265 implementation)
 2. reviewer.agent.md frontmatter tools: list matches the 16-entry baseline exactly
    (regression guard — PASSES throughout RED and GREEN)
@@ -72,14 +72,18 @@ class TestFromAC_ReviewerParallelFanOut:
     for parallel fan-out wiring (parent task #265).
     """
 
-    # --- AC 1: agents: contains quality-runner (change-detecting, FAIL before #265) ---
+    # --- AC 1: agents: contains both quality-runner and code-reader (parallel fan-out) ---
 
-    def test_reviewer_agents_contains_quality_runner(self) -> None:
-        """reviewer.agent.md agents: must include quality-runner for parallel fan-out."""
+    def test_reviewer_agents_contains_quality_runner_and_code_reader(self) -> None:
+        "`reviewer.agent.md agents: must include both quality-runner and code-reader for parallel fan-out."
         fm = _get_frontmatter(REVIEWER_AGENT)
         agents = _parse_yaml_inline_list(fm, "agents")
         assert "quality-runner" in agents, (
             f"reviewer.agent.md 'agents:' does not contain 'quality-runner'. "
+            f"Current agents: {agents}"
+        )
+        assert "code-reader" in agents, (
+            f"reviewer.agent.md 'agents:' does not contain 'code-reader'. "
             f"Current agents: {agents}"
         )
 
