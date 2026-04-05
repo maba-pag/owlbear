@@ -1,10 +1,10 @@
 ---
 id: 567
 title: 'Curator: write curation-report.json to store/memory/'
-status: todo
+status: done
 priority: important
 created: 2026-04-03T10:25:09.2481537+02:00
-updated: 2026-04-05T10:22:35.982191+02:00
+updated: 2026-04-05T15:53:20.6694848+02:00
 tags:
     - scope:agents
     - phase-2
@@ -81,3 +81,70 @@ Research complete (.90). T1 autonomous. Consumer exists in approve.py, curator s
 
 [[2026-04-05]] Sun 10:22
 APPROVED #567: Corrected stale data/memory/ paths to store/memory/, refined AC for verifiability, added agent pass-through tag. Challenger rebutted on #531 blocker (already archived). Skill-only change to w-mem-curation Step 5.
+
+[[2026-04-05]] Sun 11:21
+## Test-Writer Notes
+- Non-implementation task (tagged `agent`) — no tests applicable.
+- Primary deliverable: update `share/skills/w-mem-curation/SKILL.md` Step 5 (markdown file).
+- AC4 references `approve.py _load_curation_report()` as a verification note only ("no code changes needed") — not a new interface to test.
+- Architecture review confirms TDD compliance N/A.
+- Passing through to builder.
+
+[[2026-04-05]] Sun 13:32
+## Builder Notes
+- Files changed: `share/skills/w-mem-curation/SKILL.md` (Step 5 only)
+- Step 5 split into 5a (write curation-report.json to store/memory/) and 5b (append to task body)
+- Format matches approve.py _load_curation_report() preferred array branch: `entry_id` key, top-level array
+- Overwrite semantics explicit ("latest report only")
+- AC4 verified: approve.py L92-101 reads db_path.parent/"curation-report.json", handles array with entry_id key — no code changes needed
+- No tests (tagged `agent`, non-impl pass-through per test-writer notes)
+- Lint: N/A (markdown only)
+
+[[2026-04-05]] Sun 15:12
+## Review Evidence
+
+### Changed Files
+- `share/skills/w-mem-curation/SKILL.md` (Step 5 only, diff verified)
+
+### Tests
+N/A — non-implementation task (tagged `agent`). Test-writer pass-through confirmed by architecture review (TDD compliance: N/A). No TestFromAC tests applicable.
+
+### Lint
+N/A — markdown-only change.
+
+### Coverage
+N/A — no Python modules changed.
+
+### AC Compliance
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: Step 5 updated; JSON written before task body | Diff: Step 5a added with "Write this file **before** appending to the task body"; Step 5b retains original append content | PASS |
+| AC2: Top-level array `{entry_id, content_preview, recommendation, reason}` | SKILL.md schema matches exactly; approve.py L90-101: `if isinstance(data, list): return {e["entry_id"]: e.get("recommendation", "") for e in data}` confirms array + entry_id key | PASS |
+| AC3: Overwrite each cycle, latest only | Step 5a: "(overwrite each cycle — latest report only)" explicit | PASS |
+| AC4: approve.py reads `store/memory/curation-report.json` correctly, no code changes | `_DEFAULT_DB_PATH = "store/memory/memory.db"` → `db_path.parent / "curation-report.json"` → `store/memory/curation-report.json`; array branch at L90 uses `entry_id` key; no approve.py changes in diff | PASS |
+
+### TestFromAC Integrity
+No TestFromAC tests exist or were modified (task tagged `agent`, non-impl pass-through). Correct. Not a violation.
+
+### Deductions
+None. `content_preview` in the JSON is not consumed by approve.py's UI (it reads live DB content for its preview column), but this is benign — the field provides human-inspectable audit value, and the skill's description of consumer behavior is accurate regarding the `recommendation` column.
+
+### Confidence: .95 → PASS
+
+[[2026-04-05]] Sun 15:53
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Skill workflow change (w-mem-curation Step 5). copilot-instructions.md is a minimal identity file with no skill-step documentation — no update surface. |
+| 2 | Module docstrings | No | N/A | Markdown-only change confirmed by builder notes and reviewer. No Python modules touched. |
+| 3 | External attribution | No | N/A | All sources are internal: approve.py, test_approve_memory_531.py, test_approve_memory_585.py, internal research docs. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | .owlbear/research/curator-curation-report-json.md exists ✓. .owlbear/research/approve-memory-cli-wrapper.md exists ✓. Both linked from task body. No follow-up tasks needed (this task was the implementation). |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/567-* files found)

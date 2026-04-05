@@ -1,10 +1,10 @@
 ---
 id: 592
 title: Evaluate Power Automate Workflows availability for Teams notifications
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T18:01:47.4587011+02:00
-updated: 2026-04-05T01:13:06.0043427+02:00
+updated: 2026-04-05T13:15:42.4790362+02:00
 tags:
     - phase-3
     - scope:notifications
@@ -68,3 +68,8 @@ Original AC items 1-2 assumed programmatic verification of corp M365 tenant avai
 
 ### Verdict: APPROVE (after AC refinement)
 ### Action: AC rewritten to match research deliverables. Advanced to todo.
+
+[[2026-04-05]] Sun 13:15
+## Test-Writer Notes
+- Non-implementation task (tagged type:research) — no tests applicable.
+- Passing through to builder.

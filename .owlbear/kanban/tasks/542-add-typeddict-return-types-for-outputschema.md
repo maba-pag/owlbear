@@ -1,10 +1,10 @@
 ---
 id: 542
 title: Add TypedDict return types for outputSchema specificity on mcp-project
-status: in-progress
+status: done
 priority: important
 created: 2026-04-02T06:16:23.9009603+02:00
-updated: 2026-04-04T23:18:58.3294273+02:00
+updated: 2026-04-05T16:45:52.01529+02:00
 tags:
     - scope:mcp
     - type:build
@@ -169,3 +169,140 @@ Clean — no LLM output, no race conditions in TypedDict-annotated code, no atom
 
 ### Confidence: .93
 ### Verdict: PASS → docs
+
+[[2026-04-05]] Sun 11:19
+## Builder Notes
+
+### Files Changed
+None — pre-existing implementation is correct (reviewed PASS on 2026-04-04).
+
+### Test Results
+- pytest (task scope — test_server.py + test_typeddict_outputschema_542.py + test_error_prefix_506.py): **72 passed, 6 failed**
+
+### Failure Root Cause
+Commit `477d033` (`chore: rename data/ to store/`) was merged on 2026-04-05 (after the PASS review on 2026-04-04). It updated `project_list` in `server.py`:
+```diff
+-    projects_dir = app_ctx.owlbear_root / "data" / "projects"
++    projects_dir = app_ctx.owlbear_root / "store" / "projects"
+```
+But did NOT update the 6 `TestFromAC_ProjectListTool` tests in `test_server.py`, which still create fixtures under `data/projects`. Result: all 6 project_list tests return empty list instead of expected entries.
+
+### Failing Tests
+All 6 in `TestFromAC_ProjectListTool` (serve/mcp-project/tests/test_server.py):
+- test_returns_one_entry_per_json_file
+- test_entries_have_name_and_path_keys
+- test_entry_name_is_stem_of_json_filename
+- test_entry_path_comes_from_json_path_key
+- test_ignores_non_json_files_in_projects_dir
+- test_malformed_json_skipped_valid_entries_returned
+
+### Test-Writer: What to Fix
+Update all `TestFromAC_ProjectListTool` test fixtures from `tmp_path / "data" / "projects"` to `tmp_path / "store" / "projects"`. These 6 tests are in `serve/mcp-project/tests/test_server.py` (~lines 330–430).
+
+### #542 Scope Tests (All Pass)
+- `test_typeddict_outputschema_542.py`: all pass
+- `test_server.py::TestFromAC_ProjectInfoTool`: all pass
+- `test_error_prefix_506.py::TestFromAC_ErrorPrefixProject`: all pass
+
+### Lint Status
+Not run (no implementation changes needed).
+
+[[2026-04-05]] Sun 13:52
+## Test-Writer Notes
+
+### Retry-Cycle Verification
+
+Builder notes (2026-04-05) reported 6 failing tests in `TestFromAC_ProjectListTool` due to commit `477d033` renaming `data/projects` → `store/projects`. Fixture paths in `test_server.py` were not updated.
+
+**Finding:** All fixture paths already updated to `store/projects` (fix already applied before this session). Full test suite passes.
+
+### Test Results
+
+| File | Tests | Result |
+|------|-------|--------|
+| `serve/mcp-project/tests/test_server.py` | 48 | ✓ 48 passed |
+| `tests/test_error_prefix_506.py` | 15 | ✓ 15 passed |
+| `serve/mcp-project/tests/test_typeddict_outputschema_542.py` | 15 | ✓ 15 passed |
+| **Total** | **78** | **78 passed, 0 failed** |
+
+### AC Coverage
+
+All previously verified AC lines remain covered (see prior Review Evidence section, confidence .93). No regressions introduced. The `data/` → `store/` fix resolves the only outstanding issue.
+
+[[2026-04-05]] Sun 15:07
+## Builder Notes
+
+### Files Changed
+None — pre-existing implementation is correct and complete.
+
+### Test Results
+- pytest (task scope — test_server.py + test_typeddict_outputschema_542.py + test_error_prefix_506.py): **78 passed, 0 failed**
+- ruff check serve/mcp-project/src/ serve/mcp-project/tests/ tests/test_error_prefix_506.py: **All checks passed**
+
+### Coverage
+- `server.py`: 88% — uncovered lines 71-80 (_apply_tool_exclusions inner loop), 181-182 (OSError in project_readme), 200-201 (MCP resource routes). All pre-existing gaps unrelated to new TypedDict code (same as prior review evidence, confidence .93).
+
+### Evidence Summary
+- Previous builder (2026-04-05 11:19) found 6 failing TestFromAC_ProjectListTool tests due to commit `477d033` path rename.
+- Test-writer confirmed fix already applied; all 78 tests pass.
+- Builder retry verified: 78/78 pass, lint clean. Implementation is correct.
+
+### AC Compliance (Spot Check)
+- `ProjectInfoResult` TypedDict at module scope — CONFIRMED (server.py lines 35–44)
+- `ProjectListItem` TypedDict at module scope — CONFIRMED (server.py lines 46–52)
+- `project_info` raises ToolError on missing config (no str union) — CONFIRMED
+- `project_list` returns `list[ProjectListItem]` — CONFIRMED
+- `__all__` includes both TypedDicts — CONFIRMED
+
+[[2026-04-05]] Sun 16:22
+## Review Evidence (cycle 2 — path-rename flap resolution)
+
+### Test Results
+- pytest (independently run): **78 passed, 0 failed**
+- ruff check serve/mcp-project/src/ serve/mcp-project/tests/ tests/test_error_prefix_506.py: **All checks passed**
+
+### Coverage
+- `server.py`: 88% — uncovered lines 71-80 (_apply_tool_exclusions inner loop), 181-182 (OSError in project_readme), 200-201 (MCP resource route). Identical pre-existing gaps as cycle-1 review. New TypedDict code fully covered.
+
+### Source Control Changes
+None — implementation was pre-existing and correct. Cycle 2 was triggered solely by the `data/` → `store/` path rename from commit `477d033` affecting TestFromAC_ProjectListTool fixtures. Test-writer applied fix; builder re-verified. All 78 tests pass.
+
+### Path-Rename Fix Verification
+TestFromAC_ProjectListTool (test_server.py lines 338–410): all 6 fixtures confirmed using `tmp_path / "store" / "projects"`. No `data/projects` references remain. Independent test run confirms fix is live.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| ProjectInfoResult TypedDict, module scope, 5 string fields | server.py lines 35–44: class at module level, fields: name/type/project_path/owlbear_path/created_at all str | PASS |
+| ProjectListItem TypedDict, module scope, 2 string fields | server.py lines 46–52: class at module level, fields: name/path both str | PASS |
+| project_info return is ProjectInfoResult (no \| str union) | server.py: `async def project_info(ctx: Context) -> ProjectInfoResult:` | PASS |
+| project_info raises ToolError when config absent | server.py: `raise ToolError("No owlbear-project.json found in project root.")` | PASS |
+| project_list return is list[ProjectListItem] | server.py: `async def project_list(ctx: Context) -> list[ProjectListItem]:` | PASS |
+| project_readme/structure unchanged (return str) | server.py: both tools return str, no TypedDict changes | PASS |
+| TypedDicts NOT under TYPE_CHECKING | server.py: TypedDicts defined before tool functions, not under TYPE_CHECKING | PASS |
+| __all__ includes ProjectInfoResult and ProjectListItem | server.py lines 22–33: both symbols present | PASS |
+| 4 existing error-path tests updated to ToolError | test_server.py + test_error_prefix_506.py: all 4 use pytest.raises(ToolError) | PASS |
+| Schema-pinning project_info 5 field properties | TestFromAC_ProjectInfoOutputSchema (6 tests), 78 pass | PASS |
+| Schema-pinning project_list items name+path | TestFromAC_ProjectListOutputSchema (5 tests), direct array override confirmed | PASS |
+
+### TestFromAC_ Integrity (carried from cycle 1)
+
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC_ProjectInfoTool::test_returns_string_when_project_file_is_none | `isinstance(result, str)` → `pytest.raises(ToolError)` | STRENGTHENED — required by AC |
+| TestFromAC_ProjectInfoTool::test_error_string_is_non_empty_and_descriptive | `isinstance+len(result)` → `ToolError + len(str(exc_info.value).strip()) > 10` | STRENGTHENED — required by AC |
+| TestFromAC_ErrorPrefixProject::test_project_info_no_config_returns_error_prefix | `assert result.startswith("error: ")` → `pytest.raises(ToolError)` | COMPLIANT — required by AC |
+| TestFromAC_ErrorPrefixProject::test_project_info_no_config_exact_error_string | `result == "error: ..."` → `"owlbear-project.json" in ... or "project" in ...` | LAX — compensated by TestFromAC_ProjectInfoToolError::test_project_info_tool_error_message_describes_missing_config |
+
+### Deductions (same as cycle 1)
+1. `test_project_info_no_config_exact_error_string`: name promises exact match; assertion is loose partial with broad `or "project" in ...` fallback. Compensating test exists. (-0.03)
+2. Two stale method names in test_server.py describe old string-return behavior (test_returns_string_when_project_file_is_none, test_error_string_is_non_empty_and_descriptive); docstrings corrected, names not. (-0.02)
+3. Commit 9156065 attributed to "#543/builder" contains #542 implementation. Process attribution mismatch. (-0.01)
+4. project_list schema AC said "inside FastMCP result wrapper" — implementation uses direct array schema override. Functional goal achieved; AC wording stale. (-0.01)
+
+### Confidence: .93
+### Verdict: PASS → docs
+
+[[2026-04-05]] Sun 16:45
+Docs gate passed. 5-item checklist evaluated with evidence. No documentation files required updating: copilot-instructions.md has no MCP convention content (5-line file); server.py docstrings verified accurate for all public symbols; no external sources used in research; no CLI changes; research doc confirmed present at .owlbear/research/mcp-project-typeddict-outputschema.md. No scratch files found. Advancing to done.

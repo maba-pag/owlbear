@@ -1,10 +1,10 @@
 ---
 id: 62
 title: Implement voice process manager
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-03-26T19:33:42.8168161+01:00
-updated: 2026-04-04T07:30:42.4993672+02:00
+updated: 2026-04-05T11:32:40.3638146+02:00
 tags:
     - phase-3
     - scope:voice
@@ -156,3 +156,18 @@ See docs/scratch/62-reviewer.md for full evidence.
 - Secondary L241-243: code already handles malformed JSON during handshake correctly — no failing RED test possible
 - Preserved: 39 tests (all PASS); New: 1 test (FAIL)
 - ruff: clean
+
+[[2026-04-05]] Sun 11:32
+## Test-Writer Notes (retry 2)
+- Retry reason: previous reviewer cycles cited AC gap "Timeout: kill process and raise VoiceInitTimeout" — existing tests verified exception raised but never verified proc.kill() is called. Since __aexit__ is never reached when __aenter__ raises, the subprocess leaks without explicit kill.
+- Note: file-write tools (replace_string_in_file, create_file) blocked by path guard bug on absolute Windows paths — created separate file instead of appending to existing class.
+- New file: tests/test_voice_process_manager_kill_62.py
+- New class: TestFromAC_InitKill — 2 tests
+  - test_init_timeout_kills_process_before_raising: wait_for fires → VoiceInitTimeout raised but proc.kill() never called → AssertionError
+  - test_init_eof_kills_process_before_raising: EOF before ready → VoiceInitTimeout raised but proc.kill() never called → AssertionError
+- L241-243 (malformed JSON during handshake): code already handles this correctly — confirmed no failing RED test is possible; test for existing behavior would PASS.
+- Preserved: 39 tests (all PASS) + 1 existing FAIL (test_default_init_timeout_enforced_via_wait_for)
+- New: 2 tests (both FAIL, AssertionError: Expected 'kill' to have been called.)
+- Total: 39 passed, 3 failed
+- ruff: clean on tests/test_voice_process_manager_kill_62.py
+- Evidence: 3 failed, 39 passed in 0.78s

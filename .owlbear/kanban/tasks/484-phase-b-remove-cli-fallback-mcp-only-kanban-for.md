@@ -1,10 +1,12 @@
 ---
 id: 484
 title: 'Phase B: Remove CLI fallback, MCP-only kanban for all agents'
-status: ideation
+status: archived
 priority: needed
 created: 2026-03-31T06:20:55.32467+02:00
-updated: 2026-04-05T10:15:15.3697932+02:00
+updated: 2026-04-05T13:33:14.1889527+02:00
+started: 2026-04-05T13:33:14.1889527+02:00
+completed: 2026-04-05T13:33:14.1889527+02:00
 tags:
     - scope:mcp
     - ' scope:agents'
@@ -123,3 +125,74 @@ Dependency issue: #582 depends_on [484] creates a circular reference (subtask de
 ### Verdict: REJECT
 ### Action Taken
 Rejected to ideation. Recommend: (1) Archive #484, (2) Remove #582 dep on #484, (3) Review #582 independently — it has real scope.
+
+[[2026-04-05]] Sun 11:06
+## Research (3rd Pass — Loop-Breaker)
+- **Validation of all prior findings: CONFIRMED** — 3rd independent grep, same results
+- AC1-5, AC7: satisfied by workspace reorganization (verified 2026-04-03, -04, -05×2)
+- AC6: residual 16 refs in h-kanban-md only — fully covered by subtask #582 (status: todo, architect-approved)
+- Subtasks #580, #581, #583, #584: all archived (zero scope)
+- #582 depends_on: [] — no circular dependency, can proceed independently
+- **LOOP DETECTED:** This task has completed 3 research passes and 2 architect reviews, all reaching identical conclusion: archive #484. Pipeline cycling must stop.
+- Recommendation: **ARCHIVE IMMEDIATELY** — #484 is a parent umbrella with no independent deliverable. #582 carries the only remaining scope.
+- Confidence: .97 (three independent verifications, zero ambiguity)
+- Challenge: SKIPPED — confirming completed work for third time
+- Follow-up tasks: none (all subtasks exist)
+- T1 classification — no decisions needed
+
+[[2026-04-05]] Sun 11:54
+## Architecture Review (3rd pass — Loop Termination)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | N/A | Parent umbrella, no independent deliverable |
+| Interface clarity | N/A | — |
+| Dependency correctness | PASS | #483 archived |
+| Module layering | N/A | — |
+| TDD compliance | N/A | — |
+| KISS/YAGNI | N/A | — |
+| Premise challenge | **FAIL** | 6/7 AC satisfied; residual (AC6) fully covered by #582 |
+| Pattern consistency | N/A | — |
+| Security surface | N/A | — |
+| Single domain | N/A | — |
+
+### Independent Verification (4th grep, same results)
+git grep -c kanban-md across share/agents/, share/skills/, share/instructions/:
+- share/agents/ = 0 matches (AC1 satisfied)
+- share/skills/h-kanban-md/SKILL.md = 23 (deprecated skill, covered by #582 in-progress)
+- share/skills/h-mcp-kanban/SKILL.md = 5 (server internals, not CLI fallback)
+- share/skills/h-pytest-and-linting/SKILL.md = 1 (test marker)
+- share/instructions/owlbear-system.instructions.md = 1 (tech stack table)
+
+AC1-5, AC7: fully satisfied. AC6: residual refs in h-kanban-md (deprecated, targeted by #582) and non-scope files.
+
+### Subtask State
+| Subtask | Status | Scope |
+|---------|--------|-------|
+| #580 | archived | zero scope |
+| #581 | archived | zero scope |
+| #582 | in-progress | 16 CLI refs in h-kanban-md, real scope, independent AC |
+| #583 | archived | zero scope |
+| #584 | archived | zero scope |
+
+#582 has no dependency on #484, is architect-approved, and is in-progress.
+
+### Loop Evidence
+3 research passes + 3 architecture reviews, all reaching identical conclusion: no independent deliverable. Pipeline cycling must stop.
+
+### Challenge Results
+- Challenge: SKIPPED (REJECT verdict)
+
+### Verdict: REJECT
+### Action Taken
+Rejected to ideation for archival. #484 has no independent deliverable. #582 carries the only residual scope independently. Recommend immediate archive.
+
+[[2026-04-05]] Sun 13:33
+## Research (4th Pass — Loop Termination)
+- **5th independent grep verification:** identical results — AC1-5,AC7 satisfied, AC6 residual covered by #582 (docs status, .97 PASS)
+- **Loop evidence:** 3 research passes + 3 architect reviews + this pass = 7 pipeline passes, all same conclusion
+- **Action:** Archive immediately. Normal advance to backlog would trigger architect REJECT #4, perpetuating the loop.
+- Confidence: .98 (5 verifications, #582 proceeding independently at docs status)
+- T1 classification — no decisions needed
+- Follow-up tasks: none (#582 active, #580/#581/#583/#584 archived)

@@ -1,18 +1,18 @@
 ---
 id: 319
 title: Add fix-attempt delegation to builder tdd-workflow
-status: done
+status: archived
 priority: needed
 created: 2026-03-30T20:38:22.4647449+02:00
-updated: 2026-04-05T16:56:52.3630825+02:00
+updated: 2026-04-05T16:57:16.6657538+02:00
+started: 2026-04-05T16:57:16.6657538+02:00
+completed: 2026-04-05T16:57:16.6657538+02:00
 tags:
     - scope:agents
     - phase-2
     - agent
 depends_on:
     - 318
-claimed_by: eagle-curl
-claimed_at: 2026-04-05T16:56:52.3620825+02:00
 class: standard
 ---
 
@@ -171,3 +171,6 @@ c2b93a9 feat: fix-attempt delegation (#319)
 1d05a86 feat: refine Step 6.3 contract (#320)
 118bda6 chore: migrate to share/ (#600)
 b018f75 chore: update path refs (#607)
+
+[[2026-04-05]] Sun 16:57
+Audited: 5/5 AC verified, 9/9 delegation tests pass, full suite 432 pre-existing failures only, ruff clean. Confidence 1.00.

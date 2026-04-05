@@ -1,6 +1,3 @@
-{"timestamp":"2026-03-30T14:55:03.975066+02:00","action":"edit","task_id":218,"detail":"Sync non-impl tag list cross-references across skill files"}
-{"timestamp":"2026-03-30T14:55:22.0453279+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T14:55:39.5409797+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
 {"timestamp":"2026-03-30T14:55:39.5445772+02:00","action":"release","task_id":215,"detail":"researcher"}
 {"timestamp":"2026-03-30T15:07:00.8940933+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
 {"timestamp":"2026-03-30T15:07:06.8000428+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
@@ -9998,3 +9995,6 @@
 {"timestamp":"2026-04-05T16:55:20.4292447+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
 {"timestamp":"2026-04-05T16:55:20.4409196+02:00","action":"release","task_id":624,"detail":"wolf-fire"}
 {"timestamp":"2026-04-05T16:56:52.3640827+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T16:57:16.2184582+02:00","action":"edit","task_id":319,"detail":"Add fix-attempt delegation to builder tdd-workflow"}
+{"timestamp":"2026-04-05T16:57:16.2327393+02:00","action":"release","task_id":319,"detail":"eagle-curl"}
+{"timestamp":"2026-04-05T16:57:16.666794+02:00","action":"move","task_id":319,"detail":"done -\u003e archived"}

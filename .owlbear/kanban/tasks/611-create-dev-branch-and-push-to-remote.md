@@ -1,10 +1,10 @@
 ---
 id: 611
 title: Create dev branch and push to remote
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T21:54:56.0860979+02:00
-updated: 2026-04-05T01:18:42.6320147+02:00
+updated: 2026-04-05T15:10:43.6308244+02:00
 tags:
     - scope:infra
     - type:build
@@ -64,3 +64,8 @@ AC4 (development policy) and AC5 (branch protection) from original scope moved o
 
 [[2026-04-05]] Sun 01:18
 Refined AC from 5 to 3 lines (removed unverifiable policy and optional items). Added type:config pass-through tag. Architecture sound — simple branch creation, first step of dual-branch model #610.
+
+[[2026-04-05]] Sun 15:10
+## Test-Writer Notes
+- Non-implementation task (tagged type:config) — no tests applicable.
+- Passing through to builder.

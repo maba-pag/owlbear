@@ -1,10 +1,10 @@
 ---
 id: 596
 title: 'Fix planner skill language: reconcile "does NOT claim" with end_work usage'
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-04T20:09:51.968555+02:00
-updated: 2026-04-05T01:14:59.0675038+02:00
+updated: 2026-04-05T13:16:21.36502+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -66,3 +66,8 @@ Classification: T1 autonomous. Confidence: .95
 
 [[2026-04-05]] Sun 01:14
 APPROVED after REFINE. Fixed file path (.github/skills/ does not exist, corrected to share/skills/), tightened AC (start_work replaces show_task for dispatch path), added agent pass-through tag.
+
+[[2026-04-05]] Sun 13:16
+## Test-Writer Notes
+- Non-implementation task (tagged `agent`) — no tests applicable.
+- Passing through to builder.

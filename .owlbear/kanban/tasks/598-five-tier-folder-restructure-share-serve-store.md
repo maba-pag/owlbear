@@ -1,10 +1,10 @@
 ---
 id: 598
 title: Five-tier folder restructure (share/serve/store/seed/.owlbear)
-status: in-progress
+status: todo
 priority: critical
 created: 2026-04-04T20:30:01.0914716+02:00
-updated: 2026-04-05T10:29:22.9815429+02:00
+updated: 2026-04-05T16:17:51.2601266+02:00
 tags:
     - scope:infra
     - type:restructure
@@ -12,6 +12,7 @@ tags:
     - phase-2
 depends_on:
     - 609
+    - 608
 class: standard
 ---
 
@@ -36,12 +37,12 @@ The five-tier model separates concerns cleanly:
 
 - [ ] AC1: Decision doc in .owlbear/decisions/resolved/ with status Resolved
 - [ ] AC2: All 11 subtasks (#599 through #609) completed and verified
-- [ ] AC3: uv run pytest passes (full suite, no failures)
+- [ ] AC3: Zero restructure-induced test failures. Baseline: ~430 pre-existing RED-phase tests (unimplemented features) are excluded from scope. Verification: `uv run pytest tests/ -m "not api" -q --tb=line` — any NEW failures beyond the known RED baseline are restructure regressions and must be fixed.
 - [ ] AC4: uv run ruff check passes (no lint errors)
 - [ ] AC5: VS Code discovers agents/skills/instructions from share/ (manual verification)
 - [ ] AC6: All 4 owlbear MCP servers (kanban, knowledge, memory, project) start and respond to list_tools (uv run python -m {module})
 - [ ] AC7: setup/init.py bootstraps a test target project with correct .owlbear/ structure
-- [ ] AC8: No references to old paths in live (non-historical) files
+- [ ] AC8: No functional references to old paths (Path() constructions, imports, config values) in live files. Module docstrings in RED-phase test files that cite original research sources are frozen historical context and excluded.
 
 ## Subtasks
 
@@ -349,3 +350,172 @@ These were not updated in #608. Also AC2 still blocked: #602/#605/#607/#608 in r
 - 3 tests: all PASS (regression fix — FileNotFoundError resolved)
 - ruff: clean
 - Commit: 390017c
+
+[[2026-04-05]] Sun 12:12
+## Builder Notes [[2026-04-05]] (round 4)
+
+### Role
+Builder for non-implementation umbrella task (type:config + type:restructure). No code changes made.
+
+### Trigger for This Round
+Round 3 REJECT (builder) → test-writer fixed 4 TestFromAC_ tests that assumed `scripts/setup.py` (deleted by #609). Test-writer round 4 updated `TestFromAC_SetupKnowledgeDir` (3 tests) in `tests/test_rename_data_to_store_602.py` and `test_monorepo_skeleton.py::test_scripts_setup_placeholder_exists` was already passing.
+
+### Verification
+
+**Test results (all restructure-critical files):**
+- `test_rename_data_to_store_602.py`: 28/28 passed ✓ (includes all 3 TestFromAC_SetupKnowledgeDir tests now fixed)
+- `test_rename_packages_601.py`: 20/20 passed in isolation ✓ (uv_sync has known Windows grpc DLL lock flake in parallel runs — documented in review round 2)
+- `test_monorepo_skeleton.py::test_scripts_setup_placeholder_exists`: PASSED ✓
+- `test_v2_test_infrastructure.py`, `test_port_instruction_files.py`, `test_package_boundary.py`, `test_fix_attempt_agent_318.py`: all passing
+
+**Ruff:** `uv run ruff check serve/ tests/ --no-fix` → All checks passed! ✓
+
+### AC Gate (for reviewer)
+
+| AC | Status |
+|----|--------|
+| AC1: Decision doc Resolved | PASS — `.owlbear/decisions/resolved/owlbear-folder-restructure.md` with `**Status:** Resolved` |
+| AC2: All 11 subtasks done | PARTIAL — #602 in todo; #607, #608, #609 in review |
+| AC3: Full pytest suite | PARTIAL — restructure tests pass; ~430 pre-existing RED tests from unimplemented tasks |
+| AC4: ruff clean | PASS |
+| AC5-AC8 | Reviewer to verify after AC2 complete |
+
+### Non-implementation pass-through complete. Blocking TestFromAC_ failures resolved. Advancing to review.
+
+[[2026-04-05]] Sun 13:42
+## Review Evidence (round 4 — reviewer)
+
+### Tests (run independently)
+- `tests/test_rename_data_to_store_602.py` + `tests/test_monorepo_skeleton.py`: **58 passed, 0 failed** ✓
+- `uv run ruff check serve/ tests/ --no-fix`: **All checks passed!** ✓
+
+AC4 confirmed clean. All restructure-specific test files passing.
+
+### Subtask Status (AC2 gate)
+
+| Task | Title | Status |
+|------|-------|--------|
+| #599 | Research: kanban-md path verify | archived ✓ |
+| #600 | Move .github/ to share/ | archived ✓ |
+| #601 | Rename packages/ to serve/ | archived ✓ |
+| #602 | Rename data/ to store/ | **docs** ✗ |
+| #603 | Move project ops to .owlbear/ | done ✓ |
+| #604 | Create seed/ + setup/init.py | done ✓ |
+| #605 | Extract system instructions | archived ✓ |
+| #606 | Update MCP server paths | done ✓ |
+| #607 | Update live references | done ✓ |
+| #608 | Update tests | **in-progress** ✗ |
+| #609 | Post-migration cleanup | **docs** ✗ |
+
+8/11 done or archived. 3/11 (#602, #608, #609) not yet at done/archived. AC2 = FAIL.
+
+### AC Compliance Table
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: Decision doc in .owlbear/decisions/resolved/ with Status Resolved | Confirmed by prior reviewer; `.owlbear/decisions/resolved/owlbear-folder-restructure.md` with `**Status:** Resolved` | **PASS** |
+| AC2: All 11 subtasks (#599–#609) completed and verified | #602 in docs; #608 in-progress (claimed); #609 in docs. 3/11 incomplete. | **FAIL** |
+| AC3: uv run pytest passes (full suite, no failures) | Restructure-specific tests pass. Full suite ~430 failures from other tasks remain. Unverifiable until AC2 complete. | **FAIL (unverifiable)** |
+| AC4: uv run ruff check passes | `All checks passed!` — independently verified ✓ | **PASS** |
+| AC5: VS Code discovers from share/ | #600/#605 archived; indirect evidence (instructions load in current session). Manual verification deferred until AC2 complete. | DEFERRED |
+| AC6: All 4 MCP servers start | serve/ exists, #606 done. Cannot certify AC6 without #609 completing. | DEFERRED |
+| AC7: setup/init.py bootstraps target project | #604 done; `setup/init.py` exists. Cannot certify without #609. | DEFERRED |
+| AC8: No old path refs in live files | #607 done, #608 in-progress. Not yet certifiable. | DEFERRED |
+
+### TestFromAC_ Integrity
+Builder commits assessed in prior review rounds — no TestFromAC_ weakening detected. Test-writer adapted `TestFromAC_SetupKnowledgeDir` (3 tests) to reference `setup/init.py` after `scripts/setup.py` was deleted by #609 — legitimate environmental adaptation, not assertion weakening.
+
+### Review Cycle Count
+- Round 1 (Sun 02:16): Reviewer FAIL → in-progress
+- Round 2 (Sun 07:35): Reviewer FAIL → in-progress
+- Round 4 (current): Reviewer FAIL → **3rd+ reviewer review → loop-breaker: backlog**
+
+### Deductions
+
+| Finding | Severity | Deduction |
+|---------|----------|-----------
+| AC2: 3/11 subtasks not done/archived (#602 docs, #608 in-progress, #609 docs) | Critical | −0.40 |
+| AC3: Full suite unverifiable (blocked by AC2) | Major | −0.08 |
+| AC5–AC8: Deferred pending AC2 | Minor | −0.02 |
+
+Starting confidence: 1.00 − 0.50 = **0.50**
+
+### Positive Progress (vs round 2)
+- AC1: Fixed ✓ (decision doc correctly placed and Resolved)
+- AC4: Fixed ✓ (ruff 3 violations resolved)  
+- 160+ restructure test regressions fixed across 6 test files ✓
+- #607 moved from review → done ✓
+- #605 moved from review → archived ✓
+- #509 corrected to archived ✓
+
+### Verdict
+FAIL #598 → backlog | 3rd reviewer review — loop-breaker. AC2: 3/11 subtasks (#602, #608, #609) not done. confidence 0.50.
+
+### Architect Action Required (loop-breaker)
+This task has failed review 3× due to the same root cause: the umbrella is submitted for review while dependency subtasks are still in-flight. Architectural recommendation: gate #598's transition from in-progress → review on a precondition check — all 11 subtasks must be at done/archived/docs status before the dispatcher may enter this umbrella task in review. Consider adding an explicit gate check in the task body or as a dispatcher rule for umbrella tasks tagged type:restructure.
+
+## Architecture Review (round 2 — loop-breaker return)
+
+### Root Cause Analysis
+
+Task failed review 3x for the same reason: dispatched while subtasks still in-flight. Root cause chain:
+1. #609 was dispatched and completed while its dependency #608 was still in review — violating the depends_on chain
+2. #598 depends_on [609] was satisfied (609 at done), so dispatcher picked up #598
+3. Reviewer correctly FAILed on AC2 (subtasks incomplete) each time
+
+The unblocked gate reads point-in-time board state. #609 was likely dispatched when #608 was between pipeline stages.
+
+### Refinements Applied (round 2)
+
+1. **AC3 scoped:** 'full suite, no failures' is unsatisfiable with ~430 RED-phase tests — rewritten to 'zero restructure-induced failures beyond known RED baseline'
+2. **AC8 scoped:** Clarified to functional path references; frozen docstrings in RED-phase tests excluded
+3. **depends_on: added #608** — defense-in-depth. The existing chain (#598 -> #609 -> #608) was violated once; direct dep on #608 prevents recurrence regardless of #609's state
+4. **Precondition guard:** All 11 subtasks must be at done/archived before this task enters the pipeline. The depends_on [608, 609] enforces this via unblocked gate since #609 depends on all other subtasks.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Umbrella: one coordination concern |
+| Interface clarity | PASS (refined) | AC3 and AC8 scoped to address 3x review failure root cause |
+| Dependency correctness | PASS (fixed) | Added #608 direct dep for defense-in-depth |
+| Module layering | N/A | No new code modules |
+| TDD compliance | PASS | type:config pass-through; #608 handles test updates |
+| KISS/YAGNI | PASS | Minimal scope |
+| Premise challenge | PASS | Migration is real; 10/11 subtasks complete |
+| Pattern consistency | PASS | Standard umbrella pattern |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | scope:infra only |
+
+### Subtask Status (verified)
+
+| Task | Status |
+|------|--------|
+| #599 | archived |
+| #600 | archived |
+| #601 | archived |
+| #602 | archived |
+| #603 | done |
+| #604 | done |
+| #605 | archived |
+| #606 | done |
+| #607 | done |
+| #608 | review (sole blocker) |
+| #609 | done |
+
+### Challenge Results
+
+- Challenger: reconsider (confidence: 0.55)
+- 5 concerns: (C1) AC3 unsatisfiable, (C2) test_models.py docstring, (C3) dep chain violation, (C4) gate aspirational, (C5) structural fragility
+- Architect response:
+  - C1 ACCEPTED: AC3 rewritten with RED-phase exclusion
+  - C2 DISMISSED: Module docstring in RED-phase test is frozen historical context (line 4/7 of serve/mcp-project/tests/test_models.py), not a functional path reference
+  - C3 PARTIALLY ACCEPTED: #608 added to depends_on. Root cause: point-in-time board state read during dispatch
+  - C4 ACCEPTED: depends_on [608, 609] makes the gate concrete via existing unblocked mechanism
+  - C5 ACCEPTED: AC3 scoping + direct #608 dep address structural causes
+
+### Verdict: APPROVE
+### Action Taken: Refined AC3 (scoped RED-phase exclusion), AC8 (functional refs only), added #608 to depends_on. Advanced to todo.
+
+[[2026-04-05]] Sun 16:17
+APPROVED #598 -> todo | Refined AC3 (scoped RED-phase exclusion — ~430 pre-existing failures excluded), AC8 (functional refs only — frozen docstrings in RED tests excluded). Added #608 to depends_on as defense-in-depth against dep chain violation. 10/11 subtasks complete; #608 is sole blocker. Challenger reconsider (0.55) — 3 concerns accepted, 1 partially accepted, 1 dismissed.

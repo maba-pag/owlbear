@@ -1,10 +1,10 @@
 ---
 id: 618
 title: Build import/export tools for project-local knowledge snapshots
-status: ideation
+status: backlog
 priority: nice-to-have
 created: 2026-04-05T01:26:23.9739996+02:00
-updated: 2026-04-05T01:26:23.9739996+02:00
+updated: 2026-04-05T13:06:30.1242617+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -36,3 +36,24 @@ Research #616 (docs/research/project-local-knowledge-source.md) recommends impor
 - Import opens a *read-only* connection to the source file, reads data, then ingests via existing IngestPipeline
 - Export creates a new SQLite file with `init_db()` schema, then copies scoped rows
 - Needs decomposition: planner should break into import tool + export tool + auto-detect + tests
+
+[[2026-04-05]] Sun 13:06
+## Research
+- Research doc: .owlbear/research/import-export-knowledge-snapshots.md
+- Sources: 8 studied, 5 high-relevance (.90+)
+- Recommendation: Row-level SELECT+INSERT with new UUIDs, FK-ordered inserts, atomic transaction, content hash dedup, embed-not-reextract (confidence: .78)
+- Follow-up tasks: none new needed; #618 itself needs planner decomposition per Notes section
+- Decision requests: T3 (adds new MCP tools). No DR created (scribe unavailable). #616 research item #3 identified T3 requirement. User should approve before implementation.
+- Dependency: #617 (scope param exposure) operationally needed for querying imported data; not a build dependency
+
+## Challenge Results
+- Challenger: proceed with amendments (confidence .82 revised to .78)
+- Key challenges accepted: (1) FK mapping 6 relationships, ordered inserts required; (2) export preserves source scope, rewrite only on import; (3) LOC ~200-250 not ~120; (4) atomic transaction for import
+- Tables: documents, chunks, entities, edges, document_status (IN); knowledge_sources, bookmarks, consolidations (OUT)
+
+## Implementation Notes for Planner
+- Insert order: documents, document_status, chunks, entities, edges
+- 4 mapping dicts: doc_id_map, chunk_id_map, entity_id_map, edge_id_map
+- New module: serve/knowledge/src/owlbear_knowledge/scope_transfer.py (~150 LOC)
+- Tool wiring: serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py (~50 LOC)
+- Decompose into: (1) scope_transfer module, (2) import_scope tool, (3) export_scope tool, (4) auto-detect, (5) tests

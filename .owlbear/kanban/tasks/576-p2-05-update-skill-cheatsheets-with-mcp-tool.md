@@ -1,10 +1,12 @@
 ---
 id: 576
 title: 'P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI'
-status: backlog
+status: archived
 priority: critical
 created: 2026-04-03T11:15:13.7738172+02:00
-updated: 2026-04-05T10:25:48.4161631+02:00
+updated: 2026-04-05T13:28:09.4711539+02:00
+started: 2026-04-05T13:28:09.4711539+02:00
+completed: 2026-04-05T13:28:09.4711539+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -165,3 +167,73 @@ Reviewer (2nd review) documented that prior review evidence was stripped from th
 ## Challenge Results
 - Challenger: SKIP — confirming completed architectural work
 - Confidence in original: .92
+
+[[2026-04-05]] Sun 10:55
+## Architecture Review (Cycle 4 — Final Disposition)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | FAIL | Task fully superseded — zero deliverables remain (confirmed by Cycle 3 review, research validation at .92, and independent codebase verification) |
+| KISS/YAGNI | FAIL | All target skills are MCP-native; adding "MCP equivalent" blockquotes after MCP tool names would be circular |
+
+### Codebase Verification (independent, 2026-04-05)
+- `grep "MCP equivalent" share/skills/**/SKILL.md` → 0 results (no blockquotes exist)
+- `grep "kanban-md" share/skills/**/SKILL.md` → only in deprecated h-kanban-md/SKILL.md (not a #576 target)
+- All 10+ workflow skills have consolidated h-mcp-kanban pointer from #486 (audited at 1.00)
+- 3 normalization targets (decision-requests, dispatch-planning, kanban-md non-canonical patterns) no longer exist
+
+### Supersession Chain
+1. #484 (Phase B, archived): Removed CLI references, moved to MCP-only
+2. #486 (Phase C, archived, audited 1.00): Consolidated kanban refs to h-mcp-kanban, removed 39 inline MCP notes (DRY)
+3. Result: Zero CLI invocations + zero normalization targets = zero #576 deliverables
+
+### Challenge Results
+- Challenger: SKIP (REJECT verdict, 3rd consecutive rejection)
+
+### Verdict: REJECT → archive
+### Action Taken: Rejected to ideation. Recommend immediate archival as superseded by #486. Follow-up #627 already exists at ideation.
+
+[[2026-04-05]] Sun 11:37
+## Research (Validation Pass — Cycle 5)
+- Research doc: .owlbear/research/576-skill-cheatsheet-mcp-superseded.md (existing, validated)
+- Sources: 5 studied, 3 high-relevance (all codebase/kanban) — unchanged from prior pass
+- Independent codebase verification (2026-04-05): 0 CLI refs in targets, 0 MCP equivalent blockquotes, 0 normalization targets, 10+ skills with h-mcp-kanban pointer
+- Recommendation: Archive as superseded by #486 (confidence: .92) — findings hold exactly
+- Follow-up tasks: #627 at ideation (update parent #483 completion criteria)
+- Decision requests: none (T1 — closing superseded task)
+- Tier: T1 — Autonomous (no new capability, no arch change)
+
+## Challenge Results
+- Challenger: SKIP — confirming completed architectural work validated across 4 prior cycles + independent research
+- Confidence in original: .92
+
+[[2026-04-05]] Sun 13:28
+## Architecture Review (Cycle 5 — Closure)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | FAIL | Task fully superseded — zero deliverables remain |
+| KISS/YAGNI | FAIL | Adding "MCP equivalent" blockquotes after MCP tool names is circular |
+
+### Independent Codebase Verification (2026-04-05)
+- kanban-md CLI invocations in 14 target skill files: 0
+- Normalization targets (MCP note:, MCP equivalents (owlbear-kanban):): 0
+- Workflow skills with consolidated h-mcp-kanban pointer: 10+ (from #486, audited 1.00)
+- Result: identical to Cycles 3 and 4 — zero #576 deliverables exist
+
+### Supersession Chain (unchanged)
+1. #484 (Phase B, archived): removed CLI references, moved MCP-only
+2. #486 (Phase C, archived, audited 1.00): consolidated kanban refs to h-mcp-kanban, removed 39 inline MCP notes (DRY)
+3. Net effect: zero CLI invocations + zero normalization targets = zero #576 deliverables
+
+### Loop-Breaking Note
+This is the 5th architecture review. Cycles 3, 4, and 5 independently verified supersession. The task keeps returning to backlog without new information. Archiving directly to break the dispatch loop.
+
+### Challenge Results
+- Challenger: SKIP (REJECT verdict, 5th consecutive rejection)
+
+### Verdict: REJECT → archive
+### Action Taken: Rejected to ideation for immediate archival as superseded by #486. Follow-up #627 exists at ideation for parent #483 update.

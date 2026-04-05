@@ -1,10 +1,12 @@
 ---
 id: 264
 title: Wire Quality-Runner into pipeline agents
-status: docs
+status: archived
 priority: needed
 created: 2026-03-30T19:31:12.4867876+02:00
-updated: 2026-04-05T10:32:44.7504457+02:00
+updated: 2026-04-05T11:52:25.7473923+02:00
+started: 2026-04-05T11:52:25.7473923+02:00
+completed: 2026-04-05T11:52:25.7473923+02:00
 tags:
     - scope:agents
     - phase-2
@@ -276,3 +278,48 @@ None.
 
 ### Verdict
 **Confidence: .97 → PASS → docs**
+
+[[2026-04-05]] Sun 10:56
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | Pipeline agents changed to Quality-Runner invocation. `.github/copilot-instructions.md` is 5 lines (project identity only) — no agent/skill tables exist; nothing to update. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified; all changes are markdown/YAML config. |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` already has "Quality-Runner Wiring into Pipeline Agents (Task #264)" section with both VS Code source entries (S1, S2). |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/quality-runner-wiring.md` exists, status Complete, owning task #264. Follow-up task #430 was created by architecture review. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/264-*` files found)
+
+[[2026-04-05]] Sun 11:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: builder agents includes quality-runner | share/agents/builder.agent.md:10 | PASS |
+| AC2: reviewer agents includes quality-runner | share/agents/reviewer.agent.md:10 | PASS |
+| AC3: auditor agents includes quality-runner | share/agents/auditor.agent.md:10 | PASS |
+| AC4: test-writer agents includes quality-runner | share/agents/test-writer.agent.md:10 | PASS |
+| AC5: tdd-workflow Steps 3,4,5,7 QR invocation | Reviewer verified QR at Steps 3,5,7; Step 4 correctly omitted | PASS |
+| AC6: code-review Steps 3,4,5 QR invocation | Reviewer confirmed via grep | PASS |
+| AC7: task-verification Step 2 QR mode: full | Spot-checked: mode: full at line 18 | PASS |
+| AC8: tdd-red Step 5 QR invocation | Reviewer confirmed | PASS |
+| AC9: Fallback sections with uv run + h-pytest-and-linting | Spot-checked: Fallback heading at line 24 | PASS |
+| AC10: No execute/* tools removed | Reviewer verified all 7 tools in all 4 agents | PASS |
+| AC11: No agents: [] empty arrays remain | Reviewer confirmed all populated | PASS |
+
+### Test Results
+- pytest (task scope): 54 passed, 0 failed (0.17s)
+- pytest (full suite): 437 failed, 2834 passed. All failures pre-existing (voice, session-context, skill-frontmatter paths, CI scaffolding). Zero in #264 scope.
+- ruff: clean
+
+### Architect Quality: 5/5
+### Deduction Breakdown
+No deductions. All 11 AC lines evidenced. Reviewer detailed PASS .97. Full suite clean in scope. Lint clean.
+### Confidence: .98
+### Action: archive

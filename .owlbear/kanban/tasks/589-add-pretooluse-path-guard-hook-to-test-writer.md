@@ -1,10 +1,10 @@
 ---
 id: 589
 title: Add PreToolUse path guard hook to test-writer agent (Phase 3)
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-04T07:55:54.2806738+02:00
-updated: 2026-04-05T09:59:28.2238624+02:00
+updated: 2026-04-05T14:32:38.5051576+02:00
 tags:
     - scope:agents
     - hooks
@@ -210,3 +210,102 @@ $isInTests = $normalized.StartsWith('tests/') -or ($normalized -match '/tests/')
 $isInTests = $normalized.StartsWith('tests/')
 ```
 Remove the `-or ($normalized -match '/tests/')` clause entirely. After fixing, verify that `packages/tests/evil.py` is correctly denied.
+
+[[2026-04-05]] Sun 11:24
+## Builder Notes (Review Fix Pass)
+
+### Security Fix Applied
+Removed broken access control bypass from `.owlbear/hooks/deny-src-writes.ps1`:
+```powershell
+# BEFORE (insecure — packages/tests/evil.py bypassed guard)
+$isInTests = $normalized.StartsWith('tests/') -or ($normalized -match '/tests/')
+
+# AFTER (correct — prefix-only allow-list)
+$isInTests = $normalized.StartsWith('tests/')
+```
+
+### Builder-Discovered Tests Added
+`TestBuilderDiscovered` class (2 tests) in `tests/test_deny_src_writes_hook_589.py`:
+- `test_packages_tests_subdir_path_is_denied` — `packages/tests/evil.py` must be denied
+- `test_src_lib_tests_subdir_path_is_denied` — `src/lib/tests/backdoor.py` must be denied
+
+Both were verified RED against the pre-fix script (old OR clause allowed them), now GREEN.
+
+### Test Results
+37 passed (35 original TestFromAC_* + 2 TestBuilderDiscovered), 0 failed
+
+### Lint
+ruff: clean (tests/test_deny_src_writes_hook_589.py)
+
+### Commit
+`cda615a` — fix(agents): remove /tests/ OR bypass from deny-src-writes.ps1 allow-list (#589)
+
+[[2026-04-05]] Sun 13:20
+## Review Evidence
+
+### Test Results
+pytest: **37 passed, 0 failed** (verified independently)
+
+### Lint
+ruff: **clean** — `tests/test_deny_src_writes_hook_589.py` ✅
+
+### Coverage
+N/A — PowerShell script; Python coverage tooling not applicable.
+
+### Pass 2 — AC Compliance Table
+
+| AC Line | Mapped Test(s) | Would Fail If Violated? | Verdict |
+|---------|---------------|------------------------|---------|
+| AC1a (backslash normalization) | test_create_file_backslash_tests_path_is_allowed, test_create_file_backslash_packages_path_is_denied | Yes | COVERED |
+| AC1b/c (create_file routing) | test_create_file_tests_path_is_allowed, test_create_file_packages_path_is_denied, test_create_file_src_path_is_denied | Yes | COVERED |
+| AC1d/e (replace_string_in_file) | test_replace_string_in_file_tests_path_is_allowed, test_replace_string_in_file_packages_path_is_denied | Yes | COVERED |
+| AC1f/g (multi_replace array) | test_multi_replace_all_tests_paths_is_allowed, test_multi_replace_any_non_tests_path_is_denied | Yes | COVERED |
+| AC1h/i (create_directory dirPath) | test_create_directory_tests_dirpath_is_allowed, test_create_directory_packages_dirpath_is_denied | Yes | COVERED |
+| AC2 (write-tool gate) | test_apply_patch_is_not_gated_and_returns_empty_json, test_run_in_terminal_returns_empty_json, test_read_file_returns_empty_json, test_unknown_tool_name_returns_empty_json | Yes | COVERED |
+| AC3a-d (agent hooks frontmatter) | test_frontmatter_has_hooks_section, test_frontmatter_has_pretooluse_entry, test_pretooluse_hook_type_is_command, test_pretooluse_hook_command_references_deny_src_writes | Yes | COVERED |
+| AC4 (edit/rename removed) | test_tools_list_does_not_contain_edit_rename | Yes | COVERED |
+| AC5a-e (error safety) | test_malformed_stdin_json_returns_empty_json, test_empty_tool_name_returns_empty_json, test_missing_tool_name_key_returns_empty_json, test_write_tool_with_no_paths_returns_empty_json, test_write_tool_with_empty_string_filepath_returns_empty_json | Yes | COVERED |
+| AC6 (valid YAML) | test_frontmatter_is_parseable_yaml_with_pretooluse_hook, test_frontmatter_no_duplicate_keys | Yes | COVERED |
+
+### Pass 1 Security Fix Verification
+
+**Fix examined** in `.owlbear/hooks/deny-src-writes.ps1`:
+```powershell
+# AFTER (correct — prefix-only allow-list)
+$isInTests = $normalized.StartsWith('tests/')
+```
+The `-or ($normalized -match '/tests/')` bypass clause is **gone**. Fix is correct.
+
+**TestBuilderDiscovered coverage** — class preserved and both tests pass:
+- `test_packages_tests_subdir_path_is_denied` — `packages/tests/evil.py` → denied ✅
+- `test_src_lib_tests_subdir_path_is_denied` — `src/lib/tests/backdoor.py` → denied ✅
+
+Both tests use `_is_denied()` helper asserting `permissionDecision == "deny"` — assertion specificity is STRONG, would catch if the bypass were re-introduced.
+
+### TestFromAC Integrity
+All 35 original `TestFromAC_*` tests preserved — none removed or weakened. TestBuilderDiscovered (2 tests) added as net-new coverage for the security fix. Total: 37 tests. PASS.
+
+### Commit Scope Review
+- `cda615a` (fix commit): clean — `.owlbear/hooks/deny-src-writes.ps1` (1-line removal) + `tests/test_deny_src_writes_hook_589.py` (TestBuilderDiscovered class, 37 lines). No scope creep.
+- **AC path deviation noted**: AC1 specifies `scripts/hooks/deny-src-writes.ps1` but file lives at `.owlbear/hooks/deny-src-writes.ps1`. Fully explained by git history: commit `bbba9e5` (#609 post-migration cleanup) renamed `{scripts => .owlbear}/hooks/deny-src-writes.ps1` after the build commit. Test paths were updated by commit `46a8f1d`. The hook command in `test-writer.agent.md` points to `.owlbear/hooks/deny-src-writes.ps1`. Implementation, test paths, and hook command are all self-consistent. Not a violation.
+
+### Deductions
+None. Security bypass from Pass 1 correctly fixed. Fix is minimal, narrowly scoped, and backed by two mutation-sensitive tests.
+
+**Confidence: .96 → PASS**
+
+[[2026-04-05]] Sun 14:32
+## Docs Gate
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|---------|
+| 1 | Behavior/API change → copilot-instructions.md | Applies | No update needed | `.github/copilot-instructions.md` is a 5-line project-identity stub; no agent catalog or hooks table exists to update |
+| 2 | Module docstrings | N/A | — | No Python modules created or modified; only `.ps1`, `.md`, `pyproject.toml` touched |
+| 3 | External attribution | Applies | Already attributed | VS Code hooks docs URL already in `.owlbear/sources/overview.md` line 55 (under Task #37 section). Task body confirms all 5 sources in-repo or already attributed |
+| 4 | CLI changes | N/A | — | No CLI commands added or modified |
+| 5 | Research doc | Applies | Verified | `.owlbear/research/pretooluse-test-writer-path-guard.md` exists. Follow-ups: none declared (existing #590, #591 noted as valid) |
+| 6 | No impact | — | — | Items 1 and 3 applied but required no changes |
+
+**Files updated:** none
+**Scratch files cleaned:** none found (`589-*` search returned empty)
+**Commit required:** no (no doc files changed)
