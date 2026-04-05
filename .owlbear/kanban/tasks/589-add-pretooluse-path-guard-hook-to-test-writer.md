@@ -1,10 +1,12 @@
 ---
 id: 589
 title: Add PreToolUse path guard hook to test-writer agent (Phase 3)
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-04T07:55:54.2806738+02:00
-updated: 2026-04-05T14:32:38.5051576+02:00
+updated: 2026-04-05T19:04:51.3792193+02:00
+started: 2026-04-05T19:04:51.3792193+02:00
+completed: 2026-04-05T19:04:51.3792193+02:00
 tags:
     - scope:agents
     - hooks
@@ -309,3 +311,39 @@ None. Security bypass from Pass 1 correctly fixed. Fix is minimal, narrowly scop
 **Files updated:** none
 **Scratch files cleaned:** none found (`589-*` search returned empty)
 **Commit required:** no (no doc files changed)
+
+[[2026-04-05]] Sun 19:04
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 (path normalization + extraction + allow-list) | deny-src-writes.ps1:L57 `$normalized.StartsWith('tests/')`, backslash normalize at L56; 37 tests pass | PASS |
+| AC2 (write-tool gate) | deny-src-writes.ps1:L16-21 `$write_tools` array; apply_patch/run_in_terminal/read_file/unknown all return `{}` | PASS |
+| AC3 (PreToolUse hook in frontmatter) | share/agents/test-writer.agent.md:L11-14 hooks: PreToolUse: command: powershell ... deny-src-writes.ps1 | PASS |
+| AC4 (edit/rename removed) | share/agents/test-writer.agent.md:L9 tools list — no edit/rename present | PASS |
+| AC5 (safety pass-through) | deny-src-writes.ps1:L8-11 try/catch, L24 empty tool_name, L50 empty paths; 5 error tests pass | PASS |
+| AC6 (valid YAML) | test_frontmatter_is_parseable_yaml + test_frontmatter_no_duplicate_keys both PASS | PASS |
+| AC7 (prerequisite) | N/A — #209 archived, pre-condition | PASS |
+
+### Test Results
+- pytest (task-scoped): 37 passed, 0 failed
+- pytest (full suite): 2919 passed, 430 failed, 8 skipped — 0 failures in #589 scope
+- ruff: clean
+
+### Commits Verified
+- e46f121 test: add failing tests (#589, test-writer)
+- e136832 feat(agents): add deny-src-writes.ps1 path guard hook (#589)
+- cda615a fix(agents): remove /tests/ OR bypass (#589)
+
+### Architect Quality: 4/5
+AC well-specified after research challenge. Minor gap (packages/tests/ bypass) caught by reviewer, fixed by builder.
+
+### Deduction Breakdown
+- AC lines without evidence: 0
+- Lint violations: 0
+- AC quality 4/5: no deduction
+- Reviewer evidence: present and detailed
+- Full-suite failures in task scope: 0
+
+### Confidence: .98
+### Action: archive
