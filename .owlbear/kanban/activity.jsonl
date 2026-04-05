@@ -1,12 +1,3 @@
-{"timestamp":"2026-03-30T13:10:18.0969502+02:00","action":"claim","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T13:12:24.7272736+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T13:12:24.7304084+02:00","action":"block","task_id":143,"detail":"Stale: failed 2 consecutive cycles with infrastructure error 'Cannot read properties of undefined (reading length)'. Infrastructure issue must be resolved before retry."}
-{"timestamp":"2026-03-30T13:14:47.7460906+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T13:15:15.8217927+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T13:15:15.8258178+02:00","action":"release","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T13:15:23.3590083+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T13:15:23.3628443+02:00","action":"claim","task_id":152,"detail":"reviewer"}
-{"timestamp":"2026-03-30T13:15:29.75156+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
 {"timestamp":"2026-03-30T13:15:29.7558933+02:00","action":"release","task_id":152,"detail":"reviewer"}
 {"timestamp":"2026-03-30T13:16:20.0941885+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
 {"timestamp":"2026-03-30T13:16:20.0974389+02:00","action":"claim","task_id":212,"detail":"test-writer"}
@@ -9998,3 +9989,12 @@
 {"timestamp":"2026-04-05T14:29:29.2817689+02:00","action":"edit","task_id":614,"detail":"Move skills-ref to optional dependency group"}
 {"timestamp":"2026-04-05T14:29:29.2918193+02:00","action":"release","task_id":614,"detail":"light-basin"}
 {"timestamp":"2026-04-05T14:29:29.7262389+02:00","action":"move","task_id":614,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T14:30:38.3226677+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T14:30:38.333881+02:00","action":"claim","task_id":546,"detail":"jade-gust"}
+{"timestamp":"2026-04-05T14:30:43.2567341+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T14:30:43.2707382+02:00","action":"claim","task_id":589,"detail":"basin-keen"}
+{"timestamp":"2026-04-05T14:32:38.5061973+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
+{"timestamp":"2026-04-05T14:32:38.5179026+02:00","action":"release","task_id":589,"detail":"basin-keen"}
+{"timestamp":"2026-04-05T14:37:03.5784042+02:00","action":"edit","task_id":546,"detail":"Add apply_patch to #210 lint guard tool_name filter"}
+{"timestamp":"2026-04-05T14:37:03.5907194+02:00","action":"release","task_id":546,"detail":"jade-gust"}
+{"timestamp":"2026-04-05T14:37:04.1481411+02:00","action":"move","task_id":546,"detail":"done -\u003e archived"}
