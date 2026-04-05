@@ -1,20 +1,3 @@
-{"timestamp":"2026-03-30T14:00:05.1425966+02:00","action":"release","task_id":212,"detail":"builder"}
-{"timestamp":"2026-03-30T14:02:46.9859453+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:02:52.7344547+02:00","action":"edit","task_id":152,"detail":"Test: mcp-knowledge Phase A remaining tools"}
-{"timestamp":"2026-03-30T14:03:35.942109+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T14:03:35.9458059+02:00","action":"claim","task_id":209,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:03:41.4840768+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T14:03:41.4877318+02:00","action":"claim","task_id":55,"detail":"writer"}
-{"timestamp":"2026-03-30T14:05:15.029931+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T14:05:15.0330572+02:00","action":"release","task_id":55,"detail":"writer"}
-{"timestamp":"2026-03-30T14:05:36.300081+02:00","action":"edit","task_id":55,"detail":"Add ingest and graph tools to mcp-knowledge server"}
-{"timestamp":"2026-03-30T14:07:05.4560414+02:00","action":"create","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T14:07:44.7870901+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T14:07:44.7912786+02:00","action":"release","task_id":209,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:09:47.7014577+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T14:09:47.7064316+02:00","action":"claim","task_id":213,"detail":"researcher"}
-{"timestamp":"2026-03-30T14:09:47.9578981+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T14:09:47.9659381+02:00","action":"claim","task_id":209,"detail":"architect"}
 {"timestamp":"2026-03-30T14:10:07.0564681+02:00","action":"edit","task_id":206,"detail":"Test: intake, document_store, and ingest pipeline modules"}
 {"timestamp":"2026-03-30T14:10:07.0626429+02:00","action":"claim","task_id":206,"detail":"auditor"}
 {"timestamp":"2026-03-30T14:13:39.0433393+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
@@ -9998,3 +9981,20 @@
 {"timestamp":"2026-04-05T15:30:05.8080528+02:00","action":"edit","task_id":602,"detail":"Rename data/ to store/"}
 {"timestamp":"2026-04-05T15:30:05.8190775+02:00","action":"release","task_id":602,"detail":"larch-dusk"}
 {"timestamp":"2026-04-05T15:30:06.258525+02:00","action":"move","task_id":602,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T15:31:02.9730017+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T15:31:02.9839879+02:00","action":"claim","task_id":634,"detail":"silk-fable"}
+{"timestamp":"2026-04-05T15:31:06.9405876+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T15:31:06.9521798+02:00","action":"claim","task_id":628,"detail":"cliff-hazel"}
+{"timestamp":"2026-04-05T15:31:37.7175048+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T15:31:37.7288414+02:00","action":"claim","task_id":582,"detail":"fern-drift"}
+{"timestamp":"2026-04-05T15:31:40.3697685+02:00","action":"edit","task_id":625,"detail":"Restore #574 pipeline protocol MCP callouts — 8 failing tests"}
+{"timestamp":"2026-04-05T15:31:40.3825065+02:00","action":"claim","task_id":625,"detail":"slate-oaken"}
+{"timestamp":"2026-04-05T15:32:27.7290865+02:00","action":"edit","task_id":625,"detail":"Restore #574 pipeline protocol MCP callouts — 8 failing tests"}
+{"timestamp":"2026-04-05T15:32:27.7425505+02:00","action":"release","task_id":625,"detail":"slate-oaken"}
+{"timestamp":"2026-04-05T15:35:32.2891386+02:00","action":"edit","task_id":628,"detail":"Update pick_tasks AC to add optional tag parameter"}
+{"timestamp":"2026-04-05T15:35:32.3033652+02:00","action":"release","task_id":628,"detail":"cliff-hazel"}
+{"timestamp":"2026-04-05T15:36:21.41996+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
+{"timestamp":"2026-04-05T15:36:21.4324966+02:00","action":"release","task_id":634,"detail":"silk-fable"}
+{"timestamp":"2026-04-05T15:50:57.293138+02:00","action":"edit","task_id":582,"detail":"P2-B3: Update inline-ref skills to MCP-only"}
+{"timestamp":"2026-04-05T15:50:57.3059662+02:00","action":"release","task_id":582,"detail":"fern-drift"}
+{"timestamp":"2026-04-05T15:50:57.7842317+02:00","action":"move","task_id":582,"detail":"done -\u003e archived"}

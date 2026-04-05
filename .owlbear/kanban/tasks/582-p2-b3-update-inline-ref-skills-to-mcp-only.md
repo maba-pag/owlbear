@@ -1,10 +1,12 @@
 ---
 id: 582
 title: 'P2-B3: Update inline-ref skills to MCP-only'
-status: todo
+status: archived
 priority: needed
 created: 2026-04-03T16:42:36.5956013+02:00
-updated: 2026-04-05T10:20:02.7524845+02:00
+updated: 2026-04-05T15:50:57.7826419+02:00
+started: 2026-04-05T15:50:57.7826419+02:00
+completed: 2026-04-05T15:50:57.7826419+02:00
 tags:
     - scope:skills
     - ' scope:mcp'
@@ -101,3 +103,116 @@ Releasing claim for AC refinement and architecture review append.
 
 ### Verdict: APPROVE (via REFINE)
 ### Action Taken: Refined AC2 from ambiguous "uses MCP tool syntax" to specific thin-redirect spec. Added docs pass-through tag. Advanced to todo.
+
+[[2026-04-05]] Sun 11:16
+## Test-Writer Notes
+- Non-implementation task (tagged `docs`) — no tests applicable.
+- AC references only SKILL.md documentation files; architecture review explicitly notes "TDD compliance: N/A — No Python code".
+- Passing through to builder.
+
+[[2026-04-05]] Sun 12:25
+## Builder Notes
+
+### Files Changed
+- `share/skills/h-kanban-md/SKILL.md` — replaced 198-line CLI reference with 18-line thin redirect
+
+### AC Verification
+
+| AC | Description | Result |
+|----|-------------|--------|
+| AC1 | w-dispatch-planning, w-decision-routing, w-orchestration, w-research have 0 kanban-md.exe refs | PASS (pre-verified, confirmed 0 each) |
+| AC2 | h-kanban-md/SKILL.md reduced to thin redirect: deprecation notice + Board Configuration + cross-refs | PASS (18 lines: frontmatter + title + notice + board config) |
+| AC3 | h-kanban-md/SKILL.md has 0 kanban-md.exe refs | PASS (grep Count = 0) |
+| AC4 | grep: 0 kanban-md.exe across all 5 files | PASS (0, 0, 0, 0, 0) |
+
+### Test Results
+Non-implementation task (docs) — no tests applicable. Test-Writer Notes confirmed pass-through.
+
+### Lint
+No Python files changed. Ruff N/A.
+
+### Content Retained in Thin Redirect
+- YAML frontmatter with deprecated description
+- Title + deprecation notice with cross-refs to h-mcp-kanban and r-pipeline-protocol
+- Board Configuration section (statuses/priorities — not covered by h-mcp-kanban)
+
+[[2026-04-05]] Sun 13:16
+## Review Evidence
+
+### Files Changed
+- `share/skills/h-kanban-md/SKILL.md` — replaced 198-line CLI reference with 18-line thin redirect
+
+### Tests
+N/A — docs-only task. No Python code changed. Test-writer pass-through confirmed by architecture review.
+
+### Lint
+N/A — no Python files changed.
+
+### AC Compliance
+
+| AC | Spec | Evidence | Status |
+|----|------|----------|--------|
+| AC1 | 0 kanban-md.exe refs in 4 workflow files | `Select-String` grep returned 0 matches; MCP tool names (list_tasks, show_task, start_work, end_work) confirmed present in all 4 files | PASS |
+| AC2 | h-kanban-md/SKILL.md thin redirect: deprecated frontmatter + title + deprecation notice + Board Config (statuses/priorities) + cross-refs to h-mcp-kanban and r-pipeline-protocol | File verified line-by-line: all 6 required elements present, 18 lines (within ~20 spec) | PASS |
+| AC3 | 0 kanban-md.exe refs in h-kanban-md/SKILL.md | grep returned 0 matches | PASS |
+| AC4 | 0 kanban-md.exe across all 5 files combined | `Select-String` across all 5 paths returned no output | PASS |
+
+### Deductions
+0
+
+### Verdict
+Confidence: .97 → PASS #582 -> docs
+
+[[2026-04-05]] Sun 13:59
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A (no update needed) | h-kanban-md SKILL.md converted to thin redirect; YAML description already reads "Handbook (DEPRECATED): kanban-md CLI reference — use h-mcp-kanban instead"; `copilot-instructions.md` grep: 0 references to h-kanban-md — no update required |
+| 2 | Module docstrings | No | N/A | No Python files changed |
+| 3 | External attribution | No | N/A | No external patterns cited in research doc or task body |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/inline-ref-skills-mcp-migration.md` exists; owning task #582 at L3; referenced in task body (scope correction section); follow-ups assessed — none needed (task IS the implementation) |
+
+### AC Re-verification
+- grep `kanban-md\.exe` across all 5 files: **0 matches** (fresh run)
+- h-kanban-md/SKILL.md: 18 lines — frontmatter + title + deprecation notice + Board Configuration + cross-refs ✓
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (no `.owlbear/scratch/582-*` files)
+
+[[2026-04-05]] Sun 15:50
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: 0 kanban-md.exe refs in 4 workflow files | Select-String grep: 0 matches; MCP tool names confirmed in w-dispatch-planning (list_tasks, show_task, create_task) | PASS |
+| AC2: h-kanban-md thin redirect (~20 lines) | File read: 18 lines — frontmatter + title + deprecation notice + board config + cross-refs to h-mcp-kanban and r-pipeline-protocol | PASS |
+| AC3: 0 kanban-md.exe refs in h-kanban-md | Select-String grep: 0 matches | PASS |
+| AC4: 0 kanban-md.exe across all 5 files | Select-String across all 5 paths: no output | PASS |
+
+### Test Results
+- pytest: 2878 passed, 432 failed (all pre-existing, unrelated — docs-only task, no Python files changed), 18 skipped
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+Original AC2 ambiguous ("uses MCP tool syntax"); researcher scope correction and architect refinement fixed this. Minor gap: h-kanban-md initially excluded from scope by architect, needed researcher override.
+
+### Deduction Breakdown
+- 4 AC lines, all with specific evidence: 0
+- Lint: clean: 0
+- AC quality (4/5): 0
+- Reviewer section: present, detailed, .97 PASS: 0
+- Full-suite in-scope failures: 0
+- Uncommitted builder deliverable: noted, committed as leftover (09ce2c6)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 09ce2c6 | docs | share/skills/h-kanban-md/SKILL.md | #582 |
