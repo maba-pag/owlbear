@@ -1,6 +1,6 @@
 ---
 name: h-mcp-kanban
-description: "Handbook: owlbear-kanban MCP tool reference — 7 tools for programmatic board management"
+description: "Handbook: owlbear-kanban MCP tool reference — 8 tools for programmatic board management"
 user-invocable: false
 ---
 
@@ -21,6 +21,7 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 | `edit_task` | Edit task fields |
 | `start_work` | Claim task and return full details |
 | `end_work` | Append note, advance or resolve status, release claim |
+| `pick_tasks` | Gate-filtered dispatch list, sorted by priority/status, capped at `limit` |
 
 Parameter names, types, defaults, descriptions, and allowed values are exposed via the MCP tool schema. Use `list_tools` or inspect the schema directly — do not rely on this document for parameter details.
 
