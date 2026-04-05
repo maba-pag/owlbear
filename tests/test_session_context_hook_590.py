@@ -473,12 +473,23 @@ class TestFromAC_TestWriterAgentHooks:
     def _frontmatter(self) -> str:
         return _extract_frontmatter(self._content(), "test-writer")
 
-    def test_test_writer_has_hooks_section(self) -> None:
-        """AC4b: test-writer.agent.md must have a hooks: section (new, or merged with #589)."""
+    def test_test_writer_hooks_section_has_both_events(self) -> None:
+        """AC4b: test-writer.agent.md hooks: must contain both SessionStart (new) and PreToolUse (preserved, from #589)."""
+        import yaml  # noqa: PLC0415
+
         fm = self._frontmatter()
-        assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "test-writer.agent.md is missing the 'hooks:' key. "
-            "Builder must add a hooks: section containing SessionStart."
+        try:
+            parsed = yaml.safe_load(fm)
+        except yaml.YAMLError as exc:
+            pytest.fail(f"test-writer.agent.md frontmatter is not valid YAML: {exc}")
+        hooks = parsed.get("hooks", {})
+        assert "SessionStart" in hooks, (
+            f"hooks: section must contain SessionStart (AC3d). "
+            f"Current hook events: {list(hooks.keys())!r}"
+        )
+        assert "PreToolUse" in hooks, (
+            f"hooks: section must still contain PreToolUse (from #589, must not be replaced). "
+            f"Current hook events: {list(hooks.keys())!r}"
         )
 
     def test_test_writer_has_session_start_hook(self) -> None:
