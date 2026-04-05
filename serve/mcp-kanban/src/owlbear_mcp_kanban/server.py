@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,7 @@ __all__ = [
     "list_tasks",
     "mcp",
     "move_task",
+    "pick_tasks",
     "show_task",
     "start_work",
 ]
@@ -502,6 +504,77 @@ async def end_work(  # noqa: PLR0912, PLR0913, C901
 
     msg = f"unknown outcome {outcome!r}"
     raise ToolError(msg)
+
+
+# ---------------------------------------------------------------------------
+# pick_tasks — gate-filtered dispatch list
+# ---------------------------------------------------------------------------
+
+_PICK_AND_PATTERN = re.compile(r"\band\b", re.IGNORECASE)
+_PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
+_PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
+
+_PICK_PRIORITY_RANK: dict[str, int] = {
+    "critical": 0,
+    "needed": 1,
+    "important": 2,
+    "nice-to-have": 3,
+    "someday": 4,
+}
+_PICK_STATUS_RANK: dict[str, int] = {
+    "done": 0,
+    "docs": 1,
+    "review": 2,
+    "in-progress": 3,
+    "todo": 4,
+    "backlog": 5,
+    "ideation": 6,
+}
+_PICK_MAX_PRIORITY_RANK = max(_PICK_PRIORITY_RANK.values())
+_PICK_MAX_STATUS_RANK = max(_PICK_STATUS_RANK.values())
+
+
+def _check_pick_gates(task: dict) -> bool:
+    """Return True if task passes atomicity, TDD, and clarity gates."""
+    title: str = task.get("title", "")
+    status: str = task.get("status", "")
+    body: str = task.get("body") or ""
+
+    if _PICK_AND_PATTERN.search(title):
+        return False
+    if status == "in-progress" and "## Test-Writer Notes" not in body:
+        return False
+    return not (status in _PICK_CLARITY_STATUSES and not _PICK_AC_PATTERN.search(body))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def pick_tasks(ctx: Context, *, limit: int = 25) -> dict:
+    """Pick dispatchable tasks: gate-filtered, sorted by priority/status, capped at limit."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    stdout, stderr, rc = await _run_kanban(
+        app_ctx, "list", "--json", "--unblocked", "--not-blocked", "--unclaimed"
+    )
+    if rc != 0:
+        msg = stderr.strip() or stdout.strip()
+        raise ToolError(msg)
+    try:
+        tasks: list[dict] = json.loads(stdout)
+    except (json.JSONDecodeError, ValueError) as exc:
+        msg = f"Invalid task JSON: {stdout[:200]}"
+        raise ToolError(msg) from exc
+
+    passing = [t for t in tasks if _check_pick_gates(t)]
+
+    def _sort_key(task: dict) -> tuple[int, int]:
+        prank = _PICK_PRIORITY_RANK.get(task.get("priority", ""), _PICK_MAX_PRIORITY_RANK + 1)
+        srank = _PICK_STATUS_RANK.get(task.get("status", ""), _PICK_MAX_STATUS_RANK + 1)
+        return (prank, srank)
+
+    passing.sort(key=_sort_key)
+    capped = passing[:limit]
+    return {
+        "dispatch": [{"task_id": int(t["id"]), "status": str(t["status"])} for t in capped]
+    }
 
 
 # Override outputSchema for tools that return KanbanTask. This ensures the
