@@ -136,9 +136,9 @@ async def project_info(ctx: Context) -> ProjectInfoResult:
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def project_list(ctx: Context) -> list[ProjectListItem]:
-    """List registered projects from {owlbear_root}/data/projects/."""
+    """List registered projects from {owlbear_root}/store/projects/."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    projects_dir = app_ctx.owlbear_root / "data" / "projects"
+    projects_dir = app_ctx.owlbear_root / "store" / "projects"
     if not projects_dir.is_dir():
         return []
     results: list[ProjectListItem] = []

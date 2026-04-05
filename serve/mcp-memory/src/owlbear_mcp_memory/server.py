@@ -27,7 +27,7 @@ __all__ = [
     "set_approval_state",  # noqa: F822 — defined in tools.py
 ]
 
-_DEFAULT_DB_PATH = "data/memory/memory.db"
+_DEFAULT_DB_PATH = "store/memory/memory.db"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS memory_entries (
@@ -59,7 +59,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise the memory database; close the connection on exit.
 
     Steps:
-    (a) Resolve DB path from OWLBEAR_MEMORY_DB_PATH env var; default data/memory/memory.db.
+    (a) Resolve DB path from OWLBEAR_MEMORY_DB_PATH env var; default store/memory/memory.db.
     (b) Create parent directories if absent.
     (c) Open sqlite3 connection; set row_factory = sqlite3.Row so rows are accessible
         both by index and column name.

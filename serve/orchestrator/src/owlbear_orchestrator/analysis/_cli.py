@@ -10,7 +10,7 @@ from pathlib import Path
 from owlbear_orchestrator.analysis.analyze import analyze
 from owlbear_orchestrator.analysis.formatters import format_json, format_markdown
 
-_DEFAULT_AUDIT_DIR = Path("data/audit/")
+_DEFAULT_AUDIT_DIR = Path("store/audit/")
 _DEFAULT_WINDOW = timedelta(days=36500)  # scan all history
 
 
@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         "--audit-dir",
         default=str(_DEFAULT_AUDIT_DIR),
         metavar="PATH",
-        help="Path to audit log directory (default: data/audit/)",
+        help="Path to audit log directory (default: store/audit/)",
     )
 
     args = parser.parse_args(argv)

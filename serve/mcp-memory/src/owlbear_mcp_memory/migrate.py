@@ -15,7 +15,7 @@ from owlbear_mcp_memory.models import MemoryEntry
 
 __all__ = ["main"]
 
-_DEFAULT_DB_PATH = "data/memory/memory.db"
+_DEFAULT_DB_PATH = "store/memory/memory.db"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS memory_entries (

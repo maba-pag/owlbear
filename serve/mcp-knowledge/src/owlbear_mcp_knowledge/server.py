@@ -28,7 +28,7 @@ from owlbear_knowledge.source_store import KnowledgeSourceStore
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-_DEFAULT_KB_PATH = "data/knowledge/knowledge.db"
+_DEFAULT_KB_PATH = "store/knowledge/knowledge.db"
 _DEFAULT_MODEL = "gpt-4o-mini"
 
 

@@ -36,7 +36,7 @@ from owlbear_mcp_memory.tools import set_approval_state as set_approval_state_to
 
 __all__ = ["main"]
 
-_DEFAULT_DB_PATH = "data/memory/memory.db"
+_DEFAULT_DB_PATH = "store/memory/memory.db"
 _CONTENT_PREVIEW_LEN = 80
 
 
