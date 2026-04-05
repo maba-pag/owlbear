@@ -103,7 +103,7 @@ class TestFromAC_KnowledgeLoaderDefault:
         """AC4: os.environ.get fallback in loader.py load() must reference store/knowledge/knowledge.db."""
         loader_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "knowledge"
             / "src"
             / "owlbear_knowledge"
@@ -118,7 +118,7 @@ class TestFromAC_KnowledgeLoaderDefault:
         """AC4: loader.py must not contain the old data/knowledge/knowledge.db fallback."""
         loader_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "knowledge"
             / "src"
             / "owlbear_knowledge"
@@ -152,7 +152,7 @@ class TestFromAC_ProjectListPath:
         """AC5: server.py source must construct 'store' / 'projects' path."""
         server_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "mcp-project"
             / "src"
             / "owlbear_mcp_project"
@@ -167,7 +167,7 @@ class TestFromAC_ProjectListPath:
         """AC5: server.py must not still reference data/projects."""
         server_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "mcp-project"
             / "src"
             / "owlbear_mcp_project"
@@ -211,7 +211,7 @@ class TestFromAC_AuditDirDefault:
         """AC6: --audit-dir argparse help text must say store/audit/, not data/audit/."""
         cli_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "orchestrator"
             / "src"
             / "owlbear_orchestrator"
@@ -227,7 +227,7 @@ class TestFromAC_AuditDirDefault:
         """AC6: --audit-dir help text must not still say data/audit/."""
         cli_path = (
             WORKSPACE
-            / "packages"
+            / "serve"
             / "orchestrator"
             / "src"
             / "owlbear_orchestrator"

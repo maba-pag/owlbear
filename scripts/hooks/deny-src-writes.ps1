@@ -56,7 +56,8 @@ if ($paths.Count -eq 0) {
 foreach ($p in $paths) {
     # Normalize backslashes to forward slashes
     $normalized = $p -replace '\\', '/'
-    if (-not $normalized.StartsWith('tests/')) {
+    $isInTests = $normalized.StartsWith('tests/') -or ($normalized -match '/tests/')
+    if (-not $isInTests) {
         $response = @{
             hookSpecificOutput = @{
                 permissionDecision       = 'deny'
