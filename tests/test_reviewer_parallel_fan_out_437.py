@@ -18,8 +18,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-REVIEWER_AGENT = ROOT / ".github" / "agents" / "reviewer.agent.md"
-CODE_REVIEW_SKILL = ROOT / ".github" / "skills" / "w-code-review" / "SKILL.md"
+REVIEWER_AGENT = ROOT / "share" / "agents" / "reviewer.agent.md"
+CODE_REVIEW_SKILL = ROOT / "share" / "skills" / "w-code-review" / "SKILL.md"
 
 # Exact 16-entry tools baseline for reviewer.agent.md (AC 2 regression guard)
 EXPECTED_TOOLS: list[str] = [

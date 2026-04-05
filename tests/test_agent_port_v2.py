@@ -1,10 +1,10 @@
 """Failing tests for task #96: Port agents to agent-md v2 location.
 
 Verifies that all 11 .agent.md files are ported from .github/agents/ to
-agents/, with updated tool names (todos not todo), correct agents: fields,
+share/agents/, with updated tool names (todos not todo), correct agents: fields,
 and v1 cleanup (.github/agents/ empty of .agent.md files).
 
-All tests fail on current HEAD: agents/ only contains README.md and
+All tests fail on current HEAD: share/agents/ only contains README.md and
 .github/agents/ still holds all 11 .agent.md files.
 """
 
@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / ".github" / "agents"
+AGENTS_DIR = ROOT / "share" / "agents"
 
 # The 9 leaf agents — no sub-agents of their own
 LEAF_AGENTS = [

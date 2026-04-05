@@ -2,7 +2,7 @@
 
 Contract-level tests for:
 1. scripts/hooks/deny-src-writes.ps1 — allow-list path guard (tests/ only)
-2. .github/agents/test-writer.agent.md — PreToolUse hook + tools list edit
+2. share/agents/test-writer.agent.md — PreToolUse hook + tools list edit
 
 Assumed PreToolUse stdin JSON format (VS Code hooks spec):
   {
@@ -64,7 +64,7 @@ import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT_PATH = _REPO_ROOT / "scripts" / "hooks" / "deny-src-writes.ps1"
-_AGENT_PATH = _REPO_ROOT / ".github" / "agents" / "test-writer.agent.md"
+_AGENT_PATH = _REPO_ROOT / "share" / "agents" / "test-writer.agent.md"
 
 # Write tools that the hook must gate (AC2); apply_patch is explicitly excluded
 _GATED_WRITE_TOOLS = [

@@ -1,7 +1,7 @@
 """Tests for task #196: Add necessity check to code-review skill critical checks.
 
 AC contract under test:
-1. .github/skills/w-code-review/SKILL.md: new section "### 6.6 Necessity check" inserted after
+1. share/skills/w-code-review/SKILL.md: new section "### 6.6 Necessity check" inserted after
    existing 6.5, inside Step 6 (Pass 1: CRITICAL checks). Content includes:
    (a) Conditional gate using "> **Conditional:**" pattern, applied when task adds a
        new dependency/integration/tool/server/external capability; NOT triggered by
@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-CODE_REVIEW_SKILL = ROOT / ".github" / "skills" / "w-code-review" / "SKILL.md"
-REVIEWER_AGENT = ROOT / ".github" / "agents" / "reviewer.agent.md"
+CODE_REVIEW_SKILL = ROOT / "share" / "skills" / "w-code-review" / "SKILL.md"
+REVIEWER_AGENT = ROOT / "share" / "agents" / "reviewer.agent.md"
 
 
 def _read(path: Path) -> str:
@@ -36,14 +36,14 @@ def _read(path: Path) -> str:
 
 
 class TestFromAC_NecessityCheckSection:
-    """AC 1: .github/skills/w-code-review/SKILL.md must contain the new 6.6 section with
+    """AC 1: share/skills/w-code-review/SKILL.md must contain the new 6.6 section with
     correct placement and structural requirements."""
 
     def test_section_heading_exists(self) -> None:
         """Section '### 6.6 Necessity check' must appear in the skill file."""
         content = _read(CODE_REVIEW_SKILL)
         assert "### 6.6 Necessity check" in content, (
-            "Expected '### 6.6 Necessity check' heading in .github/skills/w-code-review/SKILL.md"
+            "Expected '### 6.6 Necessity check' heading in share/skills/w-code-review/SKILL.md"
         )
 
     def test_section_66_appears_after_section_65(self) -> None:
@@ -307,7 +307,7 @@ def _get_section_66_text(content: str) -> str:
     start = content.find("### 6.6 Necessity check")
     if start == -1:
         pytest.fail(
-            "Section '### 6.6 Necessity check' not found in .github/skills/w-code-review/SKILL.md"
+            "Section '### 6.6 Necessity check' not found in share/skills/w-code-review/SKILL.md"
         )
     # Find the next section heading after 6.6
     next_section = content.find("### 6.", start + 1)

@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENTS_DIR = _REPO_ROOT / ".github" / "agents"
+_AGENTS_DIR = _REPO_ROOT / "share" / "agents"
 
 # --- AC1: these 11 agents MUST include 'owlbear-memory/*' ---
 AGENTS_REQUIRING_MEMORY: tuple[str, ...] = (
@@ -134,7 +134,7 @@ class TestFromAC_MemoryToolPresent:
 
     def test_kanban_planner_has_memory_tool(self) -> None:
         assert _has_memory_tool(_read_agent("planner")), (
-            ".github/agents/planner.agent.md missing 'owlbear-memory/*' in tools:"
+            "share/agents/planner.agent.md missing 'owlbear-memory/*' in tools:"
         )
 
     def test_planner_has_memory_tool(self) -> None:
@@ -164,7 +164,7 @@ class TestFromAC_MemoryToolPresent:
 
     def test_writer_has_memory_tool(self) -> None:
         assert _has_memory_tool(_read_agent("writer")), (
-            ".github/agents/doc-writer.agent.md missing 'owlbear-memory/*' in tools:"
+            "share/agents/doc-writer.agent.md missing 'owlbear-memory/*' in tools:"
         )
 
 

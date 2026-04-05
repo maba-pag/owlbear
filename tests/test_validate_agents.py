@@ -38,7 +38,7 @@ from validate_agents import validate_agent  # noqa: E402  # type: ignore[import]
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT = _SCRIPTS_DIR / "validate_agents.py"
-_AGENTS_DIR = _REPO_ROOT / ".github" / "agents"
+_AGENTS_DIR = _REPO_ROOT / "share" / "agents"
 _PRECOMMIT_CONFIG = _REPO_ROOT / ".pre-commit-config.yaml"
 _README = _REPO_ROOT / "README.md"
 

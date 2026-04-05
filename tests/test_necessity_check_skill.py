@@ -1,7 +1,7 @@
 """Tests for task #196 — Add necessity check to code-review skill critical checks.
 
 Verifies that:
-- .github/skills/w-code-review/SKILL.md gains a "### 6.6 Necessity check" section
+- share/skills/w-code-review/SKILL.md gains a "### 6.6 Necessity check" section
 - agents/reviewer.agent.md gains a new red-flag entry about feature additions
 """
 
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-SKILL_FILE = Path(__file__).parent.parent / ".github" / "skills" / "w-code-review" / "SKILL.md"
-REVIEWER_AGENT_FILE = Path(__file__).parent.parent / ".github" / "agents" / "reviewer.agent.md"
+SKILL_FILE = Path(__file__).parent.parent / "share" / "skills" / "w-code-review" / "SKILL.md"
+REVIEWER_AGENT_FILE = Path(__file__).parent.parent / "share" / "agents" / "reviewer.agent.md"
 
 
 def _extract_section(content: str, section_start_idx: int) -> str:
@@ -31,7 +31,7 @@ def _extract_section(content: str, section_start_idx: int) -> str:
 
 
 class TestFromAC_NecessityCheckSection:
-    """Tests for AC line 1: .github/skills/w-code-review/SKILL.md must gain ### 6.6 Necessity check."""
+    """Tests for AC line 1: share/skills/w-code-review/SKILL.md must gain ### 6.6 Necessity check."""
 
     # ------------------------------------------------------------------ happy path
 

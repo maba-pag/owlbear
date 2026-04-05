@@ -25,7 +25,7 @@ _REPO_ROOT = Path(__file__).parent.parent
 _PYPROJECT = _REPO_ROOT / "pyproject.toml"
 _PRECOMMIT_CONFIG = _REPO_ROOT / ".pre-commit-config.yaml"
 _SCRIPT = _REPO_ROOT / "scripts" / "validate_skills.py"
-_SKILLS_DIR = _REPO_ROOT / ".github" / "skills"
+_SKILLS_DIR = _REPO_ROOT / "share" / "skills"
 
 
 # ---------------------------------------------------------------------------

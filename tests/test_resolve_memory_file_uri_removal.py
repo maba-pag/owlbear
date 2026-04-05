@@ -16,8 +16,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-CURATOR_AGENT = ROOT / ".github" / "agents" / "curator.agent.md"
-AGENTS_DIR = ROOT / ".github" / "agents"
+CURATOR_AGENT = ROOT / "share" / "agents" / "curator.agent.md"
+AGENTS_DIR = ROOT / "share" / "agents"
 AGENT_MD_FORMAT_DOC = ROOT / "docs" / "research" / "agent-md-format.md"
 
 UNSUPPORTED_TOOL = "vscode/resolveMemoryFileUri"

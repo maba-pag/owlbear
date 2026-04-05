@@ -17,8 +17,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / ".github" / "agents"
-SKILLS_DIR = ROOT / ".github" / "skills"
+AGENTS_DIR = ROOT / "share" / "agents"
+SKILLS_DIR = ROOT / "share" / "skills"
 
 # The 4 pipeline agents that must have quality-runner wired in
 WIRED_AGENTS = ["builder", "reviewer", "auditor", "test-writer"]

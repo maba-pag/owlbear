@@ -1,6 +1,6 @@
 """Tests for task #194: Add environment audit step to research-workflow skill.
 
-AC contract under test (.github/skills/w-research/SKILL.md):
+AC contract under test (share/skills/w-research/SKILL.md):
 1. New mandatory checklist item 2 inserted between item 1 (Theoretical validity)
    and current item 2 (Prior art).
 2. Item text contains "Environment audit" and the full IDE/runtime description.
@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-SKILL_FILE = ROOT / ".github" / "skills" / "w-research" / "SKILL.md"
+SKILL_FILE = ROOT / "share" / "skills" / "w-research" / "SKILL.md"
 
 
 def _skill_text() -> str:

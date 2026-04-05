@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parent.parent
-PIPELINE_PROTOCOL = ROOT / ".github" / "skills" / "r-pipeline-protocol" / "SKILL.md"
+PIPELINE_PROTOCOL = ROOT / "share" / "skills" / "r-pipeline-protocol" / "SKILL.md"
 
 
 # ---- Helpers (mirrors test_mcp_tool_references_483.py) ----

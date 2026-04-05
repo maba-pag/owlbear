@@ -4,7 +4,7 @@ Contract-level verification that the deduction rubric and related content are
 present in the target instruction files after the builder's changes.
 
 AC coverage:
-  - AC1: .github/skills/w-task-verification/SKILL.md Step 3 updated with deduction rubric
+  - AC1: share/skills/w-task-verification/SKILL.md Step 3 updated with deduction rubric
          (start at 1.0, deduct per criterion)
   - AC2: All 5 deduction criteria present with correct numeric values
   - AC3: agents/auditor.agent.md red-flags list updated with specific text
@@ -18,8 +18,8 @@ import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SKILL_FILE = _REPO_ROOT / ".github" / "skills" / "w-task-verification" / "SKILL.md"
-_AUDITOR_FILE = _REPO_ROOT / ".github" / "agents" / "auditor.agent.md"
+_SKILL_FILE = _REPO_ROOT / "share" / "skills" / "w-task-verification" / "SKILL.md"
+_AUDITOR_FILE = _REPO_ROOT / "share" / "agents" / "auditor.agent.md"
 
 
 class TestFromAC_DeductionRubricPresent:
@@ -34,7 +34,7 @@ class TestFromAC_DeductionRubricPresent:
         # Extract from "## Step 3" up to the next "## Step"
         match = re.search(r"## Step 3.*?(?=\n## Step \d)", text, re.DOTALL)
         assert match is not None, (
-            "## Step 3 section not found in .github/skills/w-task-verification/SKILL.md"
+            "## Step 3 section not found in share/skills/w-task-verification/SKILL.md"
         )
         return match.group(0)
 
@@ -43,7 +43,7 @@ class TestFromAC_DeductionRubricPresent:
         section = self._step3_section()
         found = "deduct" in section.lower() or "rubric" in section.lower()
         assert found, (
-            "Step 3 in .github/skills/w-task-verification/SKILL.md has no mention of 'deduct' or "
+            "Step 3 in share/skills/w-task-verification/SKILL.md has no mention of 'deduct' or "
             "'rubric' — AC1 requires a structured deduction rubric to be added"
         )
 
@@ -89,7 +89,7 @@ class TestFromAC_DeductionCriteriaValues:
         )
         assert pattern.search(text), (
             "Deduction criteria '-.02 per AC line with no specific evidence' "
-            "not found in .github/skills/w-task-verification/SKILL.md (AC2)"
+            "not found in share/skills/w-task-verification/SKILL.md (AC2)"
         )
 
     def test_deduction_minus_05_for_lint_issues(self) -> None:
@@ -101,7 +101,7 @@ class TestFromAC_DeductionCriteriaValues:
         )
         assert pattern.search(text), (
             "Deduction criteria '-.05 for lint issues' "
-            "not found in .github/skills/w-task-verification/SKILL.md (AC2)"
+            "not found in share/skills/w-task-verification/SKILL.md (AC2)"
         )
 
     def test_deduction_minus_03_for_low_ac_quality(self) -> None:
@@ -113,7 +113,7 @@ class TestFromAC_DeductionCriteriaValues:
         )
         assert pattern.search(text), (
             "Deduction criteria '-.03 for AC quality score at 3 or below' "
-            "not found in .github/skills/w-task-verification/SKILL.md (AC2)"
+            "not found in share/skills/w-task-verification/SKILL.md (AC2)"
         )
 
     def test_deduction_minus_02_for_missing_reviewer_evidence(self) -> None:
@@ -126,7 +126,7 @@ class TestFromAC_DeductionCriteriaValues:
         )
         assert pattern.search(text), (
             "Deduction criteria '-.02 for missing reviewer evidence section' "
-            "not found in .github/skills/w-task-verification/SKILL.md (AC2)"
+            "not found in share/skills/w-task-verification/SKILL.md (AC2)"
         )
 
     def test_deduction_minus_05_for_full_suite_test_failures(self) -> None:
@@ -139,7 +139,7 @@ class TestFromAC_DeductionCriteriaValues:
         )
         assert pattern.search(text), (
             "Deduction criteria '-.05 for full-suite test failures in task scope' "
-            "not found in .github/skills/w-task-verification/SKILL.md (AC2)"
+            "not found in share/skills/w-task-verification/SKILL.md (AC2)"
         )
 
     def test_all_five_deduction_values_present(self) -> None:

@@ -35,7 +35,7 @@ from validate_skills import validate_skill  # noqa: E402
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-_SKILLS_DIR = Path(__file__).parent.parent / ".github" / "skills"
+_SKILLS_DIR = Path(__file__).parent.parent / "share" / "skills"
 
 
 # ---------------------------------------------------------------------------

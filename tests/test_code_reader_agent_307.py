@@ -27,8 +27,8 @@ import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENT_FILE = _REPO_ROOT / ".github" / "agents" / "code-reader.agent.md"
-_REVIEWER_FILE = _REPO_ROOT / ".github" / "agents" / "reviewer.agent.md"
+_AGENT_FILE = _REPO_ROOT / "share" / "agents" / "code-reader.agent.md"
+_REVIEWER_FILE = _REPO_ROOT / "share" / "agents" / "reviewer.agent.md"
 
 _EXPECTED_TOOLS: frozenset[str] = frozenset(
     {"read/readFile", "read/viewImage", "read/problems", "search", "vscode/memory"}

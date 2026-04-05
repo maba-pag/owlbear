@@ -1,10 +1,10 @@
 """Tests for task #318: Create fix-attempt.agent.md with assign-mode tools.
 
-Contract-level verification that .github/agents/fix-attempt.agent.md exists with
+Contract-level verification that share/agents/fix-attempt.agent.md exists with
 the required frontmatter and body content per the AC.
 
 AC coverage:
-  - AC1:  .github/agents/fix-attempt.agent.md exists with valid YAML frontmatter
+  - AC1:  share/agents/fix-attempt.agent.md exists with valid YAML frontmatter
           and a <persona> section in the body
   - AC2:  Frontmatter: user-invocable: false, disable-model-invocation: true,
           agents: [], model: [Claude Sonnet 4.6 (copilot), GPT-5.3-Codex (copilot)]
@@ -30,8 +30,8 @@ import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENT_FILE = _REPO_ROOT / ".github" / "agents" / "fix-attempt.agent.md"
-_BUILDER_FILE = _REPO_ROOT / ".github" / "agents" / "builder.agent.md"
+_AGENT_FILE = _REPO_ROOT / "share" / "agents" / "fix-attempt.agent.md"
+_BUILDER_FILE = _REPO_ROOT / "share" / "agents" / "builder.agent.md"
 _VALIDATE_SCRIPT = _REPO_ROOT / "scripts" / "validate_agents.py"
 
 _EXPECTED_TOOLS: frozenset[str] = frozenset(
@@ -92,12 +92,12 @@ def _extract_tools_from_frontmatter(fm: str) -> list[str]:
 
 
 class TestFromAC_FixAttemptFrontmatter:
-    """AC1-3, AC7, AC9: .github/agents/fix-attempt.agent.md must exist with correct frontmatter."""
+    """AC1-3, AC7, AC9: share/agents/fix-attempt.agent.md must exist with correct frontmatter."""
 
     # --- AC1: file exists with valid frontmatter ---
 
     def test_file_exists(self) -> None:
-        """AC1: .github/agents/fix-attempt.agent.md must exist on disk."""
+        """AC1: share/agents/fix-attempt.agent.md must exist on disk."""
         assert _AGENT_FILE.is_file(), (
             "fix-attempt.agent.md does not exist — builder must create it"
         )

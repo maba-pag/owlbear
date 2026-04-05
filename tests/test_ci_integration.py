@@ -7,7 +7,7 @@ The pre-commit hook (``.pre-commit-config.yaml``) invokes::
 with no positional arguments (``pass_filenames: false``, no ``args:`` field).
 
 Currently ``main()`` returns exit 1 with a usage message when no args are given.
-The script must instead auto-discover and validate all ``.github/skills/*/SKILL.md``
+The script must instead auto-discover and validate all ``share/skills/*/SKILL.md``
 directories, exiting 0 when all pass (AC2(a) + AC4).
 
 AC items ALREADY satisfied (codebase + test_validate_skills.py):
@@ -16,7 +16,7 @@ AC items ALREADY satisfied (codebase + test_validate_skills.py):
   - AC3:  .pre-commit-config.yaml has repo: local / validate-skills hook
 
 Gap covered by THIS file:
-  - AC2(a): script discovers .github/skills/* when called with no arguments
+  - AC2(a): script discovers share/skills/* when called with no arguments
   - AC4: running with no args (as pre-commit does) exits 0 for a clean project
 """
 
@@ -28,11 +28,11 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _SCRIPT = _PROJECT_ROOT / "scripts" / "validate_skills.py"
-_SKILLS_DIR = _PROJECT_ROOT / ".github" / "skills"
+_SKILLS_DIR = _PROJECT_ROOT / "share" / "skills"
 
 
 class TestFromAC_ScriptAutoDiscovery:
-    """AC2(a)+AC4: script discovers .github/skills/* and exits 0 when invoked with no args.
+    """AC2(a)+AC4: script discovers share/skills/* and exits 0 when invoked with no args.
 
     The pre-commit hook ``entry: python scripts/validate_skills.py`` with
     ``pass_filenames: false`` calls the script with zero positional arguments.
@@ -40,7 +40,7 @@ class TestFromAC_ScriptAutoDiscovery:
     """
 
     def test_no_args_exits_zero_when_all_skills_valid(self) -> None:
-        """AC4: script exits 0 with no args from project root (all .github/skills/* pass)."""
+        """AC4: script exits 0 with no args from project root (all share/skills/* pass)."""
         result = subprocess.run(
             [sys.executable, str(_SCRIPT)],
             capture_output=True,

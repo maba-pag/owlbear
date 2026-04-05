@@ -6,7 +6,7 @@ Augments the #562 test suite with 5 additional checks:
   3. edit_task assertion on all cheatsheet-skill kanban-md Commands sections
   4. Parametrized tests for 4 inline-ref skills (decision-requests, dispatch-planning,
      research-workflow, kanban-md) — whole-body presence of any MCP tool name
-  5. Channel B protocol heading test on .github/skills/h-mcp-kanban/SKILL.md
+  5. Channel B protocol heading test on share/skills/h-mcp-kanban/SKILL.md
 
 New tests must FAIL on current HEAD (MCP refs not yet present in target files).
 They pass when sibling tasks #573-#576 complete the MCP reference additions.
@@ -22,7 +22,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 
 # ---- Target files ----
-MCP_KANBAN_SKILL = ROOT / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
+MCP_KANBAN_SKILL = ROOT / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 # AC: 11 pipeline agents (scribe added — owns Channel B handoff protocol)
 PIPELINE_AGENTS = [
@@ -159,28 +159,28 @@ class TestFromAC_SkillCheatsheetMcpRefs:
     """Each skill body must contain MCP tool names (files are now MCP-native)."""
 
     def _body(self, skill_name: str) -> str:
-        path = ROOT / ".github" / "skills" / skill_name / "SKILL.md"
+        path = ROOT / "share" / "skills" / skill_name / "SKILL.md"
         return _strip_frontmatter(path.read_text(encoding="utf-8"))
 
     def test_body_has_start_work(self, skill_name: str) -> None:
         """Skill body must contain start_work MCP tool reference."""
         body = self._body(skill_name)
         assert "start_work" in body, (
-            f".github/skills/{skill_name}/SKILL.md body must contain start_work"
+            f"share/skills/{skill_name}/SKILL.md body must contain start_work"
         )
 
     def test_body_has_end_work(self, skill_name: str) -> None:
         """Skill body must contain end_work MCP tool reference."""
         body = self._body(skill_name)
         assert "end_work" in body, (
-            f".github/skills/{skill_name}/SKILL.md body must contain end_work"
+            f"share/skills/{skill_name}/SKILL.md body must contain end_work"
         )
 
     def test_body_has_edit_task(self, skill_name: str) -> None:
         """Skill body must contain edit_task MCP tool reference."""
         body = self._body(skill_name)
         assert "edit_task" in body, (
-            f".github/skills/{skill_name}/SKILL.md body must contain edit_task"
+            f"share/skills/{skill_name}/SKILL.md body must contain edit_task"
         )
 
 
@@ -200,7 +200,7 @@ class TestFromAC_InlineRefSkillMcpRefs:
     """
 
     def _body(self, skill_name: str) -> str:
-        path = ROOT / ".github" / "skills" / skill_name / "SKILL.md"
+        path = ROOT / "share" / "skills" / skill_name / "SKILL.md"
         return _strip_frontmatter(path.read_text(encoding="utf-8"))
 
     def test_body_contains_at_least_one_mcp_tool_name(self, skill_name: str) -> None:

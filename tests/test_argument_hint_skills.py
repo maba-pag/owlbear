@@ -5,8 +5,8 @@ Covers: argument-hint key present in frontmatter, exact value, field placement
 project-definition and retro skill files.
 
 All tests fail on current HEAD because neither
-  .github/skills/w-project-scoping/SKILL.md
-  .github/skills/w-retro/SKILL.md
+  share/skills/w-project-scoping/SKILL.md
+  share/skills/w-retro/SKILL.md
 has an ``argument-hint`` key in its YAML frontmatter.
 """
 
@@ -16,11 +16,11 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-PROJECT_DEF_SKILL = ROOT / ".github" / "skills" / "w-project-scoping" / "SKILL.md"
-RETRO_SKILL = ROOT / ".github" / "skills" / "w-retro" / "SKILL.md"
-EXCALIDRAW_SKILL = ROOT / ".github" / "skills" / "h-excalidraw-diagram" / "SKILL.md"
-VISUAL_OUTPUT_SKILL = ROOT / ".github" / "skills" / "h-visual-output" / "SKILL.md"
-FRONTEND_DESIGN_SKILL = ROOT / ".github" / "skills" / "h-frontend-design" / "SKILL.md"
+PROJECT_DEF_SKILL = ROOT / "share" / "skills" / "w-project-scoping" / "SKILL.md"
+RETRO_SKILL = ROOT / "share" / "skills" / "w-retro" / "SKILL.md"
+EXCALIDRAW_SKILL = ROOT / "share" / "skills" / "h-excalidraw-diagram" / "SKILL.md"
+VISUAL_OUTPUT_SKILL = ROOT / "share" / "skills" / "h-visual-output" / "SKILL.md"
+FRONTEND_DESIGN_SKILL = ROOT / "share" / "skills" / "h-frontend-design" / "SKILL.md"
 
 
 def _get_frontmatter(path: Path) -> str:

@@ -35,9 +35,9 @@ import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SKILL_FILE = _REPO_ROOT / ".github" / "skills" / "w-tdd-green" / "SKILL.md"
-_BUILDER_FILE = _REPO_ROOT / ".github" / "agents" / "builder.agent.md"
-_FIX_ATTEMPT_FILE = _REPO_ROOT / ".github" / "agents" / "fix-attempt.agent.md"
+_SKILL_FILE = _REPO_ROOT / "share" / "skills" / "w-tdd-green" / "SKILL.md"
+_BUILDER_FILE = _REPO_ROOT / "share" / "agents" / "builder.agent.md"
+_FIX_ATTEMPT_FILE = _REPO_ROOT / "share" / "agents" / "fix-attempt.agent.md"
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")

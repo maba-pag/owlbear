@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-AGENTS_DIR = ROOT / ".github" / "agents"
+AGENTS_DIR = ROOT / "share" / "agents"
 
 # The 8 pipeline agents that MUST have disable-model-invocation: true
 PIPELINE_AGENTS = [
