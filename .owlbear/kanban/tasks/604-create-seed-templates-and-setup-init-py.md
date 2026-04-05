@@ -1,10 +1,12 @@
 ---
 id: 604
 title: Create seed/ templates and setup/init.py
-status: done
+status: archived
 priority: needed
 created: 2026-04-04T20:31:05.5323847+02:00
-updated: 2026-04-05T07:14:49.2534738+02:00
+updated: 2026-04-05T09:22:27.2546633+02:00
+started: 2026-04-05T09:22:27.2546633+02:00
+completed: 2026-04-05T09:22:27.2546633+02:00
 tags:
     - scope:infra
     - type:build
@@ -238,3 +240,44 @@ Confidence: **0.97** → **PASS**
 
 ### Scratch Files Cleaned
 - None (no `docs/scratch/604-*` files existed)
+
+[[2026-04-05]] Sun 09:22
+## Audit
+
+### AC Verification
+
+AC1 settings.json: PASS (3 chat keys, owlbear_path placeholder confirmed via terminal)
+AC2 mcp.json: PASS (github http, 4 owlbear stdio servers, project placeholder confirmed)
+AC3 kanban config.yml: PASS (next_id 1, standard statuses)
+AC4 kanban setup.ps1: PASS (exists)
+AC5 hooks: PASS (deny-writes.ps1 and lint-changed.ps1 exist)
+AC6 knowledge .gitkeep: PASS (exists)
+AC7 owlbear-project.json: PASS (name/type placeholders, schema_version 1, no computed placeholders)
+AC8 init() function: PASS (correct signature, seed walk, placeholders, computed fields, idempotency, CLI guard, 46/46 tests pass)
+AC9 no .github: PASS (no .github reference in init.py, TestFromAC_NoGithubDir passes)
+AC10 setup-guide.md move: PASS (git follow confirms, old path gone)
+AC11 sharing-guide.md move: PASS (git follow confirms, old path gone)
+AC12 deep merge: PASS (union + user-wins, 5 merge tests pass)
+
+### Test Results
+pytest task-scoped: 46 passed, 0 failed
+pytest full suite: 2824 passed, 443 failed (all pre-existing, 0 in scope)
+ruff: clean
+
+### Architect Quality: 5/5
+All 12 AC lines precise. Challenge process refined 10 items. No improvisation needed.
+
+### Deductions
+AC10/AC11 no automated tests (git evidence accepted): -0.01 each
+All other criteria: no deduction
+
+### Confidence: 0.98
+### Action: archive
+
+### Commits Verified
+ad9f6ae test: tests/test_setup_init.py (#604 test-writer)
+5a5b6b6 feat: seed/*, setup/init.py, setup/*.md (#604 builder)
+98a2da1 docs: README.md (#604 doc-writer)
+
+[[2026-04-05]] Sun 09:22
+12 AC lines verified with evidence. 46/46 task tests pass, ruff clean. Full suite: 2824 passed, 443 pre-existing failures (0 in scope). Architect quality 5/5. Confidence 0.98.

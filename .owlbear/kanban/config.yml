@@ -1,4 +1,4 @@
-version: 10
+﻿version: 10
 board:
     name: OwlBear
 tasks_dir: tasks
