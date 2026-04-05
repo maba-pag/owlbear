@@ -55,6 +55,10 @@ ignore = [
   "INP001", # scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
+"setup/*.py" = [
+  "INP001", # setup/ is not a package — direct-run scripts are expected here
+  "T201",   # print() is intentional in CLI scripts
+]
 "serve/*/examples/**/*.py" = [
   "INP001", # examples/ is a script-style directory, not a package
   "T201",   # print() is intentional in example output

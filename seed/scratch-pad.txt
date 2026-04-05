@@ -1,0 +1,3 @@
+Keep this file open in VS Code during long-running agent or orchestrator sessions.
+An open editor tab prevents new files from grabbing foreground focus, which avoids
+unnecessary CPU usage from syntax highlighting and language server activation.
