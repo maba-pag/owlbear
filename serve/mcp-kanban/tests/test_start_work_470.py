@@ -2,11 +2,13 @@
 
 Contract tests derived from AC:
   - start_work(task_id) exists in server.py as an MCP tool
+  - Checks blocked status before proceeding (blocked guard)
   - Always auto-generates claim name via `kanban-md agent-name`
   - Claims the task at its current status (no status change) via `edit --claim`
-  - Returns JSON: full task details from show --json (raw output)
-  - Compound: replaces agent-name + claim + show (3 calls -> 1 tool invocation)
+  - Returns KanbanTask: full task details from show --json (validated)
+  - Compound: replaces show + agent-name + claim + show (4 calls -> 1 tool invocation)
   - Already-claimed error propagates; agent-name failure propagates; show failure propagates
+  - All errors raise ToolError (MCP isError: true)
 """
 
 from __future__ import annotations
@@ -17,10 +19,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 # ---------------------------------------------------------------------------
 # Import target — will raise ImportError until builder implements #470 (RED)
 # ---------------------------------------------------------------------------
+from owlbear_mcp_kanban.models import KanbanTask
 from owlbear_mcp_kanban.server import (  # type: ignore[import]
     AppContext,
     start_work,
@@ -49,6 +53,19 @@ _FAKE_TASK_JSON = json.dumps({
     "title": "Some task",
     "status": "todo",
     "priority": "important",
+    "created": "2026-01-01T00:00:00+00:00",
+    "updated": "2026-01-01T00:00:00+00:00",
+})
+
+_FAKE_BLOCKED_TASK_JSON = json.dumps({
+    "id": 42,
+    "title": "Some task",
+    "status": "todo",
+    "priority": "important",
+    "created": "2026-01-01T00:00:00+00:00",
+    "updated": "2026-01-01T00:00:00+00:00",
+    "blocked": True,
+    "block_reason": "waiting on dependency",
 })
 
 
@@ -62,25 +79,29 @@ class TestFromAC_StartWork:
 
     # ------------------------------------------------------------------ happy: auto-generated claim
     @pytest.mark.asyncio
-    async def test_calls_agent_name_first(self) -> None:
-        """start_work always calls `agent-name` as the first subprocess call."""
+    async def test_calls_agent_name_after_blocked_guard(self) -> None:
+        """start_work calls show (blocked guard) then `agent-name` as the second subprocess call."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),   # show (blocked guard)
             ("cedar-cloud\n", "", 0),   # agent-name
             ("ok", "", 0),               # edit --claim
-            (_FAKE_TASK_JSON, "", 0),    # show --json
+            (_FAKE_TASK_JSON, "", 0),    # show --json (final)
         ])
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             await start_work(mcp_ctx, task_id="42")
 
         first_call_args: tuple[Any, ...] = mock_run.call_args_list[0][0]
-        assert "agent-name" in first_call_args
+        assert "show" in first_call_args
+        second_call_args: tuple[Any, ...] = mock_run.call_args_list[1][0]
+        assert "agent-name" in second_call_args
 
     @pytest.mark.asyncio
     async def test_uses_generated_name_to_claim(self) -> None:
         """start_work uses the agent-name output as the --claim value for edit."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("ok", "", 0),
             (_FAKE_TASK_JSON, "", 0),
@@ -88,7 +109,7 @@ class TestFromAC_StartWork:
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             await start_work(mcp_ctx, task_id="42")
 
-        edit_call_args: tuple[Any, ...] = mock_run.call_args_list[1][0]
+        edit_call_args: tuple[Any, ...] = mock_run.call_args_list[2][0]
         assert "--claim" in edit_call_args
         claim_idx = list(edit_call_args).index("--claim")
         assert edit_call_args[claim_idx + 1] == "cedar-cloud"
@@ -98,6 +119,7 @@ class TestFromAC_StartWork:
         """start_work calls show --json for task_id after claiming."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("ok", "", 0),
             (_FAKE_TASK_JSON, "", 0),
@@ -105,16 +127,17 @@ class TestFromAC_StartWork:
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             await start_work(mcp_ctx, task_id="42")
 
-        show_call_args: tuple[Any, ...] = mock_run.call_args_list[2][0]
+        show_call_args: tuple[Any, ...] = mock_run.call_args_list[3][0]
         assert "show" in show_call_args
         assert "42" in show_call_args
         assert "--json" in show_call_args
 
     @pytest.mark.asyncio
     async def test_response_includes_task_details(self) -> None:
-        """start_work response preserves full task details from show --json output."""
+        """start_work response is a KanbanTask preserving full task details."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("ok", "", 0),
             (_FAKE_TASK_JSON, "", 0),
@@ -122,17 +145,18 @@ class TestFromAC_StartWork:
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             result = await start_work(mcp_ctx, task_id="42")
 
-        data = json.loads(result)
-        assert data["id"] == 42
-        assert data["title"] == "Some task"
-        assert data["status"] == "todo"
+        assert isinstance(result, KanbanTask)
+        assert result.id == 42
+        assert result.title == "Some task"
+        assert result.status == "todo"
 
     # ------------------------------------------------------------------ boundary: call count
     @pytest.mark.asyncio
-    async def test_makes_exactly_three_subprocess_calls(self) -> None:
-        """start_work makes exactly 3 _run_kanban calls (agent-name + edit + show)."""
+    async def test_makes_exactly_four_subprocess_calls(self) -> None:
+        """start_work makes exactly 4 _run_kanban calls (show guard + agent-name + edit + show)."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("ok", "", 0),
             (_FAKE_TASK_JSON, "", 0),
@@ -140,13 +164,14 @@ class TestFromAC_StartWork:
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             await start_work(mcp_ctx, task_id="42")
 
-        assert mock_run.call_count == 3
+        assert mock_run.call_count == 4
 
     @pytest.mark.asyncio
     async def test_edit_call_does_not_include_status_flag(self) -> None:
         """start_work edit call must NOT include --status — no status change."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("ok", "", 0),
             (_FAKE_TASK_JSON, "", 0),
@@ -154,75 +179,99 @@ class TestFromAC_StartWork:
         with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
             await start_work(mcp_ctx, task_id="42")
 
-        edit_call_args: tuple[Any, ...] = mock_run.call_args_list[1][0]
+        edit_call_args: tuple[Any, ...] = mock_run.call_args_list[2][0]
         assert "--status" not in edit_call_args
         assert "move" not in edit_call_args
 
     # ------------------------------------------------------------------ error: already claimed
     @pytest.mark.asyncio
-    async def test_already_claimed_edit_error_returns_error_string(self) -> None:
-        """start_work returns 'error: ...' when edit --claim returns non-zero (already claimed)."""
+    async def test_already_claimed_edit_error_raises_tool_error(self) -> None:
+        """start_work raises ToolError when edit --claim returns non-zero (already claimed)."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),                          # show (blocked guard) ok
             ("cedar-cloud\n", "", 0),                          # agent-name ok
             ("", "task is already claimed by other-agent", 1), # edit fails
         ])
-        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
-            result = await start_work(mcp_ctx, task_id="42")
-
-        assert result.startswith("error:")
-        assert "already claimed" in result
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError, match="already claimed"):
+                await start_work(mcp_ctx, task_id="42")
 
     @pytest.mark.asyncio
-    async def test_already_claimed_does_not_call_show(self) -> None:
-        """start_work does not call show when edit --claim fails."""
+    async def test_already_claimed_does_not_call_final_show(self) -> None:
+        """start_work does not call final show when edit --claim fails."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),
             ("cedar-cloud\n", "", 0),
             ("", "task is already claimed", 1),
         ])
-        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
-            await start_work(mcp_ctx, task_id="42")
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError):
+                await start_work(mcp_ctx, task_id="42")
 
-        # agent-name + edit only; no show call
-        assert mock_run.call_count == 2
+        # show (guard) + agent-name + edit only; no final show call
+        assert mock_run.call_count == 3
 
     # ------------------------------------------------------------------ error: agent-name failure
     @pytest.mark.asyncio
-    async def test_agent_name_failure_returns_error_string(self) -> None:
-        """start_work returns 'error: ...' when agent-name subprocess fails (rc!=0)."""
+    async def test_agent_name_failure_raises_tool_error(self) -> None:
+        """start_work raises ToolError when agent-name subprocess fails (rc!=0)."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),   # show (blocked guard) ok
             ("", "binary not found", 1),
         ])
-        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
-            result = await start_work(mcp_ctx, task_id="42")
-
-        assert result.startswith("error:")
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError):
+                await start_work(mcp_ctx, task_id="42")
 
     @pytest.mark.asyncio
     async def test_agent_name_failure_does_not_proceed_to_edit(self) -> None:
         """start_work does not call edit when agent-name fails."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),   # show (blocked guard) ok
             ("", "binary not found", 1),
         ])
-        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
-            await start_work(mcp_ctx, task_id="42")
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError):
+                await start_work(mcp_ctx, task_id="42")
 
-        assert mock_run.call_count == 1
+        assert mock_run.call_count == 2
 
     # ------------------------------------------------------------------ error: show failure
     @pytest.mark.asyncio
-    async def test_show_failure_after_claim_returns_error_string(self) -> None:
-        """start_work returns 'error: ...' when show --json fails after a successful claim."""
+    async def test_show_failure_after_claim_raises_tool_error(self) -> None:
+        """start_work raises ToolError when show --json fails after a successful claim."""
         mcp_ctx = _make_mcp_ctx()
         mock_run = AsyncMock(side_effect=[
+            (_FAKE_TASK_JSON, "", 0),   # show (blocked guard) ok
             ("cedar-cloud\n", "", 0),   # agent-name ok
             ("ok", "", 0),              # edit --claim succeeded
-            ("", "task not found", 1),  # show failed
+            ("", "task not found", 1),  # final show failed
         ])
-        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run):
-            result = await start_work(mcp_ctx, task_id="42")
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError):
+                await start_work(mcp_ctx, task_id="42")
 
-        assert result.startswith("error:")
+    # ------------------------------------------------------------------ blocked guard
+    @pytest.mark.asyncio
+    async def test_blocked_task_raises_tool_error(self) -> None:
+        """start_work raises ToolError if the task is blocked."""
+        mcp_ctx = _make_mcp_ctx()
+        mock_run = AsyncMock(side_effect=[
+            (_FAKE_BLOCKED_TASK_JSON, "", 0),  # show (blocked guard) — task is blocked
+        ])
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError, match="blocked"):
+                await start_work(mcp_ctx, task_id="42")
+
+        # Only the blocked guard show call — no further calls
+        assert mock_run.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_blocked_guard_show_failure_raises_tool_error(self) -> None:
+        """start_work raises ToolError if the blocked guard show call fails."""
+        mcp_ctx = _make_mcp_ctx()
+        mock_run = AsyncMock(side_effect=[
+            ("", "task not found", 1),  # show (blocked guard) fails
+        ])
+        with patch("owlbear_mcp_kanban.server._run_kanban", mock_run), pytest.raises(ToolError):
+                await start_work(mcp_ctx, task_id="42")
+
+        assert mock_run.call_count == 1

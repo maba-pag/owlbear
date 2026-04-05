@@ -28,22 +28,22 @@ Parameter names, types, defaults, descriptions, and allowed values are exposed v
 
 ### start_work
 
-Claims the task and returns its full details as JSON. No status change.
+Checks blocked and claim status, claims the task, and returns its full details. No status change.
 
-On failure: returns `error: {reason}`.
+On failure: raises `ToolError` (MCP `isError: true`).
 
 ### end_work
 
 Counterpart to `start_work`. Appends a timestamped note, resolves the task based on `outcome`, and releases the claim.
 
 | Outcome | Behaviour |
-|---------|-----------|
+|---------|----------|
 | `success` | Advance to next status. If already at last status, archive. |
 | `fail` | Keep current status, release claim. |
 | `block` | Mark blocked with `block_reason` (required), release claim. |
 | `reject` | Move to `move_to` status (default: `ideation`), release claim. |
 
-On failure: returns `error: {reason}`.
+On failure: raises `ToolError` (MCP `isError: true`).
 
 ## Agent Lifecycle Pattern
 
@@ -84,8 +84,7 @@ For the section header to use per agent, see `agent-common.instructions.md` — 
 
 ## Error Handling
 
-- **`list_tasks`, `show_task`, `move_task`, `edit_task`** — raise `ToolError` (MCP `isError: true`).
-- **`create_task`, `start_work`, `end_work`** — return `error: {message}` string. Check for `error:` prefix.
+All tools raise `ToolError` (MCP `isError: true`) on failure.
 
 ## Configuration
 

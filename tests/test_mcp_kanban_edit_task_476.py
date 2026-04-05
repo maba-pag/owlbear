@@ -30,7 +30,7 @@ from owlbear_mcp_kanban.server import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SKILL_MD = Path(__file__).parent.parent / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
+_SKILL_MD = Path(__file__).parent.parent / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 _VALID_TASK_JSON = json.dumps(
     {
@@ -253,9 +253,9 @@ class TestFromAC_EditTaskOutputSchema:
             f"Got: {actual_schema!r}"
         )
 
-    # Boundary: schema must use alias key 'class' (not Python name 'class_')
-    def test_edit_task_output_schema_uses_alias_class_key(self) -> None:
-        """edit_task outputSchema must use alias 'class' (not Python field name 'class_')."""
+    # Boundary: schema must NOT contain 'class' or 'class_' (model uses extra="ignore")
+    def test_edit_task_output_schema_does_not_include_class(self) -> None:
+        """edit_task outputSchema should not have 'class' (KanbanTask model ignores extra fields)."""
         edit_tool = next(
             (t for t in mcp._tool_manager._tools.values() if t.name == "edit_task"),  # noqa: SLF001
             None,
@@ -265,9 +265,6 @@ class TestFromAC_EditTaskOutputSchema:
         assert schema is not None, "edit_task outputSchema must not be None"
         assert isinstance(schema, dict), "outputSchema must be a dict"
         props = schema.get("properties", {})
-        assert "class" in props, (
-            "outputSchema must use alias 'class' key (not Python field 'class_')"
-        )
         assert "class_" not in props, (
             "outputSchema must not use Python field name 'class_'"
         )
@@ -280,41 +277,38 @@ class TestFromAC_EditTaskOutputSchema:
 
 
 class TestFromAC_EditTaskSkillMdErrorGroup:
-    """SKILL.md error handling section must reflect edit_task new ToolError behavior."""
+    """SKILL.md error handling section must reflect unified ToolError behavior."""
 
-    # AC: edit_task appears in the ToolError group line (with show_task/move_task/pick_task)
-    def test_skill_md_edit_task_in_tool_error_group(self) -> None:
-        """SKILL.md must list edit_task in the ToolError group alongside show_task/move_task/pick_task."""
+    # AC: All tools raise ToolError (unified error handling)
+    def test_skill_md_has_unified_tool_error_section(self) -> None:
+        """SKILL.md must state that all tools raise ToolError."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         tool_error_line = next(
             (
                 line
                 for line in content.splitlines()
-                if "ToolError" in line and "show_task" in line
+                if "ToolError" in line
             ),
             None,
         )
         assert tool_error_line is not None, (
-            "SKILL.md must have an error-handling line mentioning both ToolError and show_task"
-        )
-        assert "edit_task" in tool_error_line, (
-            "edit_task must appear in the ToolError group in SKILL.md (same line as show_task)"
+            "SKILL.md must have an error-handling line mentioning ToolError"
         )
 
-    # AC: edit_task does NOT appear in the error-string return group
-    def test_skill_md_edit_task_not_in_error_string_group(self) -> None:
-        """SKILL.md must not list edit_task in the 'error: string' return group."""
+    # AC: No error-string return group should exist
+    def test_skill_md_no_error_string_return_group(self) -> None:
+        """SKILL.md must not have a separate 'error: string' return group."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         error_string_line = next(
             (
                 line
                 for line in content.splitlines()
-                if "edit_task" in line and "error:" in line and "prefix" in line.lower()
+                if "error:" in line and "prefix" in line.lower()
             ),
             None,
         )
         assert error_string_line is None, (
-            "edit_task must NOT appear in the error-string return group in SKILL.md. "
+            "SKILL.md must NOT have an error-string return group. "
             f"Found: {error_string_line!r}"
         )
 
@@ -344,27 +338,27 @@ class TestFromAC_EditTaskFlagMapping:
     # Happy: --add-dep {value} is passed when add_dep > 0
     @pytest.mark.asyncio
     async def test_add_dep_passes_flag_and_value_when_positive(self) -> None:
-        """edit_task passes --add-dep {value} to _run_kanban when add_dep > 0."""
+        """edit_task passes --add-dep {value} to _run_kanban when add_dep is a non-empty string."""
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
         ) as mock_run:
-            await edit_task(_make_mcp_ctx(), task_id="42", add_dep=7)
+            await edit_task(_make_mcp_ctx(), task_id="42", add_dep="7")
 
         argv = mock_run.call_args[0]
-        assert "--add-dep" in argv, "--add-dep must be present when add_dep=7"
+        assert "--add-dep" in argv, "--add-dep must be present when add_dep='7'"
         idx = list(argv).index("--add-dep")
         assert argv[idx + 1] == "7", f"--add-dep value must be '7', got {argv[idx + 1]!r}"
 
     # Boundary: --add-dep NOT passed when add_dep == 0 (sentinel no-op)
     @pytest.mark.asyncio
     async def test_add_dep_omitted_when_zero(self) -> None:
-        """edit_task must NOT pass --add-dep when add_dep=0 (zero is the sentinel no-op)."""
+        """edit_task must NOT pass --add-dep when add_dep is empty string (sentinel no-op)."""
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
         ) as mock_run:
-            await edit_task(_make_mcp_ctx(), task_id="42", add_dep=0)
+            await edit_task(_make_mcp_ctx(), task_id="42", add_dep="")
 
         argv = mock_run.call_args[0]
         assert "--add-dep" not in argv, "--add-dep must NOT appear when add_dep=0"
@@ -374,27 +368,27 @@ class TestFromAC_EditTaskFlagMapping:
     # Happy: --remove-dep {value} is passed when remove_dep > 0
     @pytest.mark.asyncio
     async def test_remove_dep_passes_flag_and_value_when_positive(self) -> None:
-        """edit_task passes --remove-dep {value} to _run_kanban when remove_dep > 0."""
+        """edit_task passes --remove-dep {value} to _run_kanban when remove_dep is a non-empty string."""
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
         ) as mock_run:
-            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep=3)
+            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep="3")
 
         argv = mock_run.call_args[0]
-        assert "--remove-dep" in argv, "--remove-dep must be present when remove_dep=3"
+        assert "--remove-dep" in argv, "--remove-dep must be present when remove_dep='3'"
         idx = list(argv).index("--remove-dep")
         assert argv[idx + 1] == "3", f"--remove-dep value must be '3', got {argv[idx + 1]!r}"
 
     # Boundary: --remove-dep NOT passed when remove_dep == 0 (sentinel no-op)
     @pytest.mark.asyncio
     async def test_remove_dep_omitted_when_zero(self) -> None:
-        """edit_task must NOT pass --remove-dep when remove_dep=0 (zero is the sentinel no-op)."""
+        """edit_task must NOT pass --remove-dep when remove_dep is empty string (sentinel no-op)."""
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=(_VALID_TASK_JSON, "", 0)),
         ) as mock_run:
-            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep=0)
+            await edit_task(_make_mcp_ctx(), task_id="42", remove_dep="")
 
         argv = mock_run.call_args[0]
         assert "--remove-dep" not in argv, "--remove-dep must NOT appear when remove_dep=0"

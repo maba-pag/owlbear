@@ -104,7 +104,7 @@ Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 
 ### Dispatch Mechanics
 
-**Dispatch prompt contains ONLY the task ID.** Subagents read their own AC via `show_task` in their Step 0.
+**Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their Step 0.
 
 **Exception — retry_hint:** Append to dispatch prompt:
 

@@ -9,7 +9,7 @@ Covers all AC items from #475:
   - Unit: --parent 42 in args when parent=42; no --parent when parent=0; --json always present
   - Integration: create with status override + show roundtrip confirms correct status
   - Integration: create with parent + show roundtrip confirms parent field
-  - .github/skills/h-mcp-kanban/SKILL.md create_task row updated to include status and parent
+  - share/skills/h-mcp-kanban/SKILL.md create_task row updated to include status and parent
 
 All tests FAIL in RED phase — the current implementation does not have status/parent params,
 does not append --json, and does not return raw JSON.
@@ -34,7 +34,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SKILL_MD = Path(__file__).parent.parent / ".github" / "skills" / "h-mcp-kanban" / "SKILL.md"
+_SKILL_MD = Path(__file__).parent.parent / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
 _SAMPLE_TASK_JSON = json.dumps({
     "id": "99",
@@ -196,53 +196,44 @@ class TestFromAC_CreateTaskArgs:
 
 
 class TestFromAC_CreateTaskReturn:
-    """Tests that create_task returns the raw JSON stdout from kanban-md."""
+    """Tests that create_task returns a validated KanbanTask."""
 
-    # AC: create_task returns the raw JSON stdout from kanban-md
-    # This requires --json to have been passed so kanban-md produces JSON
+    # AC: create_task returns a KanbanTask parsed from kanban-md JSON
     @pytest.mark.asyncio
-    async def test_returns_raw_json_stdout_on_success(self) -> None:
-        """create_task must pass --json to kanban-md and return the raw JSON stdout."""
+    async def test_returns_kanban_task_on_success(self) -> None:
+        """create_task must pass --json to kanban-md and return a validated KanbanTask."""
         with _patch_run(stdout=_SAMPLE_TASK_JSON) as mock_run:
             result = await create_task(_make_mcp_ctx(), title="T")
         call_args = mock_run.call_args[0]
         assert "--json" in call_args, (
-            "create_task must pass --json to kanban-md to receive JSON output "
-            "(required for raw JSON return contract)"
+            "create_task must pass --json to kanban-md to receive JSON output"
         )
-        assert result == _SAMPLE_TASK_JSON, (
-            "create_task must return the raw JSON stdout, not a transformed/summarised value"
+        from owlbear_mcp_kanban.models import KanbanTask  # noqa: PLC0415
+        assert isinstance(result, KanbanTask), (
+            "create_task must return a KanbanTask, not raw JSON"
         )
 
-    # AC: JSON task object must include expected fields (id, title, status, priority, created, updated, parent, class, file)
+    # AC: KanbanTask must include expected fields
     @pytest.mark.asyncio
-    async def test_returned_json_is_parseable_task_object(self) -> None:
-        """Raw JSON stdout must be parseable and --json must have been passed to produce it."""
+    async def test_returned_task_has_expected_fields(self) -> None:
+        """Returned KanbanTask must have key fields populated."""
         with _patch_run(stdout=_SAMPLE_TASK_JSON) as mock_run:
             result = await create_task(_make_mcp_ctx(), title="T")
         call_args = mock_run.call_args[0]
-        assert "--json" in call_args, (
-            "--json must be in args — it is what causes kanban-md to produce parseable JSON"
-        )
-        task = json.loads(result)
-        required_fields = {"id", "title", "status", "priority", "created", "updated", "parent", "class", "file"}
-        missing = required_fields - task.keys()
-        assert not missing, f"Returned JSON task object is missing fields: {missing}"
+        assert "--json" in call_args
+        assert result.id == 99
+        assert result.title == "Test task"
+        assert result.status == "backlog"
 
-    # Error path: when rc != 0, error string is returned; --json is still passed
+    # Error path: when rc != 0, ToolError is raised
     @pytest.mark.asyncio
-    async def test_returns_error_string_on_nonzero_rc(self) -> None:
-        """When _run_kanban returns rc != 0, create_task must return an error: string.
-
-        --json is still appended unconditionally even on the error path.
-        """
-        with _patch_run(stdout="", stderr="task file conflict", rc=1) as mock_run:
-            result = await create_task(_make_mcp_ctx(), title="T")
+    async def test_raises_tool_error_on_nonzero_rc(self) -> None:
+        """When _run_kanban returns rc != 0, create_task must raise ToolError."""
+        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+        with _patch_run(stdout="", stderr="task file conflict", rc=1) as mock_run, pytest.raises(ToolError):
+            await create_task(_make_mcp_ctx(), title="T")
         call_args = mock_run.call_args[0]
         assert "--json" in call_args, "--json must be passed unconditionally, even on error path"
-        assert result.startswith("error:"), (
-            "When kanban-md exits non-zero, create_task must return 'error: ...' string"
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +247,7 @@ class TestFromAC_CreateTaskStatusIntegration:
     # AC: Integration: create with status override + show roundtrip confirms correct status
     @pytest.mark.asyncio
     async def test_status_override_roundtrip_returns_correct_status(self) -> None:
-        """create_task with status='backlog' must result in returned JSON showing status='backlog'."""
+        """create_task with status='backlog' must result in returned KanbanTask showing status='backlog'."""
         expected_json = json.dumps({
             "id": "55",
             "title": "Status test",
@@ -271,21 +262,19 @@ class TestFromAC_CreateTaskStatusIntegration:
         with _patch_run(stdout=expected_json):
             result = await create_task(_make_mcp_ctx(), title="Status test", status="backlog")
 
-        task = json.loads(result)
-        assert task["status"] == "backlog", (
-            "Roundtrip: returned task JSON must reflect the requested status='backlog'"
+        assert result.status == "backlog", (
+            "Roundtrip: returned KanbanTask must reflect the requested status='backlog'"
         )
 
     # AC: Integration: create with parent + show roundtrip confirms parent field
     @pytest.mark.asyncio
     async def test_parent_roundtrip_returns_correct_parent(self) -> None:
-        """create_task with parent=42 must result in returned JSON showing parent=42."""
+        """create_task with parent=42 must result in returned KanbanTask showing parent=42."""
         with _patch_run(stdout=_SAMPLE_TASK_WITH_PARENT_JSON):
             result = await create_task(_make_mcp_ctx(), title="Child task", parent=42)
 
-        task = json.loads(result)
-        assert task.get("parent") == 42, (
-            "Roundtrip: returned task JSON must reflect the requested parent=42"
+        assert result.parent == 42, (
+            "Roundtrip: returned KanbanTask must reflect the requested parent=42"
         )
 
 
@@ -295,18 +284,18 @@ class TestFromAC_CreateTaskStatusIntegration:
 
 
 class TestFromAC_CreateTaskSkillDoc:
-    """Tests that .github/skills/h-mcp-kanban/SKILL.md mentions create_task."""
+    """Tests that share/skills/h-mcp-kanban/SKILL.md mentions create_task."""
 
-    # AC: .github/skills/h-mcp-kanban/SKILL.md lists create_task in Tool Summary
+    # AC: share/skills/h-mcp-kanban/SKILL.md lists create_task in Tool Summary
     def test_skill_md_create_task_row_includes_status(self) -> None:
-        """.github/skills/h-mcp-kanban/SKILL.md must have a create_task entry."""
+        """share/skills/h-mcp-kanban/SKILL.md must have a create_task entry."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         create_task_lines = [ln for ln in content.splitlines() if "create_task" in ln and "|" in ln]
         assert create_task_lines, "SKILL.md must have a table row containing 'create_task'"
 
     # AC: parameters are documented via MCP schema (enum constraints on status/priority)
     def test_skill_md_create_task_row_includes_parent(self) -> None:
-        """.github/skills/h-mcp-kanban/SKILL.md must have a create_task entry."""
+        """share/skills/h-mcp-kanban/SKILL.md must have a create_task entry."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         create_task_lines = [ln for ln in content.splitlines() if "create_task" in ln and "|" in ln]
         assert create_task_lines, "SKILL.md must have a table row containing 'create_task'"
