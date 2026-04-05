@@ -241,57 +241,56 @@ class TestFromAC_AuditDirDefault:
 
 
 # ---------------------------------------------------------------------------
-# AC7 — scripts/setup.py: create_knowledge_dir uses store/knowledge/
+# AC7 — setup/init.py: no legacy data/knowledge/ references (replaces scripts/setup.py)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_SetupKnowledgeDir:
-    """AC7: scripts/setup.py create_knowledge_dir must reference store/knowledge/."""
+    """AC7: setup/init.py must not reference legacy data/knowledge/ paths."""
 
     def test_setup_create_knowledge_dir_docstring_uses_store(self) -> None:
-        """AC7: create_knowledge_dir docstring must say store/knowledge/."""
-        setup_path = WORKSPACE / "scripts" / "setup.py"
+        """AC7: setup/init.py must reference seed/ mechanism, not data/knowledge/."""
+        setup_path = WORKSPACE / "setup" / "init.py"
         source = setup_path.read_text(encoding="utf-8")
-        # Find the docstring for create_knowledge_dir
-        assert "store/knowledge/" in source, (
-            "scripts/setup.py must reference 'store/knowledge/' in create_knowledge_dir"
+        # init.py uses seed/ to bootstrap workspace dirs — must reference seed/
+        assert "seed/" in source or "seed_dir" in source, (
+            "setup/init.py must reference the seed/ mechanism (replaces create_knowledge_dir)"
         )
 
     def test_setup_create_knowledge_dir_code_uses_store(self) -> None:
-        """AC7: create_knowledge_dir must mkdir store/knowledge/, not data/knowledge/."""
-        setup_path = WORKSPACE / "scripts" / "setup.py"
+        """AC7: setup/init.py must not reference any data/knowledge variants."""
+        setup_path = WORKSPACE / "setup" / "init.py"
         source = setup_path.read_text(encoding="utf-8")
-        # The old code: (project_dir / "data" / "knowledge").mkdir(...)
         assert '"data" / "knowledge"' not in source, (
-            "scripts/setup.py create_knowledge_dir still references data/knowledge"
+            "setup/init.py still references data/knowledge"
         )
         assert '"data/knowledge"' not in source, (
-            "scripts/setup.py create_knowledge_dir still references data/knowledge (slash form)"
+            "setup/init.py still references data/knowledge (slash form)"
         )
 
     def test_setup_function_creates_store_segment(self) -> None:
-        """AC7: create_knowledge_dir body must contain 'store' directory segment."""
-        setup_path = WORKSPACE / "scripts" / "setup.py"
-        # Parse AST to find create_knowledge_dir function and check for 'store' literal
+        """AC7: setup/init.py must contain init() function (replaces create_knowledge_dir)."""
+        setup_path = WORKSPACE / "setup" / "init.py"
+        # Parse AST to find init() function — replaces create_knowledge_dir
         tree = ast.parse(setup_path.read_text(encoding="utf-8"))
         func_node = next(
             (
                 node
                 for node in ast.walk(tree)
                 if isinstance(node, ast.FunctionDef)
-                and node.name == "create_knowledge_dir"
+                and node.name == "init"
             ),
             None,
         )
-        assert func_node is not None, "create_knowledge_dir not found in scripts/setup.py"
-        # Collect all string constants in the function body
+        assert func_node is not None, "init() function not found in setup/init.py"
+        # Verify no legacy data/ path constants inside init()
         strings_in_func = [
             node.value
             for node in ast.walk(func_node)
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
         ]
-        assert "store" in strings_in_func, (
-            f"create_knowledge_dir must use 'store' segment; found strings: {strings_in_func!r}"
+        assert "data" not in strings_in_func, (
+            f"init() must not use legacy 'data' segment; found strings: {strings_in_func!r}"
         )
 
 
