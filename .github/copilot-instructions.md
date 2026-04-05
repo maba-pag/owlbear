@@ -38,7 +38,7 @@ ideation → (researcher) → backlog → (architect) → todo → (test-writer)
 
 | Directory | Purpose |
 |-----------|---------|
-| `packages/` | Python workspace packages (orchestrator, knowledge, MCP servers, voice) |
+| `serve/` | Python workspace packages (orchestrator, knowledge, MCP servers, voice) |
 | `.github/agents/` | Agent definitions (`.agent.md`) |
 | `.github/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
 | `.github/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `agent-common.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
