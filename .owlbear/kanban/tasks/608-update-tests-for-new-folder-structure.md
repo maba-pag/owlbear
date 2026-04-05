@@ -1,10 +1,12 @@
 ---
 id: 608
 title: Update tests for new folder structure
-status: done
+status: archived
 priority: critical
 created: 2026-04-04T20:31:51.963696+02:00
-updated: 2026-04-05T22:01:33.5557617+02:00
+updated: 2026-04-05T22:16:26.8769249+02:00
+started: 2026-04-05T22:16:26.8769249+02:00
+completed: 2026-04-05T22:16:26.8769249+02:00
 tags:
     - scope:infra
     - type:build
@@ -17,8 +19,6 @@ depends_on:
     - 602
     - 603
     - 604
-claimed_by: crisp-vapor
-claimed_at: 2026-04-05T22:01:33.5485393+02:00
 class: standard
 ---
 
@@ -435,3 +435,6 @@ Deductions: -0.03 for missing positive assertion on new `--project` architecture
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/608-*` files found)
+
+[[2026-04-05]] Sun 22:16
+Audit complete. 12/12 AC PASS. Full suite: 3376 passed, 445 failed (all pre-existing RED), 0 in-scope failures. Ruff clean. Confidence .98. Commit: 2087d84.

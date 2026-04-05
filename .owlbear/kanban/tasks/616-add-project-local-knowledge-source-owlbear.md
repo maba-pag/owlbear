@@ -1,10 +1,10 @@
 ---
 id: 616
 title: Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-05T00:16:00.8159576+02:00
-updated: 2026-04-05T21:07:16.4775173+02:00
+updated: 2026-04-05T22:25:19.0176485+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -151,3 +151,8 @@ Research parent complete. All deliverables met: research doc, DR approved, risks
 - Confirmed follow-up status: #618 (todo, approved), #617 (backlog), #633 (backlog)
 - Noted query() scopes gap for transparency
 - Advanced to todo with research pass-through tag (already present)
+
+[[2026-04-05]] Sun 22:25
+## Test-Writer Notes
+- Non-implementation task (tagged research) — no tests applicable.
+- Passing through to builder.

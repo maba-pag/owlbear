@@ -4,7 +4,7 @@ title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
 status: in-progress
 priority: needed
 created: 2026-04-05T01:30:40.2393944+02:00
-updated: 2026-04-05T21:58:08.6424337+02:00
+updated: 2026-04-05T22:21:26.1235387+02:00
 started: 2026-04-05T11:14:35.6735559+02:00
 tags:
     - scope:mcp
@@ -226,3 +226,31 @@ Deductions: -1.0 (AC-1 not met: 6/8 subtasks incomplete). Confidence: 0.00 → F
 **Progress since last assessment:** No new subtasks reached done/archived (+0).
 
 **Action:** Staying in-progress. Pending: #623 (docs→done), #624 (build→done), #628 (build→done), #629 (review→done), #630 (build→done).
+
+[[2026-04-05]] Sun 22:21
+## Builder Notes
+
+**Assessment (2026-04-05, third retry):** AC-1 still technically unmet — 3 subtasks in review, not done.
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | done ✓ |
+| #624 | Evaluate and clean up orchestrator planner/ package | review ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | review ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | done ✓ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | review ✗ |
+
+**Progress this cycle:** #624, #628, #630 implemented and advanced to review (+3 net). All remaining subtasks now in review or done.
+
+**Changes made this cycle:**
+- `serve/orchestrator/src/owlbear/planner/__init__.py` — dual-path docstring (#624)
+- `serve/orchestrator/src/owlbear/planner/gates.py` — `_NON_IMPL_TAGS` + TDD gate exemption (#630)
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` — `pick_tasks` tag param (already present, #628) + `_PICK_NON_IMPL_TAGS` exemption (#630)
+- Commit: 2e84207
+
+**Action:** Staying in-progress. Re-try after #624, #628, #630 reach done.

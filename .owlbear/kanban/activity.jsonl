@@ -1,11 +1,3 @@
-{"timestamp":"2026-03-30T17:44:12.4185129+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T17:44:12.4227814+02:00","action":"release","task_id":212,"detail":"reviewer"}
-{"timestamp":"2026-03-30T17:45:00.7970331+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T17:45:05.1185472+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T17:45:05.1227669+02:00","action":"release","task_id":44,"detail":"test-writer"}
-{"timestamp":"2026-03-30T17:46:50.8755997+02:00","action":"edit","task_id":32,"detail":"Extract vector store + embedding pipeline"}
-{"timestamp":"2026-03-30T17:46:50.8803134+02:00","action":"claim","task_id":32,"detail":"builder"}
-{"timestamp":"2026-03-30T17:47:05.809601+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
 {"timestamp":"2026-03-30T17:47:05.8154285+02:00","action":"claim","task_id":224,"detail":"researcher"}
 {"timestamp":"2026-03-30T17:47:24.2904734+02:00","action":"edit","task_id":144,"detail":"Implement planner data models and board reader"}
 {"timestamp":"2026-03-30T17:47:24.2946795+02:00","action":"claim","task_id":144,"detail":"writer"}
@@ -9998,3 +9990,11 @@
 {"timestamp":"2026-04-05T22:42:42.998921+02:00","action":"edit","task_id":634,"detail":"Update test_validate_skills_ci.py DevDependency tests for validation group"}
 {"timestamp":"2026-04-05T22:42:43.0135763+02:00","action":"release","task_id":634,"detail":"moth-prism"}
 {"timestamp":"2026-04-05T22:42:43.7206733+02:00","action":"move","task_id":634,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-05T22:43:28.5599933+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T22:43:28.5737379+02:00","action":"claim","task_id":623,"detail":"zeal-fable"}
+{"timestamp":"2026-04-05T22:45:51.0041365+02:00","action":"create","task_id":635,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-05T22:46:02.3689462+02:00","action":"create","task_id":636,"detail":"Fix #616 decision: scribe fabricated approval from needs-info response"}
+{"timestamp":"2026-04-05T22:46:17.6158584+02:00","action":"edit","task_id":636,"detail":"DUPLICATE of #635 — delete"}
+{"timestamp":"2026-04-05T23:02:20.6419894+02:00","action":"edit","task_id":623,"detail":"Deprecate dispatcher agent definition"}
+{"timestamp":"2026-04-05T23:02:20.6529384+02:00","action":"release","task_id":623,"detail":"zeal-fable"}
+{"timestamp":"2026-04-05T23:02:21.1290327+02:00","action":"move","task_id":623,"detail":"done -\u003e archived"}

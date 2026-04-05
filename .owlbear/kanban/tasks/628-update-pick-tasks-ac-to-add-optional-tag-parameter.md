@@ -1,10 +1,10 @@
 ---
 id: 628
 title: Update pick_tasks AC to add optional tag parameter
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-05T10:41:53.2291189+02:00
-updated: 2026-04-05T21:00:17.6929332+02:00
+updated: 2026-04-05T22:20:40.0728361+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -134,3 +134,15 @@ ruff: clean on implementation changes
 
 [[2026-04-05]] Sun 21:00
 ## Test-Writer Notes (fix)\n- Fixed `test_tag_parameter_annotation_is_str`: replaced `inspect.signature(...).parameters[\"tag\"].annotation is str` with `typing.get_type_hints(pick_tasks)[\"tag\"] is str`\n- Root cause: `from __future__ import annotations` (PEP 563) makes all annotations lazy strings; `inspect.signature()` returned `'str'` (string) not `str` (type); `typing.get_type_hints()` evalulates forward refs and returns the actual type\n- Added `import typing` to imports\n- ruff: clean, pytest: 10/10 PASS
+
+[[2026-04-05]] Sun 22:20
+## Builder Notes
+
+**Files changed:** `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` (pre-committed by prior builder; implementation already in place on disk)
+
+**Assessment:** `pick_tasks(ctx, *, limit: int = 25, tag: str = "")` signature already implemented. `if tag: args += ["--tag", tag]` passthrough in place. All 10 TestFromAC tests pass.
+
+- Tests: 10/10 passed (test_pick_tasks_628.py)
+- ruff: clean
+- No behavioral change when tag is not provided — confirmed by test suite
+- Commit: 2e84207 (shared with #624 and #630)

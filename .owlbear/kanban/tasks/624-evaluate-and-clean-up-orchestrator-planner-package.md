@@ -1,10 +1,10 @@
 ---
 id: 624
 title: Evaluate and clean up orchestrator planner/ package
-status: in-progress
+status: review
 priority: important
 created: 2026-04-05T01:31:32.2092633+02:00
-updated: 2026-04-05T19:06:13.7203802+02:00
+updated: 2026-04-05T22:20:47.7999028+02:00
 tags:
     - scope:orchestrator
     - phase-2
@@ -87,3 +87,14 @@ N/A — no failure-mode codepaths introduced or modified.
 - Deliverable is a module-level docstring in `planner/__init__.py`; no testable Python interfaces introduced.
 - Arch review explicitly confirmed: "Non-impl task (docs tag); deliverable is a docstring, not testable code."
 - Passing through to builder.
+
+[[2026-04-05]] Sun 22:20
+## Builder Notes
+
+**Files changed:** `serve/orchestrator/src/owlbear/planner/__init__.py`
+
+**Assessment:** KEEP decision confirmed — loop.py, cli.py, and waves.py all have active planner/ imports for headless ACP path. Added module-level docstring explaining dual-path architecture (in-process path via loop.py/cli.py, MCP path via pick_tasks tool), with reference to parent task #619.
+
+- Tests: N/A (non-impl task, tagged `docs`)
+- ruff: clean
+- Commit: 2e84207

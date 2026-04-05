@@ -4,7 +4,7 @@ title: Revisit blocked-task DR scan when notification channel is enabled
 status: backlog
 priority: someday
 created: 2026-04-05T12:53:09.6563754+02:00
-updated: 2026-04-05T20:51:49.9710934+02:00
+updated: 2026-04-05T22:35:28.44018+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -53,3 +53,55 @@ When a notification channel (Slack, Teams, or alternative) becomes available, im
 ## Challenge Results
 - Challenger: SKIPPED (validation pass on existing research, no new recommendation)
 - Confidence in prior research: .80 (from #348) — no revision needed
+
+[[2026-04-05]] Sun 22:26
+## Architecture Review
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Single concern: blocked-task DR scan |
+| Interface clarity | PASS | AC lines 2-6 specific and testable |
+| Dependency correctness | FAIL | #344 and #347 must-build-first but depends_on empty, both archived, zero notification code |
+| Module layering | N/A | Prerequisite modules do not exist |
+| TDD compliance | PASS | AC6 specifies unit tests |
+| KISS/YAGNI | FAIL | Implementation against nonexistent infrastructure |
+| Premise challenge | FAIL | Decision #514 (Defer) in effect. Own research: Keep deferred (.85). #597 unresolved |
+| Pattern consistency | N/A | No notification patterns exist |
+| Security surface | N/A | No new boundaries until channel exists |
+| Single domain | PASS | Notifications domain only |
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|------------|--------|
+| AC1: Channel available | UNMET PRECONDITION | #514 defers, #597 unresolved |
+| AC2: read_blocked_tasks() | Verifiable | Depends on nonexistent infrastructure |
+| AC3: Scan in run_loop() | Verifiable | Depends on #347, archived |
+| AC4: on_decision_request() | Verifiable | Depends on #344, archived |
+| AC5: No-op notifier=None | Verifiable | Good defensive pattern |
+| AC6: Unit tests | Verifiable | Standard TDD |
+
+### Challenge Results
+- Challenger: SKIPPED (REJECT verdict)
+- Rationale: Three blocking signals: own research recommends deferral, #514 unchanged, prerequisites archived
+
+### Verdict: REJECT
+### Reason
+Own research recommends Keep at ideation/someday (.85). Decision #514 unchanged. Prerequisites #344 and #347 archived, never implemented. Zero notification code. Critical path #597 unresolved.
+
+### Action Taken
+Rejected to ideation. Tracking placeholder for when notification channel becomes available.
+
+[[2026-04-05]] Sun 22:26
+Architecture review: REJECT. Own research (.85) recommends deferral. Decision #514 unchanged. Prerequisites #344/#347 archived, never built. Zero notification code exists. Critical path #597 unresolved.
+
+[[2026-04-05]] Sun 22:35
+## Research (Validation Pass #2)
+- Research doc: .owlbear/research/revisit-blocked-task-dr-scan-notification.md (unchanged)
+- Validation: all 8 sources re-checked, no material changes since prior research (same day)
+- Decision #514: unchanged (Defer). Zero notification code. #344/#347 archived. #597 unexecuted.
+- Recommendation: Keep deferred, unchanged (confidence: .85)
+- Follow-up tasks: none (#597 remains critical path)
+- Decision requests: none (T1, revalidating existing approved decision)
+- Challenge: SKIPPED (validation pass, no new recommendation)
+- Note: Task cycled ideation to backlog to ideation (arch REJECT) once today. Advancing per pipeline; architect should archive if deferral permanent until #597 resolves.

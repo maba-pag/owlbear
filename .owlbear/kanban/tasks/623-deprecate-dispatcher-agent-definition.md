@@ -1,10 +1,12 @@
 ---
 id: 623
 title: Deprecate dispatcher agent definition
-status: done
+status: archived
 priority: important
 created: 2026-04-05T01:31:22.2282042+02:00
-updated: 2026-04-05T22:02:23.9184579+02:00
+updated: 2026-04-05T23:02:21.1228177+02:00
+started: 2026-04-05T23:02:21.1228177+02:00
+completed: 2026-04-05T23:02:21.1228177+02:00
 tags:
     - scope:agents
     - phase-2
@@ -124,3 +126,6 @@ Architecture review complete. AC refined: removed speculative YAML key, narrowed
 
 ### Scratch Files Cleaned
 - None found (`623-*` glob: no results)
+
+[[2026-04-05]] Sun 23:02
+## Audit\n\n### AC Verification\n| Binding AC | Evidence | Status |\n|---|---|---|\n| 1. description prefixed "(DEPRECATED)" | dispatcher.agent.md L2: exact prefix present | PASS |\n| 2. body deprecation callout | dispatcher.agent.md L13: exact blockquote present | PASS |\n| 3. dispatcher removed from orchestrator agents: list | orchestrator.agent.md agents: list confirmed no dispatcher entry (pre-satisfied) | PASS |\n| 4. File NOT deleted | File exists, 2-line edit only | PASS |\n\n### Test Results\n- Full suite: 2914 passed, 420 failed, 18 skipped (405s)\n- Failures in task scope: 0 (zero Python files changed; all 420 are pre-existing RED-phase tests)\n- Lint (ruff): All checks passed\n\n### Scoring\n- AC quality: 4/5 (original AC needed significant architect refinement; binding AC was clean)\n- Reviewer section: present, detailed, PASS at .97\n- Deductions: 0\n- Confidence: 1.00\n\n### Action: ARCHIVE
