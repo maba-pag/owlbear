@@ -1,12 +1,12 @@
 """Failing tests for task #44: skills-ref CI integration.
 
 Covers:
-  - AC1: skills-ref==0.1.1 listed in dependency-groups.dev in pyproject.toml
+  - AC1: skills-ref==0.1.1 listed in dependency-groups.validation in pyproject.toml
   - AC3: repo: local pre-commit hook with id: validate-skills in .pre-commit-config.yaml
   - AC4: all skills/*/ directories pass the filtered validator (exit 0)
 
 These tests fail on current HEAD because:
-  - AC1: skills-ref is absent from pyproject.toml [dependency-groups.dev]
+  - AC1: skills-ref is absent from pyproject.toml [dependency-groups.validation]
   - AC3: .pre-commit-config.yaml has no validate-skills hook entry
   - AC4: skills-ref is not installed, so the script exits non-zero
 """
@@ -29,31 +29,31 @@ _SKILLS_DIR = _REPO_ROOT / "share" / "skills"
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_DevDependency
+# TestFromAC_ValidationDependency
 # ---------------------------------------------------------------------------
-class TestFromAC_DevDependency:
-    """AC1: skills-ref==0.1.1 is listed as a dev dependency in pyproject.toml."""
+class TestFromAC_ValidationDependency:
+    """AC1: skills-ref==0.1.1 is listed as a validation dependency in pyproject.toml."""
 
-    def _dev_deps(self) -> list[str]:
+    def _validation_deps(self) -> list[str]:
         with _PYPROJECT.open("rb") as f:
             data = tomllib.load(f)
         return [
-            str(dep) for dep in data.get("dependency-groups", {}).get("dev", [])
+            str(dep) for dep in data.get("dependency-groups", {}).get("validation", [])
         ]
 
-    def test_skills_ref_present_in_dev_group(self) -> None:
-        """AC1: skills-ref entry exists in [dependency-groups.dev]."""
-        deps = self._dev_deps()
+    def test_skills_ref_present_in_validation_group(self) -> None:
+        """AC1: skills-ref entry exists in [dependency-groups.validation]."""
+        deps = self._validation_deps()
         assert any("skills-ref" in dep for dep in deps), (
-            f"skills-ref not found in [dependency-groups.dev]. "
-            f"Current dev deps: {deps}"
+            f"skills-ref not found in [dependency-groups.validation]. "
+            f"Current validation deps: {deps}"
         )
 
     def test_skills_ref_pinned_to_exact_version_0_1_1(self) -> None:
         """AC1: the entry is an exact pin to 0.1.1, not a range or other version."""
-        deps = self._dev_deps()
+        deps = self._validation_deps()
         matching = [dep for dep in deps if "skills-ref" in dep]
-        assert matching, "skills-ref not in dev deps"
+        assert matching, "skills-ref not in validation deps"
         dep_str = matching[0]
         assert "==0.1.1" in dep_str, (
             f"Expected exact pin skills-ref==0.1.1, got: {dep_str!r}"
