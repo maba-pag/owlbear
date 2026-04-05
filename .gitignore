@@ -53,9 +53,9 @@ megalinter-reports/
 *.log
 
 # Scratch / ad-hoc workspace (under docs/)
-docs/scratch/*
-!docs/scratch/.gitkeep
-!docs/scratch/.instructions.md
+.owlbear/scratch/*
+!.owlbear/scratch/.gitkeep
+!.owlbear/scratch/.instructions.md
 
 # Temp test/debug output
 *_output.txt
@@ -85,7 +85,7 @@ v1/htmlcov/
 serve/*/dist/
 
 # Knowledge data
-data/knowledge/*.db
+store/knowledge/*.db
 
 # Audit log data
-data/audit/
+store/audit/
