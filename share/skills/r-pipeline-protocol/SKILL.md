@@ -47,6 +47,8 @@ Before starting work, check whether the task was previously blocked by a decisio
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
 4. Never write to `.owlbear/decisions/` directly — always use the **scribe** agent.
 
+To read the full task body and check for decision sections, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
+
 ### Entry-Gate Agents
 
 Researcher, architect, and planner must reject invalid task inputs immediately:
@@ -94,6 +96,8 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - Target `backlog` status. Exception: researchers create follow-up tasks at `ideation`.
 - Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the dispatcher will dispatch the planner.
 
+Use `create_task(title="...", status="backlog", ...)` to create follow-up tasks (see `h-mcp-kanban`).
+
 ## 3. Communication
 
 ### Channel A — Routing Signal
@@ -110,7 +114,7 @@ Channel A is diagnostic only — the orchestrator does not parse or interpret th
 
 Rich context appended to the task body before returning. Downstream agents read this via the task body. The orchestrator never reads it.
 
-For command syntax to append body content, see the `h-mcp-kanban` skill — section `## Channel B Protocol`.
+For command syntax to append body content, see the `h-mcp-kanban` skill — section `## Channel B Protocol`. Use `edit_task(append_body="...", timestamp=True)` to append with a datestamp.
 
 ### Per-Agent Signal Mapping
 
@@ -130,6 +134,8 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 - **Orchestrator:** never reads task bodies. Re-plans from board state each cycle.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
 - **Architect / builder:** read task body for AC, architecture notes, and research pointers.
+
+To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
 ## 4. Closing
 
@@ -180,6 +186,8 @@ The kanban `block` action is reserved for:
 - Stale tasks — blocked for triage by dispatcher
 - Tasks with pending DRs — blocked until user responds
 
+To set a block reason: `edit_task(task_id="{id}", block="reason")`. To clear it: `edit_task(task_id="{id}", unblock=True)` (see `h-mcp-kanban`).
+
 ### Decision Tiers
 
 | Tier | When | Action |
@@ -192,4 +200,4 @@ All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/d
 
 ### Handoff
 
-When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments).
+When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Append the handoff note via `edit_task(task_id="{id}", append_body="...")` (see `h-mcp-kanban`).
