@@ -249,7 +249,7 @@ def main(args: list[str] | None = None) -> int:
     from owlbear_knowledge.schema import init_db as _init_db  # noqa: PLC0415
     from owlbear_knowledge.source_store import KnowledgeSourceStore  # noqa: PLC0415
 
-    db_path = os.environ.get("OWLBEAR_KB_PATH", "data/knowledge/knowledge.db")
+    db_path = os.environ.get("OWLBEAR_KB_PATH", "store/knowledge/knowledge.db")
     db_file = Path(db_path)
     db_file.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_file))
