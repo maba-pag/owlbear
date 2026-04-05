@@ -94,7 +94,7 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 
 - Every follow-up task requires concrete acceptance criteria. Single-responsibility. List affected files.
 - Target `backlog` status. Exception: researchers create follow-up tasks at `ideation`.
-- Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the dispatcher will dispatch the planner.
+- Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the orchestrator will route the task to the planner.
 
 Use `create_task(title="...", status="backlog", ...)` to create follow-up tasks (see `h-mcp-kanban`).
 
@@ -183,7 +183,7 @@ When an agent cannot proceed (missing dependencies, infeasible AC, vague scope),
 
 The kanban `block` action is reserved for:
 
-- Stale tasks — blocked for triage by dispatcher
+- Stale tasks — blocked for triage by orchestrator
 - Tasks with pending DRs — blocked until user responds
 
 To set a block reason: `edit_task(task_id="{id}", block="reason")`. To clear it: `edit_task(task_id="{id}", unblock=True)` (see `h-mcp-kanban`).

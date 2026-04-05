@@ -11,7 +11,6 @@ Append agent notes to the task body using `edit_task` (with `append_body` and `t
 
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
-| dispatcher | (JSON plan) | (none) |
 | researcher | DONE | ## Research |
 | architect | APPROVED / REFINE / SPLIT / REJECT | ## Architecture Review |
 | test-writer | DONE | ## Test-Writer Notes |
