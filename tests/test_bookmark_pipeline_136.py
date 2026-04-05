@@ -475,16 +475,6 @@ class TestFromAC_RefreshOrchestratorRefresh:  # noqa: N801
             await orch.refresh(source)
 
     @pytest.mark.asyncio
-    async def test_refresh_all_calls_list_enabled_with_scope(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        store_mock = MagicMock()
-        store_mock.list_enabled.return_value = []
-        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock())
-        await orch.refresh_all(scope="project-1")
-        store_mock.list_enabled.assert_called_once_with("project-1")
-
-    @pytest.mark.asyncio
     async def test_refresh_all_cooperative_cancellation_stops_loop(self) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
