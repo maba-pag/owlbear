@@ -279,7 +279,7 @@ class TestFromAC_ListTasksLeanJson:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        tasks = json.loads(result)
+        tasks = result
         assert isinstance(tasks, list)
         task = tasks[0]
         for field in _STRIPPED_FIELDS:
@@ -295,7 +295,7 @@ class TestFromAC_ListTasksLeanJson:
         with _patch_run(stdout=_SAMPLE_MULTI_JSON):
             result = await list_tasks(mcp_ctx)
 
-        tasks = json.loads(result)
+        tasks = result
         assert len(tasks) == 2, "Both tasks must be present in the output"
         for task in tasks:
             for field in _STRIPPED_FIELDS:
@@ -325,7 +325,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        tasks = json.loads(result)
+        tasks = result
         assert isinstance(tasks, list)
         assert len(tasks) > 0
         task = tasks[0]
@@ -343,7 +343,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        task = json.loads(result)[0]
+        task = result[0]
         assert "id" in task, "'id' must be present in lean output"
         assert task["id"] == _SAMPLE_FULL_TASK["id"]
 
@@ -355,7 +355,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        task = json.loads(result)[0]
+        task = result[0]
         assert "title" in task, "'title' must be present in lean output"
         assert task["title"] == _SAMPLE_FULL_TASK["title"]
 
@@ -367,7 +367,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        task = json.loads(result)[0]
+        task = result[0]
         original_key_count = len(_SAMPLE_FULL_TASK)
         expected_key_count = original_key_count - len(_STRIPPED_FIELDS)
         assert len(task) == expected_key_count, (
@@ -383,7 +383,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         with _patch_run(stdout=_SAMPLE_MULTI_JSON):
             result = await list_tasks(mcp_ctx)
 
-        tasks = json.loads(result)
+        tasks = result
         assert len(tasks) == 2
         for i, task in enumerate(tasks):
             assert "id" in task, f"Task[{i}] missing 'id' in lean output"
@@ -433,7 +433,7 @@ class TestFromAC_ListTasksStructuredContent:
         with _patch_run(stdout=_SAMPLE_FULL_JSON):
             result = await list_tasks(mcp_ctx)
 
-        parsed = json.loads(result)
+        parsed = result
         assert isinstance(parsed, list), "list_tasks result must be a JSON array"
         task = parsed[0]
         for field in _STRIPPED_FIELDS:

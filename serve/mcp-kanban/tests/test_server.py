@@ -590,6 +590,16 @@ class TestFromAC_Tools:
         ), pytest.raises(ToolError):
             await tool_fn(mcp_ctx, **kwargs)
 
+    @pytest.mark.asyncio
+    async def test_list_tasks_raises_tool_error_on_non_zero_rc(self) -> None:
+        """list_tasks raises ToolError when kanban-md returns non-zero exit code."""
+        mcp_ctx = _make_mcp_ctx()
+        with patch(
+            "owlbear_mcp_kanban.server._run_kanban",
+            new=AsyncMock(return_value=("", _FAKE_STDERR, 1)),
+        ), pytest.raises(ToolError, match="error:"):
+            await list_tasks(mcp_ctx)
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_AppContextStatuses
