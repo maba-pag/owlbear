@@ -1,10 +1,10 @@
 ---
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-05T19:40:52.412945+02:00
+updated: 2026-04-06T02:41:17.9519658+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -111,3 +111,18 @@ Split from #130 (Group B â€” depends on #33 IngestPipeline). See docs/resea
 - Failing tests for builder:
   1. `TestFromAC_BookmarkPipelineConstructor::test_constructor_without_web_read_fn_raises_type_error` — AC: web_read_fn REQUIRED; current impl has `None` default (bookmark_pipeline.py line 64)
   2. `TestFromAC_MCPBookmarkTools` (8 tests) — bookmark_source + list_bookmarks not in server.py; AppContext missing bookmark_pipeline and bookmark_store fields
+
+[[2026-04-06]] Mon 02:41
+## Builder Notes
+- Files changed: bookmark_pipeline.py (web_read_fn made required), server.py (AppContext + tools)
+- Tests: 53/53 passed (9 previously failing now GREEN)
+- Lint: ruff clean
+- Commit: 75dec2e
+
+### Changes applied
+1. `bookmark_pipeline.py`: Removed `None` default from `web_read_fn` — now a required keyword-only parameter; calling without it raises `TypeError`
+2. `server.py`: Added `BookmarkPipeline`, `BookmarkStore`, `SourceEvaluator` imports
+3. `server.py`: `AppContext` extended with `bookmark_pipeline: BookmarkPipeline | None` and `bookmark_store: BookmarkStore | None` fields
+4. `server.py`: `app_lifespan` initializes `BookmarkStore` and `BookmarkPipeline` (with httpx-based `_web_read` fn)
+5. `server.py`: `bookmark_source(ctx, url, reason=None)` and `list_bookmarks(ctx, tag=None, min_score=None)` registered as MCP tools
+6. `server.py`: `__all__` updated to include both new tools

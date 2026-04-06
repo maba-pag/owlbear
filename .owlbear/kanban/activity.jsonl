@@ -1,35 +1,3 @@
-{"timestamp":"2026-03-30T18:55:39.256624+02:00","action":"delete","task_id":229,"detail":"E2E-Test-019dfd51-4d94-4f43-bff6-56758527a606"}
-{"timestamp":"2026-03-30T18:55:39.7173857+02:00","action":"create","task_id":230,"detail":"E2E-Test-e8738eca-4a9e-496f-ba67-9925611d1370"}
-{"timestamp":"2026-03-30T18:55:40.8483622+02:00","action":"delete","task_id":230,"detail":"E2E-Test-e8738eca-4a9e-496f-ba67-9925611d1370"}
-{"timestamp":"2026-03-30T18:55:41.3595369+02:00","action":"create","task_id":231,"detail":"E2E-Test-06a4b09a-5af9-4f37-910b-fe57d14845a5"}
-{"timestamp":"2026-03-30T18:55:42.4127385+02:00","action":"delete","task_id":231,"detail":"E2E-Test-06a4b09a-5af9-4f37-910b-fe57d14845a5"}
-{"timestamp":"2026-03-30T18:55:42.8113903+02:00","action":"create","task_id":232,"detail":"E2E-Test-d9eb9dc7-a265-4fab-84a4-7cf03c5b51fa"}
-{"timestamp":"2026-03-30T18:55:43.8478546+02:00","action":"delete","task_id":232,"detail":"E2E-Test-d9eb9dc7-a265-4fab-84a4-7cf03c5b51fa"}
-{"timestamp":"2026-03-30T18:55:44.2256846+02:00","action":"create","task_id":233,"detail":"E2E-Test-8d01b383-ae75-47b7-b29d-d0d72cab7386"}
-{"timestamp":"2026-03-30T18:55:45.2076113+02:00","action":"delete","task_id":233,"detail":"E2E-Test-8d01b383-ae75-47b7-b29d-d0d72cab7386"}
-{"timestamp":"2026-03-30T18:55:45.5499893+02:00","action":"create","task_id":234,"detail":"E2E-Test-34a77c84-2f04-44bf-b8f3-1cb23b80e1a2"}
-{"timestamp":"2026-03-30T18:55:46.530641+02:00","action":"delete","task_id":234,"detail":"E2E-Test-34a77c84-2f04-44bf-b8f3-1cb23b80e1a2"}
-{"timestamp":"2026-03-30T18:55:46.9224109+02:00","action":"create","task_id":235,"detail":"E2E-Test-dbfea51e-665d-49b7-939d-aa299cae9616"}
-{"timestamp":"2026-03-30T18:55:47.8519076+02:00","action":"create","task_id":236,"detail":"E2E-Test-43f394b5-0886-4387-ae57-4e5f6a9de2ee"}
-{"timestamp":"2026-03-30T18:55:49.0285162+02:00","action":"delete","task_id":235,"detail":"E2E-Test-dbfea51e-665d-49b7-939d-aa299cae9616"}
-{"timestamp":"2026-03-30T18:55:49.6018107+02:00","action":"delete","task_id":236,"detail":"E2E-Test-43f394b5-0886-4387-ae57-4e5f6a9de2ee"}
-{"timestamp":"2026-03-30T18:57:42.6213903+02:00","action":"create","task_id":237,"detail":"E2E-Test-3d1af42b-ccc1-4c62-956e-08f3ef202e18"}
-{"timestamp":"2026-03-30T18:57:43.5182338+02:00","action":"delete","task_id":237,"detail":"E2E-Test-3d1af42b-ccc1-4c62-956e-08f3ef202e18"}
-{"timestamp":"2026-03-30T18:57:43.9077124+02:00","action":"create","task_id":238,"detail":"E2E-Test-d858ed48-2221-492a-bec6-2a0e10c86316"}
-{"timestamp":"2026-03-30T18:57:44.7952195+02:00","action":"delete","task_id":238,"detail":"E2E-Test-d858ed48-2221-492a-bec6-2a0e10c86316"}
-{"timestamp":"2026-03-30T18:57:45.1489543+02:00","action":"create","task_id":239,"detail":"E2E-Test-5d11b847-0fb0-4143-b571-5d7a1d5d852c"}
-{"timestamp":"2026-03-30T18:57:46.1598424+02:00","action":"delete","task_id":239,"detail":"E2E-Test-5d11b847-0fb0-4143-b571-5d7a1d5d852c"}
-{"timestamp":"2026-03-30T18:57:46.522564+02:00","action":"create","task_id":240,"detail":"E2E-Test-4c8e0a28-986a-4b31-bd48-dc5307075f8f"}
-{"timestamp":"2026-03-30T18:57:47.3444682+02:00","action":"delete","task_id":240,"detail":"E2E-Test-4c8e0a28-986a-4b31-bd48-dc5307075f8f"}
-{"timestamp":"2026-03-30T18:57:47.7699452+02:00","action":"create","task_id":241,"detail":"E2E-Test-8ab74595-7591-4053-8739-49e68a82f0a7"}
-{"timestamp":"2026-03-30T18:57:48.6916948+02:00","action":"delete","task_id":241,"detail":"E2E-Test-8ab74595-7591-4053-8739-49e68a82f0a7"}
-{"timestamp":"2026-03-30T18:57:49.0603145+02:00","action":"create","task_id":242,"detail":"E2E-Test-0d2ee2f7-a5d3-483b-b4fa-257b02877d77"}
-{"timestamp":"2026-03-30T18:57:50.051042+02:00","action":"delete","task_id":242,"detail":"E2E-Test-0d2ee2f7-a5d3-483b-b4fa-257b02877d77"}
-{"timestamp":"2026-03-30T18:57:50.4372065+02:00","action":"create","task_id":243,"detail":"E2E-Test-e9f5a785-d711-4a6d-9051-511fca64f4df"}
-{"timestamp":"2026-03-30T18:57:51.2118728+02:00","action":"create","task_id":244,"detail":"E2E-Test-567e4478-271f-4102-8b5c-c1bb556596e8"}
-{"timestamp":"2026-03-30T18:57:52.1871435+02:00","action":"delete","task_id":243,"detail":"E2E-Test-e9f5a785-d711-4a6d-9051-511fca64f4df"}
-{"timestamp":"2026-03-30T18:57:52.60417+02:00","action":"delete","task_id":244,"detail":"E2E-Test-567e4478-271f-4102-8b5c-c1bb556596e8"}
-{"timestamp":"2026-03-30T19:00:07.164543+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
 {"timestamp":"2026-03-30T19:00:26.254449+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
 {"timestamp":"2026-03-30T19:00:34.0095939+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
 {"timestamp":"2026-03-30T19:00:34.0127391+02:00","action":"release","task_id":208,"detail":"test-writer"}
@@ -9998,3 +9966,35 @@
 {"timestamp":"2026-04-06T02:35:35.0151281+02:00","action":"edit","task_id":624,"detail":"Evaluate and clean up orchestrator planner/ package"}
 {"timestamp":"2026-04-06T02:35:35.0297453+02:00","action":"release","task_id":624,"detail":"south-staff"}
 {"timestamp":"2026-04-06T02:35:35.5643541+02:00","action":"move","task_id":624,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T02:36:17.7248531+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-06T02:36:17.7434479+02:00","action":"claim","task_id":136,"detail":"solar-zeal"}
+{"timestamp":"2026-04-06T02:36:45.3971251+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-06T02:36:45.4108+02:00","action":"claim","task_id":63,"detail":"hull-quail"}
+{"timestamp":"2026-04-06T02:37:26.3404427+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-06T02:37:26.3534259+02:00","action":"claim","task_id":619,"detail":"brew-gale"}
+{"timestamp":"2026-04-06T02:39:07.1883774+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-06T02:39:07.2028925+02:00","action":"release","task_id":619,"detail":"brew-gale"}
+{"timestamp":"2026-04-06T02:39:47.0288458+02:00","action":"edit","task_id":458,"detail":"Test: Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T02:39:47.0434048+02:00","action":"claim","task_id":458,"detail":"vale-tide"}
+{"timestamp":"2026-04-06T02:40:04.6307212+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-06T02:40:04.6450311+02:00","action":"release","task_id":63,"detail":"hull-quail"}
+{"timestamp":"2026-04-06T02:41:17.9569085+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
+{"timestamp":"2026-04-06T02:41:17.9700899+02:00","action":"release","task_id":136,"detail":"solar-zeal"}
+{"timestamp":"2026-04-06T02:44:34.4442952+02:00","action":"edit","task_id":458,"detail":"Test: Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T02:44:34.4568026+02:00","action":"release","task_id":458,"detail":"vale-tide"}
+{"timestamp":"2026-04-06T02:48:16.0212247+02:00","action":"edit","task_id":458,"detail":"Test: Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T02:48:16.0371061+02:00","action":"claim","task_id":458,"detail":"spire-lime"}
+{"timestamp":"2026-04-06T02:48:48.8814405+02:00","action":"edit","task_id":639,"detail":"Fix cli.py phantom reference in planner/__init__.py docstring"}
+{"timestamp":"2026-04-06T02:48:48.9024304+02:00","action":"claim","task_id":639,"detail":"arch-bone"}
+{"timestamp":"2026-04-06T02:48:48.9993334+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T02:48:49.0378051+02:00","action":"claim","task_id":638,"detail":"reef-heron"}
+{"timestamp":"2026-04-06T02:49:32.886112+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-06T02:49:32.8997342+02:00","action":"claim","task_id":619,"detail":"fable-sage"}
+{"timestamp":"2026-04-06T02:50:20.7855165+02:00","action":"edit","task_id":639,"detail":"Fix cli.py phantom reference in planner/__init__.py docstring"}
+{"timestamp":"2026-04-06T02:50:20.7980101+02:00","action":"release","task_id":639,"detail":"arch-bone"}
+{"timestamp":"2026-04-06T02:51:09.9561523+02:00","action":"edit","task_id":458,"detail":"Test: Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T02:51:09.968713+02:00","action":"release","task_id":458,"detail":"spire-lime"}
+{"timestamp":"2026-04-06T02:52:12.3599701+02:00","action":"edit","task_id":619,"detail":"Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban"}
+{"timestamp":"2026-04-06T02:52:12.3719677+02:00","action":"release","task_id":619,"detail":"fable-sage"}
+{"timestamp":"2026-04-06T03:00:27.6612338+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T03:00:27.6733215+02:00","action":"release","task_id":638,"detail":"reef-heron"}

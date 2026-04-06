@@ -1,10 +1,12 @@
 ---
 id: 631
 title: Revisit blocked-task DR scan when notification channel is enabled
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-05T12:53:09.6563754+02:00
-updated: 2026-04-05T22:35:28.44018+02:00
+updated: 2026-04-05T23:49:51.5361147+02:00
+started: 2026-04-05T23:49:51.5361147+02:00
+completed: 2026-04-05T23:49:51.5361147+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -105,3 +107,18 @@ Architecture review: REJECT. Own research (.85) recommends deferral. Decision #5
 - Decision requests: none (T1, revalidating existing approved decision)
 - Challenge: SKIPPED (validation pass, no new recommendation)
 - Note: Task cycled ideation to backlog to ideation (arch REJECT) once today. Advancing per pipeline; architect should archive if deferral permanent until #597 resolves.
+
+[[2026-04-05]] Sun 23:49
+## Architecture Review (Pass #3)
+
+### Status: No material change since prior REJECT (same day)
+- Decision #514: unchanged (Defer notifications)
+- #597 (manual Teams verification): still in-progress, unclaimed, unresolved
+- #344 (Notifier protocol): archived, never built
+- #347 (loop integration): archived, never built
+- Zero notification code exists in the codebase
+- Own research recommends deferral with .85 confidence (confirmed twice)
+
+### Verdict: REJECT
+### Reason
+Third review cycle in one day with identical findings. Task cannot progress until: (1) #597 resolves and confirms Teams Workflows availability, (2) Decision #514 is reopened, (3) prerequisite tasks #344/#347 are unarchived and built. Recommending ARCHIVE to stop pipeline cycling — reopen only when #597 completes and #514 is revised.

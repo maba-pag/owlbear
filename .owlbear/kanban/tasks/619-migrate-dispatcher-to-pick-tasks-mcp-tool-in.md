@@ -1,10 +1,10 @@
 ---
 id: 619
 title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
-status: in-progress
+status: done
 priority: needed
 created: 2026-04-05T01:30:40.2393944+02:00
-updated: 2026-04-05T22:21:26.1235387+02:00
+updated: 2026-04-06T02:52:12.3589243+02:00
 started: 2026-04-05T11:14:35.6735559+02:00
 tags:
     - scope:mcp
@@ -254,3 +254,169 @@ Deductions: -1.0 (AC-1 not met: 6/8 subtasks incomplete). Confidence: 0.00 → F
 - Commit: 2e84207
 
 **Action:** Staying in-progress. Re-try after #624, #628, #630 reach done.
+
+[[2026-04-05]] Sun 23:31
+## Builder Notes
+
+**Assessment (2026-04-05, fourth retry):** AC-1 still unmet. Reviewer directive stands: *"Do not re-submit to review until all subtasks are done or archived."*
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | done ✓ |
+| #624 | Evaluate and clean up orchestrator planner/ package | review ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | review ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | archived ✓ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | review ✗ |
+
+**Progress this cycle:** #629 archived (+1 net). Net 5/8 subtasks done/archived.
+
+**Action:** Staying in-progress. Pending: #624, #628, #630 review → done.
+
+[[2026-04-05]] Sun 23:49
+**Assessment (2026-04-05, fifth retry):** AC-1 still unmet. Three subtasks in review awaiting reviewer sign-off.
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | done ✓ |
+| #624 | Evaluate and clean up orchestrator planner/ package | review ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | review ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | archived ✓ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | review ✗ |
+
+**Progress this cycle:** No new subtasks reached done/archived (+0). Net 5/8 done/archived.
+
+**Pending:** #624, #628, #630 review → done. All three have complete builder notes and passing tests; blocked on reviewer action only.
+
+**Action:** Staying in-progress. Reviewer pipeline required to advance #624, #628, #630.
+
+[[2026-04-06]] Mon 00:16
+## Builder Notes
+
+**Assessment (2026-04-06, sixth check):** AC-1 still unmet. Reviewer directive stands: *"Do not re-submit to review until all subtasks are done or archived."*
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | done ✓ |
+| #624 | Evaluate and clean up orchestrator planner/ package | review ✗ |
+| #628 | Update pick_tasks AC to add optional tag parameter | review ✗ |
+| #629 | Clean up dispatcher references after pick_tasks migration | archived ✓ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | done ✓ |
+
+**Progress since last assessment:** #630 moved from review → done (+1 net). Net 6/8 subtasks done/archived.
+
+**Pending:** #624, #628 review → done. Both have complete builder and review notes; blocked on reviewer sign-off only.
+
+**Action:** Staying in-progress. Next re-try after #624 and #628 reach done or archived.
+
+[[2026-04-06]] Mon 01:02
+## Builder Notes
+
+**Task type:** Parent coordination task (tagged `quality`). Non-implementation pass-through.
+
+**Assessment (2026-04-06, seventh check):** AC-1 NOW MET. All 8 subtasks are done or archived.
+
+### Subtask Status Audit
+
+| Subtask | Title | Status |
+|---------|-------|--------|
+| #620 | Test: pick_tasks gate logic and output format | archived ✓ |
+| #621 | Implement pick_tasks tool in owlbear-kanban server | done ✓ |
+| #622 | Wire pick_tasks into orchestrator workflow | done ✓ |
+| #623 | Deprecate dispatcher agent definition | done ✓ |
+| #624 | Evaluate and clean up orchestrator planner/ package | done ✓ |
+| #628 | Update pick_tasks AC to add optional tag parameter | done ✓ |
+| #629 | Clean up dispatcher references after pick_tasks migration | archived ✓ |
+| #630 | Fix TDD gate to exempt non-impl pass-through tags | done ✓ |
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All subtasks (#620–#630) complete or archived | 8/8 done or archived | PASS |
+| pick_tasks MCP tool registered and functional | #621 done + #628 done (tag param) | PASS |
+| Orchestrator calls pick_tasks directly | #622 done | PASS |
+| Dispatcher agent marked deprecated | #623 done | PASS |
+| planner/ package disposition documented | #624 done (dual-path comment) | PASS |
+
+No code changes. Coordination task complete.
+
+[[2026-04-06]] Mon 02:39
+## Review Evidence
+
+**Task type:** Parent coordination task (tagged `quality`). No implementation, no tests — completeness gate for subtask closure.
+
+### Independent Subtask Status Verification
+
+| Subtask | Title | Status (API) | Pipeline Confidence |
+|---------|-------|--------------|---------------------|
+| #620 | Test: pick_tasks gate logic | archived ✓ | 1.00 (audited) |
+| #621 | Implement pick_tasks tool | archived ✓ | 1.00 (audited) |
+| #622 | Wire pick_tasks into orchestrator | archived ✓ | 1.00 (audited) |
+| #623 | Deprecate dispatcher agent | archived ✓ | 1.00 (audited) |
+| #624 | Evaluate/clean up planner/ package | archived ✓ | 0.95 (audited) |
+| #628 | pick_tasks optional tag parameter | archived ✓ | 1.00 (audited) |
+| #629 | Dispatcher reference cleanup | archived ✓ | 1.00 (audited) |
+| #630 | Fix TDD gate non-impl exemption | archived ✓ | 0.98 (audited) |
+
+8/8 subtasks confirmed archived via independent show_task MCP calls. Builder self-report verified.
+
+### Deliverable Spot-Checks (independent grep/file checks)
+
+| Deliverable | Evidence | Status |
+|-------------|----------|--------|
+| pick_tasks registered in server.py | server.py L51 (__all__), L510 (comment), L556 (function def) | PASS |
+| Orchestrator calls pick_tasks; no dispatcher subagent | orchestrator.agent.md: 0 "dispatcher" matches; w-orchestration/SKILL.md: 0 "dispatcher" matches | PASS |
+| Dispatcher agent marked deprecated | dispatcher.agent.md L3: "(DEPRECATED)" prefix; L13: blockquote "Deprecated. Replaced by pick_tasks MCP tool (#621)." | PASS |
+| planner/ package disposition documented | planner/__init__.py L3: "Dual-path architecture (#619)"; L7: "MCP path: VS Code agents call the pick_tasks tool" | PASS |
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All subtasks (#620–#630) complete or archived | 8/8 archived (show_task API) | PASS |
+| pick_tasks MCP tool registered and functional | server.py L51, L510, L556 (grep) | PASS |
+| Orchestrator calls pick_tasks directly; no dispatcher subagent | 0 "dispatcher" refs in orchestrator.agent.md and w-orchestration/SKILL.md | PASS |
+| Dispatcher agent marked deprecated | dispatcher.agent.md description + body callout confirmed | PASS |
+| planner/ package disposition documented | planner/__init__.py dual-path docstring with #619 reference | PASS |
+
+### Notes
+
+- #624 has a minor documented defect (cli.py phantom reference in docstring — cli.py does not exist). Audited and tracked as follow-up #639. Does not invalidate AC-5 ("disposition documented") — the KEEP decision and dual-path architecture are correctly documented.
+- Previous reviewer cycles (7 prior loops) were correctly gated; each one had outstanding subtasks. This cycle is the first with all 8 resolved.
+
+### Deductions
+None.
+
+### Confidence: .97 → PASS
+
+[[2026-04-06]] Mon 02:52
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | pick_tasks tool added + orchestrator wired; copilot-instructions.md is a 5-line identity stub with no tool inventory to update |
+| 2 | Module docstrings | Yes | Verified | planner/__init__.py dual-path docstring accurate; gates.py all four public functions documented including _NON_IMPL_TAGS exemption; server.py pick_tasks docstring accurate |
+| 3 | External attribution | Yes | N/A | S8 (MCP spec ToolAnnotations) already attributed in sources/overview.md ×5 (lines 117, 118, 213, 220, 283); no new row required |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | .owlbear/research/migrate-dispatcher-to-pick-tasks.md exists; linked from task body; follow-up tasks covered by subtask decomposition |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/619-* files found)

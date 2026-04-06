@@ -1,10 +1,10 @@
 ---
 id: 63
 title: Implement VoiceChannel adapter
-status: in-progress
+status: todo
 priority: nice-to-have
 created: 2026-03-26T19:33:48.9743371+01:00
-updated: 2026-04-05T19:35:06.1444494+02:00
+updated: 2026-04-06T02:40:04.629132+02:00
 tags:
     - phase-3
     - scope:voice
@@ -121,3 +121,99 @@ Key findings:
 - AC module location specifies packages/orchestrator/src/owlbear/voice/channel.py — actual location is serve/orchestrator; builder to reconcile
 - No new failing tests written: contract fully covered by #142; writing duplicates would not add value
 - Passing through to builder pre-existing-impl pattern
+
+[[2026-04-06]] Mon 01:16
+## Builder Notes
+
+### Files changed
+- `serve/orchestrator/src/owlbear/voice/channel.py` — implementation was already live (pre-existing-impl pattern confirmed by test-writer notes)
+
+### Module location reconciliation
+- AC specified `packages/orchestrator/src/owlbear/voice/channel.py`
+- Actual location: `serve/orchestrator/src/owlbear/voice/channel.py`
+- Tests import `from owlbear.voice.channel` — resolved correctly via serve/orchestrator package; no code change needed
+
+### Test results
+- 22 passed, 0 failed
+- `serve/orchestrator/src/owlbear/voice/channel.py`: **100% coverage**
+- No builder-discovered tests needed — TestFromAC_* classes cover all branches
+
+### Lint
+- `ruff check`: **clean**
+
+### Evidence
+- `uv run pytest tests/test_voice_channel.py -q --tb=short` → 22 passed
+- `uv run ruff check serve/orchestrator/src/owlbear/voice/channel.py tests/test_voice_channel.py` → All checks passed
+
+[[2026-04-06]] Mon 02:40
+## Review Evidence
+
+### Tests
+`uv run pytest tests/test_voice_channel.py -q --tb=short` → **22 passed, 0 failed**
+
+### Lint
+`uv run ruff check serve/orchestrator/src/owlbear/voice/channel.py tests/test_voice_channel.py` → **All checks passed**
+
+### Coverage
+`serve/orchestrator/src/owlbear/voice/channel.py`: **100%** (40/40 stmts)
+
+---
+
+### AC Compliance Table
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `VoiceChannel` class with `__aenter__`/`__aexit__` | channel.py:13, 80–84 | TestFromAC_Lifecycle | PASS |
+| `__init__(manager: VoiceProcessManager)` no default | channel.py:22 (`*` keyword-only, no default) | all VoiceChannel(manager=mgr) calls | PASS |
+| `name` returns `"voice"` | channel.py:28 | test_name_property_returns_voice | PASS |
+| `async send(message: str) -> None` | channel.py:35 | test_send_is_async_method | PASS |
+| `async receive(*, prompt=None) -> str \| None` | channel.py:40 | test_receive_is_async_method | PASS |
+| `SpeakMsg(type="speak", text=..., interrupt=False)` → `manager.send()` | channel.py:37 (type defaults via Literal) | test_send_sets_exact_speak_msg_fields | PASS |
+| prompt → `send(prompt)` before listening | channel.py:48–49 | test_prompt_sent_before_listening | PASS |
+| Lazy `manager.__aenter__()` on first receive | channel.py:92–95 | test_first_receive_enters_manager | PASS |
+| `_started: bool` flag | channel.py:25 | test_second_receive_does_not_re_enter_manager (call_count==1) | PASS |
+| Loop, skip non-`TranscriptMsg(final=True)` | channel.py:50–55 | test_skips_status_msg_..., test_skips_partial_and_error_msgs, test_skips_non_final | PASS |
+| Returns `TranscriptMsg.text` | channel.py:55 | test_returns_text_for_final_transcript | PASS |
+| Returns `None` on `VoiceProcessError` | channel.py:52–53 | test_returns_none_on_voice_process_error | PASS |
+| `__aenter__` returns `self` | channel.py:81 | test_aenter_returns_self | PASS |
+| `__aexit__` → `shutdown()` if `_started` | channel.py:83–84 | test_aexit_calls_shutdown_if_started | PASS |
+| `__aexit__` no-op if never started | channel.py:83–84 | test_aexit_noop_if_never_started | PASS |
+| `send_file` → `f"[{caption}] {path}"` or `str(path)` | channel.py:62–63 | test_send_file_delegates_to_send_with_path_text | **LAX** |
+| `send_blocks` → `text_fallback` via `send()` | channel.py:65–67 | test_send_blocks_delegates_to_send_with_fallback | PASS |
+| `send_image(caption)` → `caption` via `send()` | channel.py:69–71 | test_send_image_with_caption_sends_caption | PASS |
+| `send_image(no caption)` → `"[image]"` via `send()` | channel.py:69–71 | test_send_image_without_caption_sends_image_placeholder | PASS |
+
+---
+
+### Critical Finding — 5.0 LAX Assertion
+
+**`test_send_file_delegates_to_send_with_path_text`** uses an `or` assertion:
+```python
+assert "audio.mp3" in sent_msg.text or "My file" in sent_msg.text
+```
+**Mutation test failure:** If the implementation returned only `str(path)` (i.e., `"audio.mp3"` without the caption bracket), the assert would still pass via the first clause. The AC specifies `f"[{caption}] {path}"` when caption is present — both bracketed caption AND path must appear together. The `or` allows either alone to satisfy the test.
+
+**No compensating `TestBuilderDiscovered_*` test exists.** Builder notes explicitly state "TestFromAC_* classes cover all branches."
+
+Per rule 5.0: LAX assertion with no compensating test = FAIL.
+
+**Fix required (test-writer):** Tighten to:
+```python
+assert sent_msg.text == "[My file] audio.mp3"
+```
+
+---
+
+### Informational (non-blocking)
+- **6.1 Constructor signature:** AC specifies `__init__(manager: VoiceProcessManager)` (positional allowed); implementation uses `def __init__(self, *, manager: VoiceProcessManager)` (keyword-only). More restrictive than spec — consistent with project DI style, tests pass.
+- **6.1 Module location:** AC says `packages/orchestrator/...`; actual is `serve/orchestrator/...`. Builder documented reconciliation; import resolves correctly. Consider updating AC for future reference.
+- **5.7 Builder process:** CLEAN — 1 build cycle, no retries.
+
+---
+
+### Deductions
+- −0.12: LAX assertion on `send_file` with caption; mutation not caught; no compensating test
+
+**Confidence: 0.88 → FAIL**
+
+**Target: todo** — implementation is correct; test-writer tightens `test_send_file_delegates_to_send_with_path_text` assertion.

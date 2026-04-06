@@ -1,10 +1,10 @@
 ---
 id: 632
 title: 'Disposition #575: release claim and archive as resolved-by-architecture'
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-05T12:57:54.0576608+02:00
-updated: 2026-04-05T22:23:33.702123+02:00
+updated: 2026-04-05T23:31:00.1583994+02:00
 tags:
     - phase-2
     - ' scope:kanban'
@@ -79,3 +79,8 @@ class: standard
 
 [[2026-04-05]] Sun 22:23
 APPROVED: AC precise, architecture sound. Refined AC3, added type:config tag, updated stale context.
+
+[[2026-04-05]] Sun 23:31
+## Test-Writer Notes
+- Non-implementation task (tagged type:config) — no tests applicable.
+- Passing through to builder.

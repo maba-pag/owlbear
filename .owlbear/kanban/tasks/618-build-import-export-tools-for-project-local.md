@@ -1,10 +1,10 @@
 ---
 id: 618
 title: Build import/export tools for project-local knowledge snapshots
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-05T01:26:23.9739996+02:00
-updated: 2026-04-05T20:43:15.2654282+02:00
+updated: 2026-04-05T23:44:36.6141604+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -109,3 +109,14 @@ Research #616 (docs/research/project-local-knowledge-source.md) recommends impor
 
 ### Verdict: APPROVE
 ### Action: AC refined (AC1 table list + FK order + txn, AC3 explicit tables + Qdrant exclusion, AC5 error behavior, new AC6 schema validation). Advanced to todo for planner decomposition.
+
+[[2026-04-05]] Sun 23:44
+## Test-Writer Notes
+- Test file: tests/test_scope_transfer_618.py
+- Classes: TestFromAC_ScopeTransferModule, TestFromAC_ImportScopeHappyPath, TestFromAC_ImportScopeDedup, TestFromAC_ExportScope, TestFromAC_ImportScopeSandboxing, TestFromAC_ImportScopeAutoDetect, TestFromAC_ImportScopeSchemaValidation, TestFromAC_ImportScopeTransaction, TestFromAC_MCPToolWiring
+- Tests per category: happy 11, edge 5, error 11, boundary 4
+- Total: 45 tests, all FAIL
+- ruff: clean
+- AC coverage: AC1 ✓ (9 happy path + transaction), AC2 ✓ (4 dedup), AC3 ✓ (10 export), AC4 ✓ (3 sandbox), AC5 ✓ (4 auto-detect), AC6 ✓ (4 schema validation), MCP wiring ✓ (7)
+- Note: Core functions tested as import_scope(src_path, project_name, dest_conn, *, workspace_root=None) and export_scope(scope, output_path, source_conn). Builder may adjust signatures.
+- Commit: d833605

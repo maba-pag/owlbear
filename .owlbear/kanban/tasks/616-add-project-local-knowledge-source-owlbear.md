@@ -158,8 +158,3 @@ Research parent complete. All deliverables met: research doc, risk analysis per 
 ## Test-Writer Notes
 - Non-implementation task (tagged research) — no tests applicable.
 - Passing through to builder.
-
-[[2026-04-05]] Sun 23:46
-## Clarification Requested
-
-you dropped the 'Pursue dual-stack facade (original Option A) or ATTACH DATABASE (original Option B)' option that i requested extra info on. please try again and compare only 'Scope-based tool parameters + import/export' and 'dual-stack facade (original Option A)' and 'ATTACH DATABASE' options against each other. I need to understand what each one does, where it is saved, and what the pro/con for each are.
