@@ -75,7 +75,7 @@ The thinking process moves through six moments. These are not rigid steps — th
 
 ### Moment 1: Understanding — "What's really going on?"
 
-**Lead:** Mediator channeling The Investigator. **Active:** The Critic.
+**Lead:** Mediator (Investigator mode). **Active:** The Critic.
 
 The user presents their idea, pain, or request. The system:
 - Restates what it heard, checks understanding
@@ -120,7 +120,7 @@ The Mediator invokes a research subagent (Explore or custom scout) with a focuse
 
 The Mediator presents the landscape summary to the user. For existing projects: "Here's how this change interacts with what's already built."
 
-**Output:** Landscape Summary presented to user + `context.md` written (problem, outcomes, tier, landscape). This triggers voice deliberation. Domain voices can read `research-notes.md` for deeper detail.
+**Output:** Landscape Summary presented to user + landscape appended to `context.md` (which now contains problem, outcomes, tier, and landscape). This triggers voice deliberation. Domain voices can read `research-notes.md` for deeper detail.
 
 **[Voice Deliberation Phase]** — Between Moment 3 and Moment 4, the Mediator pauses the user conversation and invokes the domain voice panel. Before invoking, it tells the user which voices it's consulting and why: "I'll run this past the Architect and Data Person — your problem is structural and data-heavy. Security isn't relevant at Tool tier. Want to add or remove anyone?" Each domain voice reads `context.md`, forms a position through Critic-loop refinement, and publishes to the Working Directory. The Pragmatist then synthesizes all voice results into `synthesis.md`.
 
@@ -165,7 +165,7 @@ User reviews, adjusts, approves. This is the **contract** between thinking and b
 - "Project X is live — N tasks created. First tasks are being researched now."
 - The user's role as thinker is done (for now). Execution pipeline takes over.
 
-**Output:** Active kanban board with tasks linked to the Brief.
+**Output:** Tasks on the project's kanban board, decomposed from the Brief.
 
 ## 7. The Voice Panel
 
@@ -328,14 +328,14 @@ The Ideator is **adjacent** to the execution pipeline, not part of it.
 │  Output: The Brief          │     │  → Test → Build → Review → Done  │
 │                             │     │                                  │
 │  Operates: before pipeline  │     │  Operates: after Brief approved  │
-│  Coupling: Brief artifact   │     │  Coupling: reads Brief for       │
-│            only             │     │            context/intent        │
+│  Coupling: Brief artifact   │     │  Coupling: kanban tasks          │
+│            only             │     │   (Brief content in parent task) │
 └─────────────────────────────┘     └──────────────────────────────────┘
 ```
 
 **Loose coupling:** The Brief is the only contract between the two systems. The Ideator doesn't know about kanban statuses, TDD phases, or agent dispatch. The execution pipeline doesn't know about voices, moments, or investigation. They can evolve independently.
 
-**The Brief propagates "why":** Downstream agents (researcher, architect, test-writer, builder) can reference the Brief to understand the intent behind their work. This solves the original problem: the "why" no longer evaporates before reaching the agents who need it.
+**The Brief propagates "why":** Downstream agents (researcher, architect, test-writer, builder) work from kanban tasks that carry the Brief's content. The intent behind the work — the "why" — no longer evaporates before reaching the agents who need it.
 
 ## 12. Technical Architecture
 
@@ -554,9 +554,8 @@ share/skills/
 3. **During ideation:** `context.md` populated incrementally, voices write to `voices/`, Pragmatist writes `synthesis.md`
 4. **At approval:** Mediator writes `brief.md` from context + decisions + synthesis
 5. **At handoff (new project):** Brief content transferred into a **parent kanban task** (problem, outcomes, approach, scope as the task body). Planner decomposes into subtasks. Downstream agents work from kanban tasks, not from the Brief file. The Brief file is preserved as audit trail.
-6. **At handoff (feature change):** For trivial changes: new task added directly to existing board, no Brief needed. For complex changes: voice deliberation produces a change brief → new parent task + subtasks.
+6. **At handoff (feature change):** For trivial changes: new task added directly to existing board, no Brief needed. For complex changes: voice deliberation produces a change brief in a new Working Directory → new parent task + subtasks.
 7. **After handoff:** Working Directory preserved for audit trail. Cleaned up when the parent task is completed or archived.
-8. **For feature changes:** New draft directory created (if voice deliberation was triggered)
 
 ### Re-entry (Mid-Execution Modification)
 
@@ -586,7 +585,7 @@ Questions raised during design, now resolved:
 
 1. **Re-entry:** Context-aware. Mediator loads Working Directory + board state, enters at relevant Moment. See Brief Lifecycle section.
 2. **Panel extensibility:** Fixed panel (4 domain voices + Critic + Pragmatist). If new voices are needed, they are added through development, not user configuration.
-3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]`
+3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Opus 4.6 (copilot), GPT-5.4 (copilot)]`
 4. **Duplicate-voice pattern:** Removed. Voices run on Opus, Critic on GPT. This provides sufficient model diversity without the cost of dual-model runs.
 5. **Brief versioning:** Brief content is transferred into a parent kanban task at handoff. Downstream agents work from kanban tasks, not Brief files. The Brief file is preserved in the Working Directory as audit trail. On re-entry, the Mediator reads the current board state + Working Directory to understand what's changed.
 6. **Working Directory cleanup:** Draft artifacts preserved after handoff for audit trail. Cleaned up when parent task is completed/archived.
