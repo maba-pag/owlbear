@@ -1,34 +1,3 @@
-{"timestamp":"2026-03-30T23:00:17.2448572+02:00","action":"edit","task_id":204,"detail":"Test: Wire audit log into dispatch loop"}
-{"timestamp":"2026-03-30T23:00:17.2490328+02:00","action":"claim","task_id":204,"detail":"builder"}
-{"timestamp":"2026-03-30T23:03:07.9995815+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-30T23:03:23.0581622+02:00","action":"edit","task_id":162,"detail":"Integration test: full ingest-to-search cycle"}
-{"timestamp":"2026-03-30T23:03:35.498643+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T23:03:44.1070052+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-30T23:03:45.3944008+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T23:03:45.8398733+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T23:03:45.8418976+02:00","action":"release","task_id":20,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:03:49.936804+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T23:03:49.9420373+02:00","action":"release","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:03:50.8678156+02:00","action":"edit","task_id":162,"detail":"Integration test: full ingest-to-search cycle"}
-{"timestamp":"2026-03-30T23:03:54.7232567+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-30T23:03:54.727771+02:00","action":"release","task_id":156,"detail":"architect"}
-{"timestamp":"2026-03-30T23:03:56.4739722+02:00","action":"edit","task_id":162,"detail":"Integration test: full ingest-to-search cycle"}
-{"timestamp":"2026-03-30T23:03:56.4775946+02:00","action":"release","task_id":162,"detail":"architect"}
-{"timestamp":"2026-03-30T23:04:35.857257+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T23:04:45.0574914+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T23:05:19.9259307+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:05:19.9324454+02:00","action":"claim","task_id":203,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:05:25.154097+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T23:05:25.1551593+02:00","action":"claim","task_id":179,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:05:27.6756853+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T23:05:27.6808672+02:00","action":"claim","task_id":225,"detail":"architect"}
-{"timestamp":"2026-03-30T23:05:31.7223973+02:00","action":"edit","task_id":24,"detail":"General KB initial data load"}
-{"timestamp":"2026-03-30T23:05:31.7265316+02:00","action":"claim","task_id":24,"detail":"architect"}
-{"timestamp":"2026-03-30T23:06:46.341692+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T23:06:50.9198428+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T23:06:50.9245428+02:00","action":"release","task_id":225,"detail":"architect"}
-{"timestamp":"2026-03-30T23:08:48.7017527+02:00","action":"edit","task_id":24,"detail":"General KB initial data load"}
-{"timestamp":"2026-03-30T23:08:59.4838511+02:00","action":"edit","task_id":24,"detail":"General KB initial data load"}
 {"timestamp":"2026-03-30T23:08:59.4870689+02:00","action":"release","task_id":24,"detail":"architect"}
 {"timestamp":"2026-03-30T23:08:59.9848751+02:00","action":"delete","task_id":24,"detail":"General KB initial data load"}
 {"timestamp":"2026-03-30T23:10:16.2018779+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
@@ -9998,3 +9967,34 @@
 {"timestamp":"2026-04-06T22:29:41.5443752+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
 {"timestamp":"2026-04-06T22:29:41.5550683+02:00","action":"release","task_id":645,"detail":"zinc-path"}
 {"timestamp":"2026-04-06T22:29:42.0742161+02:00","action":"move","task_id":645,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T22:30:21.8705057+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T22:30:21.8865937+02:00","action":"claim","task_id":665,"detail":"quartz-reef"}
+{"timestamp":"2026-04-06T22:30:36.3755201+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T22:30:36.3876696+02:00","action":"claim","task_id":663,"detail":"pond-ghost"}
+{"timestamp":"2026-04-06T22:31:33.1717989+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T22:31:33.1834745+02:00","action":"release","task_id":663,"detail":"pond-ghost"}
+{"timestamp":"2026-04-06T22:32:44.5310017+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T22:32:44.5455865+02:00","action":"release","task_id":665,"detail":"quartz-reef"}
+{"timestamp":"2026-04-06T22:34:06.5918953+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T22:34:06.6056338+02:00","action":"claim","task_id":661,"detail":"vapor-cliff"}
+{"timestamp":"2026-04-06T22:34:08.3781087+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T22:34:08.3901134+02:00","action":"claim","task_id":647,"detail":"gate-spur"}
+{"timestamp":"2026-04-06T22:34:09.7350041+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T22:34:09.7481665+02:00","action":"claim","task_id":646,"detail":"shade-lime"}
+{"timestamp":"2026-04-06T22:34:11.5427295+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T22:34:11.5553733+02:00","action":"claim","task_id":648,"detail":"kelp-spark"}
+{"timestamp":"2026-04-06T22:36:07.1891135+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T22:36:07.2006295+02:00","action":"release","task_id":648,"detail":"kelp-spark"}
+{"timestamp":"2026-04-06T22:36:44.1052646+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T22:36:44.1190101+02:00","action":"release","task_id":647,"detail":"gate-spur"}
+{"timestamp":"2026-04-06T22:36:50.0642364+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T22:36:50.081668+02:00","action":"release","task_id":646,"detail":"shade-lime"}
+{"timestamp":"2026-04-06T22:41:55.5394119+02:00","action":"create","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-06T22:42:02.7193551+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-06T22:42:02.8478925+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-06T22:42:02.9262029+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-06T22:42:02.9814923+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-06T22:42:03.0801712+02:00","action":"edit","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-06T23:01:23.5636145+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T23:01:23.5774035+02:00","action":"release","task_id":661,"detail":"vapor-cliff"}
+{"timestamp":"2026-04-06T23:01:24.1310961+02:00","action":"move","task_id":661,"detail":"done -\u003e archived"}
