@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## editFiles Schema Verification (Task #638)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Agent Hooks docs — PreToolUse input (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | `editFiles` tool_input schema: `{ "files": ["path"] }` — array of strings | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
+| VS Code Cheat Sheet — built-in tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | `#edit/editFiles` — "Apply edits to files in the workspace" confirms tool exists as built-in | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
+
 ## Deny-Code-Writes AC Validation (Task #637)
 
 | Source | URL | What | Where Used | Date |
