@@ -1,16 +1,18 @@
 ---
 id: 658
 title: Deprecate w-project-scoping SKILL.md frontmatter and body
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-06T07:23:34.0157731+02:00
-updated: 2026-04-06T17:15:26.8401738+02:00
+updated: 2026-04-06T21:22:01.9136821+02:00
 tags:
     - phase-4
     - ' scope:ideator'
     - ' type:chore'
 depends_on:
     - 643
+claimed_by: tide-thyme
+claimed_at: 2026-04-06T21:22:01.9121627+02:00
 class: standard
 ---
 
@@ -88,3 +90,65 @@ Parent #643 architect note explicitly flagged #658 and #659 as "redundant (subsu
   - AC4: user-invocable: true ✓
   - AC5: tests/test_argument_hint_skills.py references file structurally (unaffected) ✓
 - No test file created — all deliverables are non-Python file edits already done.
+
+[[2026-04-06]] Mon 19:35
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- All 5 AC items pre-satisfied by parent #643 (commit 98727c1, auditor confidence 1.00).
+- Evidence: `share/skills/w-project-scoping/SKILL.md` has DEPRECATED description (L3), deprecation banner (L8), user-invocable: true (L4), body preserved below banner. `tests/test_argument_hint_skills.py` unaffected.
+- tests: n/a (non-impl pass-through)
+- ruff: n/a
+- coverage: n/a
+- Passing through to review.
+
+[[2026-04-06]] Mon 20:15
+## Review Evidence
+
+### Source Control Changes
+Non-impl pass-through — no Python files changed. All deliverables are `.md` configuration edits completed by parent task #643 (commit `98727c1`).
+
+### Test Evidence
+AC5 requires `tests/test_argument_hint_skills.py` still passes. Test was read directly — it makes 4 structural assertions on `w-project-scoping/SKILL.md` frontmatter:
+- `argument-hint:` key present in frontmatter
+- `[project name or idea]` is the value
+- value is exactly that phrase (no extra text)
+- key is in frontmatter, not body
+
+File at L5 contains `argument-hint: "[project name or idea]"` — all 4 assertions pass. No Python implementation changes means no regression risk.
+
+### Lint
+n/a — no Python files modified.
+
+### AC Compliance
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| `description` = `"Workflow (DEPRECATED): Project scoping — use ideator agent instead"` | `share/skills/w-project-scoping/SKILL.md` L3 — exact string match | ✓ PASS |
+| Deprecation banner after frontmatter | L8: `> **Deprecated.** Superseded by the Ideator agent (Phase 4). Retained for reference until ideator ships.` — exact match | ✓ PASS |
+| Existing body content preserved below banner | L10–L50+: `# Project Scoping`, Steps 0–5, ProjectDefinition schema — all intact | ✓ PASS |
+| `user-invocable: true` | L4 — confirmed | ✓ PASS |
+| `test_argument_hint_skills.py` still passes | Frontmatter L5 satisfies all 4 test assertions; no code changes introduce regression | ✓ PASS |
+
+### Deductions
+None.
+
+### Verdict
+Confidence: .97 → **PASS**
+All 5 AC items satisfied by direct file evidence. Non-impl pass-through correctly handled by builder.
+
+[[2026-04-06]] Mon 20:35
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `copilot-instructions.md` has no direct reference to `w-project-scoping` description; change is entirely within the SKILL.md file itself (already updated by #643, verified by file read) |
+| 2 | Module docstrings | No | N/A | No Python files created or modified; non-impl pass-through |
+| 3 | External attribution | No | N/A | No external patterns or repositories referenced |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/deprecate-w-project-scoping.md` exists; linked from task body under ## Context |
+
+### Files Updated
+- None — `share/skills/w-project-scoping/SKILL.md` was already updated by parent task #643 (commit `98727c1`). File verified at read: L3 DEPRECATED description ✓, L4 `user-invocable: true` ✓, L8 deprecation banner ✓, body content intact ✓.
+
+### Scratch Files Cleaned
+- None — no `.owlbear/scratch/658-*` files found.
