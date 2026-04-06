@@ -1,82 +1,3 @@
-{"timestamp":"2026-03-30T20:47:01.1120769+02:00","action":"release","task_id":223,"detail":"researcher"}
-{"timestamp":"2026-03-30T20:47:08.2390509+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-03-30T20:47:08.2443786+02:00","action":"release","task_id":209,"detail":"researcher"}
-{"timestamp":"2026-03-30T20:49:13.9886364+02:00","action":"move","task_id":215,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T20:49:20.8242943+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T20:49:20.8284355+02:00","action":"release","task_id":215,"detail":"auditor"}
-{"timestamp":"2026-03-30T20:49:38.4854962+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T20:49:47.6019832+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T20:50:10.0616727+02:00","action":"edit","task_id":215,"detail":"Add tag-based exemptions to Gate 4 TW:MISSING check"}
-{"timestamp":"2026-03-30T20:50:38.7305062+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T20:50:38.7346813+02:00","action":"claim","task_id":208,"detail":"reviewer"}
-{"timestamp":"2026-03-30T20:50:49.9682449+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T20:50:49.9718924+02:00","action":"claim","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T20:51:06.984293+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T20:51:06.9902137+02:00","action":"claim","task_id":158,"detail":"builder-v3"}
-{"timestamp":"2026-03-30T20:53:16.0574933+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T20:53:16.0611595+02:00","action":"release","task_id":158,"detail":"builder-v3"}
-{"timestamp":"2026-03-30T20:53:55.62965+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T20:53:55.6327679+02:00","action":"claim","task_id":222,"detail":"auditor"}
-{"timestamp":"2026-03-30T20:54:43.6047678+02:00","action":"create","task_id":377,"detail":"E2E-Test-4d994cb2-f0cc-4597-8372-548c659c491a"}
-{"timestamp":"2026-03-30T20:54:44.8196165+02:00","action":"delete","task_id":377,"detail":"E2E-Test-4d994cb2-f0cc-4597-8372-548c659c491a"}
-{"timestamp":"2026-03-30T20:54:45.4258217+02:00","action":"create","task_id":378,"detail":"E2E-Test-50857bef-5d80-426f-a028-e8575ba5a2fe"}
-{"timestamp":"2026-03-30T20:54:46.7167534+02:00","action":"delete","task_id":378,"detail":"E2E-Test-50857bef-5d80-426f-a028-e8575ba5a2fe"}
-{"timestamp":"2026-03-30T20:54:47.2584023+02:00","action":"create","task_id":379,"detail":"E2E-Test-8194d5b3-5846-406e-a24d-f0aa7f36e79b"}
-{"timestamp":"2026-03-30T20:54:48.4479413+02:00","action":"delete","task_id":379,"detail":"E2E-Test-8194d5b3-5846-406e-a24d-f0aa7f36e79b"}
-{"timestamp":"2026-03-30T20:54:48.9144602+02:00","action":"create","task_id":380,"detail":"E2E-Test-ff3bc1b1-8964-43b5-8c84-0d7820bb94e1"}
-{"timestamp":"2026-03-30T20:54:50.2575744+02:00","action":"delete","task_id":380,"detail":"E2E-Test-ff3bc1b1-8964-43b5-8c84-0d7820bb94e1"}
-{"timestamp":"2026-03-30T20:54:50.7162937+02:00","action":"create","task_id":381,"detail":"E2E-Test-5764405c-1e7f-4dd4-90c5-87f7dcd8a9c2"}
-{"timestamp":"2026-03-30T20:54:52.1290374+02:00","action":"delete","task_id":381,"detail":"E2E-Test-5764405c-1e7f-4dd4-90c5-87f7dcd8a9c2"}
-{"timestamp":"2026-03-30T20:54:52.6294053+02:00","action":"create","task_id":382,"detail":"E2E-Test-5189abf3-8684-452c-b7b3-237a8b1aa30a"}
-{"timestamp":"2026-03-30T20:54:53.9769079+02:00","action":"delete","task_id":382,"detail":"E2E-Test-5189abf3-8684-452c-b7b3-237a8b1aa30a"}
-{"timestamp":"2026-03-30T20:54:54.4135127+02:00","action":"create","task_id":383,"detail":"E2E-Test-05bc66be-5e3e-4668-8e2b-437576b56dfb"}
-{"timestamp":"2026-03-30T20:54:55.5564559+02:00","action":"create","task_id":384,"detail":"E2E-Test-599bf3fe-8339-4db8-a6fc-70cce1147f01"}
-{"timestamp":"2026-03-30T20:54:56.7754921+02:00","action":"delete","task_id":383,"detail":"E2E-Test-05bc66be-5e3e-4668-8e2b-437576b56dfb"}
-{"timestamp":"2026-03-30T20:54:57.4282491+02:00","action":"delete","task_id":384,"detail":"E2E-Test-599bf3fe-8339-4db8-a6fc-70cce1147f01"}
-{"timestamp":"2026-03-30T20:56:24.2195667+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T20:56:31.6547253+02:00","action":"create","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-30T20:56:34.8059372+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T20:56:39.3529247+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T20:56:39.3581216+02:00","action":"release","task_id":208,"detail":"reviewer"}
-{"timestamp":"2026-03-30T20:57:13.6239899+02:00","action":"create","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T20:57:26.0644301+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T20:57:33.7495479+02:00","action":"move","task_id":222,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T20:57:38.7048191+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T20:57:38.70903+02:00","action":"release","task_id":222,"detail":"auditor"}
-{"timestamp":"2026-03-30T20:58:10.3254171+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T20:59:02.2169491+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T20:59:02.290834+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T20:59:02.322148+02:00","action":"claim","task_id":191,"detail":"auditor"}
-{"timestamp":"2026-03-30T20:59:19.1045741+02:00","action":"create","task_id":387,"detail":"Design per-agent institutional knowledge system with structured YAML storage"}
-{"timestamp":"2026-03-30T20:59:53.5539261+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T20:59:58.3900051+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T20:59:58.395225+02:00","action":"release","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T21:00:30.4997943+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T21:00:30.5055865+02:00","action":"claim","task_id":224,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:00:33.1451595+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:00:33.1499182+02:00","action":"claim","task_id":54,"detail":"builder"}
-{"timestamp":"2026-03-30T21:00:40.2762552+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T21:00:42.5954133+02:00","action":"create","task_id":388,"detail":"E2E-Test-096491d4-8762-42f3-9604-d43006fc4573"}
-{"timestamp":"2026-03-30T21:00:43.5136852+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:00:44.0207152+02:00","action":"delete","task_id":388,"detail":"E2E-Test-096491d4-8762-42f3-9604-d43006fc4573"}
-{"timestamp":"2026-03-30T21:00:44.5069823+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T21:00:44.511808+02:00","action":"release","task_id":224,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:00:44.7210138+02:00","action":"create","task_id":389,"detail":"E2E-Test-4253aa10-07d4-4b86-b6ee-4e7e8ebe25f3"}
-{"timestamp":"2026-03-30T21:00:46.1236658+02:00","action":"delete","task_id":389,"detail":"E2E-Test-4253aa10-07d4-4b86-b6ee-4e7e8ebe25f3"}
-{"timestamp":"2026-03-30T21:00:46.659+02:00","action":"create","task_id":390,"detail":"E2E-Test-73638b8b-fd81-44f9-b55c-1d343001943d"}
-{"timestamp":"2026-03-30T21:00:48.1289723+02:00","action":"delete","task_id":390,"detail":"E2E-Test-73638b8b-fd81-44f9-b55c-1d343001943d"}
-{"timestamp":"2026-03-30T21:00:48.764232+02:00","action":"create","task_id":391,"detail":"E2E-Test-bd0d6ba8-ee96-4329-8a7c-e3477d3a6e4a"}
-{"timestamp":"2026-03-30T21:00:50.1722671+02:00","action":"delete","task_id":391,"detail":"E2E-Test-bd0d6ba8-ee96-4329-8a7c-e3477d3a6e4a"}
-{"timestamp":"2026-03-30T21:00:50.7004114+02:00","action":"create","task_id":392,"detail":"E2E-Test-8eee2ca8-de15-403e-85ac-4a54351685bc"}
-{"timestamp":"2026-03-30T21:00:52.0946477+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:00:52.0999119+02:00","action":"release","task_id":54,"detail":"builder"}
-{"timestamp":"2026-03-30T21:00:52.2807362+02:00","action":"delete","task_id":392,"detail":"E2E-Test-8eee2ca8-de15-403e-85ac-4a54351685bc"}
-{"timestamp":"2026-03-30T21:00:52.8118885+02:00","action":"create","task_id":393,"detail":"E2E-Test-226c33ca-cf1d-44f5-8741-334995961652"}
-{"timestamp":"2026-03-30T21:00:54.0114906+02:00","action":"create","task_id":394,"detail":"E2E-Test-21702cf0-b5a9-4871-805c-fbb7fd8210af"}
-{"timestamp":"2026-03-30T21:00:54.0726164+02:00","action":"delete","task_id":393,"detail":"E2E-Test-226c33ca-cf1d-44f5-8741-334995961652"}
-{"timestamp":"2026-03-30T21:00:54.5818697+02:00","action":"create","task_id":395,"detail":"E2E-Test-c20c249c-588b-4242-8e64-e9a609fade1d"}
-{"timestamp":"2026-03-30T21:00:55.3988698+02:00","action":"delete","task_id":394,"detail":"E2E-Test-21702cf0-b5a9-4871-805c-fbb7fd8210af"}
-{"timestamp":"2026-03-30T21:00:55.7841526+02:00","action":"create","task_id":396,"detail":"E2E-Test-2b03c543-8ebd-4a43-9531-429978b23a84"}
 {"timestamp":"2026-03-30T21:00:56.172651+02:00","action":"create","task_id":397,"detail":"E2E-Test-c953d6e7-5a62-430e-9328-77dd8ddb088f"}
 {"timestamp":"2026-03-30T21:00:57.1425031+02:00","action":"delete","task_id":395,"detail":"E2E-Test-c20c249c-588b-4242-8e64-e9a609fade1d"}
 {"timestamp":"2026-03-30T21:00:57.6275277+02:00","action":"delete","task_id":397,"detail":"E2E-Test-c953d6e7-5a62-430e-9328-77dd8ddb088f"}
@@ -9998,3 +9919,82 @@
 {"timestamp":"2026-04-06T11:49:49.9435209+02:00","action":"release","task_id":617,"detail":"wren-mold"}
 {"timestamp":"2026-04-06T11:51:23.7047921+02:00","action":"edit","task_id":643,"detail":"P4-03: Deprecate w-project-scoping skill"}
 {"timestamp":"2026-04-06T11:51:23.7194192+02:00","action":"claim","task_id":643,"detail":"grain-south"}
+{"timestamp":"2026-04-06T12:17:28.5914398+02:00","action":"edit","task_id":643,"detail":"P4-03: Deprecate w-project-scoping skill"}
+{"timestamp":"2026-04-06T12:17:28.6036286+02:00","action":"release","task_id":643,"detail":"grain-south"}
+{"timestamp":"2026-04-06T12:17:29.1048347+02:00","action":"move","task_id":643,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T12:17:45.1234381+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:17:45.1389429+02:00","action":"claim","task_id":617,"detail":"plume-ghost"}
+{"timestamp":"2026-04-06T12:18:13.2383921+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:18:13.253395+02:00","action":"claim","task_id":638,"detail":"shore-delta"}
+{"timestamp":"2026-04-06T12:20:07.3317832+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T12:20:07.3452681+02:00","action":"unblock","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T12:21:05.3299379+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:21:05.3420291+02:00","action":"release","task_id":617,"detail":"plume-ghost"}
+{"timestamp":"2026-04-06T12:23:58.1964957+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:23:58.2089084+02:00","action":"release","task_id":638,"detail":"shore-delta"}
+{"timestamp":"2026-04-06T12:24:30.7465529+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:24:30.7630627+02:00","action":"unblock","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:25:26.8132536+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:25:26.8278394+02:00","action":"claim","task_id":616,"detail":"flux-halo"}
+{"timestamp":"2026-04-06T12:25:47.5282284+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T12:25:47.5436869+02:00","action":"claim","task_id":597,"detail":"amber-thyme"}
+{"timestamp":"2026-04-06T12:26:04.9472301+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:26:04.9586705+02:00","action":"claim","task_id":617,"detail":"hail-silk"}
+{"timestamp":"2026-04-06T12:26:08.6087629+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:26:08.6213006+02:00","action":"release","task_id":616,"detail":"flux-halo"}
+{"timestamp":"2026-04-06T12:26:39.7008109+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T12:26:39.712899+02:00","action":"block","task_id":597,"detail":"User action required: manual Teams GUI verification. Three prior pipeline cycles confirmed this task is not pipeline-processable. User must execute AC steps directly."}
+{"timestamp":"2026-04-06T12:26:39.7244442+02:00","action":"release","task_id":597,"detail":"amber-thyme"}
+{"timestamp":"2026-04-06T12:29:29.3306552+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:29:29.3427436+02:00","action":"release","task_id":617,"detail":"hail-silk"}
+{"timestamp":"2026-04-06T12:31:18.8068989+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:31:18.8197405+02:00","action":"claim","task_id":616,"detail":"falcon-gate"}
+{"timestamp":"2026-04-06T12:31:50.4710663+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:31:50.4844418+02:00","action":"claim","task_id":638,"detail":"cedar-glade"}
+{"timestamp":"2026-04-06T12:31:59.373194+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:31:59.3877085+02:00","action":"claim","task_id":617,"detail":"staff-quick"}
+{"timestamp":"2026-04-06T12:32:51.7280413+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:32:51.7391827+02:00","action":"release","task_id":638,"detail":"cedar-glade"}
+{"timestamp":"2026-04-06T12:33:45.0135686+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:33:45.0255083+02:00","action":"release","task_id":617,"detail":"staff-quick"}
+{"timestamp":"2026-04-06T12:34:04.6159286+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:34:04.6275015+02:00","action":"release","task_id":616,"detail":"falcon-gate"}
+{"timestamp":"2026-04-06T12:36:05.0524723+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:36:05.0640956+02:00","action":"claim","task_id":617,"detail":"steel-leaf"}
+{"timestamp":"2026-04-06T12:36:23.669112+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:36:23.6803946+02:00","action":"claim","task_id":616,"detail":"crane-south"}
+{"timestamp":"2026-04-06T12:37:04.1226709+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:37:04.1371387+02:00","action":"release","task_id":616,"detail":"crane-south"}
+{"timestamp":"2026-04-06T12:44:50.4025491+02:00","action":"edit","task_id":617,"detail":"Expose scope parameters in mcp-knowledge tool signatures"}
+{"timestamp":"2026-04-06T12:44:50.4137319+02:00","action":"release","task_id":617,"detail":"steel-leaf"}
+{"timestamp":"2026-04-06T12:44:50.9637964+02:00","action":"move","task_id":617,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T12:45:09.4191859+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T12:45:09.4348526+02:00","action":"claim","task_id":657,"detail":"quake-orbit"}
+{"timestamp":"2026-04-06T12:45:20.0321573+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T12:45:20.0478393+02:00","action":"release","task_id":657,"detail":"quake-orbit"}
+{"timestamp":"2026-04-06T12:45:27.8279384+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:45:27.840349+02:00","action":"claim","task_id":638,"detail":"gorge-lime"}
+{"timestamp":"2026-04-06T12:52:00.4671754+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:52:00.4801132+02:00","action":"release","task_id":638,"detail":"gorge-lime"}
+{"timestamp":"2026-04-06T12:53:24.2622644+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T12:53:24.2767215+02:00","action":"claim","task_id":616,"detail":"storm-timber"}
+{"timestamp":"2026-04-06T12:53:54.6710745+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:53:54.6837625+02:00","action":"claim","task_id":638,"detail":"cloud-tiger"}
+{"timestamp":"2026-04-06T12:55:28.0377899+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T12:55:28.0528893+02:00","action":"release","task_id":638,"detail":"cloud-tiger"}
+{"timestamp":"2026-04-06T13:05:11.7532776+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T13:05:11.763601+02:00","action":"release","task_id":616,"detail":"storm-timber"}
+{"timestamp":"2026-04-06T13:05:12.2687806+02:00","action":"move","task_id":616,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T13:05:44.7508861+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T13:05:44.7622045+02:00","action":"claim","task_id":657,"detail":"dawn-heron"}
+{"timestamp":"2026-04-06T13:08:55.0205305+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T13:08:55.0310555+02:00","action":"release","task_id":657,"detail":"dawn-heron"}
+{"timestamp":"2026-04-06T13:10:06.8690478+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T13:10:06.8819388+02:00","action":"claim","task_id":657,"detail":"thyme-brew"}
+{"timestamp":"2026-04-06T13:10:09.1069369+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T13:10:09.1200491+02:00","action":"claim","task_id":638,"detail":"raven-coal"}
+{"timestamp":"2026-04-06T13:11:01.9495503+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
+{"timestamp":"2026-04-06T13:11:01.9621646+02:00","action":"release","task_id":657,"detail":"thyme-brew"}
+{"timestamp":"2026-04-06T13:26:49.7060962+02:00","action":"edit","task_id":638,"detail":"Add editFiles to deny-code-writes.ps1 write-tool gate after schema verification"}
+{"timestamp":"2026-04-06T13:26:49.7171039+02:00","action":"release","task_id":638,"detail":"raven-coal"}
+{"timestamp":"2026-04-06T13:26:50.191543+02:00","action":"move","task_id":638,"detail":"done -\u003e archived"}
