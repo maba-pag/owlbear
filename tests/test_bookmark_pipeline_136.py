@@ -479,7 +479,8 @@ class TestFromAC_RefreshOrchestratorRefresh:  # noqa: N801
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         store_mock = MagicMock()
-        store_mock.list_enabled.return_value = [_make_source(name=f"src-{i}") for i in range(3)]
+        # refresh_all calls list_all() (not list_enabled); caller-side filter selects enabled sources
+        store_mock.list_all.return_value = [_make_source(name=f"src-{i}") for i in range(3)]
         store_mock.update = MagicMock()
         pipeline_mock = MagicMock()
 
@@ -840,3 +841,110 @@ class TestFromAC_InitExports:  # noqa: N801
         import owlbear_knowledge  # noqa: PLC0415
 
         assert "RefreshOrchestrator" in owlbear_knowledge.__all__
+
+
+# ===========================================================================
+# Builder-discovered tests — coverage gaps in refresh.py
+# ===========================================================================
+
+
+class TestBuilderDiscovered:  # noqa: N801
+    """Builder-discovered tests for code paths not reachable by AC-derived tests alone."""
+
+    @pytest.mark.asyncio
+    async def test_url_list_processes_ok_skipped_failed_statuses(self) -> None:
+        """URL list handler tallies ok/skipped/failed when read_url is mocked."""
+        from unittest.mock import patch  # noqa: PLC0415
+
+        from owlbear_knowledge.ingest import IngestResult  # noqa: PLC0415
+        from owlbear_knowledge.intake import IntakeResult  # noqa: PLC0415
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        pipeline_mock = MagicMock()
+        pipeline_mock.ingest = AsyncMock(
+            side_effect=[
+                IngestResult(document_id="d1", chunk_count=1, entity_count=0, edge_count=0, status="ok"),
+                IngestResult(document_id="d2", chunk_count=0, entity_count=0, edge_count=0, status="skipped"),
+                IngestResult(document_id="d3", chunk_count=0, entity_count=0, edge_count=0, status="failed"),
+            ]
+        )
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        fake_intake = IntakeResult(content="hello", source="https://a.com", metadata={})
+        orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock)
+        source = _make_source(
+            source_type=SourceType.URL_LIST,
+            config={"urls": ["https://a.com", "https://b.com", "https://c.com"]},
+        )
+        with patch("owlbear_knowledge.refresh._intake.read_url", new_callable=AsyncMock) as mock_read:
+            mock_read.return_value = fake_intake
+            result = await orch.refresh(source)
+
+        assert result.refreshed == 1
+        assert result.skipped == 1
+        assert result.failed == 1
+
+    @pytest.mark.asyncio
+    async def test_handle_crawl_with_handler_tallies_all_statuses(self) -> None:
+        """_handle_crawl invokes crawl_handler and tallies ok/skipped/failed results."""
+        from owlbear_knowledge.ingest import IngestResult  # noqa: PLC0415
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        crawl_results = [
+            IngestResult(document_id="d1", chunk_count=1, entity_count=0, edge_count=0, status="ok"),
+            IngestResult(document_id="d2", chunk_count=0, entity_count=0, edge_count=0, status="skipped"),
+            IngestResult(document_id="d3", chunk_count=0, entity_count=0, edge_count=0, status="failed"),
+        ]
+        crawl_handler = AsyncMock(return_value=crawl_results)
+        store_mock = MagicMock()
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(
+            store=store_mock,
+            pipeline=MagicMock(),
+            crawl_handler=crawl_handler,
+        )
+        source = _make_source(source_type=SourceType.CRAWL, config={"seed_url": "https://example.com"})
+        result = await orch.refresh(source)
+
+        crawl_handler.assert_called_once_with(source.config)
+        assert result.refreshed == 1
+        assert result.skipped == 1
+        assert result.failed == 1
+
+    @pytest.mark.asyncio
+    async def test_refresh_all_collects_successful_results(self) -> None:
+        """refresh_all appends RefreshResult when source refresh succeeds."""
+        from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult  # noqa: PLC0415
+
+        store_mock = MagicMock()
+        # URL_LIST with empty URL list: succeeds without network I/O
+        store_mock.list_all.return_value = [
+            _make_source(name="empty-src", source_type=SourceType.URL_LIST, config={"urls": []}),
+        ]
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock())
+        results = await orch.refresh_all()
+
+        assert len(results) == 1
+        assert isinstance(results[0], RefreshResult)
+
+    @pytest.mark.asyncio
+    async def test_refresh_all_exception_from_source_is_caught(self) -> None:
+        """refresh_all catches exceptions from individual refresh() and returns empty list."""
+        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
+
+        store_mock = MagicMock()
+        # CRAWL source with crawl_handler=None causes refresh() to raise ValueError
+        store_mock.list_all.return_value = [
+            _make_source(name="crawl-src", source_type=SourceType.CRAWL, config={}),
+        ]
+        store_mock.update = MagicMock()
+
+        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock(), crawl_handler=None)
+        # Must not propagate; exception is logged and swallowed
+        results = await orch.refresh_all()
+
+        assert results == []
