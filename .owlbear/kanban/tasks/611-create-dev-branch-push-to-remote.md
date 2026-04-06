@@ -1,18 +1,18 @@
 ---
 id: 611
 title: Create dev branch, push to remote
-status: review
+status: done
 priority: nice-to-have
 created: 2026-04-04T21:54:56.0860979+02:00
-updated: 2026-04-06T15:11:32.1263909+02:00
+updated: 2026-04-06T16:42:10.8172884+02:00
 tags:
     - scope:infra
     - type:build
     - type:config
     - phase-2
 parent: 610
-claimed_by: thorn-steam
-claimed_at: 2026-04-06T15:11:32.1248094+02:00
+claimed_by: creek-torch
+claimed_at: 2026-04-06T16:42:10.8162508+02:00
 class: standard
 ---
 
@@ -74,3 +74,54 @@ Refined AC from 5 to 3 lines (removed unverifiable policy and optional items). A
 
 [[2026-04-06]] Mon 04:05
 ## Builder Notes\n\n- AC1: `git branch dev` created dev from current HEAD of main (commit 280a316) ✓\n- AC2: `git push origin dev` — `origin/dev` now exists ✓\n- AC3: `origin/HEAD -> origin/main` — default branch unchanged ✓\n\nDev and main are now identical; they diverge after the first sync (#613 → #615) runs.
+
+[[2026-04-06]] Mon 15:18
+## Review Evidence
+
+### Task Type
+Non-implementation infrastructure task (`type:config`, `scope:infra`). Test-writer correctly passed through — no `TestFromAC_*` classes, no test suite to run. Quality-Runner not applicable.
+
+### Test / Lint / Coverage
+N/A — pure git operation, no source files changed.
+
+### Changed Files (relevant to #611)
+None. `get_changed_files` output contains 57 files, all unrelated to this task. No working tree artifact from the git branch operation.
+
+### AC Compliance Table
+
+| AC | Condition | Evidence | Status |
+|----|-----------|----------|--------|
+| AC1 | dev branch created from current HEAD of main | Builder: `git branch dev` at commit 280a316. Task #615 builder confirms local working branch is `dev`. `sync-to-main.yml` `ref: dev` ran successfully (GHA run #24016013780). | COVERED |
+| AC2 | dev branch pushed to origin | Builder: `git push origin dev → origin/dev now exists`. Parent #610 builder independently: `git branch -r → origin/dev ✓`. GHA checkout from `ref: dev` succeeded — impossible without `origin/dev`. `dependabot.yml` all three ecosystems target `target-branch: "dev"`. | COVERED |
+| AC3 | GitHub default branch remains main | Builder: `origin/HEAD -> origin/main`. Structurally sound: `git push origin dev` creates branch only; default branch requires separate GitHub API call. Sync workflow pushes to `HEAD:main --force` confirming main as the active target branch. | COVERED |
+
+### Security Review
+- No code written, no new dependencies, no new system boundaries
+- No hardcoded secrets, no injection surface, no file path manipulation
+- Git operation only — OWASP Top 10 not applicable
+
+### Verification Limitations
+`.git/` directory entirely blocked by Copilot ignore config — direct SHA comparison between dev and main at branch creation not possible. Evidence chain relies on three independent corroborating signals: (1) successful GitHub Actions run against `ref: dev`, (2) parent task #610 builder independent `git branch -r` verification, (3) current local working branch is `dev`.
+
+### Deductions
+- -0.04: Cannot directly verify git refs (`.git` blocked). AC1 starting SHA equality to main cannot be confirmed independently.
+
+### Verdict
+PASS | confidence .96
+
+[[2026-04-06]] Mon 16:24
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Git-only operation; no behavior, API, or convention changes |
+| 2 | Module docstrings | No | N/A | No Python files created or modified |
+| 3 | External attribution | No | N/A | Standard `git branch` / `git push` — no external patterns used |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | No | N/A | No research phase; task scoped to single git operation |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None

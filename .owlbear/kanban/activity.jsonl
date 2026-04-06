@@ -1,121 +1,3 @@
-{"timestamp":"2026-03-30T21:00:59.6169816+02:00","action":"delete","task_id":398,"detail":"E2E-Test-7fa65c05-4e02-4156-87cc-5fe210790ab4"}
-{"timestamp":"2026-03-30T21:01:00.1540267+02:00","action":"create","task_id":399,"detail":"E2E-Test-f24612b1-c396-4648-b813-14bc997c51c9"}
-{"timestamp":"2026-03-30T21:01:01.6198314+02:00","action":"delete","task_id":399,"detail":"E2E-Test-f24612b1-c396-4648-b813-14bc997c51c9"}
-{"timestamp":"2026-03-30T21:01:02.2444934+02:00","action":"create","task_id":400,"detail":"E2E-Test-0d337016-faa7-4eb5-898e-2a5266d45632"}
-{"timestamp":"2026-03-30T21:01:03.7590263+02:00","action":"delete","task_id":400,"detail":"E2E-Test-0d337016-faa7-4eb5-898e-2a5266d45632"}
-{"timestamp":"2026-03-30T21:01:04.3927666+02:00","action":"create","task_id":401,"detail":"E2E-Test-cd0d7aa2-9d51-480c-bfb6-875f3e8e96cd"}
-{"timestamp":"2026-03-30T21:01:05.6862615+02:00","action":"delete","task_id":401,"detail":"E2E-Test-cd0d7aa2-9d51-480c-bfb6-875f3e8e96cd"}
-{"timestamp":"2026-03-30T21:01:06.2653766+02:00","action":"create","task_id":402,"detail":"E2E-Test-ebb280e7-1fcc-4bed-a7d5-ac853e7c277e"}
-{"timestamp":"2026-03-30T21:01:07.3954004+02:00","action":"create","task_id":403,"detail":"E2E-Test-77ab4be0-94ab-42a2-ae5d-8efb933308a7"}
-{"timestamp":"2026-03-30T21:01:08.7836645+02:00","action":"delete","task_id":402,"detail":"E2E-Test-ebb280e7-1fcc-4bed-a7d5-ac853e7c277e"}
-{"timestamp":"2026-03-30T21:01:09.4301148+02:00","action":"delete","task_id":403,"detail":"E2E-Test-77ab4be0-94ab-42a2-ae5d-8efb933308a7"}
-{"timestamp":"2026-03-30T21:01:59.6718808+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T21:01:59.6766271+02:00","action":"claim","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:02:28.0586217+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T21:02:32.7104617+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T21:02:32.7146112+02:00","action":"release","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:04:27.3067317+02:00","action":"create","task_id":404,"detail":"E2E-Test-1af3da78-bfdf-46d8-a21d-9e072d4ac182"}
-{"timestamp":"2026-03-30T21:04:28.3748245+02:00","action":"delete","task_id":404,"detail":"E2E-Test-1af3da78-bfdf-46d8-a21d-9e072d4ac182"}
-{"timestamp":"2026-03-30T21:04:29.1285421+02:00","action":"create","task_id":405,"detail":"E2E-Test-03c3c77a-316f-4261-90c6-494119e655e6"}
-{"timestamp":"2026-03-30T21:04:30.4430714+02:00","action":"delete","task_id":405,"detail":"E2E-Test-03c3c77a-316f-4261-90c6-494119e655e6"}
-{"timestamp":"2026-03-30T21:04:30.9748373+02:00","action":"create","task_id":406,"detail":"E2E-Test-5fac09c9-2015-424e-bdbb-775ea4918eb1"}
-{"timestamp":"2026-03-30T21:04:32.1777634+02:00","action":"delete","task_id":406,"detail":"E2E-Test-5fac09c9-2015-424e-bdbb-775ea4918eb1"}
-{"timestamp":"2026-03-30T21:04:32.6315167+02:00","action":"create","task_id":407,"detail":"E2E-Test-f5eb64b4-51cb-461d-95f5-50c1d0b901e6"}
-{"timestamp":"2026-03-30T21:04:33.9394349+02:00","action":"delete","task_id":407,"detail":"E2E-Test-f5eb64b4-51cb-461d-95f5-50c1d0b901e6"}
-{"timestamp":"2026-03-30T21:04:34.4351355+02:00","action":"create","task_id":408,"detail":"E2E-Test-527adf4a-7db9-45f8-959c-0ce564826908"}
-{"timestamp":"2026-03-30T21:04:35.6536127+02:00","action":"delete","task_id":408,"detail":"E2E-Test-527adf4a-7db9-45f8-959c-0ce564826908"}
-{"timestamp":"2026-03-30T21:04:36.2103838+02:00","action":"create","task_id":409,"detail":"E2E-Test-076cc5ef-4307-4276-8fcf-5897a60cd86b"}
-{"timestamp":"2026-03-30T21:04:37.3724059+02:00","action":"delete","task_id":409,"detail":"E2E-Test-076cc5ef-4307-4276-8fcf-5897a60cd86b"}
-{"timestamp":"2026-03-30T21:04:37.9098333+02:00","action":"create","task_id":410,"detail":"E2E-Test-d5257194-174a-44df-b79f-c810c6f13c96"}
-{"timestamp":"2026-03-30T21:04:38.932764+02:00","action":"create","task_id":411,"detail":"E2E-Test-5143b201-fd1b-47f7-ae6a-be93184a9147"}
-{"timestamp":"2026-03-30T21:04:40.2499276+02:00","action":"delete","task_id":410,"detail":"E2E-Test-d5257194-174a-44df-b79f-c810c6f13c96"}
-{"timestamp":"2026-03-30T21:04:40.8267206+02:00","action":"delete","task_id":411,"detail":"E2E-Test-5143b201-fd1b-47f7-ae6a-be93184a9147"}
-{"timestamp":"2026-03-30T21:08:23.6529239+02:00","action":"move","task_id":191,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T21:08:24.1116826+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T21:08:24.1153076+02:00","action":"release","task_id":191,"detail":"auditor"}
-{"timestamp":"2026-03-30T21:08:55.7986468+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
-{"timestamp":"2026-03-30T21:09:29.2424347+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T21:09:29.2492259+02:00","action":"claim","task_id":219,"detail":"auditor"}
-{"timestamp":"2026-03-30T21:10:37.4793593+02:00","action":"create","task_id":412,"detail":"E2E-Test-b738287e-d5e4-4a5f-985c-a339386a2dbf"}
-{"timestamp":"2026-03-30T21:10:38.7460719+02:00","action":"delete","task_id":412,"detail":"E2E-Test-b738287e-d5e4-4a5f-985c-a339386a2dbf"}
-{"timestamp":"2026-03-30T21:10:39.2643388+02:00","action":"create","task_id":413,"detail":"E2E-Test-2f9d5ddb-77a7-41b9-8d75-08956c7038f1"}
-{"timestamp":"2026-03-30T21:10:40.6215143+02:00","action":"delete","task_id":413,"detail":"E2E-Test-2f9d5ddb-77a7-41b9-8d75-08956c7038f1"}
-{"timestamp":"2026-03-30T21:10:41.1312431+02:00","action":"create","task_id":414,"detail":"E2E-Test-010b613e-bba3-4b07-885d-85906d2f0be0"}
-{"timestamp":"2026-03-30T21:10:42.3063241+02:00","action":"delete","task_id":414,"detail":"E2E-Test-010b613e-bba3-4b07-885d-85906d2f0be0"}
-{"timestamp":"2026-03-30T21:10:42.8232885+02:00","action":"create","task_id":415,"detail":"E2E-Test-b2dd9258-1b1a-4c20-b1a5-da2afb849640"}
-{"timestamp":"2026-03-30T21:10:44.0703654+02:00","action":"delete","task_id":415,"detail":"E2E-Test-b2dd9258-1b1a-4c20-b1a5-da2afb849640"}
-{"timestamp":"2026-03-30T21:10:44.6069803+02:00","action":"create","task_id":416,"detail":"E2E-Test-bb01d9a9-3720-4ddc-8196-588fbca36f41"}
-{"timestamp":"2026-03-30T21:10:45.966696+02:00","action":"delete","task_id":416,"detail":"E2E-Test-bb01d9a9-3720-4ddc-8196-588fbca36f41"}
-{"timestamp":"2026-03-30T21:10:46.4973698+02:00","action":"create","task_id":417,"detail":"E2E-Test-5b4fc6a0-026b-4173-927e-34dede6e8f57"}
-{"timestamp":"2026-03-30T21:10:47.6928557+02:00","action":"delete","task_id":417,"detail":"E2E-Test-5b4fc6a0-026b-4173-927e-34dede6e8f57"}
-{"timestamp":"2026-03-30T21:10:48.1687081+02:00","action":"create","task_id":418,"detail":"E2E-Test-c039899a-061e-45f5-9d4d-baaa6989e0fa"}
-{"timestamp":"2026-03-30T21:10:49.239618+02:00","action":"create","task_id":419,"detail":"E2E-Test-30bf6393-b600-48a9-94d2-c834d084a181"}
-{"timestamp":"2026-03-30T21:10:50.453047+02:00","action":"delete","task_id":418,"detail":"E2E-Test-c039899a-061e-45f5-9d4d-baaa6989e0fa"}
-{"timestamp":"2026-03-30T21:10:51.0652511+02:00","action":"delete","task_id":419,"detail":"E2E-Test-30bf6393-b600-48a9-94d2-c834d084a181"}
-{"timestamp":"2026-03-30T21:13:31.9683312+02:00","action":"create","task_id":420,"detail":"E2E-Test-aa530add-d1b7-41eb-b0c6-6c7458ad1f98"}
-{"timestamp":"2026-03-30T21:13:33.5059863+02:00","action":"delete","task_id":420,"detail":"E2E-Test-aa530add-d1b7-41eb-b0c6-6c7458ad1f98"}
-{"timestamp":"2026-03-30T21:13:34.1770792+02:00","action":"create","task_id":421,"detail":"E2E-Test-460397b5-ade9-4197-b7e0-48ec3910e9ff"}
-{"timestamp":"2026-03-30T21:13:35.5600168+02:00","action":"delete","task_id":421,"detail":"E2E-Test-460397b5-ade9-4197-b7e0-48ec3910e9ff"}
-{"timestamp":"2026-03-30T21:13:36.1167982+02:00","action":"create","task_id":422,"detail":"E2E-Test-0cc10a0e-f60d-46cb-874f-d9a45435b2b5"}
-{"timestamp":"2026-03-30T21:13:37.4997241+02:00","action":"delete","task_id":422,"detail":"E2E-Test-0cc10a0e-f60d-46cb-874f-d9a45435b2b5"}
-{"timestamp":"2026-03-30T21:13:38.0790896+02:00","action":"create","task_id":423,"detail":"E2E-Test-fb973812-fe3e-4e28-b662-d2be030eadc1"}
-{"timestamp":"2026-03-30T21:13:39.5436578+02:00","action":"delete","task_id":423,"detail":"E2E-Test-fb973812-fe3e-4e28-b662-d2be030eadc1"}
-{"timestamp":"2026-03-30T21:13:40.0998971+02:00","action":"create","task_id":424,"detail":"E2E-Test-13b633db-b1be-4066-ab80-dcb6c42a0e8b"}
-{"timestamp":"2026-03-30T21:13:41.6694249+02:00","action":"delete","task_id":424,"detail":"E2E-Test-13b633db-b1be-4066-ab80-dcb6c42a0e8b"}
-{"timestamp":"2026-03-30T21:13:42.2087227+02:00","action":"create","task_id":425,"detail":"E2E-Test-c508783c-6761-42e1-a839-e093c24b6ca7"}
-{"timestamp":"2026-03-30T21:13:43.7316476+02:00","action":"delete","task_id":425,"detail":"E2E-Test-c508783c-6761-42e1-a839-e093c24b6ca7"}
-{"timestamp":"2026-03-30T21:13:44.239579+02:00","action":"create","task_id":426,"detail":"E2E-Test-40163f67-bda1-45ac-ac60-06267c194ab4"}
-{"timestamp":"2026-03-30T21:13:45.5404438+02:00","action":"create","task_id":427,"detail":"E2E-Test-516f8e32-d480-42f7-b2de-4ddec96ace37"}
-{"timestamp":"2026-03-30T21:13:46.9771085+02:00","action":"delete","task_id":426,"detail":"E2E-Test-40163f67-bda1-45ac-ac60-06267c194ab4"}
-{"timestamp":"2026-03-30T21:13:47.770977+02:00","action":"delete","task_id":427,"detail":"E2E-Test-516f8e32-d480-42f7-b2de-4ddec96ace37"}
-{"timestamp":"2026-03-30T21:16:12.9751115+02:00","action":"move","task_id":219,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T21:16:19.2481063+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T21:16:19.2517808+02:00","action":"release","task_id":219,"detail":"auditor"}
-{"timestamp":"2026-03-30T21:16:31.6248217+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T21:16:40.4616153+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T21:17:04.1101905+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
-{"timestamp":"2026-03-30T21:17:44.6730404+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T21:17:44.6777966+02:00","action":"claim","task_id":318,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:17:44.8570615+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-30T21:17:44.8612952+02:00","action":"claim","task_id":308,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:17:45.5217296+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T21:17:45.5257652+02:00","action":"claim","task_id":307,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:17:48.0498495+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T21:17:48.0551205+02:00","action":"claim","task_id":220,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:17:52.6878578+02:00","action":"create","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-30T21:18:12.049269+02:00","action":"create","task_id":429,"detail":"deer-flow broad survey: architecture, context engineering, guardrails, tooling patterns"}
-{"timestamp":"2026-03-30T21:18:28.1015015+02:00","action":"edit","task_id":387,"detail":"Design per-agent institutional knowledge system via dedicated memory-mcp server"}
-{"timestamp":"2026-03-30T21:19:39.0709176+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-30T21:19:39.0795106+02:00","action":"release","task_id":308,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:19:56.3655378+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T21:19:57.9113977+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-30T21:20:07.1192924+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T21:20:12.2692414+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T21:20:12.2752983+02:00","action":"release","task_id":220,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:21:03.6695027+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T21:21:09.4113989+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T21:21:09.4156621+02:00","action":"release","task_id":307,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:21:37.6141907+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T21:21:48.2424809+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T21:22:02.3449924+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:22:02.3481393+02:00","action":"claim","task_id":264,"detail":"architect"}
-{"timestamp":"2026-03-30T21:22:03.5774174+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-30T21:22:03.5806168+02:00","action":"claim","task_id":385,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:22:09.507355+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T21:22:09.5110403+02:00","action":"release","task_id":318,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:23:06.3331421+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T21:23:06.3368765+02:00","action":"claim","task_id":224,"detail":"builder"}
-{"timestamp":"2026-03-30T21:24:13.2637474+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:24:33.475679+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:24:44.6459974+02:00","action":"create","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:24:49.8687236+02:00","action":"edit","task_id":430,"detail":"Test: Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:24:55.2749944+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:25:14.4940584+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:25:20.0325677+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
-{"timestamp":"2026-03-30T21:25:20.0362059+02:00","action":"release","task_id":264,"detail":"architect"}
-{"timestamp":"2026-03-30T21:25:34.3612905+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T21:25:34.3655462+02:00","action":"claim","task_id":147,"detail":"builder"}
-{"timestamp":"2026-03-30T21:26:41.4655241+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
 {"timestamp":"2026-03-30T21:26:45.3715145+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
 {"timestamp":"2026-03-30T21:26:45.3761865+02:00","action":"release","task_id":147,"detail":"builder"}
 {"timestamp":"2026-03-30T21:27:13.8893289+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
@@ -9998,3 +9880,121 @@
 {"timestamp":"2026-04-06T13:38:15.026865+02:00","action":"edit","task_id":657,"detail":"Typed contract for scribe↔orchestrator NEEDS-INFO boundary"}
 {"timestamp":"2026-04-06T13:38:15.0385361+02:00","action":"release","task_id":657,"detail":"cedar-halo"}
 {"timestamp":"2026-04-06T13:38:15.5290908+02:00","action":"move","task_id":657,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T14:20:35.0820309+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T14:28:02.9661925+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T14:28:02.9891873+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T14:28:03.0362158+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T14:28:16.9061194+02:00","action":"move","task_id":590,"detail":"in-progress -\u003e todo"}
+{"timestamp":"2026-04-06T14:58:16.2249882+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T14:58:16.2377121+02:00","action":"claim","task_id":632,"detail":"pond-edge"}
+{"timestamp":"2026-04-06T14:58:38.6936971+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T14:58:38.7064323+02:00","action":"claim","task_id":654,"detail":"warp-spray"}
+{"timestamp":"2026-04-06T14:58:42.246457+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T14:58:42.2580294+02:00","action":"claim","task_id":655,"detail":"marsh-basin"}
+{"timestamp":"2026-04-06T14:58:42.3129967+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T14:58:42.3426734+02:00","action":"claim","task_id":644,"detail":"opal-halo"}
+{"timestamp":"2026-04-06T15:01:05.0289999+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T15:01:05.043047+02:00","action":"release","task_id":654,"detail":"warp-spray"}
+{"timestamp":"2026-04-06T15:01:06.8064945+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T15:01:06.8205682+02:00","action":"release","task_id":655,"detail":"marsh-basin"}
+{"timestamp":"2026-04-06T15:01:44.6187066+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T15:01:44.6338748+02:00","action":"release","task_id":644,"detail":"opal-halo"}
+{"timestamp":"2026-04-06T15:01:55.539327+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T15:01:55.5498317+02:00","action":"release","task_id":632,"detail":"pond-edge"}
+{"timestamp":"2026-04-06T15:02:46.2326318+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T15:02:46.2514646+02:00","action":"claim","task_id":658,"detail":"mace-lake"}
+{"timestamp":"2026-04-06T15:02:46.5890682+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T15:02:46.6360561+02:00","action":"claim","task_id":597,"detail":"linen-mill"}
+{"timestamp":"2026-04-06T15:02:46.7522172+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T15:02:46.7772359+02:00","action":"claim","task_id":660,"detail":"orbit-crypt"}
+{"timestamp":"2026-04-06T15:02:47.3991794+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T15:02:47.4141397+02:00","action":"claim","task_id":656,"detail":"oaken-hill"}
+{"timestamp":"2026-04-06T15:04:28.5259626+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T15:04:28.544573+02:00","action":"release","task_id":658,"detail":"mace-lake"}
+{"timestamp":"2026-04-06T15:04:40.6240466+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T15:04:40.6379383+02:00","action":"release","task_id":597,"detail":"linen-mill"}
+{"timestamp":"2026-04-06T15:05:44.0030618+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T15:05:44.0183005+02:00","action":"release","task_id":660,"detail":"orbit-crypt"}
+{"timestamp":"2026-04-06T15:09:55.2267434+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T15:09:55.2395132+02:00","action":"release","task_id":656,"detail":"oaken-hill"}
+{"timestamp":"2026-04-06T15:11:00.4549206+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T15:11:00.4712822+02:00","action":"claim","task_id":659,"detail":"crow-rust"}
+{"timestamp":"2026-04-06T15:11:00.5454617+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T15:11:00.59345+02:00","action":"claim","task_id":661,"detail":"flare-zone"}
+{"timestamp":"2026-04-06T15:11:32.1279801+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T15:11:32.1415336+02:00","action":"claim","task_id":611,"detail":"thorn-steam"}
+{"timestamp":"2026-04-06T15:12:14.7064227+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T15:12:14.7227177+02:00","action":"claim","task_id":136,"detail":"hill-crypt"}
+{"timestamp":"2026-04-06T15:12:25.0929883+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T15:12:25.1071289+02:00","action":"release","task_id":659,"detail":"crow-rust"}
+{"timestamp":"2026-04-06T15:18:56.1390337+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T15:18:56.1551775+02:00","action":"release","task_id":611,"detail":"thorn-steam"}
+{"timestamp":"2026-04-06T15:19:02.4924051+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T15:19:02.5066509+02:00","action":"release","task_id":136,"detail":"hill-crypt"}
+{"timestamp":"2026-04-06T16:13:44.4140253+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T16:13:44.4469034+02:00","action":"claim","task_id":136,"detail":"oxide-mold"}
+{"timestamp":"2026-04-06T16:14:07.6760532+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T16:14:07.6916684+02:00","action":"claim","task_id":655,"detail":"linen-lark"}
+{"timestamp":"2026-04-06T16:14:07.7690754+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T16:14:07.7997232+02:00","action":"claim","task_id":644,"detail":"fire-sand"}
+{"timestamp":"2026-04-06T16:14:07.7615898+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T16:14:07.8601006+02:00","action":"claim","task_id":654,"detail":"oaken-heath"}
+{"timestamp":"2026-04-06T16:15:34.5024183+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T16:15:34.5168597+02:00","action":"release","task_id":655,"detail":"linen-lark"}
+{"timestamp":"2026-04-06T16:15:58.2799805+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T16:15:58.2925577+02:00","action":"release","task_id":654,"detail":"oaken-heath"}
+{"timestamp":"2026-04-06T16:18:28.3109454+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T16:18:28.3258831+02:00","action":"release","task_id":136,"detail":"oxide-mold"}
+{"timestamp":"2026-04-06T16:22:44.4302876+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T16:22:44.4446384+02:00","action":"release","task_id":644,"detail":"fire-sand"}
+{"timestamp":"2026-04-06T16:23:40.5829191+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T16:23:40.5971971+02:00","action":"claim","task_id":660,"detail":"timber-coral"}
+{"timestamp":"2026-04-06T16:23:42.4294149+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T16:23:42.4424285+02:00","action":"claim","task_id":656,"detail":"raven-helm"}
+{"timestamp":"2026-04-06T16:23:48.0480504+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T16:23:48.0636761+02:00","action":"claim","task_id":632,"detail":"fawn-forge"}
+{"timestamp":"2026-04-06T16:23:49.1601691+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T16:23:49.174238+02:00","action":"claim","task_id":611,"detail":"wick-quiet"}
+{"timestamp":"2026-04-06T16:24:05.3193966+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T16:24:05.3329624+02:00","action":"release","task_id":611,"detail":"wick-quiet"}
+{"timestamp":"2026-04-06T16:25:29.6673482+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T16:25:29.6821103+02:00","action":"release","task_id":632,"detail":"fawn-forge"}
+{"timestamp":"2026-04-06T16:26:17.6290082+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T16:26:17.6405686+02:00","action":"release","task_id":660,"detail":"timber-coral"}
+{"timestamp":"2026-04-06T16:27:10.9457256+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T16:27:10.9621194+02:00","action":"release","task_id":656,"detail":"raven-helm"}
+{"timestamp":"2026-04-06T16:28:09.5461715+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T16:28:09.5602497+02:00","action":"claim","task_id":661,"detail":"mesa-jade"}
+{"timestamp":"2026-04-06T16:28:09.6296975+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T16:28:09.6650055+02:00","action":"claim","task_id":658,"detail":"peak-creek"}
+{"timestamp":"2026-04-06T16:28:09.6744587+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T16:28:09.7104441+02:00","action":"claim","task_id":659,"detail":"amber-heron"}
+{"timestamp":"2026-04-06T16:28:33.8310134+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T16:28:33.8477591+02:00","action":"claim","task_id":597,"detail":"timber-thyme"}
+{"timestamp":"2026-04-06T16:28:41.8618229+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T16:28:41.8762296+02:00","action":"release","task_id":597,"detail":"timber-thyme"}
+{"timestamp":"2026-04-06T16:29:35.9826702+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T16:29:35.995399+02:00","action":"release","task_id":658,"detail":"peak-creek"}
+{"timestamp":"2026-04-06T16:30:03.584192+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T16:30:03.5957178+02:00","action":"release","task_id":659,"detail":"amber-heron"}
+{"timestamp":"2026-04-06T16:39:07.1792116+02:00","action":"create","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (4 locations)"}
+{"timestamp":"2026-04-06T16:39:07.7366508+02:00","action":"create","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T16:39:08.3092538+02:00","action":"create","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-06T16:39:43.2393849+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T16:39:43.2525724+02:00","action":"release","task_id":661,"detail":"mesa-jade"}
+{"timestamp":"2026-04-06T16:41:55.9674205+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T16:41:55.9803192+02:00","action":"claim","task_id":661,"detail":"edge-falcon"}
+{"timestamp":"2026-04-06T16:42:02.4654587+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T16:42:02.4802906+02:00","action":"claim","task_id":632,"detail":"flux-steam"}
+{"timestamp":"2026-04-06T16:42:08.8935178+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T16:42:08.9080202+02:00","action":"claim","task_id":656,"detail":"hive-vapor"}
+{"timestamp":"2026-04-06T16:42:10.8183825+02:00","action":"edit","task_id":611,"detail":"Create dev branch, push to remote"}
+{"timestamp":"2026-04-06T16:42:10.8326693+02:00","action":"claim","task_id":611,"detail":"creek-torch"}
+{"timestamp":"2026-04-06T16:42:27.819212+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
+{"timestamp":"2026-04-06T16:42:27.8313705+02:00","action":"release","task_id":632,"detail":"flux-steam"}
+{"timestamp":"2026-04-06T16:43:44.6622622+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
+{"timestamp":"2026-04-06T16:43:44.6770054+02:00","action":"release","task_id":656,"detail":"hive-vapor"}
+{"timestamp":"2026-04-06T16:46:57.2226678+02:00","action":"create","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T16:47:04.4731486+02:00","action":"create","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-06T16:48:09.8313235+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T16:48:09.8455337+02:00","action":"release","task_id":661,"detail":"edge-falcon"}
