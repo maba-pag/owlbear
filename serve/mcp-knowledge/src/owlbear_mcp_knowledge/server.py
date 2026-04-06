@@ -189,13 +189,18 @@ _app_context: AppContext | None = None
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[SearchResult] | str:
+async def search_knowledge(
+    ctx: Context,
+    query: str,
+    limit: int = 5,
+    scopes: list[str] | None = None,
+) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     qs = app_ctx.query_service
     if qs is None:
         return "error: Knowledge service not available."
-    results = await qs.query(query, top_k=limit)
+    results = await qs.query(query, top_k=limit, scopes=scopes)
     return [{"title": r.title, "score": r.score, "snippet": r.snippet} for r in results]
 
 
@@ -216,6 +221,7 @@ async def ingest_document(
     ctx: Context,
     text: str,
     metadata: dict[str, Any] | None = None,
+    scope: str = "global",
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -223,7 +229,7 @@ async def ingest_document(
     if pipeline is None:
         return "error: ingest pipeline not available"
     try:
-        result = await pipeline.ingest_text(text, metadata=metadata)
+        result = await pipeline.ingest_text(text, metadata=metadata, scope=scope)
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
@@ -240,6 +246,7 @@ async def list_entities(
     entity_type: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    scopes: list[str] | None = None,
 ) -> list[EntityInfo] | str:
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -253,9 +260,9 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et)
+        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
     else:
-        entities = await asyncio.to_thread(gs.list_entities)
+        entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
     return [
