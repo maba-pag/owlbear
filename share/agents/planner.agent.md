@@ -5,7 +5,7 @@ argument-hint: "Plan: {feature_or-plan_description}"
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: []
 ---
 
@@ -50,7 +50,7 @@ has already approved the scope.
 
 ### Channel B
 
-Append `## Planning` section with: task breakdown table, dependency graph, creation commands. See `w-task-decomposition` skill for the full output template.
+Include `## Planning` section in your `end_work` note: task breakdown table, dependency graph, creation commands. See `w-task-decomposition` skill for the full output template.
 
 When user-invoked without a parent task, Channel B does not apply — return the breakdown directly to the user.
 

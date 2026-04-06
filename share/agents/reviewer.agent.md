@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [code-reader, scribe, quality-runner]
 hooks:
   PreToolUse:
@@ -74,7 +74,7 @@ the builder can fix it without guessing.
 
 ### Channel B
 
-Append `## Review Evidence` section with: test results, lint results, coverage data, AC compliance table (AC line / evidence / status), deductions, verdict, action. See `w-code-review` skill for the full output template.
+Include `## Review Evidence` section in your `end_work` note: test results, lint results, coverage data, AC compliance table (AC line / evidence / status), deductions, verdict, action. See `w-code-review` skill for the full output template.
 
 ### Kanban protocol
 

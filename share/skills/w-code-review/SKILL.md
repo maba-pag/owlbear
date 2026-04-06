@@ -329,7 +329,7 @@ Append to task body before advancing:
 - [ ] Coverage measured on touched modules
 - [ ] Citations verified — file:line references read and confirmed
 - [ ] Verdict matches confidence threshold (0.90+)
-- [ ] Review evidence appended to task body via `edit_task`
+- [ ] Review evidence included in `end_work` note
 - [ ] Channel A signal returned as final output
 
 ## Known Pitfalls

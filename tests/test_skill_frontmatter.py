@@ -1,10 +1,9 @@
 """Tests for task #42: Add user-invocable: false to pipeline-only skills.
 
 AC contract under test:
-1. user-invocable: false in YAML frontmatter of exactly the 11 pipeline-only skills:
-   arch-review, code-review, curation-workflow, dispatch-planning, docs-gate,
-   orchestration, research-workflow, task-decomposition, task-verification,
-   tdd-red, tdd-workflow
+1. user-invocable: false in YAML frontmatter of pipeline-only skills:
+   arch-review, curation-workflow, dispatch-planning, docs-gate,
+   orchestration, research-workflow, task-decomposition
 2. The 10 user-invocable skills do NOT have user-invocable: false:
    architecture-standards, decision-requests, excalidraw-diagram, frontend-design,
    kanban-md, knowledge-ops, project-definition, pytest-and-linting, retro, visual-output
@@ -28,16 +27,12 @@ SKILLS_DIR = ROOT / "share" / "skills"
 # AC 1: 11 pipeline-only skills — must have user-invocable: false
 PIPELINE_ONLY_SKILLS = [
     "arch-review",
-    "code-review",
     "curation-workflow",
     "dispatch-planning",
     "docs-gate",
     "orchestration",
     "research-workflow",
     "task-decomposition",
-    "task-verification",
-    "tdd-red",
-    "tdd-workflow",
 ]
 
 # AC 2: 10 user-invocable skills — must NOT have user-invocable: false

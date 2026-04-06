@@ -31,8 +31,7 @@ From the task body retrieved by `start_work`:
 
 Some tasks have no testable implementation (research, documentation, config).
 
-1. Append a note to the task body via `edit_task` (with `append_body`): "## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder."
-2. Advance via `end_work` (moves to `in-progress` + releases claim).
+1. Advance via `end_work(note="## Test-Writer Notes\n- Non-implementation task (tagged {tag}) — no tests applicable.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
 3. Return: `DONE #{id} -> in-progress | non-impl pass-through, no tests needed`
 4. **Stop here.**
 
@@ -41,9 +40,9 @@ Some tasks have no testable implementation (research, documentation, config).
 If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this is a retry (reviewer FAILed back to `todo`).
 
 1. Read the `## Review Evidence` section to understand the failure reason.
-2. **If reviewer cites missing tests:** Write NEW failing tests addressing gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Run pytest to verify: old tests PASS, new tests FAIL. Append update via `edit_task`.
-3. **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings. Append note via `edit_task`.
-4. Advance via `end_work` (moves to `in-progress` + releases claim).
+2. **If reviewer cites missing tests:** Write NEW failing tests addressing gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Run pytest to verify: old tests PASS, new tests FAIL.
+3. **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
+4. Advance via `end_work(note="## Test-Writer Notes\n- Retry: {summary of changes}")` (moves to `in-progress` + releases claim).
 5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
 6. **Stop here.**
 
@@ -61,7 +60,7 @@ Run this only if Step 2 found no testable interfaces:
 
 1. **Scan AC for Python implementation intent** — keywords: `implement`, `function`, `method`, `class`, `module`, `src/`, `serve/`, `.py`, `import`, `endpoint`, `API`.
 2. **If implementation intent found:** proceed to Step 3 (new-module RED phase, ImportError tests expected).
-3. **If NO intent AND AC references only non-Python files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.yml`, `.yaml`, `.json`, `.md`, `.prompt.md`): heuristic pass-through. Append note via `edit_task`, advance via `end_work`, return signal, and stop.
+3. **If NO intent AND AC references only non-Python files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.yml`, `.yaml`, `.json`, `.md`, `.prompt.md`): heuristic pass-through. Advance via `end_work(note="## Test-Writer Notes\n- Non-impl pass-through: config/docs only")`, return signal, and stop.
 4. **If ambiguous:** default to pass-through with strong warning. Escalate to decision request via scribe only when AC is too ambiguous to determine builder intent.
 
 ## Step 3 — Plan Test Categories
@@ -128,7 +127,7 @@ Must be clean.
 
 ## Step 6 — Deliverables
 
-Append test summary to task body via `edit_task` (with `append_body` and `timestamp=True`):
+Include the test summary in your `end_work` note:
 
 ```
 ## Test-Writer Notes
@@ -177,7 +176,7 @@ Append to task body before advancing:
 - [ ] `ruff` clean on test file
 - [ ] No source files created or edited — only test files
 - [ ] `from __future__ import annotations` on new files
-- [ ] Summary appended to task body via `edit_task`
+- [ ] Summary included in `end_work` note
 - [ ] Test files committed before advancing
 - [ ] All tests actually fail (not error) when run against current code
 - [ ] Each AC line has at least one corresponding test

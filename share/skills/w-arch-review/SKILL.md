@@ -83,7 +83,7 @@ The architect retains final authority.
 
 > **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 
-Append the architecture review to the task body via `edit_task` (with `append_body` and `timestamp=True`) before the final status move.
+Include the architecture review in your `end_work` note.
 
 Return Channel A signal per `r-pipeline-protocol`.
 
@@ -127,7 +127,7 @@ Append to task body before advancing:
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
 - [ ] Non-impl tasks tagged with pass-through tag before approving
 - [ ] Did NOT create/edit `.py`, `.toml`, or test files
-- [ ] Architecture review appended to task body via `edit_task`
+- [ ] Architecture review included in `end_work` note
 
 ## Known Pitfalls
 

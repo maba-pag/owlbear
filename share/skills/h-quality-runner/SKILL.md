@@ -1,5 +1,5 @@
 ---
-name: quality-runner
+name: h-quality-runner
 description: "Handbook: Quality-Runner subagent — consumer invocation pattern, I/O contract, and fallback"
 user-invocable: false
 ---

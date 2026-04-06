@@ -2,10 +2,10 @@
 
 AC contract under test:
 1. builder, reviewer, auditor, test-writer agent.md frontmatter agents: includes quality-runner
-2. tdd-workflow/SKILL.md Steps 3,4,5,7 contain Quality-Runner invocation (mode: scoped)
-3. code-review/SKILL.md Steps 3,4,5 contain Quality-Runner invocation
-4. task-verification/SKILL.md Step 2 contains Quality-Runner invocation (mode: full)
-5. tdd-red/SKILL.md Step 5 contains Quality-Runner invocation
+2. w-tdd-red/SKILL.md contains Quality-Runner invocation (mode: scoped)
+3. w-code-review/SKILL.md Steps 3,4,5 contain Quality-Runner invocation
+4. w-task-verification/SKILL.md Step 2 contains Quality-Runner invocation (mode: full)
+5. w-tdd-red/SKILL.md Step 5 contains Quality-Runner invocation
 6. Each updated skill retains a fallback section (heading) with direct uv run commands
 7. No existing execute/* tools removed from any agent's tools list
 8. agents: [] replaced — no empty array remains on any wired agent
@@ -143,15 +143,16 @@ class TestFromAC_ExecuteToolsPreserved:
 
 
 # ---------------------------------------------------------------------------
-# AC5: tdd-workflow/SKILL.md Steps 3,4,5,7 use Quality-Runner (mode: scoped)
+# AC5: w-tdd-red/SKILL.md contains Quality-Runner invocation (mode: scoped)
+# (Previously tdd-workflow; now split into w-tdd-red + w-tdd-green)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_TddWorkflowSkillQualityRunner:
-    """AC5: tdd-workflow/SKILL.md Steps 3, 4, 5, 7 use Quality-Runner invocation."""
+    """AC5: w-tdd-red/SKILL.md contains Quality-Runner invocation."""
 
     def _skill(self) -> str:
-        return _skill_path("tdd-workflow").read_text(encoding="utf-8")
+        return _skill_path("w-tdd-red").read_text(encoding="utf-8")
 
     def test_tdd_workflow_references_quality_runner(self) -> None:
         assert "quality-runner" in self._skill().lower()
@@ -168,7 +169,7 @@ class TestFromAC_TddWorkflowSkillQualityRunner:
     def test_tdd_workflow_has_fallback_section_heading(self) -> None:
         """A markdown heading containing 'fallback' must exist for when QR is unavailable."""
         assert re.search(r"#+\s+.*fallback", self._skill(), re.IGNORECASE), (
-            "tdd-workflow/SKILL.md: missing fallback section heading"
+            "w-tdd-red/SKILL.md: missing fallback section heading"
         )
 
     def test_tdd_workflow_fallback_references_pytest_and_linting_skill(self) -> None:
@@ -180,15 +181,15 @@ class TestFromAC_TddWorkflowSkillQualityRunner:
 
 
 # ---------------------------------------------------------------------------
-# AC6: code-review/SKILL.md Steps 3,4,5 use Quality-Runner
+# AC6: w-code-review/SKILL.md Steps 3,4,5 use Quality-Runner
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_CodeReviewSkillQualityRunner:
-    """AC6: code-review/SKILL.md Steps 3, 4, 5 use Quality-Runner invocation."""
+    """AC6: w-code-review/SKILL.md Steps 3, 4, 5 use Quality-Runner invocation."""
 
     def _skill(self) -> str:
-        return _skill_path("code-review").read_text(encoding="utf-8")
+        return _skill_path("w-code-review").read_text(encoding="utf-8")
 
     def test_code_review_references_quality_runner(self) -> None:
         assert "quality-runner" in self._skill().lower()
@@ -202,7 +203,7 @@ class TestFromAC_CodeReviewSkillQualityRunner:
     def test_code_review_has_fallback_section_heading(self) -> None:
         """A markdown heading containing 'fallback' must exist for when QR is unavailable."""
         assert re.search(r"#+\s+.*fallback", self._skill(), re.IGNORECASE), (
-            "code-review/SKILL.md: missing fallback section heading"
+            "w-code-review/SKILL.md: missing fallback section heading"
         )
 
     def test_code_review_fallback_references_pytest_and_linting_skill(self) -> None:
@@ -212,15 +213,15 @@ class TestFromAC_CodeReviewSkillQualityRunner:
 
 
 # ---------------------------------------------------------------------------
-# AC7: task-verification/SKILL.md Step 2 uses Quality-Runner (mode: full)
+# AC7: w-task-verification/SKILL.md Step 2 uses Quality-Runner (mode: full)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_TaskVerificationSkillQualityRunner:
-    """AC7: task-verification/SKILL.md Step 2 uses Quality-Runner invocation (mode: full)."""
+    """AC7: w-task-verification/SKILL.md Step 2 uses Quality-Runner invocation (mode: full)."""
 
     def _skill(self) -> str:
-        return _skill_path("task-verification").read_text(encoding="utf-8")
+        return _skill_path("w-task-verification").read_text(encoding="utf-8")
 
     def test_task_verification_references_quality_runner(self) -> None:
         assert "quality-runner" in self._skill().lower()
@@ -231,7 +232,7 @@ class TestFromAC_TaskVerificationSkillQualityRunner:
 
     def test_task_verification_has_fallback_section_heading(self) -> None:
         assert re.search(r"#+\s+.*fallback", self._skill(), re.IGNORECASE), (
-            "task-verification/SKILL.md: missing fallback section heading"
+            "w-task-verification/SKILL.md: missing fallback section heading"
         )
 
     def test_task_verification_fallback_references_pytest_and_linting_skill(self) -> None:
@@ -241,15 +242,15 @@ class TestFromAC_TaskVerificationSkillQualityRunner:
 
 
 # ---------------------------------------------------------------------------
-# AC8: tdd-red/SKILL.md Step 5 uses Quality-Runner
+# AC8: w-tdd-red/SKILL.md Step 5 uses Quality-Runner
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_TddRedSkillQualityRunner:
-    """AC8: tdd-red/SKILL.md Step 5 uses Quality-Runner invocation."""
+    """AC8: w-tdd-red/SKILL.md Step 5 uses Quality-Runner invocation."""
 
     def _skill(self) -> str:
-        return _skill_path("tdd-red").read_text(encoding="utf-8")
+        return _skill_path("w-tdd-red").read_text(encoding="utf-8")
 
     def test_tdd_red_references_quality_runner(self) -> None:
         assert "quality-runner" in self._skill().lower()
@@ -263,7 +264,7 @@ class TestFromAC_TddRedSkillQualityRunner:
             "quality-runner not wired — no QR fallback section can exist yet"
         )
         assert re.search(r"#+\s+.*fallback", skill, re.IGNORECASE), (
-            "tdd-red/SKILL.md: missing fallback section heading for QR unavailability"
+            "w-tdd-red/SKILL.md: missing fallback section heading for QR unavailability"
         )
 
     def test_tdd_red_fallback_references_pytest_and_linting_skill(self) -> None:

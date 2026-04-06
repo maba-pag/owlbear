@@ -5,7 +5,7 @@ description: "Common kanban and Channel B conventions for all pipeline agents"
 
 ## Channel B
 
-Append agent notes to the task body using `edit_task` (with `append_body` and `timestamp=True`). For tool reference, see `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+Append your agent section to the task body via the `note` parameter of `end_work`. Include your section header, findings, and summary — all in one call. For tool reference, see `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
 ## Per-Agent Section Mapping
 

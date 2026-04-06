@@ -79,7 +79,7 @@ Create each task via `create_task` with title, priority, status `ideation`, tags
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
-If dispatched with a parent task ID, append the planning summary to the parent body via `edit_task` (with `append_body` and `timestamp=True`).
+If dispatched with a parent task ID, include the planning summary in your `end_work` note.
 
 ## Step 7 — Visualize Dependencies
 

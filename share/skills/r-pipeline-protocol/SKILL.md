@@ -114,7 +114,7 @@ Channel A is diagnostic only — the orchestrator does not parse or interpret th
 
 Rich context appended to the task body before returning. Downstream agents read this via the task body. The orchestrator never reads it.
 
-For command syntax to append body content, see the `h-mcp-kanban` skill — section `## Channel B Protocol`. Use `edit_task(append_body="...", timestamp=True)` to append with a datestamp.
+Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended with a timestamp automatically. See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
 ### Per-Agent Signal Mapping
 
@@ -179,14 +179,14 @@ See `h-mcp-memory` for full tool reference.
 
 Routine gate rejections (reviewer FAIL, doc-writer reject) use simple status movement and claim release — **no blocking**. The task re-enters the pipeline automatically on the next dispatch cycle.
 
-When an agent cannot proceed (missing dependencies, infeasible AC, vague scope), it calls the **scribe** to create a DR. The scribe sets the block flag; the calling agent then calls `end_work(outcome="block")` to release its claim and append its reasoning to the task body. The scribe's return message tells the agent what to do.
+When an agent cannot proceed (missing dependencies, infeasible AC, vague scope), it calls the **scribe** to create a DR. The scribe creates the DR file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
 
 The kanban `block` action is reserved for:
 
 - Stale tasks — blocked for triage by orchestrator
 - Tasks with pending DRs — blocked until user responds
 
-To set a block reason: `edit_task(task_id="{id}", block="reason")`. To clear it: `edit_task(task_id="{id}", unblock=True)` (see `h-mcp-kanban`).
+Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
 
 ### Decision Tiers
 
@@ -200,4 +200,4 @@ All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/d
 
 ### Handoff
 
-When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Append the handoff note via `edit_task(task_id="{id}", append_body="...")` (see `h-mcp-kanban`).
+When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Include the handoff note in your `end_work(note="## Handoff\n...", outcome="fail")` call.

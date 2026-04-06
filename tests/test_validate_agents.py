@@ -1,12 +1,12 @@
 """Failing tests for task #134: validate_agents.py pre-commit hook.
 
 Covers:
-  - AC1: scripts/validate_agents.py reads agents/*.agent.md frontmatter,
+  - AC1: scripts/validate_agents.py reads share/agents/*.agent.md frontmatter,
          fails if tools: contains bare todo (not todos)
   - AC2: Script also fails if resolveMemoryFileUri appears anywhere in any
          agent file
   - AC3: repo: local hook added to .pre-commit-config.yaml with
-         id: validate-agents and files: ^agents/.*\\.agent\\.md$
+         id: validate-agents and files: ^share/agents/.*\\.agent\\.md$
   - AC4: Script exits 0 on all current HEAD agent files
   - AC5: Hook runs in less than 1s
   - AC6: README has a brief note about the hook and the VS Code auto-staging
@@ -227,10 +227,10 @@ class TestFromAC_ValidateAgentsPreCommitHook:
         )
 
     def test_validate_agents_files_pattern_present(self) -> None:
-        r"""AC3: files: ^agents/.*\.agent\.md$ pattern exists in config."""
+        r"""AC3: files: ^share/agents/.*\.agent\.md$ pattern exists in config."""
         content = self._precommit_text()
-        assert r"^agents/.*\.agent\.md$" in content, (
-            r"Expected 'files: ^agents/.*\.agent\.md$' in .pre-commit-config.yaml"
+        assert r"^share/agents/.*\.agent\.md$" in content, (
+            r"Expected 'files: ^share/agents/.*\.agent\.md$' in .pre-commit-config.yaml"
         )
 
     def test_validate_agents_under_local_repo(self) -> None:
@@ -252,7 +252,7 @@ class TestFromAC_ValidateAgentsIntegration:
     """AC4 & AC5: script exits 0 on all current agent files, completes in < 1s."""
 
     def test_script_exits_zero_on_current_agents(self) -> None:
-        """AC4: validate_agents.py exits 0 when run against all current agents/*.agent.md."""
+        """AC4: validate_agents.py exits 0 when run against all current share/agents/*.agent.md."""
         agent_files = sorted(_AGENTS_DIR.glob("*.agent.md"))
         assert agent_files, f"No *.agent.md files found in {_AGENTS_DIR}"
         result = subprocess.run(
@@ -800,7 +800,7 @@ class TestFromAC_ValidToolPatterns:
         _write_agent(agent_file, _agent_content(f"name: mcp-{safe_name}\ntools: [{pattern}]"))
         assert validate_agent(agent_file) == []
 
-    # AC5: per-file parametrized test — discovers agents/ dynamically (no hardcoded count)
+    # AC5: per-file parametrized test — discovers share/agents/ dynamically (no hardcoded count)
     @pytest.mark.parametrize(
         "agent_file",
         sorted(_AGENTS_DIR.glob("*.agent.md")),

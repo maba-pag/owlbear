@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.3-Codex (copilot)]
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: [scribe, fix-attempt, quality-runner]
 hooks:
   PostToolUse:
@@ -72,7 +72,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 
 ### Channel B
 
-Append `## Builder Notes` section with: files changed, test results (count + coverage), lint status, evidence summary, fixes applied. See `w-tdd-green` skill for the full output template.
+Include `## Builder Notes` section in your `end_work` note: files changed, test results (count + coverage), lint status, evidence summary, fixes applied. See `w-tdd-green` skill for the full output template.
 
 ### Kanban protocol
 

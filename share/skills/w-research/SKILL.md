@@ -131,7 +131,7 @@ Commit per `r-project-standards` → Commit Discipline (if research doc or sourc
 
 ## Step 7 — Advance
 
-Append research summary and challenge results to task body via `edit_task` (with `append_body` and `timestamp=True`).
+Include the research summary and challenge results in your `end_work` note.
 
 Advance via `end_work` (moves to `backlog` + releases claim).
 

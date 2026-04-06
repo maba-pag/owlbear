@@ -76,7 +76,7 @@ Verify only documentation files are staged. Skip if no files were updated.
 
 ## Step 4 — Advance
 
-Append docs gate report to task body via `edit_task` (with `append_body` and `timestamp=True`).
+Include the docs gate report in your `end_work` note.
 
 Advance via `end_work` (moves to `done` + releases claim).
 
