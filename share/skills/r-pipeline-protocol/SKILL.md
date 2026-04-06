@@ -93,7 +93,7 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 ### Follow-up Task Quality
 
 - Every follow-up task requires concrete acceptance criteria. Single-responsibility. List affected files.
-- Target `backlog` status. Exception: researchers create follow-up tasks at `ideation`.
+- Target `backlog` status. Exception: researchers create follow-up tasks at `research`.
 - Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the orchestrator will route the task to the planner.
 
 Use `create_task(title="...", status="backlog", ...)` to create follow-up tasks (see `h-mcp-kanban`).
@@ -181,7 +181,7 @@ See `h-mcp-memory` for full tool reference.
 
 Routine gate rejections (reviewer FAIL, doc-writer reject) use simple status movement and claim release — **no blocking**. The task re-enters the pipeline automatically on the next dispatch cycle.
 
-When an agent cannot proceed (missing dependencies, infeasible AC, vague scope), it calls the **scribe** to create a DR. The scribe creates the DR file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
+When an agent cannot proceed (missing dependencies, infeasible AC, vague scope) or discovers the AC requires physical user action (manual testing, GUI verification, credential setup, deployment), it calls the **scribe** to create a DR or action request. Do not pass through hoping a downstream agent will handle it. The scribe creates the file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
 
 The kanban `block` action is reserved for:
 
@@ -202,6 +202,6 @@ All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/d
 
 ### Handoff
 
-When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Include the handoff note in your `end_work(note="## Handoff\n...", outcome="fail")` call.
+When you cannot finish the task yourself, describe current state, what failed, open questions, and next step in the task body. Include the handoff note in your `end_work(note="## Handoff\n...", outcome="fail")` call.
 
 For programmatic handoff notes, use `edit_task(append_body="## Handoff\n...")` (see `h-mcp-kanban`).
