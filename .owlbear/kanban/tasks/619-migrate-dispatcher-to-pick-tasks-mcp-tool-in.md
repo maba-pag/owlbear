@@ -1,11 +1,12 @@
 ---
 id: 619
 title: Migrate dispatcher to pick_tasks MCP tool in owlbear-kanban
-status: done
+status: archived
 priority: needed
 created: 2026-04-05T01:30:40.2393944+02:00
-updated: 2026-04-06T02:52:12.3589243+02:00
+updated: 2026-04-06T03:48:49.8371734+02:00
 started: 2026-04-05T11:14:35.6735559+02:00
+completed: 2026-04-06T03:48:49.8371734+02:00
 tags:
     - scope:mcp
     - scope:orchestrator
@@ -420,3 +421,31 @@ None.
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/619-* files found)
+
+[[2026-04-06]] Mon 03:48
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All subtasks (#620–#630) complete or archived | 8/8 archived (independent show_task API calls) | PASS |
+| pick_tasks MCP tool registered and functional | server.py L51 (__all__), L510 (comment), L556 (function def); 49 pick_tasks tests pass | PASS |
+| Orchestrator calls pick_tasks directly; no dispatcher subagent | 0 "dispatcher" matches in orchestrator.agent.md and w-orchestration/SKILL.md (grep) | PASS |
+| Dispatcher agent marked deprecated | dispatcher.agent.md L3: "(DEPRECATED)", L13: deprecation callout referencing #621/#619 | PASS |
+| planner/ package disposition documented | planner/__init__.py L3: "Dual-path architecture (#619)", L7: "MCP path: pick_tasks tool" | PASS |
+
+### Test Results
+- pytest: 2935 passed, 570 failed (all pre-existing RED tests from other tasks), 18 skipped. 49 pick_tasks-specific tests all pass. 0 failures in #619 scope.
+- ruff: All checks passed
+
+### Architect Quality: 5/5
+AC lines specific, verifiable, complete. Architecture decision section documented tool signature, logic partitioning, dual-path rationale. Dependency graph analysis caught #628 direction and #622 missing dep. Challenge process identified #630 pre-existing bug.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 → -0.00
+- Lint violations: 0 → -0.00
+- AC quality ≤ 3: N/A (5/5) → -0.00
+- Missing reviewer evidence: N/A (present, .97 PASS) → -0.00
+- Full-suite failures in task scope: 0 → -0.00
+
+### Confidence: .98
+### Action: archive
