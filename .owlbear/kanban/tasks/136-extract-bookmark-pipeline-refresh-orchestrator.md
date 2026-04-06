@@ -1,10 +1,10 @@
 ---
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-06T18:13:00.0486265+02:00
+updated: 2026-04-06T20:44:30.123596+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,6 +13,8 @@ depends_on:
     - 33
     - 135
     - 223
+claimed_by: robin-blade
+claimed_at: 2026-04-06T20:44:30.1188925+02:00
 class: standard
 ---
 
@@ -528,3 +530,121 @@ This makes the reviewer-discovered SSRF fix formally verifiable. The one-line fi
 - Total: 61 tests, 61 PASS (all pre-existing; no new tests added — existing test strengthened)
 - ruff: clean
 - AC coverage: all 14 AC lines covered; `follow_redirects=False` mechanism now verified (previously only outcome-verified)
+
+[[2026-04-06]] Mon 19:16
+## Builder Notes
+- Files changed: none (test-writer fix was already committed — df7dd25)
+- Tests: 61 passed, 0 failed
+- ruff: clean
+- Coverage: bookmark_pipeline.py 93% ✅, refresh.py 92% ✅, _web_read 100%
+- Evidence: `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)` already present in test_web_read_https_scheme_reaches_httpx (test_bookmark_pipeline_136.py:991); `_web_read` in server.py:L123 has `follow_redirects=False` — assertion passes, SSRF regression path closed
+- No code changes required this cycle; verified GREEN and advancing.
+
+[[2026-04-06]] Mon 19:40
+## Review Evidence
+### Test Results
+pytest: 61 passed, 0 failed (independent run via quality-runner)
+
+### Lint
+clean: true
+
+### Coverage
+- owlbear_knowledge.bookmark_pipeline: 93% ✅
+- owlbear_knowledge.refresh: 92% ✅
+- (pre-existing code: source_store 77%, server 52% — suppressed per rules)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------| 
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | TestFromAC_BookmarkResultModel, TestFromAC_BookmarkPipelineConstructor | Yes — frozen, fields, TypeError on missing web_read_fn | COVERED |
+| web_read_fn REQUIRED (no default) | test_constructor_without_web_read_fn_raises_type_error | Yes — TypeError on omission | COVERED |
+| _default_web_read NOT extracted | test_default_web_read_not_exported_from_module | Yes | COVERED |
+| process() cooperative cancellation at each stage | TestFromAC_BookmarkPipelineProcess (8 tests) | Yes — 3 cancel checks at stages 1, 3, 5 | COVERED |
+| RefreshResult + RefreshOrchestrator in refresh.py | TestFromAC_RefreshResultModel, TestFromAC_RefreshOrchestratorConstructor | Yes | COVERED |
+| refresh_all() cooperative cancellation | test_refresh_all_cooperative_cancellation_stops_loop | Yes — mocks list_all (fixed in Retry 2), 3 sources, cancel fires before first iteration, results==[] would fail if cancel check removed | COVERED ✅ |
+| file_glob uses sandbox_path | TestFromAC_RefreshOrchestratorFileGlob (2 tests) | Yes — path traversal counted as failed | COVERED |
+| _update_source_record persists | TestFromAC_UpdateSourceRecord (2 tests) | Yes | COVERED |
+| KnowledgeSourceStore.list_enabled(scope) | TestFromAC_ListEnabled (5 tests) | Yes — method, filter, priority DESC order all tested | COVERED |
+| bookmark_source + list_bookmarks MCP tools + AppContext | TestFromAC_MCPBookmarkTools (8 tests) | Yes | COVERED |
+| __init__.py exports 4 symbols | TestFromAC_InitExports (8 tests) | Yes | COVERED |
+| _web_read scheme validation + follow_redirects=False + test asserts kwargs | test_web_read_rejects_file_scheme_returns_none, test_web_read_rejects_gopher_scheme_returns_none, test_web_read_https_scheme_reaches_httpx | Yes — scheme guard short-circuits; constructor kwargs assertion `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)` catches follow_redirects mutation | COVERED ✅ |
+
+#### Security Review — PASS
+- Scheme validation: `urlparse(url).scheme.lower() not in {"http", "https"}` — blocks file://, gopher://, dict:// (server.py L115-116) ✅
+- `follow_redirects=False` in httpx.AsyncClient call (server.py L123) — eliminates redirect-chain SSRF ✅
+- Parameterized SQL in list_enabled: scope passed as bound parameter `(scope,)` — no injection risk ✅
+- sandbox_path guards _handle_file_glob — path traversal prevention ✅
+- No hardcoded secrets, no pickle/eval/exec, no unsafe deserialization ✅
+- All prior SSRF findings from previous review cycles fully resolved ✅
+
+#### Test Integrity
+- No TestFromAC_ classes weakened or removed ✅
+- test_web_read_https_scheme_reaches_httpx **strengthened** (test-writer Retry 3, df7dd25): added `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)` ✅
+- Stale test removal (test_refresh_all_calls_list_enabled_with_scope) per #554 architect decision — correctly documented ✅
+- 8 TestBuilderDiscovered tests across 2 cycles are legitimate coverage additions — each exercises a real code path ✅
+
+#### Test Quality — STRONG
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Concrete values, frozen model raises, constructor kwargs verified |
+| Negative/error-path coverage | STRONG | TypeError, ValueError, path traversal, blocked schemes, httpx exceptions all tested |
+| Manual mutation reasoning — follow_redirects=False | STRONG | mock_cls.assert_called_once_with(follow_redirects=False, timeout=30) at test:L990 — mutating to True raises AssertionError; SSRF regression path closed |
+| Test independence | STRONG | No shared mutable state |
+| Descriptive names | STRONG | All names match AC intent |
+
+#### Data Safety — PASS
+Cancellation cooperative throughout; path sandbox prevents traversal; no unbounded inputs; no race conditions.
+
+#### Implementation-Aware Gap Analysis — PASS
+- bookmark_pipeline.py 93%: all significant paths exercised
+- refresh.py 92%: 4 TestBuilderDiscovered tests cover url_list status tallying, crawl tallying, refresh_all result collection, exception catch in loop
+
+#### Builder Process Quality
+4 builder cycles — each distinct and justified (blocked by #554 conflict → MCP tools + web_read_fn required → SSRF fix extraction → no-op verify). FRICTION, not LOOP. Loop-breaker was previously applied and cleared by architect review.
+
+### Pass 2 — INFORMATIONAL
+- refresh_all uses list_all() + in-memory enabled filter (correct per #554 decision)
+- Direct RFC 1918 / loopback access (http://169.254.169.254/) not blocked by scheme check; follow_redirects=False accepted as sufficient mitigation for trusted-agent use case — no change needed
+- source_store.py 77% overall — pre-existing code exempted
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | bookmark_pipeline.py L21-27, L47-56 | PASS |
+| web_read_fn REQUIRED | bookmark_pipeline.py L53: keyword-only, no default | PASS |
+| _default_web_read NOT extracted | Not present in module | PASS |
+| process() cancellation at each stage | bookmark_pipeline.py L95, L105, L113 — 3 cancel checks | PASS |
+| RefreshResult + RefreshOrchestrator in refresh.py | refresh.py L32-39, L60-68 | PASS |
+| refresh_all() cooperative cancellation | refresh.py L120-126: cancel check inside loop; mock fixed to list_all | PASS |
+| file_glob uses sandbox_path | refresh.py L182: sandbox_path call | PASS |
+| _update_source_record persists | refresh.py L239-253: model_copy + store.update | PASS |
+| KnowledgeSourceStore.list_enabled(scope) | source_store.py L123-135: parameterized SQL, priority DESC | PASS |
+| bookmark_source tool | server.py L346 @mcp.tool, in __all__ | PASS |
+| list_bookmarks tool | server.py L364 @mcp.tool, in __all__ | PASS |
+| AppContext extended | server.py L83-84: bookmark_pipeline + bookmark_store fields | PASS |
+| bookmark_toolset.py NOT extracted | Not present | PASS |
+| __init__.py exports 4 symbols | __init__.py: BookmarkResult, BookmarkPipeline, RefreshResult, RefreshOrchestrator in __all__ | PASS |
+| _web_read: scheme validation + follow_redirects=False + test asserts kwargs | server.py L113-128 + test_bookmark_pipeline_136.py L990 | PASS |
+
+### Confidence: .96
+### Verdict: PASS → docs
+
+[[2026-04-06]] Mon 19:46
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | copilot-instructions.md is 5 lines (project identity only — no tables, no module inventory, no MCP tool listing). New modules/tools added but no applicable section to update. |
+| 2 | Module docstrings | Yes | Verified | `BookmarkResult`, `BookmarkPipeline`, `BookmarkPipeline.process()` — all have accurate docstrings. `RefreshResult`, `RefreshOrchestrator`, `.refresh()`, `.refresh_all()` — all have accurate docstrings. `KnowledgeSourceStore.list_enabled()` — has single-line docstring. `_web_read`, `bookmark_source`, `list_bookmarks`, `BookmarkInfo` in server.py — all have docstrings. Private methods (`_handle_*`, `_update_source_record`) exempt. No updates needed. |
+| 3 | External attribution | No | N/A | Implementation is a v1→v2 extraction from internal codebase. No external repos, articles, or patterns are cited in task body or builder notes. No overview.md row needed. |
+| 4 | CLI changes | No | N/A | Two MCP tools (`bookmark_source`, `list_bookmarks`) added to server.py, but no CLI commands added or modified. README.md unchanged. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/extract-knowledge-secondary-features.md` exists. Referenced in task body as "docs/research/extract-knowledge-secondary-features.md S3". Task #136 is the follow-up task from that research. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/136-*` files found)
