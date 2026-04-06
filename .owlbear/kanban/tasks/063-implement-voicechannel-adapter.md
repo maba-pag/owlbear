@@ -1,10 +1,10 @@
 ---
 id: 63
 title: Implement VoiceChannel adapter
-status: todo
+status: docs
 priority: nice-to-have
 created: 2026-03-26T19:33:48.9743371+01:00
-updated: 2026-04-06T02:40:04.629132+02:00
+updated: 2026-04-06T04:23:18.6116423+02:00
 tags:
     - phase-3
     - scope:voice
@@ -217,3 +217,97 @@ assert sent_msg.text == "[My file] audio.mp3"
 **Confidence: 0.88 → FAIL**
 
 **Target: todo** — implementation is correct; test-writer tightens `test_send_file_delegates_to_send_with_path_text` assertion.
+
+[[2026-04-06]] Mon 03:04
+Retry cycle — reviewer cited LAX assertion in test_send_file_delegates_to_send_with_path_text (rule 5.0: `or` allows either clause alone).
+
+w-tdd-red Step 1b classification: weak test / code quality finding (NOT missing AC coverage) → pass-through applies.
+
+Implementation is already correct and 22 tests pass. Cannot add new tests that satisfy RED requirement (they'd PASS immediately). Cannot modify existing passing tests (w-tdd-red rule).
+
+Passing to builder to tighten assertion:
+  assert sent_msg.text == "[My file] audio.mp3"
+and add without-caption variant:
+  assert sent_msg.text == "audio.mp3"
+
+[[2026-04-06]] Mon 03:53
+## Builder Notes (retry cycle)
+
+### Files changed
+- `tests/test_voice_channel.py` — tightened LAX assertion; added `TestBuilderDiscovered_SendFileNoCap`
+
+### Change details
+- **Tightened**: `test_send_file_delegates_to_send_with_path_text` — replaced weak `or` assertion with exact match: `assert sent_msg.text == "[My file] audio.mp3"`
+- **Added**: `TestBuilderDiscovered_SendFileNoCap.test_send_file_no_caption_sends_str_path` — asserts `sent_msg.text == "audio.mp3"` (no-caption path). Passes immediately (implementation already correct); no RED phase possible for a test verifying an already-correct code path.
+- No implementation changes required — `channel.py` was already correct.
+
+### Test results
+- 23 passed, 0 failed (was 22; +1 builder-discovered test)
+- `serve/orchestrator/src/owlbear/voice/channel.py`: **100% coverage** (40/40 stmts)
+
+### Lint
+- `ruff check`: **clean**
+
+### Evidence
+- `uv run pytest tests/test_voice_channel.py -q --tb=short` → 23 passed
+- `uv run ruff check serve/orchestrator/src/owlbear/voice/channel.py tests/test_voice_channel.py` → All checks passed
+- Commit: `280a316`
+
+[[2026-04-06]] Mon 04:23
+## Review Evidence (retry cycle)
+
+### Tests
+`uv run pytest tests/test_voice_channel.py -q --tb=short` → **23 passed, 0 failed** (independently verified via quality-runner)
+
+### Lint
+`ruff check serve/orchestrator/src/owlbear/voice/channel.py tests/test_voice_channel.py` → **clean**
+
+### Coverage
+`owlbear.voice.channel`: **100%** (40/40 stmts)
+
+---
+
+### Previous FAIL Resolution
+
+**LAX assertion** (cycle-1 finding) in `test_send_file_delegates_to_send_with_path_text`:
+- Old: `assert "audio.mp3" in sent_msg.text or "My file" in sent_msg.text` — allowed either clause alone
+- New: `assert sent_msg.text == "[My file] audio.mp3"` — exact equality; mutation test passes ✓
+
+**Added** `TestBuilderDiscovered_SendFileNoCap.test_send_file_no_caption_sends_str_path`:
+- `assert sent_msg.text == "audio.mp3"` — exact, covers no-caption path ✓
+
+Both changes are **strengthenings**, not weakenings. PRESERVED/STRENGTHENED — no WEAKENED/REMOVED violations.
+
+---
+
+### AC Compliance Table
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `VoiceChannel` class with `__aenter__`/`__aexit__` | channel.py:13, 80–84 | TestFromAC_Lifecycle | PASS |
+| `__init__(manager: VoiceProcessManager)` no default | channel.py:22 (keyword-only `*`) | all VoiceChannel(manager=mgr) calls | PASS |
+| `name` returns `"voice"` | channel.py:28 | test_name_property_returns_voice | PASS |
+| `async send(message: str) -> None` | channel.py:35 | test_send_is_async_method | PASS |
+| `async receive(*, prompt=None) -> str \| None` | channel.py:40 | test_receive_is_async_method | PASS |
+| `SpeakMsg(type="speak", ...)` → `manager.send()` | channel.py:37 | test_send_sets_exact_speak_msg_fields | PASS |
+| prompt → `send(prompt)` before listening | channel.py:48–49 | test_prompt_sent_before_listening | PASS |
+| Lazy `manager.__aenter__()` on first receive | channel.py:92–95 | test_first_receive_enters_manager | PASS |
+| `_started: bool` flag | channel.py:25 | test_second_receive_does_not_re_enter_manager | PASS |
+| Loop, skip non-`TranscriptMsg(final=True)` | channel.py:50–55 | test_skips_status_msg, test_skips_partial_and_error_msgs, test_skips_non_final | PASS |
+| Returns `TranscriptMsg.text` | channel.py:55 | test_returns_text_for_final_transcript | PASS |
+| Returns `None` on `VoiceProcessError` | channel.py:52–53 | test_returns_none_on_voice_process_error | PASS |
+| `__aenter__` returns `self` | channel.py:81 | test_aenter_returns_self | PASS |
+| `__aexit__` → `shutdown()` if `_started` | channel.py:83–84 | test_aexit_calls_shutdown_if_started | PASS |
+| `__aexit__` no-op if not started | channel.py:83–84 | test_aexit_noop_if_never_started | PASS |
+| `send_file` caption → `f"[{caption}] {path}"` | channel.py:62–63 | test_send_file_delegates_to_send_with_path_text | PASS (tightened) |
+| `send_file` no-caption → `str(path)` | channel.py:62–63 | test_send_file_no_caption_sends_str_path | PASS |
+| `send_blocks` → `text_fallback` | channel.py:65–67 | test_send_blocks_delegates_to_send_with_fallback | PASS |
+| `send_image` with caption → caption | channel.py:69–71 | test_send_image_with_caption_sends_caption | PASS |
+| `send_image` no caption → `"[image]"` | channel.py:69–71 | test_send_image_without_caption_sends_image_placeholder | PASS |
+
+---
+
+### Deductions
+None — prior −0.12 deduction fully resolved; no new issues found.
+
+**Confidence: 0.95 → PASS**

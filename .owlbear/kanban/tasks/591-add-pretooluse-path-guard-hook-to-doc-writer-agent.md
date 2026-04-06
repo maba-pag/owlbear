@@ -1,10 +1,10 @@
 ---
 id: 591
 title: Add PreToolUse path guard hook to doc-writer agent (Phase 5)
-status: todo
+status: in-progress
 priority: someday
 created: 2026-04-04T07:56:05.2542536+02:00
-updated: 2026-04-06T02:19:29.5353409+02:00
+updated: 2026-04-06T03:22:29.0095365+02:00
 tags:
     - scope:agents
     - hooks
@@ -92,3 +92,34 @@ See .owlbear/research/pretooluse-doc-writer-path-guard-591.md and .owlbear/resea
 ### Verdict: APPROVE (via REFINE)
 ### Action Taken
 Rewrote #591 body with validated AC from #637 research (5 amendments incorporated) plus 3 challenger-driven refinements. Removed editFiles from tools list (AC4). Created follow-up #638 for editFiles re-addition. Archived #637 as subsumed. Advanced to todo.
+
+[[2026-04-06]] Mon 03:22
+## Test-Writer Notes
+
+**Test file:** `tests/test_deny_code_writes_hook_591.py`
+
+**Classes:**
+- `TestFromAC_ScriptExists` — script existence guard (2 tests)
+- `TestFromAC_DenyListBehavior` — deny-list / allow-list path routing via subprocess, Windows-only (34 tests)
+- `TestFromAC_WriteToolGate` — tool_name gating including apply_patch, Windows-only (8 tests)
+- `TestFromAC_SafetyFallbacks` — malformed JSON, empty/missing tool_name, no paths, empty filePath, empty replacements array (6 tests)
+- `TestFromAC_DocWriterAgentHooks` — frontmatter hooks section, PreToolUse entry, type:command, deny-code-writes.ps1 reference, edit/editFiles removal, YAML validity, no duplicate keys (7 tests)
+- `TestFromAC_MaintenanceHeader` — script comment header existence and content (2 tests)
+
+**Total: 59 tests — all FAIL** (confirmed with `uv run pytest --tb=no -q`)
+
+**AC coverage:**
+
+| AC | Tests |
+|----|-------|
+| AC1 (deny-list: all 10 prefixes + conftest.py) | 11 deny + 4 allow + 6 normalization + 6 multi/replace/dir = 27 tests |
+| AC2 (write-tool gate incl. apply_patch) | 5 gated + 3 pass-through = 8 tests |
+| AC3 (PreToolUse hook in frontmatter) | 4 tests |
+| AC4 (edit/editFiles removed) | 1 test |
+| AC5 (safety fallbacks) | 6 tests |
+| AC6 (valid YAML, no dups) | 2 tests |
+| AC7 (maintenance comment) | 2 tests |
+
+**Key differentiator from #589:** `apply_patch` IS gated in deny-code-writes (AC2e); deny-src-writes excluded it. Tests explicitly document this distinction.
+
+Ruff: clean. Commit: 94d071b.

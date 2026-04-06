@@ -1,10 +1,10 @@
 ---
 id: 613
 title: Create GitHub Actions sync workflow (dev to main)
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-04-04T21:55:26.1899523+02:00
-updated: 2026-04-05T21:56:56.8619322+02:00
+updated: 2026-04-06T04:03:27.3219842+02:00
 tags:
     - scope:infra
     - type:build
@@ -97,3 +97,6 @@ Refined 9 ACs into 7 precise, verifiable lines. Removed stale AC6 (#614 resolved
 
 [[2026-04-05]] Sun 21:56
 Non-implementation task (tagged type:config) — no tests applicable. Deliverable is .github/workflows/sync-to-main.yml (YAML file). No testable Python interfaces exist. All 7 ACs describe YAML workflow structure, shell script behavior, and GitHub Actions semantics — not Python code. Passing through to builder.
+
+[[2026-04-06]] Mon 04:03
+## Builder Notes\n\n### Files Changed\n- `.github/workflows/sync-to-main.yml` (created)\n\n### AC Verification\n- AC1: File exists at `.github/workflows/sync-to-main.yml` ✓\n- AC2: `on: workflow_dispatch:` only — no push/schedule/PR triggers ✓\n- AC3: Include-list: share/, serve/, seed/, setup/, pyproject.toml, uv.lock, .python-version, .gitignore, SECURITY.md, README-consumer.md→README.md. No other paths. ✓\n- AC4: Validate step iterates all include-list paths, sets `failed=1` for any missing, exits 1 if `$failed -ne 0` ✓\n- AC5: `git init` in temp dir → orphan commit → `git push origin HEAD:main --force` with message \"sync: update from dev (workflow dispatch)\" ✓\n- AC6: `.gitignore` copied as-is via `cp .gitignore \"$TREE/\"` ✓\n- AC7: `permissions: contents: write` declared; GITHUB_TOKEN used in remote URL for push ✓\n\n### Notes\n- No Python code changed; YAML-only deliverable. Lint not applicable.\n- Auth via `x-access-token:${{ secrets.GITHUB_TOKEN }}` embedded in remote URL — standard GitHub Actions pattern for force-push.\n- Unblocks #615.

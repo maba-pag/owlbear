@@ -1,10 +1,10 @@
 ---
 id: 611
 title: Create dev branch and push to remote
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-04-04T21:54:56.0860979+02:00
-updated: 2026-04-05T15:10:43.6308244+02:00
+updated: 2026-04-06T04:05:54.4936427+02:00
 tags:
     - scope:infra
     - type:build
@@ -69,3 +69,6 @@ Refined AC from 5 to 3 lines (removed unverifiable policy and optional items). A
 ## Test-Writer Notes
 - Non-implementation task (tagged type:config) — no tests applicable.
 - Passing through to builder.
+
+[[2026-04-06]] Mon 04:05
+## Builder Notes\n\n- AC1: `git branch dev` created dev from current HEAD of main (commit 280a316) ✓\n- AC2: `git push origin dev` — `origin/dev` now exists ✓\n- AC3: `origin/HEAD -> origin/main` — default branch unchanged ✓\n\nDev and main are now identical; they diverge after the first sync (#613 → #615) runs.

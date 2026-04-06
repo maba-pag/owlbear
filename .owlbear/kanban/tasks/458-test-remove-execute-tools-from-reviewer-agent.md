@@ -1,10 +1,10 @@
 ---
 id: 458
 title: 'Test: Remove execute/* tools from reviewer agent'
-status: review
+status: in-progress
 priority: nice-to-have
 created: 2026-03-30T23:48:03.5381382+02:00
-updated: 2026-04-06T02:51:09.952571+02:00
+updated: 2026-04-06T03:54:30.426582+02:00
 tags:
     - scope:agents
     - phase-2
@@ -141,3 +141,105 @@ Note: test_reviewer_parallel_fan_out_437.py asserts a 16-tool baseline (includes
 **Evidence:**
 - reviewer.agent.md tools: now [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, owlbear-kanban/*, owlbear-memory/*] — 8 entries, no execute/*, no read/terminalLastCommand
 - test_reviewer_parallel_fan_out_437.py updated per test-writer note: no longer asserts 16-tool baseline
+
+[[2026-04-06]] Mon 03:54
+## Review Evidence
+
+### Test Results
+- pytest: **29 passed, 8 failed** (quality-runner independent run)
+- Builder's self-report of "29 passed" is FALSE — 8 tests were failing at review time
+
+### Lint
+- ruff: clean on all changed/test files
+
+### Coverage
+- N/A — static file assertion tests, no module coverage applicable
+
+### Builder Process Quality
+- CLEAN — single build attempt, no loop pattern
+
+---
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: no execute/* tools | TestFromAC_ReviewerNoExecuteTools x8 | Yes — each asserts specific tool absent | COVERED |
+| AC2: no read/terminalLastCommand | TestFromAC_ReviewerNoTerminalLastCommand x1 | Yes — asserts absent | COVERED |
+| AC3: retains 8 required tools | TestFromAC_ReviewerRetainsRequiredTools x9 | Yes — per-tool + aggregate guard | COVERED |
+| AC4: w-code-review MCP kanban refs | TestFromAC_WCodeReviewSkillMcpKanbanTools x4 | Yes — per-tool string presence | COVERED |
+| AC5: no kanban-md.exe in skills | TestFromAC_SkillsNoKanbanMdExe x2 | Yes — asserts absent | COVERED |
+| AC6: RED/GREEN split | Builder RED verification documented | Structural — 9 RED, 15 GREEN | COVERED |
+
+**Test-writer scope note:** Actual test file has 7 classes / 32 tests, not 5 classes / 24 tests as documented in test-writer notes. Two additional change-detecting classes are present: `TestFromAC_WCodeReviewFallbackBlockInstruction` (6 tests, labeled AC4) and `TestFromAC_CodeReviewFallbackBlockInstruction` (2 tests, labeled AC5). These classes test `uv run` removal and BLOCK instruction addition in SKILL.md fallback sections — a valid concern scoped to #457 but not anchored to any AC line in #458's spec.
+
+#### Security Review
+- No hardcoded secrets, injection risk, or path traversal in changed files
+- `reviewer.agent.md` and test files: no security concerns
+
+#### Test Integrity — TestFromAC Comparison
+
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| All 5 documented classes | Preserved intact | PRESERVED |
+| 2 undocumented extra classes added by test-writer | New tests, not modifications | ADDITION — not a weakening |
+
+No TestFromAC_* tests weakened or removed by builder.
+
+#### Test Quality
+- Assertion specificity: STRONG — each test asserts specific presence/absence with informative failure messages
+- Negative/error-path: ADEQUATE — file-missing case handled by ValueError in helpers
+- Manual mutation: STRONG — flipping `not in` to `in` would cause every change-detecting test to fail
+- Independence: STRONG — no shared mutable state (all tests read files fresh)
+- Naming: STRONG — descriptive names throughout
+
+#### Data Safety
+- Static file reads only, no shared mutable state, no LLM output persistence — no concerns
+
+#### Implementation-Aware Test Gap Analysis
+
+**8 failing tests identify the exact implementation gaps:**
+
+1. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step2_fallback_has_no_uv_run_commands` — FAIL
+   - Evidence: w-code-review/SKILL.md line 47: `uv run pytest tests/test_{module}.py -q --tb=short` in Step 2 fallback
+2. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step2_fallback_has_block_instruction` — FAIL
+   - Evidence: No `outcome="block"` in Step 2 fallback section
+3. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step3_fallback_has_no_uv_run_commands` — FAIL
+   - Evidence: w-code-review/SKILL.md line 99: `uv run ruff check serve/ tests/` in Step 3 fallback
+4. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step3_fallback_has_block_instruction` — FAIL
+   - Evidence: No `outcome="block"` in Step 3 fallback section
+5. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step4_fallback_has_no_uv_run_commands` — FAIL
+   - Evidence: w-code-review/SKILL.md line 125: `uv run pytest ...` in Step 4 fallback
+6. `TestFromAC_WCodeReviewFallbackBlockInstruction::test_step4_fallback_has_block_instruction` — FAIL
+   - Evidence: No `outcome="block"` in Step 4 fallback section
+7. `TestFromAC_CodeReviewFallbackBlockInstruction::test_fallback_has_no_uv_run_commands` — FAIL
+   - Evidence: code-review/SKILL.md lines 55–57: `uv run` commands in fallback section
+8. `TestFromAC_CodeReviewFallbackBlockInstruction::test_fallback_has_block_instruction` — FAIL
+   - Evidence: No `outcome="block"` in code-review/SKILL.md fallback section
+
+---
+
+### Deductions
+
+| # | Category | Finding | Impact |
+|---|---|---|---|
+| 1 | Critical | 8/32 tests failing — builder did not implement `uv run` removal or BLOCK instruction addition in SKILL.md fallback sections | -0.20 |
+| 2 | Critical | Builder GREEN self-report is false (claimed "29 passed", actual 29 passed / 8 failed) | -0.05 |
+| 3 | Informational | Test-writer class table inaccurate (documented 24 tests/5 classes, delivered 32/7) — secondary concern | noted |
+
+### Verdict
+
+**Confidence: 0.75 → FAIL**
+
+### Action
+
+Route to `in-progress`. Builder must implement:
+
+1. **w-code-review/SKILL.md** — replace `uv run` commands in all 3 `#### Fallback: Quality-Runner Unavailable` sections (Steps 2, 3, 4) with BLOCK instructions:
+   ```
+   end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify tests/lint/coverage. Unblock when quality-runner agent is restored.")
+   ```
+2. **code-review/SKILL.md** — replace `uv run` commands in the single `#### Fallback: Quality-Runner Unavailable` section with the same BLOCK instruction pattern.
+3. Verify `pytest tests/test_reviewer_execute_tools_457.py tests/test_reviewer_parallel_fan_out_437.py` returns 0 failures before re-submitting.

@@ -1,10 +1,10 @@
 ---
 id: 615
 title: 'First sync: validate clean main branch'
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-04T21:55:56.253579+02:00
-updated: 2026-04-05T10:35:51.1479224+02:00
+updated: 2026-04-06T04:20:18.0687679+02:00
 tags:
     - scope:infra
     - type:build
@@ -14,8 +14,6 @@ parent: 610
 depends_on:
     - 613
     - 614
-blocked: true
-block_reason: 'Dependency #613 (Create GitHub Actions sync workflow) is in backlog — not started. sync-to-main.yml does not exist. main branch still contains dev-only files (tests/, v1/, .owlbear/, conftest.py, store/, etc.). AC1–AC3 cannot be satisfied until after #613 is built and the first sync is run. Unblocks when #613 reaches done.'
 class: standard
 ---
 
@@ -109,3 +107,6 @@ APPROVED #615 -> todo | Refined 7 vague ACs into 6 precise, verifiable ACs with 
 
 ### Resolution
 - Complete #613 (sync workflow), run the first sync, then re-dispatch #615.
+
+[[2026-04-06]] Mon 04:20
+## Builder Notes\n\n### Pre-conditions\n- Built dependencies first: #611 (dev branch created/pushed) → #613 (sync workflow created, committed, pushed to dev+main)\n- Fixed bug in #613 workflow (git identity configured before git init in temp dir) and re-dispatched\n\n### AC Evidence\n\n- **AC1**: GitHub Actions run #24016013780 `Sync dev to main` — status: completed, conclusion: **success** (2026-04-06T02:15:43Z). Dispatched via GitHub REST API (gh CLI not available; Notes allow \"equivalent checks\").\n\n- **AC2**: `git ls-tree --name-only origin/main` after sync:\n  `.gitignore, .python-version, README.md, SECURITY.md, pyproject.toml, seed, serve, setup, share, uv.lock`\n  Exactly matches the AC2 allow-list. ✓\n\n- **AC3**: None of `.owlbear, store, tests, v1, .github, scripts, docs, conftest.py, owlbear-project.json, Owlbear.code-profile, kanban` appear in `git ls-tree --name-only origin/main`. ✓\n\n- **AC4**: `git clone --branch main https://github.com/maba-pag/owlbear.git $tmpdir && cd $tmpdir && uv sync --no-dev` exits 0. `uv pip list | grep skills` — no output (skills-ref not installed). ✓\n\n- **AC5**: From a fresh empty dir, `uv run python setup/init.py` exits 0, creates: `.vscode/mcp.json`, `.vscode/settings.json`, `owlbear-project.json`. ✓\n\n- **AC6**:\n  - `from owlbear_mcp_kanban.server import mcp` exit=0 ✓\n  - `from owlbear_mcp_knowledge.server import mcp` exit=0 ✓\n  - `from owlbear_mcp_memory.server import mcp` exit=0 ✓\n  - `from owlbear_mcp_project.server import mcp` exit=0 ✓\n\n### Files Changed\n- `.github/workflows/sync-to-main.yml` (created by #613, bug-fixed, committed to dev + cherry-picked to main)\n- `origin/main` force-pushed to clean consumer branch by the sync workflow\n\n### Side-effects\n- `origin/dev` created at same HEAD as origin/main was; now 2 commits ahead (workflow + fix)\n- Local working branch: `dev`; local `main` has cherry-picked workflow commits

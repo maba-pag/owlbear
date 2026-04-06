@@ -4,7 +4,7 @@ title: Fix cli.py phantom reference in planner/__init__.py docstring
 status: ideation
 priority: nice-to-have
 created: 2026-04-06T02:35:22.7621528+02:00
-updated: 2026-04-06T02:50:20.7835488+02:00
+updated: 2026-04-06T04:02:24.3597438+02:00
 tags:
     - scope:orchestrator
     - phase-2
@@ -26,3 +26,18 @@ Discovered during audit of #624. The docstring references cli.py as an in-proces
 
 [[2026-04-06]] Mon 02:50
 REJECT: Premise challenge FAIL. cli.py exists at serve/orchestrator/src/owlbear/cli.py and imports from planner at L15-16 (read_board, select_tasks). The docstring reference is accurate. The audit finding that produced this task was itself incorrect — removing the cli.py reference would make the docstring less accurate, not more. Evidence: file_search confirmed cli.py exists; grep confirmed L15: from owlbear.planner.board import read_board, L16: from owlbear.planner.selector import select_tasks.
+
+[[2026-04-06]] Mon 03:28
+## Research\n- Research doc: none (premise validation only)\n- Sources: 3 files read (cli.py, loop.py, planner/__init__.py), 0 external\n- Finding: **Premise invalid** — cli.py exists at serve/orchestrator/src/owlbear/cli.py and imports read_board (L15) + select_tasks (L16) from planner. The docstring is accurate as-is.\n- Recommendation: Archive this task. No code change needed. (confidence: 0.97)\n- Follow-up tasks created: none\n- Decision requests: none\n- Challenge: SKIPPED — no recommendation to challenge (task invalidated by evidence)\n\n**Verified callers of planner package:**\n| File | Imports |\n|---|---|\n| cli.py L15-16 | read_board, select_tasks |\n| loop.py L17-18 | read_board, select_tasks |\n| waves.py L12 | DispatchEntry (models only) |\n\nThe audit finding from #624 that produced this task was itself incorrect. No implementation needed — recommend immediate archival.
+
+[[2026-04-06]] Mon 04:02
+## Architecture Review
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | **FAIL** | cli.py exists at serve/orchestrator/src/owlbear/cli.py. L15-16 import read_board and select_tasks from planner. Docstring at planner/__init__.py L5 is accurate. |
+
+### Verdict: REJECT
+Premise invalid — independently verified cli.py exists and imports from planner. The audit finding from #624 that created this task was incorrect. Removing the cli.py reference would degrade docstring accuracy.
+
+### Action Taken: Reject to ideation. Recommend immediate archival — no code change is warranted.

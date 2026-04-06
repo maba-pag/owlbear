@@ -1,10 +1,10 @@
 ---
 id: 596
 title: 'Fix planner skill language: reconcile "does NOT claim" with end_work usage'
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-04T20:09:51.968555+02:00
-updated: 2026-04-05T13:16:21.36502+02:00
+updated: 2026-04-06T04:02:34.9001391+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -71,3 +71,75 @@ APPROVED after REFINE. Fixed file path (.github/skills/ does not exist, correcte
 ## Test-Writer Notes
 - Non-implementation task (tagged `agent`) — no tests applicable.
 - Passing through to builder.
+
+[[2026-04-06]] Mon 03:14
+## Builder Notes
+- Files changed: `share/skills/w-task-decomposition/SKILL.md` (1 paragraph, ~L17)
+- Change applied: Replaced "This skill does NOT claim a task" with conditional claiming language — dispatcher-dispatched path uses `start_work` (returns body, no separate `show_task` needed); user-invoked path uses `show_task` without claiming
+- Step 8 (L90): Verified — "release the claim" is already consistent with revised Step 0. No change needed.
+- No Python code changes. Documentation-only fix.
+- AC: all 4 items satisfied
+
+[[2026-04-06]] Mon 03:57
+## Review Evidence
+### Test Results
+- N/A — non-implementation task (`agent` tag); no test file exists or is expected
+
+### Lint
+- N/A — documentation-only change; no Python source modified
+
+### Coverage
+- N/A
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+No `TestFromAC_*` classes — skip (non-impl task).
+
+#### Security Review
+No issues. Documentation-only edit to a Markdown skill file; no system boundaries, no user input, no code execution paths.
+
+#### TestFromAC Integrity
+No TestFromAC tests — skip.
+
+#### Test Quality
+N/A
+
+#### Data Safety
+N/A
+
+#### Implementation-Aware Test Gap Analysis
+N/A
+
+#### Necessity Check
+N/A
+
+#### Builder Process Quality
+CLEAN — 1 builder notes section, no retries.
+
+### AC Compliance Table
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Step 0 (~L15): remove "does NOT claim", add conditional claiming | grep "does NOT claim" → 0 matches; share/skills/w-task-decomposition/SKILL.md:17 has dispatcher-dispatched/user-invoked conditional | PASS |
+| Step 0: `start_work` replaces `show_task` for dispatch path | SKILL.md:17: "making a separate `show_task` call redundant" | PASS |
+| Step 8 (~L92): verify `end_work` consistent with revised Step 0 | SKILL.md:90: "advance via `end_work` to release the claim" — consistent, no change needed | PASS |
+| No functional changes — documentation-only fix | Only `share/skills/w-task-decomposition/SKILL.md` in changed files; zero Python files modified | PASS |
+
+### Verdict
+0 deductions. Confidence: .97 → PASS
+
+[[2026-04-06]] Mon 04:02
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Agent-config skill change; `copilot-instructions.md` has no references to planner claiming behavior — no update needed |
+| 2 | Module docstrings | No | N/A | Zero Python files modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/rescope-575-lifecycle-blocks.md` exists; section 3e documents the inconsistency; task #596 was created as the follow-up |
+
+### Files Updated
+- None — no documentation files required updating
+
+### Scratch Files Cleaned
+- None found for task 596

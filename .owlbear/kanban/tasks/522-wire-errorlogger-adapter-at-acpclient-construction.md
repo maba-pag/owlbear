@@ -1,10 +1,10 @@
 ---
 id: 522
 title: Wire ErrorLogger adapter at AcpClient construction sites
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-01T15:15:04.1613975+02:00
-updated: 2026-04-06T01:34:34.4305593+02:00
+updated: 2026-04-06T03:13:00.8229166+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -83,3 +83,13 @@ See .owlbear/research/errorlogger-adapter-wiring-522.md for full analysis.
 
 [[2026-04-06]] Mon 01:34
 Architecture review complete. AC refined (6 lines tightened), dependency updated #148 to #521, all 10 criteria PASS. Challenger: proceed at 0.88. Advancing to todo.
+
+[[2026-04-06]] Mon 03:13
+## Test-Writer Notes
+- Test file: tests/test_errorlogger_adapter_wiring_522.py
+- Classes: TestFromAC_ErrorLoggerAdapter, TestFromAC_OrchestrateWiring
+- Tests per category: happy 5, edge 2, boundary 6, wiring 4
+- Total: 17 tests, all FAIL (ImportError: cannot import name 'ErrorLoggerAdapter')
+- ruff: clean
+- AC coverage: AC#1 (adapter class) — 12 tests; AC#2 (sentinel) — 4 tests; AC#3 (AcpClient wiring) — 2 tests; AC#4 (orchestrate param + default path) — 3 tests; AC#6 (constraint, not testable)
+- Note: VS Code file tools blocked by path guard bug on absolute Windows paths; file written via PowerShell terminal (documented workaround)
