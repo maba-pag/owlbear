@@ -65,18 +65,21 @@ class KnowledgeQueryService:
         self._threshold = similarity_threshold
         self._retriever = retriever
 
-    def _search_chunks(self, prompt: str, top_k: int) -> list[tuple[str, float]]:
+    def _search_chunks(
+        self, prompt: str, top_k: int, *, scopes: list[str] | None = None
+    ) -> list[tuple[str, float]]:
         """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
+        effective_scopes = scopes if scopes is not None else self._scopes
         if self._retriever is not None:
-            result = self._retriever.retrieve(prompt, top_k, self._scopes)
+            result = self._retriever.retrieve(prompt, top_k, effective_scopes)
             return result.chunks[:top_k]
         embeddings = self._embedder.embed([prompt])
         if not embeddings:
             return []
         query_vec = embeddings[0]
         kwargs: dict[str, object] = {}
-        if self._scopes is not None:
-            kwargs["scopes"] = self._scopes
+        if effective_scopes is not None:
+            kwargs["scopes"] = effective_scopes
         return self._vectors.search_similar(query_vec, top_k=top_k, **kwargs)
 
     async def query(
@@ -85,6 +88,7 @@ class KnowledgeQueryService:
         *,
         top_k: int = 5,
         token_budget: int = 4000,  # noqa: ARG002 — reserved for future truncation
+        scopes: list[str] | None = None,
     ) -> list[StructuredSearchResult]:
         """Embed *prompt*, search the knowledge base, and return structured results.
 
@@ -95,9 +99,11 @@ class KnowledgeQueryService:
             prompt: Natural-language query.
             top_k: Maximum number of results to return.
             token_budget: Reserved for future snippet truncation.
+            scopes: Optional per-query scope override. When provided, overrides
+                the instance-level ``self._scopes`` for this call only.
         """
         try:
-            raw = self._search_chunks(prompt, top_k)
+            raw = self._search_chunks(prompt, top_k, scopes=scopes)
             if not raw:
                 return []
 

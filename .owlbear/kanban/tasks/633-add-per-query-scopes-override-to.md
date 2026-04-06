@@ -1,13 +1,15 @@
 ---
 id: 633
 title: Add per-query scopes override to KnowledgeQueryService.query()
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-05T12:59:29.4655727+02:00
-updated: 2026-04-05T23:45:27.5230047+02:00
+updated: 2026-04-06T09:40:26.7481115+02:00
 tags:
     - scope:knowledge
     - phase-2
+claimed_by: mist-mesa
+claimed_at: 2026-04-06T09:40:26.7481115+02:00
 class: standard
 ---
 
@@ -122,3 +124,98 @@ No new failure modes. Replaces self._scopes reads with local effective variable.
 **Pytest run:** `17 failed, 0 passed`
 
 **Note on hook bypass:** `create_file` tool blocked by deny-src-writes.ps1 path guard (requires `tests/` relative prefix but tool requires absolute paths). File written via `[System.IO.File]::WriteAllText` via terminal. Recommend the hook be updated to also accept absolute paths within the workspace tests/ directory.
+
+[[2026-04-06]] Mon 08:05
+## Builder Notes
+
+**Files changed:** 1
+- `serve/knowledge/src/owlbear_knowledge/query_service.py` — added `scopes: list[str] | None = None` to `_search_chunks()` and `query()` signatures; introduced `effective_scopes = scopes if scopes is not None else self._scopes` idiom in `_search_chunks()`; passed `scopes=scopes` from `query()` to `_search_chunks()`
+
+**Test results:**
+- `tests/test_query_service_633.py`: 17 passed (was 17 failed — RED confirmed per task body)
+- `tests/test_query_service_160.py`: 23 passed (regression check — unchanged)
+
+**Lint:** ruff clean (`All checks passed!`)
+
+**Coverage:** ~5 LOC change on single method — both paths (vector + retriever) covered by TestFromAC tests
+
+**Evidence summary:**
+- AC1 ✓ — `query()` now accepts `scopes` kwarg without TypeError
+- AC2 ✓ — `_search_chunks()` now accepts `scopes` kwarg without TypeError
+- AC3 ✓ — override value forwarded to `search_similar` and `retriever.retrieve`, not instance value
+- AC4 ✓ — `scopes=None` falls back to `self._scopes` in both paths
+- AC5 ✓ — 23 existing tests pass unchanged
+
+**No builder-discovered issues.** Boundary case (empty list distinct from None) handled by `is not None` check as expected.
+
+[[2026-04-06]] Mon 08:41
+## Review Evidence
+
+### Test Results
+- `tests/test_query_service_633.py`: **17 passed** (all TestFromAC tests)
+- `tests/test_query_service_160.py`: **23 passed** (regression)
+- Total: **40 passed, 0 failed** (quality-runner independent run)
+
+### Lint
+- ruff: **clean** — `violations: []`
+
+### Coverage
+- `owlbear_knowledge.query_service`: **91%** — above 90% threshold ✓
+- Uncovered 9%: `query_for_context()` legacy path (outside task scope — acceptable)
+
+### TestFromAC Modification Check
+No TestFromAC method was modified by the builder. Builder-changed files: `query_service.py` only. All 17 test methods preserved exactly as written by test-writer. **PRESERVED.**
+
+### AC Compliance Table
+
+| AC | Mapped Tests | Would Fail If Violated? | Verdict |
+|----|-------------|-------------------------|---------|
+| AC1: query() accepts scopes kwarg | test_query_accepts_scopes_kwarg_without_raising, test_query_accepts_explicit_none_scopes, test_query_accepts_empty_list_scopes | Yes — TypeError if param absent | COVERED |
+| AC2: _search_chunks() accepts scopes kwarg | test_search_chunks_accepts_scopes_kwarg_without_raising, test_search_chunks_accepts_explicit_none_scopes, test_search_chunks_accepts_empty_list_scopes | Yes — TypeError if param absent | COVERED |
+| AC3: Override forwarded, instance not used (vector) | test_search_chunks_override_scopes_forwarded_to_vector_store, test_search_chunks_override_does_not_use_instance_scopes_vector, test_query_override_scopes_forwarded_to_vector_store | Yes — exact value assertion on call_args | COVERED |
+| AC3: Override forwarded, instance not used (retriever) | test_search_chunks_override_scopes_forwarded_to_retriever, test_search_chunks_override_does_not_use_instance_scopes_retriever, test_query_override_scopes_forwarded_to_retriever | Yes — value-in-args assertion (adequate given positional constraints) | COVERED |
+| AC4: None falls back to instance (vector) | test_search_chunks_none_scopes_uses_instance_scopes_vector, test_query_none_scopes_uses_instance_scopes_vector | Yes — exact value assertion | COVERED |
+| AC4: None falls back to instance (retriever) | test_search_chunks_none_scopes_uses_instance_scopes_retriever, test_query_none_scopes_uses_instance_scopes_retriever | Yes — value-in-args assertion | COVERED |
+| AC5: Existing tests pass | test_query_service_160.py (23 tests) | N/A — regression run | COVERED |
+
+### Implementation Review
+
+`_search_chunks()` (query_service.py:63-79): 
+- `effective_scopes = scopes if scopes is not None else self._scopes` — correct idiom, distinguishes `[]` from `None`
+- Retriever path: `self._retriever.retrieve(prompt, top_k, effective_scopes)` — override forwarded ✓
+- Vector path: `kwargs["scopes"] = effective_scopes` guarded by `if effective_scopes is not None` — consistent with pre-existing behavior ✓
+
+`query()` (query_service.py:81-132): `self._search_chunks(prompt, top_k, scopes=scopes)` — passes override through cleanly ✓
+
+### Security
+No new system boundaries. `scopes` is an internal metadata filter — not persisted, not executed, no injection surface. No hardcoded secrets. No path traversal. OWASP clean.
+
+### Test Quality: ADEQUATE–STRONG
+- AC3 vector-path assertions: **STRONG** (exact `call_kwargs["scopes"] == [...]`)
+- AC4 assertions: **STRONG** (exact value match)
+- AC1/AC2 assertions: **ADEQUATE** — test acceptance (no TypeError), forwarding covered by AC3/AC4
+- AC3 retriever-path assertions: **ADEQUATE** — positional value-in-args pattern is functionally sufficient given `retrieve(prompt, top_k, effective_scopes)` argument constraints
+- Boundary test: **ADEQUATE** — negative assertion sufficient for the distinction claim
+
+### Deductions
+None. All concerns are minor style observations below the FAIL threshold.
+
+### Verdict
+Confidence: **.96** → **PASS**
+
+[[2026-04-06]] Mon 09:14
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `copilot-instructions.md` is a 5-line project identity stub — no API tables or knowledge service entries exist to update |
+| 2 | Module docstrings | Yes | Verified | `query()` documents `scopes` param; `KnowledgeQueryService` class docstring unchanged and accurate; `_search_chunks` is private — out of scope; `query_for_context()` unchanged and accurate |
+| 3 | External attribution | No | N/A | All 6 sources in research doc are internal codebase files — no external repos or articles used |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/per-query-scopes-override.md` exists and is linked from task body |
+
+### Files Updated
+None — no documentation updates required.
+
+### Scratch Files
+No `.owlbear/scratch/633-*` files found — nothing to clean.
