@@ -1,10 +1,12 @@
 ---
 id: 63
 title: Implement VoiceChannel adapter
-status: docs
+status: archived
 priority: nice-to-have
 created: 2026-03-26T19:33:48.9743371+01:00
-updated: 2026-04-06T04:23:18.6116423+02:00
+updated: 2026-04-06T06:23:54.2789428+02:00
+started: 2026-04-06T06:23:54.2789428+02:00
+completed: 2026-04-06T06:23:54.2789428+02:00
 tags:
     - phase-3
     - scope:voice
@@ -311,3 +313,23 @@ Both changes are **strengthenings**, not weakenings. PRESERVED/STRENGTHENED — 
 None — prior −0.12 deduction fully resolved; no new issues found.
 
 **Confidence: 0.95 → PASS**
+
+[[2026-04-06]] Mon 05:31
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `.github/copilot-instructions.md` is 5-line identity stub — no module registry or channel table. No update surface exists. |
+| 2 | Module docstrings | Yes | Verified | `serve/orchestrator/src/owlbear/voice/channel.py`: module docstring, class docstring, all public methods (`name`, `send`, `receive`, `send_file`, `send_blocks`, `send_image`, `_ensure_started`) have accurate docstrings. No edits needed. |
+| 3 | External attribution | No | N/A | Design patterns sourced from v1 internal (`v1/src/owlbear/voice/channel.py`); MCP SDK studied but not used in design decisions (all attribution rows in research → v1 internal). No new row needed in `sources/overview.md`. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/voicechannel-adapter.md` exists and is complete. Task body references stale path `docs/research/voicechannel-adapter.md` — informational gap only, not blocking. Follow-up tasks checked; research notes "no new tasks needed." |
+
+### Files Updated
+None — all checks passed without requiring edits.
+
+### Scratch Files
+None found matching `.owlbear/scratch/63-*`.
+
+[[2026-04-06]] Mon 06:23
+## Audit\n### AC Verification\n21 AC lines verified — all PASS. Key spot-checks: VoiceChannel class (channel.py:14), async context manager (80-84), lazy start (91-95), SpeakMsg construction (38), VoiceProcessError handling (52-53), send_file with tightened assertion, all rich methods.\n\n### Test Results\n- pytest (task-scoped): 23 passed, 0 failed\n- pytest (full suite): 2945 passed, 581 failed (all outside task scope), 18 skipped\n- ruff: All checks passed\n\n### Architect Quality: 4/5\nAC rewritten with 17 verifiable lines across 6 sections. Minor gap: stale packages/ path reconciled by builder.\n\n### Deduction Breakdown\n- Module path AC imprecision: -0.02\n\n### Confidence: 0.98\n### Action: archive
