@@ -2,11 +2,6 @@ name: Sync dev to main
 
 on:
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Dry run — build tree, diff, skip push"
-        type: boolean
-        default: false
 
 concurrency:
   group: sync-to-main
@@ -25,16 +20,6 @@ jobs:
         with:
           ref: dev
           fetch-depth: 0
-
-      - name: Capture dev metadata
-        id: meta
-        run: |
-          DEV_SHA=$(git rev-parse --short=8 HEAD)
-          DEV_DATE=$(date -u +%Y-%m-%dT%H:%MZ)
-          ACTOR="${{ github.actor }}"
-          echo "dev_sha=$DEV_SHA" >> "$GITHUB_OUTPUT"
-          echo "dev_date=$DEV_DATE" >> "$GITHUB_OUTPUT"
-          echo "actor=$ACTOR" >> "$GITHUB_OUTPUT"
 
       - name: Validate include-list paths exist on dev
         run: |
@@ -59,80 +44,19 @@ jobs:
           cp README-consumer.md "$TREE/README.md"
           echo "TREE=$TREE" >> "$GITHUB_ENV"
 
-      - name: Fetch main for diff comparison
-        run: |
-          git fetch origin main --depth=1 || true
-
-      - name: Generate diff summary
-        id: diff
-        run: |
-          if git rev-parse --verify origin/main >/dev/null 2>&1; then
-            # Create temp tree object from consumer tree for comparison
-            cd "$TREE"
-            git init -q
-            git add -A
-            TREE_COMMIT=$(git -c user.name=tmp -c user.email=tmp commit -q --allow-empty -m tmp && git rev-parse HEAD)
-            cd "$GITHUB_WORKSPACE"
-
-            # Diff against main
-            DIFF=$(git diff --stat origin/main -- share serve seed setup pyproject.toml uv.lock .python-version .gitignore SECURITY.md README-consumer.md 2>/dev/null || echo "First sync — no previous main to compare")
-            FILE_COUNT=$(echo "$DIFF" | grep -c '|' || echo 0)
-          else
-            DIFF="First sync — no previous main to compare"
-            FILE_COUNT=0
-          fi
-
-          {
-            echo 'diff<<EOF'
-            printf '%s\n' "$DIFF"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-          echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
-
-      - name: Dry-run summary
-        if: inputs.dry_run
-        run: |
-          echo "## Dry Run — Sync Preview" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Source:** dev @ \`${{ steps.meta.outputs.dev_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Date:** ${{ steps.meta.outputs.dev_date }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Actor:** ${{ steps.meta.outputs.actor }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Changed files (${{ steps.diff.outputs.file_count }})" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.diff.outputs.diff }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "> Push skipped (dry run)." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Create merge commit and push to main
-        if: ${{ !inputs.dry_run }}
+      - name: Create orphan commit and push to main
         run: |
           cd "$TREE"
-
-          # Re-init clean tree (diff step may have initialized)
-          rm -rf .git
           git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-
-          COMMIT_MSG="sync: dev@${{ steps.meta.outputs.dev_sha }} (${{ steps.meta.outputs.dev_date }}, ${{ steps.meta.outputs.actor }})"
-          git commit -m "$COMMIT_MSG"
-
+          git commit -m "sync: update from dev (workflow dispatch)"
           git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           git push origin HEAD:main --force
 
       - name: Write job summary
-        if: ${{ !inputs.dry_run }}
         run: |
           echo "## Sync Complete" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Source:** dev @ \`${{ steps.meta.outputs.dev_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Date:** ${{ steps.meta.outputs.dev_date }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Actor:** ${{ steps.meta.outputs.actor }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### Changed files (${{ steps.diff.outputs.file_count }})" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.diff.outputs.diff }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "**Actor:** ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"

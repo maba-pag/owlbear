@@ -4,7 +4,7 @@ title: Create GitHub Actions sync workflow (dev to main)
 status: done
 priority: needed
 created: 2026-04-04T21:55:26.1899523+02:00
-updated: 2026-04-06T18:59:15.271855+02:00
+updated: 2026-04-06T19:20:44.7017132+02:00
 tags:
     - scope:infra
     - type:build
@@ -14,6 +14,8 @@ parent: 610
 depends_on:
     - 611
     - 612
+claimed_by: stem-flint
+claimed_at: 2026-04-06T19:20:44.6968313+02:00
 class: standard
 ---
 
