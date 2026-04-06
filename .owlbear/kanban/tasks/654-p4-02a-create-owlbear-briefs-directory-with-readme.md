@@ -1,18 +1,18 @@
 ---
 id: 654
 title: 'P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep'
-status: docs
+status: done
 priority: needed
 created: 2026-04-06T07:17:22.2149049+02:00
-updated: 2026-04-06T18:59:49.4488698+02:00
+updated: 2026-04-06T19:24:45.6558202+02:00
 tags:
     - phase-4
     - ' scope:ideator'
     - ' type:build'
 depends_on:
     - 642
-claimed_by: vault-hill
-claimed_at: 2026-04-06T18:59:49.4473049+02:00
+claimed_by: fable-dusk
+claimed_at: 2026-04-06T19:24:45.6527838+02:00
 class: standard
 ---
 
@@ -175,3 +175,20 @@ None.
 
 ### Verdict
 All 7 AC lines verified against actual file content and spec §12. No Pass 1 criteria unmet. Confidence: .97 → PASS.
+
+[[2026-04-06]] Mon 19:00
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | New `.owlbear/briefs/` directory and README introduce Ideator blackboard convention. `copilot-instructions.md` is a 5-line Project Identity stub — no directory table or agent inventory to update. `README.md` IS the documentation. |
+| 2 | Module docstrings | No | N/A | No Python files created or modified. |
+| 3 | External attribution | No | N/A | All sources (framework spec §12, research doc, decisions/README.md style ref) are internal. Blackboard design pattern already attributed in `sources/overview.md` under parent #642. No new external sources. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/briefs-directory-structure.md` exists and is linked from task body. Follow-up tasks not needed — this IS the implementation task from #642. |
+
+### Files Updated
+- None — all checklist items verified as no-impact or already correct.
+
+### Scratch Files Cleaned
+- None — no `.owlbear/scratch/654-*` files found.
