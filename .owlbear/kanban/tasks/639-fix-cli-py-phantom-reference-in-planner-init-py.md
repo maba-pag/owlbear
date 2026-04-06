@@ -1,10 +1,12 @@
 ---
 id: 639
 title: Fix cli.py phantom reference in planner/__init__.py docstring
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-04-06T02:35:22.7621528+02:00
-updated: 2026-04-06T04:02:24.3597438+02:00
+updated: 2026-04-06T05:50:26.8317838+02:00
+started: 2026-04-06T05:50:26.8317838+02:00
+completed: 2026-04-06T05:50:26.8317838+02:00
 tags:
     - scope:orchestrator
     - phase-2
@@ -41,3 +43,14 @@ REJECT: Premise challenge FAIL. cli.py exists at serve/orchestrator/src/owlbear/
 Premise invalid — independently verified cli.py exists and imports from planner. The audit finding from #624 that created this task was incorrect. Removing the cli.py reference would degrade docstring accuracy.
 
 ### Action Taken: Reject to ideation. Recommend immediate archival — no code change is warranted.
+
+[[2026-04-06]] Mon 05:50
+## Research (validation pass)
+- Prior research (Mon 03:28) and architecture review (Mon 04:02) both found premise invalid
+- Independent re-verification confirms: cli.py exists at serve/orchestrator/src/owlbear/cli.py (L15: read_board, L16: select_tasks)
+- planner/__init__.py L5 docstring correctly references cli.py
+- No code change needed. Recommend immediate archival.
+- Sources: 2 files verified (cli.py, planner/__init__.py), 0 external
+- Follow-up tasks: none
+- Decision requests: none
+- Challenge: SKIPPED (premise invalidated, no recommendation to challenge)
