@@ -567,12 +567,23 @@ class TestFromAC_DocWriterAgentHooks:
     def _frontmatter(self) -> str:
         return _extract_frontmatter(self._content(), "doc-writer")
 
-    def test_doc_writer_has_hooks_section(self) -> None:
-        """AC4c: doc-writer.agent.md must have a hooks: section."""
+    def test_doc_writer_has_hooks_section_with_session_start(self) -> None:
+        """AC4c: doc-writer.agent.md hooks: section must contain SessionStart (may already have other events)."""
+        import yaml  # noqa: PLC0415
+
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
             "doc-writer.agent.md is missing the 'hooks:' key. "
-            "Builder must add a new hooks: section containing SessionStart."
+            "Builder must add SessionStart to the hooks: section."
+        )
+        try:
+            parsed = yaml.safe_load(fm)
+        except yaml.YAMLError as exc:
+            pytest.fail(f"doc-writer.agent.md frontmatter is not valid YAML: {exc}")
+        hooks = parsed.get("hooks", {})
+        assert "SessionStart" in hooks, (
+            "doc-writer.agent.md hooks: section exists but is missing SessionStart. "
+            f"Current hook events: {list(hooks.keys())}. Builder must add SessionStart."
         )
 
     def test_doc_writer_has_session_start_hook(self) -> None:
