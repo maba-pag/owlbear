@@ -4,7 +4,7 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, read/readFile, agent]
+tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/*', 'owlbear-memory/*']
 agents:
   - planner
   - scribe
